@@ -15,32 +15,41 @@ function runGuard() {
   );
 }
 
+/**
+ * `FEATURES` is a plain module-level `const`, not a DI token, so there is no
+ * provider to override for the guard's other branch -- the flag is flipped
+ * directly, the same thing a future remote-config read would do at this call
+ * site. Each test sets its own precondition explicitly rather than trusting
+ * whatever `favourites` currently ships as: that value is expected to change
+ * the day the backend lands (see the doc comment on `FEATURES.favourites`),
+ * and did in fact change under this very test suite while it was being
+ * written -- so nothing here may assume today's shipped default.
+ */
 describe('favouritesEnabledGuard', () => {
-  it('blocks /profile/favorites while FEATURES.favourites is off, redirecting to /profile', () => {
-    // This is the shipped configuration today (`core/config/features.ts`):
-    // the favourites backend does not exist yet, so a direct navigation to
-    // the URL must not reach a screen whose every call would 404.
-    expect(FEATURES.favourites).toBe(false);
+  const originalFavourites = FEATURES.favourites;
 
+  function setFlag(value: boolean): void {
+    (FEATURES as { favourites: boolean }).favourites = value;
+  }
+
+  afterAll(() => {
+    setFlag(originalFavourites);
+  });
+
+  it('blocks /profile/favorites while the flag is off, redirecting to /profile', () => {
+    setFlag(false);
     const { router } = setUp();
+
     const result = runGuard();
 
     expect(result).toBeInstanceOf(UrlTree);
     expect(router.serializeUrl(result as UrlTree)).toBe('/profile');
   });
 
-  it('passes through once the flag is on -- proving this is a real toggle and not a permanent block', () => {
+  it('passes through once the flag is on', () => {
+    setFlag(true);
     setUp();
-    const original = FEATURES.favourites;
-    // `FEATURES` is a plain frozen-shaped `const`, not a DI token, so the
-    // guard's *other* branch is exercised by flipping the flag directly
-    // rather than by provider override -- the same thing a future
-    // remote-config read would do at this call site.
-    (FEATURES as { favourites: boolean }).favourites = true;
-    try {
-      expect(runGuard()).toBe(true);
-    } finally {
-      (FEATURES as { favourites: boolean }).favourites = original;
-    }
+
+    expect(runGuard()).toBe(true);
   });
 });

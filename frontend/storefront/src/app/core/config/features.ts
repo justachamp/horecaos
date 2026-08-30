@@ -14,8 +14,12 @@
  * -- every call site already reads from here rather than deciding for itself.
  */
 export const FEATURES = {
-  /** Hearts on home/product/food-card, and the profile favourites screen. */
-  favourites: false,
+  /**
+   * Hearts on home/product/food-card, and the profile favourites screen.
+   * Backend landed with V0097 (`/me/favourites`, ported from the Qoida
+   * shortlist work) — on since 2026-08-30.
+   */
+  favourites: true,
 
   /** The profile avatar picker (upload, replace, remove) and its display. */
   avatar: false,
