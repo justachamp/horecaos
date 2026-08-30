@@ -16,6 +16,16 @@ which can follow.
 It is a planning document, not a decision record. It does not override any ADR;
 it selects a subset of them.
 
+> **Scope note, 2026-08-30 (ADR 0055):** the slice below is now read as a
+> **greenfield launch**, not a cutover. The first production tenant is created
+> natively; nothing legacy gates it. Every reference in this document to legacy
+> cutover, backfill, shadow traffic, `DECIDE` dispositions, or `CUTOVER_READY`
+> belongs to the separate migration program that starts after production —
+> see [ADR 0055](adr/meta/0055-greenfield-launch-scope.md). The slice
+> definition, the seven inviolable rules, and the stage discipline stand
+> unchanged. The Flutter app is on hold; the Angular storefront is the
+> customer surface for launch.
+
 ## The slice
 
 **One tenant, one brand, one location, taking real paid orders on the new

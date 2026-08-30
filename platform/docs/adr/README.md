@@ -61,7 +61,7 @@ table before proposing a change; the answer is often already there.
 | **Built** — A real operator could use the whole feature today. | 13 | [`built/`](built/) |
 | **Partial** — Some of it exists. Each record's status line names what does not. | 40 | [`partial/`](partial/) |
 | **Not started** — Decided and not begun. | 1 | [`not-started/`](not-started/) |
-| **Not applicable** — Process records that govern documents rather than code. | 1 | [`meta/`](meta/) |
+| **Not applicable** — Process records that govern documents rather than code. | 2 | [`meta/`](meta/) |
 
 **Built** — [0001](built/0001-platform-foundation.md), [0003](built/0003-keycloak-tenant-authorization.md), [0004](built/0004-sql-outbox-and-kafka-delivery.md), [0005](built/0005-kafka-inbox-and-idempotent-consumers.md), [0025](built/0025-fine-grained-authorization-and-capability-model.md), [0026](built/0026-provider-installations-bindings-and-secret-references.md), [0031](built/0031-http-api-conventions.md), [0032](built/0032-event-contract-governance-and-topic-policy.md), [0049](built/0049-non-staff-principal-authorization.md), [0050](built/0050-missing-approval-policy-behavior.md), [0051](built/0051-customer-session-authentication.md), [0053](built/0053-horecaos-identity-and-rebrand.md), [0054](built/0054-build-time-quality-gates.md)
 
@@ -69,7 +69,7 @@ table before proposing a change; the answer is often already there.
 
 **Not started** — [0022](not-started/0022-frontend-platform-authentication-and-journey-migration.md)
 
-**Not applicable** — [0000](meta/0000-adr-process-and-status-model.md)
+**Not applicable** — [0000](meta/0000-adr-process-and-status-model.md), [0055](meta/0055-greenfield-launch-scope.md)
 
 <!-- /generated:status-summary -->
 
