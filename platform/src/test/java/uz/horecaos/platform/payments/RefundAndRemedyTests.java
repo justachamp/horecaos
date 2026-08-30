@@ -176,8 +176,12 @@ class RefundAndRemedyTests {
 
         settlements = new OrderSettlementService(settlementStore, points, clock);
         planner = new CheckoutSettlementPlanner(settlementStore, settlements, clock);
+        // A no-op publisher: this suite's own StubOrders is a fake OrderDirectory
+        // with no JdbcOrderStore behind it, so there is nothing here for
+        // PaymentProjectionTrigger to write to. What recordRefund now publishes is
+        // covered against a real order in CartCheckoutAndOrderTests instead.
         remedies = new OrderRemedyService(
-                remedyStore, settlements, orders, deliveryFees, approvals, audit, clock, THRESHOLD);
+                remedyStore, settlements, orders, deliveryFees, approvals, audit, event -> {}, clock, THRESHOLD);
         entitlements = new RemedyEntitlementService(remedyStore, clock);
 
         seedTenancy();

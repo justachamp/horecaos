@@ -49,7 +49,10 @@ import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.OrderReceived;
 import uz.horecaos.platform.ordering.api.OrderingEvent;
 import uz.horecaos.platform.ordering.api.PaymentCaptured;
+import uz.horecaos.platform.ordering.api.PaymentFailed;
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
+import uz.horecaos.platform.ordering.api.PaymentRefunded;
+import uz.horecaos.platform.ordering.api.PaymentVoided;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
 import uz.horecaos.platform.ordering.application.OrderAcceptancePolicyService;
@@ -57,6 +60,7 @@ import uz.horecaos.platform.ordering.application.OrderInventoryProcess;
 import uz.horecaos.platform.ordering.application.OrderQueryService;
 import uz.horecaos.platform.ordering.application.OrderStateService;
 import uz.horecaos.platform.ordering.application.PaymentCaptureConfirmationTrigger;
+import uz.horecaos.platform.ordering.application.PaymentProjectionTrigger;
 import uz.horecaos.platform.ordering.domain.AcceptanceMode;
 import uz.horecaos.platform.ordering.domain.ApprovalChannel;
 import uz.horecaos.platform.ordering.domain.ApprovalTimeoutAction;
@@ -165,6 +169,7 @@ class CartCheckoutAndOrderTests {
     private CheckoutSettlementPlanner settlementPlanner;
     private OrderConfirmedSettlementTrigger confirmationSettles;
     private PaymentCaptureConfirmationTrigger paymentCaptureTrigger;
+    private PaymentProjectionTrigger paymentProjectionTrigger;
     private OrderRemedyService remedies;
     private uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService loyaltyAdjustments;
     private uz.horecaos.platform.loyalty.application.LoyaltyMaintenanceService loyaltySweep;
@@ -370,7 +375,18 @@ class CartCheckoutAndOrderTests {
         // to OrderStateService, and that delivery is production code whose absence
         // is exactly what these tests must not paper over.
         paymentCaptureTrigger = new PaymentCaptureConfirmationTrigger(orderState);
-        published.onPaymentCaptured = paymentCaptureTrigger::onPaymentCaptured;
+        // payment_status_projection's own listener (V0022), stood in beside it. Two
+        // independent BEFORE_COMMIT listeners react to one PaymentCaptured, exactly
+        // as Spring would deliver to both in production, which is what proves the
+        // projection write is not accidentally coupled to the state-machine one.
+        paymentProjectionTrigger = new PaymentProjectionTrigger(orderStore);
+        published.onPaymentCaptured = captured -> {
+            paymentCaptureTrigger.onPaymentCaptured(captured);
+            paymentProjectionTrigger.onPaymentCaptured(captured);
+        };
+        published.onPaymentFailed = paymentProjectionTrigger::onPaymentFailed;
+        published.onPaymentVoided = paymentProjectionTrigger::onPaymentVoided;
+        published.onPaymentRefunded = paymentProjectionTrigger::onPaymentRefunded;
         remedies = new OrderRemedyService(
                 new JdbcRemedyStore(jdbc),
                 settlements,
@@ -378,6 +394,7 @@ class CartCheckoutAndOrderTests {
                 (tenantId, orderId) -> deliveryFeeBasis,
                 ALWAYS_APPROVES,
                 new JdbcAuditRecorder(jdbc, objectMapper),
+                published,
                 clock,
                 200_000L);
         orderQuery = new OrderQueryService(orderStore, processStore, UNWIRED_PAYMENTS, protection);
@@ -1017,6 +1034,153 @@ class CartCheckoutAndOrderTests {
         // of this design and is covered on its own in the settlement suite
         // (aLatePaymentAfterAReleasedHoldSettlesShortAndSaysSo and neighbours).
         assertThat(settlementStore.findSettlement(TENANT, placed.orderId())).isPresent();
+    }
+
+    // ------------------------------------------- V0022: payment_status_projection
+
+    @Test
+    @DisplayName("a captured payment flips the order's payment projection from PENDING to CAPTURED")
+    void captureFlipsPaymentProjectionToCaptured() {
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-proj-captured", "CLICK")));
+        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().paymentStatusProjection())
+                .isEqualTo("PENDING");
+
+        UUID attempt = reservedAttempt(placed.orderId(), PaymentProviderType.CLICK, Duration.ofHours(12));
+        capturePayment(placed.orderId(), attempt);
+
+        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().paymentStatusProjection())
+                .as("the operations list must stop reading PENDING the instant the money is in")
+                .isEqualTo("CAPTURED");
+    }
+
+    @Test
+    @DisplayName("a duplicate payment-captured delivery leaves the payment projection exactly " + "where it was")
+    void duplicateCaptureProjectionIsANoOp() {
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-proj-captured-dup", "CLICK")));
+        UUID attempt = reservedAttempt(placed.orderId(), PaymentProviderType.CLICK, Duration.ofHours(12));
+        capturePayment(placed.orderId(), attempt);
+        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().paymentStatusProjection())
+                .isEqualTo("CAPTURED");
+
+        // A redelivery of the same fact, exactly as duplicateCaptureIsANoOp above
+        // exercises for the order's status. The projection write is a plain SET,
+        // not a conditional UPDATE, so this must converge on the same value rather
+        // than error.
+        tx(() -> published.publishEvent(new PaymentCaptured(
+                UUID.randomUUID(),
+                new uz.horecaos.platform.tenancy.api.TenantId(TENANT),
+                placed.orderId(),
+                clock.instant())));
+
+        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().paymentStatusProjection())
+                .isEqualTo("CAPTURED");
+    }
+
+    @Test
+    @DisplayName("a failed attempt flips the order's payment projection to FAILED")
+    void failedAttemptFlipsPaymentProjectionToFailed() {
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-proj-failed", "CLICK")));
+        UUID attempt = presentedAttempt(placed.orderId(), PaymentProviderType.CLICK);
+
+        failPayment(placed.orderId(), attempt);
+
+        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().paymentStatusProjection())
+                .isEqualTo("FAILED");
+    }
+
+    @Test
+    @DisplayName("a void flips the order's payment projection to VOIDED")
+    void voidFlipsPaymentProjectionToVoided() {
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-proj-voided", "CLICK")));
+        UUID attempt = reservedAttempt(placed.orderId(), PaymentProviderType.CLICK, Duration.ofHours(12));
+
+        voidPayment(placed.orderId(), attempt);
+
+        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().paymentStatusProjection())
+                .as("TerminalOrderPaymentVoid closed the provider's side with no money moved, so "
+                        + "the operations list must say VOIDED and not leave the stale PENDING")
+                .isEqualTo("VOIDED");
+    }
+
+    @Test
+    @DisplayName(
+            "a refund recorded through OrderRemedyService flips a captured order's payment " + "projection to REFUNDED")
+    void refundFlipsPaymentProjectionToRefunded() {
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-proj-refund", "CLICK")));
+        UUID attempt = reservedAttempt(placed.orderId(), PaymentProviderType.CLICK, Duration.ofHours(12));
+        capturePayment(placed.orderId(), attempt);
+        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().paymentStatusProjection())
+                .isEqualTo("CAPTURED");
+
+        // The real ADR 0048 path: the settlement CheckoutSettlementPlanner already
+        // planned at checkout, refunded through the real OrderRemedyService rather
+        // than a hand-planned settlement — see anOrderPlacedTheRealWayCanBeRefunded
+        // for why that distinction is the whole test.
+        var outcome = tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 100_000L)));
+        assertThat(outcome.recorded()).isTrue();
+
+        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().paymentStatusProjection())
+                .isEqualTo("REFUNDED");
+    }
+
+    @Test
+    @DisplayName("a cash order's NOT_REQUIRED payment projection is never moved by a payment " + "lifecycle signal")
+    void cashOrderPaymentProjectionIsNeverTouched() {
+        var wired = checkoutWith.apply(realPayments(NO_SELLER));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-proj-cash", "CASH")));
+        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().paymentStatusProjection())
+                .isEqualTo("NOT_REQUIRED");
+
+        // Every one of the four signals, fired directly against this cash order's
+        // id. Cash never opens a payment attempt in production, so this is the one
+        // place these four are proven against the guard itself —
+        // JdbcOrderStore.updatePaymentProjection's own WHERE clause — rather than
+        // against the (also true) fact that nothing would ordinarily call them for
+        // cash at all.
+        tx(() -> {
+            published.publishEvent(new PaymentCaptured(
+                    UUID.randomUUID(),
+                    new uz.horecaos.platform.tenancy.api.TenantId(TENANT),
+                    placed.orderId(),
+                    clock.instant()));
+            published.publishEvent(new PaymentFailed(
+                    UUID.randomUUID(),
+                    new uz.horecaos.platform.tenancy.api.TenantId(TENANT),
+                    placed.orderId(),
+                    clock.instant()));
+            published.publishEvent(new PaymentVoided(
+                    UUID.randomUUID(),
+                    new uz.horecaos.platform.tenancy.api.TenantId(TENANT),
+                    placed.orderId(),
+                    clock.instant()));
+            published.publishEvent(new PaymentRefunded(
+                    UUID.randomUUID(),
+                    new uz.horecaos.platform.tenancy.api.TenantId(TENANT),
+                    placed.orderId(),
+                    clock.instant()));
+        });
+
+        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().paymentStatusProjection())
+                .as("NOT_REQUIRED means no online payment is tracked for this order at all; no "
+                        + "payment lifecycle signal may move it, including one this order will "
+                        + "never actually receive")
+                .isEqualTo("NOT_REQUIRED");
+
+        // And the real path a cash order does receive: a genuine refund, recorded
+        // for real. It must not disturb NOT_REQUIRED either.
+        handOver(placed.orderId());
+        var refunded = tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 100_000L)));
+        assertThat(refunded.recorded()).isTrue();
+        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().paymentStatusProjection())
+                .as("a cash order genuinely refunded through the ADR 0048 remedy path still "
+                        + "reads NOT_REQUIRED: the remedy is real, this projection was never "
+                        + "tracking this order's money, and does not start now")
+                .isEqualTo("NOT_REQUIRED");
     }
 
     private long pendingApprovalTimers(UUID orderId) {
@@ -3371,6 +3535,79 @@ class CartCheckoutAndOrderTests {
         });
     }
 
+    /**
+     * A provider declines the attempt before any money moves, with every
+     * consequence {@code PaymentAttemptService.applyToIntent} would draw from it:
+     * the attempt reaches {@code FAILED}, the intent reaches {@code FAILED}, and
+     * — the seam under test — {@link PaymentFailed} is published, which {@link
+     * PaymentProjectionTrigger} is wired above to deliver to {@code
+     * JdbcOrderStore.updatePaymentProjection}.
+     *
+     * <p>Written by hand for the same reason {@link #capturePayment} is.
+     */
+    private void failPayment(UUID orderId, UUID attemptId) {
+        tx(() -> {
+            paymentAttemptStore.transition(
+                    TENANT,
+                    attemptId,
+                    uz.horecaos.platform.payments.domain.PaymentAttemptStatus.PRESENTED,
+                    uz.horecaos.platform.payments.domain.PaymentAttemptStatus.FAILED,
+                    null,
+                    null,
+                    null,
+                    "DECLINED",
+                    clock.instant());
+            var intent = intentStore.findLiveForOrder(TENANT, orderId).orElseThrow();
+            intentStore.transition(
+                    TENANT,
+                    intent.id(),
+                    intent.status(),
+                    PaymentIntentStatus.FAILED,
+                    intent.version(),
+                    clock.instant());
+            published.publishEvent(new PaymentFailed(
+                    UUID.randomUUID(),
+                    new uz.horecaos.platform.tenancy.api.TenantId(TENANT),
+                    orderId,
+                    clock.instant()));
+        });
+    }
+
+    /**
+     * The provider's side of an order that ended unpaid is closed with no money
+     * ever moved — {@code TerminalOrderPaymentVoid.recordVoided}'s effect: the
+     * attempt reaches {@code CANCELLED}, and {@link PaymentVoided} is published.
+     *
+     * <p>Written by hand for the same reason {@link #capturePayment} is.
+     */
+    private void voidPayment(UUID orderId, UUID attemptId) {
+        tx(() -> {
+            paymentAttemptStore.transition(
+                    TENANT,
+                    attemptId,
+                    uz.horecaos.platform.payments.domain.PaymentAttemptStatus.RESERVED,
+                    uz.horecaos.platform.payments.domain.PaymentAttemptStatus.CANCELLED,
+                    null,
+                    null,
+                    null,
+                    null,
+                    clock.instant());
+            var intent = intentStore.findLiveForOrder(TENANT, orderId).orElseThrow();
+            intentStore.transition(
+                    TENANT,
+                    intent.id(),
+                    intent.status(),
+                    PaymentIntentStatus.CANCELLED,
+                    intent.version(),
+                    clock.instant());
+            published.publishEvent(new PaymentVoided(
+                    UUID.randomUUID(),
+                    new uz.horecaos.platform.tenancy.api.TenantId(TENANT),
+                    orderId,
+                    clock.instant()));
+        });
+    }
+
     private OrderRemedyService.RefundCommand refundOf(UUID orderId, long amountMinor) {
         return new OrderRemedyService.RefundCommand(
                 TENANT,
@@ -3863,9 +4100,17 @@ class CartCheckoutAndOrderTests {
          * Stands in for the Spring dispatch a {@code BEFORE_COMMIT} listener gets,
          * for the payments-to-ordering direction. Production payments code
          * publishes {@link PaymentCaptured}; nothing in this hand-wired suite
-         * delivers it to {@link PaymentCaptureConfirmationTrigger} otherwise.
+         * delivers it to {@link PaymentCaptureConfirmationTrigger} and {@link
+         * PaymentProjectionTrigger} otherwise.
          */
         private volatile java.util.function.Consumer<PaymentCaptured> onPaymentCaptured = captured -> {};
+
+        /** The same stand-in, for the projection's other three inbound facts. */
+        private volatile java.util.function.Consumer<PaymentFailed> onPaymentFailed = failed -> {};
+
+        private volatile java.util.function.Consumer<PaymentVoided> onPaymentVoided = voided -> {};
+
+        private volatile java.util.function.Consumer<PaymentRefunded> onPaymentRefunded = refunded -> {};
 
         @Override
         public void publishEvent(Object event) {
@@ -3877,6 +4122,15 @@ class CartCheckoutAndOrderTests {
             }
             if (event instanceof PaymentCaptured captured) {
                 onPaymentCaptured.accept(captured);
+            }
+            if (event instanceof PaymentFailed failed) {
+                onPaymentFailed.accept(failed);
+            }
+            if (event instanceof PaymentVoided voided) {
+                onPaymentVoided.accept(voided);
+            }
+            if (event instanceof PaymentRefunded refunded) {
+                onPaymentRefunded.accept(refunded);
             }
         }
     }
