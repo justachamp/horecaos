@@ -580,6 +580,50 @@ public class JdbcOrderStore {
                 .optional();
     }
 
+    /**
+     * Mirrors a payment lifecycle fact onto {@code payment_status_projection}
+     * (V0022): "always written from those aggregates' events rather than decided
+     * here". This is that write — the one V0022's own comment promised and that
+     * nothing, until now, ever performed.
+     *
+     * <p>A plain {@code SET}, not a conditional UPDATE naming an expected prior
+     * value. Nothing about this column drives an order-state transition, so there
+     * is no race to lose: whichever payment fact arrives last is the projection's
+     * truth, exactly as it is the payment aggregate's, and applying the same fact
+     * twice converges on the same value rather than erroring or double-applying.
+     *
+     * <p>{@code NOT_REQUIRED} is excluded from the {@code WHERE} clause on
+     * purpose, which is the one guard this method does apply. It is not "no
+     * payment fact has arrived yet" — it is checkout's own declaration that no
+     * online payment will ever be tracked for this order (cash, or an unwired
+     * payments port), made once, and a payment lifecycle signal must not
+     * overwrite it. A cash order that is later refunded through {@code
+     * OrderRemedyService} stays {@code NOT_REQUIRED}: the remedy is real and is
+     * recorded in {@code payments.order_remedies}, but this column was never
+     * tracking that order's money and does not start now.
+     *
+     * @param projection one of the CHECK constraint's values other than {@code
+     *                    NOT_REQUIRED} — {@code CAPTURED}, {@code FAILED},
+     *                    {@code VOIDED} or {@code REFUNDED} today
+     * @return whether a row was actually changed — false for an unknown order, a
+     *         cross-tenant id, or a {@code NOT_REQUIRED} order, all three of
+     *         which are quiet no-ops rather than exceptions, matching every other
+     *         inbound payment signal this store answers
+     */
+    public boolean updatePaymentProjection(UUID tenantId, UUID orderId, String projection) {
+        int updated = jdbc.sql("""
+                        UPDATE ordering.orders
+                           SET payment_status_projection = :projection
+                         WHERE tenant_id = :tenantId AND id = :id
+                           AND payment_status_projection <> 'NOT_REQUIRED'
+                        """)
+                .param("projection", projection)
+                .param("tenantId", tenantId)
+                .param("id", orderId)
+                .update();
+        return updated > 0;
+    }
+
     /** The operations list for one location, newest first. */
     public List<OrderRow> listForLocation(
             UUID tenantId, UUID brandId, UUID locationId, List<String> statuses, int limit) {

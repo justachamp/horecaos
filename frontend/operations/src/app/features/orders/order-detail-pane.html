@@ -1,0 +1,389 @@
+<div class="pane" data-testid="order-detail-pane">
+  <!-- Always rendered, regardless of load state: support pastes this id from a
+       log, and the old placeholder's own reason for existing was "the route
+       binding... deep-linkable" — this is the visible proof it worked. -->
+  <p class="q-caption pane__id-ref">
+    {{ 'orders.detail.reference' | t }} <span class="q-mono" data-testid="order-detail-id">{{ orderId() }}</span>
+  </p>
+
+  @if (notice(); as text) {
+    <div class="pane__notice-band" role="status" data-testid="order-detail-notice">
+      <span class="q-body-sm">{{ text }}</span>
+      <button
+        type="button"
+        class="pane__notice-dismiss"
+        (click)="dismissNotice()"
+        [attr.aria-label]="'orders.detail.close' | t"
+      >
+        ×
+      </button>
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="pane__skeleton" [attr.aria-label]="'orders.detail.loading' | t" data-testid="order-detail-loading">
+      @for (i of [1, 2, 3, 4]; track i) {
+        <div class="pane__skeleton-row"></div>
+      }
+    </div>
+  } @else if (denied()) {
+    <p class="q-body-sm pane__state" data-testid="order-detail-denied">{{ 'orders.detail.denied' | t }}</p>
+  } @else if (notFound()) {
+    <p class="q-body-sm pane__state" data-testid="order-detail-not-found">
+      {{ 'error.RESOURCE_NOT_FOUND' | t }}
+    </p>
+  } @else if (lastError(); as error) {
+    <div class="pane__state" data-testid="order-detail-error">
+      <p class="q-body-sm">{{ errorMessage(error) }}</p>
+      <button type="button" class="pane__retry" (click)="manualRetry()">
+        {{ 'orders.queue.error.retry' | t }}
+      </button>
+    </div>
+  } @else if (order(); as detail) {
+    <!-- ================================================================ header (§3.3) -->
+    <header class="pane__header">
+      <div class="pane__header-row">
+        <span class="q-mono pane__order-number">{{ detail.value.summary.publicOrderNumber }}</span>
+        <span class="status-badge">{{ statusLabel(detail.value.summary.status) }}</span>
+      </div>
+      @if (headerSeverity(); as severity) {
+        @if (severityCaption(severity); as caption) {
+          <p
+            class="q-caption pane__severity-caption"
+            [class.pane__severity-caption--danger]="severity.tone === 'danger'"
+            [class.pane__severity-caption--warning]="severity.tone === 'warning'"
+          >
+            {{ caption }}
+          </p>
+        }
+      }
+      <p class="q-caption pane__version">
+        {{ 'orders.detail.version' | t: { version: detail.value.summary.version ?? 0 } }}
+      </p>
+
+      <div class="pane__actions">
+        @if (primaryAction(); as primary) {
+          <button
+            type="button"
+            class="pane__primary-action"
+            [disabled]="busy()"
+            (click)="onActionClick(primary)"
+            data-testid="order-detail-primary-action"
+          >
+            {{ actionLabel(primary) }}
+          </button>
+        }
+        @if (overflowActions().length > 0) {
+          <div class="pane__overflow">
+            <button
+              type="button"
+              class="pane__overflow-trigger"
+              [disabled]="busy()"
+              (click)="toggleHeaderOverflow()"
+              [attr.aria-label]="'orders.action.overflow' | t"
+              [attr.aria-expanded]="headerOverflowOpen()"
+              data-testid="order-detail-overflow-trigger"
+            >
+              <span aria-hidden="true">⋯</span>
+            </button>
+            @if (headerOverflowOpen()) {
+              <div class="pane__overflow-menu" data-testid="order-detail-overflow-menu">
+                @for (action of overflowActions(); track action.action + (action.targetStatus ?? '')) {
+                  <button
+                    type="button"
+                    class="pane__overflow-item"
+                    (click)="onActionClick(action)"
+                    [attr.data-testid]="'order-detail-action-' + action.action"
+                  >
+                    {{ actionLabel(action) }}
+                  </button>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </header>
+
+    <!-- ================================================================ Состав (§3.4) -->
+    <section class="pane__section" [attr.aria-label]="'orders.detail.section.lines' | t">
+      <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.lines' | t }}</h2>
+      <p class="q-caption pane__snapshot-notice">{{ 'orders.detail.lines.snapshotNotice' | t }}</p>
+
+      <table class="pane__lines-table" data-testid="order-detail-lines">
+        <thead>
+          <tr>
+            <th>{{ 'orders.detail.lines.column.number' | t }}</th>
+            <th>{{ 'orders.detail.lines.column.name' | t }}</th>
+            <th class="pane__num-col">{{ 'orders.detail.lines.column.quantity' | t }}</th>
+            <th class="pane__num-col">{{ 'orders.detail.lines.column.amount' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (line of detail.value.lines; track line.lineId) {
+            <tr data-testid="order-detail-line">
+              <td class="q-tnum">{{ line.lineNumber }}</td>
+              <td>
+                <div>{{ lineName(line) }}</div>
+                @if (line.variantName) {
+                  <div class="q-caption pane__line-variant">{{ line.variantName }}</div>
+                }
+                @if (line.modifiers.length > 0) {
+                  <ul class="pane__line-modifiers">
+                    @for (modifier of line.modifiers; track modifier) {
+                      <li class="q-caption">{{ modifier }}</li>
+                    }
+                  </ul>
+                }
+                @if (line.hasNote) {
+                  @if (revealedNote(line.lineId); as note) {
+                    <p class="q-caption pane__line-note">{{ note }}</p>
+                  } @else if (revealedNote(line.lineId) === null) {
+                    <p class="q-caption pane__line-note">{{ 'orders.detail.lines.note.empty' | t }}</p>
+                  } @else {
+                    <button
+                      type="button"
+                      class="pane__reveal-link"
+                      [disabled]="isRevealingNote(line.lineId)"
+                      (click)="revealLineNote(line.lineId)"
+                      [attr.data-testid]="'order-detail-line-note-reveal-' + line.lineId"
+                    >
+                      {{ 'orders.detail.lines.note.hidden' | t }}
+                    </button>
+                  }
+                }
+              </td>
+              <td class="pane__num-col q-tnum">{{ line.quantity }}</td>
+              <td class="pane__num-col q-mono q-tnum">
+                {{ formatMoneyMinor(line.finalAmountMinor, detail.value.summary.currency) }}
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ================================================================ Деньги (§3.5, §1.3) -->
+    <section class="pane__section" [attr.aria-label]="'orders.detail.section.money' | t">
+      <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.money' | t }}</h2>
+
+      @if (moneyReconciliation(); as money) {
+        @if (money.reconciles) {
+          <dl class="pane__money">
+            <div class="pane__money-row">
+              <dt class="q-body-sm">{{ 'orders.detail.money.subtotal' | t }}</dt>
+              <dd class="q-mono q-tnum">{{ formatMoneyMinor(money.subtotalMinor, detail.value.summary.currency) }}</dd>
+            </div>
+            <div class="pane__money-row">
+              <dt class="q-body-sm">{{ 'orders.detail.money.tax' | t }}</dt>
+              <dd class="q-mono q-tnum">{{ formatMoneyMinor(detail.value.taxMinor, detail.value.summary.currency) }}</dd>
+            </div>
+            <div class="pane__money-row pane__money-row--total">
+              <dt class="q-body-sm">{{ 'orders.detail.money.total' | t }}</dt>
+              <dd class="q-mono q-tnum">{{ formatMoneyMinor(money.totalMinor, detail.value.summary.currency) }}</dd>
+            </div>
+          </dl>
+        } @else {
+          <div class="pane__money-error" role="alert" data-testid="order-detail-money-error">
+            <p class="q-body-sm">{{ 'orders.detail.money.error' | t }}</p>
+            <p class="q-caption q-mono">
+              {{
+                'orders.detail.money.errorDetail'
+                  | t
+                    : {
+                        lineSum: formatMoneyMinor(money.lineSumMinor, detail.value.summary.currency),
+                        subtotal: formatMoneyMinor(money.subtotalMinor, detail.value.summary.currency)
+                      }
+              }}
+            </p>
+          </div>
+        }
+      }
+    </section>
+
+    <!-- ================================================================ Клиент (§3.7) -->
+    <section class="pane__section" [attr.aria-label]="'orders.detail.section.customer' | t">
+      <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.customer' | t }}</h2>
+
+      @if (detail.value.customer.anonymized) {
+        <p class="q-body-sm pane__anonymized" data-testid="order-detail-customer-anonymized">
+          {{ 'orders.detail.customer.anonymized' | t }}
+        </p>
+      } @else {
+        <dl class="pane__fields">
+          <div class="pane__field">
+            <dt class="q-caption">{{ 'orders.detail.customer.name' | t }}</dt>
+            <dd class="q-body-sm">
+              {{ detail.value.customer.displayName }}
+              @if (detail.value.customer.customerType === 'GUEST') {
+                <span class="pane__guest-badge">{{ 'orders.detail.customer.guest' | t }}</span>
+              }
+            </dd>
+          </div>
+
+          <div class="pane__field">
+            <dt class="q-caption">{{ 'orders.detail.customer.phone' | t }}</dt>
+            <dd class="q-body-sm">
+              @if (detail.value.customer.phoneMasked) {
+                <span class="q-mono">{{ revealedPhone() ?? detail.value.customer.phoneMasked }}</span>
+                <button
+                  type="button"
+                  class="pane__reveal-link"
+                  [disabled]="revealingPhone()"
+                  (click)="revealPhone()"
+                  data-testid="order-detail-phone-reveal"
+                >
+                  {{ 'orders.detail.customer.phone.reveal' | t }}
+                </button>
+                <button
+                  type="button"
+                  class="pane__reveal-link"
+                  [disabled]="revealingPhone()"
+                  (click)="copyPhone()"
+                  data-testid="order-detail-phone-copy"
+                >
+                  {{ 'orders.detail.customer.phone.copy' | t }}
+                </button>
+              } @else {
+                {{ 'orders.detail.customer.phone.none' | t }}
+              }
+            </dd>
+          </div>
+
+          @if (!detail.value.customer.transactionalContactAllowed) {
+            <p class="q-caption pane__contact-blocked">{{ 'orders.detail.customer.contactBlocked' | t }}</p>
+          }
+        </dl>
+      }
+    </section>
+
+    <!-- ================================================================ Адрес и доставка (§3.8) -->
+    @if (isDeliveryOrder()) {
+      <section class="pane__section" [attr.aria-label]="'orders.detail.section.address' | t">
+        <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.address' | t }}</h2>
+
+        @if (detail.value.customer.anonymized) {
+          <p class="q-body-sm pane__anonymized">{{ 'orders.detail.customer.anonymized' | t }}</p>
+        } @else if (!detail.value.customer.hasAddress) {
+          <p class="q-body-sm pane__state-inline">{{ 'orders.detail.address.none' | t }}</p>
+        } @else if (revealedAddress(); as address) {
+          <dl class="pane__fields" data-testid="order-detail-address-revealed">
+            @if (address.line1) {
+              <div class="pane__field">
+                <dt class="q-caption">{{ 'orders.detail.address.line' | t }}</dt>
+                <dd class="q-body-sm">
+                  {{ address.line1 }}@if (address.line2) {<span>, {{ address.line2 }}</span>}
+                </dd>
+              </div>
+            }
+            @if (address.entrance) {
+              <div class="pane__field">
+                <dt class="q-caption">{{ 'orders.detail.address.entrance' | t }}</dt>
+                <dd class="q-body-sm">{{ address.entrance }}</dd>
+              </div>
+            }
+            @if (address.floor) {
+              <div class="pane__field">
+                <dt class="q-caption">{{ 'orders.detail.address.floor' | t }}</dt>
+                <dd class="q-body-sm">{{ address.floor }}</dd>
+              </div>
+            }
+            @if (address.apartment) {
+              <div class="pane__field">
+                <dt class="q-caption">{{ 'orders.detail.address.apartment' | t }}</dt>
+                <dd class="q-body-sm">{{ address.apartment }}</dd>
+              </div>
+            }
+            @if (address.landmark) {
+              <div class="pane__field">
+                <dt class="q-caption">{{ 'orders.detail.address.landmark' | t }}</dt>
+                <dd class="q-body-sm">{{ address.landmark }}</dd>
+              </div>
+            }
+            @if (address.deliveryInstructions) {
+              <div class="pane__field">
+                <dt class="q-caption">{{ 'orders.detail.address.instructions' | t }}</dt>
+                <dd class="q-body-sm">{{ address.deliveryInstructions }}</dd>
+              </div>
+            }
+            @if (hasCoordinates(address)) {
+              <div class="pane__field">
+                <dt class="q-caption">{{ 'orders.detail.address.coordinates' | t }}</dt>
+                <dd class="q-body-sm q-mono">{{ address.latitude }}, {{ address.longitude }}</dd>
+              </div>
+            }
+          </dl>
+        } @else {
+          <button
+            type="button"
+            class="pane__reveal-link"
+            [disabled]="revealingAddress()"
+            (click)="revealAddress()"
+            data-testid="order-detail-address-reveal"
+          >
+            {{ 'orders.detail.address.reveal' | t }}
+          </button>
+        }
+      </section>
+    }
+
+    <!-- ================================================================ Хронология (§3.10) -->
+    <section class="pane__section" [attr.aria-label]="'orders.detail.section.timeline' | t">
+      <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.timeline' | t }}</h2>
+
+      <div class="pane__timeline-lane">
+        <p class="q-caption pane__timeline-lane-label">{{ 'orders.detail.timeline.lane.commercial' | t }}</p>
+        @if (timeline(); as entries) {
+          @if (entries.length === 0) {
+            <p class="q-body-sm pane__state-inline">{{ 'orders.detail.timeline.empty' | t }}</p>
+          } @else {
+            <ol class="pane__timeline-entries" data-testid="order-detail-timeline">
+              @for (entry of entries; track entry.sequence; let i = $index) {
+                @if (missingSequenceBefore(entries, i); as missing) {
+                  <li class="pane__timeline-gap" data-testid="order-detail-timeline-gap">
+                    {{ 'orders.detail.timeline.gap' | t: { sequence: missing } }}
+                  </li>
+                }
+                <li class="pane__timeline-entry">
+                  <span class="q-body-sm">{{ statusLabel(entry.fromStatus) }} → {{ statusLabel(entry.toStatus) }}</span>
+                  <span class="q-caption pane__timeline-meta">
+                    {{ triggerLabel(entry.trigger) }}
+                    @if (entry.reasonCode) {
+                      · {{ entry.reasonCode }}
+                    }
+                    · {{ formatOccurredAt(entry.occurredAt) }}
+                  </span>
+                </li>
+              }
+            </ol>
+          }
+        } @else if (timelineError()) {
+          <p class="q-body-sm pane__state-inline">{{ 'orders.detail.timeline.error' | t }}</p>
+        } @else {
+          <p class="q-body-sm pane__state-inline">{{ 'orders.detail.loading' | t }}</p>
+        }
+      </div>
+
+      <div class="pane__timeline-lane pane__timeline-lane--not-built">
+        <p class="q-caption pane__timeline-lane-label">{{ 'orders.detail.timeline.lane.production' | t }}</p>
+        <p class="q-caption">{{ 'orders.detail.timeline.lane.notBuilt' | t }}</p>
+      </div>
+
+      <div class="pane__timeline-lane pane__timeline-lane--not-built">
+        <p class="q-caption pane__timeline-lane-label">{{ 'orders.detail.timeline.lane.delivery' | t }}</p>
+        <p class="q-caption">{{ 'orders.detail.timeline.lane.notBuilt' | t }}</p>
+      </div>
+    </section>
+  }
+
+  @if (dialog()) {
+    <q-order-reason-dialog
+      [titleKey]="dialogTitleKey()"
+      [confirmLabelKey]="dialogConfirmLabelKey()"
+      [noteEnabled]="dialogNoteEnabled()"
+      [busy]="busy()"
+      (confirm)="onDialogConfirm($event)"
+      (dismiss)="onDialogDismiss()"
+    />
+  }
+</div>

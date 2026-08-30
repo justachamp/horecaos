@@ -51,6 +51,23 @@
     </div>
   }
 
+  <!-- §4.1/§4.3: never a silent auto-retry — STALE_VERSION, a lost approval
+       race, and a refused transition all surface here, in words, with the
+       queue already re-read. -->
+  @if (actionNotice(); as notice) {
+    <div class="order-queue__notice-band" role="status" data-testid="order-queue-notice">
+      <span class="q-body-sm">{{ notice }}</span>
+      <button
+        type="button"
+        class="order-queue__notice-dismiss"
+        (click)="dismissNotice()"
+        [attr.aria-label]="'orders.detail.close' | t"
+      >
+        ×
+      </button>
+    </div>
+  }
+
   <div class="order-queue__table-wrap" data-testid="order-queue-table-wrap">
     @if (!firstLoadComplete()) {
       <div
@@ -76,6 +93,9 @@
             <th>{{ 'orders.column.type' | t }}</th>
             <th class="order-queue__num-col">{{ 'orders.column.total' | t }}</th>
             <th>{{ 'orders.column.status' | t }}</th>
+            <th class="order-queue__actions-col">
+              <span class="q-visually-hidden">{{ 'orders.column.actions' | t }}</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -112,10 +132,57 @@
               <td>
                 <span class="status-badge">{{ statusLabel(row.order.status) }}</span>
               </td>
+              <td class="order-queue__actions-col" data-testid="order-row-actions">
+                <div class="row-actions">
+                  @for (action of inlineActions(row.order); track action.action + (action.targetStatus ?? '')) {
+                    <button
+                      type="button"
+                      class="row-actions__inline"
+                      [disabled]="isRowBusy(row.order.orderId)"
+                      (click)="onActionClick(row.order, action, $event)"
+                      [attr.data-testid]="'order-row-action-' + action.action"
+                    >
+                      {{ actionLabel(row.order, action) }}
+                    </button>
+                  }
+                  @if (overflowActions(row.order).length > 0) {
+                    <div class="row-actions__overflow">
+                      <button
+                        type="button"
+                        class="row-actions__overflow-trigger"
+                        [disabled]="isRowBusy(row.order.orderId)"
+                        (click)="toggleOverflow(row.order.orderId, $event)"
+                        [attr.aria-label]="'orders.action.overflow' | t"
+                        [attr.aria-expanded]="openOverflowFor() === row.order.orderId"
+                        data-testid="order-row-overflow-trigger"
+                      >
+                        <span aria-hidden="true">⋯</span>
+                      </button>
+                      @if (openOverflowFor() === row.order.orderId) {
+                        <div class="row-actions__overflow-menu" data-testid="order-row-overflow-menu">
+                          @for (
+                            action of overflowActions(row.order);
+                            track action.action + (action.targetStatus ?? '')
+                          ) {
+                            <button
+                              type="button"
+                              class="row-actions__overflow-item"
+                              (click)="onActionClick(row.order, action, $event)"
+                              [attr.data-testid]="'order-row-action-' + action.action"
+                            >
+                              {{ actionLabel(row.order, action) }}
+                            </button>
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              </td>
             </tr>
           } @empty {
             <tr class="order-queue__empty-row">
-              <td colspan="6">
+              <td colspan="7">
                 <p class="q-body-sm" data-testid="order-queue-empty">{{ emptyMessage() }}</p>
               </td>
             </tr>
@@ -124,4 +191,15 @@
       </table>
     }
   </div>
+
+  @if (dialog()) {
+    <q-order-reason-dialog
+      [titleKey]="dialogTitleKey()"
+      [confirmLabelKey]="dialogConfirmLabelKey()"
+      [noteEnabled]="dialogNoteEnabled()"
+      [busy]="dialogBusy()"
+      (confirm)="onDialogConfirm($event)"
+      (dismiss)="onDialogDismiss()"
+    />
+  }
 </div>

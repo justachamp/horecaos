@@ -13,7 +13,7 @@ import { ApiClient } from '../../core/api/api-client';
 import { operationsPaths } from '../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
-import { TimeZone, formatClock, formatDuration, formatTime } from '../../core/format/datetime';
+import { TimeZone, formatClock, formatTime } from '../../core/format/datetime';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
@@ -23,18 +23,19 @@ import {
   DecisionIdRegistry,
   OrderActionResponse,
   actionLabel,
+  decisionOutcomeLabel,
   splitInlineOverflow,
 } from './order-actions';
 import { DecisionResponse, OrderActionsApi } from './order-actions-api';
 import { CountableOrder, OrderCounts, TabCounts, zeroTabCounts } from './order-counts';
-import { describeApiError, errorReference, transitionConflict } from './order-errors';
+import { describeApiError, errorReference, mutationErrorNotice } from './order-errors';
 import { OrderReasonDialog, OrderReasonSubmission } from './order-reason-dialog';
 import {
   OrderSeverity,
   compareNewestFirst,
   compareOrderSeverity,
   computeOrderSeverity,
-  formatCountdown,
+  formatSeverityCaption,
 } from './order-severity';
 import { orderStatusLabel } from './order-status';
 import { OrderSummaryResponse } from './order-summary';
@@ -106,7 +107,7 @@ interface RowDialogState {
  */
 @Component({
   selector: 'q-order-queue',
-  imports: [TPipe],
+  imports: [TPipe, OrderReasonDialog],
   templateUrl: './order-queue.html',
   styleUrl: './order-queue.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -295,23 +296,7 @@ export class OrderQueue implements OnInit {
   }
 
   protected severityCaption(severity: OrderSeverity): string | null {
-    switch (severity.level) {
-      case 'BLOCKED':
-        return this.i18n.t('orders.severity.blocked');
-      case 'AWAITING_APPROVAL_DEADLINE':
-        return this.i18n.t('orders.severity.approvalDeadline', {
-          mmss: formatCountdown(severity.remainingMs ?? 0),
-        });
-      case 'NO_PROMISE_FALLBACK':
-        return this.i18n.t('orders.severity.noPromiseFallback', {
-          duration: formatDuration(Math.floor((severity.elapsedMs ?? 0) / 60_000), {
-            hour: this.i18n.t('orders.duration.hour'),
-            minute: this.i18n.t('orders.duration.minute'),
-          }),
-        });
-      case 'NORMAL':
-        return null;
-    }
+    return formatSeverityCaption(severity, (key, values) => this.i18n.t(key, values));
   }
 
   protected emptyMessage(): string {
@@ -321,18 +306,218 @@ export class OrderQueue implements OnInit {
   }
 
   protected errorMessage(error: ApiError): string {
-    const key = ERROR_MESSAGE_KEYS[error.code];
-    if (key) {
-      return this.i18n.t(key);
-    }
-    return error.correlationId
-      ? this.i18n.t('error.unknown', { correlationId: error.correlationId })
-      : this.i18n.t('error.unknown.noReference');
+    return describeApiError(error, (key, values) => this.i18n.t(key, values));
   }
 
   /** ADR 0031's errorCode and correlation id, for support (§2.11's error band). */
   protected errorReference(error: ApiError): string {
-    return error.correlationId ? `${error.code} · ${error.correlationId}` : error.code;
+    return errorReference(error);
+  }
+
+  // ------------------------------------------------------------ §2.9 row actions
+
+  /** At most two inline affordances (§2.9); the rest go in the row's overflow menu. */
+  protected inlineActions(order: OrderSummaryResponse): readonly OrderActionResponse[] {
+    return splitInlineOverflow(order.actions).inline;
+  }
+
+  protected overflowActions(order: OrderSummaryResponse): readonly OrderActionResponse[] {
+    return splitInlineOverflow(order.actions).overflow;
+  }
+
+  protected actionLabel(order: OrderSummaryResponse, action: OrderActionResponse): string {
+    return actionLabel(
+      action,
+      order.fulfillmentMode ?? null,
+      (key, values) => this.i18n.t(key, values),
+      (status) => this.statusLabel(status),
+    );
+  }
+
+  protected isRowBusy(orderId: string): boolean {
+    return this.busyOrderIds().has(orderId);
+  }
+
+  protected toggleOverflow(orderId: string, event: Event): void {
+    event.stopPropagation();
+    this.openOverflowFor.update((current) => (current === orderId ? null : orderId));
+  }
+
+  protected dismissNotice(): void {
+    this.actionNotice.set(null);
+  }
+
+  /** Dispatches whichever action was clicked, inline or from the overflow menu. */
+  protected onActionClick(order: OrderSummaryResponse, action: OrderActionResponse, event: Event): void {
+    event.stopPropagation();
+    this.openOverflowFor.set(null);
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    // Java's OrderSummaryResponse.version is a primitive int, always sent; the
+    // fallback is only for a fixture or an interim response that omits it.
+    const version = order.version ?? 0;
+
+    switch (action.action) {
+      case 'APPROVE':
+        void this.submitDecision(
+          order.orderId,
+          this.actionsApi.approve(scope, order.orderId, this.decisionIds.idFor(order.orderId)),
+        );
+        return;
+      case 'REJECT':
+        this.dialog.set({ orderId: order.orderId, kind: 'reject', version });
+        return;
+      case 'CANCEL':
+        this.dialog.set({ orderId: order.orderId, kind: 'cancel', version });
+        return;
+      case 'ADVANCE':
+        if (action.targetStatus) {
+          void this.submitStateMutation(
+            order.orderId,
+            this.actionsApi.advance(scope, order.orderId, action.targetStatus, version),
+          );
+        }
+        return;
+      default:
+      // An action code this client does not recognise yet — §4.2 says render
+      // it, but there is nothing this client knows how to invoke for it.
+    }
+  }
+
+  protected dialogTitleKey(): MessageKey {
+    return this.dialog()?.kind === 'cancel' ? 'orders.dialog.cancel.title' : 'orders.dialog.reject.title';
+  }
+
+  protected dialogConfirmLabelKey(): MessageKey {
+    return this.dialog()?.kind === 'cancel' ? 'orders.action.cancel' : 'orders.action.reject';
+  }
+
+  protected dialogNoteEnabled(): boolean {
+    return this.dialog()?.kind === 'cancel';
+  }
+
+  protected dialogBusy(): boolean {
+    const state = this.dialog();
+    return state !== null && this.isRowBusy(state.orderId);
+  }
+
+  protected onDialogDismiss(): void {
+    this.dialog.set(null);
+  }
+
+  protected onDialogConfirm(submission: OrderReasonSubmission): void {
+    const state = this.dialog();
+    const scope = this.location.scope();
+    if (!state || !scope) {
+      return;
+    }
+
+    const task =
+      state.kind === 'reject'
+        ? this.submitDecision(
+            state.orderId,
+            this.actionsApi.reject(
+              scope,
+              state.orderId,
+              this.decisionIds.idFor(state.orderId),
+              submission.reasonCode,
+            ),
+          )
+        : this.submitStateMutation(
+            state.orderId,
+            this.actionsApi.cancel(scope, state.orderId, state.version, submission.reasonCode, submission.note),
+          );
+
+    void task.finally(() => this.dialog.set(null));
+  }
+
+  /**
+   * `APPROVE`/`REJECT`: settled by `decisionId` compare-and-set, never by
+   * version. §4.3: "the response reports the outcome that actually settled
+   * the order... a second click gives the same answer as the first rather
+   * than an error" — a lost race is not an error, so it renders the settling
+   * decision rather than a failure message.
+   */
+  private async submitDecision(orderId: string, request: Observable<DecisionResponse>): Promise<void> {
+    this.setRowBusy(orderId, true);
+    try {
+      const result = await firstValueFrom(request);
+      this.decisionIds.settle(orderId);
+      if (!result.applied && result.effectiveAction) {
+        this.actionNotice.set(
+          this.i18n.t('orders.action.lostRace', {
+            action: this.decisionActionLabel(result.effectiveAction),
+          }),
+        );
+      }
+      void this.refresh();
+    } catch (error) {
+      this.handleMutationError(orderId, error, { isDecision: true });
+    } finally {
+      this.setRowBusy(orderId, false);
+    }
+  }
+
+  /**
+   * `ADVANCE`/`CANCEL`: settled by `If-Match` against the order's version.
+   * §4.1: a `409 STALE_VERSION` is handled by re-reading and telling the
+   * operator what changed, never by retrying.
+   */
+  private async submitStateMutation(orderId: string, request: Observable<DecisionResponse>): Promise<void> {
+    this.setRowBusy(orderId, true);
+    try {
+      await firstValueFrom(request);
+      void this.refresh();
+    } catch (error) {
+      this.handleMutationError(orderId, error, { isDecision: false });
+    } finally {
+      this.setRowBusy(orderId, false);
+    }
+  }
+
+  private handleMutationError(
+    orderId: string,
+    error: unknown,
+    options: { readonly isDecision: boolean },
+  ): void {
+    if (!(error instanceof ApiError)) {
+      throw error;
+    }
+
+    // A decisionId is only worth keeping for a retryable failure — the
+    // transport never delivered this attempt, so the next click is still the
+    // same human decision. Anything else is definitive.
+    if (options.isDecision && !error.isRetryable) {
+      this.decisionIds.settle(orderId);
+    }
+
+    const notice = mutationErrorNotice(
+      error,
+      (key, values) => this.i18n.t(key, values),
+      (status) => this.statusLabel(status),
+    );
+    this.actionNotice.set(notice.text);
+    if (notice.shouldReread) {
+      void this.refresh();
+    }
+  }
+
+  private decisionActionLabel(effectiveAction: string): string {
+    return decisionOutcomeLabel(effectiveAction, (key) => this.i18n.t(key));
+  }
+
+  private setRowBusy(orderId: string, busy: boolean): void {
+    this.busyOrderIds.update((current) => {
+      const next = new Set(current);
+      if (busy) {
+        next.add(orderId);
+      } else {
+        next.delete(orderId);
+      }
+      return next;
+    });
   }
 }
 

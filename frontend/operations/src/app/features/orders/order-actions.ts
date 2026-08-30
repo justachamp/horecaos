@@ -96,6 +96,26 @@ export function actionLabel(
   }
 }
 
+const DECISION_OUTCOME_LABEL_KEYS: Readonly<Record<string, MessageKey>> = {
+  APPROVE: 'orders.action.outcome.APPROVE',
+  REJECT: 'orders.action.outcome.REJECT',
+};
+
+/**
+ * The past-tense word for a decision that already settled an order —
+ * "принят"/"отклонён" — distinct from {@link actionLabel}'s imperative button
+ * word ("Принять"/"Отклонить"). §4.3's own example is a participle, not a
+ * command: "«Уже принят — Ш. Каримов, 14:03»". Used only for the lost-race
+ * notice on a settled `DecisionResponse.effectiveAction`.
+ */
+export function decisionOutcomeLabel(
+  effectiveAction: string,
+  translate: (key: MessageKey) => string,
+): string {
+  const key = DECISION_OUTCOME_LABEL_KEYS[effectiveAction];
+  return key ? translate(key) : effectiveAction;
+}
+
 /**
  * `POST .../state-actions` requires a non-blank `reasonCode` (`StateActionRequest`
  * in `OperationsOrderController`), but §4.3's own table marks `Продвинуть`'s

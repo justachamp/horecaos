@@ -10,6 +10,7 @@ import { ApiClient } from '../../core/api/api-client';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
+import { OrderCounts, zeroTabCounts } from './order-counts';
 import { OrderQueue } from './order-queue';
 import { OrderSummaryResponse } from './order-summary';
 
@@ -29,6 +30,17 @@ const FRAME_MS = 20;
  * going through real HTTP — the queue's contract with the wire (paths,
  * headers, cursor rules) is `api-client.spec.ts`'s job; this file is about
  * what the queue does with a response once it has one.
+ *
+ * `OrderCounts` is stubbed too, deliberately, even though it is a real,
+ * `providedIn: 'root'` class rather than a boundary this file owns:
+ * `OrderCounts.forOrders` now makes its own `ApiClient.get` call (the
+ * `GET .../orders/counts` seam, `order-counts.spec.ts`), and `getOrders`
+ * above is a single mock that answers *any* path with the orders array. If
+ * `OrderCounts` were left real it would consume `getOrders`'s call queue
+ * (`mockReturnValueOnce`, etc.) for a second, unrelated request every
+ * refresh, which is exactly the kind of cross-talk this file's own docstring
+ * says it exists to avoid. `OrderCounts`'s own endpoint-consuming behaviour
+ * is `order-counts.spec.ts`'s job.
  */
 function configure(getOrders: ReturnType<typeof vi.fn>): void {
   TestBed.configureTestingModule({
@@ -43,6 +55,7 @@ function configure(getOrders: ReturnType<typeof vi.fn>): void {
         },
       },
       { provide: ApiClient, useValue: { get: getOrders } },
+      { provide: OrderCounts, useValue: { forOrders: () => Promise.resolve(zeroTabCounts()) } },
     ],
   });
   TestBed.inject(I18n).setLocale('en');

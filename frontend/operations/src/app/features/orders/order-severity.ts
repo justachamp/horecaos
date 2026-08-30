@@ -1,3 +1,5 @@
+import { formatDuration } from '../../core/format/datetime';
+import { MessageKey } from '../../core/i18n/messages.en';
 import { isTerminalOrderStatus } from './order-status';
 
 /**
@@ -162,4 +164,33 @@ export function formatCountdown(remainingMs: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+/**
+ * The severity caption (§2.7: "under the order number, in the severity
+ * colour, one line of real text") — shared between `order-queue.ts`'s rows
+ * and `order-detail-pane.ts`'s header, which both need the identical
+ * sentence for the identical `OrderSeverity`.
+ */
+export function formatSeverityCaption(
+  severity: OrderSeverity,
+  translate: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string,
+): string | null {
+  switch (severity.level) {
+    case 'BLOCKED':
+      return translate('orders.severity.blocked');
+    case 'AWAITING_APPROVAL_DEADLINE':
+      return translate('orders.severity.approvalDeadline', {
+        mmss: formatCountdown(severity.remainingMs ?? 0),
+      });
+    case 'NO_PROMISE_FALLBACK':
+      return translate('orders.severity.noPromiseFallback', {
+        duration: formatDuration(Math.floor((severity.elapsedMs ?? 0) / 60_000), {
+          hour: translate('orders.duration.hour'),
+          minute: translate('orders.duration.minute'),
+        }),
+      });
+    case 'NORMAL':
+      return null;
+  }
 }

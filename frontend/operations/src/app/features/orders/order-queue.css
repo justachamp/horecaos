@@ -146,6 +146,30 @@
   flex-shrink: 0;
 }
 
+/* ---- notice band: STALE_VERSION / lost race / refused transition ------ */
+
+.order-queue__notice-band {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 24px;
+  background: var(--q-info-tint);
+  color: var(--q-info-text);
+  border-bottom: 1px solid var(--q-hairline);
+  flex-shrink: 0;
+}
+
+.order-queue__notice-dismiss {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 /* ---- table -------------------------------------------------------------- */
 
 .order-queue__table-wrap {
@@ -244,6 +268,88 @@
   font-size: 12px;
   color: var(--q-ink-muted);
   white-space: nowrap;
+}
+
+/* ---- §2.9 row actions: at most two inline, the rest in overflow ------- */
+
+.order-queue__actions-col {
+  width: 190px;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+}
+
+.row-actions__inline {
+  padding: 4px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.row-actions__inline:hover:not(:disabled) {
+  border-color: var(--q-primary);
+  color: var(--q-primary);
+}
+
+.row-actions__inline:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.row-actions__overflow {
+  position: relative;
+}
+
+.row-actions__overflow-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+  cursor: pointer;
+}
+
+.row-actions__overflow-trigger:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.row-actions__overflow-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 2px);
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  z-index: 10;
+}
+
+.row-actions__overflow-item {
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--q-ink);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.row-actions__overflow-item:hover {
+  background: var(--q-surface-1);
 }
 
 /* ---- skeleton / empty / denied states (§2.11) ------------------------- */

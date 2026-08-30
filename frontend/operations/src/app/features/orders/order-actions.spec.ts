@@ -7,6 +7,7 @@ import {
   OrderActionResponse,
   actionLabel,
   advanceReasonCode,
+  decisionOutcomeLabel,
   splitInlineOverflow,
 } from './order-actions';
 
@@ -75,6 +76,17 @@ describe('actionLabel', () => {
 
   it('renders an unrecognised action code as its own raw value rather than throwing', () => {
     expect(actionLabel(action({ action: 'RESCHEDULE' }), null, t, statusLabel)).toBe('RESCHEDULE');
+  });
+});
+
+describe('decisionOutcomeLabel', () => {
+  it('renders the past-tense outcome, not the imperative button word', () => {
+    expect(decisionOutcomeLabel('APPROVE', t)).toBe('accepted');
+    expect(decisionOutcomeLabel('REJECT', t)).toBe('rejected');
+  });
+
+  it('falls back to the raw action code for one this client does not know', () => {
+    expect(decisionOutcomeLabel('SOMETHING_NEW', t)).toBe('SOMETHING_NEW');
   });
 });
 

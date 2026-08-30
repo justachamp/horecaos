@@ -17,7 +17,9 @@ import java.util.UUID;
  * identifier arriving from a request body or another module's row is not evidence
  * of anything; every query behind this interface constrains on the tenant and the
  * location together, so an entity belonging to another tenant cannot be returned
- * whatever id is passed.
+ * whatever id is passed. {@link #summary} is the one deliberate exception, and it
+ * keeps the same shape: the tenant is still in the predicate beside the id, so an
+ * id from another tenant's row still returns empty rather than that tenant's row.
  *
  * <p>Resolved once and snapshotted. Nothing downstream re-resolves: a
  * re-registration must not rewrite which company a delivered order's receipt said
@@ -37,6 +39,33 @@ public interface LegalEntityDirectory {
      *         visible work rather than a guess
      */
     Optional<FiscalSeller> sellerFor(UUID tenantId, UUID locationId, LocalDate businessDate);
+
+    /**
+     * The entity itself, by the id a caller already holds.
+     *
+     * <p>For registration-time validation rather than resolution: a payment
+     * merchant binding names its legal entity directly in the request that
+     * registers it, and the caller must refuse an id that does not belong to
+     * this tenant or that names an entity which may not currently be sold under
+     * before it writes a row that would let that entity settle a payment.
+     * {@link #sellerFor} cannot answer this — it takes a location, not an
+     * entity id, and an id arriving in a request body is not evidence of
+     * anything until it is checked against the tenant it claims to belong to.
+     *
+     * <p>Defaults to always-empty, the same way {@link #isWired} defaults to
+     * {@code true}: a test double built only for {@link #sellerFor} — this
+     * interface's single abstract method before this one, and still a lambda
+     * target because of the default — is not asserting anything about
+     * registration and should not have to implement a query it never exercises.
+     *
+     * @return empty when no such entity exists for this tenant, never when it
+     *         exists but is inactive — {@link LegalEntitySummary#active()}
+     *         carries that distinction so a caller can tell "no such entity" from
+     *         "that entity cannot be named as a seller right now" apart
+     */
+    default Optional<LegalEntitySummary> summary(UUID tenantId, UUID legalEntityId) {
+        return Optional.empty();
+    }
 
     /**
      * Whether the legal-entity schema this reads is present in the deployment.

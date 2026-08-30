@@ -54,3 +54,42 @@ export function transitionConflict(error: ApiError): { from: string; to: string 
   const to = error.problem['to'];
   return typeof from === 'string' && typeof to === 'string' ? { from, to } : null;
 }
+
+export interface MutationOutcomeNotice {
+  readonly text: string;
+  /**
+   * True when the caller should re-read the order rather than merely show the
+   * message: `STALE_VERSION` and a refused transition both mean this
+   * client's picture of the order is now wrong, not just that one click
+   * failed (§4.1).
+   */
+  readonly shouldReread: boolean;
+}
+
+/**
+ * What to tell the operator, and whether to re-read, for a failed mutation —
+ * shared between the queue's row actions and the detail pane's header
+ * actions, since both submit the same three calls (`order-actions-api.ts`)
+ * and must react to `STALE_VERSION` and a refused transition identically
+ * (§4.1: "never by retrying").
+ */
+export function mutationErrorNotice(
+  error: ApiError,
+  translate: (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string,
+  statusLabel: (status: string) => string,
+): MutationOutcomeNotice {
+  if (error.code === ApiErrorCode.STALE_VERSION) {
+    return { text: translate('orders.action.staleVersion'), shouldReread: true };
+  }
+  const conflict = transitionConflict(error);
+  if (conflict) {
+    return {
+      text: translate('orders.action.conflict', {
+        from: statusLabel(conflict.from),
+        to: statusLabel(conflict.to),
+      }),
+      shouldReread: true,
+    };
+  }
+  return { text: describeApiError(error, translate), shouldReread: false };
+}

@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.OptionalLong;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -22,9 +23,11 @@ import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.ordering.api.OrderDirectory.OrderSummary;
+import uz.horecaos.platform.ordering.api.PaymentRefunded;
 import uz.horecaos.platform.payments.api.EntitlementBenefit;
 import uz.horecaos.platform.payments.api.EntitlementScope;
 import uz.horecaos.platform.payments.application.DeliveryFeeBasisPort;
+import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -119,9 +122,11 @@ public class OrderRemedyService {
     private final DeliveryFeeBasisPort deliveryFees;
     private final ApprovalService approvals;
     private final AuditRecorder audit;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
     private final long approvalThresholdMinor;
 
+    @SuppressWarnings("checkstyle:ParameterNumber")
     public OrderRemedyService(
             JdbcRemedyStore remedies,
             OrderSettlementService settlements,
@@ -129,6 +134,7 @@ public class OrderRemedyService {
             DeliveryFeeBasisPort deliveryFees,
             ApprovalService approvals,
             AuditRecorder audit,
+            ApplicationEventPublisher events,
             Clock clock,
             @Value("${horecaos.payments.remedy-approval-threshold-minor:200000}") long approvalThresholdMinor) {
         this.remedies = remedies;
@@ -137,6 +143,7 @@ public class OrderRemedyService {
         this.deliveryFees = deliveryFees;
         this.approvals = approvals;
         this.audit = audit;
+        this.events = events;
         this.clock = clock;
         this.approvalThresholdMinor = approvalThresholdMinor;
     }
@@ -294,6 +301,20 @@ public class OrderRemedyService {
                 1);
 
         remedies.insertRemedy(remedy, command.idempotencyKey(), now);
+
+        // The order's own payment_status_projection (V0022), mirrored rather than
+        // decided here — a plain application event for the same module-boundary
+        // reason PaymentAttemptService publishes PaymentCaptured, see that type's
+        // Javadoc. Every amount reaching this line is positive (checked at the top
+        // of this method), so money genuinely came back, whether the platform
+        // performed it or is taking an operator's word for it; the split between
+        // the two is the remedy row's business, not the order's. A NOT_REQUIRED
+        // order — a cash order refunded through this same call, which is ADR
+        // 0048's ordinary case — is left exactly as it is: JdbcOrderStore
+        // .updatePaymentProjection refuses to move that value at all.
+        events.publishEvent(
+                new PaymentRefunded(UUID.randomUUID(), new TenantId(command.tenantId()), command.orderId(), now));
+
         recordAudit(
                 "payments.remedy.record",
                 order,

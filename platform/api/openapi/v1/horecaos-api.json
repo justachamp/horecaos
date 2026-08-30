@@ -4350,6 +4350,68 @@
         },
         "type" : "object"
       },
+      "MerchantBindingView" : {
+        "properties" : {
+          "callbackPathSegment" : {
+            "type" : "string"
+          },
+          "effectiveFrom" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "effectiveUntil" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "installationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "integrationBindingId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "legalEntityId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "merchantAccountReference" : {
+            "type" : "string"
+          },
+          "merchantIdReference" : {
+            "type" : "string"
+          },
+          "merchantUserReference" : {
+            "type" : "string"
+          },
+          "providerType" : {
+            "enum" : [ "CLICK", "PAYME", "TELEGRAM" ],
+            "type" : "string"
+          },
+          "secretReference" : {
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "DRAFT", "ACTIVE", "SUSPENDED", "RETIRED" ],
+            "type" : "string"
+          },
+          "supportsPartnerFiscalization" : {
+            "type" : "boolean"
+          },
+          "supportsReversal" : {
+            "type" : "boolean"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "MetricResponse" : {
         "properties" : {
           "aggregation" : {
@@ -6531,6 +6593,70 @@
           }
         },
         "required" : [ "code", "legalName", "tin" ],
+        "type" : "object"
+      },
+      "RegisterMerchantBindingRequest" : {
+        "properties" : {
+          "callbackPathSegment" : {
+            "minLength" : 1,
+            "pattern" : "[a-z0-9][a-z0-9-]{7,63}",
+            "type" : "string"
+          },
+          "effectiveFrom" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "effectiveUntil" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "installationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "integrationBindingId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "legalEntityId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "merchantAccountReference" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "merchantIdReference" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "merchantUserReference" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "providerType" : {
+            "enum" : [ "CLICK", "PAYME", "TELEGRAM" ],
+            "type" : "string"
+          },
+          "secretReference" : {
+            "description" : "An ADR 0028 secret reference. Never a secret value.",
+            "example" : "horecaos:prod:provider_payment:tenant-42:click-service-1",
+            "maxLength" : 512,
+            "minLength" : 0,
+            "pattern" : "horecaos:[^:]+:provider_payment:[^:]+:[^:]+",
+            "type" : "string"
+          },
+          "supportsPartnerFiscalization" : {
+            "type" : "boolean"
+          },
+          "supportsReversal" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "callbackPathSegment", "effectiveFrom", "installationId", "integrationBindingId", "legalEntityId", "merchantAccountReference", "providerType", "secretReference" ],
         "type" : "object"
       },
       "RegisterRequest" : {
@@ -9405,7 +9531,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/approval-policies" : {
       "get" : {
         "description" : "Every version of each policy, newest first. An action code with no row here needs no second signature, which is the state every action is in until somebody publishes one.",
-        "operationId" : "list_7",
+        "operationId" : "list_8",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -10801,7 +10927,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/versions/{version}/activate" : {
       "post" : {
         "description" : "Refuses a band gap, an inverted fee bound, and ROAD distance with no routing binding installed. Every problem is returned at once.",
-        "operationId" : "activate_6",
+        "operationId" : "activate_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -11177,7 +11303,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/activation" : {
       "post" : {
         "description" : "Requires If-Match carrying the book's version, so two operators activating at once cannot both win. Quotes already issued are untouched: they carry their own totals and are honoured at the price the customer was shown until they expire.",
-        "operationId" : "activate_5",
+        "operationId" : "activate_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -11876,7 +12002,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions/{version}/activate" : {
       "post" : {
         "description" : "Refuses self-intersecting rings, geometry outside the region's box, and an area above the platform maximum — which is what stops an operator drawing a polygon around the country by accident. Every reason is returned at once rather than one attempt at a time.",
-        "operationId" : "activate_4",
+        "operationId" : "activate_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -11967,7 +12093,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/grants" : {
       "get" : {
-        "operationId" : "list_6",
+        "operationId" : "list_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -12123,7 +12249,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/integrations" : {
       "get" : {
-        "operationId" : "list_5",
+        "operationId" : "list_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -12386,7 +12512,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities" : {
       "get" : {
-        "operationId" : "list_4",
+        "operationId" : "list_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -12416,7 +12542,7 @@
       },
       "post" : {
         "description" : "Registered in DRAFT. A draft entity cannot be named as a seller until it is activated, so typing an INN never immediately puts it on a receipt.",
-        "operationId" : "register_2",
+        "operationId" : "register_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -12501,7 +12627,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities/{entityId}" : {
       "get" : {
-        "operationId" : "get_5",
+        "operationId" : "get_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -12538,7 +12664,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities/{entityId}/activate" : {
       "post" : {
         "description" : "Only an ACTIVE entity may be named as a seller. Permitted from DRAFT or SUSPENDED.",
-        "operationId" : "activate_3",
+        "operationId" : "activate_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -12697,7 +12823,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}" : {
       "get" : {
         "description" : "Blocked steps are listed with the decision that would unblock them, so a tenant that is live without a check is visible rather than implied.",
-        "operationId" : "get_4",
+        "operationId" : "get_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -12734,7 +12860,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}/activate" : {
       "post" : {
         "description" : "Requires every required step to have completed, plus platform approval where a policy demands it. Activating twice produces one transition.",
-        "operationId" : "activate_2",
+        "operationId" : "activate_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -12829,7 +12955,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons" : {
       "get" : {
         "description" : "Read with ORDER_READ rather than the manage capability, because the cancel dialog has to populate its list for every operator who can cancel an order and almost none of them may author one.",
-        "operationId" : "list_3",
+        "operationId" : "list_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -13332,7 +13458,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/sales-channels" : {
       "get" : {
         "description" : "Archived channels are listed because a historical order still renders through one; the status says whether a new cart may use it.",
-        "operationId" : "list_2",
+        "operationId" : "list_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -13401,7 +13527,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/archive" : {
       "post" : {
         "description" : "Channels archive and never delete. Every order carries its channel forever, and a deleted row makes that order unattributable in every report.",
-        "operationId" : "archive_1",
+        "operationId" : "archive_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -14187,7 +14313,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/courier-engagements/{engagementId}/suspend" : {
       "post" : {
-        "operationId" : "suspend_2",
+        "operationId" : "suspend_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -14485,7 +14611,7 @@
     "/api/v1/operations/tenants/{tenantId}/couriers" : {
       "post" : {
         "description" : "Opens in PENDING_VERIFICATION. Onboarding somebody and attesting to their registration are different acts by different people, and this call deliberately cannot do the second.",
-        "operationId" : "register_1",
+        "operationId" : "register_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -14909,6 +15035,245 @@
         },
         "summary" : "Verify a handover code",
         "tags" : [ "Marketplace operations" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/merchant-bindings" : {
+      "get" : {
+        "operationId" : "list_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/MerchantBindingView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List the tenant's registered merchant bindings",
+        "tags" : [ "Merchant bindings" ]
+      },
+      "post" : {
+        "description" : "Registered in DRAFT. A draft binding never resolves for a payment -- JdbcPaymentBindingResolver only returns an ACTIVE row -- so typing in an account reference never immediately puts it in front of a customer. The referenced legal entity must belong to this tenant and be ACTIVE.",
+        "operationId" : "register_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RegisterMerchantBindingRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MerchantBindingView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Register a legal entity's merchant account",
+        "tags" : [ "Merchant bindings" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}" : {
+      "get" : {
+        "operationId" : "get_4",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "bindingId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MerchantBindingView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Get a merchant binding",
+        "tags" : [ "Merchant bindings" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/activate" : {
+      "post" : {
+        "description" : "Only an ACTIVE binding resolves for a payment. Permitted from DRAFT or SUSPENDED; refused if this legal entity already has a different ACTIVE binding for the same provider.",
+        "operationId" : "activate_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "bindingId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MerchantBindingView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Activate a merchant binding",
+        "tags" : [ "Merchant bindings" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/archive" : {
+      "post" : {
+        "description" : "Ends its life on the platform; the row survives so every payment it ever settled still resolves an account reference. Permitted from DRAFT or SUSPENDED -- an ACTIVE binding is suspended first, so retiring one is never the first anyone hears that it stopped resolving.",
+        "operationId" : "archive_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "bindingId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MerchantBindingView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Retire a merchant binding",
+        "tags" : [ "Merchant bindings" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/suspend" : {
+      "post" : {
+        "description" : "Stops the binding from resolving for a new payment. Nothing about a payment it already settled changes. Permitted from ACTIVE only.",
+        "operationId" : "suspend_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "bindingId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MerchantBindingView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Suspend a merchant binding",
+        "tags" : [ "Merchant bindings" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/orders/{orderId}/delivery-fee-reimbursements" : {
@@ -20480,7 +20845,7 @@
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders" : {
       "get" : {
         "description" : "Filterable by status. An empty filter returns everything rather than silently hiding the closed ones, because a branch reconciling a shift needs the orders that are over as much as the ones that are live.",
-        "operationId" : "list_9",
+        "operationId" : "list_10",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -22740,7 +23105,7 @@
     "/api/v1/tenants/{tenantId}/customers/{accountId}/notification-preferences" : {
       "get" : {
         "description" : "Only what has been set. An absent row means the default for that class, which is on rather than off: a customer who never expressed a preference has not opted out of anything.",
-        "operationId" : "list_8",
+        "operationId" : "list_9",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -23812,6 +24177,9 @@
   }, {
     "description" : "Which system may write a capability, at a resolved scope",
     "name" : "Migration ownership"
+  }, {
+    "description" : "Which legal entity settles under which provider account (ADR 0013, ADR 0026)",
+    "name" : "Merchant bindings"
   }, {
     "description" : "The tenant-owned registry of routes to market",
     "name" : "Sales channels"
