@@ -25,6 +25,7 @@ import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
+import uz.horecaos.platform.iam.api.grants.TenantOwnerAuthorityGrantor;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.TenancyEvent;
@@ -34,6 +35,7 @@ import uz.horecaos.platform.tenancy.api.TenantOnboardingStarted;
 import uz.horecaos.platform.tenancy.api.TenantOnboardingStepCompleted;
 import uz.horecaos.platform.tenancy.api.TenantReady;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStep;
+import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcTenantControlPlaneStore;
 
 /**
@@ -64,6 +66,7 @@ class OnboardingServiceTests {
     private RecordingProvisioner provisioner;
     private RecordingEvents published;
     private MutableClock clock;
+    private JdbcTenantControlPlaneStore store;
 
     // Only so that the gauge under test stays strongly reachable while it is
     // read; see stalledAgeSeconds().
@@ -102,7 +105,7 @@ class OnboardingServiceTests {
         clock = new MutableClock(NOW);
         var mapper = JsonMapper.builder().build();
         var recorder = new JdbcAuditRecorder(jdbc, mapper);
-        var store = new JdbcTenantControlPlaneStore(jdbc);
+        store = new JdbcTenantControlPlaneStore(jdbc);
         provisioner = new RecordingProvisioner();
         published = new RecordingEvents();
 
@@ -113,11 +116,7 @@ class OnboardingServiceTests {
                 // transaction starts and stops; a no-op here would test a shape
                 // the application never runs.
                 transactions,
-                List.of(
-                        new OnboardingStepHandlers.KeycloakOrganizationReconcile(provisioner, store),
-                        new OnboardingStepHandlers.TenantOwnerLinkOrInvite(provisioner),
-                        new OnboardingStepHandlers.DefaultConfigurationApply(),
-                        new OnboardingStepHandlers.BrandsAndLocationsValidate(store)),
+                allHandlers(provisioner, store),
                 recorder,
                 new JdbcApprovalService(jdbc, recorder, clock, new SimpleMeterRegistry()),
                 published,
@@ -129,7 +128,7 @@ class OnboardingServiceTests {
     }
 
     @Test
-    void everyStepIsMaterialisedIncludingTheBlockedOnes() {
+    void everyStepIsMaterialised() {
         UUID runId = startRun();
 
         var steps = jdbc.sql("""
@@ -141,20 +140,52 @@ class OnboardingServiceTests {
                 .list();
 
         assertThat(steps).hasSize(OnboardingStep.values().length);
-        assertThat(steps)
-                .as("a template that silently skips a check reads exactly like one that passed it")
-                .contains("CATALOG_READINESS_VALIDATE=BLOCKED", "POS_BINDINGS_VALIDATE=BLOCKED");
+        // As of 2026-08-30 every step has a handler and none is materialised
+        // BLOCKED by design any more; TENANT_ACTIVATE is the only one still
+        // never claimed by a worker, and only once the scheduler reaches it.
+        assertThat(steps).allMatch(step -> step.endsWith("=PENDING"));
     }
 
+    /**
+     * The fallback this used to be: a step whose capability genuinely has no
+     * handler still materialises and still resolves to {@code BLOCKED} rather
+     * than silently completing or hanging forever. No step is built this way
+     * on 2026-08-30, so this test constructs its own service with one handler
+     * deliberately left out, the way a template author would discover a gap
+     * before shipping it.
+     */
     @Test
-    void aBlockedStepCarriesTheAdrThatWouldUnblockIt() {
-        UUID runId = startRun();
+    void aStepWithNoRegisteredHandlerResolvesToBlockedRatherThanHanging() {
+        OnboardingService serviceMissingOneHandler = new OnboardingService(
+                jdbc,
+                transactions,
+                allHandlers(provisioner, store).stream()
+                        .filter(handler -> handler.step() != OnboardingStep.CATALOG_READINESS_VALIDATE)
+                        .toList(),
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                new JdbcApprovalService(
+                        jdbc,
+                        new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                        clock,
+                        new SimpleMeterRegistry()),
+                published,
+                JsonMapper.builder().build(),
+                clock);
+        UUID runId = serviceMissingOneHandler.startRun(
+                TENANT, TEMPLATE, 1, Map.of("ownerEmail", "owner@acme.example"), ADMIN);
+
+        for (int guard = 0; guard < 60 && serviceMissingOneHandler.runNextStep(runId); guard++) {
+            // Drains without advancing the mutable clock: nothing here retries.
+        }
 
         assertThat(jdbc.sql("""
-                SELECT last_error FROM tenant.onboarding_steps
+                SELECT status, last_error_code FROM tenant.onboarding_steps
                  WHERE run_id = :runId AND step_key = 'CATALOG_READINESS_VALIDATE'
-                """).param("runId", runId).query(String.class).single())
-                .contains("ADR 0016");
+                """)
+                        .param("runId", runId)
+                        .query((rs, n) -> rs.getString("status") + "=" + rs.getString("last_error_code"))
+                        .single())
+                .isEqualTo("BLOCKED=CAPABILITY_ABSENT");
     }
 
     @Test
@@ -325,7 +356,14 @@ class OnboardingServiceTests {
                         "KEYCLOAK_ORGANIZATION_RECONCILE",
                         "TENANT_OWNER_LINK_OR_INVITE",
                         "DEFAULT_CONFIGURATION_APPLY",
-                        "BRANDS_AND_LOCATIONS_VALIDATE");
+                        "BRANDS_AND_LOCATIONS_VALIDATE",
+                        "PAYMENT_CONFIGURATION_VALIDATE",
+                        "DELIVERY_CONFIGURATION_VALIDATE",
+                        "POS_BINDINGS_VALIDATE",
+                        "CATALOG_READINESS_VALIDATE",
+                        "MEDIA_READINESS_VALIDATE",
+                        "FRONTEND_DOMAIN_VALIDATE",
+                        "ACTIVATION_SMOKE_TEST");
     }
 
     @Test
@@ -566,6 +604,48 @@ class OnboardingServiceTests {
                 .param("tenantId", TENANT)
                 .param("brandId", BRAND)
                 .update();
+    }
+
+    /**
+     * The four real handlers, plus a trivial always-completes fake for each of
+     * the seven newly-required steps this file's own fixture (tenant, one
+     * brand, one location, no channel, no legal entity, no catalog) does not
+     * set up data for. This class exists to test the workflow — leases,
+     * retries, compare-and-set, resume, activation — not to re-prove the
+     * business rules inside each of those seven, which have their own
+     * dedicated passing/failing tests next to {@code OnboardingStepHandlers}
+     * itself.
+     */
+    private static List<OnboardingStepHandler> allHandlers(
+            OrganizationProvisioner provisioner, JdbcTenantControlPlaneStore store) {
+        List<OnboardingStepHandler> handlers = new java.util.ArrayList<>(List.of(
+                new OnboardingStepHandlers.KeycloakOrganizationReconcile(provisioner, store),
+                new OnboardingStepHandlers.TenantOwnerLinkOrInvite(provisioner, NO_OP_GRANTOR),
+                new OnboardingStepHandlers.DefaultConfigurationApply(),
+                new OnboardingStepHandlers.BrandsAndLocationsValidate(store)));
+        for (OnboardingStep step : new OnboardingStep[] {
+            OnboardingStep.PAYMENT_CONFIGURATION_VALIDATE,
+            OnboardingStep.DELIVERY_CONFIGURATION_VALIDATE,
+            OnboardingStep.POS_BINDINGS_VALIDATE,
+            OnboardingStep.CATALOG_READINESS_VALIDATE,
+            OnboardingStep.MEDIA_READINESS_VALIDATE,
+            OnboardingStep.FRONTEND_DOMAIN_VALIDATE,
+            OnboardingStep.ACTIVATION_SMOKE_TEST
+        }) {
+            handlers.add(new AlwaysCompletes(step));
+        }
+        return handlers;
+    }
+
+    private static final TenantOwnerAuthorityGrantor NO_OP_GRANTOR = (tenantId, subjectId, reason) -> {};
+
+    /** A step whose real business rule is tested elsewhere; here it just completes. */
+    private record AlwaysCompletes(OnboardingStep step) implements OnboardingStepHandler {
+
+        @Override
+        public StepResult execute(StepContext context) {
+            return StepResult.completed(Map.of(), null);
+        }
     }
 
     private static final class MutableClock extends Clock {

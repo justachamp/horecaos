@@ -23,6 +23,17 @@ import uz.horecaos.platform.payments.domain.ProviderBinding;
  *
  * <p>Nothing here reads a credential. {@code secret_reference} is an ADR 0028
  * handle; the adapter resolves it at call time, uses it, and never logs it.
+ *
+ * <p><strong>Not also a {@code payments.api} export.</strong> Tenant onboarding's
+ * {@code PAYMENT_CONFIGURATION_VALIDATE} needs exactly this table's existence
+ * question, and the natural shape would be a small {@code payments.api} port —
+ * but {@code payments} sits on a real cycle with {@code tenancy}:
+ * {@code catalog -> tenancy -> payments -> integration -> notifications ->
+ * ordering -> pricing -> catalog}, confirmed by {@code ModularArchitectureTests}
+ * the moment a {@code tenancy -> payments.api} edge was tried. The onboarding
+ * handler reads {@code payments.merchant_bindings} directly through {@code
+ * JdbcClient} instead, the same way it reads {@code fulfillment} and {@code
+ * catalog}'s schemas — see {@code OnboardingStepHandlers}'s class javadoc.
  */
 @Repository
 public class JdbcPaymentBindingResolver implements PaymentBindingResolver {

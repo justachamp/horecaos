@@ -5,7 +5,7 @@ MVN := ./mvnw
 
 .DEFAULT_GOAL := help
 
-.PHONY: help verify test arch build lint format run up down logs eval fmt-check hooks-test bands-test doc-links openapi-client-check openapi-baseline ci
+.PHONY: help verify test arch build lint format run up down logs eval fmt-check hooks-test bands-test doc-links openapi-client-check openapi-baseline seed-payments ci
 
 help: ## List targets
 	@grep -hE '^[a-z][a-zA-Z0-9_-]*:.*?## ' $(MAKEFILE_LIST) \
@@ -58,6 +58,8 @@ run: ## Start the API on :8080 with local-only fixture data
 up: ## Start local PostgreSQL, Kafka, and Keycloak
 	docker compose up -d
 	docker compose ps
+	@echo "==> Assigning ADR 0009 Keycloak service-account roles"
+	./infra/keycloak/assign-service-account-roles.sh
 
 down: ## Stop the local dependency stack
 	docker compose down
@@ -67,5 +69,8 @@ logs: ## Tail the local dependency stack
 
 eval: ## Run the agent-configuration regression suite
 	@bash evals/run.sh
+
+seed-payments: ## Seed a local dev CLICK payment setup for the docs/local-fixtures.md demo tenant
+	@./tools/seed-payments
 
 ci: lint verify openapi-client-check ## What CI runs

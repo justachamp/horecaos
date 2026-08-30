@@ -125,6 +125,123 @@ public class GrantManagementService {
     }
 
     /**
+     * Grants a role as a system-initiated consequence of a platform process,
+     * never as a person exercising {@code IAM_GRANT_MANAGE}.
+     *
+     * <p>{@link uz.horecaos.platform.iam.api.grants.TenantOwnerAuthorityGrantor}
+     * (ADR 0009's missing half) is the caller this exists for: once the
+     * onboarding workflow confirms who the tenant owner is, the platform
+     * itself confers the role, the same way {@code StorefrontChannelSeeder}
+     * gives every new tenant its channel as "a consequence ADR 0036 attaches"
+     * rather than an action anyone asked for. Two things distinguish this
+     * from {@link #grant}, both because there is no human granter to consult:
+     *
+     * <ul>
+     *   <li>Skips {@code authorization.require} and {@link #requireGrantable}.
+     *       Both exist to stop a caller minting authority it does not itself
+     *       hold, which is a question about a *person's* existing grants. It
+     *       does not apply to the workflow deciding, unconditionally, that
+     *       {@code roleCode} is exactly what ADR 0009 always intended to
+     *       confer — a background job has no session to hold a grant on, and
+     *       building one (a synthetic {@code Authentication} carrying
+     *       {@code platform-admin}) would be the more dangerous path: forging
+     *       the exact credential {@link JdbcAuthorizationService}'s bootstrap
+     *       bypass exists to gate.
+     *   <li>Idempotent by lookup rather than by catching the unique-index
+     *       violation {@link #grant} would throw on a repeat. ADR 0008 requires
+     *       every step handler to be safe to run again; a retried
+     *       {@code TENANT_OWNER_LINK_OR_INVITE} must find the grant already
+     *       there and complete, not fail on a constraint it cannot see coming.
+     * </ul>
+     *
+     * <p>{@code platform.admin} is still never grantable here — the one check
+     * from {@link #requireGrantable} this method keeps, because a background
+     * job minting the superuser bundle would be worse than a person doing it
+     * by mistake.
+     *
+     * @param systemActor a stable, non-human identifier (never a Keycloak
+     *                    subject) recorded as {@code granted_by}, so the audit
+     *                    trail can tell a platform action from an
+     *                    administrator's
+     */
+    @Transactional
+    public UUID grantSystemInitiated(GrantCommand command, String systemActor) {
+        ResolvedRole role = resolveRole(command.roleCode(), command.scope().tenantId());
+        if (role.capabilities().contains(Capability.PLATFORM_ADMIN)) {
+            throw new IllegalArgumentException(
+                    "platform.admin is issued by Keycloak and is never granted through this API");
+        }
+
+        Optional<UUID> existing = existingActiveGrant(command.principalSubject(), role.id(), command.scope());
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+
+        UUID grantId = UUID.randomUUID();
+        Instant now = clock.instant();
+
+        jdbc.sql("""
+                INSERT INTO iam.grants (
+                    id, tenant_id, principal_subject, role_id, role_is_platform,
+                    scope_type, scope_id,
+                    status, granted_by, reason, valid_from, valid_until)
+                VALUES (:id, :tenantId, :subject, :roleId, :roleIsPlatform,
+                        :scopeType, :scopeId,
+                        'ACTIVE', :grantedBy, :reason, :validFrom, :validUntil)
+                """)
+                .param("id", grantId)
+                .param("roleIsPlatform", role.platformDefined())
+                .param("tenantId", command.scope().tenantId())
+                .param("subject", command.principalSubject())
+                .param("roleId", role.id())
+                .param("scopeType", command.scope().type().name())
+                .param("scopeId", command.scope().scopeId())
+                .param("grantedBy", systemActor)
+                .param("reason", command.reason())
+                .param("validFrom", at(now))
+                .param("validUntil", command.validUntil() == null ? null : at(command.validUntil()))
+                .update();
+
+        evictAndPublish(new GrantChanged(
+                grantId,
+                GrantChanged.Change.GRANTED,
+                command.principalSubject(),
+                command.scope(),
+                systemActor,
+                command.reason(),
+                Map.of(
+                        "role",
+                        role.code(),
+                        "scope",
+                        command.scope().type().name(),
+                        "validUntil",
+                        String.valueOf(command.validUntil())),
+                now));
+        return grantId;
+    }
+
+    /**
+     * Matches {@code uq_grant_active} exactly: one active grant per
+     * (subject, role, scope-type, scope-id-or-the-platform-sentinel).
+     */
+    private Optional<UUID> existingActiveGrant(String subject, UUID roleId, ResourceScope scope) {
+        return jdbc.sql("""
+                SELECT id FROM iam.grants
+                 WHERE principal_subject = :subject AND role_id = :roleId
+                   AND scope_type = :scopeType
+                   AND coalesce(scope_id, '00000000-0000-0000-0000-000000000000'::uuid)
+                     = coalesce(:scopeId, '00000000-0000-0000-0000-000000000000'::uuid)
+                   AND status = 'ACTIVE'
+                """)
+                .param("subject", subject)
+                .param("roleId", roleId)
+                .param("scopeType", scope.type().name())
+                .param("scopeId", scope.scopeId())
+                .query(UUID.class)
+                .optional();
+    }
+
+    /**
      * Revokes a grant belonging to {@code tenantId}.
      *
      * <p>The tenant is a parameter rather than being read from the grant row
