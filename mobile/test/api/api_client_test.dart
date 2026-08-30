@@ -3,13 +3,13 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:qoida_mobile/src/api/api_client.dart';
-import 'package:qoida_mobile/src/api/api_exception.dart';
-import 'package:qoida_mobile/src/api/api_telemetry.dart';
-import 'package:qoida_mobile/src/api/idempotency_key.dart';
-import 'package:qoida_mobile/src/api/page.dart';
-import 'package:qoida_mobile/src/api/problem_details.dart';
-import 'package:qoida_mobile/src/format/money.dart';
+import 'package:horecaos_mobile/src/api/api_client.dart';
+import 'package:horecaos_mobile/src/api/api_exception.dart';
+import 'package:horecaos_mobile/src/api/api_telemetry.dart';
+import 'package:horecaos_mobile/src/api/idempotency_key.dart';
+import 'package:horecaos_mobile/src/api/page.dart';
+import 'package:horecaos_mobile/src/api/problem_details.dart';
+import 'package:horecaos_mobile/src/format/money.dart';
 
 /// A token source with no Keycloak behind it.
 class _StubTokens implements AccessTokens {
@@ -37,11 +37,11 @@ class _RecordingTelemetry implements ApiTelemetry {
   void record(ApiCallRecord call) => calls.add(call);
 }
 
-QoidaApiClient _client(
+HorecaOSApiClient _client(
   MockClient transport, {
   AccessTokens? tokens,
   ApiTelemetry? telemetry,
-}) => QoidaApiClient(
+}) => HorecaOSApiClient(
   baseUri: Uri.parse('https://api.example.test'),
   httpClient: transport,
   tokens: tokens ?? _StubTokens('at_1'),
@@ -65,7 +65,7 @@ void main() {
   group('every request', () {
     test('carries the bearer token and a correlation identifier', () async {
       late http.BaseRequest seen;
-      final QoidaApiClient client = _client(
+      final HorecaOSApiClient client = _client(
         MockClient((http.Request request) async {
           seen = request;
           return _json(<String, Object?>{'ok': true});
@@ -75,12 +75,12 @@ void main() {
       await client.get('/api/v1/storefront/ping', decode: _identity);
 
       expect(seen.headers['Authorization'], 'Bearer at_1');
-      expect(seen.headers[QoidaApiClient.correlationIdHeader], 'cid-fixed');
+      expect(seen.headers[HorecaOSApiClient.correlationIdHeader], 'cid-fixed');
     });
 
     test('accepts problem+json as well as json', () async {
       late http.BaseRequest seen;
-      final QoidaApiClient client = _client(
+      final HorecaOSApiClient client = _client(
         MockClient((http.Request request) async {
           seen = request;
           return _json(<String, Object?>{});
@@ -96,7 +96,7 @@ void main() {
   group('idempotency', () {
     test("sends the caller's key on a mutation", () async {
       late http.BaseRequest seen;
-      final QoidaApiClient client = _client(
+      final HorecaOSApiClient client = _client(
         MockClient((http.Request request) async {
           seen = request;
           return _json(<String, Object?>{'orderId': 'o1'});
@@ -110,12 +110,12 @@ void main() {
         decode: _identity,
       );
 
-      expect(seen.headers[QoidaApiClient.idempotencyKeyHeader], 'intent-1');
+      expect(seen.headers[HorecaOSApiClient.idempotencyKeyHeader], 'intent-1');
     });
 
     test('does not send one on a read', () async {
       late http.BaseRequest seen;
-      final QoidaApiClient client = _client(
+      final HorecaOSApiClient client = _client(
         MockClient((http.Request request) async {
           seen = request;
           return _json(<String, Object?>{});
@@ -125,18 +125,18 @@ void main() {
       await client.get('/orders', decode: _identity);
 
       expect(
-        seen.headers.containsKey(QoidaApiClient.idempotencyKeyHeader),
+        seen.headers.containsKey(HorecaOSApiClient.idempotencyKeyHeader),
         isFalse,
       );
     });
 
     test('reports a replayed response so a screen does not retry it', () async {
-      final QoidaApiClient client = _client(
+      final HorecaOSApiClient client = _client(
         MockClient(
           (http.Request request) async => _json(
             <String, Object?>{'orderId': 'o1'},
             headers: <String, String>{
-              QoidaApiClient.idempotencyReplayedHeader: 'true',
+              HorecaOSApiClient.idempotencyReplayedHeader: 'true',
             },
           ),
         ),
@@ -158,10 +158,10 @@ void main() {
       var attempt = 0;
       final _StubTokens tokens = _StubTokens('stale', refreshed: 'fresh');
 
-      final QoidaApiClient client = _client(
+      final HorecaOSApiClient client = _client(
         MockClient((http.Request request) async {
           attempt++;
-          keysSeen.add(request.headers[QoidaApiClient.idempotencyKeyHeader]);
+          keysSeen.add(request.headers[HorecaOSApiClient.idempotencyKeyHeader]);
           if (attempt == 1) {
             return _json(<String, Object?>{
               'code': 'UNAUTHENTICATED',
@@ -186,7 +186,7 @@ void main() {
 
     test('gives up after one refresh rather than looping', () async {
       var attempts = 0;
-      final QoidaApiClient client = _client(
+      final HorecaOSApiClient client = _client(
         MockClient((http.Request request) async {
           attempts++;
           return _json(<String, Object?>{'code': 'UNAUTHENTICATED'}, status: 401);
@@ -205,7 +205,7 @@ void main() {
   group('optimistic concurrency', () {
     test('sends the expected version as a weak If-Match', () async {
       late http.BaseRequest seen;
-      final QoidaApiClient client = _client(
+      final HorecaOSApiClient client = _client(
         MockClient((http.Request request) async {
           seen = request;
           return _json(<String, Object?>{});
@@ -225,7 +225,7 @@ void main() {
     });
 
     test('reads the version back out of the ETag', () async {
-      final QoidaApiClient client = _client(
+      final HorecaOSApiClient client = _client(
         MockClient(
           (http.Request request) async => _json(
             <String, Object?>{},
@@ -243,11 +243,11 @@ void main() {
     });
 
     test('surfaces the current version from a STALE_VERSION problem', () async {
-      final QoidaApiClient client = _client(
+      final HorecaOSApiClient client = _client(
         MockClient(
           (http.Request request) async => http.Response(
             jsonEncode(<String, Object?>{
-              'type': 'https://docs.qoida.uz/problems/stale-version',
+              'type': 'https://docs.horecaos.uz/problems/stale-version',
               'title': 'Stale version',
               'status': 409,
               'detail': 'The resource has changed since version 7 was read',
@@ -284,7 +284,7 @@ void main() {
 
   group('problem details', () {
     test('branches on code, not on title', () async {
-      final QoidaApiClient client = _client(
+      final HorecaOSApiClient client = _client(
         MockClient(
           (http.Request request) async => http.Response(
             jsonEncode(<String, Object?>{
@@ -312,7 +312,7 @@ void main() {
     });
 
     test('keeps field errors as codes rather than prose', () async {
-      final QoidaApiClient client = _client(
+      final HorecaOSApiClient client = _client(
         MockClient(
           (http.Request request) async => http.Response(
             jsonEncode(<String, Object?>{
@@ -350,7 +350,7 @@ void main() {
       // ADR 0031 evolves a major version additively and permits new enum
       // values. A client that threw on decoding one would turn an additive
       // server change into a crash.
-      final QoidaApiClient client = _client(
+      final HorecaOSApiClient client = _client(
         MockClient(
           (http.Request request) async => http.Response(
             jsonEncode(<String, Object?>{
@@ -375,7 +375,7 @@ void main() {
     });
 
     test('does not pretend a gateway HTML page was Problem Details', () async {
-      final QoidaApiClient client = _client(
+      final HorecaOSApiClient client = _client(
         MockClient(
           (http.Request request) async => http.Response(
             '<html>502 Bad Gateway</html>',
@@ -395,7 +395,7 @@ void main() {
     });
 
     test('reads Retry-After on a 429', () async {
-      final QoidaApiClient client = _client(
+      final HorecaOSApiClient client = _client(
         MockClient(
           (http.Request request) async => http.Response(
             jsonEncode(<String, Object?>{
@@ -424,7 +424,7 @@ void main() {
       // Zero would mean "retry immediately", which is the opposite of what a
       // server asking for backoff wants.
       expect(
-        QoidaApiClient.parseRetryAfter('Wed, 21 Oct 2026 07:28:00 GMT'),
+        HorecaOSApiClient.parseRetryAfter('Wed, 21 Oct 2026 07:28:00 GMT'),
         isNull,
       );
     });
@@ -433,7 +433,7 @@ void main() {
   group('cursor pagination', () {
     test('passes the cursor and limit, and reads the next cursor back', () async {
       late Uri seen;
-      final QoidaApiClient client = _client(
+      final HorecaOSApiClient client = _client(
         MockClient((http.Request request) async {
           seen = request.url;
           return _json(<String, Object?>{
@@ -462,7 +462,7 @@ void main() {
     });
 
     test('a null next cursor is the end of the collection', () async {
-      final QoidaApiClient client = _client(
+      final HorecaOSApiClient client = _client(
         MockClient(
           (http.Request request) async => _json(<String, Object?>{
             'items': <Map<String, Object?>>[],
@@ -480,7 +480,7 @@ void main() {
 
   group('money on the wire', () {
     test('decodes an ADR 0031 money object out of a response', () async {
-      final QoidaApiClient client = _client(
+      final HorecaOSApiClient client = _client(
         MockClient(
           (http.Request request) async => _json(<String, Object?>{
             'total': <String, Object?>{
@@ -504,7 +504,7 @@ void main() {
   group('telemetry carries no personal data', () {
     test('redacts identifiers out of the recorded path', () {
       expect(
-        QoidaApiClient.redactPath(
+        HorecaOSApiClient.redactPath(
           '/api/v1/storefront/tenants/018f1a2b-3c4d-5e6f-8a9b-0c1d2e3f4a5b'
           '/brands/019a1a2b-3c4d-5e6f-8a9b-0c1d2e3f4a5b/orders/42',
         ),
@@ -514,7 +514,7 @@ void main() {
 
     test('records no query, no body, and no token', () async {
       final _RecordingTelemetry telemetry = _RecordingTelemetry();
-      final QoidaApiClient client = _client(
+      final HorecaOSApiClient client = _client(
         MockClient(
           (http.Request request) async => _json(<String, Object?>{
             'customerName': 'Aziza Karimova',
@@ -548,7 +548,7 @@ void main() {
 
     test('records the error code, which is a registry constant', () async {
       final _RecordingTelemetry telemetry = _RecordingTelemetry();
-      final QoidaApiClient client = _client(
+      final HorecaOSApiClient client = _client(
         MockClient(
           (http.Request request) async => http.Response(
             jsonEncode(<String, Object?>{
@@ -579,7 +579,7 @@ void main() {
 
   group('transport failure', () {
     test('is distinct from an API error and names no URL', () async {
-      final QoidaApiClient client = _client(
+      final HorecaOSApiClient client = _client(
         MockClient((http.Request request) async {
           throw http.ClientException('Failed host lookup');
         }),

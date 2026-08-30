@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:qoida_mobile/src/api/api_client.dart';
-import 'package:qoida_mobile/src/api/idempotency_key.dart';
-import 'package:qoida_mobile/src/features/profile/data/notification_preference.dart';
-import 'package:qoida_mobile/src/features/profile/data/notification_preference_repository.dart';
+import 'package:horecaos_mobile/src/api/api_client.dart';
+import 'package:horecaos_mobile/src/api/idempotency_key.dart';
+import 'package:horecaos_mobile/src/features/profile/data/notification_preference.dart';
+import 'package:horecaos_mobile/src/features/profile/data/notification_preference_repository.dart';
 
 import 'profile_harness.dart';
 
@@ -146,7 +146,7 @@ void main() {
     HttpNotificationPreferenceRepository repository() {
       sent = <http.BaseRequest>[];
       return HttpNotificationPreferenceRepository(
-        api: QoidaApiClient(
+        api: HorecaOSApiClient(
           baseUri: Uri.parse('https://api.example.test'),
           httpClient: MockClient((http.Request request) async {
             sent.add(request);
@@ -171,7 +171,7 @@ void main() {
       expect(request.method, 'PUT');
       expect(request.url.path, endsWith('/notification-preferences/MARKETING/SMS'));
       expect(
-        request.headers[QoidaApiClient.idempotencyKeyHeader],
+        request.headers[HorecaOSApiClient.idempotencyKeyHeader],
         'intent-1',
       );
       expect(

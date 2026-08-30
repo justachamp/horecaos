@@ -21,7 +21,7 @@ String moneyLabel(BuildContext context, Money money) {
       locale: locale,
     );
   }
-  // No other currency is configured for a Qoida brand today, and the ARB has no
+  // No other currency is configured for a HorecaOS brand today, and the ARB has no
   // marker for one. The ISO code is used rather than a symbol invented here:
   // wrong-looking is recoverable, wrong-valued is not.
   return '${MoneyFormat.amount(money, locale: locale)}'

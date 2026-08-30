@@ -1,6 +1,6 @@
 {
-    "name": "qoida_mobile",
-    "short_name": "qoida_mobile",
+    "name": "horecaos_mobile",
+    "short_name": "horecaos_mobile",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

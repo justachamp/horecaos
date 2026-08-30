@@ -21,7 +21,7 @@ class StorefrontHome extends StatefulWidget {
     super.key,
   });
 
-  final QoidaApiClient api;
+  final HorecaOSApiClient api;
   final PickupSearchPoint initialPickupPoint;
 
   @override

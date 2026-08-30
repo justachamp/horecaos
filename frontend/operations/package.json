@@ -1,5 +1,5 @@
 {
-  "name": "qoida-operations",
+  "name": "horecaos-operations",
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
@@ -35,5 +35,5 @@
     "typescript": "~6.0.2",
     "vitest": "^4.0.8"
   },
-  "description": "Qoida Operations \u2014 the console one restaurant's staff use during service."
+  "description": "HorecaOS Operations \u2014 the console one restaurant's staff use during service."
 }

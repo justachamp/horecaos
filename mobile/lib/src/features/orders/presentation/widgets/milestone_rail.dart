@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design/qoida_theme.dart';
-import '../../../../design/qoida_tokens.dart';
-import '../../../../format/qoida_formats.dart';
+import '../../../../design/horecaos_theme.dart';
+import '../../../../design/horecaos_tokens.dart';
+import '../../../../format/horecaos_formats.dart';
 import '../../../../l10n/generated/app_localizations.dart';
 import '../../application/order_milestones.dart';
 import '../../data/order_codes.dart';
@@ -86,7 +86,7 @@ class _RailRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
     final AppLocalizations l10n = AppLocalizations.of(context);
 
@@ -128,11 +128,11 @@ class _RailRow extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: QoidaGeometry.spaceSm),
+          const SizedBox(width: HorecaOSGeometry.spaceSm),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(
-                vertical: QoidaGeometry.spaceSm,
+                vertical: HorecaOSGeometry.spaceSm,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -147,8 +147,8 @@ class _RailRow extends StatelessWidget {
                   ),
                   if (step.at != null)
                     Text(
-                      QoidaFormats.dayMonthTime(
-                        QoidaFormats.toLocal(step.at!),
+                      HorecaOSFormats.dayMonthTime(
+                        HorecaOSFormats.toLocal(step.at!),
                         locale: Localizations.localeOf(context).toLanguageTag(),
                       ),
                       style: text.bodySmall,
@@ -182,7 +182,7 @@ class _Connector extends StatelessWidget {
     // makes the segment span the gap between two dots however tall the row's
     // text turns out to be.
     child: Container(
-      width: QoidaGeometry.hairline,
+      width: HorecaOSGeometry.hairline,
       color: visible ? colour : null,
     ),
   );

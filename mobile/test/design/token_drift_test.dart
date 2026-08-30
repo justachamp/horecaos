@@ -2,8 +2,8 @@ import 'dart:io';
 import 'dart:ui' show Color;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:qoida_mobile/src/design/qoida_tokens.dart';
-import 'package:qoida_mobile/src/design/qoida_typography.dart';
+import 'package:horecaos_mobile/src/design/horecaos_tokens.dart';
+import 'package:horecaos_mobile/src/design/horecaos_typography.dart';
 
 /// The drift check ADR 0035 asks for, in the form that is possible today.
 ///
@@ -24,30 +24,30 @@ void main() {
 
   group('colour tokens match the vendored sheet', () {
     final Map<String, Color> expected = <String, Color>{
-      'q-primary': QoidaPalette.primary,
-      'q-primary-hover': QoidaPalette.primaryHover,
-      'q-primary-active': QoidaPalette.primaryActive,
-      'q-ink': QoidaPalette.ink,
-      'q-ink-muted': QoidaPalette.inkMuted,
-      'q-ink-subtle': QoidaPalette.inkSubtle,
-      'q-canvas': QoidaPalette.canvas,
-      'q-surface-1': QoidaPalette.surface1,
-      'q-surface-2': QoidaPalette.surface2,
-      'q-hairline': QoidaPalette.hairline,
-      'q-inverse': QoidaPalette.inverse,
-      'q-inverse-ink': QoidaPalette.inverseInk,
-      'q-inverse-ink-muted': QoidaPalette.inverseInkMuted,
-      'q-success': QoidaPalette.success,
-      'q-warning': QoidaPalette.warning,
-      'q-error': QoidaPalette.error,
-      'q-info-tint': QoidaPalette.infoTint,
-      'q-info-text': QoidaPalette.infoText,
-      'q-success-tint': QoidaPalette.successTint,
-      'q-success-text': QoidaPalette.successText,
-      'q-warning-tint': QoidaPalette.warningTint,
-      'q-warning-text': QoidaPalette.warningText,
-      'q-error-tint': QoidaPalette.errorTint,
-      'q-error-text': QoidaPalette.errorText,
+      'q-primary': HorecaOSPalette.primary,
+      'q-primary-hover': HorecaOSPalette.primaryHover,
+      'q-primary-active': HorecaOSPalette.primaryActive,
+      'q-ink': HorecaOSPalette.ink,
+      'q-ink-muted': HorecaOSPalette.inkMuted,
+      'q-ink-subtle': HorecaOSPalette.inkSubtle,
+      'q-canvas': HorecaOSPalette.canvas,
+      'q-surface-1': HorecaOSPalette.surface1,
+      'q-surface-2': HorecaOSPalette.surface2,
+      'q-hairline': HorecaOSPalette.hairline,
+      'q-inverse': HorecaOSPalette.inverse,
+      'q-inverse-ink': HorecaOSPalette.inverseInk,
+      'q-inverse-ink-muted': HorecaOSPalette.inverseInkMuted,
+      'q-success': HorecaOSPalette.success,
+      'q-warning': HorecaOSPalette.warning,
+      'q-error': HorecaOSPalette.error,
+      'q-info-tint': HorecaOSPalette.infoTint,
+      'q-info-text': HorecaOSPalette.infoText,
+      'q-success-tint': HorecaOSPalette.successTint,
+      'q-success-text': HorecaOSPalette.successText,
+      'q-warning-tint': HorecaOSPalette.warningTint,
+      'q-warning-text': HorecaOSPalette.warningText,
+      'q-error-tint': HorecaOSPalette.errorTint,
+      'q-error-text': HorecaOSPalette.errorText,
     };
 
     for (final MapEntry<String, Color> entry in expected.entries) {
@@ -80,14 +80,14 @@ void main() {
   group('motion tokens match the vendored sheet', () {
     test('durations', () {
       expect(css['q-dur-fast'], '110ms');
-      expect(QoidaMotion.fast, const Duration(milliseconds: 110));
+      expect(HorecaOSMotion.fast, const Duration(milliseconds: 110));
       expect(css['q-dur-base'], '150ms');
-      expect(QoidaMotion.base, const Duration(milliseconds: 150));
+      expect(HorecaOSMotion.base, const Duration(milliseconds: 150));
     });
 
     test('the productive easing curve', () {
       expect(css['q-ease-productive'], 'cubic-bezier(0.2, 0, 0.38, 0.9)');
-      expect(QoidaMotion.easeProductive, <double>[0.2, 0, 0.38, 0.9]);
+      expect(HorecaOSMotion.easeProductive, <double>[0.2, 0, 0.38, 0.9]);
     });
   });
 
@@ -98,7 +98,7 @@ void main() {
       // expected to differ — asserted so that a future sheet carrying a FIELD
       // radius does not silently make this a coincidence.
       expect(css['q-radius'], '0px');
-      expect(QoidaGeometry.radius, 8);
+      expect(HorecaOSGeometry.radius, 8);
     });
   });
 
@@ -110,14 +110,14 @@ void main() {
     test('the family is withheld until the faces are bundled', () {
       // Naming a family Flutter cannot find logs an error on every frame and
       // renders the fallback anyway. See assets/fonts/README.md.
-      expect(QoidaTypography.fontFamily, isNull);
+      expect(HorecaOSTypography.fontFamily, isNull);
       expect(
         Directory('assets/fonts').listSync().whereType<File>().where(
           (File file) => file.path.endsWith('.ttf'),
         ),
         isEmpty,
         reason:
-            'Font faces are present: set QoidaTypography.fontFamily to '
+            'Font faces are present: set HorecaOSTypography.fontFamily to '
             "'IBMPlexSans' and declare them in pubspec.yaml.",
       );
     });

@@ -1,6 +1,6 @@
 /// Where Keycloak is and how this application identifies itself (ADR 0003).
 ///
-/// The realm is `qoida` — one realm, with tenants as Keycloak Organizations
+/// The realm is `horecaos` — one realm, with tenants as Keycloak Organizations
 /// inside it. ADR 0003 rejected realm-per-tenant: realms degrade past roughly a
 /// hundred, and a multi-tenant customer would need identity brokering.
 final class AuthConfig {
@@ -10,7 +10,7 @@ final class AuthConfig {
     required this.redirectUri,
     required this.callbackUrlScheme,
     this.scopes = const <String>['openid', 'profile', 'offline_access'],
-    this.audience = 'qoida-api',
+    this.audience = 'horecaos-api',
   });
 
   /// The realm's issuer, matching the platform's

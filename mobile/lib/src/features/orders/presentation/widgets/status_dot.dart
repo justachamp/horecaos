@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design/qoida_theme.dart';
-import '../../../../design/qoida_tokens.dart';
+import '../../../../design/horecaos_theme.dart';
+import '../../../../design/horecaos_tokens.dart';
 import '../../data/order_codes.dart';
 
 /// The tone a status carries. Never expressed as colour alone.
@@ -35,7 +35,7 @@ class StatusDot extends StatelessWidget {
           color: filled ? colour : null,
           border: filled
               ? null
-              : Border.all(color: colour, width: QoidaGeometry.hairline),
+              : Border.all(color: colour, width: HorecaOSGeometry.hairline),
         ),
       ),
     );
@@ -46,7 +46,7 @@ class StatusDot extends StatelessWidget {
   /// Read from the theme extension rather than from the palette, so a tenant
   /// accent reaches the active tone the way ADR 0035 intends.
   static Color colourFor(BuildContext context, StatusTone tone) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     return switch (tone) {
       StatusTone.neutral => tokens.inkSubtle,
       StatusTone.active => tokens.accent,

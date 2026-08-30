@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../design/q_empty_state.dart';
-import '../../../design/qoida_theme.dart';
-import '../../../design/qoida_tokens.dart';
+import '../../../design/horecaos_theme.dart';
+import '../../../design/horecaos_tokens.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../data/menu.dart';
 import '../data/menu_index.dart';
@@ -36,7 +36,7 @@ class CategoryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final List<MenuProduct> products = index.productsIn(category.categoryId);
 
     return Scaffold(
@@ -49,7 +49,7 @@ class CategoryScreen extends StatelessWidget {
           : ListView.separated(
               itemCount: products.length,
               separatorBuilder: (BuildContext context, int _) => Divider(
-                height: QoidaGeometry.hairline,
+                height: HorecaOSGeometry.hairline,
                 color: tokens.hairline,
               ),
               itemBuilder: (BuildContext context, int position) {

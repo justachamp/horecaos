@@ -1,12 +1,12 @@
 /* VENDORED SOURCE — NOT AUTHORED HERE. Do not edit.
    Copied verbatim from `frontend/prototypes/control-plane/src/tokens.css` in
-   the qoida-platform repository, which carries the Qoida Design System token
+   the qoida-platform repository, which carries the HorecaOS Design System token
    sheet unchanged. Identical to the operations prototype's copy.
 
    It is not compiled, imported, or served: this is a Flutter application and
    there is no CSS in it. It is here so that
    `test/design/token_drift_test.dart` can check the generated Dart constants
-   in `lib/src/design/qoida_tokens.dart` against the sheet they came from,
+   in `lib/src/design/horecaos_tokens.dart` against the sheet they came from,
    inside this repository, without a network or a sibling checkout.
 
    ADR 0035's `sync-tokens` will replace this file and regenerate the Dart in

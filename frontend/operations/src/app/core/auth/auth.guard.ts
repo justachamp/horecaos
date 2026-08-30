@@ -14,7 +14,7 @@ import { map, take } from 'rxjs';
  * land on Today and have to find the order themselves — which is the moment the
  * link stopped being useful.
  */
-export const RETURN_TO_KEY = 'qoida.operations.returnTo';
+export const RETURN_TO_KEY = 'horecaos.operations.returnTo';
 
 /**
  * Requires a signed-in operator, and starts the login redirect when there is not

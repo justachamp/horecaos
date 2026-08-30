@@ -71,7 +71,7 @@ final class Money implements Comparable<Money> {
 /// How many minor units make one major unit, per currency.
 ///
 /// **This table is why this file exists.** ISO 4217 gives UZS an exponent of 2,
-/// because a som is nominally a hundred tiyin. The Qoida platform stores whole
+/// because a som is nominally a hundred tiyin. The HorecaOS platform stores whole
 /// som as its minor unit and ADR 0018 says so: there is nothing to divide.
 ///
 /// Any formatter that asks ICU — `NumberFormat.currency` without an explicit

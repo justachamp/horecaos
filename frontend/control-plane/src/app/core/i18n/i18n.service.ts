@@ -31,7 +31,7 @@ const CATALOGUES: Readonly<Record<Locale, Messages>> = {
  * a browser installed in Uzbekistan is usually an English build.
  */
 const DEFAULT_LOCALE: Locale = 'ru';
-const STORAGE_KEY = 'qoida.control-plane.locale';
+const STORAGE_KEY = 'horecaos.control-plane.locale';
 
 @Injectable({ providedIn: 'root' })
 export class I18nService {

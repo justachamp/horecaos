@@ -24,7 +24,7 @@ export interface Money {
  * platform stores it.
  *
  * UZS is 0 on purpose and disagrees with ISO 4217. Tiyin have not circulated
- * for decades and no Qoida price is ever expressed in them.
+ * for decades and no HorecaOS price is ever expressed in them.
  */
 const DISPLAY_DECIMALS: Readonly<Record<string, number>> = {
   UZS: 0,

@@ -32,27 +32,27 @@ final class AppConfig {
   /// than quietly point at production.
   factory AppConfig.fromEnvironment() {
     const String apiBase = String.fromEnvironment(
-      'QOIDA_API_BASE_URI',
+      'HORECAOS_API_BASE_URI',
       defaultValue: 'http://localhost:8080',
     );
     const String issuer = String.fromEnvironment(
-      'QOIDA_OIDC_ISSUER_URI',
-      defaultValue: 'http://localhost:8081/realms/qoida',
+      'HORECAOS_OIDC_ISSUER_URI',
+      defaultValue: 'http://localhost:8081/realms/horecaos',
     );
     const String clientId = String.fromEnvironment(
-      'QOIDA_OIDC_CLIENT_ID',
-      defaultValue: 'qoida-mobile',
+      'HORECAOS_OIDC_CLIENT_ID',
+      defaultValue: 'horecaos-mobile',
     );
     const String redirectScheme = String.fromEnvironment(
-      'QOIDA_OIDC_REDIRECT_SCHEME',
-      defaultValue: 'uz.qoida.mobile',
+      'HORECAOS_OIDC_REDIRECT_SCHEME',
+      defaultValue: 'uz.horecaos.mobile',
     );
     const String pickupLatitude = String.fromEnvironment(
-      'QOIDA_INITIAL_PICKUP_LATITUDE',
+      'HORECAOS_INITIAL_PICKUP_LATITUDE',
       defaultValue: '41.311341',
     );
     const String pickupLongitude = String.fromEnvironment(
-      'QOIDA_INITIAL_PICKUP_LONGITUDE',
+      'HORECAOS_INITIAL_PICKUP_LONGITUDE',
       defaultValue: '69.282722',
     );
 
@@ -60,13 +60,13 @@ final class AppConfig {
       pickupLatitude,
       minimum: -90,
       maximum: 90,
-      name: 'QOIDA_INITIAL_PICKUP_LATITUDE',
+      name: 'HORECAOS_INITIAL_PICKUP_LATITUDE',
     );
     final double initialPickupLongitude = _coordinate(
       pickupLongitude,
       minimum: -180,
       maximum: 180,
-      name: 'QOIDA_INITIAL_PICKUP_LONGITUDE',
+      name: 'HORECAOS_INITIAL_PICKUP_LONGITUDE',
     );
 
     return AppConfig(

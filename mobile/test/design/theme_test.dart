@@ -1,28 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:qoida_mobile/src/design/qoida_theme.dart';
-import 'package:qoida_mobile/src/design/qoida_tokens.dart';
-import 'package:qoida_mobile/src/design/qoida_typography.dart';
+import 'package:horecaos_mobile/src/design/horecaos_theme.dart';
+import 'package:horecaos_mobile/src/design/horecaos_tokens.dart';
+import 'package:horecaos_mobile/src/design/horecaos_typography.dart';
 
 void main() {
-  final ThemeData theme = QoidaTheme.light();
+  final ThemeData theme = HorecaOSTheme.light();
 
   group('tokens reach the theme', () {
     test('the extension is present', () {
-      expect(theme.extension<QoidaTokens>(), isNotNull);
+      expect(theme.extension<HorecaOSTokens>(), isNotNull);
     });
 
     test('the accent is the platform blue when no tenant accent is given', () {
-      expect(theme.colorScheme.primary, QoidaPalette.primary);
+      expect(theme.colorScheme.primary, HorecaOSPalette.primary);
     });
 
     test('a tenant accent replaces the platform blue', () {
       // MOBILE is a customer inside one brand's application, so the accent is
       // that brand's. On CONSOLE a tenant accent is forbidden.
       const Color tenant = Color(0xFF7A1F5C);
-      final ThemeData branded = QoidaTheme.light(tenantAccent: tenant);
+      final ThemeData branded = HorecaOSTheme.light(tenantAccent: tenant);
       expect(branded.colorScheme.primary, tenant);
-      expect(branded.extension<QoidaTokens>()!.accent, tenant);
+      expect(branded.extension<HorecaOSTokens>()!.accent, tenant);
     });
   });
 
@@ -55,7 +55,7 @@ void main() {
 
   group('geometry is FIELD, not CONSOLE and not Material', () {
     test('corners are the 8dp FIELD radius', () {
-      expect(QoidaGeometry.radius, 8);
+      expect(HorecaOSGeometry.radius, 8);
       expect(_topLeftRadius(theme.cardTheme.shape), 8);
       expect(_topLeftRadius(theme.dialogTheme.shape), 8);
       // Material's default sheet corner is 28. A phone sheet in this system is
@@ -64,7 +64,7 @@ void main() {
     });
 
     test('minimum targets are 48dp on both platforms', () {
-      expect(QoidaGeometry.minTarget, 48);
+      expect(HorecaOSGeometry.minTarget, 48);
       final Size? minimum = theme.filledButtonTheme.style?.minimumSize
           ?.resolve(<WidgetState>{});
       expect(minimum?.height, 48);
@@ -106,7 +106,7 @@ void main() {
     test('the numeric style uses tabular figures', () {
       // Proportional digits make a column of totals ripple as it updates.
       expect(
-        QoidaTypography.dataLarge.fontFeatures,
+        HorecaOSTypography.dataLarge.fontFeatures,
         contains(const FontFeature.tabularFigures()),
       );
     });
@@ -115,7 +115,7 @@ void main() {
   group('dynamic type', () {
     test('is honoured within bounds', () {
       expect(
-        QoidaTypography.clampScaler(const TextScaler.linear(1.2)).scale(10),
+        HorecaOSTypography.clampScaler(const TextScaler.linear(1.2)).scale(10),
         12,
       );
     });
@@ -124,12 +124,12 @@ void main() {
       // Unbounded, a 200 % system setting pushes a price off its row; refused,
       // the application is unusable for anyone who needs larger text.
       expect(
-        QoidaTypography.clampScaler(const TextScaler.linear(3)).scale(10),
-        10 * QoidaTypography.maxTextScale,
+        HorecaOSTypography.clampScaler(const TextScaler.linear(3)).scale(10),
+        10 * HorecaOSTypography.maxTextScale,
       );
       expect(
-        QoidaTypography.clampScaler(const TextScaler.linear(0.5)).scale(10),
-        10 * QoidaTypography.minTextScale,
+        HorecaOSTypography.clampScaler(const TextScaler.linear(0.5)).scale(10),
+        10 * HorecaOSTypography.minTextScale,
       );
     });
   });
@@ -138,9 +138,9 @@ void main() {
     test('yellow is a dot, and its text pair is the darker ink', () {
       // A design-system rule with an accessibility reason: the warning yellow
       // does not meet contrast as text on white, so it is never used as one.
-      expect(QoidaTokens.light.warningDot, QoidaPalette.warning);
-      expect(QoidaTokens.light.warningInk, QoidaPalette.warningText);
-      expect(QoidaTokens.light.warningInk, isNot(QoidaTokens.light.warningDot));
+      expect(HorecaOSTokens.light.warningDot, HorecaOSPalette.warning);
+      expect(HorecaOSTokens.light.warningInk, HorecaOSPalette.warningText);
+      expect(HorecaOSTokens.light.warningInk, isNot(HorecaOSTokens.light.warningDot));
     });
   });
 }

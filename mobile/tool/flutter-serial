@@ -21,7 +21,7 @@
 
 set -euo pipefail
 
-LOCK_DIR="${TMPDIR:-/tmp}/qoida-flutter.lock"
+LOCK_DIR="${TMPDIR:-/tmp}/horecaos-flutter.lock"
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STALE_AFTER_SECONDS=1200
 

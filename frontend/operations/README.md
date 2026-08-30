@@ -1,4 +1,4 @@
-# Qoida Operations
+# HorecaOS Operations
 
 The console one restaurant's staff use during service.
 
@@ -8,7 +8,7 @@ everything about it: speed of the common action beats completeness of the rare
 one, the queue is never hidden behind anything, and the number of late orders is
 visible from every screen in the application.
 
-Angular 22, `CONSOLE` surface of the Qoida Design System, `ru` / `uz-Latn` / `en`.
+Angular 22, `CONSOLE` surface of the HorecaOS Design System, `ru` / `uz-Latn` / `en`.
 
 ---
 
@@ -72,7 +72,7 @@ the guard except the login callback.
 
 ## Authentication
 
-Authorization Code with PKCE against the Qoida realm (ADR 0003, ADR 0035), via
+Authorization Code with PKCE against the HorecaOS realm (ADR 0003, ADR 0035), via
 `angular-auth-oidc-client`.
 
 **Tokens are never persisted.** `SplitSecurityStorage` keeps the access token,
@@ -92,7 +92,7 @@ The realm is not reachable from this repository, and these five things are
 asserted in `src/app/core/auth/auth.providers.ts` and proven nowhere. The first
 person with a running Keycloak should check them by hand:
 
-1. A client `qoida-operations` exists in realm `qoida` and is a **public** client.
+1. A client `horecaos-operations` exists in realm `horecaos` and is a **public** client.
 2. PKCE `S256` is **required** on it, not merely permitted.
 3. `http://localhost:4200/auth/callback` and the production callback are
    allowlisted **exactly**. No wildcards — a wildcard redirect URI is an open
@@ -196,7 +196,7 @@ React's `#root`; Angular's mount node is `q-root`). It is listed in
 
 Four frontend repositories each hold their own copy because there is no shared
 package registry yet, and **inventing one is not this application's decision to
-make.** A published `@qoida/design-tokens` package is the right answer; it needs a
+make.** A published `@horecaos/design-tokens` package is the right answer; it needs a
 registry decision first — self-hosted Verdaccio, GitHub Packages, or npm private
 — and that belongs in an ADR, not in a `package.json`. Until then ADR 0035's
 `sync-tokens` script and a per-repository drift check are what keep the four

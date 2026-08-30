@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../design/qoida_theme.dart';
-import '../../../design/qoida_tokens.dart';
+import '../../../design/horecaos_theme.dart';
+import '../../../design/horecaos_tokens.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../data/menu.dart';
 import '../data/menu_index.dart';
@@ -47,21 +47,21 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
     final MenuProduct product = widget.product;
 
     return Scaffold(
       appBar: AppBar(title: Text(product.name)),
       body: ListView(
-        padding: const EdgeInsets.only(bottom: QoidaGeometry.spaceXl),
+        padding: const EdgeInsets.only(bottom: HorecaOSGeometry.spaceXl),
         children: <Widget>[
           if (product.description != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                QoidaGeometry.spaceMd,
-                QoidaGeometry.spaceMd,
-                QoidaGeometry.spaceMd,
+                HorecaOSGeometry.spaceMd,
+                HorecaOSGeometry.spaceMd,
+                HorecaOSGeometry.spaceMd,
                 0,
               ),
               child: Text(
@@ -71,14 +71,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ),
 
           Padding(
-            padding: const EdgeInsets.all(QoidaGeometry.spaceMd),
+            padding: const EdgeInsets.all(HorecaOSGeometry.spaceMd),
             child: product.isOrderable
                 ? const PriceInBasketCaption()
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       const SoldOutLabel(),
-                      const SizedBox(height: QoidaGeometry.spaceXs),
+                      const SizedBox(height: HorecaOSGeometry.spaceXs),
                       Text(
                         l10n.catalogueProductSoldOutBody,
                         style: text.bodyMedium?.copyWith(
@@ -118,7 +118,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
           if (widget.onAddToBasket != null)
             Padding(
-              padding: const EdgeInsets.all(QoidaGeometry.spaceMd),
+              padding: const EdgeInsets.all(HorecaOSGeometry.spaceMd),
               child: FilledButton(
                 // Disabled, not hidden. A greyed action that stays where the
                 // customer expects it explains itself; an action that vanishes
@@ -156,10 +156,10 @@ class _Heading extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        QoidaGeometry.spaceMd,
-        QoidaGeometry.spaceLg,
-        QoidaGeometry.spaceMd,
-        QoidaGeometry.spaceSm,
+        HorecaOSGeometry.spaceMd,
+        HorecaOSGeometry.spaceLg,
+        HorecaOSGeometry.spaceMd,
+        HorecaOSGeometry.spaceSm,
       ),
       child: Row(
         children: <Widget>[
@@ -191,7 +191,7 @@ class _VariantRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
 
     return CataloguePressable(
@@ -200,7 +200,7 @@ class _VariantRow extends StatelessWidget {
       child: Row(
         children: <Widget>[
           SelectionIndicator(selected: selected, round: true),
-          const SizedBox(width: QoidaGeometry.spaceMd),
+          const SizedBox(width: HorecaOSGeometry.spaceMd),
           Expanded(
             child: Text(
               label,
@@ -225,7 +225,7 @@ class _ModifierGroupSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
     final MenuModifierGroup group = state.group;
 
@@ -235,12 +235,12 @@ class _ModifierGroupSection extends StatelessWidget {
     // the checkout will refuse.
     if (state.problem == ModifierSelectionProblem.groupIsIncoherent) {
       return Padding(
-        padding: const EdgeInsets.all(QoidaGeometry.spaceMd),
+        padding: const EdgeInsets.all(HorecaOSGeometry.spaceMd),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(group.name, style: text.titleSmall),
-            const SizedBox(height: QoidaGeometry.spaceXs),
+            const SizedBox(height: HorecaOSGeometry.spaceXs),
             Text(
               l10n.catalogueGroupUnavailable,
               style: text.bodyMedium?.copyWith(color: tokens.inkMuted),
@@ -266,14 +266,14 @@ class _ModifierGroupSection extends StatelessWidget {
         ),
         Padding(
           padding: const EdgeInsets.symmetric(
-            horizontal: QoidaGeometry.spaceMd,
+            horizontal: HorecaOSGeometry.spaceMd,
           ),
           child: Text(
             _instruction(group, l10n),
             style: text.bodySmall?.copyWith(color: tokens.inkMuted),
           ),
         ),
-        const SizedBox(height: QoidaGeometry.spaceSm),
+        const SizedBox(height: HorecaOSGeometry.spaceSm),
         for (final MenuModifierOption option in group.options)
           CataloguePressable(
             onTap: state.canToggle(option.optionId)
@@ -285,7 +285,7 @@ class _ModifierGroupSection extends StatelessWidget {
                   selected: state.isSelected(option.optionId),
                   round: single,
                 ),
-                const SizedBox(width: QoidaGeometry.spaceMd),
+                const SizedBox(width: HorecaOSGeometry.spaceMd),
                 Expanded(
                   child: Text(
                     // The wire carries only an authoring code for an option;
@@ -347,7 +347,7 @@ class SelectionIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     return SizedBox(
       width: _size,
       height: _size,
@@ -356,10 +356,10 @@ class SelectionIndicator extends StatelessWidget {
           shape: round ? BoxShape.circle : BoxShape.rectangle,
           borderRadius: round
               ? null
-              : BorderRadius.circular(QoidaGeometry.spaceXs),
+              : BorderRadius.circular(HorecaOSGeometry.spaceXs),
           border: Border.all(
             color: selected ? tokens.accent : tokens.hairline,
-            width: selected ? 2 : QoidaGeometry.hairline,
+            width: selected ? 2 : HorecaOSGeometry.hairline,
           ),
         ),
         child: selected

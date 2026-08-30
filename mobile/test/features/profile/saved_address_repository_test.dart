@@ -3,15 +3,15 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:qoida_mobile/src/api/api_client.dart';
-import 'package:qoida_mobile/src/api/api_telemetry.dart';
-import 'package:qoida_mobile/src/api/idempotency_key.dart';
-import 'package:qoida_mobile/src/features/profile/data/saved_address.dart';
-import 'package:qoida_mobile/src/features/profile/data/saved_address_repository.dart';
+import 'package:horecaos_mobile/src/api/api_client.dart';
+import 'package:horecaos_mobile/src/api/api_telemetry.dart';
+import 'package:horecaos_mobile/src/api/idempotency_key.dart';
+import 'package:horecaos_mobile/src/features/profile/data/saved_address.dart';
+import 'package:horecaos_mobile/src/features/profile/data/saved_address_repository.dart';
 
 import 'profile_harness.dart';
 
-/// Every request in this feature goes through `QoidaApiClient`.
+/// Every request in this feature goes through `HorecaOSApiClient`.
 ///
 /// The point of these tests is the wire: the path, the reveal purpose, the
 /// idempotency key, and what telemetry is allowed to see afterwards.
@@ -40,7 +40,7 @@ void main() {
     sent = <http.BaseRequest>[];
     telemetry = _RecordingTelemetry();
     return HttpSavedAddressRepository(
-      api: QoidaApiClient(
+      api: HorecaOSApiClient(
         baseUri: Uri.parse('https://api.example.test'),
         httpClient: MockClient((http.Request request) {
           sent.add(request);
@@ -147,7 +147,7 @@ void main() {
       );
 
       expect(
-        sent.single.headers[QoidaApiClient.idempotencyKeyHeader],
+        sent.single.headers[HorecaOSApiClient.idempotencyKeyHeader],
         'intent-1',
       );
     });

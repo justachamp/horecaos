@@ -33,7 +33,7 @@ void main() {
     refreshTokens: const SecureRefreshTokenStore(),
   );
 
-  final QoidaApiClient api = QoidaApiClient(
+  final HorecaOSApiClient api = HorecaOSApiClient(
     baseUri: config.apiBaseUri,
     httpClient: httpClient,
     tokens: session,
@@ -48,7 +48,7 @@ void main() {
     AppScope(
       session: session,
       api: api,
-      child: QoidaApp(
+      child: HorecaOSApp(
         session: session,
         api: api,
         initialPickupPoint: PickupSearchPoint(

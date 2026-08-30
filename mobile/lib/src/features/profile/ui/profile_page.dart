@@ -3,7 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app_scope.dart';
 import '../../../auth/auth_session.dart';
-import '../../../design/qoida_tokens.dart';
+import '../../../design/horecaos_tokens.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../data/customer_account.dart';
 import '../profile_area.dart';
@@ -92,13 +92,13 @@ class _ProfilePageState extends State<ProfilePage> {
     return Scaffold(
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.only(bottom: QoidaGeometry.spaceXl),
+          padding: const EdgeInsets.only(bottom: HorecaOSGeometry.spaceXl),
           children: <Widget>[
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                QoidaGeometry.spaceMd,
-                QoidaGeometry.spaceLg,
-                QoidaGeometry.spaceMd,
+                HorecaOSGeometry.spaceMd,
+                HorecaOSGeometry.spaceLg,
+                HorecaOSGeometry.spaceMd,
                 0,
               ),
               child: Text(l10n.profileTitle, style: text.titleLarge),
@@ -131,7 +131,7 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
             const ProfileDivider(),
 
-            const SizedBox(height: QoidaGeometry.spaceLg),
+            const SizedBox(height: HorecaOSGeometry.spaceLg),
             ProfileRow(
               title: l10n.signOut,
               destructive: true,
@@ -168,7 +168,7 @@ class _AccountSection extends StatelessWidget {
           (BuildContext context, AsyncSnapshot<CustomerAccount> snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Padding(
-                padding: EdgeInsets.all(QoidaGeometry.spaceMd),
+                padding: EdgeInsets.all(HorecaOSGeometry.spaceMd),
                 child: Center(child: CircularProgressIndicator()),
               );
             }
@@ -176,7 +176,7 @@ class _AccountSection extends StatelessWidget {
             if (failure != null) {
               return Padding(
                 padding: const EdgeInsets.symmetric(
-                  vertical: QoidaGeometry.spaceMd,
+                  vertical: HorecaOSGeometry.spaceMd,
                 ),
                 child: ProfileFailureView(failure: failure, onRetry: onRetry),
               );
@@ -195,9 +195,9 @@ class _AccountSection extends StatelessWidget {
                 const ProfileDivider(),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
-                    QoidaGeometry.spaceMd,
-                    QoidaGeometry.spaceSm,
-                    QoidaGeometry.spaceMd,
+                    HorecaOSGeometry.spaceMd,
+                    HorecaOSGeometry.spaceSm,
+                    HorecaOSGeometry.spaceMd,
                     0,
                   ),
                   child: Text(

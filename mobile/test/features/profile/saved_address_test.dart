@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:qoida_mobile/src/features/profile/data/saved_address.dart';
+import 'package:horecaos_mobile/src/features/profile/data/saved_address.dart';
 
 /// The address model, and the rules that decide whether a draft may be sent.
 ///

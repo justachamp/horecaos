@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'qoida_theme.dart';
+import 'horecaos_theme.dart';
 
 /// The icons this application is allowed to draw.
 ///
@@ -16,7 +16,7 @@ enum QIconName { home, orders, cart, profile, back, close, search, chevronRight 
 /// would have forced two icon sets.
 ///
 /// The icon font is not bundled yet, so this maps onto Material's built-in set
-/// today. That is a stand-in, not the decision: when the Qoida icon font lands,
+/// today. That is a stand-in, not the decision: when the HorecaOS icon font lands,
 /// only [_glyph] changes and no call site moves. Call sites must therefore never
 /// use `Icon(Icons.…)` directly — test/design/design_system_lint_test.dart fails
 /// the build on one.
@@ -34,7 +34,7 @@ class QIcon extends StatelessWidget {
     return Icon(
       _glyph(name),
       size: size,
-      color: color ?? IconTheme.of(context).color ?? context.qoida.ink,
+      color: color ?? IconTheme.of(context).color ?? context.horecaos.ink,
     );
   }
 

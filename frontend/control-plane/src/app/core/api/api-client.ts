@@ -18,7 +18,7 @@ import { Page, PageQuery } from './page';
  *   - collections are cursor-paginated.
  *
  * Surface prefixes are ADR 0031's: `/api/v1/control-plane/**` for tenant
- * administration and `/api/v1/platform-admin/**` for Qoida staff at global
+ * administration and `/api/v1/platform-admin/**` for HorecaOS staff at global
  * scope. This console is the only client of both.
  */
 

@@ -1,4 +1,4 @@
-import 'package:qoida_mobile/src/features/catalogue/data/menu.dart';
+import 'package:horecaos_mobile/src/features/catalogue/data/menu.dart';
 
 /// A menu shaped exactly like the platform's own response.
 ///

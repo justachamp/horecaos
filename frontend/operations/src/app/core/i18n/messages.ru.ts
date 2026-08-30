@@ -11,7 +11,7 @@ import type { MessageCatalogue } from './messages.en';
  * dictionary disagree, the table wins: it is the word the staff already use.
  */
 export const messagesRu: MessageCatalogue = {
-  'shell.brand': 'qoida',
+  'shell.brand': 'horecaos',
   'shell.skipToContent': 'Перейти к содержимому',
   'shell.newOrder': 'Новый заказ',
   'shell.newOrder.shortcut': 'F2',

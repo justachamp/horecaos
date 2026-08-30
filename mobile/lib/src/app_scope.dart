@@ -18,7 +18,7 @@ class AppScope extends InheritedWidget {
   });
 
   final AuthSession session;
-  final QoidaApiClient api;
+  final HorecaOSApiClient api;
 
   static AppScope of(BuildContext context) {
     final AppScope? scope = context

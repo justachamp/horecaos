@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../auth/auth_session.dart';
 import '../auth/tokens.dart';
-import '../design/qoida_theme.dart';
-import '../design/qoida_tokens.dart';
+import '../design/horecaos_theme.dart';
+import '../design/horecaos_tokens.dart';
 import '../l10n/generated/app_localizations.dart';
 
 /// The sign-in route.
@@ -60,24 +60,24 @@ class _SignInPageState extends State<SignInPage> {
     return Scaffold(
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(QoidaGeometry.spaceLg),
+          padding: const EdgeInsets.all(HorecaOSGeometry.spaceLg),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Text(l10n.signInTitle, style: text.titleLarge),
-              const SizedBox(height: QoidaGeometry.spaceSm),
+              const SizedBox(height: HorecaOSGeometry.spaceSm),
               Text(l10n.signInBody, style: text.bodyMedium),
               if (_failed) ...<Widget>[
-                const SizedBox(height: QoidaGeometry.spaceMd),
+                const SizedBox(height: HorecaOSGeometry.spaceMd),
                 Text(
                   l10n.signInFailed,
                   style: text.bodyMedium?.copyWith(
-                    color: context.qoida.errorInk,
+                    color: context.horecaos.errorInk,
                   ),
                 ),
               ],
-              const SizedBox(height: QoidaGeometry.spaceLg),
+              const SizedBox(height: HorecaOSGeometry.spaceLg),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(

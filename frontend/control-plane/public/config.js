@@ -8,9 +8,9 @@
  * No secret belongs here. It is public, and the client is a public OAuth client
  * that holds no credential (ADR 0003).
  */
-window.qoidaControlPlaneConfig = {
+window.horecaosControlPlaneConfig = {
   apiBaseUrl: 'http://localhost:8080',
-  issuerUrl: 'http://localhost:8081/realms/qoida',
-  clientId: 'qoida-control-plane',
+  issuerUrl: 'http://localhost:8081/realms/horecaos',
+  clientId: 'horecaos-control-plane',
   displayTimeZone: 'Asia/Tashkent',
 };

@@ -1,5 +1,5 @@
 /**
- * RFC 9457 Problem Details, in the one shape every Qoida surface returns
+ * RFC 9457 Problem Details, in the one shape every HorecaOS surface returns
  * (ADR 0031).
  *
  * The server's `ApiProblem` builds these and its `ErrorCode` enum is the
@@ -10,7 +10,7 @@
 
 /**
  * The server's error codes, as of the platform release this client is written
- * against. Mirrors uz.qoida.platform.web.api.ErrorCode.
+ * against. Mirrors uz.horecaos.platform.web.api.ErrorCode.
  */
 export type KnownErrorCode =
   | 'VALIDATION_FAILED'

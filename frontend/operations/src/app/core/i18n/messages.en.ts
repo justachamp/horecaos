@@ -24,7 +24,7 @@
  * would be inventing a name the restaurant does not use.
  */
 export const messagesEn = {
-  'shell.brand': 'qoida',
+  'shell.brand': 'horecaos',
   'shell.skipToContent': 'Skip to content',
   'shell.newOrder': 'New order',
   'shell.newOrder.shortcut': 'F2',

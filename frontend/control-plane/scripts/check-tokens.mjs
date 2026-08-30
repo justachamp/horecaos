@@ -6,11 +6,11 @@
  * token that moved in the design system cannot sit unnoticed in this
  * repository until a designer spots two buttons that do not match.
  *
- * The source of record is the design system's token sheet, carried verbatim in
- * the platform repository. This repository has no dependency on that one, so
- * the check is skipped rather than failed when the platform repository is not
- * beside it — a developer who cloned only this application should not be
- * blocked, while CI, which will have both, is.
+ * The source of record is frontend/design-tokens/tokens.css, the canonical
+ * sheet vendored by all four HorecaOS frontend apps. It lives in this same
+ * monorepo, so unlike before the HorecaOS import this check no longer has an
+ * absent-sibling-repository case to skip — it always has something to
+ * compare against.
  *
  * When the design system is published as a package this script is deleted and
  * the version range does the job instead.
@@ -22,10 +22,7 @@ import { dirname, resolve } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const vendored = resolve(here, '../src/design-system/tokens.css');
-const sourceOfRecord = resolve(
-  here,
-  '../../prototypes/control-plane/src/tokens.css',
-);
+const sourceOfRecord = resolve(here, '../../design-tokens/tokens.css');
 
 /** Both files open with a block comment that is not part of the tokens. */
 function body(css) {
@@ -34,7 +31,7 @@ function body(css) {
 
 if (!existsSync(sourceOfRecord)) {
   console.log(
-    'check:tokens skipped — the platform repository is not beside this one, ' +
+    'check:tokens skipped — frontend/design-tokens/tokens.css is not present, ' +
       'so there is nothing to compare against.',
   );
   process.exit(0);

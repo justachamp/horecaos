@@ -4,19 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:qoida_mobile/src/api/api_client.dart';
-import 'package:qoida_mobile/src/design/qoida_theme.dart';
-import 'package:qoida_mobile/src/features/catalogue/catalogue_controller.dart';
-import 'package:qoida_mobile/src/features/catalogue/data/catalogue_scope.dart';
-import 'package:qoida_mobile/src/features/catalogue/data/menu.dart';
-import 'package:qoida_mobile/src/features/catalogue/data/menu_index.dart';
-import 'package:qoida_mobile/src/features/catalogue/data/menu_repository.dart';
-import 'package:qoida_mobile/src/features/catalogue/domain/modifier_selection.dart';
-import 'package:qoida_mobile/src/features/catalogue/ui/category_screen.dart';
-import 'package:qoida_mobile/src/features/catalogue/ui/menu_screen.dart';
-import 'package:qoida_mobile/src/features/catalogue/ui/product_detail_screen.dart';
-import 'package:qoida_mobile/src/l10n/generated/app_localizations.dart';
-import 'package:qoida_mobile/src/l10n/supported_locales.dart';
+import 'package:horecaos_mobile/src/api/api_client.dart';
+import 'package:horecaos_mobile/src/design/horecaos_theme.dart';
+import 'package:horecaos_mobile/src/features/catalogue/catalogue_controller.dart';
+import 'package:horecaos_mobile/src/features/catalogue/data/catalogue_scope.dart';
+import 'package:horecaos_mobile/src/features/catalogue/data/menu.dart';
+import 'package:horecaos_mobile/src/features/catalogue/data/menu_index.dart';
+import 'package:horecaos_mobile/src/features/catalogue/data/menu_repository.dart';
+import 'package:horecaos_mobile/src/features/catalogue/domain/modifier_selection.dart';
+import 'package:horecaos_mobile/src/features/catalogue/ui/category_screen.dart';
+import 'package:horecaos_mobile/src/features/catalogue/ui/menu_screen.dart';
+import 'package:horecaos_mobile/src/features/catalogue/ui/product_detail_screen.dart';
+import 'package:horecaos_mobile/src/l10n/generated/app_localizations.dart';
+import 'package:horecaos_mobile/src/l10n/supported_locales.dart';
 
 import 'menu_fixture.dart';
 
@@ -36,11 +36,11 @@ class _NoTokens implements AccessTokens {
 
 /// Every screen under the real theme and the real localisations.
 ///
-/// Not a bare `MaterialApp`: `context.qoida` throws without `QoidaTokens` in
+/// Not a bare `MaterialApp`: `context.horecaos` throws without `HorecaOSTokens` in
 /// the theme, which is deliberate — a widget that renders with Material's own
 /// palette looks almost right, and almost right is what ships.
 Widget _host(Widget child) => MaterialApp(
-  theme: QoidaTheme.light(),
+  theme: HorecaOSTheme.light(),
   locale: SupportedLocales.english,
   localizationsDelegates: AppLocalizations.localizationsDelegates,
   supportedLocales: SupportedLocales.all,
@@ -50,7 +50,7 @@ Widget _host(Widget child) => MaterialApp(
 CatalogueController _controller(Map<String, Object?> body, {int status = 200}) =>
     CatalogueController(
       repository: MenuRepository(
-        api: QoidaApiClient(
+        api: HorecaOSApiClient(
           baseUri: Uri.parse('https://api.example.test'),
           httpClient: MockClient(
             (http.Request request) async => http.Response(

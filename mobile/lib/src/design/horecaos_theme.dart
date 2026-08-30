@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 
-import 'qoida_tokens.dart';
-import 'qoida_typography.dart';
+import 'horecaos_tokens.dart';
+import 'horecaos_typography.dart';
 
 /// The design tokens, reachable from any widget.
 ///
 /// ADR 0035 requires that widgets read tokens through
-/// `Theme.of(context).extension<QoidaTokens>()` and never through `Colors.*` or
+/// `Theme.of(context).extension<HorecaOSTokens>()` and never through `Colors.*` or
 /// a literal `Color(0x…)`. This extension is what makes that possible, and it
 /// is also the seam through which a tenant accent is injected: the accent is
 /// per-brand data, so it cannot live in a `const` token file.
 @immutable
-class QoidaTokens extends ThemeExtension<QoidaTokens> {
-  const QoidaTokens({
+class HorecaOSTokens extends ThemeExtension<HorecaOSTokens> {
+  const HorecaOSTokens({
     required this.accent,
     required this.ink,
     required this.inkMuted,
@@ -58,26 +58,26 @@ class QoidaTokens extends ThemeExtension<QoidaTokens> {
   final double radius;
   final double minTarget;
 
-  static const QoidaTokens light = QoidaTokens(
-    accent: QoidaPalette.primary,
-    ink: QoidaPalette.ink,
-    inkMuted: QoidaPalette.inkMuted,
-    inkSubtle: QoidaPalette.inkSubtle,
-    canvas: QoidaPalette.canvas,
-    surface1: QoidaPalette.surface1,
-    surface2: QoidaPalette.surface2,
-    hairline: QoidaPalette.hairline,
-    success: QoidaPalette.successText,
-    warningDot: QoidaPalette.warning,
-    warningInk: QoidaPalette.warningText,
-    error: QoidaPalette.error,
-    errorInk: QoidaPalette.errorText,
-    radius: QoidaGeometry.radius,
-    minTarget: QoidaGeometry.minTarget,
+  static const HorecaOSTokens light = HorecaOSTokens(
+    accent: HorecaOSPalette.primary,
+    ink: HorecaOSPalette.ink,
+    inkMuted: HorecaOSPalette.inkMuted,
+    inkSubtle: HorecaOSPalette.inkSubtle,
+    canvas: HorecaOSPalette.canvas,
+    surface1: HorecaOSPalette.surface1,
+    surface2: HorecaOSPalette.surface2,
+    hairline: HorecaOSPalette.hairline,
+    success: HorecaOSPalette.successText,
+    warningDot: HorecaOSPalette.warning,
+    warningInk: HorecaOSPalette.warningText,
+    error: HorecaOSPalette.error,
+    errorInk: HorecaOSPalette.errorText,
+    radius: HorecaOSGeometry.radius,
+    minTarget: HorecaOSGeometry.minTarget,
   );
 
   @override
-  QoidaTokens copyWith({Color? accent}) => QoidaTokens(
+  HorecaOSTokens copyWith({Color? accent}) => HorecaOSTokens(
     accent: accent ?? this.accent,
     ink: ink,
     inkMuted: inkMuted,
@@ -101,8 +101,8 @@ class QoidaTokens extends ThemeExtension<QoidaTokens> {
   /// motion the design system forbids. Returning the destination outright is
   /// the honest implementation of that rule rather than an unimplemented method.
   @override
-  QoidaTokens lerp(ThemeExtension<QoidaTokens>? other, double t) {
-    if (other is! QoidaTokens) {
+  HorecaOSTokens lerp(ThemeExtension<HorecaOSTokens>? other, double t) {
+    if (other is! HorecaOSTokens) {
       return this;
     }
     return t < 0.5 ? this : other;
@@ -110,16 +110,16 @@ class QoidaTokens extends ThemeExtension<QoidaTokens> {
 }
 
 /// Builds the application theme from the tokens.
-abstract final class QoidaTheme {
+abstract final class HorecaOSTheme {
   /// The `--q-ease-productive` curve.
   static const Cubic easeProductive = Cubic(0.2, 0, 0.38, 0.9);
 
   static ThemeData light({Color? tenantAccent}) {
-    final QoidaTokens tokens = QoidaTokens.light.copyWith(accent: tenantAccent);
+    final HorecaOSTokens tokens = HorecaOSTokens.light.copyWith(accent: tenantAccent);
     return _build(tokens);
   }
 
-  static ThemeData _build(QoidaTokens tokens) {
+  static ThemeData _build(HorecaOSTokens tokens) {
     // A seeded scheme would generate its own palette and quietly overrule the
     // token sheet, so every role is stated. Roles the design system has no
     // opinion about still have to be filled: Material reads all of them, and an
@@ -128,11 +128,11 @@ abstract final class QoidaTheme {
     final ColorScheme scheme = ColorScheme(
       brightness: Brightness.light,
       primary: tokens.accent,
-      onPrimary: QoidaPalette.inverseInk,
+      onPrimary: HorecaOSPalette.inverseInk,
       secondary: tokens.accent,
-      onSecondary: QoidaPalette.inverseInk,
+      onSecondary: HorecaOSPalette.inverseInk,
       error: tokens.error,
-      onError: QoidaPalette.inverseInk,
+      onError: HorecaOSPalette.inverseInk,
       surface: tokens.canvas,
       onSurface: tokens.ink,
       surfaceContainerLowest: tokens.canvas,
@@ -143,8 +143,8 @@ abstract final class QoidaTheme {
       onSurfaceVariant: tokens.inkMuted,
       outline: tokens.hairline,
       outlineVariant: tokens.hairline,
-      inverseSurface: QoidaPalette.inverse,
-      onInverseSurface: QoidaPalette.inverseInk,
+      inverseSurface: HorecaOSPalette.inverse,
+      onInverseSurface: HorecaOSPalette.inverseInk,
       // Material 3 tints surfaces by elevation. This design system expresses
       // depth with one shadow and a hairline, never by recolouring. A
       // transparent tint is how that is switched off scheme-wide.
@@ -162,7 +162,7 @@ abstract final class QoidaTheme {
       scaffoldBackgroundColor: tokens.canvas,
       canvasColor: tokens.canvas,
       textTheme: _textTheme(tokens),
-      fontFamily: QoidaTypography.fontFamily,
+      fontFamily: HorecaOSTypography.fontFamily,
 
       // The ink ripple is decoration, and this system has none. A press state is
       // a token-controlled colour change, applied by the component that owns it.
@@ -174,11 +174,11 @@ abstract final class QoidaTheme {
       // what Material consults for the legacy overlay path.
       applyElevationOverlayColor: false,
 
-      shadowColor: QoidaElevation.shadowColor,
+      shadowColor: HorecaOSElevation.shadowColor,
       dividerTheme: DividerThemeData(
         color: tokens.hairline,
-        thickness: QoidaGeometry.hairline,
-        space: QoidaGeometry.hairline,
+        thickness: HorecaOSGeometry.hairline,
+        space: HorecaOSGeometry.hairline,
       ),
 
       appBarTheme: AppBarThemeData(
@@ -188,7 +188,7 @@ abstract final class QoidaTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
-        titleTextStyle: QoidaTypography.subhead.copyWith(color: tokens.ink),
+        titleTextStyle: HorecaOSTypography.subhead.copyWith(color: tokens.ink),
       ),
 
       cardTheme: CardThemeData(
@@ -196,7 +196,7 @@ abstract final class QoidaTheme {
         surfaceTintColor: const Color(0x00000000),
         elevation: 0,
         shape: shape.copyWith(
-          side: BorderSide(color: tokens.hairline, width: QoidaGeometry.hairline),
+          side: BorderSide(color: tokens.hairline, width: HorecaOSGeometry.hairline),
         ),
         margin: EdgeInsets.zero,
       ),
@@ -220,16 +220,16 @@ abstract final class QoidaTheme {
         surfaceTintColor: const Color(0x00000000),
         elevation: 0,
         shape: shape,
-        titleTextStyle: QoidaTypography.subhead.copyWith(color: tokens.ink),
-        contentTextStyle: QoidaTypography.body.copyWith(color: tokens.ink),
+        titleTextStyle: HorecaOSTypography.subhead.copyWith(color: tokens.ink),
+        contentTextStyle: HorecaOSTypography.body.copyWith(color: tokens.ink),
       ),
 
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: QoidaPalette.inverse,
-        contentTextStyle: QoidaTypography.bodySmall.copyWith(
-          color: QoidaPalette.inverseInk,
+        backgroundColor: HorecaOSPalette.inverse,
+        contentTextStyle: HorecaOSTypography.bodySmall.copyWith(
+          color: HorecaOSPalette.inverseInk,
         ),
-        actionTextColor: QoidaPalette.inverseInk,
+        actionTextColor: HorecaOSPalette.inverseInk,
         behavior: SnackBarBehavior.floating,
         shape: shape,
         elevation: 0,
@@ -242,10 +242,10 @@ abstract final class QoidaTheme {
           ) {
             if (states.contains(WidgetState.disabled)) return tokens.surface2;
             if (states.contains(WidgetState.pressed)) {
-              return QoidaPalette.primaryActive;
+              return HorecaOSPalette.primaryActive;
             }
             if (states.contains(WidgetState.hovered)) {
-              return QoidaPalette.primaryHover;
+              return HorecaOSPalette.primaryHover;
             }
             return tokens.accent;
           }),
@@ -253,7 +253,7 @@ abstract final class QoidaTheme {
             Set<WidgetState> states,
           ) {
             if (states.contains(WidgetState.disabled)) return tokens.inkSubtle;
-            return QoidaPalette.inverseInk;
+            return HorecaOSPalette.inverseInk;
           }),
         ),
       ),
@@ -265,7 +265,7 @@ abstract final class QoidaTheme {
           ) {
             if (states.contains(WidgetState.disabled)) return tokens.inkSubtle;
             if (states.contains(WidgetState.pressed)) {
-              return QoidaPalette.primaryActive;
+              return HorecaOSPalette.primaryActive;
             }
             return tokens.accent;
           }),
@@ -276,7 +276,7 @@ abstract final class QoidaTheme {
         style: _buttonStyle(tokens).copyWith(
           foregroundColor: WidgetStatePropertyAll<Color>(tokens.ink),
           side: WidgetStatePropertyAll<BorderSide>(
-            BorderSide(color: tokens.hairline, width: QoidaGeometry.hairline),
+            BorderSide(color: tokens.hairline, width: HorecaOSGeometry.hairline),
           ),
         ),
       ),
@@ -286,7 +286,7 @@ abstract final class QoidaTheme {
         surfaceTintColor: const Color(0x00000000),
         indicatorColor: const Color(0x00000000),
         elevation: 0,
-        height: QoidaGeometry.minTarget + QoidaGeometry.spaceMd,
+        height: HorecaOSGeometry.minTarget + HorecaOSGeometry.spaceMd,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         labelTextStyle: WidgetStateProperty.resolveWith<TextStyle?>((
           Set<WidgetState> states,
@@ -294,7 +294,7 @@ abstract final class QoidaTheme {
           final Color colour = states.contains(WidgetState.selected)
               ? tokens.accent
               : tokens.inkMuted;
-          return QoidaTypography.caption.copyWith(color: colour);
+          return HorecaOSTypography.caption.copyWith(color: colour);
         }),
         iconTheme: WidgetStateProperty.resolveWith<IconThemeData?>((
           Set<WidgetState> states,
@@ -325,12 +325,12 @@ abstract final class QoidaTheme {
           borderRadius: BorderRadius.circular(tokens.radius),
           borderSide: BorderSide(color: tokens.error),
         ),
-        labelStyle: QoidaTypography.bodySmall.copyWith(color: tokens.inkMuted),
-        hintStyle: QoidaTypography.body.copyWith(color: tokens.inkSubtle),
-        errorStyle: QoidaTypography.caption.copyWith(color: tokens.errorInk),
+        labelStyle: HorecaOSTypography.bodySmall.copyWith(color: tokens.inkMuted),
+        hintStyle: HorecaOSTypography.body.copyWith(color: tokens.inkSubtle),
+        errorStyle: HorecaOSTypography.caption.copyWith(color: tokens.errorInk),
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: QoidaGeometry.spaceMd,
-          vertical: QoidaGeometry.spaceMd,
+          horizontal: HorecaOSGeometry.spaceMd,
+          vertical: HorecaOSGeometry.spaceMd,
         ),
       ),
 
@@ -351,18 +351,18 @@ abstract final class QoidaTheme {
     );
   }
 
-  static ButtonStyle _buttonStyle(QoidaTokens tokens) => ButtonStyle(
+  static ButtonStyle _buttonStyle(HorecaOSTokens tokens) => ButtonStyle(
     minimumSize: WidgetStatePropertyAll<Size>(
       Size(tokens.minTarget, tokens.minTarget),
     ),
     shape: WidgetStatePropertyAll<OutlinedBorder>(
       RoundedRectangleBorder(borderRadius: BorderRadius.circular(tokens.radius)),
     ),
-    textStyle: WidgetStatePropertyAll<TextStyle>(QoidaTypography.emphasis),
+    textStyle: WidgetStatePropertyAll<TextStyle>(HorecaOSTypography.emphasis),
     elevation: const WidgetStatePropertyAll<double>(0),
     splashFactory: NoSplash.splashFactory,
     padding: const WidgetStatePropertyAll<EdgeInsetsGeometry>(
-      EdgeInsets.symmetric(horizontal: QoidaGeometry.spaceMd),
+      EdgeInsets.symmetric(horizontal: HorecaOSGeometry.spaceMd),
     ),
   );
 
@@ -371,40 +371,40 @@ abstract final class QoidaTheme {
   /// Every slot is filled from the scale. Leaving one unset would let a
   /// Material default through, and a Material default is a font size nobody in
   /// this design system chose.
-  static TextTheme _textTheme(QoidaTokens tokens) {
+  static TextTheme _textTheme(HorecaOSTokens tokens) {
     final Color ink = tokens.ink;
     final Color muted = tokens.inkMuted;
     return TextTheme(
-      displayLarge: QoidaTypography.display.copyWith(color: ink),
-      displayMedium: QoidaTypography.display.copyWith(color: ink),
-      displaySmall: QoidaTypography.headline.copyWith(color: ink),
-      headlineLarge: QoidaTypography.headline.copyWith(color: ink),
+      displayLarge: HorecaOSTypography.display.copyWith(color: ink),
+      displayMedium: HorecaOSTypography.display.copyWith(color: ink),
+      displaySmall: HorecaOSTypography.headline.copyWith(color: ink),
+      headlineLarge: HorecaOSTypography.headline.copyWith(color: ink),
       // `.q-data-lg`. Material has no numeric slot, and this is the closest.
-      headlineMedium: QoidaTypography.dataLarge.copyWith(color: ink),
-      headlineSmall: QoidaTypography.title.copyWith(color: ink),
-      titleLarge: QoidaTypography.title.copyWith(color: ink),
-      titleMedium: QoidaTypography.subhead.copyWith(color: ink),
-      titleSmall: QoidaTypography.emphasis.copyWith(color: ink),
-      bodyLarge: QoidaTypography.body.copyWith(color: ink),
-      bodyMedium: QoidaTypography.bodySmall.copyWith(color: ink),
-      bodySmall: QoidaTypography.caption.copyWith(color: muted),
-      labelLarge: QoidaTypography.emphasis.copyWith(color: ink),
-      labelMedium: QoidaTypography.bodySmall.copyWith(color: muted),
-      labelSmall: QoidaTypography.caption.copyWith(color: muted),
+      headlineMedium: HorecaOSTypography.dataLarge.copyWith(color: ink),
+      headlineSmall: HorecaOSTypography.title.copyWith(color: ink),
+      titleLarge: HorecaOSTypography.title.copyWith(color: ink),
+      titleMedium: HorecaOSTypography.subhead.copyWith(color: ink),
+      titleSmall: HorecaOSTypography.emphasis.copyWith(color: ink),
+      bodyLarge: HorecaOSTypography.body.copyWith(color: ink),
+      bodyMedium: HorecaOSTypography.bodySmall.copyWith(color: ink),
+      bodySmall: HorecaOSTypography.caption.copyWith(color: muted),
+      labelLarge: HorecaOSTypography.emphasis.copyWith(color: ink),
+      labelMedium: HorecaOSTypography.bodySmall.copyWith(color: muted),
+      labelSmall: HorecaOSTypography.caption.copyWith(color: muted),
     );
   }
 }
 
 /// Reads the tokens, or fails loudly.
-extension QoidaThemeContext on BuildContext {
-  QoidaTokens get qoida {
-    final QoidaTokens? tokens = Theme.of(this).extension<QoidaTokens>();
+extension HorecaOSThemeContext on BuildContext {
+  HorecaOSTokens get horecaos {
+    final HorecaOSTokens? tokens = Theme.of(this).extension<HorecaOSTokens>();
     if (tokens == null) {
       // Falling back to a default here would let a widget render with
       // Material's palette and look almost right, which is worse than not
       // rendering: the drift would ship.
       throw FlutterError(
-        'No QoidaTokens in this Theme. Wrap the subtree in QoidaTheme.light().',
+        'No HorecaOSTokens in this Theme. Wrap the subtree in HorecaOSTheme.light().',
       );
     }
     return tokens;

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design/qoida_theme.dart';
-import '../../../../design/qoida_tokens.dart';
-import '../../../../design/qoida_typography.dart';
+import '../../../../design/horecaos_theme.dart';
+import '../../../../design/horecaos_tokens.dart';
+import '../../../../design/horecaos_typography.dart';
 import '../../../../format/money.dart';
 import '../../../../l10n/generated/app_localizations.dart';
 import '../../data/order_models.dart';
@@ -36,7 +36,7 @@ class OrderLinesPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
 
     return Column(
@@ -44,7 +44,7 @@ class OrderLinesPanel extends StatelessWidget {
       children: <Widget>[
         for (final OrderLine line in lines)
           Padding(
-            padding: const EdgeInsets.only(bottom: QoidaGeometry.spaceMd),
+            padding: const EdgeInsets.only(bottom: HorecaOSGeometry.spaceMd),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
@@ -55,7 +55,7 @@ class OrderLinesPanel extends StatelessWidget {
                     '${line.quantity}×',
                     style: text.bodyMedium?.copyWith(
                       color: tokens.inkMuted,
-                      fontFeatures: QoidaTypography.tabular,
+                      fontFeatures: HorecaOSTypography.tabular,
                     ),
                   ),
                 ),
@@ -71,11 +71,11 @@ class OrderLinesPanel extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: QoidaGeometry.spaceSm),
+                const SizedBox(width: HorecaOSGeometry.spaceSm),
                 Text(
                   OrderStrings.money(context, line.total),
                   style: text.bodyLarge?.copyWith(
-                    fontFeatures: QoidaTypography.tabular,
+                    fontFeatures: HorecaOSTypography.tabular,
                   ),
                 ),
               ],
@@ -133,12 +133,12 @@ class _TotalRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
     final TextStyle? style = emphasised ? text.titleMedium : text.bodyMedium;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: QoidaGeometry.spaceXs),
+      padding: const EdgeInsets.symmetric(vertical: HorecaOSGeometry.spaceXs),
       child: Row(
         children: <Widget>[
           Expanded(
@@ -151,7 +151,7 @@ class _TotalRow extends StatelessWidget {
           ),
           Text(
             OrderStrings.money(context, amount),
-            style: style?.copyWith(fontFeatures: QoidaTypography.tabular),
+            style: style?.copyWith(fontFeatures: HorecaOSTypography.tabular),
           ),
         ],
       ),
@@ -175,7 +175,7 @@ class OrderPaymentPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
     final AppLocalizations l10n = AppLocalizations.of(context);
     final String? method = payment.methodName;
@@ -185,7 +185,7 @@ class OrderPaymentPanel extends StatelessWidget {
       children: <Widget>[
         if (method != null && method.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.only(bottom: QoidaGeometry.spaceXs),
+            padding: const EdgeInsets.only(bottom: HorecaOSGeometry.spaceXs),
             child: Row(
               children: <Widget>[
                 Expanded(

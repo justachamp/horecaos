@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../../design/qoida_tokens.dart';
+import '../../../design/horecaos_tokens.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../settings/locale_preference.dart';
 import 'language_names.dart';
@@ -52,7 +52,7 @@ class LanguagePage extends StatelessWidget {
                 unawaited(preference.select(_localeFor(tag)));
               },
               child: ListView(
-                padding: const EdgeInsets.only(bottom: QoidaGeometry.spaceXl),
+                padding: const EdgeInsets.only(bottom: HorecaOSGeometry.spaceXl),
                 children: <Widget>[
                   const ProfileDivider(),
                   ProfileRow(

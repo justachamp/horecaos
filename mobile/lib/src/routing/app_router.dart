@@ -16,7 +16,7 @@ import 'sign_in_page.dart';
 /// The menu is public browse; customer-specific surfaces remain guarded.
 GoRouter buildRouter(
   AuthSession session, {
-  required QoidaApiClient api,
+  required HorecaOSApiClient api,
   required PickupSearchPoint initialPickupPoint,
   String? initialLocation,
 }) {

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../../../design/qoida_theme.dart';
-import '../../../design/qoida_tokens.dart';
+import '../../../design/horecaos_theme.dart';
+import '../../../design/horecaos_tokens.dart';
 
 /// A tappable row with the design system's press state.
 ///
 /// ADR 0035 replaces the Material ink ripple with "a token-controlled press
-/// state", and `QoidaTheme` switches the ripple off globally — which on its own
+/// state", and `HorecaOSTheme` switches the ripple off globally — which on its own
 /// leaves a row that gives no feedback at all. This is the other half: the
 /// surface changes to `surface1` while the finger is down and back when it
 /// lifts. No animation, because only `transform` and `opacity` animate in this
@@ -21,8 +21,8 @@ class CataloguePressable extends StatefulWidget {
     super.key,
     this.onTap,
     this.padding = const EdgeInsets.symmetric(
-      horizontal: QoidaGeometry.spaceMd,
-      vertical: QoidaGeometry.spaceMd,
+      horizontal: HorecaOSGeometry.spaceMd,
+      vertical: HorecaOSGeometry.spaceMd,
     ),
     this.semanticsLabel,
   });
@@ -51,7 +51,7 @@ class _CataloguePressableState extends State<CataloguePressable> {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final bool enabled = widget.onTap != null;
 
     return Semantics(

@@ -137,8 +137,8 @@ export class Session {
   }
 }
 
-const TOKEN_KEY = 'qoida_session_token';
-const EXPIRES_AT_KEY = 'qoida_session_expires_at';
+const TOKEN_KEY = 'horecaos_session_token';
+const EXPIRES_AT_KEY = 'horecaos_session_expires_at';
 
 /** Epoch milliseconds, or 0 for anything that cannot be read as an instant. */
 function expiryOf(expiresAt: string | null | undefined): number {

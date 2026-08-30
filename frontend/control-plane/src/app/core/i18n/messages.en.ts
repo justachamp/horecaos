@@ -12,7 +12,7 @@
  * nobody can read the error message of.
  */
 export const en = {
-  'app.name': 'Qoida',
+  'app.name': 'HorecaOS',
   'app.surface': 'control plane',
 
   'nav.overview': 'Overview',
@@ -42,7 +42,7 @@ export const en = {
 
   'state.unavailable.title': 'Sign-in is unavailable',
   'state.unavailable.body':
-    'The Qoida realm did not answer. Nothing is wrong with your account. Try again once identity is back.',
+    'The HorecaOS realm did not answer. Nothing is wrong with your account. Try again once identity is back.',
   'state.unavailable.retry': 'Try again',
 
   'state.denied.title': 'You do not have access to this section',

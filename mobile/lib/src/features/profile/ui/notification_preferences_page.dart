@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 
 import '../../../api/idempotency_key.dart';
-import '../../../design/qoida_theme.dart';
-import '../../../design/qoida_tokens.dart';
+import '../../../design/horecaos_theme.dart';
+import '../../../design/horecaos_tokens.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../data/notification_preference.dart';
 import '../data/notification_preference_repository.dart';
@@ -219,11 +219,11 @@ class _PreferenceList extends StatelessWidget {
     );
 
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
 
     return ListView(
-      padding: const EdgeInsets.only(bottom: QoidaGeometry.spaceXl),
+      padding: const EdgeInsets.only(bottom: HorecaOSGeometry.spaceXl),
       children: <Widget>[
         ProfileSectionHeader(l10n.profileNotificationsAlwaysTitle),
         const ProfileDivider(),
@@ -236,9 +236,9 @@ class _PreferenceList extends StatelessWidget {
         ],
         Padding(
           padding: const EdgeInsets.fromLTRB(
-            QoidaGeometry.spaceMd,
-            QoidaGeometry.spaceSm,
-            QoidaGeometry.spaceMd,
+            HorecaOSGeometry.spaceMd,
+            HorecaOSGeometry.spaceSm,
+            HorecaOSGeometry.spaceMd,
             0,
           ),
           child: Text(
@@ -265,9 +265,9 @@ class _PreferenceList extends StatelessWidget {
           ],
         Padding(
           padding: const EdgeInsets.fromLTRB(
-            QoidaGeometry.spaceMd,
-            QoidaGeometry.spaceSm,
-            QoidaGeometry.spaceMd,
+            HorecaOSGeometry.spaceMd,
+            HorecaOSGeometry.spaceSm,
+            HorecaOSGeometry.spaceMd,
             0,
           ),
           child: Text(

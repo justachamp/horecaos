@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../design/q_empty_state.dart';
 import '../../../design/q_icon.dart';
-import '../../../design/qoida_theme.dart';
-import '../../../design/qoida_tokens.dart';
+import '../../../design/horecaos_theme.dart';
+import '../../../design/horecaos_tokens.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../data/menu.dart';
 import '../data/menu_index.dart';
@@ -105,7 +105,7 @@ class _MenuBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
 
     if (index.products.isEmpty) {
       // Published, and offering nothing here. A different sentence from "this
@@ -140,7 +140,7 @@ class _MenuBody extends StatelessWidget {
             index.products.length +
             (showCategories ? index.rootCategories.length + 1 : 0),
         separatorBuilder: (BuildContext context, int _) =>
-            Divider(height: QoidaGeometry.hairline, color: tokens.hairline),
+            Divider(height: HorecaOSGeometry.hairline, color: tokens.hairline),
         itemBuilder: (BuildContext context, int position) {
           if (showCategories) {
             if (position == 0) {
@@ -176,10 +176,10 @@ class _SectionHeading extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        QoidaGeometry.spaceMd,
-        QoidaGeometry.spaceLg,
-        QoidaGeometry.spaceMd,
-        QoidaGeometry.spaceSm,
+        HorecaOSGeometry.spaceMd,
+        HorecaOSGeometry.spaceLg,
+        HorecaOSGeometry.spaceMd,
+        HorecaOSGeometry.spaceSm,
       ),
       child: Text(text, style: Theme.of(context).textTheme.titleMedium),
     );
@@ -194,7 +194,7 @@ class _CategoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     return CataloguePressable(
       onTap: onTap,
       child: Row(

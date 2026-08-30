@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 
 /**
- * The stable error vocabulary from `uz.qoida.platform.web.api.ErrorCode`.
+ * The stable error vocabulary from `uz.horecaos.platform.web.api.ErrorCode`.
  *
  * ADR 0031 says clients branch on `code`, never on `title` or `detail`, and that
  * new codes are an additive change a client must tolerate. The `(string & {})`
@@ -36,7 +36,7 @@ export interface FieldError {
   readonly message?: string;
 }
 
-/** RFC 9457, plus the Qoida extensions ApiProblem always sets. */
+/** RFC 9457, plus the HorecaOS extensions ApiProblem always sets. */
 export interface ProblemDetails {
   readonly type?: string;
   readonly title?: string;
@@ -69,7 +69,7 @@ export function isProblemDetails(body: unknown): body is ProblemDetails {
  * no call site has to distinguish "the server said no" from "the request never
  * arrived" before it can read a code.
  */
-export class QoidaApiError extends Error {
+export class HorecaOSApiError extends Error {
   readonly status: number;
   readonly code: ErrorCode;
   readonly detail: string;
@@ -90,7 +90,7 @@ export class QoidaApiError extends Error {
     // `detail` is developer-facing and, per ADR 0031, carries no PII. It is
     // still never the string shown to a customer: see `messageKeyFor`.
     super(`${init.code} (${init.status}): ${init.detail}`);
-    this.name = 'QoidaApiError';
+    this.name = 'HorecaOSApiError';
     this.status = init.status;
     this.code = init.code;
     this.detail = init.detail;
@@ -127,7 +127,7 @@ export class QoidaApiError extends Error {
  */
 export function isUnauthenticated(failure: unknown): boolean {
   return (
-    failure instanceof QoidaApiError &&
+    failure instanceof HorecaOSApiError &&
     (failure.status === 401 ||
       failure.code === 'UNAUTHENTICATED' ||
       failure.code === 'SESSION_EXPIRED')
@@ -150,7 +150,7 @@ export function isUnauthenticated(failure: unknown): boolean {
  * which is what {@link Session.expire} acts on.
  */
 export function isSessionExpired(failure: unknown): boolean {
-  return failure instanceof QoidaApiError && failure.code === 'SESSION_EXPIRED';
+  return failure instanceof HorecaOSApiError && failure.code === 'SESSION_EXPIRED';
 }
 
 /**
@@ -162,16 +162,16 @@ export function isSessionExpired(failure: unknown): boolean {
  * out of its way to close.
  */
 export function isNotFound(failure: unknown): boolean {
-  return failure instanceof QoidaApiError && failure.status === 404;
+  return failure instanceof HorecaOSApiError && failure.status === 404;
 }
 
-export function toQoidaApiError(response: HttpErrorResponse): QoidaApiError {
+export function toHorecaOSApiError(response: HttpErrorResponse): HorecaOSApiError {
   const retryAfter = Number(response.headers?.get('Retry-After'));
   const retryAfterSeconds = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined;
 
   if (isProblemDetails(response.error)) {
     const problem = response.error;
-    return new QoidaApiError({
+    return new HorecaOSApiError({
       status: problem.status ?? response.status,
       code: problem.code ?? 'INTERNAL_ERROR',
       detail: problem.detail ?? problem.title ?? response.statusText,
@@ -185,7 +185,7 @@ export function toQoidaApiError(response: HttpErrorResponse): QoidaApiError {
   // Status 0 is the browser refusing to tell us why: offline, DNS, CORS, or a
   // WebView that killed the request. Guessing between them would be fiction.
   if (response.status === 0) {
-    return new QoidaApiError({
+    return new HorecaOSApiError({
       status: 0,
       code: 'NETWORK_UNREACHABLE',
       detail: 'The request did not reach the platform.',
@@ -193,7 +193,7 @@ export function toQoidaApiError(response: HttpErrorResponse): QoidaApiError {
     });
   }
 
-  return new QoidaApiError({
+  return new HorecaOSApiError({
     status: response.status,
     code: 'INTERNAL_ERROR',
     detail: response.statusText || 'Unrecognised error response.',
@@ -210,7 +210,7 @@ export function toQoidaApiError(response: HttpErrorResponse): QoidaApiError {
  * for `TranslateService.get`, never a sentence — the wording lives in `i18n/`
  * with every other string a customer reads.
  */
-export function messageKeyFor(error: QoidaApiError): string {
+export function messageKeyFor(error: HorecaOSApiError): string {
   switch (error.code) {
     case 'STALE_VERSION':
       return 'errors.staleVersion';

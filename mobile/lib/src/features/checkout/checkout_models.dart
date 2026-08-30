@@ -1,6 +1,6 @@
 import '../../format/money.dart';
 
-/// How the customer pays (`uz.qoida.platform.payments.domain.PaymentMethod`).
+/// How the customer pays (`uz.horecaos.platform.payments.domain.PaymentMethod`).
 ///
 /// Code-owned on the platform and code-owned here, for the reason the platform
 /// gives: an unknown method must fail rather than resolve to something. A

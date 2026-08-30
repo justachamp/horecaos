@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../design/q_empty_state.dart';
-import '../../design/qoida_theme.dart';
-import '../../design/qoida_tokens.dart';
+import '../../design/horecaos_theme.dart';
+import '../../design/horecaos_tokens.dart';
 import '../../l10n/generated/app_localizations.dart';
 import 'cart_controller.dart';
 import 'cart_item_naming.dart';
@@ -52,14 +52,14 @@ class CartPage extends StatelessWidget {
 
   Widget _body(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final Cart? cart = controller.cart;
 
     if (cart == null) {
       final CartProblem? problem = controller.problem;
       if (problem != null) {
         return Padding(
-          padding: const EdgeInsets.all(QoidaGeometry.spaceMd),
+          padding: const EdgeInsets.all(HorecaOSGeometry.spaceMd),
           child: cartProblemPanel(context, problem),
         );
       }
@@ -86,11 +86,11 @@ class CartPage extends StatelessWidget {
       children: <Widget>[
         Expanded(
           child: ListView(
-            padding: const EdgeInsets.only(bottom: QoidaGeometry.spaceMd),
+            padding: const EdgeInsets.only(bottom: HorecaOSGeometry.spaceMd),
             children: <Widget>[
               if (problem != null)
                 Padding(
-                  padding: const EdgeInsets.all(QoidaGeometry.spaceMd),
+                  padding: const EdgeInsets.all(HorecaOSGeometry.spaceMd),
                   child: cartProblemPanel(context, problem),
                 ),
               for (final CartLine line in cart.lines) ...<Widget>[
@@ -199,13 +199,13 @@ class _ActionBar extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         border: Border(
-          top: BorderSide(color: hairline, width: QoidaGeometry.hairline),
+          top: BorderSide(color: hairline, width: HorecaOSGeometry.hairline),
         ),
       ),
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.all(QoidaGeometry.spaceMd),
+          padding: const EdgeInsets.all(HorecaOSGeometry.spaceMd),
           child: SizedBox(
             width: double.infinity,
             child: FilledButton(

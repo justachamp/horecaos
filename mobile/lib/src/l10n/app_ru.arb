@@ -1,6 +1,6 @@
 {
   "@@locale": "ru",
-  "appTitle": "Qoida",
+  "appTitle": "HorecaOS",
   "navHome": "Меню",
   "navOrders": "Заказы",
   "signInTitle": "Войдите, чтобы заказать",
@@ -201,7 +201,7 @@
   "paymentCouldNotOpen": "Не удалось открыть страницу оплаты.",
   "paymentSurfaceUnavailable": "Оплату нельзя начать здесь.",
   "paymentUncertainTitle": "Не платите повторно",
-  "paymentUncertainBody": "Провайдер не ответил, поэтому неясно, списаны ли деньги. Qoida разбирается.",
+  "paymentUncertainBody": "Провайдер не ответил, поэтому неясно, списаны ли деньги. HorecaOS разбирается.",
   "paymentAlreadyPaid": "Этот заказ уже оплачен.",
   "checkoutDone": "Готово",
 

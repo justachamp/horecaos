@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
-import 'package:qoida_mobile/src/api/api_client.dart';
-import 'package:qoida_mobile/src/features/cart/cart_models.dart';
-import 'package:qoida_mobile/src/features/cart/cart_repository.dart';
+import 'package:horecaos_mobile/src/api/api_client.dart';
+import 'package:horecaos_mobile/src/features/cart/cart_models.dart';
+import 'package:horecaos_mobile/src/features/cart/cart_repository.dart';
 
 import 'support.dart';
 
@@ -44,7 +44,7 @@ void main() {
       await repository.createCart(FulfilmentMode.pickup);
 
       expect(
-        log.single.request.headers[QoidaApiClient.idempotencyKeyHeader],
+        log.single.request.headers[HorecaOSApiClient.idempotencyKeyHeader],
         isNotEmpty,
       );
     });

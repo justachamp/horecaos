@@ -5,13 +5,13 @@ import { environment } from '../../../environments/environment';
 import { SplitSecurityStorage } from './security-storage';
 
 /**
- * Authorization Code with PKCE against the Qoida Keycloak realm
+ * Authorization Code with PKCE against the HorecaOS Keycloak realm
  * (ADR 0003, ADR 0035).
  *
  * **What cannot be verified from this repository.** The realm is not reachable
  * from a developer machine without the platform's docker compose running, and it
  * is not reachable from CI at all. Everything below that depends on Keycloak's
- * actual configuration — that `qoida-operations` exists as a *public* client,
+ * actual configuration — that `horecaos-operations` exists as a *public* client,
  * that PKCE S256 is required on it, that the redirect URI is allowlisted
  * exactly, that the audience mapper puts the API in `aud` — is asserted here and
  * proven nowhere. The first person with a running realm should check those five
@@ -29,11 +29,11 @@ import { SplitSecurityStorage } from './security-storage';
  * a load ever has to process is an authorization callback, and that has its own
  * route outside the guard, which calls `checkAuth()` itself.
  */
-export function provideQoidaAuth(): EnvironmentProviders {
+export function provideHorecaOSAuth(): EnvironmentProviders {
   return makeEnvironmentProviders([
     provideAuth({
       config: {
-        configId: 'qoida-operations',
+        configId: 'horecaos-operations',
         authority: environment.auth.issuer,
         clientId: environment.auth.clientId,
         redirectUrl: environment.auth.redirectUri,

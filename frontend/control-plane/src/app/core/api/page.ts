@@ -15,7 +15,7 @@ export interface Page<T> {
   readonly nextCursor: string | null;
 }
 
-/** Mirrors uz.qoida.platform.web.api.Page. The server clamps to the maximum. */
+/** Mirrors uz.horecaos.platform.web.api.Page. The server clamps to the maximum. */
 export const DEFAULT_PAGE_LIMIT = 50;
 export const MAXIMUM_PAGE_LIMIT = 200;
 

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:qoida_mobile/src/features/orders/application/order_milestones.dart';
-import 'package:qoida_mobile/src/features/orders/data/order_codes.dart';
+import 'package:horecaos_mobile/src/features/orders/application/order_milestones.dart';
+import 'package:horecaos_mobile/src/features/orders/data/order_codes.dart';
 
 /// ADR 0045's milestone table, asserted row by row.
 ///

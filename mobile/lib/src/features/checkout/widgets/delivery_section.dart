@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../design/qoida_theme.dart';
-import '../../../design/qoida_tokens.dart';
+import '../../../design/horecaos_theme.dart';
+import '../../../design/horecaos_tokens.dart';
 import '../../../format/money.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../cart/money_label.dart';
@@ -38,7 +38,7 @@ class DeliverySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
     final AppLocalizations l10n = AppLocalizations.of(context);
     final DeliveryFeeQuote? fee = controller.deliveryFee;
@@ -47,12 +47,12 @@ class DeliverySection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(l10n.checkoutDeliveryTitle, style: text.titleSmall),
-        const SizedBox(height: QoidaGeometry.spaceXs),
+        const SizedBox(height: HorecaOSGeometry.spaceXs),
         Text(
           l10n.checkoutDeliveryBody,
           style: text.bodySmall?.copyWith(color: tokens.inkMuted),
         ),
-        const SizedBox(height: QoidaGeometry.spaceSm),
+        const SizedBox(height: HorecaOSGeometry.spaceSm),
         if (controller.destination == null)
           _Row(
             label: l10n.checkoutDeliveryNotSet,
@@ -76,7 +76,7 @@ class DeliverySection extends StatelessWidget {
             ),
           if (controller.deliveryShortfall case final Money shortfall)
             Padding(
-              padding: const EdgeInsets.only(top: QoidaGeometry.spaceXs),
+              padding: const EdgeInsets.only(top: HorecaOSGeometry.spaceXs),
               child: Text(
                 l10n.checkoutDeliveryShortfall(moneyLabel(context, shortfall)),
                 style: text.bodySmall?.copyWith(color: tokens.warningInk),
@@ -84,7 +84,7 @@ class DeliverySection extends StatelessWidget {
             )
           else if (fee.minimumBasket case final Money minimum)
             Padding(
-              padding: const EdgeInsets.only(top: QoidaGeometry.spaceXs),
+              padding: const EdgeInsets.only(top: HorecaOSGeometry.spaceXs),
               child: Text(
                 l10n.checkoutDeliveryMinimumBasket(
                   moneyLabel(context, minimum),
@@ -94,7 +94,7 @@ class DeliverySection extends StatelessWidget {
             ),
           if (fee.freeDeliveryFrom case final Money threshold)
             Padding(
-              padding: const EdgeInsets.only(top: QoidaGeometry.spaceXs),
+              padding: const EdgeInsets.only(top: HorecaOSGeometry.spaceXs),
               child: Text(
                 l10n.checkoutFreeDeliveryFrom(moneyLabel(context, threshold)),
                 style: text.bodySmall?.copyWith(color: tokens.inkMuted),
@@ -116,7 +116,7 @@ class _Row extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
 
     return Row(

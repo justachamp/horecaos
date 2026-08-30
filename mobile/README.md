@@ -1,6 +1,6 @@
-# Qoida mobile
+# HorecaOS mobile
 
-The Qoida customer ordering application for iOS and Android. Flutter, MOBILE
+The HorecaOS customer ordering application for iOS and Android. Flutter, MOBILE
 skin, per [ADR 0035][adr0035].
 
 > **Nothing in this repository has ever been compiled.**
@@ -60,7 +60,7 @@ half-built screen is worse than an empty route.
 | | Where |
 |---|---|
 | Design tokens as Dart constants, and the MOBILE `ThemeData` built from them | `lib/src/design/` |
-| Closed type scale mapped onto every Material text slot | `lib/src/design/qoida_typography.dart` |
+| Closed type scale mapped onto every Material text slot | `lib/src/design/horecaos_typography.dart` |
 | Router with a shell, two routes, and a pure-function auth guard | `lib/src/routing/` |
 | Keycloak Authorization Code + PKCE, system browser, refresh token in the keystore | `lib/src/auth/` |
 | HTTP client honouring [ADR 0031][adr0031] | `lib/src/api/` |
@@ -92,7 +92,7 @@ what Flutter's own design system is switched **off**:
   archive's bare `uz` was ambiguous.
 
 Adaptive Cupertino/Material widgets are not used. One Material-based,
-Qoida-skinned widget set runs on both platforms, because "one codebase" stops
+HorecaOS-skinned widget set runs on both platforms, because "one codebase" stops
 being true the moment the tree branches on platform.
 
 ### The API client
@@ -151,7 +151,7 @@ The group separator is a **no-break space**, so `84 000` never wraps between the
 
 ### Authentication
 
-Authorization Code with PKCE (S256 only) against the `qoida` realm, in the
+Authorization Code with PKCE (S256 only) against the `horecaos` realm, in the
 **system browser** — `ASWebAuthenticationSession` on iOS, Custom Tabs on Android
 — never a WebView. A WebView would put the customer's Keycloak password inside
 this process and would forgo the system cookie jar, so single sign-on between
@@ -192,7 +192,7 @@ enforcement point ([ADR 0025][adr0025]).
   archive and needs `google-services.json` / `GoogleService-Info.plist`, neither
   of which belongs in git.
 - **The IBM Plex Sans faces.** See `assets/fonts/README.md`.
-- **The Qoida icon font.** `QIcon` is the seam and maps onto Material icons
+- **The HorecaOS icon font.** `QIcon` is the seam and maps onto Material icons
   today. Call sites already go through it, so replacing the set moves no call
   site.
 - **id_token validation.** The token is kept for `id_token_hint` on logout and
@@ -208,7 +208,7 @@ enforcement point ([ADR 0025][adr0025]).
 
 ## Why the tokens are vendored
 
-`lib/src/design/qoida_tokens.dart` and `qoida_typography.dart` carry a
+`lib/src/design/horecaos_tokens.dart` and `horecaos_typography.dart` carry a
 generated-output header and are transcribed from
 `design-tokens/tokens.css`, which is itself a verbatim copy of
 `frontend/prototypes/control-plane/src/tokens.css` in the platform repository.
@@ -257,7 +257,7 @@ cd frontend/mobile
 
 # 1. Recreate the platform folders. This writes android/ and ios/ into the
 #    existing tree and leaves lib/, test/ and pubspec.yaml alone.
-flutter create --platforms=ios,android --org uz.qoida --project-name qoida_mobile .
+flutter create --platforms=ios,android --org uz.horecaos --project-name horecaos_mobile .
 # Read `git status` before committing what it wrote. It is safe on an existing
 # tree in principle; everything here is committed already so that "in principle"
 # never has to be trusted.
@@ -275,10 +275,10 @@ flutter test
 
 # 5. Run against a local platform and Keycloak.
 flutter run \
-  --dart-define=QOIDA_API_BASE_URI=http://10.0.2.2:8080 \
-  --dart-define=QOIDA_OIDC_ISSUER_URI=http://10.0.2.2:8081/realms/qoida \
-  --dart-define=QOIDA_OIDC_CLIENT_ID=qoida-mobile \
-  --dart-define=QOIDA_OIDC_REDIRECT_SCHEME=uz.qoida.mobile
+  --dart-define=HORECAOS_API_BASE_URI=http://10.0.2.2:8080 \
+  --dart-define=HORECAOS_OIDC_ISSUER_URI=http://10.0.2.2:8081/realms/horecaos \
+  --dart-define=HORECAOS_OIDC_CLIENT_ID=horecaos-mobile \
+  --dart-define=HORECAOS_OIDC_REDIRECT_SCHEME=uz.horecaos.mobile
 ```
 
 `10.0.2.2` is the Android emulator's route to the host. An iOS simulator reaches
@@ -307,7 +307,7 @@ In order, with what to expect.
    a country subtag — the whole point of the script tag is lost if it did not.
 
 4. **`flutter analyze`.** Expect errors, and expect most of them in
-   `lib/src/design/qoida_theme.dart`. Material's theme-data classes were
+   `lib/src/design/horecaos_theme.dart`. Material's theme-data classes were
    renamed in Flutter's normalisation work (`CardTheme` to `CardThemeData` and
    so on) and the exact set that has moved in 3.47 was checked against the API
    docs but not against a compiler. The other candidates, in rough order of
@@ -318,7 +318,7 @@ In order, with what to expect.
      replaced the deprecated `encryptedSharedPreferences` path
      (`lib/src/auth/token_store.dart`).
    - `FadeForwardsPageTransitionsBuilder`, if it is named differently in this
-     release (`lib/src/design/qoida_theme.dart`).
+     release (`lib/src/design/horecaos_theme.dart`).
    - `NumberFormat.symbols.DECIMAL_SEP` in `intl`
      (`lib/src/format/money.dart`).
 
@@ -340,13 +340,13 @@ In order, with what to expect.
 - **Android** — declare the redirect scheme so the browser can hand the
   authorization code back. `flutter_web_auth_2` needs its callback activity in
   `android/app/src/main/AndroidManifest.xml` with
-  `android:scheme="uz.qoida.mobile"`, and `minSdk` at 23 or above for
+  `android:scheme="uz.horecaos.mobile"`, and `minSdk` at 23 or above for
   `flutter_secure_storage`.
-- **iOS** — add `uz.qoida.mobile` to `CFBundleURLTypes` in `Info.plist`, and
+- **iOS** — add `uz.horecaos.mobile` to `CFBundleURLTypes` in `Info.plist`, and
   enable the Keychain Sharing capability if the token store needs it.
-- **Keycloak** — the `qoida-mobile` client must be **public** (no secret, none
+- **Keycloak** — the `horecaos-mobile` client must be **public** (no secret, none
   can be kept in a binary), with PKCE required at S256, and
-  `uz.qoida.mobile://oauth/callback` allowlisted **exactly**. A wildcard
+  `uz.horecaos.mobile://oauth/callback` allowlisted **exactly**. A wildcard
   redirect on a public client lets any application registering the same scheme
   receive the authorization code.
 
@@ -358,7 +358,7 @@ realm:
 - That the derived endpoint paths match this realm's. They follow Keycloak's
   fixed layout under an issuer, and a realm behind a reverse proxy that rewrites
   paths would break them.
-- That `qoida-mobile` exists, is public, and has the exact redirect allowlisted.
+- That `horecaos-mobile` exists, is public, and has the exact redirect allowlisted.
 - That the realm issues a refresh token at all. It requires the
   `offline_access` scope or a session-idle configuration that permits it; a realm
   that does not will sign the customer out on every cold start, and the symptom
@@ -369,7 +369,7 @@ realm:
   will be less forgiving than the tests are.
 - That `ui_locales=uz-Latn` resolves to a login theme. A realm with no `uz`
   theme falls back to its default. Cosmetic, and visible.
-- That the platform accepts the token's audience as `qoida-api`.
+- That the platform accepts the token's audience as `horecaos-api`.
 
 ## Testing
 

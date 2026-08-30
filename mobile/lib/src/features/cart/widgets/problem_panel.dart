@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../design/qoida_theme.dart';
-import '../../../design/qoida_tokens.dart';
+import '../../../design/horecaos_theme.dart';
+import '../../../design/horecaos_tokens.dart';
 import '../../../l10n/generated/app_localizations.dart';
 
 /// How serious the thing being reported is.
@@ -56,18 +56,18 @@ class QProblemPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(QoidaGeometry.spaceMd),
+      padding: const EdgeInsets.all(HorecaOSGeometry.spaceMd),
       decoration: BoxDecoration(
         color: tokens.surface1,
         borderRadius: BorderRadius.circular(tokens.radius),
         border: Border.all(
           color: tokens.hairline,
-          width: QoidaGeometry.hairline,
+          width: HorecaOSGeometry.hairline,
         ),
       ),
       child: Column(
@@ -79,28 +79,28 @@ class QProblemPanel extends StatelessWidget {
               Padding(
                 // Centres the dot on the first line of the title rather than on
                 // the row, so it does not drift down as the title wraps.
-                padding: const EdgeInsets.only(top: QoidaGeometry.spaceSm),
+                padding: const EdgeInsets.only(top: HorecaOSGeometry.spaceSm),
                 child: _Dot(tone: tone),
               ),
-              const SizedBox(width: QoidaGeometry.spaceSm),
+              const SizedBox(width: HorecaOSGeometry.spaceSm),
               Expanded(child: Text(title, style: text.titleSmall)),
             ],
           ),
-          const SizedBox(height: QoidaGeometry.spaceXs),
+          const SizedBox(height: HorecaOSGeometry.spaceXs),
           Text(body, style: text.bodyMedium?.copyWith(color: tokens.inkMuted)),
           if (child != null) ...<Widget>[
-            const SizedBox(height: QoidaGeometry.spaceMd),
+            const SizedBox(height: HorecaOSGeometry.spaceMd),
             child!,
           ],
           if (correlationId != null) ...<Widget>[
-            const SizedBox(height: QoidaGeometry.spaceSm),
+            const SizedBox(height: HorecaOSGeometry.spaceSm),
             Text(
               AppLocalizations.of(context).supportReference(correlationId!),
               style: text.bodySmall,
             ),
           ],
           if (actionLabel != null && onAction != null) ...<Widget>[
-            const SizedBox(height: QoidaGeometry.spaceSm),
+            const SizedBox(height: HorecaOSGeometry.spaceSm),
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton(onPressed: onAction, child: Text(actionLabel!)),
@@ -119,10 +119,10 @@ class _Dot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     return SizedBox(
-      width: QoidaGeometry.spaceSm,
-      height: QoidaGeometry.spaceSm,
+      width: HorecaOSGeometry.spaceSm,
+      height: HorecaOSGeometry.spaceSm,
       child: DecoratedBox(
         decoration: BoxDecoration(
           shape: BoxShape.circle,

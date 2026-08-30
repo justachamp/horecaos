@@ -1,5 +1,5 @@
 import '../../../format/money.dart';
-import '../../../format/qoida_formats.dart';
+import '../../../format/horecaos_formats.dart';
 
 /// Decoding helpers shared by the order payloads.
 ///
@@ -45,11 +45,11 @@ abstract final class OrderJson {
   ///
   /// Strict on a malformed value rather than falling back to "now": an order
   /// whose placed-at time silently became the current instant is a receipt that
-  /// lies, and `QoidaFormats.parseInstant` is deliberately strict for the same
+  /// lies, and `HorecaOSFormats.parseInstant` is deliberately strict for the same
   /// reason.
   static DateTime? optionalInstant(Map<String, Object?> json, String key) {
     final String? raw = optionalString(json, key);
-    return raw == null ? null : QoidaFormats.parseInstant(raw);
+    return raw == null ? null : HorecaOSFormats.parseInstant(raw);
   }
 
   static DateTime requireInstant(Map<String, Object?> json, String key) {

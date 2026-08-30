@@ -1,9 +1,9 @@
 import 'dart:ui' show Locale;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:qoida_mobile/src/features/profile/settings/language_choice_store.dart';
-import 'package:qoida_mobile/src/features/profile/settings/locale_preference.dart';
-import 'package:qoida_mobile/src/l10n/supported_locales.dart';
+import 'package:horecaos_mobile/src/features/profile/settings/language_choice_store.dart';
+import 'package:horecaos_mobile/src/features/profile/settings/locale_preference.dart';
+import 'package:horecaos_mobile/src/l10n/supported_locales.dart';
 
 /// A store that fails everything, for the paths that must survive it.
 final class _BrokenStore implements LanguageChoiceStore {

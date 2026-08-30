@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:qoida_mobile/src/features/orders/presentation/order_detail_page.dart';
-import 'package:qoida_mobile/src/features/orders/presentation/widgets/milestone_rail.dart';
-import 'package:qoida_mobile/src/format/qoida_formats.dart';
-import 'package:qoida_mobile/src/l10n/generated/app_localizations.dart';
+import 'package:horecaos_mobile/src/features/orders/presentation/order_detail_page.dart';
+import 'package:horecaos_mobile/src/features/orders/presentation/widgets/milestone_rail.dart';
+import 'package:horecaos_mobile/src/format/horecaos_formats.dart';
+import 'package:horecaos_mobile/src/l10n/generated/app_localizations.dart';
 
 import 'orders_harness.dart';
 
@@ -67,8 +67,8 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  String at(DateTime instant) => QoidaFormats.time(
-    QoidaFormats.toLocal(instant),
+  String at(DateTime instant) => HorecaOSFormats.time(
+    HorecaOSFormats.toLocal(instant),
     locale: 'ru',
   );
 

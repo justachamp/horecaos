@@ -5,7 +5,7 @@ import { catchError, throwError } from 'rxjs';
 import { Session } from '../auth/session';
 import { ANONYMOUS, PLATFORM_API_REQUEST } from './api-client';
 import { newCorrelationId } from './idempotency';
-import { isSessionExpired, toQoidaApiError } from './problem-details';
+import { isSessionExpired, toHorecaOSApiError } from './problem-details';
 
 /**
  * Headers ADR 0031 expects on every request <em>to the platform</em>.
@@ -42,7 +42,7 @@ export const conventionsInterceptor: HttpInterceptorFn = (request, next) => {
  * The bearer token, from memory, and only where it belongs.
  *
  * Two gates, and they are not the same gate. {@link PLATFORM_API_REQUEST} says
- * the destination is the Qoida API at all — anywhere else, a token attached
+ * the destination is the HorecaOS API at all — anywhere else, a token attached
  * here is a credential handed to a third party, which is a leak rather than a
  * mistake that shows up as a 401. {@link ANONYMOUS} then says that this
  * platform call is one the customer makes without an identity.
@@ -63,7 +63,7 @@ export const bearerInterceptor: HttpInterceptorFn = (request, next) => {
 };
 
 /**
- * Turns every failure into a {@link QoidaApiError}.
+ * Turns every failure into a {@link HorecaOSApiError}.
  *
  * Placed last so it also normalises failures the interceptors above produce, and
  * so no call site anywhere in the application has to know the shape of an
@@ -72,7 +72,7 @@ export const bearerInterceptor: HttpInterceptorFn = (request, next) => {
 export const problemDetailsInterceptor: HttpInterceptorFn = (request, next) =>
   next(request).pipe(
     catchError((failure: unknown) =>
-      throwError(() => (failure instanceof HttpErrorResponse ? toQoidaApiError(failure) : failure)),
+      throwError(() => (failure instanceof HttpErrorResponse ? toHorecaOSApiError(failure) : failure)),
     ),
   );
 
@@ -104,7 +104,7 @@ export const expiredSessionInterceptor: HttpInterceptorFn = (request, next) => {
   return next(request).pipe(
     catchError((failure: unknown) => {
       if (
-        isSessionExpired(failure instanceof HttpErrorResponse ? toQoidaApiError(failure) : failure)
+        isSessionExpired(failure instanceof HttpErrorResponse ? toHorecaOSApiError(failure) : failure)
       ) {
         session.expire();
       }

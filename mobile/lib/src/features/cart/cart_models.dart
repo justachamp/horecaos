@@ -1,6 +1,6 @@
 import '../../format/money.dart';
 
-/// How the order leaves the location (`uz.qoida.platform.tenancy.api.FulfillmentMode`).
+/// How the order leaves the location (`uz.horecaos.platform.tenancy.api.FulfillmentMode`).
 ///
 /// Fixed when the cart is opened and never changed on it: `CartService.create`
 /// takes the mode, and nothing in ADR 0019 moves a cart between modes. Changing

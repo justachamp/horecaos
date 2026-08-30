@@ -11,7 +11,7 @@ import { isNotFound } from '../core/api/problem-details';
  * Three steps, because the bytes never pass through the platform: ask for a key
  * and a constrained URL, PUT the file straight at the object store, then tell
  * the platform to verify and attach it. The middle step is the only request in
- * this application that does not go to the Qoida API, and it deliberately
+ * this application that does not go to the HorecaOS API, and it deliberately
  * carries no bearer token -- `PLATFORM_API_REQUEST` is not set on it, so
  * `bearerInterceptor` leaves it alone. Handing a platform credential to an
  * object store because it happened to be in the URL bar is exactly what that

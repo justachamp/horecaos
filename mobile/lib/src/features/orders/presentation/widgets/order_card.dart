@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design/qoida_theme.dart';
-import '../../../../design/qoida_tokens.dart';
-import '../../../../design/qoida_typography.dart';
-import '../../../../format/qoida_formats.dart';
+import '../../../../design/horecaos_theme.dart';
+import '../../../../design/horecaos_tokens.dart';
+import '../../../../design/horecaos_typography.dart';
+import '../../../../format/horecaos_formats.dart';
 import '../../../../l10n/generated/app_localizations.dart';
 import '../../data/order_models.dart';
 import '../order_strings.dart';
@@ -38,13 +38,13 @@ class _OrderCardState extends State<OrderCard> {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
     final AppLocalizations l10n = AppLocalizations.of(context);
     final String locale = Localizations.localeOf(context).toLanguageTag();
     final OrderSummary order = widget.order;
 
-    final DateTime placedAt = QoidaFormats.toLocal(order.placedAt);
+    final DateTime placedAt = HorecaOSFormats.toLocal(order.placedAt);
 
     return Semantics(
       button: true,
@@ -56,7 +56,7 @@ class _OrderCardState extends State<OrderCard> {
         onTap: widget.onOpen,
         child: Container(
           constraints: BoxConstraints(minHeight: tokens.minTarget),
-          padding: const EdgeInsets.all(QoidaGeometry.spaceMd),
+          padding: const EdgeInsets.all(HorecaOSGeometry.spaceMd),
           decoration: BoxDecoration(
             // The press state is a token colour change, because the ink ripple
             // is switched off system-wide: a ripple is decoration and this
@@ -65,7 +65,7 @@ class _OrderCardState extends State<OrderCard> {
             borderRadius: BorderRadius.circular(tokens.radius),
             border: Border.all(
               color: tokens.hairline,
-              width: QoidaGeometry.hairline,
+              width: HorecaOSGeometry.hairline,
             ),
           ),
           child: Column(
@@ -80,29 +80,29 @@ class _OrderCardState extends State<OrderCard> {
                       style: text.titleMedium,
                     ),
                   ),
-                  const SizedBox(width: QoidaGeometry.spaceSm),
+                  const SizedBox(width: HorecaOSGeometry.spaceSm),
                   Text(
                     OrderStrings.money(context, order.total),
                     // Tabular figures so a column of totals does not ripple as
                     // the list scrolls.
                     style: text.titleMedium?.copyWith(
-                      fontFeatures: QoidaTypography.tabular,
+                      fontFeatures: HorecaOSTypography.tabular,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: QoidaGeometry.spaceSm),
+              const SizedBox(height: HorecaOSGeometry.spaceSm),
               Row(
                 children: <Widget>[
                   Expanded(
                     child: Text(
                       l10n.ordersPlacedAt(
-                        QoidaFormats.dayMonthTime(placedAt, locale: locale),
+                        HorecaOSFormats.dayMonthTime(placedAt, locale: locale),
                       ),
                       style: text.bodySmall,
                     ),
                   ),
-                  const SizedBox(width: QoidaGeometry.spaceSm),
+                  const SizedBox(width: HorecaOSGeometry.spaceSm),
                   Flexible(
                     child: OrderStatusPill(
                       status: order.status,

@@ -54,7 +54,7 @@ final class ApiResponse<T> {
   final bool replayed;
 }
 
-/// The Qoida platform HTTP client (ADR 0031).
+/// The HorecaOS platform HTTP client (ADR 0031).
 ///
 /// Verified against the platform's own `ApiProblem`, `AggregateVersion`,
 /// `IdempotencyInterceptor`, `CorrelationIdFilter` and `Page`, and against
@@ -68,8 +68,8 @@ final class ApiResponse<T> {
 /// would sit on top of, not a substitute for one. Response *types* are
 /// deliberately absent: hand-copying those is the specific failure ADR 0035
 /// forbids.
-final class QoidaApiClient {
-  QoidaApiClient({
+final class HorecaOSApiClient {
+  HorecaOSApiClient({
     required this._baseUri,
     required http.Client httpClient,
     required this._tokens,

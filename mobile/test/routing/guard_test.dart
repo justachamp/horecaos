@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:qoida_mobile/src/auth/auth_session.dart';
-import 'package:qoida_mobile/src/routing/app_router.dart';
-import 'package:qoida_mobile/src/routing/routes.dart';
+import 'package:horecaos_mobile/src/auth/auth_session.dart';
+import 'package:horecaos_mobile/src/routing/app_router.dart';
+import 'package:horecaos_mobile/src/routing/routes.dart';
 
 void main() {
   group('while the session is being restored', () {

@@ -4,12 +4,12 @@ import 'pickup_location.dart';
 /// Reads the public, nearest-first pickup branch projection.
 final class PickupLocationRepository {
   // ignore: prefer_initializing_formals
-  const PickupLocationRepository({required QoidaApiClient api}) : _api = api;
+  const PickupLocationRepository({required HorecaOSApiClient api}) : _api = api;
 
-  final QoidaApiClient _api;
+  final HorecaOSApiClient _api;
 
   /// The branch options around [point]. The endpoint accepts an unauthenticated
-  /// request; going through [QoidaApiClient] still gives it the same timeout,
+  /// request; going through [HorecaOSApiClient] still gives it the same timeout,
   /// correlation identifier and problem decoding as an authenticated request.
   Future<List<PickupLocation>> nearby({
     required PickupSearchPoint point,

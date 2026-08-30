@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../design/q_icon.dart';
-import '../design/qoida_theme.dart';
-import '../design/qoida_tokens.dart';
+import '../design/horecaos_theme.dart';
+import '../design/horecaos_tokens.dart';
 import '../l10n/generated/app_localizations.dart';
 import 'routes.dart';
 
@@ -24,7 +24,7 @@ class AppShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final AppLocalizations l10n = AppLocalizations.of(context);
     final int index = _indexOf(GoRouterState.of(context).uri.path);
 
@@ -37,7 +37,7 @@ class AppShell extends StatelessWidget {
           border: Border(
             top: BorderSide(
               color: tokens.hairline,
-              width: QoidaGeometry.hairline,
+              width: HorecaOSGeometry.hairline,
             ),
           ),
         ),

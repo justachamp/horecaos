@@ -17,10 +17,10 @@ export const environment: Environment = {
   production: true,
   apiBaseUrl: '',
   auth: {
-    issuer: 'https://id.qoida.uz/realms/qoida',
-    clientId: 'qoida-operations',
-    redirectUri: 'https://operations.qoida.uz/auth/callback',
-    postLogoutRedirectUri: 'https://operations.qoida.uz/',
+    issuer: 'https://id.horecaos.uz/realms/horecaos',
+    clientId: 'horecaos-operations',
+    redirectUri: 'https://operations.horecaos.uz/auth/callback',
+    postLogoutRedirectUri: 'https://operations.horecaos.uz/',
     scope: 'openid profile email',
   },
 };

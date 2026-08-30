@@ -1,7 +1,7 @@
-/// RFC 9457 Problem Details, in the shape every Qoida surface returns
+/// RFC 9457 Problem Details, in the shape every HorecaOS surface returns
 /// (ADR 0031).
 ///
-/// Verified against `uz.qoida.platform.web.api.ApiProblem` and `ErrorCode` in
+/// Verified against `uz.horecaos.platform.web.api.ApiProblem` and `ErrorCode` in
 /// the platform repository, and against the extension members
 /// `StorefrontOrderingController` actually sets — `reason`, `unavailableItems`,
 /// `warnings`, `currentVersion`, `requiredCapability` — rather than against the

@@ -3,7 +3,7 @@ import { AuthConfig } from 'angular-oauth2-oidc';
 import { AppConfig } from '../config/app-config';
 
 /**
- * Authorization Code with PKCE against the Qoida realm (ADR 0003, ADR 0035).
+ * Authorization Code with PKCE against the HorecaOS realm (ADR 0003, ADR 0035).
  *
  * Not the implicit flow, which returns tokens in a URL fragment that lands in
  * browser history and in any referrer a page leaks. Not a confidential client,

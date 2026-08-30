@@ -10,16 +10,16 @@ import 'menu.dart';
 /// response a 30 second `Cache-Control` and an `ETag` of the publication
 /// identifier.
 ///
-/// It goes through [QoidaApiClient] rather than `package:http` directly, which
+/// It goes through [HorecaOSApiClient] rather than `package:http` directly, which
 /// is not a style preference: that client is where the correlation identifier,
 /// the token refresh, Problem Details decoding and telemetry redaction live.
 final class MenuRepository {
   // Not an initialising formal because a named parameter cannot be private,
   // and the client is nobody else's to reach.
   // ignore: prefer_initializing_formals
-  const MenuRepository({required QoidaApiClient api}) : _api = api;
+  const MenuRepository({required HorecaOSApiClient api}) : _api = api;
 
-  final QoidaApiClient _api;
+  final HorecaOSApiClient _api;
 
   /// The live menu for [scope], with names in [locale].
   ///

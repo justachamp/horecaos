@@ -32,7 +32,7 @@ final class SecureLanguageChoiceStore implements LanguageChoiceStore {
 
   final FlutterSecureStorage _storage;
 
-  static const String _key = 'qoida.language_choice';
+  static const String _key = 'horecaos.language_choice';
 
   /// Not `first_unlock_this_device`, which is what the refresh token uses.
   ///

@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:qoida_mobile/src/api/api_exception.dart';
-import 'package:qoida_mobile/src/api/problem_details.dart';
-import 'package:qoida_mobile/src/features/profile/data/notification_preference.dart';
-import 'package:qoida_mobile/src/features/profile/data/saved_address.dart';
-import 'package:qoida_mobile/src/features/profile/profile_area.dart';
-import 'package:qoida_mobile/src/features/profile/profile_routes.dart';
-import 'package:qoida_mobile/src/features/profile/settings/language_choice_store.dart';
-import 'package:qoida_mobile/src/l10n/generated/app_localizations.dart';
-import 'package:qoida_mobile/src/l10n/supported_locales.dart';
+import 'package:horecaos_mobile/src/api/api_exception.dart';
+import 'package:horecaos_mobile/src/api/problem_details.dart';
+import 'package:horecaos_mobile/src/features/profile/data/notification_preference.dart';
+import 'package:horecaos_mobile/src/features/profile/data/saved_address.dart';
+import 'package:horecaos_mobile/src/features/profile/profile_area.dart';
+import 'package:horecaos_mobile/src/features/profile/profile_routes.dart';
+import 'package:horecaos_mobile/src/features/profile/settings/language_choice_store.dart';
+import 'package:horecaos_mobile/src/l10n/generated/app_localizations.dart';
+import 'package:horecaos_mobile/src/l10n/supported_locales.dart';
 
 import 'profile_harness.dart';
 

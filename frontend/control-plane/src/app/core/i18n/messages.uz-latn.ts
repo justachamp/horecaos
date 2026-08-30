@@ -9,7 +9,7 @@ import { Messages } from './messages.en';
  * text on a Latin screen.
  */
 export const uzLatn: Messages = {
-  'app.name': 'Qoida',
+  'app.name': 'HorecaOS',
   'app.surface': 'boshqaruv paneli',
 
   'nav.overview': 'Umumiy ko‘rinish',
@@ -39,7 +39,7 @@ export const uzLatn: Messages = {
 
   'state.unavailable.title': 'Kirish mavjud emas',
   'state.unavailable.body':
-    'Qoida realm javob bermadi. Hisobingizda muammo yo‘q. Autentifikatsiya tiklangach qayta urinib ko‘ring.',
+    'HorecaOS realm javob bermadi. Hisobingizda muammo yo‘q. Autentifikatsiya tiklangach qayta urinib ko‘ring.',
   'state.unavailable.retry': 'Qayta urinish',
 
   'state.denied.title': 'Bu bo‘limga ruxsatingiz yo‘q',

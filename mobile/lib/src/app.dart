@@ -3,16 +3,16 @@ import 'package:go_router/go_router.dart';
 
 import 'api/api_client.dart';
 import 'auth/auth_session.dart';
-import 'design/qoida_theme.dart';
-import 'design/qoida_typography.dart';
+import 'design/horecaos_theme.dart';
+import 'design/horecaos_typography.dart';
 import 'features/catalogue/data/pickup_location.dart';
 import 'l10n/generated/app_localizations.dart';
 import 'l10n/supported_locales.dart';
 import 'routing/app_router.dart';
 
 /// The application root.
-class QoidaApp extends StatefulWidget {
-  const QoidaApp({
+class HorecaOSApp extends StatefulWidget {
+  const HorecaOSApp({
     required this.session,
     required this.api,
     required this.initialPickupPoint,
@@ -21,7 +21,7 @@ class QoidaApp extends StatefulWidget {
   });
 
   final AuthSession session;
-  final QoidaApiClient api;
+  final HorecaOSApiClient api;
   final PickupSearchPoint initialPickupPoint;
 
   /// Only tests pass this. Production always starts at the guard's own
@@ -29,10 +29,10 @@ class QoidaApp extends StatefulWidget {
   final String? initialLocation;
 
   @override
-  State<QoidaApp> createState() => _QoidaAppState();
+  State<HorecaOSApp> createState() => _HorecaOSAppState();
 }
 
-class _QoidaAppState extends State<QoidaApp> {
+class _HorecaOSAppState extends State<HorecaOSApp> {
   late final GoRouter _router = buildRouter(
     widget.session,
     api: widget.api,
@@ -54,7 +54,7 @@ class _QoidaAppState extends State<QoidaApp> {
       debugShowCheckedModeBanner: false,
       routerConfig: _router,
 
-      theme: QoidaTheme.light(),
+      theme: HorecaOSTheme.light(),
       // No dark theme, and this is a gap rather than a decision to ship light
       // only. The design system's token sheet has no dark palette: there are no
       // dark values for `--q-canvas`, `--q-ink` or the status tints to vendor,
@@ -75,7 +75,7 @@ class _QoidaAppState extends State<QoidaApp> {
         final MediaQueryData media = MediaQuery.of(context);
         return MediaQuery(
           data: media.copyWith(
-            textScaler: QoidaTypography.clampScaler(media.textScaler),
+            textScaler: HorecaOSTypography.clampScaler(media.textScaler),
           ),
           child: child ?? const SizedBox.shrink(),
         );

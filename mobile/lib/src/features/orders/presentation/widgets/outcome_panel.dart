@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design/qoida_theme.dart';
-import '../../../../design/qoida_tokens.dart';
-import '../../../../format/qoida_formats.dart';
+import '../../../../design/horecaos_theme.dart';
+import '../../../../design/horecaos_tokens.dart';
+import '../../../../format/horecaos_formats.dart';
 import '../../../../l10n/generated/app_localizations.dart';
 import '../../data/order_codes.dart';
 import '../../data/order_models.dart';
@@ -29,7 +29,7 @@ class OutcomePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
     final AppLocalizations l10n = AppLocalizations.of(context);
 
@@ -39,7 +39,7 @@ class OutcomePanel extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(QoidaGeometry.spaceMd),
+      padding: const EdgeInsets.all(HorecaOSGeometry.spaceMd),
       decoration: BoxDecoration(
         color: tokens.surface1,
         borderRadius: BorderRadius.circular(tokens.radius),
@@ -53,10 +53,10 @@ class OutcomePanel extends StatelessWidget {
               Padding(
                 // Aligns the dot with the first line of the title rather than
                 // with the middle of a title that has wrapped onto two.
-                padding: const EdgeInsets.only(top: QoidaGeometry.spaceSm),
+                padding: const EdgeInsets.only(top: HorecaOSGeometry.spaceSm),
                 child: StatusDot(tone: _tone(outcome.kind)),
               ),
-              const SizedBox(width: QoidaGeometry.spaceSm),
+              const SizedBox(width: HorecaOSGeometry.spaceSm),
               Expanded(
                 child: Text(
                   OrderStrings.outcomeTitle(l10n, outcome.kind),
@@ -66,22 +66,22 @@ class OutcomePanel extends StatelessWidget {
             ],
           ),
           if (reason != null) ...<Widget>[
-            const SizedBox(height: QoidaGeometry.spaceSm),
+            const SizedBox(height: HorecaOSGeometry.spaceSm),
             Text(
               reason,
               style: text.bodyMedium?.copyWith(color: tokens.inkMuted),
             ),
           ],
           if (refund != null) ...<Widget>[
-            const SizedBox(height: QoidaGeometry.spaceSm),
+            const SizedBox(height: HorecaOSGeometry.spaceSm),
             Text(refund, style: text.labelLarge),
           ],
           if (closedAt != null) ...<Widget>[
-            const SizedBox(height: QoidaGeometry.spaceSm),
+            const SizedBox(height: HorecaOSGeometry.spaceSm),
             Text(
               l10n.orderClosedAt(
-                QoidaFormats.dayMonthTime(
-                  QoidaFormats.toLocal(closedAt),
+                HorecaOSFormats.dayMonthTime(
+                  HorecaOSFormats.toLocal(closedAt),
                   locale: Localizations.localeOf(context).toLanguageTag(),
                 ),
               ),

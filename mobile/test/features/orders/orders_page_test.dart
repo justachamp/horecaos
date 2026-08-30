@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:qoida_mobile/src/features/orders/data/order_models.dart';
-import 'package:qoida_mobile/src/features/orders/presentation/orders_page.dart';
-import 'package:qoida_mobile/src/features/orders/presentation/widgets/order_card.dart';
-import 'package:qoida_mobile/src/l10n/generated/app_localizations.dart';
+import 'package:horecaos_mobile/src/features/orders/data/order_models.dart';
+import 'package:horecaos_mobile/src/features/orders/presentation/orders_page.dart';
+import 'package:horecaos_mobile/src/features/orders/presentation/widgets/order_card.dart';
+import 'package:horecaos_mobile/src/l10n/generated/app_localizations.dart';
 
 import 'orders_harness.dart';
 

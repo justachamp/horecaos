@@ -1,5 +1,5 @@
 {
-  "name": "qoida-control-plane",
+  "name": "horecaos-control-plane",
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
@@ -35,5 +35,5 @@
     "typescript": "~6.0.2",
     "vitest": "^4.0.8"
   },
-  "description": "Qoida's own staff console: tenants, onboarding, subscriptions, payments, platform configuration"
+  "description": "HorecaOS's own staff console: tenants, onboarding, subscriptions, payments, platform configuration"
 }

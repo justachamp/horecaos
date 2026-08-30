@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../design/qoida_theme.dart';
+import '../../../design/horecaos_theme.dart';
 import '../../../format/money.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../cart/money_label.dart';
@@ -75,7 +75,7 @@ class _Comparison extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
     final AppLocalizations l10n = AppLocalizations.of(context);
     final Money? current = stage.newQuote?.total;

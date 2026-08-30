@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../design/q_empty_state.dart';
 import '../../../design/q_icon.dart';
-import '../../../design/qoida_theme.dart';
-import '../../../design/qoida_tokens.dart';
+import '../../../design/horecaos_theme.dart';
+import '../../../design/horecaos_tokens.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../data/pickup_location.dart';
 import '../pickup_location_controller.dart';
@@ -78,7 +78,7 @@ class _Locations extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
 
     if (locations.isEmpty) {
       return QEmptyState(
@@ -90,15 +90,15 @@ class _Locations extends StatelessWidget {
     return ListView.separated(
       itemCount: locations.length + 1,
       separatorBuilder: (BuildContext context, int _) =>
-          Divider(height: QoidaGeometry.hairline, color: tokens.hairline),
+          Divider(height: HorecaOSGeometry.hairline, color: tokens.hairline),
       itemBuilder: (BuildContext context, int index) {
         if (index == 0) {
           return Padding(
             padding: const EdgeInsets.fromLTRB(
-              QoidaGeometry.spaceMd,
-              QoidaGeometry.spaceLg,
-              QoidaGeometry.spaceMd,
-              QoidaGeometry.spaceSm,
+              HorecaOSGeometry.spaceMd,
+              HorecaOSGeometry.spaceLg,
+              HorecaOSGeometry.spaceMd,
+              HorecaOSGeometry.spaceSm,
             ),
             child: Text(
               l10n.pickupLocationsNearby,
@@ -121,7 +121,7 @@ class _LocationRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
     final String name = location.brandName == location.locationName
         ? location.brandName
@@ -143,18 +143,18 @@ class _LocationRow extends StatelessWidget {
               children: <Widget>[
                 Text(name, style: text.bodyLarge),
                 if (address.isNotEmpty) ...<Widget>[
-                  const SizedBox(height: QoidaGeometry.spaceXs),
+                  const SizedBox(height: HorecaOSGeometry.spaceXs),
                   Text(
                     address.join(', '),
                     style: text.bodyMedium?.copyWith(color: tokens.inkMuted),
                   ),
                 ],
-                const SizedBox(height: QoidaGeometry.spaceXs),
+                const SizedBox(height: HorecaOSGeometry.spaceXs),
                 Text(
                   l10n.pickupLocationsDistance(location.distanceMeters),
                   style: text.bodyMedium?.copyWith(color: tokens.inkMuted),
                 ),
-                const SizedBox(height: QoidaGeometry.spaceXs),
+                const SizedBox(height: HorecaOSGeometry.spaceXs),
                 Text(
                   location.available
                       ? l10n.pickupLocationAvailable

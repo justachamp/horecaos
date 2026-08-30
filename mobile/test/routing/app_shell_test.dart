@@ -4,22 +4,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:qoida_mobile/src/app.dart';
-import 'package:qoida_mobile/src/auth/auth_config.dart';
-import 'package:qoida_mobile/src/auth/auth_session.dart';
-import 'package:qoida_mobile/src/auth/token_endpoint.dart';
-import 'package:qoida_mobile/src/auth/token_store.dart';
-import 'package:qoida_mobile/src/api/api_client.dart';
-import 'package:qoida_mobile/src/design/qoida_theme.dart';
-import 'package:qoida_mobile/src/features/catalogue/data/pickup_location.dart';
-import 'package:qoida_mobile/src/l10n/generated/app_localizations.dart';
-import 'package:qoida_mobile/src/l10n/supported_locales.dart';
+import 'package:horecaos_mobile/src/app.dart';
+import 'package:horecaos_mobile/src/auth/auth_config.dart';
+import 'package:horecaos_mobile/src/auth/auth_session.dart';
+import 'package:horecaos_mobile/src/auth/token_endpoint.dart';
+import 'package:horecaos_mobile/src/auth/token_store.dart';
+import 'package:horecaos_mobile/src/api/api_client.dart';
+import 'package:horecaos_mobile/src/design/horecaos_theme.dart';
+import 'package:horecaos_mobile/src/features/catalogue/data/pickup_location.dart';
+import 'package:horecaos_mobile/src/l10n/generated/app_localizations.dart';
+import 'package:horecaos_mobile/src/l10n/supported_locales.dart';
 
 final AuthConfig _config = AuthConfig(
-  issuer: Uri.parse('https://id.example.test/realms/qoida'),
-  clientId: 'qoida-mobile',
-  redirectUri: Uri.parse('uz.qoida.mobile://oauth/callback'),
-  callbackUrlScheme: 'uz.qoida.mobile',
+  issuer: Uri.parse('https://id.example.test/realms/horecaos'),
+  clientId: 'horecaos-mobile',
+  redirectUri: Uri.parse('uz.horecaos.mobile://oauth/callback'),
+  callbackUrlScheme: 'uz.horecaos.mobile',
 );
 
 AuthSession _session({String? storedRefreshToken}) => AuthSession(
@@ -54,7 +54,7 @@ const PickupSearchPoint _pickupPoint = PickupSearchPoint(
   longitude: 69.282722,
 );
 
-QoidaApiClient _api() => QoidaApiClient(
+HorecaOSApiClient _api() => HorecaOSApiClient(
   baseUri: Uri.parse('https://api.example.test'),
   httpClient: MockClient((http.Request request) async {
     if (request.url.path == '/api/v1/storefront/pickup-locations') {
@@ -65,7 +65,7 @@ QoidaApiClient _api() => QoidaApiClient(
               'tenantId': 'tenant-1',
               'brandId': 'brand-1',
               'locationId': 'location-1',
-              'brandName': 'Qoida Cafe',
+              'brandName': 'HorecaOS Cafe',
               'locationName': 'Central kitchen',
               'addressLine': '1 Demo Street',
               'district': 'Shaykhontohur',
@@ -118,8 +118,8 @@ QoidaApiClient _api() => QoidaApiClient(
   tokens: _NoTokens(),
 );
 
-QoidaApp _app(AuthSession session) =>
-    QoidaApp(session: session, api: _api(), initialPickupPoint: _pickupPoint);
+HorecaOSApp _app(AuthSession session) =>
+    HorecaOSApp(session: session, api: _api(), initialPickupPoint: _pickupPoint);
 
 void main() {
   // Every assertion below reads a Russian string, so the locale has to be the
@@ -185,7 +185,7 @@ void main() {
     await session.restore();
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Qoida Cafe — Central kitchen'));
+    await tester.tap(find.text('HorecaOS Cafe — Central kitchen'));
     await tester.pumpAndSettle();
 
     expect(find.text('Плов'), findsOneWidget);
@@ -230,7 +230,7 @@ void main() {
     },
   );
 
-  testWidgets('the theme reaching the tree is the Qoida theme', (
+  testWidgets('the theme reaching the tree is the HorecaOS theme', (
     WidgetTester tester,
   ) async {
     final AuthSession session = _session(storedRefreshToken: 'rt_1');
@@ -239,7 +239,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final BuildContext context = tester.element(find.byType(NavigationBar));
-    expect(context.qoida.radius, 8);
-    expect(context.qoida.minTarget, 48);
+    expect(context.horecaos.radius, 8);
+    expect(context.horecaos.minTarget, 48);
   });
 }

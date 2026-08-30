@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../design/qoida_theme.dart';
-import '../../../design/qoida_tokens.dart';
+import '../../../design/horecaos_theme.dart';
+import '../../../design/horecaos_tokens.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../cart_models.dart';
 import '../money_label.dart';
@@ -24,14 +24,14 @@ class CartTotals extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
     final AppLocalizations l10n = AppLocalizations.of(context);
     final PricedCart? priced = quote;
 
     if (priced == null) {
       return Padding(
-        padding: const EdgeInsets.all(QoidaGeometry.spaceMd),
+        padding: const EdgeInsets.all(HorecaOSGeometry.spaceMd),
         child: Text(
           l10n.cartPriceNotConfirmed,
           style: text.bodyMedium?.copyWith(color: tokens.inkMuted),
@@ -40,14 +40,14 @@ class CartTotals extends StatelessWidget {
     }
 
     return Padding(
-      padding: const EdgeInsets.all(QoidaGeometry.spaceMd),
+      padding: const EdgeInsets.all(HorecaOSGeometry.spaceMd),
       child: Column(
         children: <Widget>[
           _Row(label: l10n.cartSubtotal, value: moneyLabel(context, priced.subtotal)),
-          const SizedBox(height: QoidaGeometry.spaceXs),
+          const SizedBox(height: HorecaOSGeometry.spaceXs),
           _Row(label: l10n.cartTax, value: moneyLabel(context, priced.tax)),
           const Padding(
-            padding: EdgeInsets.symmetric(vertical: QoidaGeometry.spaceSm),
+            padding: EdgeInsets.symmetric(vertical: HorecaOSGeometry.spaceSm),
             child: Divider(),
           ),
           _Row(
@@ -74,7 +74,7 @@ class _Row extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
     final TextStyle? style = emphasised ? text.titleSmall : text.bodyMedium;
 

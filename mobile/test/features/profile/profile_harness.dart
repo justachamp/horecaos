@@ -5,26 +5,26 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:qoida_mobile/src/api/api_client.dart';
-import 'package:qoida_mobile/src/api/idempotency_key.dart';
-import 'package:qoida_mobile/src/app_scope.dart';
-import 'package:qoida_mobile/src/auth/auth_config.dart';
-import 'package:qoida_mobile/src/auth/auth_session.dart';
-import 'package:qoida_mobile/src/auth/token_endpoint.dart';
-import 'package:qoida_mobile/src/auth/token_store.dart';
-import 'package:qoida_mobile/src/design/qoida_theme.dart';
-import 'package:qoida_mobile/src/features/profile/customer_scope.dart';
-import 'package:qoida_mobile/src/features/profile/data/customer_account.dart';
-import 'package:qoida_mobile/src/features/profile/data/notification_preference.dart';
-import 'package:qoida_mobile/src/features/profile/data/notification_preference_repository.dart';
-import 'package:qoida_mobile/src/features/profile/data/saved_address.dart';
-import 'package:qoida_mobile/src/features/profile/data/saved_address_repository.dart';
-import 'package:qoida_mobile/src/features/profile/profile_area.dart';
-import 'package:qoida_mobile/src/features/profile/profile_routes.dart';
-import 'package:qoida_mobile/src/features/profile/settings/language_choice_store.dart';
-import 'package:qoida_mobile/src/features/profile/settings/locale_preference.dart';
-import 'package:qoida_mobile/src/l10n/generated/app_localizations.dart';
-import 'package:qoida_mobile/src/l10n/supported_locales.dart';
+import 'package:horecaos_mobile/src/api/api_client.dart';
+import 'package:horecaos_mobile/src/api/idempotency_key.dart';
+import 'package:horecaos_mobile/src/app_scope.dart';
+import 'package:horecaos_mobile/src/auth/auth_config.dart';
+import 'package:horecaos_mobile/src/auth/auth_session.dart';
+import 'package:horecaos_mobile/src/auth/token_endpoint.dart';
+import 'package:horecaos_mobile/src/auth/token_store.dart';
+import 'package:horecaos_mobile/src/design/horecaos_theme.dart';
+import 'package:horecaos_mobile/src/features/profile/customer_scope.dart';
+import 'package:horecaos_mobile/src/features/profile/data/customer_account.dart';
+import 'package:horecaos_mobile/src/features/profile/data/notification_preference.dart';
+import 'package:horecaos_mobile/src/features/profile/data/notification_preference_repository.dart';
+import 'package:horecaos_mobile/src/features/profile/data/saved_address.dart';
+import 'package:horecaos_mobile/src/features/profile/data/saved_address_repository.dart';
+import 'package:horecaos_mobile/src/features/profile/profile_area.dart';
+import 'package:horecaos_mobile/src/features/profile/profile_routes.dart';
+import 'package:horecaos_mobile/src/features/profile/settings/language_choice_store.dart';
+import 'package:horecaos_mobile/src/features/profile/settings/locale_preference.dart';
+import 'package:horecaos_mobile/src/l10n/generated/app_localizations.dart';
+import 'package:horecaos_mobile/src/l10n/supported_locales.dart';
 
 /// The tenant and brand every test uses.
 const CustomerScope testScope = CustomerScope(
@@ -206,10 +206,10 @@ ProfileArea fakeArea({
 /// A session that is signed in, over a token endpoint that answers.
 AuthSession testSession() {
   final AuthConfig config = AuthConfig(
-    issuer: Uri.parse('https://id.example.test/realms/qoida'),
-    clientId: 'qoida-mobile',
-    redirectUri: Uri.parse('uz.qoida.mobile://oauth/callback'),
-    callbackUrlScheme: 'uz.qoida.mobile',
+    issuer: Uri.parse('https://id.example.test/realms/horecaos'),
+    clientId: 'horecaos-mobile',
+    redirectUri: Uri.parse('uz.horecaos.mobile://oauth/callback'),
+    callbackUrlScheme: 'uz.horecaos.mobile',
   );
   return AuthSession(
     config: config,
@@ -264,7 +264,7 @@ Future<AppLocalizations> pumpProfile(
   await tester.pumpWidget(
     AppScope(
       session: activeSession,
-      api: QoidaApiClient(
+      api: HorecaOSApiClient(
         baseUri: Uri.parse('https://api.example.test'),
         httpClient: MockClient(
           (http.Request request) async =>
@@ -276,7 +276,7 @@ Future<AppLocalizations> pumpProfile(
       ),
       child: MaterialApp.router(
         routerConfig: router,
-        theme: QoidaTheme.light(),
+        theme: HorecaOSTheme.light(),
         locale: locale,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: SupportedLocales.all,

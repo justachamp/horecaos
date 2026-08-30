@@ -11,9 +11,9 @@ import { I18nService } from '../core/i18n/i18n.service';
 import { ConsoleShell } from './console-shell';
 
 const CONFIG: AppConfig = {
-  apiBaseUrl: 'https://api.test.qoida.uz',
-  issuerUrl: 'https://auth.test.qoida.uz/realms/qoida',
-  clientId: 'qoida-control-plane',
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  issuerUrl: 'https://auth.test.horecaos.uz/realms/horecaos',
+  clientId: 'horecaos-control-plane',
   displayTimeZone: 'Asia/Tashkent',
 };
 

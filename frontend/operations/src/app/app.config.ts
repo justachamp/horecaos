@@ -10,7 +10,7 @@ import { authInterceptor } from 'angular-auth-oidc-client';
 
 import { routes } from './app.routes';
 import { correlationIdInterceptor } from './core/api/correlation-id.interceptor';
-import { provideQoidaAuth } from './core/auth/auth.providers';
+import { provideHorecaOSAuth } from './core/auth/auth.providers';
 import { I18n } from './core/i18n/i18n';
 
 export const appConfig: ApplicationConfig = {
@@ -37,7 +37,7 @@ export const appConfig: ApplicationConfig = {
       ]),
     ),
 
-    provideQoidaAuth(),
+    provideHorecaOSAuth(),
 
     // The stored locale is applied to <html lang> before the first paint.
     // Getting this wrong is not cosmetic: `lang` is what a screen reader uses to

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../design/qoida_theme.dart';
-import '../../design/qoida_tokens.dart';
+import '../../design/horecaos_theme.dart';
+import '../../design/horecaos_tokens.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../cart/cart_controller.dart';
 import '../cart/cart_models.dart';
@@ -74,7 +74,7 @@ class _Form extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
     final AppLocalizations l10n = AppLocalizations.of(context);
     final CheckoutStage stage = controller.stage;
@@ -83,19 +83,19 @@ class _Form extends StatelessWidget {
       children: <Widget>[
         Expanded(
           child: ListView(
-            padding: const EdgeInsets.all(QoidaGeometry.spaceMd),
+            padding: const EdgeInsets.all(HorecaOSGeometry.spaceMd),
             children: <Widget>[
               if (stage case final CheckoutPriceMoved moved) ...<Widget>[
                 PriceMovedPanel(stage: moved, onAccept: controller.place),
-                const SizedBox(height: QoidaGeometry.spaceMd),
+                const SizedBox(height: HorecaOSGeometry.spaceMd),
               ],
               if (stage case final CheckoutRefused refused) ...<Widget>[
                 _refusalPanel(context, refused, onRetry: controller.place),
-                const SizedBox(height: QoidaGeometry.spaceMd),
+                const SizedBox(height: HorecaOSGeometry.spaceMd),
               ],
 
               Text(l10n.checkoutFulfilmentTitle, style: text.titleSmall),
-              const SizedBox(height: QoidaGeometry.spaceXs),
+              const SizedBox(height: HorecaOSGeometry.spaceXs),
               Text(_modeLabel(l10n, controller.fulfilmentMode), style: text.bodyLarge),
               Text(
                 // The mode is fixed for the life of a cart: the platform takes
@@ -106,14 +106,14 @@ class _Form extends StatelessWidget {
               ),
 
               if (controller.isDelivery) ...<Widget>[
-                const SizedBox(height: QoidaGeometry.spaceLg),
+                const SizedBox(height: HorecaOSGeometry.spaceLg),
                 DeliverySection(
                   controller: controller,
                   onChooseDestination: onChooseDestination,
                 ),
               ],
 
-              const SizedBox(height: QoidaGeometry.spaceLg),
+              const SizedBox(height: HorecaOSGeometry.spaceLg),
               Text(l10n.checkoutPaymentTitle, style: text.titleSmall),
               for (final PaymentMethodChoice method
                   in PaymentMethodChoice.values)
@@ -123,7 +123,7 @@ class _Form extends StatelessWidget {
                   onSelected: () => controller.choosePaymentMethod(method),
                 ),
 
-              const SizedBox(height: QoidaGeometry.spaceLg),
+              const SizedBox(height: HorecaOSGeometry.spaceLg),
               CartTotals(quote: _quoteOnScreen),
             ],
           ),
@@ -241,7 +241,7 @@ class _PaymentOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
 
     return Semantics(
@@ -256,7 +256,7 @@ class _PaymentOption extends StatelessWidget {
           child: Row(
             children: <Widget>[
               _SelectionMark(selected: selected),
-              const SizedBox(width: QoidaGeometry.spaceMd),
+              const SizedBox(width: HorecaOSGeometry.spaceMd),
               Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -298,17 +298,17 @@ class _SelectionMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     return SizedBox(
-      width: QoidaGeometry.spaceLg,
-      height: QoidaGeometry.spaceLg,
+      width: HorecaOSGeometry.spaceLg,
+      height: HorecaOSGeometry.spaceLg,
       child: DecoratedBox(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: selected ? tokens.accent : tokens.canvas,
           border: Border.all(
             color: selected ? tokens.accent : tokens.surface2,
-            width: QoidaGeometry.hairline,
+            width: HorecaOSGeometry.hairline,
           ),
         ),
       ),
@@ -332,13 +332,13 @@ class _ActionBar extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         border: Border(
-          top: BorderSide(color: hairline, width: QoidaGeometry.hairline),
+          top: BorderSide(color: hairline, width: HorecaOSGeometry.hairline),
         ),
       ),
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.all(QoidaGeometry.spaceMd),
+          padding: const EdgeInsets.all(HorecaOSGeometry.spaceMd),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
@@ -350,7 +350,7 @@ class _ActionBar extends StatelessWidget {
                     Text(moneyLabel(context, total), style: text.titleSmall),
                   ],
                 ),
-              const SizedBox(height: QoidaGeometry.spaceSm),
+              const SizedBox(height: HorecaOSGeometry.spaceSm),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(

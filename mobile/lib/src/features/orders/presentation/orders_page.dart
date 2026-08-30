@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../api/api_exception.dart';
 import '../../../design/q_empty_state.dart';
-import '../../../design/qoida_tokens.dart';
+import '../../../design/horecaos_tokens.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../application/order_list_controller.dart';
 import '../data/order_models.dart';
@@ -151,12 +151,12 @@ class _OrdersPageState extends State<OrdersPage> {
       onRefresh: _controller.refresh,
       child: ListView.separated(
         controller: _scroll,
-        padding: const EdgeInsets.all(QoidaGeometry.spaceMd),
+        padding: const EdgeInsets.all(HorecaOSGeometry.spaceMd),
         // One extra row for the footer: a continuation in flight, a retry after
         // one failed, or nothing at the end of the collection.
         itemCount: orders.length + 1,
         separatorBuilder: (BuildContext context, int index) =>
-            const SizedBox(height: QoidaGeometry.spaceSm),
+            const SizedBox(height: HorecaOSGeometry.spaceSm),
         itemBuilder: (BuildContext context, int index) {
           if (index == orders.length) return _footer(l10n);
           final OrderSummary order = orders[index];
@@ -173,7 +173,7 @@ class _OrdersPageState extends State<OrdersPage> {
   Widget _footer(AppLocalizations l10n) {
     if (_controller.isLoadingMore) {
       return const Padding(
-        padding: EdgeInsets.all(QoidaGeometry.spaceMd),
+        padding: EdgeInsets.all(HorecaOSGeometry.spaceMd),
         child: Center(child: CircularProgressIndicator()),
       );
     }
@@ -183,7 +183,7 @@ class _OrdersPageState extends State<OrdersPage> {
       // reading is a worse answer to a dropped connection than leaving it and
       // offering the continuation again.
       return Padding(
-        padding: const EdgeInsets.all(QoidaGeometry.spaceSm),
+        padding: const EdgeInsets.all(HorecaOSGeometry.spaceSm),
         child: Center(
           child: TextButton(
             onPressed: _controller.loadMore,
@@ -192,6 +192,6 @@ class _OrdersPageState extends State<OrdersPage> {
         ),
       );
     }
-    return const SizedBox(height: QoidaGeometry.spaceMd);
+    return const SizedBox(height: HorecaOSGeometry.spaceMd);
   }
 }

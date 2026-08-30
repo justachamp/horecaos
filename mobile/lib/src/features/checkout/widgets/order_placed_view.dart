@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../design/qoida_theme.dart';
-import '../../../design/qoida_tokens.dart';
-import '../../../format/qoida_formats.dart';
+import '../../../design/horecaos_theme.dart';
+import '../../../design/horecaos_tokens.dart';
+import '../../../format/horecaos_formats.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../cart/widgets/problem_panel.dart';
 import '../checkout_controller.dart';
@@ -27,24 +27,24 @@ class OrderPlacedView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
     final AppLocalizations l10n = AppLocalizations.of(context);
     final String locale = Localizations.localeOf(context).toLanguageTag();
 
     return ListView(
-      padding: const EdgeInsets.all(QoidaGeometry.spaceMd),
+      padding: const EdgeInsets.all(HorecaOSGeometry.spaceMd),
       children: <Widget>[
         Text(l10n.orderPlacedTitle, style: text.titleLarge),
-        const SizedBox(height: QoidaGeometry.spaceXs),
+        const SizedBox(height: HorecaOSGeometry.spaceXs),
         Text(l10n.ordersNumber(order.publicOrderNumber), style: text.bodyLarge),
-        const SizedBox(height: QoidaGeometry.spaceSm),
+        const SizedBox(height: HorecaOSGeometry.spaceSm),
         Text(
           _statusLabel(l10n, order.status),
           style: text.bodyMedium?.copyWith(color: tokens.inkMuted),
         ),
 
-        const SizedBox(height: QoidaGeometry.spaceMd),
+        const SizedBox(height: HorecaOSGeometry.spaceMd),
         // The promise, exactly as the platform decided it at checkout. Absent
         // rather than estimated: V0023 stores a promised time that is never
         // recomputed, and a client-side guess printed beside it would be a
@@ -53,8 +53,8 @@ class OrderPlacedView extends StatelessWidget {
           order.promisedAt == null
               ? l10n.orderPromisedNone
               : l10n.orderPromisedBy(
-                  QoidaFormats.dayMonthTime(
-                    QoidaFormats.toLocal(order.promisedAt!),
+                  HorecaOSFormats.dayMonthTime(
+                    HorecaOSFormats.toLocal(order.promisedAt!),
                     locale: locale,
                   ),
                 ),
@@ -62,7 +62,7 @@ class OrderPlacedView extends StatelessWidget {
         ),
 
         if (order.replayed) ...<Widget>[
-          const SizedBox(height: QoidaGeometry.spaceMd),
+          const SizedBox(height: HorecaOSGeometry.spaceMd),
           // A replay is a success. The platform returned the order it had
           // already created for this idempotency key rather than creating a
           // second one, and saying so stops a customer pressing the button
@@ -73,7 +73,7 @@ class OrderPlacedView extends StatelessWidget {
           ),
         ],
 
-        const SizedBox(height: QoidaGeometry.spaceMd),
+        const SizedBox(height: HorecaOSGeometry.spaceMd),
         _Payment(
           stage: paymentStage,
           method: paymentMethod,
@@ -81,7 +81,7 @@ class OrderPlacedView extends StatelessWidget {
           onPay: onPay,
         ),
 
-        const SizedBox(height: QoidaGeometry.spaceLg),
+        const SizedBox(height: HorecaOSGeometry.spaceLg),
         FilledButton(onPressed: onDone, child: Text(l10n.checkoutDone)),
       ],
     );

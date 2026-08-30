@@ -5,7 +5,7 @@ import { map } from 'rxjs/operators';
 import { ApiClient } from '../core/api/api-client';
 import { APP_CONFIG } from '../core/config/app-config';
 import { newIdempotencyKey } from '../core/api/idempotency';
-import { QoidaApiError } from '../core/api/problem-details';
+import { HorecaOSApiError } from '../core/api/problem-details';
 import type { Page } from '../core/api/page';
 
 /**
@@ -201,7 +201,7 @@ const PLATFORM_STATUSES: Readonly<Record<string, readonly string[]>> = {
 
 /** The version the server actually holds, or null when this was not a stale one. */
 function staleVersionFrom(failure: unknown): number | null {
-  if (!(failure instanceof QoidaApiError) || !failure.isStaleVersion) {
+  if (!(failure instanceof HorecaOSApiError) || !failure.isStaleVersion) {
     return null;
   }
   const current = failure.problem?.currentVersion;

@@ -8,12 +8,12 @@ import 'checkout_models.dart';
 /// `POST /checkouts` on the storefront ordering surface,
 /// `POST /orders/{orderId}/payment-sessions` on the storefront payment surface,
 /// and ADR 0037's delivery-fee resolver. All three go through
-/// [QoidaApiClient], so idempotency, `If-Match`, token refresh, replay
+/// [HorecaOSApiClient], so idempotency, `If-Match`, token refresh, replay
 /// detection and Problem Details are handled once.
 final class CheckoutRepository {
   const CheckoutRepository({required this._api, required this._scope});
 
-  final QoidaApiClient _api;
+  final HorecaOSApiClient _api;
   final StorefrontScope _scope;
 
   /// Turns a priced cart into an order.

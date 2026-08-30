@@ -74,7 +74,7 @@ final class AddressOperationUnavailable implements Exception {
 ///
 /// *The reads are shaped against ADR 0031, not against today's controller.*
 /// ADR 0031 fixes one collection representation — `{"items": [...],
-/// "nextCursor": null}` — and [QoidaApiClient] implements exactly that.
+/// "nextCursor": null}` — and [HorecaOSApiClient] implements exactly that.
 /// `CustomerController` returns a bare JSON array, which disagrees with the
 /// convention its own platform sets. The contract of record is ADR 0031 and the
 /// published OpenAPI document (ADR 0035), so this client reads the envelope; a
@@ -88,7 +88,7 @@ final class HttpSavedAddressRepository implements SavedAddressRepository {
     required this._accountId,
   });
 
-  final QoidaApiClient _api;
+  final HorecaOSApiClient _api;
   final CustomerScope _scope;
   final String _accountId;
 

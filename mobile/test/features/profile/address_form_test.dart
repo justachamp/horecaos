@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:qoida_mobile/src/features/profile/data/saved_address.dart';
-import 'package:qoida_mobile/src/features/profile/profile_area.dart';
-import 'package:qoida_mobile/src/features/profile/profile_routes.dart';
-import 'package:qoida_mobile/src/l10n/generated/app_localizations.dart';
+import 'package:horecaos_mobile/src/features/profile/data/saved_address.dart';
+import 'package:horecaos_mobile/src/features/profile/profile_area.dart';
+import 'package:horecaos_mobile/src/features/profile/profile_routes.dart';
+import 'package:horecaos_mobile/src/l10n/generated/app_localizations.dart';
 
 import 'profile_harness.dart';
 

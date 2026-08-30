@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../api/api_exception.dart';
 import '../../../design/q_empty_state.dart';
-import '../../../design/qoida_theme.dart';
-import '../../../design/qoida_tokens.dart';
-import '../../../format/qoida_formats.dart';
+import '../../../design/horecaos_theme.dart';
+import '../../../design/horecaos_tokens.dart';
+import '../../../format/horecaos_formats.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../application/order_milestones.dart';
 import '../application/order_tracking_controller.dart';
@@ -161,7 +161,7 @@ class _OrderBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
     final AppLocalizations l10n = AppLocalizations.of(context);
     final String locale = Localizations.localeOf(context).toLanguageTag();
@@ -172,7 +172,7 @@ class _OrderBody extends StatelessWidget {
     final bool ended = order.status.isTerminal;
 
     return ListView(
-      padding: const EdgeInsets.all(QoidaGeometry.spaceMd),
+      padding: const EdgeInsets.all(HorecaOSGeometry.spaceMd),
       children: <Widget>[
         Row(
           children: <Widget>[
@@ -181,11 +181,11 @@ class _OrderBody extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: QoidaGeometry.spaceSm),
+        const SizedBox(height: HorecaOSGeometry.spaceSm),
         Text(
           l10n.ordersPlacedAt(
-            QoidaFormats.dayMonthTime(
-              QoidaFormats.toLocal(order.placedAt),
+            HorecaOSFormats.dayMonthTime(
+              HorecaOSFormats.toLocal(order.placedAt),
               locale: locale,
             ),
           ),
@@ -196,12 +196,12 @@ class _OrderBody extends StatelessWidget {
         // is over, what was promised is history and what happened is the
         // outcome below.
         if (!ended) ...<Widget>[
-          const SizedBox(height: QoidaGeometry.spaceMd),
+          const SizedBox(height: HorecaOSGeometry.spaceMd),
           _PromiseLine(order: order, isLate: isLate),
         ],
 
         if (order.status.isBeforeAcceptance) ...<Widget>[
-          const SizedBox(height: QoidaGeometry.spaceSm),
+          const SizedBox(height: HorecaOSGeometry.spaceSm),
           Text(
             l10n.orderAwaitingRestaurant,
             style: text.bodyMedium?.copyWith(color: tokens.inkMuted),
@@ -212,14 +212,14 @@ class _OrderBody extends StatelessWidget {
         // order needs no panel: the rail's last step already says it arrived.
         if (ended && order.status != OrderStatus.completed && outcome != null)
           ...<Widget>[
-            const SizedBox(height: QoidaGeometry.spaceMd),
+            const SizedBox(height: HorecaOSGeometry.spaceMd),
             OutcomePanel(outcome: outcome),
           ],
 
         if (steps.isNotEmpty) ...<Widget>[
-          const SizedBox(height: QoidaGeometry.spaceLg),
+          const SizedBox(height: HorecaOSGeometry.spaceLg),
           SectionHeading(l10n.orderProgressHeading),
-          const SizedBox(height: QoidaGeometry.spaceSm),
+          const SizedBox(height: HorecaOSGeometry.spaceSm),
           MilestoneRail(
             steps: steps,
             mode: order.fulfillmentMode,
@@ -228,27 +228,27 @@ class _OrderBody extends StatelessWidget {
           ),
         ],
 
-        const SizedBox(height: QoidaGeometry.spaceLg),
+        const SizedBox(height: HorecaOSGeometry.spaceLg),
         SectionHeading(l10n.orderItemsHeading),
-        const SizedBox(height: QoidaGeometry.spaceMd),
+        const SizedBox(height: HorecaOSGeometry.spaceMd),
         OrderLinesPanel(lines: order.lines),
 
-        const SizedBox(height: QoidaGeometry.spaceSm),
+        const SizedBox(height: HorecaOSGeometry.spaceSm),
         OrderTotalsPanel(order: order),
 
         if (order.payment != null) ...<Widget>[
-          const SizedBox(height: QoidaGeometry.spaceLg),
+          const SizedBox(height: HorecaOSGeometry.spaceLg),
           SectionHeading(l10n.orderPaymentHeading),
-          const SizedBox(height: QoidaGeometry.spaceSm),
+          const SizedBox(height: HorecaOSGeometry.spaceSm),
           OrderPaymentPanel(payment: order.payment!),
         ],
 
         if (!ended && updatedAt != null) ...<Widget>[
-          const SizedBox(height: QoidaGeometry.spaceLg),
+          const SizedBox(height: HorecaOSGeometry.spaceLg),
           Text(
             l10n.orderUpdatedAt(
-              QoidaFormats.time(
-                QoidaFormats.toLocal(updatedAt!),
+              HorecaOSFormats.time(
+                HorecaOSFormats.toLocal(updatedAt!),
                 locale: locale,
               ),
             ),
@@ -274,7 +274,7 @@ class _PromiseLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
     final AppLocalizations l10n = AppLocalizations.of(context);
     final DateTime? promisedAt = order.promisedAt;
@@ -290,8 +290,8 @@ class _PromiseLine extends StatelessWidget {
 
     return Text(
       l10n.orderPromisedBy(
-        QoidaFormats.time(
-          QoidaFormats.toLocal(promisedAt),
+        HorecaOSFormats.time(
+          HorecaOSFormats.toLocal(promisedAt),
           locale: Localizations.localeOf(context).toLanguageTag(),
         ),
       ),

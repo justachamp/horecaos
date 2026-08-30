@@ -1,4 +1,4 @@
-package com.example.qoida_mobile
+package com.example.horecaos_mobile
 
 import io.flutter.embedding.android.FlutterActivity
 

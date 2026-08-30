@@ -1,5 +1,5 @@
 /**
- * Cursor pagination (ADR 0031), mirroring `uz.qoida.platform.web.api.Page`.
+ * Cursor pagination (ADR 0031), mirroring `uz.horecaos.platform.web.api.Page`.
  *
  * There is no total and no page number, and there will not be one. Offsets skip
  * and duplicate rows in a collection that changes while you read it, and in an

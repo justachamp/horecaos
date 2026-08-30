@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:qoida_mobile/src/format/money.dart';
+import 'package:horecaos_mobile/src/format/money.dart';
 
 void main() {
   group('UZS has no minor units', () {

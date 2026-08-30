@@ -48,7 +48,7 @@ class CatalogueHome extends StatefulWidget {
   /// Supplying the composition-root client keeps this feature mountable
   /// without an inherited service. The fallback preserves its standalone host
   /// contract for screens that already provide [AppScope].
-  final QoidaApiClient? api;
+  final HorecaOSApiClient? api;
 
   /// Handed straight to product detail. The cart is a different feature and
   /// this one does not reach into it.

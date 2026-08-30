@@ -42,7 +42,7 @@ final class SystemAuthorizationBrowser implements AuthorizationBrowser {
           // An ephemeral session: no cookie is read from the system browser and
           // none is left behind in it when the sheet closes.
           //
-          // The cost is single sign-on. A customer already signed in to Qoida
+          // The cost is single sign-on. A customer already signed in to HorecaOS
           // in Safari or Chrome types their password again here, and signing
           // out of the application no longer leaves a realm session the
           // browser could silently re-establish — which is the point. The

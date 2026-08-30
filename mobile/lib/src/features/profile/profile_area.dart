@@ -41,7 +41,7 @@ final class ProfileArea {
 
   /// The ordinary wiring: repositories over the shared API client.
   factory ProfileArea.from({
-    required QoidaApiClient api,
+    required HorecaOSApiClient api,
     required CustomerScope customer,
     AuthSession? session,
     LanguageChoiceStore? languageStore,

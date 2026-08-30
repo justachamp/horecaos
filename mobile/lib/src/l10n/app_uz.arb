@@ -1,6 +1,6 @@
 {
   "@@locale": "uz",
-  "appTitle": "Qoida",
+  "appTitle": "HorecaOS",
   "navHome": "Menyu",
   "navOrders": "Buyurtmalar",
   "signInTitle": "Buyurtma berish uchun kiring",
@@ -201,7 +201,7 @@
   "paymentCouldNotOpen": "To'lov sahifasini ochib bo'lmadi.",
   "paymentSurfaceUnavailable": "To'lovni bu yerdan boshlab bo'lmaydi.",
   "paymentUncertainTitle": "Qayta to'lamang",
-  "paymentUncertainBody": "Provayder javob bermadi, shuning uchun pul yechilgani noaniq. Qoida buni aniqlamoqda.",
+  "paymentUncertainBody": "Provayder javob bermadi, shuning uchun pul yechilgani noaniq. HorecaOS buni aniqlamoqda.",
   "paymentAlreadyPaid": "Bu buyurtma allaqachon to'langan.",
   "checkoutDone": "Tayyor",
 

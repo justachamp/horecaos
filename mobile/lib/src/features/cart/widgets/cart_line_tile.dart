@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../design/q_icon.dart';
-import '../../../design/qoida_theme.dart';
-import '../../../design/qoida_tokens.dart';
+import '../../../design/horecaos_theme.dart';
+import '../../../design/horecaos_tokens.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../cart_item_naming.dart';
 import '../cart_models.dart';
@@ -37,7 +37,7 @@ class CartLineTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
     final AppLocalizations l10n = AppLocalizations.of(context);
     final CartItemName? name = naming.nameFor(line.variantId);
@@ -49,8 +49,8 @@ class CartLineTile extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(
-        vertical: QoidaGeometry.spaceMd,
-        horizontal: QoidaGeometry.spaceMd,
+        vertical: HorecaOSGeometry.spaceMd,
+        horizontal: HorecaOSGeometry.spaceMd,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -77,13 +77,13 @@ class CartLineTile extends StatelessWidget {
                   Text(l10n.cartLineNote, style: text.bodySmall),
                 if (name != null && !name.orderable)
                   Padding(
-                    padding: const EdgeInsets.only(top: QoidaGeometry.spaceXs),
+                    padding: const EdgeInsets.only(top: HorecaOSGeometry.spaceXs),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
                         SizedBox(
-                          width: QoidaGeometry.spaceSm,
-                          height: QoidaGeometry.spaceSm,
+                          width: HorecaOSGeometry.spaceSm,
+                          height: HorecaOSGeometry.spaceSm,
                           child: DecoratedBox(
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
@@ -91,7 +91,7 @@ class CartLineTile extends StatelessWidget {
                             ),
                           ),
                         ),
-                        const SizedBox(width: QoidaGeometry.spaceXs),
+                        const SizedBox(width: HorecaOSGeometry.spaceXs),
                         Text(
                           l10n.cartLineSoldOut,
                           style: text.bodySmall?.copyWith(
@@ -104,7 +104,7 @@ class CartLineTile extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: QoidaGeometry.spaceSm),
+          const SizedBox(width: HorecaOSGeometry.spaceSm),
           _QuantityStepper(
             quantity: line.quantity,
             enabled: enabled,
@@ -156,7 +156,7 @@ class _QuantityStepper extends StatelessWidget {
         SizedBox(
           // Fixed, so the row does not jump one pixel sideways when the count
           // crosses from nine to ten while a thumb is resting on the button.
-          width: QoidaGeometry.spaceXl,
+          width: HorecaOSGeometry.spaceXl,
           child: Text(
             '$quantity',
             textAlign: TextAlign.center,
@@ -186,7 +186,7 @@ class _StepButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     return Semantics(
       button: true,
       label: semanticLabel,

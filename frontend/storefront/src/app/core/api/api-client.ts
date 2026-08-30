@@ -13,7 +13,7 @@ import { newIdempotencyKey } from './idempotency';
 import type { Page, PageRequest } from './page';
 
 /**
- * Marks a request as going to the Qoida platform, and therefore as somewhere a
+ * Marks a request as going to the HorecaOS platform, and therefore as somewhere a
  * bearer token may be sent.
  *
  * Default false, so a destination has to opt in. The token is a bearer

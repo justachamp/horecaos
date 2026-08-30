@@ -44,7 +44,7 @@ final class HttpNotificationPreferenceRepository
     required this._accountId,
   });
 
-  final QoidaApiClient _api;
+  final HorecaOSApiClient _api;
   final CustomerScope _scope;
   final String _accountId;
 

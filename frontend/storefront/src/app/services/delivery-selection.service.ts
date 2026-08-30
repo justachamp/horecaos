@@ -2,7 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 
 import { CustomerProfileService } from './customer-profile.service';
 
-const ADDRESS_KEY = 'qoida_delivery_address';
+const ADDRESS_KEY = 'horecaos_delivery_address';
 
 /**
  * Where this customer's next delivery is going, and who receives it.

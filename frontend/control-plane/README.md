@@ -1,8 +1,8 @@
-# Qoida control plane
+# HorecaOS control plane
 
-The console the people who run Qoida as a business use: tenants, onboarding and
+The console the people who run HorecaOS as a business use: tenants, onboarding and
 offboarding, subscriptions, payments, statistics, platform configuration, and
-who among Qoida's own staff may do what.
+who among HorecaOS's own staff may do what.
 
 Its subject is the customer — who they are, how they were brought on, what they
 pay, what they use, and when they leave. Engineering surfaces are deliberately
@@ -24,7 +24,7 @@ npm test           # vitest, single run
 ```
 
 `npm start` expects the platform API at `http://localhost:8080` and Keycloak at
-`http://localhost:8081/realms/qoida`. Without Keycloak the application starts
+`http://localhost:8081/realms/horecaos`. Without Keycloak the application starts
 and shows its sign-in-unavailable state rather than a blank page — which is
 also what it does in a real outage, and is worth seeing once.
 
@@ -35,10 +35,10 @@ in at build time, so one artifact is promoted from staging to production
 unchanged:
 
 ```js
-window.qoidaControlPlaneConfig = {
-  apiBaseUrl: 'https://api.qoida.uz',
-  issuerUrl: 'https://auth.qoida.uz/realms/qoida',
-  clientId: 'qoida-control-plane',
+window.horecaosControlPlaneConfig = {
+  apiBaseUrl: 'https://api.horecaos.uz',
+  issuerUrl: 'https://auth.horecaos.uz/realms/horecaos',
+  clientId: 'horecaos-control-plane',
   displayTimeZone: 'Asia/Tashkent',
 };
 ```
@@ -57,7 +57,7 @@ which is throwaway React, is read and never imported.
 system's token sheet, with a header saying so. IBM Plex Sans and IBM Plex Mono
 are self-hosted through `@fontsource` rather than fetched from a font CDN.
 
-**Authentication.** Authorization Code with PKCE against the Qoida realm
+**Authentication.** Authorization Code with PKCE against the HorecaOS realm
 ([ADR 0003], [ADR 0035]). Tokens live in memory; only the PKCE verifier and the
 nonce go to `sessionStorage`, because they are written before the browser
 navigates to Keycloak and read after it comes back, and a value kept in memory
@@ -122,7 +122,7 @@ of them fails for a reason somebody would otherwise debug.
   the handful of response shapes this application needs are declared by hand
   next to the endpoint they came from, and each says which Java record it
   mirrors. `SessionContext` and `Problem` are the only two.
-- **Tenant selection.** The console is Qoida staff at platform scope; a tenant
+- **Tenant selection.** The console is HorecaOS staff at platform scope; a tenant
   picker belongs with the first screen that needs one.
 - **Cross-tab refresh coordination.** [ADR 0035] wants proactive refresh
   coordinated across tabs. What is here is the library's automatic silent
@@ -145,7 +145,7 @@ of them fails for a reason somebody would otherwise debug.
 PKCE round trip has never run end to end. What is verified is everything up to
 the redirect and everything after the token exists: the configuration, the
 storage partition, the guards, and the token's path onto a request. What is not:
-that the realm has a `qoida-control-plane` public client, that
+that the realm has a `horecaos-control-plane` public client, that
 `http://localhost:4200/` and the production origin are exact allowlisted
 redirect URIs, that the `organization` claim is in the access token, and that
 the refresh grant works with `offline_access`. Each of those is a realm

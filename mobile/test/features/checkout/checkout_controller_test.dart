@@ -1,13 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
-import 'package:qoida_mobile/src/api/api_client.dart';
-import 'package:qoida_mobile/src/features/cart/cart_controller.dart';
-import 'package:qoida_mobile/src/features/cart/cart_models.dart';
-import 'package:qoida_mobile/src/features/cart/cart_repository.dart';
-import 'package:qoida_mobile/src/features/checkout/checkout_controller.dart';
-import 'package:qoida_mobile/src/features/checkout/checkout_models.dart';
-import 'package:qoida_mobile/src/features/checkout/checkout_repository.dart';
-import 'package:qoida_mobile/src/features/checkout/payment_launcher.dart';
+import 'package:horecaos_mobile/src/api/api_client.dart';
+import 'package:horecaos_mobile/src/features/cart/cart_controller.dart';
+import 'package:horecaos_mobile/src/features/cart/cart_models.dart';
+import 'package:horecaos_mobile/src/features/cart/cart_repository.dart';
+import 'package:horecaos_mobile/src/features/checkout/checkout_controller.dart';
+import 'package:horecaos_mobile/src/features/checkout/checkout_models.dart';
+import 'package:horecaos_mobile/src/features/checkout/checkout_repository.dart';
+import 'package:horecaos_mobile/src/features/checkout/payment_launcher.dart';
 
 import '../cart/support.dart';
 
@@ -109,7 +109,7 @@ class _Harness {
       .toList();
 
   Iterable<String> get orderKeys => checkouts.map(
-    (Recorded r) => r.request.headers[QoidaApiClient.idempotencyKeyHeader]!,
+    (Recorded r) => r.request.headers[HorecaOSApiClient.idempotencyKeyHeader]!,
   );
 }
 
@@ -180,7 +180,7 @@ void main() {
           jsonResponse(
             orderJson(),
             headers: <String, String>{
-              QoidaApiClient.idempotencyReplayedHeader: 'true',
+              HorecaOSApiClient.idempotencyReplayedHeader: 'true',
             },
           ),
         ],

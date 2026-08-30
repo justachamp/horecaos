@@ -3,16 +3,16 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:qoida_mobile/src/api/api_client.dart';
-import 'package:qoida_mobile/src/design/qoida_theme.dart';
-import 'package:qoida_mobile/src/features/orders/data/orders_repository.dart';
-import 'package:qoida_mobile/src/l10n/generated/app_localizations.dart';
-import 'package:qoida_mobile/src/l10n/supported_locales.dart';
+import 'package:horecaos_mobile/src/api/api_client.dart';
+import 'package:horecaos_mobile/src/design/horecaos_theme.dart';
+import 'package:horecaos_mobile/src/features/orders/data/orders_repository.dart';
+import 'package:horecaos_mobile/src/l10n/generated/app_localizations.dart';
+import 'package:horecaos_mobile/src/l10n/supported_locales.dart';
 
 /// Shared scaffolding for the order tests.
 ///
 /// The screens are exercised through a real [OrdersRepository] over a real
-/// [QoidaApiClient] with a `MockClient` transport, rather than against a hand-
+/// [HorecaOSApiClient] with a `MockClient` transport, rather than against a hand-
 /// written fake repository. That is deliberate: the decoding, the path, the
 /// cursor parameters and the `ETag` are the parts most likely to be wrong, and
 /// a fake repository is exactly the thing that cannot catch them.
@@ -33,7 +33,7 @@ class StubTokens implements AccessTokens {
 }
 
 OrdersRepository repositoryOver(MockClient transport) => OrdersRepository(
-  api: QoidaApiClient(
+  api: HorecaOSApiClient(
     baseUri: Uri.parse('https://api.example.test'),
     httpClient: transport,
     tokens: StubTokens(),
@@ -138,7 +138,7 @@ Widget host(Widget child, {Locale locale = SupportedLocales.russian}) =>
       locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: SupportedLocales.all,
-      theme: QoidaTheme.light(),
+      theme: HorecaOSTheme.light(),
       home: child,
     );
 

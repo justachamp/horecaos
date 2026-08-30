@@ -16,7 +16,7 @@ export interface Environment {
   readonly apiBaseUrl: string;
 
   readonly auth: {
-    /** Keycloak realm issuer, e.g. https://id.qoida.uz/realms/qoida */
+    /** Keycloak realm issuer, e.g. https://id.horecaos.uz/realms/horecaos */
     readonly issuer: string;
     /** Public client id. Public clients hold no secret; PKCE replaces it. */
     readonly clientId: string;

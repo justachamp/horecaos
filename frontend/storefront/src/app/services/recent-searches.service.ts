@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 
-const STORAGE_KEY = 'qoida_recent_searches';
+const STORAGE_KEY = 'horecaos_recent_searches';
 const LIMIT = 8;
 
 /**

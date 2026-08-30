@@ -117,7 +117,7 @@ describe('ApiClient', () => {
 
       http.expectOne(url('/api/v1/orders/o')).flush(
         {
-          type: 'https://docs.qoida.uz/problems/insufficient-capability',
+          type: 'https://docs.horecaos.uz/problems/insufficient-capability',
           title: 'Insufficient capability',
           status: 403,
           detail: 'Requires order.approve at LOCATION scope.',

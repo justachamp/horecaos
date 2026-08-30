@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'qoida_theme.dart';
-import 'qoida_tokens.dart';
+import 'horecaos_theme.dart';
+import 'horecaos_tokens.dart';
 
 /// The design system's empty state: a caption and a tertiary action.
 ///
@@ -23,19 +23,19 @@ class QEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
 
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(QoidaGeometry.spaceLg),
+        padding: const EdgeInsets.all(HorecaOSGeometry.spaceLg),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
             Text(title, style: text.titleMedium, textAlign: TextAlign.center),
             if (body != null) ...<Widget>[
-              const SizedBox(height: QoidaGeometry.spaceSm),
+              const SizedBox(height: HorecaOSGeometry.spaceSm),
               Text(
                 body!,
                 style: text.bodyMedium?.copyWith(color: tokens.inkMuted),
@@ -43,7 +43,7 @@ class QEmptyState extends StatelessWidget {
               ),
             ],
             if (actionLabel != null && onAction != null) ...<Widget>[
-              const SizedBox(height: QoidaGeometry.spaceMd),
+              const SizedBox(height: HorecaOSGeometry.spaceMd),
               TextButton(onPressed: onAction, child: Text(actionLabel!)),
             ],
           ],

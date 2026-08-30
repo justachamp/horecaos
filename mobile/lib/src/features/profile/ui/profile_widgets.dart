@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../design/q_icon.dart';
-import '../../../design/qoida_theme.dart';
-import '../../../design/qoida_tokens.dart';
+import '../../../design/horecaos_theme.dart';
+import '../../../design/horecaos_tokens.dart';
 
 /// A section heading inside a settings list.
 ///
@@ -17,10 +17,10 @@ class ProfileSectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        QoidaGeometry.spaceMd,
-        QoidaGeometry.spaceLg,
-        QoidaGeometry.spaceMd,
-        QoidaGeometry.spaceSm,
+        HorecaOSGeometry.spaceMd,
+        HorecaOSGeometry.spaceLg,
+        HorecaOSGeometry.spaceMd,
+        HorecaOSGeometry.spaceSm,
       ),
       child: Text(title, style: Theme.of(context).textTheme.bodySmall),
     );
@@ -82,16 +82,16 @@ class _ProfileRowState extends State<ProfileRow> {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
     final bool interactive = widget.onTap != null;
 
     final Widget content = Container(
-      constraints: const BoxConstraints(minHeight: QoidaGeometry.minTarget),
+      constraints: const BoxConstraints(minHeight: HorecaOSGeometry.minTarget),
       color: _pressed && interactive ? tokens.surface1 : tokens.canvas,
       padding: const EdgeInsets.symmetric(
-        horizontal: QoidaGeometry.spaceMd,
-        vertical: QoidaGeometry.spaceSm,
+        horizontal: HorecaOSGeometry.spaceMd,
+        vertical: HorecaOSGeometry.spaceSm,
       ),
       child: Row(
         children: <Widget>[
@@ -107,24 +107,24 @@ class _ProfileRowState extends State<ProfileRow> {
                       : text.bodyLarge,
                 ),
                 if (widget.detail != null) ...<Widget>[
-                  const SizedBox(height: QoidaGeometry.spaceXs),
+                  const SizedBox(height: HorecaOSGeometry.spaceXs),
                   Text(widget.detail!, style: text.bodySmall),
                 ],
               ],
             ),
           ),
           if (widget.value != null) ...<Widget>[
-            const SizedBox(width: QoidaGeometry.spaceMd),
+            const SizedBox(width: HorecaOSGeometry.spaceMd),
             Text(
               widget.value!,
               style: text.bodyMedium?.copyWith(color: tokens.inkMuted),
             ),
           ],
           if (widget.trailing != null) ...<Widget>[
-            const SizedBox(width: QoidaGeometry.spaceSm),
+            const SizedBox(width: HorecaOSGeometry.spaceSm),
             widget.trailing!,
           ] else if (interactive) ...<Widget>[
-            const SizedBox(width: QoidaGeometry.spaceSm),
+            const SizedBox(width: HorecaOSGeometry.spaceSm),
             QIcon(QIconName.chevronRight, size: 20, color: tokens.inkSubtle),
           ],
         ],
@@ -159,8 +159,8 @@ class ProfileDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Divider(
-    height: QoidaGeometry.hairline,
-    thickness: QoidaGeometry.hairline,
-    color: context.qoida.hairline,
+    height: HorecaOSGeometry.hairline,
+    thickness: HorecaOSGeometry.hairline,
+    color: context.horecaos.hairline,
   );
 }

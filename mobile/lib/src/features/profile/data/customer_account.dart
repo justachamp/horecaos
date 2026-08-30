@@ -70,7 +70,7 @@ final class HttpCustomerAccountRepository implements CustomerAccountRepository {
     required this._scope,
   });
 
-  final QoidaApiClient _api;
+  final HorecaOSApiClient _api;
   final CustomerScope _scope;
 
   @override

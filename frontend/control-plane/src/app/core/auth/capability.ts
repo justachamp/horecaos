@@ -1,7 +1,7 @@
 /**
  * The capabilities this console asks about (ADR 0025).
  *
- * The server owns the registry — `uz.qoida.platform.iam.api.Capability` — and
+ * The server owns the registry — `uz.horecaos.platform.iam.api.Capability` — and
  * serialises each value as its enum name, so these strings are the wire
  * values. Only the ones this application's navigation and guards reference are
  * listed; the registry has around ninety, and copying all of them would create
@@ -40,7 +40,7 @@ export interface ScopeGrant {
 }
 
 /**
- * `GET /api/v1/session/context`. Mirrors uz.qoida.platform.iam.api.CapabilityView.
+ * `GET /api/v1/session/context`. Mirrors uz.horecaos.platform.iam.api.CapabilityView.
  *
  * `capabilities` may contain values this client does not know, because ADR
  * 0031 allows new enum values within a major version. Unknown values are kept

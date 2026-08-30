@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../api/idempotency_key.dart';
-import '../../../design/qoida_theme.dart';
-import '../../../design/qoida_tokens.dart';
+import '../../../design/horecaos_theme.dart';
+import '../../../design/horecaos_tokens.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../data/saved_address.dart';
 import '../data/saved_address_repository.dart';
@@ -209,7 +209,7 @@ class _AddressFormPageState extends State<AddressFormPage> {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
 
     return Scaffold(
@@ -222,7 +222,7 @@ class _AddressFormPageState extends State<AddressFormPage> {
       ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(QoidaGeometry.spaceMd),
+          padding: const EdgeInsets.all(HorecaOSGeometry.spaceMd),
           children: <Widget>[
             _Field(
               controller: _label,
@@ -257,9 +257,9 @@ class _AddressFormPageState extends State<AddressFormPage> {
               },
             ),
 
-            const SizedBox(height: QoidaGeometry.spaceSm),
+            const SizedBox(height: HorecaOSGeometry.spaceSm),
             Text(l10n.profileAddressInsideTitle, style: text.titleSmall),
-            const SizedBox(height: QoidaGeometry.spaceSm),
+            const SizedBox(height: HorecaOSGeometry.spaceSm),
             _Field(
               controller: _entrance,
               label: l10n.profileAddressFieldEntrance,
@@ -292,9 +292,9 @@ class _AddressFormPageState extends State<AddressFormPage> {
               maxLines: 2,
             ),
 
-            const SizedBox(height: QoidaGeometry.spaceMd),
+            const SizedBox(height: HorecaOSGeometry.spaceMd),
             Text(l10n.profileAddressPinTitle, style: text.titleSmall),
-            const SizedBox(height: QoidaGeometry.spaceSm),
+            const SizedBox(height: HorecaOSGeometry.spaceSm),
             if (_keepsExistingPoint)
               _PinKept(l10n: l10n)
             else
@@ -307,14 +307,14 @@ class _AddressFormPageState extends State<AddressFormPage> {
               ),
 
             if (_failure != null) ...<Widget>[
-              const SizedBox(height: QoidaGeometry.spaceMd),
+              const SizedBox(height: HorecaOSGeometry.spaceMd),
               Text(
                 l10n.profileAddressSaveFailed,
                 style: text.bodyMedium?.copyWith(color: tokens.errorInk),
               ),
             ],
 
-            const SizedBox(height: QoidaGeometry.spaceLg),
+            const SizedBox(height: HorecaOSGeometry.spaceLg),
             SizedBox(
               width: double.infinity,
               child: FilledButton(
@@ -356,7 +356,7 @@ class _Field extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: QoidaGeometry.spaceMd),
+      padding: const EdgeInsets.only(bottom: HorecaOSGeometry.spaceMd),
       child: TextField(
         controller: controller,
         maxLines: maxLines,

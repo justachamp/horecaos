@@ -14,7 +14,7 @@ import type { MessageCatalogue } from './messages.en';
  * a different character that breaks search and sorting.
  */
 export const messagesUzLatn: MessageCatalogue = {
-  'shell.brand': 'qoida',
+  'shell.brand': 'horecaos',
   'shell.skipToContent': 'Asosiy qismga oʻtish',
   'shell.newOrder': 'Yangi buyurtma',
   'shell.newOrder.shortcut': 'F2',

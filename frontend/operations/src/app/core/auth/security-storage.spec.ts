@@ -11,7 +11,7 @@ import { SESSION_STORAGE, SplitSecurityStorage } from './security-storage';
  * reads as a Keycloak misconfiguration and costs a day. These tests pin both.
  */
 describe('SplitSecurityStorage', () => {
-  const CONFIG_ID = 'qoida-operations';
+  const CONFIG_ID = 'horecaos-operations';
   let session: Storage;
   let storage: SplitSecurityStorage;
 
@@ -95,7 +95,7 @@ describe('SplitSecurityStorage', () => {
   });
 
   it('recovers from a corrupt persisted blob instead of wedging every login', () => {
-    session.setItem(`qoida.operations.oidc.${CONFIG_ID}`, '{not json');
+    session.setItem(`horecaos.operations.oidc.${CONFIG_ID}`, '{not json');
     expect(storage.read(CONFIG_ID)).toBeNull();
     expect(session.length).toBe(0);
   });

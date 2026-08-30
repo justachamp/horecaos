@@ -5,18 +5,18 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:qoida_mobile/src/auth/auth_config.dart';
-import 'package:qoida_mobile/src/auth/auth_session.dart';
-import 'package:qoida_mobile/src/auth/authorization_browser.dart';
-import 'package:qoida_mobile/src/auth/token_endpoint.dart';
-import 'package:qoida_mobile/src/auth/token_store.dart';
-import 'package:qoida_mobile/src/auth/tokens.dart';
+import 'package:horecaos_mobile/src/auth/auth_config.dart';
+import 'package:horecaos_mobile/src/auth/auth_session.dart';
+import 'package:horecaos_mobile/src/auth/authorization_browser.dart';
+import 'package:horecaos_mobile/src/auth/token_endpoint.dart';
+import 'package:horecaos_mobile/src/auth/token_store.dart';
+import 'package:horecaos_mobile/src/auth/tokens.dart';
 
 final AuthConfig _config = AuthConfig(
-  issuer: Uri.parse('https://id.example.test/realms/qoida'),
-  clientId: 'qoida-mobile',
-  redirectUri: Uri.parse('uz.qoida.mobile://oauth/callback'),
-  callbackUrlScheme: 'uz.qoida.mobile',
+  issuer: Uri.parse('https://id.example.test/realms/horecaos'),
+  clientId: 'horecaos-mobile',
+  redirectUri: Uri.parse('uz.horecaos.mobile://oauth/callback'),
+  callbackUrlScheme: 'uz.horecaos.mobile',
 );
 
 /// Returns whatever the test tells it to, and records what it was asked.
@@ -39,7 +39,7 @@ class _FakeBrowser implements AuthorizationBrowser {
 /// Echoes the `state` the application sent, as a well-behaved realm does.
 Uri _redirectEchoingState(Uri authorizationUri) {
   final String state = authorizationUri.queryParameters['state']!;
-  return Uri.parse('uz.qoida.mobile://oauth/callback?code=ac_1&state=$state');
+  return Uri.parse('uz.horecaos.mobile://oauth/callback?code=ac_1&state=$state');
 }
 
 String _tokenBody({
@@ -161,8 +161,8 @@ void main() {
       // The verifier must never appear in the authorization request: that is
       // the value the challenge exists to keep out of it.
       expect(authorize.containsKey('code_verifier'), isFalse);
-      expect(authorize['redirect_uri'], 'uz.qoida.mobile://oauth/callback');
-      expect(authorize['client_id'], 'qoida-mobile');
+      expect(authorize['redirect_uri'], 'uz.horecaos.mobile://oauth/callback');
+      expect(authorize['client_id'], 'horecaos-mobile');
 
       expect(exchanged['grant_type'], 'authorization_code');
       expect(exchanged['code'], 'ac_1');
@@ -184,7 +184,7 @@ void main() {
         refreshTokens: InMemoryRefreshTokenStore(),
         browser: _FakeBrowser(
           (_) => Uri.parse(
-            'uz.qoida.mobile://oauth/callback?code=attacker&state=not-ours',
+            'uz.horecaos.mobile://oauth/callback?code=attacker&state=not-ours',
           ),
         ),
       );
@@ -217,7 +217,7 @@ void main() {
         refreshTokens: InMemoryRefreshTokenStore(),
         browser: _FakeBrowser(
           (_) => Uri.parse(
-            'uz.qoida.mobile://oauth/callback?error=access_denied',
+            'uz.horecaos.mobile://oauth/callback?error=access_denied',
           ),
         ),
       );

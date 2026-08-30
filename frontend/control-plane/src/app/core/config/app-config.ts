@@ -13,7 +13,7 @@ export interface AppConfig {
   /** Origin of the platform API, no trailing slash. Same origin in production. */
   readonly apiBaseUrl: string;
 
-  /** Keycloak realm issuer, e.g. https://auth.qoida.uz/realms/qoida. */
+  /** Keycloak realm issuer, e.g. https://auth.horecaos.uz/realms/horecaos. */
   readonly issuerUrl: string;
 
   /** Public client identifier. A public client holds no secret (ADR 0003). */
@@ -27,11 +27,11 @@ export interface AppConfig {
   readonly displayTimeZone: string;
 }
 
-export const APP_CONFIG = new InjectionToken<AppConfig>('Qoida control-plane configuration');
+export const APP_CONFIG = new InjectionToken<AppConfig>('HorecaOS control-plane configuration');
 
 /** The global `public/config.js` writes, if it has been deployed. */
 interface ConfiguredWindow {
-  qoidaControlPlaneConfig?: Partial<AppConfig>;
+  horecaosControlPlaneConfig?: Partial<AppConfig>;
 }
 
 /**
@@ -41,13 +41,13 @@ interface ConfiguredWindow {
  */
 const DEVELOPMENT_DEFAULTS: AppConfig = {
   apiBaseUrl: 'http://localhost:8080',
-  issuerUrl: 'http://localhost:8081/realms/qoida',
-  clientId: 'qoida-control-plane',
+  issuerUrl: 'http://localhost:8081/realms/horecaos',
+  clientId: 'horecaos-control-plane',
   displayTimeZone: 'Asia/Tashkent',
 };
 
 export function resolveAppConfig(host: ConfiguredWindow = globalThis as ConfiguredWindow): AppConfig {
-  const supplied = host.qoidaControlPlaneConfig ?? {};
+  const supplied = host.horecaosControlPlaneConfig ?? {};
   const resolved: AppConfig = { ...DEVELOPMENT_DEFAULTS, ...supplied };
 
   // A trailing slash produces `//api/v1/...` once a path is appended, which

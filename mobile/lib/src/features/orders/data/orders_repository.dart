@@ -4,7 +4,7 @@ import 'order_models.dart';
 
 /// The customer's own orders, over the ADR 0031 client.
 ///
-/// Nothing here speaks HTTP. `QoidaApiClient` already owns the bearer token and
+/// Nothing here speaks HTTP. `HorecaOSApiClient` already owns the bearer token and
 /// its refresh, the correlation identifier, Problem Details, `ETag` parsing and
 /// cursor pagination; a screen that reached for `package:http` would be
 /// re-implementing all five, and would get the idempotency rules wrong on the
@@ -47,7 +47,7 @@ final class OrdersRepository {
     required this.brandId,
   });
 
-  final QoidaApiClient api;
+  final HorecaOSApiClient api;
 
   /// The brand this build is the storefront for. Both identifiers are in the
   /// path because the platform's authorization and idempotency interceptors

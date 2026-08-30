@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:qoida_mobile/src/features/orders/application/order_tracking_controller.dart';
-import 'package:qoida_mobile/src/features/orders/data/order_codes.dart';
+import 'package:horecaos_mobile/src/features/orders/application/order_tracking_controller.dart';
+import 'package:horecaos_mobile/src/features/orders/data/order_codes.dart';
 
 import 'orders_harness.dart';
 

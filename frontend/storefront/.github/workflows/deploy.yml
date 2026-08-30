@@ -26,10 +26,10 @@ jobs:
         run: |
           if [[ "${{ github.ref_name }}" == "main" ]]; then
             echo "ENV_NAME=prod" >> $GITHUB_OUTPUT
-            echo "DEPLOY_PATH=/opt/www/jizbiz.qoida.one" >> $GITHUB_OUTPUT
+            echo "DEPLOY_PATH=/opt/www/jizbiz.horecaos.one" >> $GITHUB_OUTPUT
           else
             echo "ENV_NAME=dev" >> $GITHUB_OUTPUT
-            echo "DEPLOY_PATH=/opt/www/dev.jizbiz.qoida.one" >> $GITHUB_OUTPUT
+            echo "DEPLOY_PATH=/opt/www/dev.jizbiz.horecaos.one" >> $GITHUB_OUTPUT
           fi
 
       - name: Log in to GHCR

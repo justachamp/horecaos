@@ -3,8 +3,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../api/idempotency_key.dart';
 import '../../../design/q_empty_state.dart';
-import '../../../design/qoida_theme.dart';
-import '../../../design/qoida_tokens.dart';
+import '../../../design/horecaos_theme.dart';
+import '../../../design/horecaos_tokens.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../data/saved_address.dart';
 import '../data/saved_address_repository.dart';
@@ -192,7 +192,7 @@ class _AddressListView extends StatelessWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     return ListView(
-      padding: const EdgeInsets.only(bottom: QoidaGeometry.spaceXl),
+      padding: const EdgeInsets.only(bottom: HorecaOSGeometry.spaceXl),
       children: <Widget>[
         const ProfileDivider(),
         for (final SavedAddress address in list.addresses) ...<Widget>[
@@ -208,7 +208,7 @@ class _AddressListView extends StatelessWidget {
           const ProfileDivider(),
         ],
         Padding(
-          padding: const EdgeInsets.all(QoidaGeometry.spaceMd),
+          padding: const EdgeInsets.all(HorecaOSGeometry.spaceMd),
           child: SizedBox(
             width: double.infinity,
             child: FilledButton(
@@ -235,7 +235,7 @@ class _AddressTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
 
     final String? street = _street(address.fields);
@@ -243,7 +243,7 @@ class _AddressTile extends StatelessWidget {
     final String? landmark = address.fields.landmark?.trim();
 
     return Padding(
-      padding: const EdgeInsets.all(QoidaGeometry.spaceMd),
+      padding: const EdgeInsets.all(HorecaOSGeometry.spaceMd),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -254,27 +254,27 @@ class _AddressTile extends StatelessWidget {
             style: text.titleSmall,
           ),
           if (street != null) ...<Widget>[
-            const SizedBox(height: QoidaGeometry.spaceXs),
+            const SizedBox(height: HorecaOSGeometry.spaceXs),
             Text(street, style: text.bodyMedium),
           ],
           if (detail != null) ...<Widget>[
-            const SizedBox(height: QoidaGeometry.spaceXs),
+            const SizedBox(height: HorecaOSGeometry.spaceXs),
             Text(
               detail,
               style: text.bodyMedium?.copyWith(color: tokens.inkMuted),
             ),
           ],
           if (landmark != null && landmark.isNotEmpty) ...<Widget>[
-            const SizedBox(height: QoidaGeometry.spaceXs),
+            const SizedBox(height: HorecaOSGeometry.spaceXs),
             Text(
               '${l10n.profileAddressFieldLandmark}: $landmark',
               style: text.bodyMedium,
             ),
           ],
-          const SizedBox(height: QoidaGeometry.spaceXs),
+          const SizedBox(height: HorecaOSGeometry.spaceXs),
           Text(_pinState(address, l10n), style: text.bodySmall),
           if (onEdit != null || onRemove != null) ...<Widget>[
-            const SizedBox(height: QoidaGeometry.spaceSm),
+            const SizedBox(height: HorecaOSGeometry.spaceSm),
             Row(
               children: <Widget>[
                 if (onEdit != null)

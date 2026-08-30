@@ -1,12 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:qoida_mobile/src/api/api_exception.dart';
-import 'package:qoida_mobile/src/api/page.dart';
-import 'package:qoida_mobile/src/features/orders/data/order_codes.dart';
-import 'package:qoida_mobile/src/features/orders/data/order_models.dart';
-import 'package:qoida_mobile/src/features/orders/data/orders_repository.dart';
-import 'package:qoida_mobile/src/format/money.dart';
+import 'package:horecaos_mobile/src/api/api_exception.dart';
+import 'package:horecaos_mobile/src/api/page.dart';
+import 'package:horecaos_mobile/src/features/orders/data/order_codes.dart';
+import 'package:horecaos_mobile/src/features/orders/data/order_models.dart';
+import 'package:horecaos_mobile/src/features/orders/data/orders_repository.dart';
+import 'package:horecaos_mobile/src/format/money.dart';
 
 import 'orders_harness.dart';
 

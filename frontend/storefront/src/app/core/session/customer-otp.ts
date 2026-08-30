@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 
 import { ApiClient } from '../api/api-client';
 import { APP_CONFIG } from '../config/app-config';
-import { QoidaApiError } from '../api/problem-details';
+import { HorecaOSApiError } from '../api/problem-details';
 import { Session } from '../auth/session';
 
 /**
@@ -50,7 +50,7 @@ import { Session } from '../auth/session';
  * throw "the session exchange answered without an access token" against a server
  * that had just minted a perfectly good one.
  *
- * **Do not read this shape out of `api/generated/qoida-api-v1.ts`.** OpenAPI
+ * **Do not read this shape out of `api/generated/horecaos-api-v1.ts`.** OpenAPI
  * schema names are a flat namespace on the simple class name, and until the
  * platform record was renamed to `CustomerSessionResponse` this operation shared
  * a schema with the dine-in table session — so the generated client described
@@ -319,7 +319,7 @@ export class OtpUndeliverableError extends Error {
 const BLACKLISTED = 'SMS_RECEIVER_BLACKLISTED';
 
 function translateIssue(failure: unknown): unknown {
-  if (!(failure instanceof QoidaApiError)) {
+  if (!(failure instanceof HorecaOSApiError)) {
     return failure;
   }
   if (failure.status === 404) {
@@ -341,7 +341,7 @@ function translateIssue(failure: unknown): unknown {
 }
 
 function translateAttempt(failure: unknown): unknown {
-  if (!(failure instanceof QoidaApiError)) {
+  if (!(failure instanceof HorecaOSApiError)) {
     return failure;
   }
   if (failure.status === 404) {
@@ -365,7 +365,7 @@ function translateAttempt(failure: unknown): unknown {
 }
 
 function translateExchange(failure: unknown): unknown {
-  if (!(failure instanceof QoidaApiError)) {
+  if (!(failure instanceof HorecaOSApiError)) {
     return failure;
   }
   if (failure.status === 404) {
@@ -380,7 +380,7 @@ function translateExchange(failure: unknown): unknown {
 }
 
 /** The platform sends how many guesses are left. Absent is not zero. */
-function attemptsRemaining(failure: QoidaApiError): number | null {
+function attemptsRemaining(failure: HorecaOSApiError): number | null {
   const value = (failure.problem as { attemptsRemaining?: unknown } | undefined)?.attemptsRemaining;
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }

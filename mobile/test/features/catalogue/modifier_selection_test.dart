@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:qoida_mobile/src/features/catalogue/data/menu.dart';
-import 'package:qoida_mobile/src/features/catalogue/domain/modifier_selection.dart';
+import 'package:horecaos_mobile/src/features/catalogue/data/menu.dart';
+import 'package:horecaos_mobile/src/features/catalogue/domain/modifier_selection.dart';
 
 import 'menu_fixture.dart';
 

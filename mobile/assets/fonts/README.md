@@ -32,7 +32,7 @@ assets/fonts/IBMPlexSans-Italic.ttf       w400 italic
 ```
 
 Four, not the whole family: the closed type scale in
-`lib/src/design/qoida_typography.dart` uses w300, w400 and w600 and nothing
+`lib/src/design/horecaos_typography.dart` uses w300, w400 and w600 and nothing
 else. Shipping weights nothing references is megabytes of download for nothing.
 
 Check the subsets before committing. The default IBM Plex Sans release is Latin
@@ -60,7 +60,7 @@ Add this block to `pubspec.yaml` under `flutter:`:
           weight: 600
 ```
 
-And set the family in `lib/src/design/qoida_typography.dart`:
+And set the family in `lib/src/design/horecaos_typography.dart`:
 
 ```dart
 static const String? fontFamily = 'IBMPlexSans';

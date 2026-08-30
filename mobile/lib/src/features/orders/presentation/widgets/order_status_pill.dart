@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design/qoida_theme.dart';
-import '../../../../design/qoida_tokens.dart';
+import '../../../../design/horecaos_theme.dart';
+import '../../../../design/horecaos_tokens.dart';
 import '../../../../l10n/generated/app_localizations.dart';
 import '../../data/order_codes.dart';
 import '../order_strings.dart';
@@ -30,14 +30,14 @@ class OrderStatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
     final AppLocalizations l10n = AppLocalizations.of(context);
 
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: QoidaGeometry.spaceSm,
-        vertical: QoidaGeometry.spaceXs,
+        horizontal: HorecaOSGeometry.spaceSm,
+        vertical: HorecaOSGeometry.spaceXs,
       ),
       decoration: BoxDecoration(
         color: tokens.surface1,
@@ -47,7 +47,7 @@ class OrderStatusPill extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           StatusDot(tone: toneForStatus(status)),
-          const SizedBox(width: QoidaGeometry.spaceXs),
+          const SizedBox(width: HorecaOSGeometry.spaceXs),
           Flexible(
             child: Text(
               OrderStrings.status(l10n, status),
@@ -56,9 +56,9 @@ class OrderStatusPill extends StatelessWidget {
             ),
           ),
           if (isLate) ...<Widget>[
-            const SizedBox(width: QoidaGeometry.spaceSm),
+            const SizedBox(width: HorecaOSGeometry.spaceSm),
             const StatusDot(tone: StatusTone.warning),
-            const SizedBox(width: QoidaGeometry.spaceXs),
+            const SizedBox(width: HorecaOSGeometry.spaceXs),
             Flexible(
               child: Text(
                 l10n.orderLate,

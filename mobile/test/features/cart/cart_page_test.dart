@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
-import 'package:qoida_mobile/src/features/cart/cart_controller.dart';
-import 'package:qoida_mobile/src/features/cart/cart_item_naming.dart';
-import 'package:qoida_mobile/src/features/cart/cart_page.dart';
-import 'package:qoida_mobile/src/features/cart/cart_repository.dart';
+import 'package:horecaos_mobile/src/features/cart/cart_controller.dart';
+import 'package:horecaos_mobile/src/features/cart/cart_item_naming.dart';
+import 'package:horecaos_mobile/src/features/cart/cart_page.dart';
+import 'package:horecaos_mobile/src/features/cart/cart_repository.dart';
 
 import 'support.dart';
 

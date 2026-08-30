@@ -1,6 +1,6 @@
 /**
  * Optimistic concurrency over HTTP (ADR 0031), mirroring
- * `uz.qoida.platform.web.api.AggregateVersion`.
+ * `uz.horecaos.platform.web.api.AggregateVersion`.
  *
  * The server renders a version as a **weak** ETag — `W/"7"` — because two
  * responses at the same version are semantically equivalent without being

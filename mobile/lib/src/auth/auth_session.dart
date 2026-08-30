@@ -21,7 +21,7 @@ enum AuthStatus {
 
 /// The application's session (ADR 0003, ADR 0035).
 ///
-/// Authorization Code with PKCE against the Qoida realm, through the system
+/// Authorization Code with PKCE against the HorecaOS realm, through the system
 /// browser. The access token is held here, in memory, and dies with the
 /// process; the refresh token is the only thing on the device.
 ///

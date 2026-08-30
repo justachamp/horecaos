@@ -9,7 +9,7 @@ import { Messages } from './messages.en';
  * console ends up in the wrong language without anyone noticing.
  */
 export const ru: Messages = {
-  'app.name': 'Qoida',
+  'app.name': 'HorecaOS',
   'app.surface': 'панель управления',
 
   'nav.overview': 'Обзор',
@@ -39,7 +39,7 @@ export const ru: Messages = {
 
   'state.unavailable.title': 'Вход недоступен',
   'state.unavailable.body':
-    'Realm Qoida не отвечает. С вашей учётной записью всё в порядке. Повторите попытку, когда сервис аутентификации вернётся.',
+    'Realm HorecaOS не отвечает. С вашей учётной записью всё в порядке. Повторите попытку, когда сервис аутентификации вернётся.',
   'state.unavailable.retry': 'Повторить',
 
   'state.denied.title': 'У вас нет доступа к этому разделу',

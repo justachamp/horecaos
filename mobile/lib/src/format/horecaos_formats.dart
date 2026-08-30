@@ -8,7 +8,7 @@ import 'package:intl/intl.dart';
 /// language and not for the date convention, and an order list that renders
 /// `22.08` in two locales and `08/22` in the third is a list that looks broken
 /// in the third. Recorded here as a decision rather than an inference.
-abstract final class QoidaFormats {
+abstract final class HorecaOSFormats {
   /// `22.08`.
   static String dayMonth(DateTime local, {String? locale}) =>
       DateFormat('dd.MM', locale).format(local);

@@ -4,7 +4,7 @@ import { catchError, throwError } from 'rxjs';
 import { NotificationService } from '../services/notification.service';
 import { TranslateService } from '../services/translate.service';
 import { PLATFORM_API_REQUEST } from '../core/api/api-client';
-import { QoidaApiError, messageKeyFor } from '../core/api/problem-details';
+import { HorecaOSApiError, messageKeyFor } from '../core/api/problem-details';
 
 const FALLBACK_MESSAGE = 'An error occurred';
 
@@ -34,7 +34,7 @@ function formatLegacyNotification(err: HttpErrorResponse): string {
  * `code` to a translated string instead, which is also the only way the message
  * appears in the customer's own language.
  *
- * Placed first in the chain so it sees the QoidaApiError that
+ * Placed first in the chain so it sees the HorecaOSApiError that
  * `problemDetailsInterceptor` produces further down.
  */
 export const errorNotificationInterceptor: HttpInterceptorFn = (req, next) => {
@@ -48,7 +48,7 @@ export const errorNotificationInterceptor: HttpInterceptorFn = (req, next) => {
         // An expired session is not an error to report. The customer is about
         // to be shown a sign-in screen, and a toast saying "something went
         // wrong" on top of it explains nothing and blames them for it.
-        if (err instanceof QoidaApiError && err.status !== 401) {
+        if (err instanceof HorecaOSApiError && err.status !== 401) {
           notification.show(translate.get(messageKeyFor(err)));
         }
         return throwError(() => err);

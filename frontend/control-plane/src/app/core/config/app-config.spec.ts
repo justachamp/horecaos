@@ -13,22 +13,22 @@ describe('resolveAppConfig', () => {
 
   it('takes what config.js supplies', () => {
     const config = resolveAppConfig({
-      qoidaControlPlaneConfig: {
-        apiBaseUrl: 'https://api.qoida.uz',
-        issuerUrl: 'https://auth.qoida.uz/realms/qoida',
+      horecaosControlPlaneConfig: {
+        apiBaseUrl: 'https://api.horecaos.uz',
+        issuerUrl: 'https://auth.horecaos.uz/realms/horecaos',
       },
     });
-    expect(config.apiBaseUrl).toBe('https://api.qoida.uz');
-    expect(config.issuerUrl).toBe('https://auth.qoida.uz/realms/qoida');
+    expect(config.apiBaseUrl).toBe('https://api.horecaos.uz');
+    expect(config.issuerUrl).toBe('https://auth.horecaos.uz/realms/horecaos');
   });
 
   it('keeps defaults for fields config.js does not mention', () => {
-    const config = resolveAppConfig({ qoidaControlPlaneConfig: { apiBaseUrl: 'https://api.qoida.uz' } });
+    const config = resolveAppConfig({ horecaosControlPlaneConfig: { apiBaseUrl: 'https://api.horecaos.uz' } });
     expect(config.displayTimeZone).toBe('Asia/Tashkent');
   });
 
   it('strips a trailing slash so paths do not become //api/v1', () => {
-    const config = resolveAppConfig({ qoidaControlPlaneConfig: { apiBaseUrl: 'https://api.qoida.uz/' } });
-    expect(config.apiBaseUrl).toBe('https://api.qoida.uz');
+    const config = resolveAppConfig({ horecaosControlPlaneConfig: { apiBaseUrl: 'https://api.horecaos.uz/' } });
+    expect(config.apiBaseUrl).toBe('https://api.horecaos.uz');
   });
 });

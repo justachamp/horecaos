@@ -3,7 +3,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { ApiClient } from '../core/api/api-client';
 import { APP_CONFIG } from '../core/config/app-config';
 import { newIdempotencyKey } from '../core/api/idempotency';
-import { QoidaApiError, isNotFound } from '../core/api/problem-details';
+import { HorecaOSApiError, isNotFound } from '../core/api/problem-details';
 
 /**
  * The platform cart, which is a different thing from the legacy one.
@@ -292,7 +292,7 @@ export class CartService {
       this.adopt(result);
       return result;
     } catch (failure) {
-      if (!(failure instanceof QoidaApiError) || !failure.isStaleVersion) {
+      if (!(failure instanceof HorecaOSApiError) || !failure.isStaleVersion) {
         throw failure;
       }
       const fresh = await this.api.get<PlatformCart>(`${this.brandPath}/carts/${cart.cartId}`);
@@ -333,7 +333,7 @@ export function lineKeyFor(variantId: string, modifierOptionIds: readonly string
     : `${variantId}+${[...modifierOptionIds].sort().join('.')}`;
 }
 
-const STORAGE_PREFIX = 'qoida_cart_';
+const STORAGE_PREFIX = 'horecaos_cart_';
 
 function readCartId(locationId: string): string | null {
   try {

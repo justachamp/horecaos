@@ -42,7 +42,7 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes, withPreloading(PreloadAllModules)),
     provideHttpClient(
       // Order matters. errorNotificationInterceptor is outermost so it sees the
-      // QoidaApiError that problemDetailsInterceptor produces below it, and that
+      // HorecaOSApiError that problemDetailsInterceptor produces below it, and that
       // one is innermost so it also normalises failures the others cause.
       //
       // The legacy auth, headers and unauthorized interceptors are gone with the

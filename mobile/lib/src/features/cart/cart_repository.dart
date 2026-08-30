@@ -4,7 +4,7 @@ import 'cart_models.dart';
 
 /// Every storefront cart call, and nothing else.
 ///
-/// A thin layer over [QoidaApiClient] rather than a second client: idempotency
+/// A thin layer over [HorecaOSApiClient] rather than a second client: idempotency
 /// keys, `If-Match`, token refresh, replay detection and Problem Details are all
 /// already solved there, and a repository that reached for `http` directly would
 /// be re-solving them worse. What this class adds is the path shapes, the wire
@@ -17,7 +17,7 @@ import 'cart_models.dart';
 final class CartRepository {
   const CartRepository({required this._api, required this._scope});
 
-  final QoidaApiClient _api;
+  final HorecaOSApiClient _api;
   final StorefrontScope _scope;
 
   /// Opens a cart at this scope's location for one fulfilment mode.

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:qoida_mobile/src/auth/pkce.dart';
+import 'package:horecaos_mobile/src/auth/pkce.dart';
 
 void main() {
   group('PKCE', () {

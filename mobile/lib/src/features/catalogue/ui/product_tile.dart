@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../design/q_icon.dart';
-import '../../../design/qoida_theme.dart';
-import '../../../design/qoida_tokens.dart';
+import '../../../design/horecaos_theme.dart';
+import '../../../design/horecaos_tokens.dart';
 import '../data/menu.dart';
 import 'availability_label.dart';
 import 'catalogue_pressable.dart';
@@ -22,7 +22,7 @@ class ProductTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final TextTheme text = Theme.of(context).textTheme;
     final bool orderable = product.isOrderable;
 
@@ -46,7 +46,7 @@ class ProductTile extends StatelessWidget {
                   ),
                 ),
                 if (product.description != null) ...<Widget>[
-                  const SizedBox(height: QoidaGeometry.spaceXs),
+                  const SizedBox(height: HorecaOSGeometry.spaceXs),
                   Text(
                     product.description!,
                     style: text.bodyMedium?.copyWith(color: tokens.inkMuted),
@@ -54,7 +54,7 @@ class ProductTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
-                const SizedBox(height: QoidaGeometry.spaceSm),
+                const SizedBox(height: HorecaOSGeometry.spaceSm),
                 if (orderable)
                   const PriceInBasketCaption()
                 else
@@ -63,7 +63,7 @@ class ProductTile extends StatelessWidget {
             ),
           ),
           if (onTap != null) ...<Widget>[
-            const SizedBox(width: QoidaGeometry.spaceSm),
+            const SizedBox(width: HorecaOSGeometry.spaceSm),
             QIcon(QIconName.chevronRight, color: tokens.inkSubtle),
           ],
         ],

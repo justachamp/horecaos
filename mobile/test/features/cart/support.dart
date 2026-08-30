@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:qoida_mobile/src/api/api_client.dart';
-import 'package:qoida_mobile/src/design/qoida_theme.dart';
-import 'package:qoida_mobile/src/features/cart/cart_models.dart';
-import 'package:qoida_mobile/src/l10n/generated/app_localizations.dart';
-import 'package:qoida_mobile/src/l10n/supported_locales.dart';
+import 'package:horecaos_mobile/src/api/api_client.dart';
+import 'package:horecaos_mobile/src/design/horecaos_theme.dart';
+import 'package:horecaos_mobile/src/features/cart/cart_models.dart';
+import 'package:horecaos_mobile/src/l10n/generated/app_localizations.dart';
+import 'package:horecaos_mobile/src/l10n/supported_locales.dart';
 
 /// The scope every test uses. Fixed identifiers so a path assertion can be
 /// written out in full rather than interpolated from the thing under test.
@@ -41,10 +41,10 @@ class Recorded {
 
 /// Builds a client whose transport answers from [handler] and records what it
 /// was asked.
-QoidaApiClient client(
+HorecaOSApiClient client(
   Future<http.Response> Function(http.Request request) handler, {
   List<Recorded>? log,
-}) => QoidaApiClient(
+}) => HorecaOSApiClient(
   baseUri: Uri.parse('https://api.example.test'),
   httpClient: MockClient((http.Request request) async {
     log?.add(
@@ -170,7 +170,7 @@ String uzs(String grouped) =>
 
 /// Wraps a screen in exactly the theme and localisations the application uses.
 ///
-/// The real theme, not a stub: a widget that reads `context.qoida` throws
+/// The real theme, not a stub: a widget that reads `context.horecaos` throws
 /// without it, and a test that supplied a Material default would be testing a
 /// tree the application never builds.
 Future<void> pumpScreen(
@@ -180,7 +180,7 @@ Future<void> pumpScreen(
 }) async {
   await tester.pumpWidget(
     MaterialApp(
-      theme: QoidaTheme.light(),
+      theme: HorecaOSTheme.light(),
       locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: SupportedLocales.all,

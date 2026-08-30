@@ -19,9 +19,9 @@ void main() {
   // the things everything else is forbidden to say; that is what makes them the
   // design system.
   const Set<String> designSystem = <String>{
-    'lib/src/design/qoida_tokens.dart',
-    'lib/src/design/qoida_typography.dart',
-    'lib/src/design/qoida_theme.dart',
+    'lib/src/design/horecaos_tokens.dart',
+    'lib/src/design/horecaos_typography.dart',
+    'lib/src/design/horecaos_theme.dart',
     'lib/src/design/q_icon.dart',
   };
 
@@ -46,11 +46,11 @@ void main() {
     for (final File file in callSites) {
       test(_normalise(file.path), () {
         final List<String> offences = _offences(file, <RegExp, String>{
-          RegExp(r'\bColors\.'): 'Material palette. Use context.qoida.',
+          RegExp(r'\bColors\.'): 'Material palette. Use context.horecaos.',
           RegExp(r'\bColor\(0x'):
-              'colour literal. Add it to qoida_tokens.dart if it is a token.',
-          RegExp(r'\bQoidaPalette\.'):
-              'palette constant at a call site. Read it from context.qoida, '
+              'colour literal. Add it to horecaos_tokens.dart if it is a token.',
+          RegExp(r'\bHorecaOSPalette\.'):
+              'palette constant at a call site. Read it from context.horecaos, '
               'so a tenant accent can override it.',
         });
         expect(offences, isEmpty, reason: offences.join('\n'));

@@ -32,7 +32,7 @@ abstract base class WireCode {
   String toString() => '$runtimeType($value)';
 }
 
-/// `uz.qoida.platform.ordering.domain.OrderStatus`, ADR 0019.
+/// `uz.horecaos.platform.ordering.domain.OrderStatus`, ADR 0019.
 final class OrderStatus extends WireCode {
   const OrderStatus(super.value);
 
@@ -102,7 +102,7 @@ final class OrderStatus extends WireCode {
       this == awaitingApproval;
 }
 
-/// `uz.qoida.platform.tenancy.api.FulfillmentMode`.
+/// `uz.horecaos.platform.tenancy.api.FulfillmentMode`.
 final class FulfillmentMode extends WireCode {
   const FulfillmentMode(super.value);
 
@@ -155,7 +155,7 @@ final class PaymentStatus extends WireCode {
       : unrecognised;
 }
 
-/// `uz.qoida.platform.ordering.domain.TerminalOutcomeKind`, ADR 0039.
+/// `uz.horecaos.platform.ordering.domain.TerminalOutcomeKind`, ADR 0039.
 ///
 /// The whole point of the enum on the platform is that a rejection, an expiry
 /// and a cancellation are three different commercial facts rather than one
@@ -203,7 +203,7 @@ final class TerminalOutcomeKind extends WireCode {
   }
 }
 
-/// `uz.qoida.platform.ordering.domain.OutcomeSystemCategory`, ADR 0039.
+/// `uz.horecaos.platform.ordering.domain.OutcomeSystemCategory`, ADR 0039.
 ///
 /// Platform-owned and closed, which is exactly why this screen renders from it
 /// rather than from the tenant's own reason registry: the registry is fifty
@@ -270,7 +270,7 @@ final class OutcomeCategory extends WireCode {
       raw == null ? null : OutcomeCategory(raw);
 }
 
-/// `uz.qoida.platform.ordering.domain.CustomerRefund`, ADR 0039.
+/// `uz.horecaos.platform.ordering.domain.CustomerRefund`, ADR 0039.
 ///
 /// A **posture**, not a refund. ADR 0013 owns the money; this is what the
 /// reason says should happen, and the wording on the screen has to keep that

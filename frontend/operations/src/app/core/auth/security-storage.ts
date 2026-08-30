@@ -10,7 +10,7 @@ import { AbstractSecurityStorage } from 'angular-auth-oidc-client';
  * `NG0201: No provider found for Storage` even when a default value is written.
  * The token also gives tests a seam that does not involve a real browser store.
  */
-export const SESSION_STORAGE = new InjectionToken<Storage>('qoida.sessionStorage', {
+export const SESSION_STORAGE = new InjectionToken<Storage>('horecaos.sessionStorage', {
   providedIn: 'root',
   factory: () => globalThis.sessionStorage,
 });
@@ -137,5 +137,5 @@ export class SplitSecurityStorage implements AbstractSecurityStorage {
 }
 
 function sessionKey(configId: string): string {
-  return `qoida.operations.oidc.${configId}`;
+  return `horecaos.operations.oidc.${configId}`;
 }

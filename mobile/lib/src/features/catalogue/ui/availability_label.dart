@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../design/qoida_theme.dart';
-import '../../../design/qoida_tokens.dart';
+import '../../../design/horecaos_theme.dart';
+import '../../../design/horecaos_tokens.dart';
 import '../../../l10n/generated/app_localizations.dart';
 
 /// "Sold out", as a dot and a word.
@@ -22,7 +22,7 @@ class SoldOutLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TextTheme text = Theme.of(context).textTheme;
 
@@ -37,7 +37,7 @@ class SoldOutLabel extends StatelessWidget {
             shape: BoxShape.circle,
           ),
         ),
-        const SizedBox(width: QoidaGeometry.spaceXs),
+        const SizedBox(width: HorecaOSGeometry.spaceXs),
         Text(
           l10n.catalogueSoldOut,
           style: text.bodySmall?.copyWith(color: tokens.warningInk),
@@ -61,7 +61,7 @@ class PriceInBasketCaption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final QoidaTokens tokens = context.qoida;
+    final HorecaOSTokens tokens = context.horecaos;
     return Text(
       AppLocalizations.of(context).cataloguePriceInBasket,
       style: Theme.of(context).textTheme.bodySmall

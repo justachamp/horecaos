@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:qoida_mobile/src/api/api_exception.dart';
-import 'package:qoida_mobile/src/api/problem_details.dart';
-import 'package:qoida_mobile/src/auth/auth_session.dart';
-import 'package:qoida_mobile/src/features/profile/data/customer_account.dart';
-import 'package:qoida_mobile/src/features/profile/profile_area.dart';
+import 'package:horecaos_mobile/src/api/api_exception.dart';
+import 'package:horecaos_mobile/src/api/problem_details.dart';
+import 'package:horecaos_mobile/src/auth/auth_session.dart';
+import 'package:horecaos_mobile/src/features/profile/data/customer_account.dart';
+import 'package:horecaos_mobile/src/features/profile/profile_area.dart';
 
 import 'profile_harness.dart';
 

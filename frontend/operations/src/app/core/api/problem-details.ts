@@ -1,8 +1,8 @@
 /**
- * RFC 9457 Problem Details, in the one shape every Qoida surface returns
+ * RFC 9457 Problem Details, in the one shape every HorecaOS surface returns
  * (ADR 0031).
  *
- * The server builds these in `uz.qoida.platform.web.api.ApiProblem`. The fields
+ * The server builds these in `uz.horecaos.platform.web.api.ApiProblem`. The fields
  * below are the ones it actually sets, not the ones RFC 9457 permits.
  */
 export interface ProblemDetails {
@@ -39,7 +39,7 @@ export interface ProblemFieldError {
 
 /**
  * The server's error code registry, mirrored from
- * `uz.qoida.platform.web.api.ErrorCode`.
+ * `uz.horecaos.platform.web.api.ErrorCode`.
  *
  * This is a `const` object rather than a TypeScript `enum` so that an unknown
  * code arriving from a newer server is still a plain string this client can

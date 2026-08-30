@@ -27,7 +27,7 @@ final class SecureRefreshTokenStore implements RefreshTokenStore {
   /// Not namespaced by customer. There is one session on a device, and keying
   /// by subject would leave a previous customer's token behind after a sign-out
   /// on a shared phone.
-  static const String _key = 'qoida.refresh_token';
+  static const String _key = 'horecaos.refresh_token';
 
   static const IOSOptions _iosOptions = IOSOptions(
     // The default is `unlocked`, which permits a background read while the

@@ -29,7 +29,7 @@ const CATALOGUES: Record<Locale, MessageCatalogue> = {
   en: messagesEn,
 };
 
-const STORAGE_KEY = 'qoida.operations.locale';
+const STORAGE_KEY = 'horecaos.operations.locale';
 
 /**
  * Runtime locale switching over compile-time-complete catalogues.
