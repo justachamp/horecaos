@@ -20,6 +20,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 import uz.horecaos.platform.migration.api.ExternalEffect;
 import uz.horecaos.platform.migration.api.ImportSuppression;
 import uz.horecaos.platform.ordering.api.PaymentCaptured;
+import uz.horecaos.platform.ordering.api.PaymentFailed;
+import uz.horecaos.platform.ordering.api.PaymentRefunded;
+import uz.horecaos.platform.ordering.api.PaymentVoided;
 import uz.horecaos.platform.payments.domain.PaymentAttempt;
 import uz.horecaos.platform.payments.domain.PaymentAttemptStateMachine;
 import uz.horecaos.platform.payments.domain.PaymentAttemptStatus;
@@ -532,26 +535,58 @@ public class PaymentAttemptService {
      * <p>Local rows only, and inside the transaction that records the capture on
      * purpose. A settlement that closed in a separate transaction could be lost
      * while the capture survived, which is the same gap in a smaller window.
+     *
+     * <p>Four of the six statuses this method may be called with also carry a
+     * second local fact: {@code ordering.orders.payment_status_projection}, the
+     * V0022 rendering column that exists so an operations list can be drawn
+     * without joining four modules. Every state this method draws a consequence
+     * from is a state {@code PaymentProjectionTrigger} on the ordering side
+     * mirrors onto it — {@link PaymentCaptured}, {@link PaymentFailed}, {@link
+     * PaymentVoided} and {@link PaymentRefunded} — through the same plain
+     * application event {@link PaymentCaptured} already used, and for the same
+     * module-boundary reason given on that type's own Javadoc. {@code EXPIRED}
+     * and {@code UNCERTAIN} publish nothing: the projection has no value for
+     * either, and a reservation aging out is not, on its own, the fact an
+     * operations list needs to see.
      */
     private void applyToIntent(PaymentAttempt attempt, PaymentAttemptStatus attemptStatus, Instant now) {
         intents.find(attempt.tenantId(), attempt.intentId()).ifPresent(intent -> {
             if (attemptStatus == PaymentAttemptStatus.CAPTURED) {
                 captures.recordCapture(intent.tenantId(), intent.orderId(), CAPTURE_ACTOR);
-
-                // ADR 0019 step 8's missing half: an order held in
-                // PAYMENT_AUTHORIZING is told the money arrived so it can confirm
-                // or go to restaurant approval, exactly as a cash order would at
-                // checkout. A plain application event and not a direct call,
-                // because this module already depends on ordering.api for the
-                // reverse direction (OrderConfirmedSettlementTrigger,
-                // TerminalOrderPaymentVoid) — calling into ordering.application
-                // directly would reach past its module boundary into a package
-                // this module may not see, and a dependency running the other way
-                // would make the two modules mutually dependent. See
-                // PaymentCaptured's own Javadoc.
-                events.publishEvent(
-                        new PaymentCaptured(UUID.randomUUID(), new TenantId(intent.tenantId()), intent.orderId(), now));
             }
+
+            // ADR 0019 step 8's missing half — and, for the three siblings below,
+            // the projection this class exists to keep honest. A plain application
+            // event and not a direct call, because this module already depends on
+            // ordering.api for the reverse direction (OrderConfirmedSettlementTrigger,
+            // TerminalOrderPaymentVoid) — calling into ordering.application
+            // directly would reach past its module boundary into a package this
+            // module may not see, and a dependency running the other way would
+            // make the two modules mutually dependent. See PaymentCaptured's own
+            // Javadoc.
+            TenantId tenant = new TenantId(intent.tenantId());
+            switch (attemptStatus) {
+                case CAPTURED ->
+                    events.publishEvent(new PaymentCaptured(UUID.randomUUID(), tenant, intent.orderId(), now));
+                case FAILED -> events.publishEvent(new PaymentFailed(UUID.randomUUID(), tenant, intent.orderId(), now));
+                // CANCELLED here is always a release with no capture — the state
+                // machine forbids CAPTURED -> CANCELLED — so it is honestly a void,
+                // whether TerminalOrderPaymentVoid asked for it or a resolver found
+                // the provider had rejected the reservation outright.
+                case CANCELLED ->
+                    events.publishEvent(new PaymentVoided(UUID.randomUUID(), tenant, intent.orderId(), now));
+                // The mirror of CAPTURED: money that had landed has gone back,
+                // reported by the provider itself (Payme's inbound CancelTransaction
+                // after a cabinet refund, or Click's own reversal of a capture that
+                // outlived its order).
+                case REVERSED ->
+                    events.publishEvent(new PaymentRefunded(UUID.randomUUID(), tenant, intent.orderId(), now));
+                default -> {
+                    // EXPIRED and UNCERTAIN. Neither is a fact the projection has a
+                    // value for; UNCERTAIN in particular is not yet a fact at all.
+                }
+            }
+
             PaymentIntentStatus target =
                     switch (attemptStatus) {
                         case CAPTURED -> PaymentIntentStatus.PAID;
