@@ -47,9 +47,10 @@ Spring JDBC with explicit SQL — **no ORM**), Kafka 4.3, Keycloak 26.7, S3-comp
   line is machine-read: it begins with `Built`, `Partial`, `Not started` or
   `Not applicable`, then an em dash, then what exists and what does not.
 - **`Built` means an operator could use the whole feature today.** A module that exists but
-  that nothing calls is `Partial`, and its status line has to say so. Four records are
-  `Built`; forty-two are `Partial`. Read the status line of the record you are touching
-  before assuming its subject works.
+  that nothing calls is `Partial`, and its status line has to say so. Most records are
+  `Partial` — the generated summary in docs/adr/README.md has the current counts; never
+  write counts by hand, here or anywhere. Read the status line of the record you are
+  touching before assuming its subject works.
 - **Every tenant-owned row carries a non-null `tenant_id`**, and unique/foreign keys
   include it. Cache keys, S3 object keys, Kafka envelopes, and logs are tenant-scoped too.
 - **Every mutating endpoint declares a capability** (ADR 0025). Organization membership

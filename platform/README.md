@@ -12,43 +12,29 @@ extensible.
 
 ## Project status
 
-Twenty-eight modules, 50 Flyway migrations, 922 Java files, and 1,534 passing
-tests. The backend that the decision records describe now largely exists: the
-tenancy hierarchy, catalogue authoring and publication, carts and checkout,
-pricing and quotes, inventory, orders and their process managers, payments
-against Click and Payme, fiscalisation, kitchen routing, courier shifts and
-compensation, loyalty and split tender, dine-in, the marketplace partner API,
-reporting, marketing, telemetry, and the legacy migration control plane.
+This section carries no hand-written counts or gap lists: two previous
+revisions of it drifted dozens of migrations behind the code and kept
+narrating closed gaps as open. The status sources that are maintained by
+tooling or adversarial review, in order of authority:
 
-What that does **not** mean is that a restaurant could open tomorrow. Four
-decision records are `Built`; forty-two are `Partial`. The honest summary is in
-[docs/adr/README.md](docs/adr/README.md), where every record's status line names
-what exists and what does not — and the records themselves are filed by status
-under [`built/`](docs/adr/built/), [`partial/`](docs/adr/partial/), and
-[`not-started/`](docs/adr/not-started/).
+- [docs/adr/README.md](docs/adr/README.md) — the generated status summary.
+  Every record carries a decision status and an implementation status; `Built`
+  means an operator could use the whole feature today, and each `Partial`
+  status line names what exists and what does not. Records are filed by status
+  under [`built/`](docs/adr/built/), [`partial/`](docs/adr/partial/), and
+  [`not-started/`](docs/adr/not-started/).
+- [docs/minimum-viable-cutover.md](docs/minimum-viable-cutover.md) — the
+  smallest slice that takes a real paid order, and the execution order that
+  outranks the breadth of the ADR list.
+- [The founding review](../docs/qoida-review.md) — the honest state of the
+  whole platform, backend and frontends, as of the HorecaOS import
+  (2026-08-30), including what remains before a pilot.
 
-Four gaps stop a pilot, and they are worth stating plainly rather than leaving
-someone to infer them from forty-two status lines:
-
-- **No price can be authored.** Nothing in production code writes
-  `pricing.price_books`, `prices`, `price_book_assignments` or `tax_profiles`;
-  every price in the test suite was written by a fixture. Cart pricing therefore
-  fails, so checkout fails, so nothing downstream is exercised even by hand.
-- **No customer can get an account.** There is no phone/OTP registration, realm
-  self-registration is disabled, and no controller creates a staff member either.
-- **No customer principal can hold a capability**, so the storefront ordering
-  endpoints answer 403 to the customer they were written for (ADR 0025).
-- **Orders cannot leave the building.** Delivery has provider adapters and a
-  Camel route, and no shipment tables and no caller.
-
-The frontends are further behind than the backend. The Flutter customer app has
-catalogue, cart, checkout, orders and profile built and tested, but not yet
-mounted in its router; the three Angular apps are routed placeholders.
-
-A security and quality audit of 2026-08-24 closed 66 findings across the
-backend, the frontends and the production infrastructure, including cross-tenant
-writes that were reachable by any staff principal. The report is linked from
-[docs/adr/README.md](docs/adr/README.md).
+The frontends live in [`../frontend`](../frontend) and [`../mobile`](../mobile)
+since the monorepo decision
+([ADR 0052](docs/adr/partial/0052-one-repository-for-the-whole-platform.md));
+their state at import is recorded in the founding review and in
+[`../frontend/README.md`](../frontend/README.md).
 
 The detailed migration sequence is in
 [docs/migration-plan.md](docs/migration-plan.md). The

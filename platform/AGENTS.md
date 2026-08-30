@@ -14,26 +14,19 @@ schema, integration, or migration changes.
 
 ## Current status
 
-Twenty-eight modules, 50 Flyway migrations, 922 Java files, 1,534 passing tests.
-Most of what the decision records describe is built to some depth: tenancy,
-catalogue and publication, carts, checkout, pricing, inventory, ordering,
-payments, fiscalisation, kitchen, courier, loyalty, dine-in, the partner API,
-reporting, marketing, telemetry, and the migration control plane all have
-schema, services and tests.
-
-Four ADRs are `Built`; forty-two are `Partial`; one is `Not started`. They are
-filed by status under [docs/adr](docs/adr/README.md) —
-[`built/`](docs/adr/built/), [`partial/`](docs/adr/partial/),
-[`not-started/`](docs/adr/not-started/) — and each record's status line names
-what exists and what does not. Read the status line of the record you are about
-to touch; it is verified against code, not aspirational.
+No counts or gap lists here — two revisions of this section drifted far behind
+the code while sounding authoritative. Current status lives where tooling or
+adversarial review maintains it: the generated summary in
+[docs/adr/README.md](docs/adr/README.md), each record's own status line
+(filed under [`built/`](docs/adr/built/), [`partial/`](docs/adr/partial/),
+[`not-started/`](docs/adr/not-started/) — verified against code, not
+aspirational), and the founding review at `../docs/qoida-review.md`. Read the
+status line of the record you are about to touch.
 
 `Partial` is the normal state here and is not an invitation to finish the record
-you happen to be in. Four gaps stop a pilot and none of them is a small job:
-no production code can author a price; there is no customer identity and no
-staff administration; no customer principal can hold a capability, so storefront
-ordering answers 403; and delivery has adapters but no shipment tables and no
-caller.
+you happen to be in. What actually blocks a pilot is whichever
+[minimum-viable-cutover](docs/minimum-viable-cutover.md) stage is unfinished —
+work from that document's order, not from the ADR list's breadth.
 
 Both statuses are defined in
 [ADR 0000](docs/adr/meta/0000-adr-process-and-status-model.md), whose
