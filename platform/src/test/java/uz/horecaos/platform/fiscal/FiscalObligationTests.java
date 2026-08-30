@@ -31,7 +31,6 @@ import uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalLifecycl
 import uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalLifecycleStore.FiscalDocumentRow;
 import uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalLifecycleStore.NewFiscalDocument;
 import uz.horecaos.platform.support.TestDatabase;
-import uz.horecaos.platform.tenancy.LegalEntitySchema;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcLegalEntityStore;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyResolver;
 
@@ -101,8 +100,6 @@ class FiscalObligationTests {
         jdbc.sql("TRUNCATE TABLE customer.customer_accounts CASCADE").update();
         jdbc.sql("TRUNCATE TABLE catalog.catalogs CASCADE").update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
-
-        LegalEntitySchema.apply(jdbc);
         seedTenancy();
 
         store = new JdbcFiscalLifecycleStore(jdbc);

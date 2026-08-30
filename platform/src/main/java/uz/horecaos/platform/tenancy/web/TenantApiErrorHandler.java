@@ -21,7 +21,8 @@ import uz.horecaos.platform.web.api.ErrorCode;
             TenantControlPlaneController.class,
             SalesChannelController.class,
             ServiceScheduleController.class,
-            LocationServiceOperationsController.class
+            LocationServiceOperationsController.class,
+            LegalEntityController.class
         })
 public class TenantApiErrorHandler {
 
@@ -32,6 +33,25 @@ public class TenantApiErrorHandler {
 
     @ExceptionHandler(TenantResourceConflictException.class)
     ProblemDetail conflict(TenantResourceConflictException exception) {
+        return ApiProblem.of(ErrorCode.RESOURCE_CONFLICT, exception.getMessage());
+    }
+
+    /**
+     * A business conflict raised as a bare {@link IllegalStateException} rather
+     * than the module's own {@link TenantResourceConflictException}.
+     *
+     * <p>{@code LegalEntity.requireStatus} and {@code
+     * JdbcLegalEntityStore.explain} (a duplicate TIN, a duplicate code, two
+     * assignments overlapping one location on one day) all raise this rather
+     * than a typed exception, so without this handler an entirely ordinary
+     * business refusal — activate an already-archived entity, register a
+     * taxpayer number that already exists — reached no handler here and fell
+     * through to a 500. It is exactly the same failure a stale-transition guard
+     * elsewhere in this domain model can raise, so the mapping is the same one
+     * {@link TenantResourceConflictException} gets.
+     */
+    @ExceptionHandler(IllegalStateException.class)
+    ProblemDetail stateConflict(IllegalStateException exception) {
         return ApiProblem.of(ErrorCode.RESOURCE_CONFLICT, exception.getMessage());
     }
 

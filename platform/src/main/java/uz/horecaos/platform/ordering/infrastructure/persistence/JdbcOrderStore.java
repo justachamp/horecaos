@@ -1021,6 +1021,33 @@ public class JdbcOrderStore {
     }
 
     /**
+     * Corrects the deadline an order itself reports, for the one path that arms
+     * an approval timer later than checkout.
+     *
+     * <p>{@code approval_deadline_at} is written once, at {@link #insertOrder},
+     * from "if this order needed restaurant approval right now" — which is
+     * correct for a cash or already-payable order, where the timer is armed in
+     * the same statement using the same instant, but wrong for a
+     * {@code BEFORE_CONFIRMATION} order: {@code CheckoutService.awaitPayment}
+     * arms no timer at all, and the real one is armed only once the payment
+     * lands, against the later instant the money actually arrived. Left
+     * uncorrected, this column would show a deadline no timer row backs, which
+     * is precisely the gap {@code ordering.order_timers} exists to prevent
+     * looking authoritative.
+     */
+    public void armApprovalDeadline(UUID tenantId, UUID orderId, Instant deadline) {
+        jdbc.sql("""
+                UPDATE ordering.orders
+                SET approval_deadline_at = :deadline
+                WHERE tenant_id = :tenantId AND id = :id
+                """)
+                .param("tenantId", tenantId)
+                .param("id", orderId)
+                .param("deadline", utc(deadline))
+                .update();
+    }
+
+    /**
      * Claims due timers for this worker.
      *
      * <p>{@code FOR UPDATE SKIP LOCKED} so two workers never fire one timer twice,

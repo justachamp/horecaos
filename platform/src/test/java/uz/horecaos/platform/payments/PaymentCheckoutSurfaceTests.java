@@ -170,6 +170,7 @@ class PaymentCheckoutSurfaceTests {
                 List.of(click, payme),
                 CapturedMoneyPort.NONE,
                 unitOfWork,
+                event -> {},
                 CLOCK);
 
         checkout = new PaymentCheckoutService(

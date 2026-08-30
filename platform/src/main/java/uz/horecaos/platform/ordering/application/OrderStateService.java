@@ -15,11 +15,13 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.ordering.api.OrderAwaitingApproval;
 import uz.horecaos.platform.ordering.api.OrderCancelled;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.OrderExpired;
 import uz.horecaos.platform.ordering.api.OrderRejected;
 import uz.horecaos.platform.ordering.api.OrderSettlementPort;
+import uz.horecaos.platform.ordering.domain.AcceptanceMode;
 import uz.horecaos.platform.ordering.domain.ApprovalTimeoutAction;
 import uz.horecaos.platform.ordering.domain.CustomerRefund;
 import uz.horecaos.platform.ordering.domain.LiabilityParty;
@@ -54,6 +56,9 @@ import uz.horecaos.platform.tenancy.api.TenantId;
 public class OrderStateService {
 
     private static final Logger log = LoggerFactory.getLogger(OrderStateService.class);
+
+    /** The actor a transition records when a payment capture drove it, nobody clicked. */
+    private static final String PAYMENT_CAPTURE_ACTOR = "payment-capture";
 
     private final JdbcOrderStore orders;
     private final LocationCapacityPort capacity;
@@ -267,6 +272,137 @@ public class OrderStateService {
                 target,
                 version,
                 orders.findEffectiveDecision(tenantId, orderId).orElse(null));
+    }
+
+    /**
+     * The provider's money has landed against an order still waiting on it
+     * (ADR 0013, ADR 0019).
+     *
+     * <p>The missing half of ADR 0019 step 8: {@code CheckoutService.awaitPayment}
+     * holds a {@code BEFORE_CONFIRMATION} order in {@code PAYMENT_AUTHORIZING} and
+     * arms nothing, on the documented understanding that a payment capture is what
+     * moves it on. Until this method existed, nothing did, and a fully paid order
+     * sat there for ever.
+     *
+     * <p>The acceptance policy consulted is the one {@link #approvalDeadlineReached}
+     * also uses: pinned to the order at checkout (ADR 0030), never re-resolved, so
+     * a policy edited after checkout cannot change what an already-placed order is
+     * permitted to do. A paid order lands exactly where an equivalent cash order
+     * would — {@code AUTO_CONFIRM} confirms it immediately, {@code
+     * RESTAURANT_APPROVAL} sends it to {@code AWAITING_APPROVAL} with the same
+     * approval timer {@code CheckoutService.awaitApproval} would have armed had the
+     * money been in hand at checkout — and the events a consumer expects on either
+     * path, {@link OrderConfirmed} or {@link OrderAwaitingApproval}, fire exactly
+     * as they would from there.
+     *
+     * <p>Idempotent the same way every other transition here is: a conditional
+     * UPDATE naming {@code PAYMENT_AUTHORIZING} as the status it expects. A
+     * duplicate delivery of the capture fact finds the order already moved and
+     * applies nothing; an order that left {@code PAYMENT_AUTHORIZING} some other
+     * way — cancelled while the customer was on the provider's page, or expired —
+     * finds the same and is left exactly as it is. The money itself is never in
+     * question here: {@code CapturedMoneyPort} records it against the settlement
+     * regardless of what this method decides, in the same transaction, which is
+     * what makes a late capture for an order that has already ended a recorded,
+     * harmless no-op rather than a crash or a resurrected order.
+     */
+    @Transactional
+    public DecisionResult paymentCaptured(UUID tenantId, UUID orderId, Instant capturedAt) {
+        Instant now = capturedAt == null ? clock.instant() : capturedAt;
+
+        OrderRow order = orders.find(tenantId, orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
+
+        if (order.status() != OrderStatus.PAYMENT_AUTHORIZING) {
+            log.info(
+                    "A payment was captured for order {}, which is already {} rather than "
+                            + "PAYMENT_AUTHORIZING; the order is left as it is and the money stays "
+                            + "recorded against the settlement",
+                    orderId,
+                    order.status());
+            return new DecisionResult(false, order.status(), order.version(), null);
+        }
+
+        var policy = acceptancePolicies.pinned(order.acceptancePolicyId(), order.acceptancePolicyVersion());
+        boolean approvalRequired = policy.mode() == AcceptanceMode.RESTAURANT_APPROVAL;
+        OrderStatus target = approvalRequired ? OrderStatus.AWAITING_APPROVAL : OrderStatus.CONFIRMED;
+        OrderStateMachine.require(OrderStatus.PAYMENT_AUTHORIZING, target);
+
+        Optional<Integer> won = orders.transition(tenantId, orderId, OrderStatus.PAYMENT_AUTHORIZING, target, now);
+        if (won.isEmpty()) {
+            // Lost a race against a cancellation or a duplicate delivery arriving
+            // concurrently. Whatever settled it stands; this call applies nothing.
+            OrderRow settled = orders.find(tenantId, orderId).orElseThrow();
+            log.info("A payment capture for order {} lost the race to move it; order is {}", orderId, settled.status());
+            return new DecisionResult(false, settled.status(), settled.version(), null);
+        }
+
+        int version = won.get();
+        orders.recordTransition(
+                tenantId,
+                orderId,
+                version,
+                OrderStatus.PAYMENT_AUTHORIZING,
+                target,
+                TransitionTrigger.PAYMENT_RESULT,
+                "PAYMENT_CAPTURED",
+                "SYSTEM_JOB",
+                PAYMENT_CAPTURE_ACTOR,
+                null,
+                now);
+
+        if (approvalRequired) {
+            Instant deadline = now.plus(policy.approvalTimeout());
+            orders.insertTimer(tenantId, orderId, CheckoutService.APPROVAL_TIMER, deadline);
+            // Checkout wrote a hypothetical deadline onto the order itself and
+            // armed no timer for a BEFORE_CONFIRMATION order; correct it to the
+            // instant the real timer above actually uses.
+            orders.armApprovalDeadline(tenantId, orderId, deadline);
+            events.publishEvent(new OrderAwaitingApproval(
+                    UUID.randomUUID(),
+                    new TenantId(tenantId),
+                    orderId,
+                    now,
+                    order.brandId(),
+                    order.locationId(),
+                    policy.approvalChannel().name(),
+                    deadline,
+                    policy.timeoutAction().name(),
+                    OrderStatus.AWAITING_APPROVAL.name(),
+                    version));
+        } else {
+            // Same consequence CheckoutService.confirmImmediately and
+            // OrderStateService.applyConsequences both draw from CONFIRMED: the
+            // reservation this order already holds becomes a committed sale.
+            inventoryProcess.enqueueCommit(orderId, tenantId, order.pricingQuoteId(), now);
+            events.publishEvent(new OrderConfirmed(
+                    UUID.randomUUID(),
+                    new TenantId(tenantId),
+                    orderId,
+                    now,
+                    order.brandId(),
+                    order.locationId(),
+                    policy.mode().name(),
+                    null,
+                    now,
+                    order.currency(),
+                    order.totalMinor(),
+                    OrderStatus.CONFIRMED.name(),
+                    version));
+        }
+
+        recordAudit(
+                order,
+                "ordering.order.payment-captured",
+                "SYSTEM_JOB",
+                PAYMENT_CAPTURE_ACTOR,
+                "PAYMENT_CAPTURED",
+                version,
+                Map.of("fromStatus", OrderStatus.PAYMENT_AUTHORIZING.name(), "toStatus", target.name()),
+                AuditFact.Outcome.SUCCEEDED,
+                null,
+                now);
+
+        return new DecisionResult(true, target, version, null);
     }
 
     /**

@@ -28,6 +28,26 @@ public enum Capability {
     LOCATION_READ("location.read", "location", "read"),
     LOCATION_WRITE("location.write", "location", "write"),
 
+    /**
+     * ADR 0038: reading which companies a tenant has registered and which one
+     * sells at a branch on a given date.
+     */
+    LEGAL_ENTITY_READ("legal-entity.read", "legal-entity", "read"),
+
+    /**
+     * ADR 0038: registering, activating, suspending or archiving a legal entity,
+     * and assigning one as a location's seller.
+     *
+     * <p>Not folded into {@link #TENANT_WRITE}. That capability administers the
+     * tenant's own identity, brand and location tree; this one decides whose
+     * name appears on every fiscal receipt a branch issues from the date it is
+     * granted, which is a fiscal-identity decision rather than a tenant-profile
+     * edit — the same distinction {@link #PAYMENT_MERCHANT_BINDING_MANAGE} draws
+     * from {@link #INTEGRATION_INSTALLATION_MANAGE} for the merchant account
+     * that settles under it.
+     */
+    LEGAL_ENTITY_MANAGE("legal-entity.manage", "legal-entity", "manage"),
+
     /** ADR 0036: the tenant-owned sales channel registry and its three matrices. */
     CHANNEL_READ("channel.read", "channel", "read"),
     CHANNEL_MANAGE("channel.manage", "channel", "manage"),

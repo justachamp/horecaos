@@ -39,11 +39,13 @@ import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcLegalEntitySt
  * tenant. And a branch with no assignment at all, which must answer "nobody"
  * rather than answer with a default.
  *
- * <p>The two tables are created by {@link LegalEntitySchema} rather than by
- * Flyway, because schema numbering is central and this change may not add a
- * migration. That is stated on the fixture; what matters here is that the
+ * <p>The two tables are Flyway's, from V0053: what matters here is that the
  * constraints being asserted are real PostgreSQL constraints and not Java checks
- * dressed up as them.
+ * dressed up as them. They used to be recreated by hand for every test in this
+ * class through a fixture — {@code LegalEntitySchema}, since deleted — written
+ * before V0053 existed and never retired once it did; {@code TestDatabase
+ * .migrated()} already applies it, so the redundant drop-and-recreate is gone
+ * and the {@code TRUNCATE ... CASCADE} below is what resets the tables now.
  */
 class LegalEntityAssignmentTests {
 
@@ -89,7 +91,6 @@ class LegalEntityAssignmentTests {
         jdbc = JdbcClient.create(dataSource);
 
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
-        LegalEntitySchema.apply(jdbc);
         seedTenancy();
 
         store = new JdbcLegalEntityStore(jdbc);
