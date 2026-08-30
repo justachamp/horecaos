@@ -15,6 +15,7 @@ make format           # reformat Java sources (ADR 0054); verify enforces this
 make up / make down   # local Postgres, Kafka, Keycloak
 make run              # start the API on :8080
 make eval             # agent-configuration regression suite (evals/README.md)
+make seed-payments    # seed a local CLICK payment setup on the fixture tenant
 
 tools/mvn-serial …    # Maven behind a lock. Several agents share one target/;
                       # running mvn directly corrupts it. Waiting is not a hang.
@@ -81,6 +82,22 @@ Spring JDBC with explicit SQL — **no ORM**), Kafka 4.3, Keycloak 26.7, S3-comp
   in a sequence production cannot produce. And the clock: a fixture's clock is the
   test's clock, so a lifetime, lease, expiry or sweep asserted without advancing it is
   asserted against an instant, not a duration.
+- **A Flyway number is only "next free" in the worktree that read it.** Parallel
+  sessions in sibling `.worktrees/*` branch from the same commit and each sees the
+  same highest `V*`; two agents can claim `V0098` independently and only find out at
+  merge. Check every active worktree's `db/migration/` (`git worktree list`, then
+  look), not just your own, before naming a new migration.
+- **The OpenAPI baseline is five documents, not one** (ADR 0057): the full v1 contract
+  plus `storefront`/`control-plane`/`operations`/`providers` groups, each with its own
+  checked-in baseline and generated client. `make openapi-baseline` and
+  `make openapi-client-check` cover all five — a change that regenerates only the full
+  document leaves four stale.
+- **A `computed()` never re-evaluates just because wall-clock time passed.** It
+  memoizes on its signal dependencies and reruns only when one changes; nothing
+  drives it on a timer. The storefront's session token expiry is deliberately a plain
+  method, not a `computed()`, for exactly this reason — see `session.ts`'s
+  `accessToken()` doc comment. Reach for `computed()` for reactive, signal-driven state;
+  check the clock imperatively, on every read, for anything with a deadline.
 
 ## Definition of done
 

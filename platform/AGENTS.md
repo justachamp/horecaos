@@ -2,15 +2,21 @@
 
 ## Scope
 
-These instructions apply to the entire `horecaos-platform` repository.
+These instructions apply to the entire `horecaos-platform` module of the HorecaOS
+monorepo.
 
-HorecaOS Platform is the target SaaS platform that will incrementally replace the
-legacy FastAPI application in `../milliy`. The legacy application is a source
-of business behavior and migration data, not a template for the new design.
+HorecaOS launches greenfield: the first production tenants are onboarded natively,
+with no legacy data, identity, or traffic in scope
+([ADR 0055](docs/adr/meta/0055-greenfield-launch-scope.md)). The legacy `milliy`
+system (now archived at `../../Qoida/milliy` outside this repository) remains a
+source of business behavior for the later, separate migration program — not a
+gate on anything being built now, and not a template for the new design.
 
 Read [README.md](README.md) and
-[docs/migration-plan.md](docs/migration-plan.md) before making architectural,
-schema, integration, or migration changes.
+[docs/minimum-viable-cutover.md](docs/minimum-viable-cutover.md) before making
+architectural, schema, or integration changes. Read
+[docs/migration-plan.md](docs/migration-plan.md) only when working on the future
+migration program (see [Migration rules](#migration-rules-the-future-migration-program) below).
 
 ## Current status
 
@@ -20,8 +26,17 @@ adversarial review maintains it: the generated summary in
 [docs/adr/README.md](docs/adr/README.md), each record's own status line
 (filed under [`built/`](docs/adr/built/), [`partial/`](docs/adr/partial/),
 [`not-started/`](docs/adr/not-started/) — verified against code, not
-aspirational), and the founding review at `../docs/horecaos-review.md`. Read the
-status line of the record you are about to touch.
+aspirational), and the founding review at
+[../docs/qoida-review.md](../docs/qoida-review.md). Read the status line of the
+record you are about to touch.
+
+The current build is scoped to a greenfield launch, not a migration
+([ADR 0055](docs/adr/meta/0055-greenfield-launch-scope.md)): the storefront,
+Operations, tenant onboarding, and one payment provider, proven in dev/test
+before production is even planned. Everything legacy-facing —
+`docs/migration-plan.md`, `docs/migration-coverage.md`, the `migration` module —
+belongs to the later program that ADR 0055 and ADR 0024 describe, and does not
+gate anything below.
 
 `Partial` is the normal state here and is not an invitation to finish the record
 you happen to be in. What actually blocks a pilot is whichever
@@ -98,6 +113,35 @@ re-implement any of them locally.
   a schema file and a catalogue entry exist before a producer ships.
 - **Caches** are registered accelerators only. No correctness decision reads
   cache state, per [ADR 0033](docs/adr/partial/0033-caching-rate-limiting-and-shared-runtime-state.md).
+
+## Greenfield launch working rules
+
+Specific to the current phase ([ADR 0055](docs/adr/meta/0055-greenfield-launch-scope.md)):
+
+- **[minimum-viable-cutover.md](docs/minimum-viable-cutover.md) outranks the
+  breadth of the ADR list.** Its own 2026-08-30 scope note rereads the whole
+  document as a greenfield launch rather than a cutover; the slice definition
+  and its seven inviolable rules are unchanged. If a change does not serve the
+  current stage, it needs a written reason to exist.
+- **Quality gates run inside `./mvnw verify`** ([ADR 0054](docs/adr/built/0054-build-time-quality-gates.md)):
+  JaCoCo enforces a line-coverage floor that **may only rise**, never be
+  lowered to admit a change; Spotless enforces formatting absolutely — run
+  `make format` before committing rather than hand-formatting; Error Prone and
+  NullAway compile-time findings are warnings today, not build failures, but
+  are not therefore noise.
+- **The OpenAPI contract is five documents, not one**
+  ([ADR 0057](docs/adr/built/0057-openapi-per-surface-document-groups.md)): the
+  full v1 baseline plus one per surface group (`storefront`, `control-plane`,
+  `operations`, `providers`). A new controller lands under an existing group's
+  path prefix or needs a new `OpenApiSurface` constant —
+  `everyPublishedPathBelongsToExactlyOneSurfaceGroup` fails the build either
+  way if it is missed. Run `make openapi-baseline` for all five together.
+- **A Flyway "next free" number is only free in the worktree that computed it.**
+  Parallel agent sessions in sibling git worktrees (`.worktrees/*`) branch from
+  the same commit and each sees the same highest `V*`. Check every active
+  worktree's `db/migration/` directory, not only your own, before naming a new
+  migration — `check_unique_versions` in `tools/checks/repo_hygiene.py` only
+  catches the collision once both files land on the same branch.
 
 ## SaaS tenancy model
 
@@ -330,7 +374,13 @@ module's internal entities or repositories.
 - During migration, verify source and destination checksums before switching a
   reference. Preserve the legacy filesystem through the rollback window.
 
-## Migration rules
+## Migration rules (the future migration program)
+
+Legacy migration is a separate program that starts after production exists
+([ADR 0055](docs/adr/meta/0055-greenfield-launch-scope.md)). Nothing below gates
+the current greenfield build; these rules apply once that program starts, and
+exist now so the `migration` module and the migration docs stay coherent while
+dormant rather than rotting.
 
 - Read [docs/migration-coverage.md](docs/migration-coverage.md) alongside the
   migration plan. Every legacy table, field/value family, API operation,

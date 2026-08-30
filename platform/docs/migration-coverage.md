@@ -1,5 +1,12 @@
 # Migration coverage and readiness register
 
+> **This register belongs to the post-production legacy-migration program**
+> ([ADR 0055](adr/meta/0055-greenfield-launch-scope.md)), not to the current
+> greenfield launch. Nothing here gates the launch in progress. It was last verified
+> against the legacy `milliy` system before the HorecaOS founding (2026-08-30) — see
+> [the founding review](../../docs/qoida-review.md) — and the Phase 0 production
+> discovery this document itself says must precede it has not run.
+
 ## Purpose and status
 
 This register prevents a successful target build from leaving an unexamined
