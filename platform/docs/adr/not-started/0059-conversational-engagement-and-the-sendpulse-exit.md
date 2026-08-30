@@ -10,11 +10,10 @@
   (architecture and the scope discipline)
 - Depends on: 0020, 0025, 0026, 0028, 0029, 0044, 0051, 0058
 - Supersedes / Superseded by: —
-- Open inputs: who authors flows in practice — platform staff on tenants' behalf, or
-  tenants themselves — which alone decides whether a visual flow builder is ever built
-  (owner; revisit after the first three tenants run flows); the trigger for an
-  Instagram/Meta adapter (owner; revisit only on a real tenant demand, because Meta's
-  app-review overhead is paid up front)
+- Open inputs: the trigger for an Instagram/Meta adapter (owner; revisit only on a
+  real tenant demand, because Meta's app-review overhead is paid up front). The
+  flow-authoring input was resolved by the owner on 2026-08-30: flows are YAML
+  configuration and no visual builder will be built — see the Decision.
 
 ## Context
 
@@ -44,11 +43,12 @@ core and channel-specific adapters:
   channel identity (Telegram chat) to a customer account via ADR 0058's handshake;
   captured inputs (the `{{feedback}}`-style fields) land as customer data or as the
   feedback/support facts the relevant module owns — never as an engagement-silo copy.
-- **Flows are declarative, versioned, per-brand configuration** — a flow document with
-  a deliberately small block vocabulary (message, buttons, input-to-field, delay,
-  condition, operator handoff), authored as config through the control-plane and
-  executed by a flow engine in the platform. **No visual builder in v1**; the open
-  input above decides if one is ever built.
+- **Flows are declarative, versioned, per-brand YAML documents** — workflow, states,
+  and a deliberately small block vocabulary (message, buttons, input-to-field, delay,
+  condition, operator handoff), authored as configuration through the control-plane
+  and executed by a flow engine in the platform. **No visual builder — decided, not
+  deferred** (owner, 2026-08-30): YAML is the authoring surface, full stop; a future
+  GUI would need a superseding record.
 - **The operator inbox lives in the operations app**: staff read and answer customer
   conversations for their location/brand there, with takeover from and return to the
   flow engine. Capability-gated (ADR 0025); conversation history is customer PII and
@@ -71,7 +71,7 @@ core and channel-specific adapters:
 |---|---|---|
 | Stay on SendPulse | The bill scales with the contact base by design; tenants' customer PII lives outside ADR 0029; the capability cannot be resold to tenants | Never as the end state; it remains the fallback during cutover by webhook repoint |
 | A different vendor (Manychat, Chatfuel, …) | Same per-contact economics and the same data-outside-the-platform problem, plus a second migration later | — |
-| Build the visual flow builder in v1 | The builder is the vendor's product, not this platform's; the observed most-used flow is six blocks of configuration; a GUI multiplies scope for an author who may not exist | The open input resolves to "tenants author their own flows" |
+| Build a visual flow builder | The builder is the vendor's product, not this platform's; the observed most-used flow is six blocks of configuration; the owner decided YAML is the authoring surface | Never absent a superseding record |
 | Multi-channel from day one | Meta app review and API surface are paid before any tenant asks; the channel-neutral core keeps the door open at near-zero cost | A tenant demand names a second channel |
 | Bolt the inbox onto Telegram's own group tools | Group chats leak customer PII to all members and offer no capability gating, assignment, or history tied to the customer record | Never |
 
@@ -92,8 +92,8 @@ core and channel-specific adapters:
   assignment, unread state, takeover/return, history) — the largest single piece here.
 - The flow engine becomes an availability concern for first-contact customer
   experience; a broken flow answers `/start` with silence.
-- Until the open input resolves, flow authoring is a platform-staff task — a support
-  load the vendor used to carry.
+- Flow authoring is a platform-staff task by design — a support load the vendor's GUI
+  used to carry, accepted in exchange for ownership and reviewable, versionable flows.
 
 ### Accepted trade-offs
 
@@ -122,7 +122,7 @@ which keeps working until the account is closed. Stage 4: broadcasts under ADR 0
 ## Implementation checklist
 
 - [ ] Conversation/contact-link model and history under ADR 0029
-- [ ] Flow document schema, versioning, and engine (six block types)
+- [ ] Flow YAML schema (workflow, states, six block types), versioning, and engine
 - [ ] The observed welcome series reproduced as the first flow document
 - [ ] Operator inbox in the operations app, capability-gated per location
 - [ ] SendPulse contact export → `customers` with consent flags
