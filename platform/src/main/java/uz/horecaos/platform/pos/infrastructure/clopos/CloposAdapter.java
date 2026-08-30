@@ -11,9 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.integration.api.pos.PosApiCall;
 import uz.horecaos.platform.integration.api.pos.PosApiCall.Effect;
 import uz.horecaos.platform.integration.api.pos.PosApiTransport;
@@ -147,75 +145,113 @@ public class CloposAdapter implements PosAdapter {
         ProviderOutcome venues = read(context, "venues", "/venues");
         boolean authenticated = venues.status() == ProviderOutcome.Status.SUCCESS;
 
-        entries.put(PosCapability.CATALOG_READ, probe(context, PosCapability.CATALOG_READ,
-                "/products" + CloposQuery.create().page(1, 1).render(),
-                IdempotencyBehaviour.NATURALLY_IDEMPOTENT, now,
-                Map.of("pageSize", Integer.toString(PAGE_SIZE),
-                        // Recorded on the capability because it is the fact that
-                        // decides the whole shape of a sync run.
-                        "incrementalFetch", "false",
-                        "changeFeed", "none")));
+        entries.put(
+                PosCapability.CATALOG_READ,
+                probe(
+                        context,
+                        PosCapability.CATALOG_READ,
+                        "/products" + CloposQuery.create().page(1, 1).render(),
+                        IdempotencyBehaviour.NATURALLY_IDEMPOTENT,
+                        now,
+                        Map.of(
+                                "pageSize",
+                                Integer.toString(PAGE_SIZE),
+                                // Recorded on the capability because it is the fact that
+                                // decides the whole shape of a sync run.
+                                "incrementalFetch",
+                                "false",
+                                "changeFeed",
+                                "none")));
 
-        entries.put(PosCapability.AVAILABILITY_READ, probe(context, PosCapability.AVAILABILITY_READ,
-                "/products/stop-list",
-                IdempotencyBehaviour.NATURALLY_IDEMPOTENT, now,
-                Map.of("perRowTimestamp", "true", "perVenue", "false")));
+        entries.put(
+                PosCapability.AVAILABILITY_READ,
+                probe(
+                        context,
+                        PosCapability.AVAILABILITY_READ,
+                        "/products/stop-list",
+                        IdempotencyBehaviour.NATURALLY_IDEMPOTENT,
+                        now,
+                        Map.of("perRowTimestamp", "true", "perVenue", "false")));
 
-        entries.put(PosCapability.RECEIPT_READ, probe(context, PosCapability.RECEIPT_READ,
-                "/receipts" + CloposQuery.create().page(1, 1).render(),
-                IdempotencyBehaviour.NATURALLY_IDEMPOTENT, now, Map.of()));
+        entries.put(
+                PosCapability.RECEIPT_READ,
+                probe(
+                        context,
+                        PosCapability.RECEIPT_READ,
+                        "/receipts" + CloposQuery.create().page(1, 1).render(),
+                        IdempotencyBehaviour.NATURALLY_IDEMPOTENT,
+                        now,
+                        Map.of()));
 
         // Order approval is real and it is polled. Recorded as PARTIAL with the
         // reason attached rather than SUPPORTED, so that a control plane offering
         // "the POS decides" also shows how late the decision arrives.
-        entries.put(PosCapability.ORDER_APPROVAL, new Entry(
-                authenticated ? CapabilitySupport.PARTIAL : CapabilitySupport.UNSUPPORTED,
-                IdempotencyBehaviour.NATURALLY_IDEMPOTENT,
-                false,
-                ADAPTER_VERSION,
-                Map.of("decisionLatency", "one poll interval", "push", "none"),
-                "Acceptance is a clerk's decision at the terminal. Clopos publishes no webhooks, "
-                        + "so the decision is discovered by polling and never pushed.",
-                now));
+        entries.put(
+                PosCapability.ORDER_APPROVAL,
+                new Entry(
+                        authenticated ? CapabilitySupport.PARTIAL : CapabilitySupport.UNSUPPORTED,
+                        IdempotencyBehaviour.NATURALLY_IDEMPOTENT,
+                        false,
+                        ADAPTER_VERSION,
+                        Map.of("decisionLatency", "one poll interval", "push", "none"),
+                        "Acceptance is a clerk's decision at the terminal. Clopos publishes no webhooks, "
+                                + "so the decision is discovered by polling and never pushed.",
+                        now));
 
-        entries.put(PosCapability.ORDER_EXPORT, new Entry(
-                authenticated ? CapabilitySupport.SUPPORTED : CapabilitySupport.UNSUPPORTED,
-                IdempotencyBehaviour.NONE,
-                false,
-                ADAPTER_VERSION,
-                Map.of("correlationEchoVerified",
-                        context.config(CloposConfig.CORRELATION_ECHO_VERIFIED, "false")),
-                // Not verified by exercising it, and the snapshot says so.
-                "Not probed: proving an order export means creating an order, and Clopos offers no "
-                        + "idempotency key with which to undo the proof.",
-                now));
+        entries.put(
+                PosCapability.ORDER_EXPORT,
+                new Entry(
+                        authenticated ? CapabilitySupport.SUPPORTED : CapabilitySupport.UNSUPPORTED,
+                        IdempotencyBehaviour.NONE,
+                        false,
+                        ADAPTER_VERSION,
+                        Map.of(
+                                "correlationEchoVerified",
+                                context.config(CloposConfig.CORRELATION_ECHO_VERIFIED, "false")),
+                        // Not verified by exercising it, and the snapshot says so.
+                        "Not probed: proving an order export means creating an order, and Clopos offers no "
+                                + "idempotency key with which to undo the proof.",
+                        now));
 
-        entries.put(PosCapability.ORDER_CANCELLATION, new Entry(
-                authenticated ? CapabilitySupport.PARTIAL : CapabilitySupport.UNSUPPORTED,
-                IdempotencyBehaviour.NATURALLY_IDEMPOTENT,
-                false,
-                ADAPTER_VERSION,
-                Map.of("beforeAcceptance", "true", "afterAcceptance", "false"),
-                "PUT /orders/{id} status IGNORE works while the order is PENDING. After a clerk "
-                        + "accepts it there is no documented order-level cancel.",
-                now));
+        entries.put(
+                PosCapability.ORDER_CANCELLATION,
+                new Entry(
+                        authenticated ? CapabilitySupport.PARTIAL : CapabilitySupport.UNSUPPORTED,
+                        IdempotencyBehaviour.NATURALLY_IDEMPOTENT,
+                        false,
+                        ADAPTER_VERSION,
+                        Map.of("beforeAcceptance", "true", "afterAcceptance", "false"),
+                        "PUT /orders/{id} status IGNORE works while the order is PENDING. After a clerk "
+                                + "accepts it there is no documented order-level cancel.",
+                        now));
 
-        entries.put(PosCapability.FISCAL_IDENTIFIER_WRITE_BACK, new Entry(
-                authenticated ? CapabilitySupport.SUPPORTED : CapabilitySupport.UNSUPPORTED,
-                IdempotencyBehaviour.NATURALLY_IDEMPOTENT, false, ADAPTER_VERSION,
-                Map.of("afterClose", "true"),
-                "PATCH /receipts/{id} writes fiscal_id even after the receipt is closed.", now));
+        entries.put(
+                PosCapability.FISCAL_IDENTIFIER_WRITE_BACK,
+                new Entry(
+                        authenticated ? CapabilitySupport.SUPPORTED : CapabilitySupport.UNSUPPORTED,
+                        IdempotencyBehaviour.NATURALLY_IDEMPOTENT,
+                        false,
+                        ADAPTER_VERSION,
+                        Map.of("afterClose", "true"),
+                        "PATCH /receipts/{id} writes fiscal_id even after the receipt is closed.",
+                        now));
 
-        entries.put(PosCapability.FULFILLMENT_STATUS_WRITE, new Entry(
-                authenticated ? CapabilitySupport.SUPPORTED : CapabilitySupport.UNSUPPORTED,
-                IdempotencyBehaviour.NATURALLY_IDEMPOTENT, false, ADAPTER_VERSION,
-                Map.of("direction", "outbound"),
-                "PATCH /receipts/{id} order_status. Outbound only; it is not a kitchen report.", now));
+        entries.put(
+                PosCapability.FULFILLMENT_STATUS_WRITE,
+                new Entry(
+                        authenticated ? CapabilitySupport.SUPPORTED : CapabilitySupport.UNSUPPORTED,
+                        IdempotencyBehaviour.NATURALLY_IDEMPOTENT,
+                        false,
+                        ADAPTER_VERSION,
+                        Map.of("direction", "outbound"),
+                        "PATCH /receipts/{id} order_status. Outbound only; it is not a kitchen report.",
+                        now));
 
         // Stated rather than omitted. An absent entry reads as "not discovered";
         // this reads as "discovered, and the answer is no".
-        entries.put(PosCapability.PREPARATION_STATUS, Entry.unsupported(
-                "Clopos publishes no endpoint that reports preparation. Receipt.order_status is one "
+        entries.put(
+                PosCapability.PREPARATION_STATUS,
+                Entry.unsupported("Clopos publishes no endpoint that reports preparation. Receipt.order_status is one "
                         + "of the four fields we write, so reading it back would report our own writes."));
 
         // PARTIAL, not UNSUPPORTED, and the distinction is the whole point of the
@@ -228,42 +264,54 @@ public class CloposAdapter implements PosAdapter {
         // whoever configures the branch, and it would disagree with the provider
         // ceiling in `integration.pos_provider_capabilities`, which V0036 seeds
         // PARTIAL for exactly this reason.
-        entries.put(PosCapability.CUSTOMER_UPSERT, new Entry(
-                CapabilitySupport.PARTIAL,
-                // No key, no header, no dedupe window — the same absence the order
-                // create has, so a lost response leaves a customer that may or may
-                // not exist.
-                IdempotencyBehaviour.NONE,
-                false,
-                ADAPTER_VERSION,
-                Map.of("consentBasisRequired", "true", "guestPath", "false"),
-                "POST /customers exists and an order export needs a Clopos customer first, so the "
-                        + "provider can do this. Not enabled: exporting a phone and address needs an "
-                        + "ADR 0029 consent basis, there is no documented guest path, and the create "
-                        + "has the same absence of idempotency as the order create.",
-                now));
+        entries.put(
+                PosCapability.CUSTOMER_UPSERT,
+                new Entry(
+                        CapabilitySupport.PARTIAL,
+                        // No key, no header, no dedupe window — the same absence the order
+                        // create has, so a lost response leaves a customer that may or may
+                        // not exist.
+                        IdempotencyBehaviour.NONE,
+                        false,
+                        ADAPTER_VERSION,
+                        Map.of("consentBasisRequired", "true", "guestPath", "false"),
+                        "POST /customers exists and an order export needs a Clopos customer first, so the "
+                                + "provider can do this. Not enabled: exporting a phone and address needs an "
+                                + "ADR 0029 consent basis, there is no documented guest path, and the create "
+                                + "has the same absence of idempotency as the order create.",
+                        now));
 
         return new CapabilitySnapshot(entries, now, ADAPTER_VERSION);
     }
 
-    private Entry probe(PosContext context, PosCapability capability, String path,
-            IdempotencyBehaviour idempotency, Instant now, Map<String, String> limits) {
+    private Entry probe(
+            PosContext context,
+            PosCapability capability,
+            String path,
+            IdempotencyBehaviour idempotency,
+            Instant now,
+            Map<String, String> limits) {
 
-        ProviderOutcome outcome = read(context, "probe." + capability.code().toLowerCase(
-                java.util.Locale.ROOT), path);
+        ProviderOutcome outcome = read(context, "probe." + capability.code().toLowerCase(java.util.Locale.ROOT), path);
 
-        CapabilitySupport support = switch (outcome.status()) {
-            case SUCCESS -> CapabilitySupport.SUPPORTED;
-            // A refusal is the staff user's permissions answering, which is
-            // exactly what this probe exists to discover.
-            case REJECTED -> CapabilitySupport.UNSUPPORTED;
-            // Clopos was unreachable. Not evidence about the capability at all,
-            // and recording UNSUPPORTED here would suspend a working integration
-            // because of a bad afternoon.
-            case RETRYABLE, UNCERTAIN -> CapabilitySupport.PARTIAL;
-        };
+        CapabilitySupport support =
+                switch (outcome.status()) {
+                    case SUCCESS -> CapabilitySupport.SUPPORTED;
+                    // A refusal is the staff user's permissions answering, which is
+                    // exactly what this probe exists to discover.
+                    case REJECTED -> CapabilitySupport.UNSUPPORTED;
+                    // Clopos was unreachable. Not evidence about the capability at all,
+                    // and recording UNSUPPORTED here would suspend a working integration
+                    // because of a bad afternoon.
+                    case RETRYABLE, UNCERTAIN -> CapabilitySupport.PARTIAL;
+                };
 
-        return new Entry(support, idempotency, false, ADAPTER_VERSION, limits,
+        return new Entry(
+                support,
+                idempotency,
+                false,
+                ADAPTER_VERSION,
+                limits,
                 outcome.status() == ProviderOutcome.Status.SUCCESS
                         ? "Probed successfully."
                         : "Probe returned %s (%s)".formatted(outcome.status(), outcome.errorCode()),
@@ -293,20 +341,29 @@ public class CloposAdapter implements PosAdapter {
      */
     @Override
     public CatalogRead readCatalog(PosContext context) {
-        PagedRead products = readAllPages(context, "products", page -> "/products"
-                + CloposQuery.create()
-                        .page(page, PAGE_SIZE)
-                        .with(0, "category")
-                        .with(1, "modifications")
-                        .with(2, "modificator_groups")
-                        .with(3, "codes")
-                        .render());
+        PagedRead products = readAllPages(
+                context,
+                "products",
+                page -> "/products"
+                        + CloposQuery.create()
+                                .page(page, PAGE_SIZE)
+                                .with(0, "category")
+                                .with(1, "modifications")
+                                .with(2, "modificator_groups")
+                                .with(3, "codes")
+                                .render());
         if (products.failed()) {
             return new CatalogRead(products.outcome(), null);
         }
 
-        PagedRead categories = readAllPages(context, "categories", page -> "/categories"
-                + CloposQuery.create().page(page, PAGE_SIZE).param("include_inactive", "1").render());
+        PagedRead categories = readAllPages(
+                context,
+                "categories",
+                page -> "/categories"
+                        + CloposQuery.create()
+                                .page(page, PAGE_SIZE)
+                                .param("include_inactive", "1")
+                                .render());
         if (categories.failed()) {
             return new CatalogRead(categories.outcome(), null);
         }
@@ -321,9 +378,10 @@ public class CloposAdapter implements PosAdapter {
             stopList = ProviderOutcome.success(Map.of("data", List.of()), null);
         }
 
-        CatalogSnapshot snapshot = new CloposCatalogNormalizer(
-                context.config(CloposConfig.CURRENCY, "UZS"))
-                .normalize(products.rows(), categories.rows(),
+        CatalogSnapshot snapshot = new CloposCatalogNormalizer(context.config(CloposConfig.CURRENCY, "UZS"))
+                .normalize(
+                        products.rows(),
+                        categories.rows(),
                         CloposEnvelope.dataList(stopList.normalized()),
                         clock.instant(),
                         // Offset paging. See the method note.
@@ -349,10 +407,9 @@ public class CloposAdapter implements PosAdapter {
         if (outcome.status() != ProviderOutcome.Status.SUCCESS) {
             return new AvailabilityRead(outcome, List.of());
         }
-        CatalogSnapshot snapshot = new CloposCatalogNormalizer(
-                context.config(CloposConfig.CURRENCY, "UZS"))
-                .normalize(List.of(), List.of(), CloposEnvelope.dataList(outcome.normalized()),
-                        clock.instant(), true, 1);
+        CatalogSnapshot snapshot = new CloposCatalogNormalizer(context.config(CloposConfig.CURRENCY, "UZS"))
+                .normalize(
+                        List.of(), List.of(), CloposEnvelope.dataList(outcome.normalized()), clock.instant(), true, 1);
         return new AvailabilityRead(outcome, snapshot.availability());
     }
 
@@ -395,11 +452,13 @@ public class CloposAdapter implements PosAdapter {
         if (order.correlationReference() != null) {
             body.put("order_number", order.correlationReference());
         }
-        body.put("customer", Map.of(
-                "id", numericOrNull(order.customer().externalCustomerId()),
-                "name", nullToEmpty(order.customer().name()),
-                "phone", nullToEmpty(order.customer().phone()),
-                "address", nullToEmpty(order.customer().address())));
+        body.put(
+                "customer",
+                Map.of(
+                        "id", numericOrNull(order.customer().externalCustomerId()),
+                        "name", nullToEmpty(order.customer().name()),
+                        "phone", nullToEmpty(order.customer().phone()),
+                        "address", nullToEmpty(order.customer().address())));
 
         List<Map<String, Object>> lines = new ArrayList<>();
         for (OrderExport.Line line : order.lines()) {
@@ -415,19 +474,28 @@ public class CloposAdapter implements PosAdapter {
             // fields we do understand at least makes it stable for one line and
             // different between two, which is the only property anything could
             // plausibly want from it. Question Q12 to Clopos.
-            product.put("product_hash", LineFingerprint.of(List.of(new LineFingerprint.Line(
-                    line.externalProductId(), line.quantity(), line.unitAmountMinor()))));
+            product.put(
+                    "product_hash",
+                    LineFingerprint.of(List.of(new LineFingerprint.Line(
+                            line.externalProductId(), line.quantity(), line.unitAmountMinor()))));
             if (!line.externalModifierIds().isEmpty()) {
-                product.put("modificators", line.externalModifierIds().stream()
-                        .map(CloposAdapter::numeric).toList());
+                product.put(
+                        "modificators",
+                        line.externalModifierIds().stream()
+                                .map(CloposAdapter::numeric)
+                                .toList());
             }
             lines.add(product);
         }
         body.put("products", lines);
 
         PosApiCall call = new PosApiCall(
-                context.tenantId(), context.installationId(), PROVIDER_TYPE,
-                "order.create", "POST", "/orders",
+                context.tenantId(),
+                context.installationId(),
+                PROVIDER_TYPE,
+                "order.create",
+                "POST",
+                "/orders",
                 PosApiCall.fixedBody(body),
                 Effect.UNKEYED_CREATE,
                 PosApiCall.fixedHeaders(headers(token.value(), context)),
@@ -447,9 +515,7 @@ public class CloposAdapter implements PosAdapter {
         String externalId = CloposEnvelope.string(created, "id");
         String status = CloposEnvelope.string(created, "status");
         return new ExportResult(
-                ProviderOutcome.success(created, externalId),
-                externalId,
-                "PENDING".equalsIgnoreCase(status));
+                ProviderOutcome.success(created, externalId), externalId, "PENDING".equalsIgnoreCase(status));
     }
 
     /**
@@ -476,11 +542,14 @@ public class CloposAdapter implements PosAdapter {
         String day = LocalDate.ofInstant(probe.windowStart(), ZoneOffset.UTC).toString();
         String until = LocalDate.ofInstant(probe.windowEnd(), ZoneOffset.UTC).toString();
 
-        PagedRead orders = readAllPages(context, "order.search", page -> "/orders"
-                + CloposQuery.create()
-                        .page(page, PAGE_SIZE)
-                        .dateRange(day, until)
-                        .render());
+        PagedRead orders = readAllPages(
+                context,
+                "order.search",
+                page -> "/orders"
+                        + CloposQuery.create()
+                                .page(page, PAGE_SIZE)
+                                .dateRange(day, until)
+                                .render());
         if (orders.failed()) {
             return new RecoveryRead(orders.outcome(), List.of());
         }
@@ -492,11 +561,11 @@ public class CloposAdapter implements PosAdapter {
             Map<String, Object> payload = payloadOf(row);
             Map<String, Object> customer = mapOf(payload, "customer");
 
-            boolean phoneMatches = wantedPhone.equals(
-                    LineFingerprint.phoneHash(CloposEnvelope.string(customer, "phone")));
+            boolean phoneMatches =
+                    wantedPhone.equals(LineFingerprint.phoneHash(CloposEnvelope.string(customer, "phone")));
             String fingerprint = fingerprintOf(payload);
-            boolean fingerprintMatches = probe.lineFingerprint() != null
-                    && probe.lineFingerprint().equals(fingerprint);
+            boolean fingerprintMatches =
+                    probe.lineFingerprint() != null && probe.lineFingerprint().equals(fingerprint);
 
             if (!phoneMatches && !fingerprintMatches) {
                 continue;
@@ -513,11 +582,14 @@ public class CloposAdapter implements PosAdapter {
                     CloposEnvelope.string(row, "id"),
                     CloposEnvelope.string(row, "status"),
                     createdAt,
-                    probe.correlationReference() != null && probe.correlationReference().equals(echoed),
+                    probe.correlationReference() != null
+                            && probe.correlationReference().equals(echoed),
                     phoneMatches,
                     fingerprintMatches,
-                    createdAt == null ? null
-                            : (int) Duration.between(probe.windowStart(), createdAt).toSeconds()));
+                    createdAt == null
+                            ? null
+                            : (int) Duration.between(probe.windowStart(), createdAt)
+                                    .toSeconds()));
         }
 
         return new RecoveryRead(ProviderOutcome.success(Map.of(), null), List.copyOf(candidates));
@@ -542,23 +614,26 @@ public class CloposAdapter implements PosAdapter {
             return token.outcome();
         }
         PosApiCall call = new PosApiCall(
-                context.tenantId(), context.installationId(), PROVIDER_TYPE,
-                "order.ignore", "PUT", "/orders/" + externalOrderId,
+                context.tenantId(),
+                context.installationId(),
+                PROVIDER_TYPE,
+                "order.ignore",
+                "PUT",
+                "/orders/" + externalOrderId,
                 PosApiCall.fixedBody(Map.of("status", "IGNORE")),
                 // Setting a terminal state. Repeating it converges, so a lost
                 // response here really is safe to send again.
                 Effect.IDEMPOTENT_WRITE,
                 PosApiCall.fixedHeaders(headers(token.value(), context)),
-                context.correlationId(), null);
+                context.correlationId(),
+                null);
 
         return CloposEnvelope.read(transport.exchange(call), Effect.IDEMPOTENT_WRITE);
     }
 
     @Override
-    public ProviderOutcome writeFiscalIdentifier(PosContext context, String externalReceiptId,
-            String fiscalId) {
-        return patchReceipt(context, "receipt.fiscal-id", externalReceiptId,
-                Map.of("fiscal_id", fiscalId));
+    public ProviderOutcome writeFiscalIdentifier(PosContext context, String externalReceiptId, String fiscalId) {
+        return patchReceipt(context, "receipt.fiscal-id", externalReceiptId, Map.of("fiscal_id", fiscalId));
     }
 
     /**
@@ -570,27 +645,30 @@ public class CloposAdapter implements PosAdapter {
      * from, and the method name says so where the vendor's field name does not.
      */
     @Override
-    public ProviderOutcome writeFulfillmentStatus(PosContext context, String externalReceiptId,
-            String status) {
-        return patchReceipt(context, "receipt.order-status", externalReceiptId,
-                Map.of("order_status", status));
+    public ProviderOutcome writeFulfillmentStatus(PosContext context, String externalReceiptId, String status) {
+        return patchReceipt(context, "receipt.order-status", externalReceiptId, Map.of("order_status", status));
     }
 
-    private ProviderOutcome patchReceipt(PosContext context, String operation,
-            String externalReceiptId, Map<String, Object> body) {
+    private ProviderOutcome patchReceipt(
+            PosContext context, String operation, String externalReceiptId, Map<String, Object> body) {
         CloposSession.Token token = session.token(context);
         if (!token.usable()) {
             return token.outcome();
         }
         PosApiCall call = new PosApiCall(
-                context.tenantId(), context.installationId(), PROVIDER_TYPE,
-                operation, "PATCH", "/receipts/" + externalReceiptId,
+                context.tenantId(),
+                context.installationId(),
+                PROVIDER_TYPE,
+                operation,
+                "PATCH",
+                "/receipts/" + externalReceiptId,
                 PosApiCall.fixedBody(body),
                 // Sets a named field to a named value. Idempotent by construction
                 // whatever Clopos guarantees, which is nothing.
                 Effect.IDEMPOTENT_WRITE,
                 PosApiCall.fixedHeaders(headers(token.value(), context)),
-                context.correlationId(), null);
+                context.correlationId(),
+                null);
 
         return CloposEnvelope.read(transport.exchange(call), Effect.IDEMPOTENT_WRITE);
     }
@@ -605,10 +683,17 @@ public class CloposAdapter implements PosAdapter {
             return token.outcome();
         }
         PosApiCall call = new PosApiCall(
-                context.tenantId(), context.installationId(), PROVIDER_TYPE,
-                operation, "GET", path, null, Effect.READ,
+                context.tenantId(),
+                context.installationId(),
+                PROVIDER_TYPE,
+                operation,
+                "GET",
+                path,
+                null,
+                Effect.READ,
                 PosApiCall.fixedHeaders(headers(token.value(), context)),
-                context.correlationId(), null);
+                context.correlationId(),
+                null);
 
         ProviderOutcome outcome = CloposEnvelope.read(transport.exchange(call), Effect.READ);
         if ("CLOPOS_TOKEN_EXPIRED".equals(outcome.errorCode())) {
@@ -621,17 +706,24 @@ public class CloposAdapter implements PosAdapter {
                 return fresh.outcome();
             }
             PosApiCall retry = new PosApiCall(
-                    context.tenantId(), context.installationId(), PROVIDER_TYPE,
-                    operation, "GET", path, null, Effect.READ,
+                    context.tenantId(),
+                    context.installationId(),
+                    PROVIDER_TYPE,
+                    operation,
+                    "GET",
+                    path,
+                    null,
+                    Effect.READ,
                     PosApiCall.fixedHeaders(headers(fresh.value(), context)),
-                    context.correlationId(), null);
+                    context.correlationId(),
+                    null);
             return CloposEnvelope.read(transport.exchange(retry), Effect.READ);
         }
         return outcome;
     }
 
-    private PagedRead readAllPages(PosContext context, String operation,
-            java.util.function.IntFunction<String> pathForPage) {
+    private PagedRead readAllPages(
+            PosContext context, String operation, java.util.function.IntFunction<String> pathForPage) {
 
         List<Map<String, Object>> rows = new ArrayList<>();
         for (int page = 1; page <= MAX_PAGES; page++) {
@@ -648,10 +740,12 @@ public class CloposAdapter implements PosAdapter {
         // The ceiling was reached, which means either a brand larger than anything
         // seen or a paging bug. Either way this is not a snapshot to diff against:
         // a truncated read reports everything beyond the ceiling as removed.
-        return new PagedRead(ProviderOutcome.rejected("CLOPOS_PAGE_CEILING",
-                "Stopped after %d pages; a truncated catalog cannot be compared safely"
-                        .formatted(MAX_PAGES)),
-                List.of(), MAX_PAGES);
+        return new PagedRead(
+                ProviderOutcome.rejected(
+                        "CLOPOS_PAGE_CEILING",
+                        "Stopped after %d pages; a truncated catalog cannot be compared safely".formatted(MAX_PAGES)),
+                List.of(),
+                MAX_PAGES);
     }
 
     /**

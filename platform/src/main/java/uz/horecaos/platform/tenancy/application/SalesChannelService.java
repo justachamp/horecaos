@@ -4,11 +4,9 @@ import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.api.SalesChannelSystemType;
@@ -39,10 +37,17 @@ public class SalesChannelService {
         UUID pricePlaneChannelId = validatedPricePlane(tenantId, command.pricePlaneChannelId());
 
         SalesChannel channel = new SalesChannel(
-                UUID.randomUUID(), tenantId, command.code(), systemType, command.displayName(),
-                SalesChannel.Status.ACTIVE, pricePlaneChannelId,
-                command.externallyPriced(), command.guestOrdersAllowed(),
-                command.providerInstallationId(), 1);
+                UUID.randomUUID(),
+                tenantId,
+                command.code(),
+                systemType,
+                command.displayName(),
+                SalesChannel.Status.ACTIVE,
+                pricePlaneChannelId,
+                command.externallyPriced(),
+                command.guestOrdersAllowed(),
+                command.providerInstallationId(),
+                1);
         try {
             store.insert(channel, clock.instant());
         } catch (DataIntegrityViolationException violation) {
@@ -77,14 +82,20 @@ public class SalesChannelService {
             throw new TenantResourceConflictException(
                     "Another channel takes its prices from this one; repoint it before archiving");
         }
-        if (!store.updateStatus(tenantId, channelId, SalesChannel.Status.ARCHIVED,
-                expectedVersion, clock.instant())) {
+        if (!store.updateStatus(tenantId, channelId, SalesChannel.Status.ARCHIVED, expectedVersion, clock.instant())) {
             throw new TenantResourceConflictException("The channel changed since it was read");
         }
-        return new SalesChannel(channel.id(), channel.tenantId(), channel.code(),
-                channel.systemType(), channel.displayName(), SalesChannel.Status.ARCHIVED,
-                channel.pricePlaneChannelId(), channel.externallyPriced(),
-                channel.guestOrdersAllowed(), channel.providerInstallationId(),
+        return new SalesChannel(
+                channel.id(),
+                channel.tenantId(),
+                channel.code(),
+                channel.systemType(),
+                channel.displayName(),
+                SalesChannel.Status.ARCHIVED,
+                channel.pricePlaneChannelId(),
+                channel.externallyPriced(),
+                channel.guestOrdersAllowed(),
+                channel.providerInstallationId(),
                 channel.version() + 1);
     }
 
@@ -96,8 +107,7 @@ public class SalesChannelService {
      * what makes the second writer lose visibly.
      */
     @Transactional
-    public void replacePaymentMethods(UUID tenantId, UUID channelId,
-            Map<String, Boolean> matrix, int expectedVersion) {
+    public void replacePaymentMethods(UUID tenantId, UUID channelId, Map<String, Boolean> matrix, int expectedVersion) {
         require(tenantId, channelId);
         if (!store.replacePaymentMethods(tenantId, channelId, matrix, expectedVersion, clock.instant())) {
             throw new TenantResourceConflictException("The channel changed since it was read");
@@ -105,8 +115,8 @@ public class SalesChannelService {
     }
 
     @Transactional
-    public void replaceFulfillmentModes(UUID tenantId, UUID channelId,
-            Map<FulfillmentMode, Boolean> matrix, int expectedVersion) {
+    public void replaceFulfillmentModes(
+            UUID tenantId, UUID channelId, Map<FulfillmentMode, Boolean> matrix, int expectedVersion) {
         require(tenantId, channelId);
         if (!store.replaceFulfillmentModes(tenantId, channelId, matrix, expectedVersion, clock.instant())) {
             throw new TenantResourceConflictException("The channel changed since it was read");
@@ -114,12 +124,10 @@ public class SalesChannelService {
     }
 
     @Transactional
-    public void replaceLocations(UUID tenantId, UUID channelId, List<UUID> locationIds,
-            int expectedVersion) {
+    public void replaceLocations(UUID tenantId, UUID channelId, List<UUID> locationIds, int expectedVersion) {
         require(tenantId, channelId);
         try {
-            if (!store.replaceLocations(tenantId, channelId, locationIds, expectedVersion,
-                    clock.instant())) {
+            if (!store.replaceLocations(tenantId, channelId, locationIds, expectedVersion, clock.instant())) {
                 throw new TenantResourceConflictException("The channel changed since it was read");
             }
         } catch (DataIntegrityViolationException violation) {
@@ -152,8 +160,7 @@ public class SalesChannelService {
                 .orElseThrow(() -> new TenantResourceNotFoundException(
                         "No sales channel %s for this tenant".formatted(pricePlaneChannelId)));
         if (plane.pricePlaneChannelId() != null) {
-            throw new TenantResourceConflictException(
-                    "A price plane may not itself take prices from another channel");
+            throw new TenantResourceConflictException("A price plane may not itself take prices from another channel");
         }
         return plane.id();
     }
@@ -165,10 +172,10 @@ public class SalesChannelService {
             UUID pricePlaneChannelId,
             boolean externallyPriced,
             boolean guestOrdersAllowed,
-            UUID providerInstallationId) { }
+            UUID providerInstallationId) {}
 
     public record ChannelMatrices(
             Map<String, Boolean> paymentMethods,
             Map<FulfillmentMode, Boolean> fulfillmentModes,
-            List<UUID> locationIds) { }
+            List<UUID> locationIds) {}
 }

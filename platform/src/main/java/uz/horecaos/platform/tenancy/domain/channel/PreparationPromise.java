@@ -17,8 +17,7 @@ import java.util.Collection;
  */
 public final class PreparationPromise {
 
-    private PreparationPromise() {
-    }
+    private PreparationPromise() {}
 
     /**
      * @param bandMinutes     the band covering the order's start instant, or null

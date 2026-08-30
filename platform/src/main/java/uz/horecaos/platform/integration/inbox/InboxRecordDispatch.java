@@ -3,10 +3,8 @@ package uz.horecaos.platform.integration.inbox;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
-
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Header;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -68,8 +66,13 @@ public class InboxRecordDispatch {
                     // them. The others deduplicate on redelivery, so the cost is
                     // a repeated no-op rather than a repeated effect.
                     allAcknowledgeable = false;
-                    log.debug("Holding offset {}-{}@{} for consumer {}: {}",
-                            record.topic(), record.partition(), record.offset(), consumerName, result);
+                    log.debug(
+                            "Holding offset {}-{}@{} for consumer {}: {}",
+                            record.topic(),
+                            record.partition(),
+                            record.offset(),
+                            consumerName,
+                            result);
                 }
             }
             return allAcknowledgeable;

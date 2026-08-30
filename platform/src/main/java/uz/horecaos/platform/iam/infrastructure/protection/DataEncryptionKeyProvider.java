@@ -13,14 +13,11 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
-
 import javax.crypto.KDF;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.HKDFParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
@@ -102,8 +99,7 @@ public class DataEncryptionKeyProvider {
 
     /** The key new writes use, with the identifier that travels with the ciphertext. */
     public VersionedKey currentKey(UUID tenantId, DataClass dataClass) {
-        KeyIdentity identity = new KeyIdentity(
-                tenantId, dataClass.name().toLowerCase(Locale.ROOT), CURRENT_GENERATION);
+        KeyIdentity identity = new KeyIdentity(tenantId, dataClass.name().toLowerCase(Locale.ROOT), CURRENT_GENERATION);
         return new VersionedKey(identity.keyId(), key(identity));
     }
 
@@ -137,24 +133,25 @@ public class DataEncryptionKeyProvider {
     }
 
     private SecretKey derive(KeyIdentity identity) {
-        return LEGACY_GENERATION.equals(identity.generation())
-                ? legacyDerive(identity.keyId())
-                : hkdf(identity);
+        return LEGACY_GENERATION.equals(identity.generation()) ? legacyDerive(identity.keyId()) : hkdf(identity);
     }
 
     private SecretKey hkdf(KeyIdentity identity) {
         byte[] kek = kekMaterial();
         try {
-            return KDF.getInstance("HKDF-SHA256").deriveKey("AES", HKDFParameterSpec.ofExtract()
-                    .addIKM(kek)
-                    // A fixed salt rather than a random one: the salt has to be
-                    // reproducible to derive the same key twice, and there is
-                    // nowhere to store a per-key salt that the key identifier
-                    // does not already say. Naming the environment keeps a
-                    // staging KEK restored into production from producing
-                    // production keys.
-                    .addSalt(("horecaos:dek:" + environment).getBytes(StandardCharsets.UTF_8))
-                    .thenExpand(identity.info(), KEY_LENGTH_BYTES));
+            return KDF.getInstance("HKDF-SHA256")
+                    .deriveKey(
+                            "AES",
+                            HKDFParameterSpec.ofExtract()
+                                    .addIKM(kek)
+                                    // A fixed salt rather than a random one: the salt has to be
+                                    // reproducible to derive the same key twice, and there is
+                                    // nowhere to store a per-key salt that the key identifier
+                                    // does not already say. Naming the environment keeps a
+                                    // staging KEK restored into production from producing
+                                    // production keys.
+                                    .addSalt(("horecaos:dek:" + environment).getBytes(StandardCharsets.UTF_8))
+                                    .thenExpand(identity.info(), KEY_LENGTH_BYTES));
         } catch (GeneralSecurityException failure) {
             throw new IllegalStateException("HKDF-SHA256 key derivation failed", failure);
         } finally {
@@ -186,8 +183,8 @@ public class DataEncryptionKeyProvider {
      * rather than disposed; the array returned here is this class's own copy.
      */
     private byte[] kekMaterial() {
-        return secrets.resolve(new SecretReference(
-                environment, SecretCategory.DATA_ENCRYPTION, KEK_OWNER, KEK_ID)).revealBytes();
+        return secrets.resolve(new SecretReference(environment, SecretCategory.DATA_ENCRYPTION, KEK_OWNER, KEK_ID))
+                .revealBytes();
     }
 
     /**
@@ -210,7 +207,8 @@ public class DataEncryptionKeyProvider {
     private record KeyIdentity(UUID tenantId, String dataClass, String generation) {
 
         static KeyIdentity parse(String keyId, UUID tenantId) {
-            String[] parts = Objects.requireNonNull(keyId, "A key id is required").split(":");
+            String[] parts =
+                    Objects.requireNonNull(keyId, "A key id is required").split(":");
             if (parts.length != 3) {
                 throw new IllegalArgumentException("A data key identifier has three parts");
             }
@@ -222,8 +220,7 @@ public class DataEncryptionKeyProvider {
                         "A data key identifier starts with the tenant it belongs to", malformed);
             }
             if (!owner.equals(tenantId)) {
-                throw new IllegalArgumentException(
-                        "A protected value names a data key belonging to another tenant");
+                throw new IllegalArgumentException("A protected value names a data key belonging to another tenant");
             }
             if (!DATA_CLASSES.contains(parts[1])) {
                 throw new IllegalArgumentException("A data key identifier names a data class");
@@ -245,11 +242,12 @@ public class DataEncryptionKeyProvider {
          * two identities share an info string.
          */
         byte[] info() {
-            return "horecaos:dek|%s|%s|%s".formatted(tenantId, dataClass, generation)
+            return "horecaos:dek|%s|%s|%s"
+                    .formatted(tenantId, dataClass, generation)
                     .getBytes(StandardCharsets.UTF_8);
         }
     }
 
     /** A key together with the identifier stored alongside every ciphertext. */
-    public record VersionedKey(String keyId, SecretKey key) { }
+    public record VersionedKey(String keyId, SecretKey key) {}
 }

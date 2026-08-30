@@ -5,10 +5,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.helpcenter.domain.SupportContent.FaqCategory;
 import uz.horecaos.platform.helpcenter.domain.SupportContent.FaqEntry;
 import uz.horecaos.platform.helpcenter.domain.SupportContent.SocialLink;
@@ -42,8 +40,16 @@ public class JdbcSupportStore {
         // DISTINCT ON picks one translation row per entity: the requested locale
         // when there is one, otherwise whichever sorts first. The ORDER BY is
         // what makes that deterministic rather than whatever the planner returns.
-        record Row(UUID categoryId, String categoryCode, String categoryName, int categorySort,
-                UUID entryId, String entryCode, String question, String answer, int entrySort) { }
+        record Row(
+                UUID categoryId,
+                String categoryCode,
+                String categoryName,
+                int categorySort,
+                UUID entryId,
+                String entryCode,
+                String question,
+                String answer,
+                int entrySort) {}
 
         List<Row> rows = jdbc.sql("""
                 SELECT c.id AS category_id, c.code AS category_code, c.sort_order AS category_sort,
@@ -72,7 +78,9 @@ public class JdbcSupportStore {
                   AND c.status = 'PUBLISHED'
                 ORDER BY c.sort_order, c.id, e.sort_order, e.id
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId).param("locale", locale)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locale", locale)
                 .query((row, number) -> new Row(
                         row.getObject("category_id", UUID.class),
                         row.getString("category_code"),
@@ -95,16 +103,18 @@ public class JdbcSupportStore {
             // entry columns, from the LEFT JOIN. It keeps its place and its
             // heading; dropping it would hide a section an operator published.
             if (row.entryId() != null && row.question() != null) {
-                entriesByCategory.get(row.categoryId()).add(new FaqEntry(
-                        row.entryId(), row.entryCode(), row.question(), row.answer(),
-                        row.entrySort()));
+                entriesByCategory
+                        .get(row.categoryId())
+                        .add(new FaqEntry(
+                                row.entryId(), row.entryCode(), row.question(), row.answer(), row.entrySort()));
             }
         }
 
         List<FaqCategory> result = new ArrayList<>(categories.size());
         for (Row row : categories.values()) {
             result.add(new FaqCategory(
-                    row.categoryId(), row.categoryCode(),
+                    row.categoryId(),
+                    row.categoryCode(),
                     // Untranslated in every locale. The code is never shown, so
                     // the heading is empty and the entries still read.
                     row.categoryName() == null ? "" : row.categoryName(),
@@ -121,7 +131,8 @@ public class JdbcSupportStore {
                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND status = 'PUBLISHED'
                 ORDER BY sort_order, platform
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .query((row, number) -> {
                     UUID assetId = row.getObject("media_asset_id", UUID.class);
                     return new SocialLink(
@@ -133,8 +144,7 @@ public class JdbcSupportStore {
                             // photo does and neither needs a token.
                             assetId == null
                                     ? null
-                                    : "/api/v1/storefront/tenants/%s/media/%s"
-                                            .formatted(tenantId, assetId),
+                                    : "/api/v1/storefront/tenants/%s/media/%s".formatted(tenantId, assetId),
                             row.getInt("sort_order"));
                 })
                 .list();

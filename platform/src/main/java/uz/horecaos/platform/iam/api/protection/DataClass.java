@@ -8,7 +8,6 @@ package uz.horecaos.platform.iam.api.protection;
  * no-PII-in-events rule, masked projections, and retention all key off this.
  */
 public enum DataClass {
-
     PUBLIC(false),
     INTERNAL(false),
 

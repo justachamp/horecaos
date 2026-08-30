@@ -37,8 +37,7 @@ public interface RemedyEntitlementPort {
      * failure is not spendable at another brand of the same tenant, whose legal
      * entity did not agree to it and whose margin would pay for it.
      */
-    List<GrantedEntitlement> available(UUID tenantId, UUID brandId, UUID customerAccountId,
-            Instant at);
+    List<GrantedEntitlement> available(UUID tenantId, UUID brandId, UUID customerAccountId, Instant at);
 
     /**
      * Spends one use, or refuses.
@@ -65,8 +64,7 @@ public interface RemedyEntitlementPort {
             Long maximumMinor,
             String currency,
             int usesRemaining,
-            Instant expiresAt) {
-    }
+            Instant expiresAt) {}
 
     /**
      * @param subtotalDiscountMinor what pricing took off the subtotal, in whole som
@@ -79,8 +77,7 @@ public interface RemedyEntitlementPort {
             UUID orderId,
             long subtotalDiscountMinor,
             long deliveryDiscountMinor,
-            String currency) {
-    }
+            String currency) {}
 
     /**
      * @param redeemed        false when the entitlement was exhausted, expired,

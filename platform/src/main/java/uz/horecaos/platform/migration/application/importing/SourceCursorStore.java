@@ -43,8 +43,7 @@ public interface SourceCursorStore {
      *         this cursor and this page's work must be rolled back rather than
      *         merged
      */
-    boolean advance(UUID tenantId, UUID scopeId, String entityType, Advance advance,
-            int expectedVersion, Instant now);
+    boolean advance(UUID tenantId, UUID scopeId, String entityType, Advance advance, int expectedVersion, Instant now);
 
     /**
      * @param lastStableKey exclusive lower bound for the next page, or null when
@@ -70,7 +69,7 @@ public interface SourceCursorStore {
             long pagesCommitted,
             long rowsCommitted,
             boolean exhausted,
-            int version) { }
+            int version) {}
 
     /**
      * One page's worth of movement.
@@ -88,5 +87,5 @@ public interface SourceCursorStore {
             int transformationVersion,
             long pagesCommitted,
             long rowsCommitted,
-            boolean exhausted) { }
+            boolean exhausted) {}
 }

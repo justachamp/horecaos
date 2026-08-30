@@ -4,13 +4,11 @@ import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.migration.application.MigrationPreconditionException;
 import uz.horecaos.platform.migration.application.MigrationResourceNotFoundException;
 import uz.horecaos.platform.migration.application.MigrationRunService;
@@ -46,8 +44,7 @@ import uz.horecaos.platform.migration.domain.ReconciliationSeverity;
 // otherwise fail to start for want of a connection to a system it is not
 // migrating. Conditional on the property rather than on the bean, because
 // @ConditionalOnBean over component-scanned beans depends on definition order.
-@ConditionalOnProperty(
-        prefix = "horecaos.migration.legacy", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(prefix = "horecaos.migration.legacy", name = "enabled", havingValue = "true")
 public class ReconciliationService {
 
     private static final Logger log = LoggerFactory.getLogger(ReconciliationService.class);
@@ -91,16 +88,17 @@ public class ReconciliationService {
     public List<Finding> reconcile(UUID tenantId, UUID runId) {
         RunRow run = runService.get(tenantId, runId);
         ScopeRow scope = scopes.findById(tenantId, run.scopeId())
-                .orElseThrow(() -> new MigrationResourceNotFoundException(
-                        "Scope %s does not exist".formatted(run.scopeId())));
+                .orElseThrow(() ->
+                        new MigrationResourceNotFoundException("Scope %s does not exist".formatted(run.scopeId())));
 
         List<ReconciliationRule> applicable = library.forCapability(scope.capability());
         if (applicable.isEmpty()) {
             throw new MigrationPreconditionException(
                     MigrationPreconditionException.NO_RECONCILIATION_RULES,
                     ("No reconciliation rule covers %s. ADR 0024 gates cutover on evidence, and a "
-                            + "capability with no rules would clear every gate by having nothing to "
-                            + "fail.").formatted(scope.capability()));
+                                    + "capability with no rules would clear every gate by having nothing to "
+                                    + "fail.")
+                            .formatted(scope.capability()));
         }
 
         List<Finding> findings = new ArrayList<>();
@@ -109,7 +107,8 @@ public class ReconciliationService {
                     .orElseThrow(() -> new MigrationPreconditionException(
                             MigrationPreconditionException.NO_RECONCILIATION_RULES,
                             ("Rule %s is implemented and not declared. A result carrying a severity "
-                                    + "nothing can resolve is not evidence.").formatted(rule.ruleCode())));
+                                            + "nothing can resolve is not evidence.")
+                                    .formatted(rule.ruleCode())));
 
             if (declared.ruleVersion() != rule.ruleVersion()) {
                 // The same refusal the transformation registry makes, for the same
@@ -119,31 +118,47 @@ public class ReconciliationService {
                 throw new MigrationPreconditionException(
                         MigrationPreconditionException.RECONCILIATION_RULE_VERSION_DRIFT,
                         ("Rule %s is declared at version %d and implemented at version %d. "
-                                + "Declare the new version before measuring under it.")
+                                        + "Declare the new version before measuring under it.")
                                 .formatted(rule.ruleCode(), declared.ruleVersion(), rule.ruleVersion()));
             }
 
             ReconciliationRule.RuleContext context = new ReconciliationRule.RuleContext(
-                    tenantId, scope.id(), scope.brandId(), scope.locationId(),
-                    rule.entityType(), legacy, target);
+                    tenantId, scope.id(), scope.brandId(), scope.locationId(), rule.entityType(), legacy, target);
 
             for (Measurement measurement : rule.evaluate(context)) {
-                UUID resultId = rules.record(new ReconciliationRuleStore.Result(
-                        UUID.randomUUID(), tenantId, runId, scope.id(),
-                        rule.ruleCode(), declared.ruleVersion(), measurement.dimensionKey(),
-                        declared.severity(), measurement), clock.instant());
+                UUID resultId = rules.record(
+                        new ReconciliationRuleStore.Result(
+                                UUID.randomUUID(),
+                                tenantId,
+                                runId,
+                                scope.id(),
+                                rule.ruleCode(),
+                                declared.ruleVersion(),
+                                measurement.dimensionKey(),
+                                declared.severity(),
+                                measurement),
+                        clock.instant());
 
                 boolean within = measurement.agrees() || declared.tolerates(measurement.difference());
-                findings.add(new Finding(resultId, rule.ruleCode(), declared.ruleVersion(),
-                        measurement.dimensionKey(), declared.severity(), measurement, within));
+                findings.add(new Finding(
+                        resultId,
+                        rule.ruleCode(),
+                        declared.ruleVersion(),
+                        measurement.dimensionKey(),
+                        declared.severity(),
+                        measurement,
+                        within));
 
                 if (!within && declared.severity() == ReconciliationSeverity.CRITICAL) {
                     // The figures themselves are not logged. They are on the result
                     // row, which is where an approver reads them; a log line carrying
                     // a tenant's money totals is the kind of thing ADR 0029 exists to
                     // keep out of wherever logs are shipped.
-                    log.warn("Reconciliation rule {} v{} is open on scope {} dimension {}",
-                            rule.ruleCode(), declared.ruleVersion(), scope.id(),
+                    log.warn(
+                            "Reconciliation rule {} v{} is open on scope {} dimension {}",
+                            rule.ruleCode(),
+                            declared.ruleVersion(),
+                            scope.id(),
                             measurement.dimensionKey());
                 }
             }
@@ -165,5 +180,5 @@ public class ReconciliationService {
             String dimensionKey,
             ReconciliationSeverity severity,
             Measurement measurement,
-            boolean within) { }
+            boolean within) {}
 }

@@ -1,14 +1,13 @@
 package uz.horecaos.platform.integration.camel.common;
 
-import java.time.Clock;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
-
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Clock;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Publishes how long each provider's circuit has been continuously open (ADR
@@ -42,8 +41,7 @@ public final class ProviderCircuitMetrics {
     private static final double OPEN = 2;
     private static final double FORCED_OR_DISABLED = 3;
 
-    private ProviderCircuitMetrics() {
-    }
+    private ProviderCircuitMetrics() {}
 
     /**
      * Binds every breaker the registry holds now and every one it creates later.

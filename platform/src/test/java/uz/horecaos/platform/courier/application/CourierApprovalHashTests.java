@@ -5,10 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalParameters;
 import uz.horecaos.platform.courier.application.CourierAdjustmentService.AdjustmentCommand;
@@ -48,26 +46,50 @@ class CourierApprovalHashTests {
     void theAmountAndTheOriginStillBind() {
         String base = CourierAdjustmentService.parametersHash(penalty(CHILONZOR));
 
-        assertThat(CourierAdjustmentService.parametersHash(
-                new AdjustmentCommand(TENANT, COURIER, CHILONZOR, -500_000L, "UZS",
-                        "UNDELIVERED_ORDER", AdjustmentOrigin.MANUAL, "key-1", MAKER,
-                        "Order never arrived", "trace-1")))
+        assertThat(CourierAdjustmentService.parametersHash(new AdjustmentCommand(
+                        TENANT,
+                        COURIER,
+                        CHILONZOR,
+                        -500_000L,
+                        "UZS",
+                        "UNDELIVERED_ORDER",
+                        AdjustmentOrigin.MANUAL,
+                        "key-1",
+                        MAKER,
+                        "Order never arrived",
+                        "trace-1")))
                 .as("a fifty-thousand penalty's signature is not a five-hundred-thousand one's")
                 .isNotEqualTo(base);
-        assertThat(CourierAdjustmentService.parametersHash(
-                new AdjustmentCommand(TENANT, COURIER, CHILONZOR, -200_000L, "UZS",
-                        "UNDELIVERED_ORDER", AdjustmentOrigin.RULE, "key-1", MAKER,
-                        "Order never arrived", "trace-1")))
+        assertThat(CourierAdjustmentService.parametersHash(new AdjustmentCommand(
+                        TENANT,
+                        COURIER,
+                        CHILONZOR,
+                        -200_000L,
+                        "UZS",
+                        "UNDELIVERED_ORDER",
+                        AdjustmentOrigin.RULE,
+                        "key-1",
+                        MAKER,
+                        "Order never arrived",
+                        "trace-1")))
                 .as("a rule-derived penalty is reproducible and a manual one is somebody's judgement")
                 .isNotEqualTo(base);
     }
 
     @Test
     void aRetryOfTheSameSubmissionIsTheSameIntendedAction() {
-        assertThat(CourierAdjustmentService.parametersHash(
-                new AdjustmentCommand(TENANT, COURIER, CHILONZOR, -200_000L, "UZS",
-                        "UNDELIVERED_ORDER", AdjustmentOrigin.MANUAL, "key-9", MAKER,
-                        "Order never arrived", "trace-9")))
+        assertThat(CourierAdjustmentService.parametersHash(new AdjustmentCommand(
+                        TENANT,
+                        COURIER,
+                        CHILONZOR,
+                        -200_000L,
+                        "UZS",
+                        "UNDELIVERED_ORDER",
+                        AdjustmentOrigin.MANUAL,
+                        "key-9",
+                        MAKER,
+                        "Order never arrived",
+                        "trace-9")))
                 .isEqualTo(CourierAdjustmentService.parametersHash(penalty(CHILONZOR)));
     }
 
@@ -83,28 +105,24 @@ class CourierApprovalHashTests {
     void thePayoutMethodIsPartOfWhatWasApproved() {
         PeriodRow period = closedPeriod(1_200_000L);
 
-        assertThat(CourierSettlementService.payoutApprovalHash(TENANT, period,
-                PayoutMethod.CASH_AT_BRANCH))
-                .isNotEqualTo(CourierSettlementService.payoutApprovalHash(TENANT, period,
-                        PayoutMethod.BANK_TRANSFER));
+        assertThat(CourierSettlementService.payoutApprovalHash(TENANT, period, PayoutMethod.CASH_AT_BRANCH))
+                .isNotEqualTo(CourierSettlementService.payoutApprovalHash(TENANT, period, PayoutMethod.BANK_TRANSFER));
     }
 
     @Test
     void thePayoutHashNamesItsTenantAndItsCourier() {
         PeriodRow period = closedPeriod(1_200_000L);
-        String base = CourierSettlementService.payoutApprovalHash(TENANT, period,
-                PayoutMethod.BANK_TRANSFER);
+        String base = CourierSettlementService.payoutApprovalHash(TENANT, period, PayoutMethod.BANK_TRANSFER);
 
-        assertThat(CourierSettlementService.payoutApprovalHash(UUID.randomUUID(), period,
-                PayoutMethod.BANK_TRANSFER))
+        assertThat(CourierSettlementService.payoutApprovalHash(UUID.randomUUID(), period, PayoutMethod.BANK_TRANSFER))
                 .as("a hash that does not name the tenant is one column away from a cross-tenant match")
                 .isNotEqualTo(base);
-        assertThat(CourierSettlementService.payoutApprovalHash(TENANT,
-                closedPeriod(1_200_000L, UUID.randomUUID()), PayoutMethod.BANK_TRANSFER))
+        assertThat(CourierSettlementService.payoutApprovalHash(
+                        TENANT, closedPeriod(1_200_000L, UUID.randomUUID()), PayoutMethod.BANK_TRANSFER))
                 .as("who is being paid is part of what was approved")
                 .isNotEqualTo(base);
-        assertThat(CourierSettlementService.payoutApprovalHash(TENANT, closedPeriod(1_300_000L),
-                PayoutMethod.BANK_TRANSFER))
+        assertThat(CourierSettlementService.payoutApprovalHash(
+                        TENANT, closedPeriod(1_300_000L), PayoutMethod.BANK_TRANSFER))
                 .isNotEqualTo(base);
     }
 
@@ -115,16 +133,32 @@ class CourierApprovalHashTests {
      */
     @Test
     void aComponentAddedToAnAdjustmentEntersTheHashAndThisListSaysSo() {
-        assertThat(ApprovalParameters.coveredComponents(AdjustmentCommand.class,
-                "idempotencyKey", "actor", "correlationId"))
-                .containsExactly("tenantId", "courierId", "locationId", "amountMinor", "currency",
-                        "reasonCode", "origin", "reason");
+        assertThat(ApprovalParameters.coveredComponents(
+                        AdjustmentCommand.class, "idempotencyKey", "actor", "correlationId"))
+                .containsExactly(
+                        "tenantId",
+                        "courierId",
+                        "locationId",
+                        "amountMinor",
+                        "currency",
+                        "reasonCode",
+                        "origin",
+                        "reason");
     }
 
     private static AdjustmentCommand penalty(UUID locationId) {
-        return new AdjustmentCommand(TENANT, COURIER, locationId, -200_000L, "UZS",
-                "UNDELIVERED_ORDER", AdjustmentOrigin.MANUAL, "key-1", MAKER,
-                "Order never arrived", "trace-1");
+        return new AdjustmentCommand(
+                TENANT,
+                COURIER,
+                locationId,
+                -200_000L,
+                "UZS",
+                "UNDELIVERED_ORDER",
+                AdjustmentOrigin.MANUAL,
+                "key-1",
+                MAKER,
+                "Order never arrived",
+                "trace-1");
     }
 
     private static PeriodRow closedPeriod(long amountPayableMinor) {
@@ -132,10 +166,29 @@ class CourierApprovalHashTests {
     }
 
     private static PeriodRow closedPeriod(long amountPayableMinor, UUID courierId) {
-        return new PeriodRow(PERIOD, TENANT, courierId, ENGAGEMENT,
-                LocalDate.parse("2026-08-01"), LocalDate.parse("2026-08-15"),
-                SettlementPeriodStatus.CLOSED, "UZS", amountPayableMinor, 0L, 0L,
-                amountPayableMinor, 40, 38, 120_000L, 86_400L, 12, true, "a".repeat(64),
-                "manager-1", Instant.parse("2026-08-16T09:00:00Z"), null, 1);
+        return new PeriodRow(
+                PERIOD,
+                TENANT,
+                courierId,
+                ENGAGEMENT,
+                LocalDate.parse("2026-08-01"),
+                LocalDate.parse("2026-08-15"),
+                SettlementPeriodStatus.CLOSED,
+                "UZS",
+                amountPayableMinor,
+                0L,
+                0L,
+                amountPayableMinor,
+                40,
+                38,
+                120_000L,
+                86_400L,
+                12,
+                true,
+                "a".repeat(64),
+                "manager-1",
+                Instant.parse("2026-08-16T09:00:00Z"),
+                null,
+                1);
     }
 }

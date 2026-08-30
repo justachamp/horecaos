@@ -50,7 +50,6 @@ public enum Boundary {
 
     /** Whether this answer is worth raising with the tenant or with Operations. */
     public boolean noteworthy() {
-        return this == APPROACHING || this == OVER_BILLABLE
-                || this == OVER_UNBILLED || this == REFUSED;
+        return this == APPROACHING || this == OVER_BILLABLE || this == OVER_UNBILLED || this == REFUSED;
     }
 }

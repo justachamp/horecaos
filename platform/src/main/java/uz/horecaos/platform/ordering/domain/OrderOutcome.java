@@ -50,12 +50,10 @@ public record OrderOutcome(
             throw new IllegalArgumentException("A terminal outcome needs a stock disposition");
         }
         if ((reasonId == null) != (reasonVersion == null)) {
-            throw new IllegalArgumentException(
-                    "A cited reason travels with the version it was cited at");
+            throw new IllegalArgumentException("A cited reason travels with the version it was cited at");
         }
         if ((reasonId == null) != (reasonSnapshot == null)) {
-            throw new IllegalArgumentException(
-                    "A cited reason travels with a snapshot of the row it was");
+            throw new IllegalArgumentException("A cited reason travels with a snapshot of the row it was");
         }
         // The category belongs to the kind. A completion categorised as
         // ITEM_UNAVAILABLE would sit in the cancellation funnel for ever.
@@ -66,17 +64,14 @@ public record OrderOutcome(
         // A completed order took the stock it was always going to take at
         // confirmation. Nothing further moves, and nobody is out of pocket.
         if (kind == TerminalOutcomeKind.COMPLETED
-                && (disposition != StockDisposition.NO_EFFECT || liabilityParty != null
-                        || customerRefund != null)) {
-            throw new IllegalArgumentException(
-                    "A completed order moves no stock and costs nobody anything");
+                && (disposition != StockDisposition.NO_EFFECT || liabilityParty != null || customerRefund != null)) {
+            throw new IllegalArgumentException("A completed order moves no stock and costs nobody anything");
         }
         // ADR 0017: a cancellation never reopens a committed reservation, so a
         // disposition that moves stock can only follow one that was committed.
         if (!reservationCommitted && disposition != StockDisposition.RELEASE) {
-            throw new IllegalArgumentException(
-                    "An uncommitted reservation is released; the reason's disposition "
-                            + "decides nothing until the hold has been turned into a sale");
+            throw new IllegalArgumentException("An uncommitted reservation is released; the reason's disposition "
+                    + "decides nothing until the hold has been turned into a sale");
         }
     }
 

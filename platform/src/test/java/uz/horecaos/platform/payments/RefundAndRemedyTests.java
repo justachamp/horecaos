@@ -1,7 +1,8 @@
 package uz.horecaos.platform.payments;
 
-import java.sql.Connection;
-import java.sql.Statement;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -15,9 +16,7 @@ import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import javax.sql.DataSource;
-
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -28,7 +27,6 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.ApprovalRequestCommand;
@@ -54,19 +52,16 @@ import uz.horecaos.platform.payments.settlement.OrderRemedyService.FutureDiscoun
 import uz.horecaos.platform.payments.settlement.OrderRemedyService.RefundCommand;
 import uz.horecaos.platform.payments.settlement.OrderRemedyService.RemedyOutcome;
 import uz.horecaos.platform.payments.settlement.OrderSettlementService;
-import uz.horecaos.platform.payments.settlement.SettlementStatus;
-import uz.horecaos.platform.payments.settlement.TenderStatus;
 import uz.horecaos.platform.payments.settlement.OrderSettlementService.PlannedTender;
 import uz.horecaos.platform.payments.settlement.OrderSettlementService.SettlementPlan;
 import uz.horecaos.platform.payments.settlement.RemedyEntitlementService;
 import uz.horecaos.platform.payments.settlement.RemedyType;
 import uz.horecaos.platform.payments.settlement.SettlementBasis;
+import uz.horecaos.platform.payments.settlement.SettlementStatus;
+import uz.horecaos.platform.payments.settlement.TenderStatus;
 import uz.horecaos.platform.payments.settlement.VerificationState;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.api.ApiException;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Refunds and service-recovery remedies as bookkeeping (ADR 0013, amended by the
@@ -136,8 +131,8 @@ class RefundAndRemedyTests {
 
     @BeforeAll
     static void startDatabase() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
-                "Docker is required for remedy tests");
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(), "Docker is required for remedy tests");
         db = TestDatabase.migrated();
         jdbcUrl = db.jdbcUrl();
         username = db.username();
@@ -157,13 +152,15 @@ class RefundAndRemedyTests {
         jdbc = JdbcClient.create(dataSource);
 
         jdbc.sql("TRUNCATE TABLE payments.entitlement_redemptions, "
-                + "payments.remedy_entitlements, payments.order_remedies CASCADE").update();
-        jdbc.sql("TRUNCATE TABLE payments.tenders, payments.order_settlements, "
-                + "payments.payment_methods CASCADE").update();
+                        + "payments.remedy_entitlements, payments.order_remedies CASCADE")
+                .update();
+        jdbc.sql("TRUNCATE TABLE payments.tenders, payments.order_settlements, " + "payments.payment_methods CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE ordering.order_lines, ordering.orders, ordering.carts CASCADE")
                 .update();
         jdbc.sql("TRUNCATE TABLE pricing.quotes CASCADE").update();
-        jdbc.sql("TRUNCATE TABLE catalog.publications, catalog.catalogs CASCADE").update();
+        jdbc.sql("TRUNCATE TABLE catalog.publications, catalog.catalogs CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE customer.customer_accounts CASCADE").update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
 
@@ -179,8 +176,8 @@ class RefundAndRemedyTests {
 
         settlements = new OrderSettlementService(settlementStore, points, clock);
         planner = new CheckoutSettlementPlanner(settlementStore, settlements, clock);
-        remedies = new OrderRemedyService(remedyStore, settlements, orders, deliveryFees,
-                approvals, audit, clock, THRESHOLD);
+        remedies = new OrderRemedyService(
+                remedyStore, settlements, orders, deliveryFees, approvals, audit, clock, THRESHOLD);
         entitlements = new RemedyEntitlementService(remedyStore, clock);
 
         seedTenancy();
@@ -190,8 +187,8 @@ class RefundAndRemedyTests {
     // -------------------------------------------------- the reconciliation gap
 
     @Test
-    @DisplayName("a refund splits into the money the platform moved and the money it is taking "
-            + "somebody's word for")
+    @DisplayName(
+            "a refund splits into the money the platform moved and the money it is taking " + "somebody's word for")
     void aRefundSeparatesWhatThePlatformSettledFromWhatItWasTold() {
         UUID order = settledSplitOrder("A-1", 100_000L, 4_000L);
 
@@ -204,8 +201,7 @@ class RefundAndRemedyTests {
                         + "this platform never called")
                 .isEqualTo(96_000L);
         assertThat(remedy.platformSettledMinor())
-                .as("the 4 000 of points was reversed here, in this transaction, against the "
-                        + "lots that were spent")
+                .as("the 4 000 of points was reversed here, in this transaction, against the " + "lots that were spent")
                 .isEqualTo(4_000L);
         assertThat(remedy.settlementBasis()).isEqualTo(SettlementBasis.MIXED);
         assertThat(remedy.attestedMoneyMinor() + remedy.platformSettledMinor())
@@ -222,8 +218,11 @@ class RefundAndRemedyTests {
         UUID order = settledSplitOrder("A-2", 100_000L, 4_000L);
         Instant inTheCabinet = NOW.minus(Duration.ofMinutes(20));
 
-        RemedyRow remedy = refund(order, 50_000L, new RefundEvidence(
-                ExecutionChannel.PROVIDER_CONSOLE, "CLICK-REV-88213", "cashier-7", inTheCabinet))
+        RemedyRow remedy = refund(
+                        order,
+                        50_000L,
+                        new RefundEvidence(
+                                ExecutionChannel.PROVIDER_CONSOLE, "CLICK-REV-88213", "cashier-7", inTheCabinet))
                 .remedy();
 
         assertThat(remedy.verificationState())
@@ -245,8 +244,7 @@ class RefundAndRemedyTests {
     void anAttestationWithoutAClaimantIsRefused() {
         UUID order = settledSplitOrder("A-3", 100_000L, 4_000L);
 
-        assertThatThrownBy(() -> refund(order, 50_000L,
-                new RefundEvidence(null, null, null, null)))
+        assertThatThrownBy(() -> refund(order, 50_000L, new RefundEvidence(null, null, null, null)))
                 .as("a ledger line asserting money left a merchant account, with nobody attached "
                         + "to the assertion, is the shape this whole design exists to avoid")
                 .isInstanceOf(ApiException.class);
@@ -255,13 +253,12 @@ class RefundAndRemedyTests {
     }
 
     @Test
-    @DisplayName("a refund made in a provider cabinet is refused without the reference the "
-            + "cabinet showed")
+    @DisplayName("a refund made in a provider cabinet is refused without the reference the " + "cabinet showed")
     void aConsoleRefundWithoutItsReferenceIsRefused() {
         UUID order = settledSplitOrder("A-4", 100_000L, 4_000L);
 
-        assertThatThrownBy(() -> refund(order, 50_000L, new RefundEvidence(
-                ExecutionChannel.PROVIDER_CONSOLE, "  ", "cashier-7", NOW)))
+        assertThatThrownBy(() -> refund(
+                        order, 50_000L, new RefundEvidence(ExecutionChannel.PROVIDER_CONSOLE, "  ", "cashier-7", NOW)))
                 .as("without it nothing can ever match a settlement line, which is the only way "
                         + "the assertion is ever discharged")
                 .isInstanceOf(ApiException.class);
@@ -301,15 +298,26 @@ class RefundAndRemedyTests {
                 .extracting(RemedyRow::id)
                 .containsExactly(remedy.id());
 
-        boolean recorded = transactions.execute(status -> remedies.recordVerification(TENANT,
-                remedy.id(), VerificationState.CONFIRMED, "click-settlement-2026-08-25",
-                ActorRef.user("finance-1", null), "Matched the settlement line", null));
+        boolean recorded = transactions.execute(status -> remedies.recordVerification(
+                TENANT,
+                remedy.id(),
+                VerificationState.CONFIRMED,
+                "click-settlement-2026-08-25",
+                ActorRef.user("finance-1", null),
+                "Matched the settlement line",
+                null));
         assertThat(recorded).isTrue();
-        assertThat(remedies.unverifiedAttestations(TENANT, Duration.ofHours(24), 50)).isEmpty();
+        assertThat(remedies.unverifiedAttestations(TENANT, Duration.ofHours(24), 50))
+                .isEmpty();
 
-        Boolean second = transactions.execute(status -> remedies.recordVerification(TENANT,
-                remedy.id(), VerificationState.DISPUTED, "second-look",
-                ActorRef.user("finance-2", null), "Looking again", null));
+        Boolean second = transactions.execute(status -> remedies.recordVerification(
+                TENANT,
+                remedy.id(),
+                VerificationState.DISPUTED,
+                "second-look",
+                ActorRef.user("finance-2", null),
+                "Looking again",
+                null));
         assertThat(second)
                 .as("a second reconciliation run must not overwrite what the first one found")
                 .isFalse();
@@ -339,10 +347,20 @@ class RefundAndRemedyTests {
     void anOrderIsNeverReachedByItsIdAlone() {
         UUID order = settledSplitOrder("B-2", 100_000L, 4_000L);
 
-        assertThatThrownBy(() -> transactions.execute(status -> remedies.recordRefund(
-                new RefundCommand(OTHER_TENANT, order, 10_000L, "UZS", "GOODWILL", "Cold food",
-                        ExecutionChannel.CASH_DRAWER, null, "cashier-7", NOW,
-                        ActorRef.user("support-1", null), "k-cross", null))))
+        assertThatThrownBy(() -> transactions.execute(status -> remedies.recordRefund(new RefundCommand(
+                        OTHER_TENANT,
+                        order,
+                        10_000L,
+                        "UZS",
+                        "GOODWILL",
+                        "Cold food",
+                        ExecutionChannel.CASH_DRAWER,
+                        null,
+                        "cashier-7",
+                        NOW,
+                        ActorRef.user("support-1", null),
+                        "k-cross",
+                        null))))
                 .as("keyed on the order id alone this would be a cross-tenant write")
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("No such order");
@@ -362,8 +380,7 @@ class RefundAndRemedyTests {
         assertThat(outcome.approval()).isInstanceOf(ApprovalOutcome.Pending.class);
         assertThat(remedyStore.remediesOfOrder(TENANT, order)).isEmpty();
         assertThat(points.reversed)
-                .as("nothing was returned while the request waits, so a declined approval has "
-                        + "nothing to undo")
+                .as("nothing was returned while the request waits, so a declined approval has " + "nothing to undo")
                 .isEmpty();
         assertThat(refundedOn(order))
                 .as("and the tender's cumulative cap is untouched")
@@ -397,8 +414,8 @@ class RefundAndRemedyTests {
 
         refund(order, 300_000L, consoleRefund());
         deliveryFees.fee = OptionalLong.of(300_000L);
-        transactions.execute(status -> remedies.recordDeliveryFeeReimbursement(
-                command(order, 300_000L, consoleRefund(), "k-fee")));
+        transactions.execute(
+                status -> remedies.recordDeliveryFeeReimbursement(command(order, 300_000L, consoleRefund(), "k-fee")));
 
         assertThat(approvals.requests).hasSize(2);
         assertThat(approvals.requests.get(0).parametersHash())
@@ -416,11 +433,11 @@ class RefundAndRemedyTests {
         deliveryFees.fee = OptionalLong.of(12_000L);
 
         refund(order, 30_000L, consoleRefund());
-        transactions.execute(status -> remedies.recordDeliveryFeeReimbursement(
-                command(order, 12_000L, consoleRefund(), "k-fee")));
+        transactions.execute(
+                status -> remedies.recordDeliveryFeeReimbursement(command(order, 12_000L, consoleRefund(), "k-fee")));
 
-        List<RemedyTotals> totals = remedies.totalsByType(TENANT, NOW.minus(Duration.ofDays(1)),
-                NOW.plus(Duration.ofDays(1)));
+        List<RemedyTotals> totals =
+                remedies.totalsByType(TENANT, NOW.minus(Duration.ofDays(1)), NOW.plus(Duration.ofDays(1)));
 
         assertThat(totals)
                 .as("two lines, never one: a tenant asking what late delivery cost them is not "
@@ -434,8 +451,7 @@ class RefundAndRemedyTests {
             assertThat(line.remedyType()).isEqualTo(RemedyType.DELIVERY_FEE_REIMBURSEMENT);
             assertThat(line.amountMinor()).isEqualTo(12_000L);
             assertThat(line.unverifiedMinor())
-                    .as("and within the line, the money nothing has corroborated is its own "
-                            + "figure")
+                    .as("and within the line, the money nothing has corroborated is its own " + "figure")
                     .isEqualTo(12_000L);
         });
     }
@@ -446,14 +462,12 @@ class RefundAndRemedyTests {
         UUID order = settledSplitOrder("D-2", 100_000L, 4_000L);
         deliveryFees.fee = OptionalLong.of(12_000L);
 
-        transactions.execute(status -> remedies.recordDeliveryFeeReimbursement(
-                command(order, 8_000L, consoleRefund(), "k-fee-1")));
+        transactions.execute(
+                status -> remedies.recordDeliveryFeeReimbursement(command(order, 8_000L, consoleRefund(), "k-fee-1")));
 
         assertThatThrownBy(() -> transactions.execute(status ->
-                remedies.recordDeliveryFeeReimbursement(
-                        command(order, 8_000L, consoleRefund(), "k-fee-2"))))
-                .as("16 000 reimbursed against a 12 000 fee is a refund of the food wearing a "
-                        + "delivery label")
+                        remedies.recordDeliveryFeeReimbursement(command(order, 8_000L, consoleRefund(), "k-fee-2"))))
+                .as("16 000 reimbursed against a 12 000 fee is a refund of the food wearing a " + "delivery label")
                 .isInstanceOf(ApiException.class);
     }
 
@@ -463,25 +477,24 @@ class RefundAndRemedyTests {
         UUID order = settledSplitOrder("D-3", 100_000L, 4_000L);
         deliveryFees.fee = OptionalLong.empty();
 
-        RemedyRow remedy = transactions.execute(status ->
-                remedies.recordDeliveryFeeReimbursement(
-                        command(order, 8_000L, consoleRefund(), "k-fee"))).remedy();
+        RemedyRow remedy = transactions
+                .execute(status ->
+                        remedies.recordDeliveryFeeReimbursement(command(order, 8_000L, consoleRefund(), "k-fee")))
+                .remedy();
 
         assertThat(remedy.deliveryFeeBasisMinor())
                 .as("null is not zero: zero would mean free delivery, and this row means nobody "
                         + "could tell us what the fee was")
                 .isNull();
         assertThat(remedy.amountMinor())
-                .as("the tender cap still bounded it, so the remedy is recorded rather than "
-                        + "refused")
+                .as("the tender cap still bounded it, so the remedy is recorded rather than " + "refused")
                 .isEqualTo(8_000L);
     }
 
     // --------------------------------------------------- future discounts
 
     @Test
-    @DisplayName("a future discount grants uses, costs nothing today, and carries no money "
-            + "columns to be summed")
+    @DisplayName("a future discount grants uses, costs nothing today, and carries no money " + "columns to be summed")
     void aFutureDiscountIsNotMoney() {
         UUID order = settledSplitOrder("E-1", 100_000L, 4_000L);
 
@@ -501,17 +514,17 @@ class RefundAndRemedyTests {
     }
 
     @Test
-    @DisplayName("one use is one order: a retried redemption of the same order spends nothing "
-            + "more")
+    @DisplayName("one use is one order: a retried redemption of the same order spends nothing " + "more")
     void aRedemptionIsIdempotentPerOrder() {
         UUID granting = settledSplitOrder("E-2", 100_000L, 4_000L);
-        UUID entitlementId = entitlementOf(grantThreeFreeDeliveries(granting).remedy().id());
+        UUID entitlementId =
+                entitlementOf(grantThreeFreeDeliveries(granting).remedy().id());
         UUID next = order("E-3", 60_000L, 12_000L, customerId);
 
-        RedemptionOutcome first = transactions.execute(status -> entitlements.redeem(
-                new RedeemCommand(TENANT, entitlementId, customerId, next, 0L, 10_000L, "UZS")));
-        RedemptionOutcome retry = transactions.execute(status -> entitlements.redeem(
-                new RedeemCommand(TENANT, entitlementId, customerId, next, 0L, 10_000L, "UZS")));
+        RedemptionOutcome first = transactions.execute(status ->
+                entitlements.redeem(new RedeemCommand(TENANT, entitlementId, customerId, next, 0L, 10_000L, "UZS")));
+        RedemptionOutcome retry = transactions.execute(status ->
+                entitlements.redeem(new RedeemCommand(TENANT, entitlementId, customerId, next, 0L, 10_000L, "UZS")));
 
         assertThat(first.redeemed()).isTrue();
         assertThat(first.usesRemaining()).isEqualTo(2);
@@ -527,22 +540,28 @@ class RefundAndRemedyTests {
     @DisplayName("uses run out, and the last one closes the grant")
     void anEntitlementIsExhaustedByItsGrantedUses() {
         UUID granting = settledSplitOrder("E-4", 100_000L, 4_000L);
-        UUID entitlementId = entitlementOf(grantThreeFreeDeliveries(granting).remedy().id());
+        UUID entitlementId =
+                entitlementOf(grantThreeFreeDeliveries(granting).remedy().id());
 
         for (int use = 1; use <= 3; use++) {
             UUID next = order("E-4-" + use, 60_000L, 12_000L, customerId);
-            assertThat(transactions.execute(status -> entitlements.redeem(new RedeemCommand(
-                    TENANT, entitlementId, customerId, next, 0L, 5_000L, "UZS"))).redeemed())
+            assertThat(transactions
+                            .execute(status -> entitlements.redeem(
+                                    new RedeemCommand(TENANT, entitlementId, customerId, next, 0L, 5_000L, "UZS")))
+                            .redeemed())
                     .isTrue();
         }
 
         UUID fourth = order("E-4-4", 60_000L, 12_000L, customerId);
-        RedemptionOutcome refused = transactions.execute(status -> entitlements.redeem(
-                new RedeemCommand(TENANT, entitlementId, customerId, fourth, 0L, 5_000L, "UZS")));
+        RedemptionOutcome refused = transactions.execute(status ->
+                entitlements.redeem(new RedeemCommand(TENANT, entitlementId, customerId, fourth, 0L, 5_000L, "UZS")));
 
         assertThat(refused.redeemed()).isFalse();
         assertThat(refused.refusalCode()).isEqualTo(EntitlementStatus.EXHAUSTED.name());
-        assertThat(remedyStore.findEntitlement(TENANT, entitlementId).orElseThrow().status())
+        assertThat(remedyStore
+                        .findEntitlement(TENANT, entitlementId)
+                        .orElseThrow()
+                        .status())
                 .isEqualTo(EntitlementStatus.EXHAUSTED);
     }
 
@@ -551,19 +570,21 @@ class RefundAndRemedyTests {
             + "maximum, by another customer, or after it expires")
     void theBoundsOfAGrantAreEnforcedWhereTheMoneyIsTaken() {
         UUID granting = settledSplitOrder("E-5", 100_000L, 4_000L);
-        UUID entitlementId = entitlementOf(grantThreeFreeDeliveries(granting).remedy().id());
+        UUID entitlementId =
+                entitlementOf(grantThreeFreeDeliveries(granting).remedy().id());
         UUID next = order("E-6", 60_000L, 12_000L, customerId);
 
-        assertThat(transactions.execute(status -> entitlements.redeem(new RedeemCommand(
-                TENANT, entitlementId, customerId, next, 5_000L, 0L, "UZS"))).refusalCode())
+        assertThat(transactions
+                        .execute(status -> entitlements.redeem(
+                                new RedeemCommand(TENANT, entitlementId, customerId, next, 5_000L, 0L, "UZS")))
+                        .refusalCode())
                 .as("a delivery-fee grant does not discount the food")
                 .isEqualTo("SCOPE_NOT_COVERED");
 
-        RedemptionOutcome overCap = transactions.execute(status -> entitlements.redeem(
-                new RedeemCommand(TENANT, entitlementId, customerId, next, 0L, 20_000L, "UZS")));
+        RedemptionOutcome overCap = transactions.execute(status ->
+                entitlements.redeem(new RedeemCommand(TENANT, entitlementId, customerId, next, 0L, 20_000L, "UZS")));
         assertThat(overCap.refusalCode())
-                .as("the per-use maximum is checked here, because a cap only the caller "
-                        + "enforces is not a cap")
+                .as("the per-use maximum is checked here, because a cap only the caller " + "enforces is not a cap")
                 .isEqualTo("EXCEEDS_MAXIMUM");
         assertThat(overCap.usesRemaining())
                 .as("a refusal about the amount spends nothing: reporting zero here would tell "
@@ -572,18 +593,20 @@ class RefundAndRemedyTests {
 
         UUID strangersOrder = order("E-7", 60_000L, 12_000L, otherCustomerId);
         RedemptionOutcome stranger = transactions.execute(status -> entitlements.redeem(
-                new RedeemCommand(TENANT, entitlementId, otherCustomerId, strangersOrder, 0L,
-                        5_000L, "UZS")));
+                new RedeemCommand(TENANT, entitlementId, otherCustomerId, strangersOrder, 0L, 5_000L, "UZS")));
         assertThat(stranger.refusalCode())
                 .as("an entitlement is one brand's promise to one person, and answering anything "
                         + "else to a stranger is an enumeration oracle")
                 .isEqualTo("NOT_FOUND");
 
         clock.advance(Duration.ofDays(31));
-        assertThat(transactions.execute(status -> entitlements.redeem(new RedeemCommand(
-                TENANT, entitlementId, customerId, next, 0L, 5_000L, "UZS"))).refusalCode())
+        assertThat(transactions
+                        .execute(status -> entitlements.redeem(
+                                new RedeemCommand(TENANT, entitlementId, customerId, next, 0L, 5_000L, "UZS")))
+                        .refusalCode())
                 .isEqualTo("OUTSIDE_WINDOW");
-        assertThat(entitlements.available(TENANT, BRAND, customerId, clock.instant())).isEmpty();
+        assertThat(entitlements.available(TENANT, BRAND, customerId, clock.instant()))
+                .isEmpty();
     }
 
     @Test
@@ -591,11 +614,21 @@ class RefundAndRemedyTests {
     void anUncappedPercentageIsRefused() {
         UUID order = settledSplitOrder("E-8", 100_000L, 4_000L);
 
-        assertThatThrownBy(() -> transactions.execute(status -> remedies.grantFutureDiscount(
-                new FutureDiscountCommand(TENANT, order, EntitlementScope.BOTH,
-                        EntitlementBenefit.PERCENT, 2_000, null, null, 3, Duration.ofDays(30),
-                        "SERVICE_FAILURE", "Very late", ActorRef.user("support-1", null),
-                        "k-uncapped", null))))
+        assertThatThrownBy(() -> transactions.execute(status -> remedies.grantFutureDiscount(new FutureDiscountCommand(
+                        TENANT,
+                        order,
+                        EntitlementScope.BOTH,
+                        EntitlementBenefit.PERCENT,
+                        2_000,
+                        null,
+                        null,
+                        3,
+                        Duration.ofDays(30),
+                        "SERVICE_FAILURE",
+                        "Very late",
+                        ActorRef.user("support-1", null),
+                        "k-uncapped",
+                        null))))
                 .as("20% off is 2 000 som on a delivery fee and 400 000 on a catering order, and "
                         + "the person apologising for a cold pizza meant the first")
                 .isInstanceOf(ApiException.class);
@@ -608,14 +641,25 @@ class RefundAndRemedyTests {
         approvals.answer = new ApprovalOutcome.Pending(UUID.randomUUID());
 
         // Ten uses worth 30 000 each: 300 000 of liability from one console click.
-        RemedyOutcome outcome = transactions.execute(status -> remedies.grantFutureDiscount(
-                new FutureDiscountCommand(TENANT, order, EntitlementScope.BOTH,
-                        EntitlementBenefit.FIXED_AMOUNT, null, 30_000L, null, 10,
-                        Duration.ofDays(30), "SERVICE_FAILURE", "Very late",
-                        ActorRef.user("support-1", null), "k-big", null)));
+        RemedyOutcome outcome = transactions.execute(status -> remedies.grantFutureDiscount(new FutureDiscountCommand(
+                TENANT,
+                order,
+                EntitlementScope.BOTH,
+                EntitlementBenefit.FIXED_AMOUNT,
+                null,
+                30_000L,
+                null,
+                10,
+                Duration.ofDays(30),
+                "SERVICE_FAILURE",
+                "Very late",
+                ActorRef.user("support-1", null),
+                "k-big",
+                null)));
 
         assertThat(outcome.recorded()).isFalse();
-        assertThat(remedyStore.spendableEntitlements(TENANT, BRAND, customerId, NOW)).isEmpty();
+        assertThat(remedyStore.spendableEntitlements(TENANT, BRAND, customerId, NOW))
+                .isEmpty();
     }
 
     @Test
@@ -623,13 +667,22 @@ class RefundAndRemedyTests {
     void aGuestOrderHasNobodyToGrantTo() {
         UUID guestOrder = order("E-10", 60_000L, 12_000L, null);
 
-        assertThatThrownBy(() -> transactions.execute(status -> remedies.grantFutureDiscount(
-                new FutureDiscountCommand(TENANT, guestOrder, EntitlementScope.BOTH,
-                        EntitlementBenefit.FIXED_AMOUNT, null, 5_000L, null, 1,
-                        Duration.ofDays(30), "SERVICE_FAILURE", "Late",
-                        ActorRef.user("support-1", null), "k-guest", null))))
-                .as("inventing an identity here is how a remedy becomes spendable by whoever "
-                        + "next uses the device")
+        assertThatThrownBy(() -> transactions.execute(status -> remedies.grantFutureDiscount(new FutureDiscountCommand(
+                        TENANT,
+                        guestOrder,
+                        EntitlementScope.BOTH,
+                        EntitlementBenefit.FIXED_AMOUNT,
+                        null,
+                        5_000L,
+                        null,
+                        1,
+                        Duration.ofDays(30),
+                        "SERVICE_FAILURE",
+                        "Late",
+                        ActorRef.user("support-1", null),
+                        "k-guest",
+                        null))))
+                .as("inventing an identity here is how a remedy becomes spendable by whoever " + "next uses the device")
                 .isInstanceOf(ApiException.class);
     }
 
@@ -671,14 +724,14 @@ class RefundAndRemedyTests {
      * path to give it back.
      */
     @Test
-    @DisplayName("a payment that lands after the order was cancelled leaves the money "
-            + "refundable rather than stranded")
+    @DisplayName(
+            "a payment that lands after the order was cancelled leaves the money " + "refundable rather than stranded")
     void aCaptureThatArrivesAfterTheOrderEndedIsStillRefundable() {
         UUID order = plannedSplitOrder("G-1", 100_000L, 4_000L);
 
         // ordering's OrderStateService on any terminal status but COMPLETED.
-        transactions.executeWithoutResult(status ->
-                planner.recordTerminalOutcome(TENANT, order, "CUSTOMER_UNREACHABLE", "support-1"));
+        transactions.executeWithoutResult(
+                status -> planner.recordTerminalOutcome(TENANT, order, "CUSTOMER_UNREACHABLE", "support-1"));
 
         assertThat(settlementStore.findSettlement(TENANT, order).orElseThrow().status())
                 .as("the platform has given up on the money, which is a statement about its "
@@ -688,8 +741,7 @@ class RefundAndRemedyTests {
         // The redirect the customer completed an hour later. In production this
         // arrives through PaymentAttemptService.applyToIntent on a CAPTURED
         // attempt; called directly here because this suite wires no context.
-        transactions.executeWithoutResult(status ->
-                planner.recordCapture(TENANT, order, "payment-capture"));
+        transactions.executeWithoutResult(status -> planner.recordCapture(TENANT, order, "payment-capture"));
 
         var settlement = settlementStore.findSettlement(TENANT, order).orElseThrow();
         assertThat(settlement.settledMinor())
@@ -717,15 +769,13 @@ class RefundAndRemedyTests {
             + "ceiling is the money that actually arrived")
     void aLateCaptureSettlesOnlyTheMoneyThatArrived() {
         UUID order = plannedSplitOrder("G-2", 100_000L, 4_000L);
-        transactions.executeWithoutResult(status ->
-                planner.recordTerminalOutcome(TENANT, order, "EXPIRED", "system"));
-        transactions.executeWithoutResult(status ->
-                planner.recordCapture(TENANT, order, "payment-capture"));
+        transactions.executeWithoutResult(status -> planner.recordTerminalOutcome(TENANT, order, "EXPIRED", "system"));
+        transactions.executeWithoutResult(status -> planner.recordCapture(TENANT, order, "payment-capture"));
 
-        UUID settlementId = settlementStore.findSettlement(TENANT, order).orElseThrow().id();
+        UUID settlementId =
+                settlementStore.findSettlement(TENANT, order).orElseThrow().id();
         assertThat(settlementStore.tendersOf(TENANT, settlementId))
-                .filteredOn(uz.horecaos.platform.payments.settlement.JdbcSettlementStore.TenderRow
-                        ::settlesFromBalance)
+                .filteredOn(uz.horecaos.platform.payments.settlement.JdbcSettlementStore.TenderRow::settlesFromBalance)
                 .allSatisfy(tender -> assertThat(tender.status())
                         .as("points given back to a customer are theirs; settling them out of "
                                 + "RELEASED would spend a hold that no longer exists")
@@ -761,8 +811,7 @@ class RefundAndRemedyTests {
      * refuses. See {@link #aGuestOrderHasNobodyToGrantTo}.
      */
     @Test
-    @DisplayName("an order the customer paid nothing for can take a goodwill remedy and "
-            + "cannot take a cash refund")
+    @DisplayName("an order the customer paid nothing for can take a goodwill remedy and " + "cannot take a cash refund")
     void aZeroPaidOrderIsRemediedWithGoodwillAndNeverWithCash() {
         // Zero total, zero fee: the shape a hundred-percent-off aggregator push
         // writes, and no settlement, because nothing is owed and there is nothing
@@ -777,8 +826,7 @@ class RefundAndRemedyTests {
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("no settlement");
         assertThat(remedyStore.remediesOfOrder(TENANT, order))
-                .as("and the refused refund leaves nothing behind to be reconciled against "
-                        + "nothing")
+                .as("and the refused refund leaves nothing behind to be reconciled against " + "nothing")
                 .isEmpty();
 
         RemedyOutcome goodwill = grantThreeFreeDeliveries(order);
@@ -810,10 +858,9 @@ class RefundAndRemedyTests {
     void anOrderWithNoSettlementEndsCleanly() {
         UUID order = order("H-2", 60_000L, 12_000L, customerId);
 
-        transactions.executeWithoutResult(status ->
-                planner.recordHandover(TENANT, order, "counter-1"));
-        transactions.executeWithoutResult(status ->
-                planner.recordTerminalOutcome(TENANT, order, "CANCELLED", "support-1"));
+        transactions.executeWithoutResult(status -> planner.recordHandover(TENANT, order, "counter-1"));
+        transactions.executeWithoutResult(
+                status -> planner.recordTerminalOutcome(TENANT, order, "CANCELLED", "support-1"));
 
         assertThat(settlementStore.findSettlement(TENANT, order))
                 .as("neither call invented one")
@@ -840,13 +887,12 @@ class RefundAndRemedyTests {
         settledSplitOrder("I-1", 100_000L, 4_000L);
         plannedSplitOrder("I-2", 80_000L, 5_000L);
         UUID cancelled = plannedSplitOrder("I-3", 70_000L, 1_000L);
-        transactions.executeWithoutResult(status ->
-                planner.recordTerminalOutcome(TENANT, cancelled, "CANCELLED", "support-1"));
+        transactions.executeWithoutResult(
+                status -> planner.recordTerminalOutcome(TENANT, cancelled, "CANCELLED", "support-1"));
         UUID late = plannedSplitOrder("I-4", 90_000L, 2_000L);
-        transactions.executeWithoutResult(status ->
-                planner.recordTerminalOutcome(TENANT, late, "CANCELLED", "support-1"));
-        transactions.executeWithoutResult(status ->
-                planner.recordCapture(TENANT, late, "payment-capture"));
+        transactions.executeWithoutResult(
+                status -> planner.recordTerminalOutcome(TENANT, late, "CANCELLED", "support-1"));
+        transactions.executeWithoutResult(status -> planner.recordCapture(TENANT, late, "payment-capture"));
 
         assertThat(jdbc.sql("""
                 SELECT o.public_order_number
@@ -884,41 +930,60 @@ class RefundAndRemedyTests {
 
     // --------------------------------------------------------------- helpers
 
-    private record RefundEvidence(ExecutionChannel channel, String providerReference,
-            String executedBy, Instant executedAt) {
-    }
+    private record RefundEvidence(
+            ExecutionChannel channel, String providerReference, String executedBy, Instant executedAt) {}
 
     private static RefundEvidence consoleRefund() {
-        return new RefundEvidence(ExecutionChannel.PROVIDER_CONSOLE, "CLICK-REV-1", "cashier-7",
-                NOW);
+        return new RefundEvidence(ExecutionChannel.PROVIDER_CONSOLE, "CLICK-REV-1", "cashier-7", NOW);
     }
 
     private RemedyOutcome refund(UUID orderId, long amountMinor, RefundEvidence evidence) {
-        return transactions.execute(status -> remedies.recordRefund(
-                command(orderId, amountMinor, evidence, "k-" + UUID.randomUUID())));
+        return transactions.execute(
+                status -> remedies.recordRefund(command(orderId, amountMinor, evidence, "k-" + UUID.randomUUID())));
     }
 
-    private RefundCommand command(UUID orderId, long amountMinor, RefundEvidence evidence,
-            String idempotencyKey) {
-        return new RefundCommand(TENANT, orderId, amountMinor, "UZS", "GOODWILL",
-                "Cold food, customer called", evidence.channel(), evidence.providerReference(),
-                evidence.executedBy(), evidence.executedAt(), ActorRef.user("support-1", null),
-                idempotencyKey, null);
+    private RefundCommand command(UUID orderId, long amountMinor, RefundEvidence evidence, String idempotencyKey) {
+        return new RefundCommand(
+                TENANT,
+                orderId,
+                amountMinor,
+                "UZS",
+                "GOODWILL",
+                "Cold food, customer called",
+                evidence.channel(),
+                evidence.providerReference(),
+                evidence.executedBy(),
+                evidence.executedAt(),
+                ActorRef.user("support-1", null),
+                idempotencyKey,
+                null);
     }
 
     private RemedyOutcome grantThreeFreeDeliveries(UUID orderId) {
-        return transactions.execute(status -> remedies.grantFutureDiscount(
-                new FutureDiscountCommand(TENANT, orderId, EntitlementScope.DELIVERY_FEE,
-                        EntitlementBenefit.FIXED_AMOUNT, null, 12_000L, null, 3,
-                        Duration.ofDays(30), "SERVICE_FAILURE", "Ninety minutes late",
-                        ActorRef.user("support-1", null), "k-" + UUID.randomUUID(), null)));
+        return transactions.execute(status -> remedies.grantFutureDiscount(new FutureDiscountCommand(
+                TENANT,
+                orderId,
+                EntitlementScope.DELIVERY_FEE,
+                EntitlementBenefit.FIXED_AMOUNT,
+                null,
+                12_000L,
+                null,
+                3,
+                Duration.ofDays(30),
+                "SERVICE_FAILURE",
+                "Ninety minutes late",
+                ActorRef.user("support-1", null),
+                "k-" + UUID.randomUUID(),
+                null)));
     }
 
     private UUID entitlementOf(UUID remedyId) {
         return jdbc.sql("SELECT id FROM payments.remedy_entitlements "
                         + "WHERE tenant_id = :tenantId AND remedy_id = :remedyId")
-                .param("tenantId", TENANT).param("remedyId", remedyId)
-                .query(UUID.class).single();
+                .param("tenantId", TENANT)
+                .param("remedyId", remedyId)
+                .query(UUID.class)
+                .single();
     }
 
     /** What the money tender of this order has already given back. */
@@ -928,24 +993,36 @@ class RefundAndRemedyTests {
                   FROM payments.tenders t
                   JOIN payments.order_settlements s ON s.id = t.settlement_id
                  WHERE s.tenant_id = :tenantId AND s.order_id = :orderId
-                """).param("tenantId", TENANT).param("orderId", orderId)
-                .query(Long.class).single();
+                """)
+                .param("tenantId", TENANT)
+                .param("orderId", orderId)
+                .query(Long.class)
+                .single();
         return refunded == null ? 0L : refunded;
     }
 
     /** An order settled by one points tender and one card tender, both settled. */
     private UUID settledSplitOrder(String number, long totalMinor, long pointsMinor) {
         UUID orderId = order(number, totalMinor, 12_000L, customerId);
-        transactions.execute(status -> settlements.plan(new SettlementPlan(TENANT, BRAND, orderId,
-                customerId, "UZS", totalMinor,
-                List.of(new PlannedTender(pointsMethod, pointsMinor),
+        transactions.execute(status -> settlements.plan(new SettlementPlan(
+                TENANT,
+                BRAND,
+                orderId,
+                customerId,
+                "UZS",
+                totalMinor,
+                List.of(
+                        new PlannedTender(pointsMethod, pointsMinor),
                         new PlannedTender(clickMethod, totalMinor - pointsMinor)),
-                "plan-" + orderId, "test")));
+                "plan-" + orderId,
+                "test")));
 
-        UUID settlementId = settlementStore.findSettlement(TENANT, orderId).orElseThrow().id();
-        settlementStore.tendersOf(TENANT, settlementId).forEach(tender ->
-                transactions.executeWithoutResult(status ->
-                        settlements.recordTenderSettled(TENANT, orderId, tender.id(), "test")));
+        UUID settlementId =
+                settlementStore.findSettlement(TENANT, orderId).orElseThrow().id();
+        settlementStore
+                .tendersOf(TENANT, settlementId)
+                .forEach(tender -> transactions.executeWithoutResult(
+                        status -> settlements.recordTenderSettled(TENANT, orderId, tender.id(), "test")));
         return orderId;
     }
 
@@ -956,11 +1033,18 @@ class RefundAndRemedyTests {
      */
     private UUID plannedSplitOrder(String number, long totalMinor, long pointsMinor) {
         UUID orderId = order(number, totalMinor, 12_000L, customerId);
-        transactions.execute(status -> settlements.plan(new SettlementPlan(TENANT, BRAND, orderId,
-                customerId, "UZS", totalMinor,
-                List.of(new PlannedTender(pointsMethod, pointsMinor),
+        transactions.execute(status -> settlements.plan(new SettlementPlan(
+                TENANT,
+                BRAND,
+                orderId,
+                customerId,
+                "UZS",
+                totalMinor,
+                List.of(
+                        new PlannedTender(pointsMethod, pointsMinor),
                         new PlannedTender(clickMethod, totalMinor - pointsMinor)),
-                "plan-" + orderId, "test")));
+                "plan-" + orderId,
+                "test")));
         return orderId;
     }
 
@@ -978,9 +1062,14 @@ class RefundAndRemedyTests {
                     tax_minor, total_minor, expires_at)
                 VALUES (:id, :tenantId, :brandId, :locationId, 'UZS', :publicationId, 1, 'hash',
                         :total, 0, :total, now() + interval '1 hour')
-                """).param("id", quoteId).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("locationId", locationId).param("publicationId", publicationId)
-                .param("total", totalMinor).update();
+                """)
+                .param("id", quoteId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", locationId)
+                .param("publicationId", publicationId)
+                .param("total", totalMinor)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO ordering.carts (id, tenant_id, brand_id, location_id, channel_id,
@@ -988,9 +1077,15 @@ class RefundAndRemedyTests {
                     guest_reference_hash, expires_at)
                 VALUES (:id, :tenantId, :brandId, :locationId, :channelId, 'DELIVERY', 'UZS',
                         'ACTIVE', :customer, :guest, now() + interval '1 hour')
-                """).param("id", cartId).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("locationId", locationId).param("channelId", channelId)
-                .param("customer", customer).param("guest", guestHash).update();
+                """)
+                .param("id", cartId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", locationId)
+                .param("channelId", channelId)
+                .param("customer", customer)
+                .param("guest", guestHash)
+                .update();
 
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("id", orderId);
@@ -1023,8 +1118,8 @@ class RefundAndRemedyTests {
                     :publicationId, :cartId, :key, 1, now())
                 """).params(parameters).update();
 
-        orders.register(new OrderDirectory.OrderSummary(orderId, TENANT, BRAND, locationId, number,
-                customer, guestHash, "CONFIRMED", "UZS", totalMinor, 1));
+        orders.register(new OrderDirectory.OrderSummary(
+                orderId, TENANT, BRAND, locationId, number, customer, guestHash, "CONFIRMED", "UZS", totalMinor, 1));
         return orderId;
     }
 
@@ -1047,7 +1142,10 @@ class RefundAndRemedyTests {
                     timezone, status, version)
                 VALUES (:id, :tenantId, :brandId, 'CENTRE', 'centre', 'Centre', 'Asia/Tashkent',
                         'ACTIVE', 0)
-                """).param("id", locationId).param("tenantId", TENANT).param("brandId", BRAND)
+                """)
+                .param("id", locationId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
                 .update();
 
         channelId = UUID.randomUUID();
@@ -1061,7 +1159,10 @@ class RefundAndRemedyTests {
         jdbc.sql("""
                 INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
                 VALUES (:id, :tenantId, :brandId, 'MAIN', 'Main menu', 'ACTIVE')
-                """).param("id", catalogId).param("tenantId", TENANT).param("brandId", BRAND)
+                """)
+                .param("id", catalogId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
                 .update();
 
         publicationId = UUID.randomUUID();
@@ -1069,8 +1170,12 @@ class RefundAndRemedyTests {
                 INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel,
                     status, content_hash, activated_at)
                 VALUES (:id, :tenantId, :brandId, :catalogId, 'WEB', 'PUBLISHED', 'hash', now())
-                """).param("id", publicationId).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("catalogId", catalogId).update();
+                """)
+                .param("id", publicationId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("catalogId", catalogId)
+                .update();
 
         customerId = insertCustomer();
         otherCustomerId = insertCustomer();
@@ -1088,10 +1193,8 @@ class RefundAndRemedyTests {
 
     private void seedPaymentMethods() {
         Instant now = clock.instant();
-        clickMethod = settlementStore.registerMethod(TENANT, "CLICK", "Click", "PARTNER", false,
-                now);
-        pointsMethod = settlementStore.registerMethod(TENANT, "LOYALTY_POINTS", "Баллы",
-                "OPERATOR", true, now);
+        clickMethod = settlementStore.registerMethod(TENANT, "CLICK", "Click", "PARTNER", false, now);
+        pointsMethod = settlementStore.registerMethod(TENANT, "LOYALTY_POINTS", "Баллы", "OPERATOR", true, now);
     }
 
     // --------------------------------------------------------------- doubles
@@ -1109,27 +1212,22 @@ class RefundAndRemedyTests {
 
         @Override
         public RedemptionOffer quote(RedemptionQuery query) {
-            return new RedemptionOffer(UUID.randomUUID(), 100_000L, 100_000L, query.currency(),
-                    null);
+            return new RedemptionOffer(UUID.randomUUID(), 100_000L, 100_000L, query.currency(), null);
         }
 
         @Override
         public PointsHold reserve(ReserveCommand command) {
-            return new PointsHold(UUID.randomUUID(), UUID.randomUUID(), command.amountMinor(), 0L,
-                    1);
+            return new PointsHold(UUID.randomUUID(), UUID.randomUUID(), command.amountMinor(), 0L, 1);
         }
 
         @Override
-        public void settle(UUID tenantId, UUID tenderId) {
-        }
+        public void settle(UUID tenantId, UUID tenderId) {}
 
         @Override
-        public void release(UUID tenantId, UUID tenderId, String reasonCode, String actor) {
-        }
+        public void release(UUID tenantId, UUID tenderId, String reasonCode, String actor) {}
 
         @Override
-        public void reverse(UUID tenantId, UUID tenderId, long amountMinor, String reasonCode,
-                String actor) {
+        public void reverse(UUID tenantId, UUID tenderId, long amountMinor, String reasonCode, String actor) {
             reversed.add(amountMinor);
         }
     }
@@ -1165,8 +1263,8 @@ class RefundAndRemedyTests {
 
         private final List<ApprovalRequestCommand> requests = new CopyOnWriteArrayList<>();
         private final AtomicInteger consumed = new AtomicInteger();
-        private ApprovalOutcome answer = new ApprovalOutcome.Approved(UUID.randomUUID(),
-                "checker-1", consumed::incrementAndGet);
+        private ApprovalOutcome answer =
+                new ApprovalOutcome.Approved(UUID.randomUUID(), "checker-1", consumed::incrementAndGet);
 
         @Override
         public ApprovalOutcome requireApproval(ApprovalRequestCommand command) {
@@ -1175,8 +1273,7 @@ class RefundAndRemedyTests {
         }
 
         @Override
-        public void decide(UUID requestId, Decision decision, ActorRef approver, String reason) {
-        }
+        public void decide(UUID requestId, Decision decision, ActorRef approver, String reason) {}
 
         @Override
         public int expireOverdue() {

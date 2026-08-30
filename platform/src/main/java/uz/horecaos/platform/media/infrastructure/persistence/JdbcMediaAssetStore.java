@@ -7,10 +7,8 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.MediaAssetStatus;
 import uz.horecaos.platform.media.domain.MediaAsset;
@@ -76,8 +74,14 @@ public class JdbcMediaAssetStore {
      * @param contentType what the image's own header says, not what the client
      *                    declared and not what the store echoed back
      */
-    public void markAvailable(MediaAssetId assetId, String contentType, long sizeBytes,
-            String checksum, int widthPx, int heightPx, Instant now) {
+    public void markAvailable(
+            MediaAssetId assetId,
+            String contentType,
+            long sizeBytes,
+            String checksum,
+            int widthPx,
+            int heightPx,
+            Instant now) {
         jdbc.sql("""
                 UPDATE media.assets
                 SET status = 'AVAILABLE',
@@ -120,8 +124,8 @@ public class JdbcMediaAssetStore {
         return new MediaAsset(
                 new MediaAssetId(row.getObject("asset_id", UUID.class)),
                 row.getObject("tenant_id", UUID.class),
-                new MediaOwner(MediaOwner.Scope.valueOf(row.getString("owner_scope")),
-                        row.getObject("owner_id", UUID.class)),
+                new MediaOwner(
+                        MediaOwner.Scope.valueOf(row.getString("owner_scope")), row.getObject("owner_id", UUID.class)),
                 row.getString("object_key"),
                 row.getString("bucket"),
                 MediaAssetStatus.valueOf(row.getString("status")),

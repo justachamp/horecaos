@@ -1,16 +1,16 @@
 package uz.horecaos.platform.partner.web;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
-
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,10 +18,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.partner.api.PartnerBound;
 import uz.horecaos.platform.partner.api.PartnerPrincipal;
@@ -98,26 +94,25 @@ public class PartnerOrderController {
     @PostMapping("/orders")
     @PartnerBound(Capability.MARKETPLACE_ORDER_RECEIVE)
     @NaturallyIdempotent
-    @Operation(summary = "Push an order",
+    @Operation(
+            summary = "Push an order",
             description = "Idempotent on (venue, externalOrderId). A repeat returns the order the "
                     + "first push created, with 200 rather than 201, and never creates a second.")
-    public ResponseEntity<PushResponse> push(
-            @PathVariable UUID tenantId, @Valid @RequestBody PushRequest body) {
+    public ResponseEntity<PushResponse> push(@PathVariable UUID tenantId, @Valid @RequestBody PushRequest body) {
 
         PartnerPrincipal principal = authentication.authenticate(tokens.clientId(), tenantId);
 
         RateLimiter.Decision decision = rateLimiter.check(
-                new RateLimiter.Key("partner.order.push", tenantId.toString(),
-                        principal.rateLimitSubject()),
+                new RateLimiter.Key("partner.order.push", tenantId.toString(), principal.rateLimitSubject()),
                 ORDER_PUSH_LIMIT);
         if (!decision.allowed()) {
-            throw new ApiException(ErrorCode.RATE_LIMIT_EXCEEDED,
+            throw new ApiException(
+                    ErrorCode.RATE_LIMIT_EXCEEDED,
                     "Too many pushes on this partner credential",
                     java.util.Map.of("retryAfterSeconds", decision.retryAfter().toSeconds()));
         }
 
-        MarketplaceIngestionService.Outcome outcome =
-                ingestion.receive(principal, body.toPush());
+        MarketplaceIngestionService.Outcome outcome = ingestion.receive(principal, body.toPush());
 
         if (!outcome.accepted()) {
             // 422 rather than 400: the request was well formed and HorecaOS
@@ -126,8 +121,7 @@ public class PartnerOrderController {
             return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
                     .body(PushResponse.rejected(outcome.rejectionCode().name()));
         }
-        return ResponseEntity
-                .status(outcome.duplicate() ? HttpStatus.OK : HttpStatus.CREATED)
+        return ResponseEntity.status(outcome.duplicate() ? HttpStatus.OK : HttpStatus.CREATED)
                 .body(PushResponse.accepted(outcome));
     }
 
@@ -149,7 +143,9 @@ public class PartnerOrderController {
 
         PartnerOrderPush toPush() {
             ExternalTotals external = new ExternalTotals(
-                    totals.currency(), totals.totalMinor(), totals.subtotalMinor(),
+                    totals.currency(),
+                    totals.totalMinor(),
+                    totals.subtotalMinor(),
                     totals.discountMinor() == null ? 0L : totals.discountMinor(),
                     totals.feeMinor() == null ? 0L : totals.feeMinor(),
                     totals.taxMinor());
@@ -160,12 +156,14 @@ public class PartnerOrderController {
                     displayCode,
                     fulfillmentMode,
                     external,
-                    discountFunding == null
-                            ? DiscountFunding.UNKNOWN
-                            : DiscountFunding.valueOf(discountFunding),
+                    discountFunding == null ? DiscountFunding.UNKNOWN : DiscountFunding.valueOf(discountFunding),
                     lines.stream()
-                            .map(line -> new PushLine(line.externalItemReference(), line.name(),
-                                    line.quantity(), line.unitAmountMinor(), line.lineAmountMinor(),
+                            .map(line -> new PushLine(
+                                    line.externalItemReference(),
+                                    line.name(),
+                                    line.quantity(),
+                                    line.unitAmountMinor(),
+                                    line.lineAmountMinor(),
                                     line.taxMinor()))
                             .toList(),
                     handoverCode,
@@ -188,7 +186,7 @@ public class PartnerOrderController {
             @NotNull Long subtotalMinor,
             Long discountMinor,
             Long feeMinor,
-            Long taxMinor) { }
+            Long taxMinor) {}
 
     public record Line(
             @NotBlank @Size(max = 128) String externalItemReference,
@@ -196,7 +194,7 @@ public class PartnerOrderController {
             @Positive int quantity,
             @NotNull Long unitAmountMinor,
             @NotNull Long lineAmountMinor,
-            Long taxMinor) { }
+            Long taxMinor) {}
 
     /**
      * @param unmappedItems non-empty means the order was accepted with items the
@@ -205,16 +203,14 @@ public class PartnerOrderController {
      *                      and raised as a branch-visible exception here.
      */
     public record PushResponse(
-            String status,
-            UUID orderId,
-            String publicOrderNumber,
-            String rejectionCode,
-            List<String> unmappedItems) {
+            String status, UUID orderId, String publicOrderNumber, String rejectionCode, List<String> unmappedItems) {
 
         static PushResponse accepted(MarketplaceIngestionService.Outcome outcome) {
             return new PushResponse(
                     outcome.duplicate() ? "DUPLICATE" : "ACCEPTED",
-                    outcome.orderId(), outcome.publicOrderNumber(), null,
+                    outcome.orderId(),
+                    outcome.publicOrderNumber(),
+                    null,
                     outcome.unmappedItems());
         }
 

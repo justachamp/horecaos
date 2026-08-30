@@ -10,10 +10,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
-
 import uz.horecaos.platform.iam.api.protection.ClassificationScanner;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
@@ -58,6 +56,7 @@ public class ResponseBodyProtection {
 
     /** Named for the AAD binding, which must match between the write and the replay. */
     static final String TABLE = "platform.idempotency_records";
+
     static final String COLUMN = "response_body";
 
     /**
@@ -144,8 +143,7 @@ public class ResponseBodyProtection {
      * cover rather than trust — see the enforcement test.
      */
     public static boolean isScannable(Method handler) {
-        return responseTypeOf(handler.getGenericReturnType()) != null
-                || carriesNoBody(handler.getGenericReturnType());
+        return responseTypeOf(handler.getGenericReturnType()) != null || carriesNoBody(handler.getGenericReturnType());
     }
 
     static boolean carriesNoBody(Type type) {
@@ -163,19 +161,19 @@ public class ResponseBodyProtection {
             Type[] arguments = parameterized.getActualTypeArguments();
             return arguments.length == 1 && carriesNoBody(arguments[0]);
         }
-        return raw == UUID.class || raw == String.class
-                || Number.class.isAssignableFrom(raw) || raw.isPrimitive();
+        return raw == UUID.class || raw == String.class || Number.class.isAssignableFrom(raw) || raw.isPrimitive();
     }
 
     /** Encrypts a body for storage, bound to the tenant and the record holding it. */
     public String protect(UUID tenantId, DataClass dataClass, UUID recordId, String body) {
-        return protection.protect(tenantId, dataClass, recordRef(recordId), body).serialize();
+        return protection
+                .protect(tenantId, dataClass, recordRef(recordId), body)
+                .serialize();
     }
 
     /** Reverses {@link #protect} for a replay. */
     public String reveal(UUID tenantId, UUID recordId, String stored) {
-        return protection.reveal(
-                tenantId, ProtectedValue.deserialize(stored), recordRef(recordId), REPLAY_PURPOSE);
+        return protection.reveal(tenantId, ProtectedValue.deserialize(stored), recordRef(recordId), REPLAY_PURPOSE);
     }
 
     private static FieldProtection.RecordRef recordRef(UUID recordId) {
@@ -185,8 +183,8 @@ public class ResponseBodyProtection {
     /** The handlers whose responses are classified, for the enforcement test to name. */
     static List<String> describe(Method handler) {
         return classify(handler)
-                .map(dataClass -> List.of(handler.getDeclaringClass().getSimpleName()
-                        + "#" + handler.getName() + " -> " + dataClass))
+                .map(dataClass -> List.of(
+                        handler.getDeclaringClass().getSimpleName() + "#" + handler.getName() + " -> " + dataClass))
                 .orElseGet(List::of);
     }
 }

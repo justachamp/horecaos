@@ -1,16 +1,15 @@
 package uz.horecaos.platform.integration.camel.delivery;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.integration.api.delivery.DeliveryCapability;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.DeliveryRequest;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.Dropoff;
@@ -20,8 +19,6 @@ import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.integration.camel.common.ProviderExceptionClassifier;
 import uz.horecaos.platform.integration.camel.common.ProviderHttpClient;
 import uz.horecaos.platform.integration.camel.delivery.noor.NoorDeliveryAdapter;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * What Noor actually receives (ADR 0014).
@@ -37,8 +34,8 @@ class NoorDeliveryAdapterTests {
     @BeforeEach
     void startPartner() throws Exception {
         partner = RecordingPartnerServer.start();
-        adapter = new NoorDeliveryAdapter(new ProviderHttpClient(
-                JsonMapper.builder().build(), new ProviderExceptionClassifier()));
+        adapter = new NoorDeliveryAdapter(
+                new ProviderHttpClient(JsonMapper.builder().build(), new ProviderExceptionClassifier()));
     }
 
     @AfterEach
@@ -107,7 +104,8 @@ class NoorDeliveryAdapterTests {
     void createTimeoutIsUncertain() {
         partner.stallAfterReceiving("/api/v1/orders", 2_000);
 
-        ProviderOutcome outcome = adapter.createShipment(request(true, null),
+        ProviderOutcome outcome = adapter.createShipment(
+                request(true, null),
                 new ProviderCall(partner.baseUrl(), "secret-token", "cmd-1", Duration.ofMillis(300)));
 
         // The premise, asserted rather than assumed: Noor really did receive the
@@ -130,8 +128,8 @@ class NoorDeliveryAdapterTests {
             deadUrl = dead.baseUrl();
         }
 
-        ProviderOutcome outcome = adapter.createShipment(request(true, null),
-                new ProviderCall(deadUrl, "secret-token", "cmd-2", Duration.ofSeconds(2)));
+        ProviderOutcome outcome = adapter.createShipment(
+                request(true, null), new ProviderCall(deadUrl, "secret-token", "cmd-2", Duration.ofSeconds(2)));
 
         // The mirror of the test above, and the reason the two must be told
         // apart: this one is safe to send again, that one is not.
@@ -199,13 +197,13 @@ class NoorDeliveryAdapterTests {
     @DisplayName("Noor declares no reservation and refuses to pretend it confirmed one")
     void hasNoReservationPhase() {
         assertThat(adapter.capabilities())
-                .doesNotContain(DeliveryCapability.RESERVE_SHIPMENT,
+                .doesNotContain(
+                        DeliveryCapability.RESERVE_SHIPMENT,
                         DeliveryCapability.CONFIRM_SHIPMENT,
                         DeliveryCapability.RESCHEDULE_SHIPMENT,
                         DeliveryCapability.QUERY_CANCELLATION_COST);
 
-        assertThat(adapter.confirmShipment("noor-1", call()).status())
-                .isEqualTo(ProviderOutcome.Status.REJECTED);
+        assertThat(adapter.confirmShipment("noor-1", call()).status()).isEqualTo(ProviderOutcome.Status.REJECTED);
     }
 
     @Test
@@ -247,8 +245,7 @@ class NoorDeliveryAdapterTests {
         return new DeliveryRequest(
                 "QO-1001",
                 new Pickup(41.3111, 69.2797, "Amir Temur 1", "Kitchen", "+998901112233", null),
-                new Dropoff(41.2995, 69.2401, "Navoi 5", "Customer", "+998907654321",
-                        null, "2", "4", "12"),
+                new Dropoff(41.2995, 69.2401, "Navoi 5", "Customer", "+998907654321", null, "2", "4", "12"),
                 pickupAt,
                 prepaid,
                 150_000_00L,

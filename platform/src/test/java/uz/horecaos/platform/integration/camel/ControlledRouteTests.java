@@ -1,19 +1,15 @@
 package uz.horecaos.platform.integration.camel;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.io.IOException;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
+import javax.sql.DataSource;
 import org.apache.camel.CamelContext;
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.impl.DefaultCamelContext;
@@ -25,12 +21,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.integration.api.ExternalEventEnvelope;
 import uz.horecaos.platform.integration.api.InboxHandler;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
@@ -190,9 +183,8 @@ class ControlledRouteTests {
     }
 
     private InboxResult offer(Instant at, UUID commandId, String scenario, long offset) {
-        return executorAt(at).execute(
-                CONSUMER, commandId.toString(), body(commandId, scenario),
-                Map.of(), TOPIC, 0, offset);
+        return executorAt(at)
+                .execute(CONSUMER, commandId.toString(), body(commandId, scenario), Map.of(), TOPIC, 0, offset);
     }
 
     private InboxExecutor executorAt(Instant at) {
@@ -220,12 +212,13 @@ class ControlledRouteTests {
                 {"eventId":"%s","eventType":"ControlledCommandIssued","eventVersion":1,"tenantId":"%s",
                  "aggregateType":"ControlledCommand","aggregateId":"%s","correlationId":"correlation-1",
                  "causationId":null,"occurredAt":"2026-08-25T10:00:00Z",
-                 "payload":{"scenario":"%s"}}"""
-                .formatted(commandId, TENANT, commandId, scenario);
+                 "payload":{"scenario":"%s"}}""".formatted(commandId, TENANT, commandId, scenario);
     }
 
     private long outboxRows() {
-        return jdbc.sql("SELECT count(*) FROM integration.outbox_events").query(Long.class).single();
+        return jdbc.sql("SELECT count(*) FROM integration.outbox_events")
+                .query(Long.class)
+                .single();
     }
 
     private String outboxStatus(UUID commandId) {
@@ -282,10 +275,12 @@ class ControlledRouteTests {
         @Override
         public void handle(ExternalEventEnvelope<Map<String, Object>> event) {
             ControlledCommand command = new ControlledCommand(
-                    event.eventId(), event.tenantId(), String.valueOf(event.payload().get("scenario")));
+                    event.eventId(),
+                    event.tenantId(),
+                    String.valueOf(event.payload().get("scenario")));
 
-            ProviderOutcome outcome = producer.requestBody(
-                    ControlledCommandRoute.COMMAND_ENDPOINT, command, ProviderOutcome.class);
+            ProviderOutcome outcome =
+                    producer.requestBody(ControlledCommandRoute.COMMAND_ENDPOINT, command, ProviderOutcome.class);
 
             if (outcome.mayRetryDirectly()) {
                 // Thrown rather than recorded, so the inbox schedules the retry

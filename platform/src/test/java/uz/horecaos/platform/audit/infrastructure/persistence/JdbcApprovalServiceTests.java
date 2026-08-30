@@ -1,16 +1,18 @@
 package uz.horecaos.platform.audit.infrastructure.persistence;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.UUID;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -19,26 +21,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
-
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import tools.jackson.databind.json.JsonMapper;
-
-import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalAction;
 import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.ApprovalRequestCommand;
 import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.iam.api.ResourceScope;
-import uz.horecaos.platform.tenancy.api.TenantId;
+import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -105,26 +97,33 @@ class JdbcApprovalServiceTests {
 
     @Test
     void anActionWithNoPolicyProceedsWithoutApproval() {
-        assertThat(approvals.requireApproval(command(PARAMETERS)))
-                .isInstanceOf(ApprovalOutcome.NotRequired.class);
+        assertThat(approvals.requireApproval(command(PARAMETERS))).isInstanceOf(ApprovalOutcome.NotRequired.class);
     }
 
     @Test
     void anActionRegisteredFailClosedRefusesWhenNoPolicyResolves() {
         ApprovalRequestCommand manualPenalty = new ApprovalRequestCommand(
-                ApprovalAction.COURIER_MANUAL_PENALTY.code(), PARAMETERS,
-                ResourceScope.tenant(TENANT), ActorRef.user("operator-1", "Operator One"),
-                "Penalty requires a second signature", ApprovalRequestCommand.DEFAULT_VALIDITY);
+                ApprovalAction.COURIER_MANUAL_PENALTY.code(),
+                PARAMETERS,
+                ResourceScope.tenant(TENANT),
+                ActorRef.user("operator-1", "Operator One"),
+                "Penalty requires a second signature",
+                ApprovalRequestCommand.DEFAULT_VALIDITY);
 
         assertThatThrownBy(() -> approvals.requireApproval(manualPenalty))
                 .isInstanceOf(ApiException.class)
                 .extracting(failure -> ((ApiException) failure).errorCode())
                 .isEqualTo(ErrorCode.APPROVAL_POLICY_REQUIRED);
         assertThat(meters.find(JdbcApprovalService.RESOLUTION_METRIC)
-                .tags("action", ApprovalAction.COURIER_MANUAL_PENALTY.code(),
-                        "outcome", "unresolved",
-                        "missing_policy_mode", "REQUIRE_CONFIGURED_POLICY")
-                .counter().count())
+                        .tags(
+                                "action",
+                                ApprovalAction.COURIER_MANUAL_PENALTY.code(),
+                                "outcome",
+                                "unresolved",
+                                "missing_policy_mode",
+                                "REQUIRE_CONFIGURED_POLICY")
+                        .counter()
+                        .count())
                 .isEqualTo(1.0);
     }
 
@@ -142,8 +141,10 @@ class JdbcApprovalServiceTests {
                         jsonb_build_object('description', 'Covered brand only'),
                         'refund.approve', :validFrom, 1, 'platform-admin')
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", TENANT)
-                .param("brandId", coveredBrand).param("actionCode", ACTION)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", coveredBrand)
+                .param("actionCode", ACTION)
                 .param("validFrom", clock.instant().minus(Duration.ofDays(1)).atOffset(ZoneOffset.UTC))
                 .update();
 
@@ -166,7 +167,11 @@ class JdbcApprovalServiceTests {
                 .as("an operator has to be able to alert on a control nothing reaches")
                 .isEqualTo(1.0);
         assertThat(meters.find(JdbcApprovalService.RESOLUTION_METRIC)
-                .tag("outcome", "unresolved").counter().getId().getTags().toString())
+                        .tag("outcome", "unresolved")
+                        .counter()
+                        .getId()
+                        .getTags()
+                        .toString())
                 .as("the signal names the action and the scope, never the parameters or the reason")
                 .contains("action", ACTION)
                 .doesNotContain(PARAMETERS);
@@ -182,7 +187,8 @@ class JdbcApprovalServiceTests {
                 .as("a configured action has to be distinguishable from an unconfigured one")
                 .isEqualTo(1.0);
         assertThat(meters.find(JdbcApprovalService.RESOLUTION_METRIC)
-                .tag("outcome", "unresolved").counter())
+                        .tag("outcome", "unresolved")
+                        .counter())
                 .isNull();
     }
 
@@ -253,8 +259,7 @@ class JdbcApprovalServiceTests {
     }
 
     private static ch.qos.logback.classic.Logger approvalLogger() {
-        return (ch.qos.logback.classic.Logger)
-                org.slf4j.LoggerFactory.getLogger(JdbcApprovalService.class);
+        return (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(JdbcApprovalService.class);
     }
 
     private static java.util.List<String> warnings(ListAppender<ILoggingEvent> appender) {
@@ -282,7 +287,9 @@ class JdbcApprovalServiceTests {
                 .as("a pending approval must never let the side effect run")
                 .isFalse();
         assertThat(jdbc.sql("SELECT count(*) FROM audit.audit_events WHERE action_code = 'approval.requested'")
-                .query(Long.class).single()).isEqualTo(1L);
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1L);
     }
 
     @Test
@@ -314,8 +321,11 @@ class JdbcApprovalServiceTests {
         insertPolicy(1, "amount above 1,000,000 UZS");
         UUID requestId = ((ApprovalOutcome.Pending) approvals.requireApproval(command(PARAMETERS))).requestId();
 
-        approvals.decide(requestId, ApprovalService.Decision.APPROVE,
-                ActorRef.user("manager-1", "Manager One"), "Verified with the customer");
+        approvals.decide(
+                requestId,
+                ApprovalService.Decision.APPROVE,
+                ActorRef.user("manager-1", "Manager One"),
+                "Verified with the customer");
 
         ApprovalOutcome resumed = transactions.execute(status -> {
             ApprovalOutcome outcome = approvals.requireApproval(command(PARAMETERS));
@@ -326,7 +336,9 @@ class JdbcApprovalServiceTests {
         assertThat(resumed.mayProceed()).isTrue();
         assertThat(((ApprovalOutcome.Approved) resumed).approvedBy()).isEqualTo("manager-1");
         assertThat(jdbc.sql("SELECT status FROM audit.approval_requests WHERE id = :id")
-                .param("id", requestId).query(String.class).single())
+                        .param("id", requestId)
+                        .query(String.class)
+                        .single())
                 .as("and the signature is spent, so the identical resubmission has to ask again")
                 .isEqualTo("CONSUMED");
     }
@@ -336,8 +348,11 @@ class JdbcApprovalServiceTests {
         insertPolicy(1, "amount above 1,000,000 UZS");
         UUID requestId = ((ApprovalOutcome.Pending) approvals.requireApproval(command(PARAMETERS))).requestId();
 
-        assertThatThrownBy(() -> approvals.decide(requestId, ApprovalService.Decision.APPROVE,
-                ActorRef.user("operator-1", "Operator One"), "approving my own"))
+        assertThatThrownBy(() -> approvals.decide(
+                        requestId,
+                        ApprovalService.Decision.APPROVE,
+                        ActorRef.user("operator-1", "Operator One"),
+                        "approving my own"))
                 .isInstanceOf(ApprovalService.SelfApprovalException.class);
     }
 
@@ -362,8 +377,8 @@ class JdbcApprovalServiceTests {
 
         clock.advance(ApprovalRequestCommand.DEFAULT_VALIDITY.plusHours(1));
 
-        assertThatThrownBy(() -> approvals.decide(requestId, ApprovalService.Decision.APPROVE,
-                ActorRef.user("manager-1", "M"), "late"))
+        assertThatThrownBy(() -> approvals.decide(
+                        requestId, ApprovalService.Decision.APPROVE, ActorRef.user("manager-1", "M"), "late"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("expired");
     }
@@ -373,8 +388,8 @@ class JdbcApprovalServiceTests {
         insertPolicy(1, "amount above 1,000,000 UZS");
         UUID requestId = ((ApprovalOutcome.Pending) approvals.requireApproval(command(PARAMETERS))).requestId();
 
-        approvals.decide(requestId, ApprovalService.Decision.DECLINE,
-                ActorRef.user("manager-1", "M"), "Not a service failure");
+        approvals.decide(
+                requestId, ApprovalService.Decision.DECLINE, ActorRef.user("manager-1", "M"), "Not a service failure");
 
         ApprovalOutcome outcome = approvals.requireApproval(command(PARAMETERS));
         assertThat(outcome).isInstanceOf(ApprovalOutcome.Declined.class);
@@ -391,9 +406,9 @@ class JdbcApprovalServiceTests {
         insertPolicy(2, "amount above 100,000 UZS");
 
         assertThat(jdbc.sql("SELECT policy_version, threshold_description FROM audit.approval_requests WHERE id = :id")
-                .param("id", requestId)
-                .query((rs, n) -> rs.getInt("policy_version") + "/" + rs.getString("threshold_description"))
-                .single())
+                        .param("id", requestId)
+                        .query((rs, n) -> rs.getInt("policy_version") + "/" + rs.getString("threshold_description"))
+                        .single())
                 .as("the snapshotted policy is what the approver actually saw")
                 .isEqualTo("1/amount above 1,000,000 UZS");
     }
@@ -406,7 +421,9 @@ class JdbcApprovalServiceTests {
         clock.advance(ApprovalRequestCommand.DEFAULT_VALIDITY.plusHours(1));
 
         assertThat(approvals.expireOverdue()).isEqualTo(1);
-        assertThat(jdbc.sql("SELECT status FROM audit.approval_requests").query(String.class).single())
+        assertThat(jdbc.sql("SELECT status FROM audit.approval_requests")
+                        .query(String.class)
+                        .single())
                 .isEqualTo("EXPIRED");
     }
 
@@ -415,14 +432,15 @@ class JdbcApprovalServiceTests {
         insertPolicy(1, "amount above 1,000,000 UZS");
         UUID requestId = ((ApprovalOutcome.Pending) approvals.requireApproval(command(PARAMETERS))).requestId();
 
-        approvals.decide(requestId, ApprovalService.Decision.APPROVE,
-                ActorRef.user("manager-1", "Manager One"), "Verified");
+        approvals.decide(
+                requestId, ApprovalService.Decision.APPROVE, ActorRef.user("manager-1", "Manager One"), "Verified");
 
         assertThat(jdbc.sql("""
                 SELECT count(*) FROM audit.audit_events
                  WHERE action_code = 'approval.approve' AND actor_subject = 'manager-1'
                    AND approval_request_id = :id
-                """).param("id", requestId).query(Long.class).single()).isEqualTo(1L);
+                """).param("id", requestId).query(Long.class).single())
+                .isEqualTo(1L);
     }
 
     private ApprovalRequestCommand command(String parametersHash) {
@@ -431,7 +449,8 @@ class JdbcApprovalServiceTests {
 
     private ApprovalRequestCommand command(UUID tenantId, String parametersHash) {
         return new ApprovalRequestCommand(
-                ACTION, parametersHash,
+                ACTION,
+                parametersHash,
                 ResourceScope.tenant(tenantId),
                 ActorRef.user("operator-1", "Operator One"),
                 "Customer reported a missing item",
@@ -440,9 +459,12 @@ class JdbcApprovalServiceTests {
 
     private ApprovalRequestCommand command(ResourceScope scope) {
         return new ApprovalRequestCommand(
-                ACTION, PARAMETERS, scope,
+                ACTION,
+                PARAMETERS,
+                scope,
                 ActorRef.user("operator-1", "Operator One"),
-                "Customer reported a missing item", ApprovalRequestCommand.DEFAULT_VALIDITY);
+                "Customer reported a missing item",
+                ApprovalRequestCommand.DEFAULT_VALIDITY);
     }
 
     private void insertPolicy(int version, String threshold) {
@@ -475,8 +497,11 @@ class JdbcApprovalServiceTests {
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
                 VALUES (:id, :tenantId, :code, :slug, :code, 'ACTIVE', 0)
                 """)
-                .param("id", id).param("tenantId", TENANT).param("code", code)
-                .param("slug", code.toLowerCase()).update();
+                .param("id", id)
+                .param("tenantId", TENANT)
+                .param("code", code)
+                .param("slug", code.toLowerCase())
+                .update();
     }
 
     private static final class MutableClock extends Clock {

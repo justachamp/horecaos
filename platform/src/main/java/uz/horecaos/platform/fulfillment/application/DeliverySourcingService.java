@@ -7,11 +7,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-
 import uz.horecaos.platform.fulfillment.api.InternalFleetPort;
 import uz.horecaos.platform.fulfillment.api.InternalFleetPort.FleetCandidate;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort;
@@ -92,8 +90,12 @@ public class DeliverySourcingService {
     private final PolicyResolver policies;
     private final Clock clock;
 
-    public DeliverySourcingService(InternalFleetPort fleet, ShipmentBookingPort bookings,
-            SourcingJournal journal, PolicyResolver policies, Clock clock) {
+    public DeliverySourcingService(
+            InternalFleetPort fleet,
+            ShipmentBookingPort bookings,
+            SourcingJournal journal,
+            PolicyResolver policies,
+            Clock clock) {
         this.fleet = fleet;
         this.bookings = bookings;
         this.journal = journal;
@@ -111,15 +113,15 @@ public class DeliverySourcingService {
         ResolvedPolicy<DeliverySourcingPolicy> policy = resolvePolicy(request);
 
         List<FleetCandidate> candidates = request.mode().usesFleet()
-                ? fleet.candidates(request.tenantId(), request.brandId(), request.locationId(),
-                        request.distanceMeters())
+                ? fleet.candidates(
+                        request.tenantId(), request.brandId(), request.locationId(), request.distanceMeters())
                 : List.of();
         List<PartnerOption> partners = request.mode().usesPartners()
                 ? bookings.partners(request.tenantId(), request.brandId(), request.locationId())
                 : List.of();
 
-        SourcingDecision decision = SourcingPlanner.decide(request.plan(), policy.document(),
-                request.mode(), candidates, partners, progress, now);
+        SourcingDecision decision = SourcingPlanner.decide(
+                request.plan(), policy.document(), request.mode(), candidates, partners, progress, now);
 
         List<ScoredPartner> scored = List.of();
         if (decision instanceof SourcingDecision.BookPartner && partners.size() > 1) {
@@ -129,20 +131,23 @@ public class DeliverySourcingService {
             // couriers takes thirty seconds later buys nothing, and asking a
             // single configured partner what it costs cannot change who is booked.
             scored = quoteAndScore(request, partners, progress, now);
-            decision = SourcingPlanner.decide(request.plan(), policy.document(), request.mode(),
-                    candidates, QuoteScoring.ranked(scored),
-                    ineligibleAsAttempted(progress, scored), now);
+            decision = SourcingPlanner.decide(
+                    request.plan(),
+                    policy.document(),
+                    request.mode(),
+                    candidates,
+                    QuoteScoring.ranked(scored),
+                    ineligibleAsAttempted(progress, scored),
+                    now);
         }
 
         return switch (decision) {
             case SourcingDecision.BookPartner book ->
-                    execute(request, book, progress, policy, quoteFor(scored, book), now);
+                execute(request, book, progress, policy, quoteFor(scored, book), now);
             case SourcingDecision.OfferInternal offer -> offer(request, offer, progress, policy, now);
             case SourcingDecision.WaitForInternal wait ->
-                    new Outcome(wait, progress, null, policy.policyId(), policy.policyVersion(),
-                            null, false);
-            case SourcingDecision.EscalateToOperations escalate ->
-                    escalate(request, escalate, progress, policy, now);
+                new Outcome(wait, progress, null, policy.policyId(), policy.policyVersion(), null, false);
+            case SourcingDecision.EscalateToOperations escalate -> escalate(request, escalate, progress, policy, now);
         };
     }
 
@@ -161,91 +166,153 @@ public class DeliverySourcingService {
 
     // ------------------------------------------------------------- the effects
 
-    private Outcome execute(SourcingRequest request, SourcingDecision.BookPartner decision,
-            SourcingProgress progress, ResolvedPolicy<DeliverySourcingPolicy> policy,
-            DeliveryQuote quote, Instant now) {
+    private Outcome execute(
+            SourcingRequest request,
+            SourcingDecision.BookPartner decision,
+            SourcingProgress progress,
+            ResolvedPolicy<DeliverySourcingPolicy> policy,
+            DeliveryQuote quote,
+            Instant now) {
 
-        UUID commandId = commandId(request.planId(), decision.partner().bindingId(),
+        UUID commandId = commandId(
+                request.planId(),
+                decision.partner().bindingId(),
                 progress.attemptedPartners().size());
 
-        SourcingJournal.OpenAttempt attempt = journal.openPartnerAttempt(
-                new SourcingJournal.PartnerAttempt(request.tenantId(), request.planId(),
-                        decision.partner().bindingId(), commandId.toString(),
-                        quote == null ? null : quote.id(), decision.reason(),
-                        policy.policyId(), policy.policyVersion(), now));
+        SourcingJournal.OpenAttempt attempt = journal.openPartnerAttempt(new SourcingJournal.PartnerAttempt(
+                request.tenantId(),
+                request.planId(),
+                decision.partner().bindingId(),
+                commandId.toString(),
+                quote == null ? null : quote.id(),
+                decision.reason(),
+                policy.policyId(),
+                policy.policyVersion(),
+                now));
 
         if (!attempt.needsCall()) {
             // A previous tick already sent this exact command and the partner has
             // answered it. Sending it again would be a second order on any partner
             // whose deduplication is unverified — which is Noor, today.
-            log.info("Plan {} already has attempt {} in {}; no partner is called this tick",
-                    request.planId(), attempt.attemptId(), attempt.status());
-            return new Outcome(decision, progress, null, policy.policyId(), policy.policyVersion(),
-                    attempt.attemptId(), false);
+            log.info(
+                    "Plan {} already has attempt {} in {}; no partner is called this tick",
+                    request.planId(),
+                    attempt.attemptId(),
+                    attempt.status());
+            return new Outcome(
+                    decision, progress, null, policy.policyId(), policy.policyVersion(), attempt.attemptId(), false);
         }
 
-        BookingCommand command = new BookingCommand(commandId,
-                request.tenantId(), request.brandId(), request.locationId(),
-                decision.partner().bindingId(), decision.intent(), request.orderReference(),
-                request.pickup(), request.dropoff(), decision.requestedPickupAt(),
-                request.prepaid(), request.itemValueMinor(), request.currency(),
+        BookingCommand command = new BookingCommand(
+                commandId,
+                request.tenantId(),
+                request.brandId(),
+                request.locationId(),
+                decision.partner().bindingId(),
+                decision.intent(),
+                request.orderReference(),
+                request.pickup(),
+                request.dropoff(),
+                decision.requestedPickupAt(),
+                request.prepaid(),
+                request.itemValueMinor(),
+                request.currency(),
                 request.correlationId());
 
         BookingReceipt receipt = bookings.book(command);
-        boolean won = journal.settlePartnerAttempt(request.tenantId(), attempt.attemptId(),
-                receipt, now);
+        boolean won = journal.settlePartnerAttempt(request.tenantId(), attempt.attemptId(), receipt, now);
 
-        SourcingProgress next = progress.withPartnerAttempt(decision.partner().bindingId(),
-                receipt.status() == BookingStatus.UNCERTAIN);
+        SourcingProgress next = progress.withPartnerAttempt(
+                decision.partner().bindingId(), receipt.status() == BookingStatus.UNCERTAIN);
 
-        log.info("Plan {} booking with {} finished as {} ({})", request.planId(),
-                decision.partner().providerType(), receipt.status(), decision.reason());
+        log.info(
+                "Plan {} booking with {} finished as {} ({})",
+                request.planId(),
+                decision.partner().providerType(),
+                receipt.status(),
+                decision.reason());
 
         if (receipt.status() == BookingStatus.UNCERTAIN || receipt.status() == BookingStatus.HELD) {
             // Nothing else may be attempted for this plan until a human or a query
             // settles what the partner actually did, so the exception exists from
             // the moment the doubt does rather than on the next tick.
-            journal.raiseException(request.tenantId(), request.brandId(), request.locationId(),
-                    request.planId(), DeliveryExceptionReason.AWAITING_RECONCILIATION,
-                    "attempt=" + attempt.attemptId(), now);
+            journal.raiseException(
+                    request.tenantId(),
+                    request.brandId(),
+                    request.locationId(),
+                    request.planId(),
+                    DeliveryExceptionReason.AWAITING_RECONCILIATION,
+                    "attempt=" + attempt.attemptId(),
+                    now);
         }
 
         // A RETRYABLE receipt is the one case where the same partner is tried
         // again rather than the next one, and it is safe precisely because the
         // command id is derived rather than fresh: the attempt row is still
         // REQUESTED under the same key, so the partner sees the retry as a retry.
-        return new Outcome(decision,
+        return new Outcome(
+                decision,
                 receipt.status() == BookingStatus.RETRYABLE ? progress : next,
-                receipt, policy.policyId(), policy.policyVersion(), attempt.attemptId(), won);
+                receipt,
+                policy.policyId(),
+                policy.policyVersion(),
+                attempt.attemptId(),
+                won);
     }
 
-    private Outcome offer(SourcingRequest request, SourcingDecision.OfferInternal decision,
-            SourcingProgress progress, ResolvedPolicy<DeliverySourcingPolicy> policy, Instant now) {
+    private Outcome offer(
+            SourcingRequest request,
+            SourcingDecision.OfferInternal decision,
+            SourcingProgress progress,
+            ResolvedPolicy<DeliverySourcingPolicy> policy,
+            Instant now) {
 
-        SourcingJournal.OpenAttempt attempt = journal.openInternalOffer(
-                new SourcingJournal.InternalOffer(request.tenantId(), request.planId(),
-                        decision.courierId(), offerKey(request.planId(), decision.courierId()),
-                        decision.expiresAt(), decision.reason(), policy.policyId(),
-                        policy.policyVersion(), now));
+        SourcingJournal.OpenAttempt attempt = journal.openInternalOffer(new SourcingJournal.InternalOffer(
+                request.tenantId(),
+                request.planId(),
+                decision.courierId(),
+                offerKey(request.planId(), decision.courierId()),
+                decision.expiresAt(),
+                decision.reason(),
+                policy.policyId(),
+                policy.policyVersion(),
+                now));
 
-        log.info("Plan {} offered courier {} until {} ({})", request.planId(),
-                decision.courierId(), decision.expiresAt(), decision.reason());
+        log.info(
+                "Plan {} offered courier {} until {} ({})",
+                request.planId(),
+                decision.courierId(),
+                decision.expiresAt(),
+                decision.reason());
 
-        return new Outcome(decision,
+        return new Outcome(
+                decision,
                 progress.withOffer(decision.courierId(), decision.expiresAt()),
-                null, policy.policyId(), policy.policyVersion(), attempt.attemptId(), false);
+                null,
+                policy.policyId(),
+                policy.policyVersion(),
+                attempt.attemptId(),
+                false);
     }
 
-    private Outcome escalate(SourcingRequest request, SourcingDecision.EscalateToOperations decision,
-            SourcingProgress progress, ResolvedPolicy<DeliverySourcingPolicy> policy, Instant now) {
+    private Outcome escalate(
+            SourcingRequest request,
+            SourcingDecision.EscalateToOperations decision,
+            SourcingProgress progress,
+            ResolvedPolicy<DeliverySourcingPolicy> policy,
+            Instant now) {
 
-        journal.raiseException(request.tenantId(), request.brandId(), request.locationId(),
-                request.planId(), DeliveryExceptionReason.forDecision(decision.reason()),
-                decision.reason(), now);
+        journal.raiseException(
+                request.tenantId(),
+                request.brandId(),
+                request.locationId(),
+                request.planId(),
+                DeliveryExceptionReason.forDecision(decision.reason()),
+                decision.reason(),
+                now);
 
         log.warn("Plan {} needs manual action: {}", request.planId(), decision.reason());
-        return new Outcome(decision, progress, null, policy.policyId(), policy.policyVersion(),
-                null, false);
+        return new Outcome(decision, progress, null, policy.policyId(), policy.policyVersion(), null, false);
     }
 
     // -------------------------------------------------------------- the quotes
@@ -259,28 +326,37 @@ public class DeliverySourcingService {
      * row at all: a refusal row would say the partner declined this plan, and
      * scoring would then step past a partner that was never asked.
      */
-    private List<ScoredPartner> quoteAndScore(SourcingRequest request,
-            List<PartnerOption> partners, SourcingProgress progress, Instant now) {
+    private List<ScoredPartner> quoteAndScore(
+            SourcingRequest request, List<PartnerOption> partners, SourcingProgress progress, Instant now) {
 
         List<DeliveryQuote> quotes = new ArrayList<>();
         for (PartnerOption partner : partners) {
             if (progress.attemptedPartners().contains(partner.bindingId())) {
                 continue;
             }
-            UUID requestId = quoteId(request.planId(), partner.bindingId(),
+            UUID requestId = quoteId(
+                    request.planId(),
+                    partner.bindingId(),
                     progress.attemptedPartners().size());
             QuoteOutcome outcome = bookings.quote(quoteCommand(request, partner, requestId));
-            if (!outcome.hasPrice()
-                    && ShipmentBookingPort.QUOTE_NOT_WIRED.equals(outcome.failureCode())) {
+            if (!outcome.hasPrice() && ShipmentBookingPort.QUOTE_NOT_WIRED.equals(outcome.failureCode())) {
                 continue;
             }
-            quotes.add(new DeliveryQuote(UUID.randomUUID(), partner.bindingId(),
-                    partner.providerType(), requestId, outcome.priceMinor(), outcome.currency(),
-                    outcome.pickupEtaSeconds(), outcome.deliveryEtaSeconds(),
-                    outcome.distanceMeters(), outcome.deadHeadMeters(),
-                    outcome.expiresAt() != null
-                            ? outcome.expiresAt() : now.plusSeconds(QUOTE_TTL_SECONDS),
-                    outcome.partnerSuppliedExpiry(), outcome.failureCode(), now));
+            quotes.add(new DeliveryQuote(
+                    UUID.randomUUID(),
+                    partner.bindingId(),
+                    partner.providerType(),
+                    requestId,
+                    outcome.priceMinor(),
+                    outcome.currency(),
+                    outcome.pickupEtaSeconds(),
+                    outcome.deliveryEtaSeconds(),
+                    outcome.distanceMeters(),
+                    outcome.deadHeadMeters(),
+                    outcome.expiresAt() != null ? outcome.expiresAt() : now.plusSeconds(QUOTE_TTL_SECONDS),
+                    outcome.partnerSuppliedExpiry(),
+                    outcome.failureCode(),
+                    now));
         }
 
         if (!quotes.isEmpty()) {
@@ -289,13 +365,22 @@ public class DeliverySourcingService {
         return QuoteScoring.rank(partners, quotes, request.plan(), now);
     }
 
-    private static BookingCommand quoteCommand(SourcingRequest request, PartnerOption partner,
-            UUID requestId) {
-        return new BookingCommand(requestId, request.tenantId(), request.brandId(),
-                request.locationId(), partner.bindingId(),
-                ShipmentBookingPort.BookingIntent.BOOK_NOW, request.orderReference(),
-                request.pickup(), request.dropoff(), null, request.prepaid(),
-                request.itemValueMinor(), request.currency(), request.correlationId());
+    private static BookingCommand quoteCommand(SourcingRequest request, PartnerOption partner, UUID requestId) {
+        return new BookingCommand(
+                requestId,
+                request.tenantId(),
+                request.brandId(),
+                request.locationId(),
+                partner.bindingId(),
+                ShipmentBookingPort.BookingIntent.BOOK_NOW,
+                request.orderReference(),
+                request.pickup(),
+                request.dropoff(),
+                null,
+                request.prepaid(),
+                request.itemValueMinor(),
+                request.currency(),
+                request.correlationId());
     }
 
     /**
@@ -309,8 +394,7 @@ public class DeliverySourcingService {
      * what makes the escalation read {@code PARTNERS_EXHAUSTED} rather than
      * {@code NO_PARTNER_CONFIGURED} when a branch has partners that all refused.
      */
-    private static SourcingProgress ineligibleAsAttempted(SourcingProgress progress,
-            List<ScoredPartner> scored) {
+    private static SourcingProgress ineligibleAsAttempted(SourcingProgress progress, List<ScoredPartner> scored) {
 
         SourcingProgress augmented = progress;
         for (ScoredPartner candidate : scored) {
@@ -328,8 +412,7 @@ public class DeliverySourcingService {
      * null — an unquoted partner is still bookable — and {@code findFirst} on a
      * null element throws rather than answering "none".
      */
-    private static DeliveryQuote quoteFor(List<ScoredPartner> scored,
-            SourcingDecision.BookPartner decision) {
+    private static DeliveryQuote quoteFor(List<ScoredPartner> scored, SourcingDecision.BookPartner decision) {
         for (ScoredPartner candidate : scored) {
             if (candidate.partner().bindingId().equals(decision.partner().bindingId())) {
                 return candidate.quote();
@@ -352,9 +435,8 @@ public class DeliverySourcingService {
      * written under, which is what makes the replay find its own attempt.
      */
     static UUID commandId(UUID planId, UUID bindingId, int attempt) {
-        return UUID.nameUUIDFromBytes(
-                ("horecaos.delivery-attempt:%s:%s:%d".formatted(planId, bindingId, attempt))
-                        .getBytes(StandardCharsets.UTF_8));
+        return UUID.nameUUIDFromBytes(("horecaos.delivery-attempt:%s:%s:%d".formatted(planId, bindingId, attempt))
+                .getBytes(StandardCharsets.UTF_8));
     }
 
     /**
@@ -364,9 +446,8 @@ public class DeliverySourcingService {
      * crash.
      */
     static UUID quoteId(UUID planId, UUID bindingId, int round) {
-        return UUID.nameUUIDFromBytes(
-                ("horecaos.delivery-quote:%s:%s:%d".formatted(planId, bindingId, round))
-                        .getBytes(StandardCharsets.UTF_8));
+        return UUID.nameUUIDFromBytes(("horecaos.delivery-quote:%s:%s:%d".formatted(planId, bindingId, round))
+                .getBytes(StandardCharsets.UTF_8));
     }
 
     /**
@@ -379,13 +460,16 @@ public class DeliverySourcingService {
     }
 
     private ResolvedPolicy<DeliverySourcingPolicy> resolvePolicy(SourcingRequest request) {
-        ResourceScope scope = ResourceScope.location(
-                request.tenantId(), request.brandId(), request.locationId());
+        ResourceScope scope = ResourceScope.location(request.tenantId(), request.brandId(), request.locationId());
         Optional<ResolvedPolicy<DeliverySourcingPolicy>> resolved =
                 policies.resolve(DeliverySourcingPolicies.SOURCING, scope);
         return resolved.orElseGet(() -> new ResolvedPolicy<>(
-                DeliverySourcingPolicies.SOURCING.code(), DEFAULTS_ID, 1, scope.type(),
-                "defaults", DeliverySourcingPolicy.DEFAULTS));
+                DeliverySourcingPolicies.SOURCING.code(),
+                DEFAULTS_ID,
+                1,
+                scope.type(),
+                "defaults",
+                DeliverySourcingPolicy.DEFAULTS));
     }
 
     /**
@@ -394,8 +478,7 @@ public class DeliverySourcingService {
      * random id per call would make two identical decisions look as though they
      * ran under two different policies.
      */
-    public static final UUID DEFAULTS_ID =
-            UUID.fromString("00000000-0000-0000-0000-000000000014");
+    public static final UUID DEFAULTS_ID = UUID.fromString("00000000-0000-0000-0000-000000000014");
 
     /**
      * @param progress what the next tick would see if it did not read the attempt

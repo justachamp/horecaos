@@ -7,14 +7,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
 import java.util.UUID;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
-import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.ApprovalAction;
+import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.ApprovalParameters;
 import uz.horecaos.platform.audit.api.ApprovalRequestCommand;
 import uz.horecaos.platform.audit.api.ApprovalService;
@@ -124,11 +122,15 @@ public class OrderRemedyService {
     private final Clock clock;
     private final long approvalThresholdMinor;
 
-    public OrderRemedyService(JdbcRemedyStore remedies, OrderSettlementService settlements,
-            OrderDirectory orders, DeliveryFeeBasisPort deliveryFees, ApprovalService approvals,
-            AuditRecorder audit, Clock clock,
-            @Value("${horecaos.payments.remedy-approval-threshold-minor:200000}")
-            long approvalThresholdMinor) {
+    public OrderRemedyService(
+            JdbcRemedyStore remedies,
+            OrderSettlementService settlements,
+            OrderDirectory orders,
+            DeliveryFeeBasisPort deliveryFees,
+            ApprovalService approvals,
+            AuditRecorder audit,
+            Clock clock,
+            @Value("${horecaos.payments.remedy-approval-threshold-minor:200000}") long approvalThresholdMinor) {
         this.remedies = remedies;
         this.settlements = settlements;
         this.orders = orders;
@@ -150,11 +152,20 @@ public class OrderRemedyService {
      * @param providerReference the reversal or cancellation identifier the cabinet
      *                          showed. Required on {@link ExecutionChannel#PROVIDER_CONSOLE}
      */
-    public record RefundCommand(UUID tenantId, UUID orderId, long amountMinor, String currency,
-            String reasonCode, String reason, ExecutionChannel channel, String providerReference,
-            String executedBy, Instant executedAt, ActorRef actor, String idempotencyKey,
-            String correlationId) {
-    }
+    public record RefundCommand(
+            UUID tenantId,
+            UUID orderId,
+            long amountMinor,
+            String currency,
+            String reasonCode,
+            String reason,
+            ExecutionChannel channel,
+            String providerReference,
+            String executedBy,
+            Instant executedAt,
+            ActorRef actor,
+            String idempotencyKey,
+            String correlationId) {}
 
     /**
      * @param uses      how many future orders this is good for, at most
@@ -162,11 +173,21 @@ public class OrderRemedyService {
      * @param validFor  the window from now. An entitlement with no end is a
      *                  liability that never leaves the balance sheet
      */
-    public record FutureDiscountCommand(UUID tenantId, UUID orderId, EntitlementScope appliesTo,
-            EntitlementBenefit benefit, Integer percentBasisPoints, Long amountMinor,
-            Long maximumMinor, int uses, Duration validFor, String reasonCode, String reason,
-            ActorRef actor, String idempotencyKey, String correlationId) {
-    }
+    public record FutureDiscountCommand(
+            UUID tenantId,
+            UUID orderId,
+            EntitlementScope appliesTo,
+            EntitlementBenefit benefit,
+            Integer percentBasisPoints,
+            Long amountMinor,
+            Long maximumMinor,
+            int uses,
+            Duration validFor,
+            String reasonCode,
+            String reason,
+            ActorRef actor,
+            String idempotencyKey,
+            String correlationId) {}
 
     /**
      * @param remedy null when {@code approval} says a second pair of eyes is
@@ -202,8 +223,7 @@ public class OrderRemedyService {
 
     private RemedyOutcome recordMoneyRemedy(RefundCommand command, RemedyType type) {
         if (command.amountMinor() <= 0) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A remedy returns a positive amount");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A remedy returns a positive amount");
         }
         OrderSummary order = requireOrder(command.tenantId(), command.orderId());
         requireSameCurrency(order, command.currency());
@@ -216,8 +236,8 @@ public class OrderRemedyService {
         // Weighed before anything is written, and weighed against everything this
         // order has already given back. A control that only looked at the command
         // in front of it is walked around by anyone who can count.
-        long weighed = Math.addExact(command.amountMinor(),
-                remedies.moneyRemediedMinor(command.tenantId(), command.orderId()));
+        long weighed = Math.addExact(
+                command.amountMinor(), remedies.moneyRemediedMinor(command.tenantId(), command.orderId()));
         ApprovalOutcome approval = approvalFor(order, type, command, weighed);
         if (!approval.mayProceed()) {
             return new RemedyOutcome(approval, null);
@@ -231,8 +251,12 @@ public class OrderRemedyService {
         // The cap, the tender ordering and the points reversal all live here. What
         // comes back is the part the money tenders absorbed -- and that part is
         // exactly the part HorecaOS did not perform.
-        long attested = settlements.refund(command.tenantId(), command.orderId(),
-                command.amountMinor(), command.reasonCode(), command.actor().subject());
+        long attested = settlements.refund(
+                command.tenantId(),
+                command.orderId(),
+                command.amountMinor(),
+                command.reasonCode(),
+                command.actor().subject());
         long platformSettled = Math.subtractExact(command.amountMinor(), attested);
 
         // Checked after the apportionment rather than before it, because what
@@ -244,19 +268,41 @@ public class OrderRemedyService {
 
         Instant now = clock.instant();
         JdbcRemedyStore.RemedyRow remedy = new JdbcRemedyStore.RemedyRow(
-                UUID.randomUUID(), command.tenantId(), order.brandId(), command.orderId(), type,
-                command.reasonCode(), command.reason(), command.currency(), command.amountMinor(),
-                attested, platformSettled, basisOf(attested, platformSettled),
+                UUID.randomUUID(),
+                command.tenantId(),
+                order.brandId(),
+                command.orderId(),
+                type,
+                command.reasonCode(),
+                command.reason(),
+                command.currency(),
+                command.amountMinor(),
+                attested,
+                platformSettled,
+                basisOf(attested, platformSettled),
                 attested > 0 ? command.channel() : null,
                 attested > 0 ? command.providerReference() : null,
                 attested > 0 ? command.executedBy() : null,
                 attested > 0 ? command.executedAt() : null,
-                VerificationState.UNVERIFIED, null, null, feeBasis,
-                command.actor().subject(), now, approvalIdOf(approval), 1);
+                VerificationState.UNVERIFIED,
+                null,
+                null,
+                feeBasis,
+                command.actor().subject(),
+                now,
+                approvalIdOf(approval),
+                1);
 
         remedies.insertRemedy(remedy, command.idempotencyKey(), now);
-        recordAudit("payments.remedy.record", order, remedy, command.reason(), command.actor(),
-                approvalIdOf(approval), command.correlationId(), Map.of(
+        recordAudit(
+                "payments.remedy.record",
+                order,
+                remedy,
+                command.reason(),
+                command.actor(),
+                approvalIdOf(approval),
+                command.correlationId(),
+                Map.of(
                         "remedyType", type.name(),
                         "amountMinor", command.amountMinor(),
                         "attestedMoneyMinor", attested,
@@ -276,15 +322,15 @@ public class OrderRemedyService {
      *         reconciliation can find every reimbursement that was never bounded
      */
     private Long checkDeliveryFeeCeiling(RefundCommand command) {
-        OptionalLong charged = deliveryFees.deliveryFeeMinor(command.tenantId(),
-                command.orderId());
+        OptionalLong charged = deliveryFees.deliveryFeeMinor(command.tenantId(), command.orderId());
         if (charged.isEmpty()) {
             return null;
         }
         long fee = charged.getAsLong();
         long already = remedies.reimbursedDeliveryFeeMinor(command.tenantId(), command.orderId());
         if (Math.addExact(already, command.amountMinor()) > fee) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
                     "The delivery fee on this order was " + fee + " and " + already
                             + " has already been reimbursed against it");
         }
@@ -303,15 +349,20 @@ public class OrderRemedyService {
         if (attested <= 0) {
             return;
         }
-        if (command.channel() == null || command.executedBy() == null
-                || command.executedBy().isBlank() || command.executedAt() == null) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
+        if (command.channel() == null
+                || command.executedBy() == null
+                || command.executedBy().isBlank()
+                || command.executedAt() == null) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
                     "Money this platform did not move is recorded only with who moved it, when, "
                             + "and through which channel");
         }
         if (command.channel() == ExecutionChannel.PROVIDER_CONSOLE
-                && (command.providerReference() == null || command.providerReference().isBlank())) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
+                && (command.providerReference() == null
+                        || command.providerReference().isBlank())) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
                     "A refund made in a provider cabinet is recorded with the reference the "
                             + "cabinet showed: without it nothing can ever match a settlement line");
         }
@@ -341,7 +392,8 @@ public class OrderRemedyService {
         if (order.customerAccountId() == null) {
             // A guest order has nobody to grant to. Inventing an identity here is
             // how a remedy ends up spendable by whoever next uses the device.
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
                     "A future discount is granted to a customer account, and this order has none");
         }
         validate(command);
@@ -351,37 +403,78 @@ public class OrderRemedyService {
         // Weighed on the exposure, bound to the grant. Those are two different
         // questions and using one answer for both is what let a ten-use capped
         // percentage ride in on a one-use fixed amount's signature.
-        ApprovalOutcome approval = approvals(order, ApprovalAction.PAYMENTS_REMEDY_FUTURE_DISCOUNT.code(),
+        ApprovalOutcome approval = approvals(
+                order,
+                ApprovalAction.PAYMENTS_REMEDY_FUTURE_DISCOUNT.code(),
                 futureDiscountApprovalHash(command),
-                command.actor(), command.reason(), exposure);
+                command.actor(),
+                command.reason(),
+                exposure);
         if (!approval.mayProceed()) {
             return new RemedyOutcome(approval, null);
         }
         approval.consume();
 
         JdbcRemedyStore.RemedyRow remedy = new JdbcRemedyStore.RemedyRow(
-                UUID.randomUUID(), command.tenantId(), order.brandId(), command.orderId(),
-                RemedyType.FUTURE_DISCOUNT, command.reasonCode(), command.reason(),
+                UUID.randomUUID(),
+                command.tenantId(),
+                order.brandId(),
+                command.orderId(),
+                RemedyType.FUTURE_DISCOUNT,
+                command.reasonCode(),
+                command.reason(),
                 order.currency(),
                 // No money columns at all. A future discount cannot be added into a
                 // refund figure by a query that forgot to filter, because there is
                 // nothing on the row to add.
-                0L, 0L, 0L, SettlementBasis.NOT_MONEY, null, null, null, null,
-                VerificationState.UNVERIFIED, null, null, null,
-                command.actor().subject(), now, approvalIdOf(approval), 1);
+                0L,
+                0L,
+                0L,
+                SettlementBasis.NOT_MONEY,
+                null,
+                null,
+                null,
+                null,
+                VerificationState.UNVERIFIED,
+                null,
+                null,
+                null,
+                command.actor().subject(),
+                now,
+                approvalIdOf(approval),
+                1);
 
         JdbcRemedyStore.EntitlementRow entitlement = new JdbcRemedyStore.EntitlementRow(
-                UUID.randomUUID(), command.tenantId(), order.brandId(), remedy.id(),
-                order.customerAccountId(), command.appliesTo(), command.benefit(),
-                command.percentBasisPoints(), command.amountMinor(), command.maximumMinor(),
-                order.currency(), command.uses(), 0, now, now.plus(command.validFor()),
-                EntitlementStatus.ACTIVE, 1);
+                UUID.randomUUID(),
+                command.tenantId(),
+                order.brandId(),
+                remedy.id(),
+                order.customerAccountId(),
+                command.appliesTo(),
+                command.benefit(),
+                command.percentBasisPoints(),
+                command.amountMinor(),
+                command.maximumMinor(),
+                order.currency(),
+                command.uses(),
+                0,
+                now,
+                now.plus(command.validFor()),
+                EntitlementStatus.ACTIVE,
+                1);
 
         remedies.insertRemedy(remedy, command.idempotencyKey(), now);
         remedies.insertEntitlement(entitlement, now);
 
-        recordAudit("payments.remedy.future-discount", order, remedy, command.reason(),
-                command.actor(), approvalIdOf(approval), command.correlationId(), Map.of(
+        recordAudit(
+                "payments.remedy.future-discount",
+                order,
+                remedy,
+                command.reason(),
+                command.actor(),
+                approvalIdOf(approval),
+                command.correlationId(),
+                Map.of(
                         "appliesTo", command.appliesTo().name(),
                         "benefit", command.benefit().name(),
                         "uses", command.uses(),
@@ -402,50 +495,49 @@ public class OrderRemedyService {
      * one shape of this remedy worth a second pair of eyes.
      */
     private static long exposureOf(FutureDiscountCommand command) {
-        long perUse = command.benefit() == EntitlementBenefit.FIXED_AMOUNT
-                ? command.amountMinor()
-                : command.maximumMinor();
+        long perUse =
+                command.benefit() == EntitlementBenefit.FIXED_AMOUNT ? command.amountMinor() : command.maximumMinor();
         return Math.multiplyExact(perUse, command.uses());
     }
 
     private static void validate(FutureDiscountCommand command) {
         if (command.uses() < 1 || command.uses() > MAXIMUM_GRANTED_USES) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A future discount is good for between 1 and " + MAXIMUM_GRANTED_USES
-                            + " uses");
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "A future discount is good for between 1 and " + MAXIMUM_GRANTED_USES + " uses");
         }
-        if (command.validFor() == null || command.validFor().isNegative()
+        if (command.validFor() == null
+                || command.validFor().isNegative()
                 || command.validFor().isZero()) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A future discount expires: an entitlement with no end never leaves the "
-                            + "liability report");
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "A future discount expires: an entitlement with no end never leaves the " + "liability report");
         }
         switch (command.benefit()) {
             case PERCENT -> {
-                if (command.percentBasisPoints() == null || command.percentBasisPoints() < 1
+                if (command.percentBasisPoints() == null
+                        || command.percentBasisPoints() < 1
                         || command.percentBasisPoints() > 10_000) {
-                    throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                            "A percentage discount is between 1 and 10 000 basis points");
+                    throw new ApiException(
+                            ErrorCode.VALIDATION_FAILED, "A percentage discount is between 1 and 10 000 basis points");
                 }
                 if (command.maximumMinor() == null || command.maximumMinor() <= 0) {
-                    throw new ApiException(ErrorCode.VALIDATION_FAILED,
+                    throw new ApiException(
+                            ErrorCode.VALIDATION_FAILED,
                             "A percentage discount carries a per-use maximum: without one, 20% "
                                     + "off is 2 000 som on a delivery fee and 400 000 on a "
                                     + "catering order");
                 }
                 if (command.amountMinor() != null) {
-                    throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                            "A percentage discount has no fixed amount");
+                    throw new ApiException(ErrorCode.VALIDATION_FAILED, "A percentage discount has no fixed amount");
                 }
             }
             case FIXED_AMOUNT -> {
                 if (command.amountMinor() == null || command.amountMinor() <= 0) {
-                    throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                            "A fixed discount is worth a positive amount");
+                    throw new ApiException(ErrorCode.VALIDATION_FAILED, "A fixed discount is worth a positive amount");
                 }
                 if (command.percentBasisPoints() != null) {
-                    throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                            "A fixed discount has no percentage");
+                    throw new ApiException(ErrorCode.VALIDATION_FAILED, "A fixed discount has no percentage");
                 }
             }
         }
@@ -465,19 +557,24 @@ public class OrderRemedyService {
      * ignore.
      */
     @Transactional
-    public boolean recordVerification(UUID tenantId, UUID remedyId, VerificationState state,
-            String source, ActorRef actor, String reason, String correlationId) {
+    public boolean recordVerification(
+            UUID tenantId,
+            UUID remedyId,
+            VerificationState state,
+            String source,
+            ActorRef actor,
+            String reason,
+            String correlationId) {
         if (state == VerificationState.UNVERIFIED) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
                     "A verification records what a source said, which is never 'unverified'");
         }
         if (source == null || source.isBlank()) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A verification names the source that corroborated it");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A verification names the source that corroborated it");
         }
         JdbcRemedyStore.RemedyRow remedy = remedies.findRemedy(tenantId, remedyId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No such remedy"));
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such remedy"));
 
         Instant now = clock.instant();
         if (!remedies.recordVerification(tenantId, remedyId, state, source, now)) {
@@ -488,8 +585,13 @@ public class OrderRemedyService {
                 .at(ResourceScope.brand(tenantId, remedy.brandId()))
                 .target("payments.order_remedy", remedyId)
                 .because(reason)
-                .changed(Map.of("verificationState", state.name(), "source", source,
-                        "attestedMoneyMinor", remedy.attestedMoneyMinor()))
+                .changed(Map.of(
+                        "verificationState",
+                        state.name(),
+                        "source",
+                        source,
+                        "attestedMoneyMinor",
+                        remedy.attestedMoneyMinor()))
                 .correlatedBy(correlationId == null ? remedyId.toString() : correlationId)
                 .occurredAt(now)
                 .build());
@@ -510,15 +612,12 @@ public class OrderRemedyService {
      *                       chance to appear in anybody's settlement file
      */
     @Transactional(readOnly = true)
-    public List<JdbcRemedyStore.RemedyRow> unverifiedAttestations(UUID tenantId,
-            Duration settlingPeriod, int limit) {
-        return remedies.unverifiedAttestations(tenantId,
-                clock.instant().minus(settlingPeriod), limit);
+    public List<JdbcRemedyStore.RemedyRow> unverifiedAttestations(UUID tenantId, Duration settlingPeriod, int limit) {
+        return remedies.unverifiedAttestations(tenantId, clock.instant().minus(settlingPeriod), limit);
     }
 
     @Transactional(readOnly = true)
-    public List<JdbcRemedyStore.RemedyTotals> totalsByType(UUID tenantId, Instant from,
-            Instant to) {
+    public List<JdbcRemedyStore.RemedyTotals> totalsByType(UUID tenantId, Instant from, Instant to) {
         return remedies.totalsByType(tenantId, from, to);
     }
 
@@ -538,15 +637,20 @@ public class OrderRemedyService {
 
     private static void requireSameCurrency(OrderSummary order, String currency) {
         if (!order.currency().equals(currency)) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
                     "The order is in " + order.currency() + " and the remedy is in " + currency);
         }
     }
 
-    private ApprovalOutcome approvalFor(OrderSummary order, RemedyType type, RefundCommand command,
-            long weighedMinor) {
-        return approvals(order, ApprovalAction.PAYMENTS_REMEDY_RECORD.code(), refundApprovalHash(command, type),
-                command.actor(), command.reason(), weighedMinor);
+    private ApprovalOutcome approvalFor(OrderSummary order, RemedyType type, RefundCommand command, long weighedMinor) {
+        return approvals(
+                order,
+                ApprovalAction.PAYMENTS_REMEDY_RECORD.code(),
+                refundApprovalHash(command, type),
+                command.actor(),
+                command.reason(),
+                weighedMinor);
     }
 
     /**
@@ -627,19 +731,35 @@ public class OrderRemedyService {
                 .hash();
     }
 
-    private ApprovalOutcome approvals(OrderSummary order, String actionCode, String parametersHash,
-            ActorRef actor, String reason, long weighedMinor) {
+    private ApprovalOutcome approvals(
+            OrderSummary order,
+            String actionCode,
+            String parametersHash,
+            ActorRef actor,
+            String reason,
+            long weighedMinor) {
         if (weighedMinor < approvalThresholdMinor) {
             return new ApprovalOutcome.NotRequired();
         }
-        return approvals.requireApproval(new ApprovalRequestCommand(actionCode, parametersHash,
-                ResourceScope.brand(order.tenantId(), order.brandId()), actor, reason,
+        return approvals.requireApproval(new ApprovalRequestCommand(
+                actionCode,
+                parametersHash,
+                ResourceScope.brand(order.tenantId(), order.brandId()),
+                actor,
+                reason,
                 ApprovalRequestCommand.DEFAULT_VALIDITY));
     }
 
-    private void recordAudit(String actionCode, OrderSummary order,
-            JdbcRemedyStore.RemedyRow remedy, String reason, ActorRef actor, UUID approvalId,
-            String correlationId, Map<String, Object> changes, Instant now) {
+    private void recordAudit(
+            String actionCode,
+            OrderSummary order,
+            JdbcRemedyStore.RemedyRow remedy,
+            String reason,
+            ActorRef actor,
+            UUID approvalId,
+            String correlationId,
+            Map<String, Object> changes,
+            Instant now) {
 
         audit.record(AuditFact.of(actionCode, AuditClass.BUSINESS)
                 .by(actor)
@@ -656,5 +776,4 @@ public class OrderRemedyService {
     private static UUID approvalIdOf(ApprovalOutcome outcome) {
         return outcome instanceof ApprovalOutcome.Approved approved ? approved.requestId() : null;
     }
-
 }

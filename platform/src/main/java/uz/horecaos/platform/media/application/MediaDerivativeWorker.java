@@ -1,22 +1,19 @@
 package uz.horecaos.platform.media.application;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.media.domain.DecodeError;
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcDerivativeJobStore;
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcDerivativeJobStore.ClaimedJob;
@@ -52,10 +49,7 @@ import uz.horecaos.platform.media.infrastructure.persistence.JdbcDerivativeJobSt
  * back to originals as it must anyway for formats the JDK cannot decode.
  */
 @Component
-@ConditionalOnProperty(
-        name = "horecaos.media.derivatives.enabled",
-        havingValue = "true",
-        matchIfMissing = true)
+@ConditionalOnProperty(name = "horecaos.media.derivatives.enabled", havingValue = "true", matchIfMissing = true)
 public class MediaDerivativeWorker {
 
     private static final Logger log = LoggerFactory.getLogger(MediaDerivativeWorker.class);
@@ -134,13 +128,10 @@ public class MediaDerivativeWorker {
             @Value("${spring.application.name:horecaos-platform}") String applicationName) {
 
         if (batchSize < 1 || maximumAttempts < 1) {
-            throw new IllegalArgumentException(
-                    "A derivative batch size and attempt limit must be positive");
+            throw new IllegalArgumentException("A derivative batch size and attempt limit must be positive");
         }
-        if (initialBackoff.isNegative() || initialBackoff.isZero()
-                || maximumBackoff.compareTo(initialBackoff) < 0) {
-            throw new IllegalArgumentException(
-                    "Derivative retry delays must be positive and consistently ordered");
+        if (initialBackoff.isNegative() || initialBackoff.isZero() || maximumBackoff.compareTo(initialBackoff) < 0) {
+            throw new IllegalArgumentException("Derivative retry delays must be positive and consistently ordered");
         }
         this.jobs = jobs;
         this.derivatives = derivatives;
@@ -224,13 +215,18 @@ public class MediaDerivativeWorker {
             try {
                 jobs.release(job.jobId(), job.leaseToken(), now, now);
             } catch (RuntimeException | Error secondary) {
-                log.error("Could not release derivative job for media asset {} after an "
+                log.error(
+                        "Could not release derivative job for media asset {} after an "
                                 + "interrupted batch ({}); its lease expires in {} instead",
-                        job.assetId(), secondary.getClass().getSimpleName(), lease);
+                        job.assetId(),
+                        secondary.getClass().getSimpleName(),
+                        lease);
             }
         }
-        log.warn("A derivative batch was interrupted; {} claimed job(s) were handed back "
-                + "unattempted rather than left leased", untouched.size());
+        log.warn(
+                "A derivative batch was interrupted; {} claimed job(s) were handed back "
+                        + "unattempted rather than left leased",
+                untouched.size());
     }
 
     /**
@@ -259,8 +255,7 @@ public class MediaDerivativeWorker {
         }
 
         try {
-            MediaDerivativeService.DerivativeReport report =
-                    derivatives.renderMissing(job.tenantId(), job.assetId());
+            MediaDerivativeService.DerivativeReport report = derivatives.renderMissing(job.tenantId(), job.assetId());
 
             // Completed even when nothing was produced, and that is the
             // decision rather than an oversight — but only for the outcomes the
@@ -276,18 +271,23 @@ public class MediaDerivativeWorker {
                 // The lease was lost, so this render outlasted it and somebody
                 // else owns the job now. Not counted as rendered: whatever this
                 // process did, the row's outcome is the other worker's to write.
-                log.warn("Derivative job for media asset {} outlived its lease; "
-                        + "another worker owns the outcome", job.assetId());
+                log.warn(
+                        "Derivative job for media asset {} outlived its lease; " + "another worker owns the outcome",
+                        job.assetId());
                 return;
             }
             rendered.increment();
 
             if (!report.created().isEmpty()) {
-                log.info("Rendered {} derivative(s) for media asset {}",
-                        report.created().size(), job.assetId());
+                log.info(
+                        "Rendered {} derivative(s) for media asset {}",
+                        report.created().size(),
+                        job.assetId());
             } else if (report.sourceUnsupported()) {
-                log.info("Media asset {} has no renderable derivative ({}); "
-                        + "the original stands alone", job.assetId(), report.unsupportedReason());
+                log.info(
+                        "Media asset {} has no renderable derivative ({}); " + "the original stands alone",
+                        job.assetId(),
+                        report.unsupportedReason());
             }
         } catch (IllegalArgumentException gone) {
             // The asset does not exist for this tenant any more. A deletion
@@ -359,30 +359,32 @@ public class MediaDerivativeWorker {
         // that one condition reads as one condition whichever of the JDK's two
         // readers produced it. An operator seeing RENDER_OUT_OF_MEMORY should
         // not have to know which format the asset was.
-        String errorCode = fatal instanceof OutOfMemoryError
-                ? RENDER_OUT_OF_MEMORY : RENDER_FAILED;
+        String errorCode = fatal instanceof OutOfMemoryError ? RENDER_OUT_OF_MEMORY : RENDER_FAILED;
         try {
             retryOrAbandon(job, errorCode, now, fatal);
         } catch (RuntimeException | Error secondary) {
-            log.error("Could not settle derivative job for media asset {} while unwinding ({})",
-                    job.assetId(), secondary.getClass().getSimpleName());
+            log.error(
+                    "Could not settle derivative job for media asset {} while unwinding ({})",
+                    job.assetId(),
+                    secondary.getClass().getSimpleName());
         }
     }
 
-    private void retryOrAbandon(ClaimedJob job, String errorCode, Instant now,
-            Throwable failure) {
+    private void retryOrAbandon(ClaimedJob job, String errorCode, Instant now, Throwable failure) {
         if (job.attemptCount() >= maximumAttempts) {
             terminate(job, errorCode, now, failure);
             return;
         }
-        jobs.reschedule(job.jobId(), job.leaseToken(), now.plus(backoffAfter(job.attemptCount())),
-                errorCode, now);
+        jobs.reschedule(job.jobId(), job.leaseToken(), now.plus(backoffAfter(job.attemptCount())), errorCode, now);
         retried.increment();
         // The asset id and the code. Never the filename, never the object key:
         // a decoder's own message is the one place an uploaded name has been
         // seen to reach a log nobody was reading.
-        log.warn("Derivative render for media asset {} failed on attempt {} ({})",
-                job.assetId(), job.attemptCount(), errorCode);
+        log.warn(
+                "Derivative render for media asset {} failed on attempt {} ({})",
+                job.assetId(),
+                job.attemptCount(),
+                errorCode);
     }
 
     private void terminate(ClaimedJob job, String errorCode, Instant now, Throwable cause) {
@@ -394,8 +396,12 @@ public class MediaDerivativeWorker {
         // database or an allocation failure — the renderer turns decoder
         // exceptions into codes itself — so the message names keys and
         // identifiers, never a customer.
-        log.error("Giving up on derivatives for media asset {} after {} attempt(s): {}",
-                job.assetId(), job.attemptCount(), errorCode, cause);
+        log.error(
+                "Giving up on derivatives for media asset {} after {} attempt(s): {}",
+                job.assetId(),
+                job.attemptCount(),
+                errorCode,
+                cause);
     }
 
     /**
@@ -410,9 +416,7 @@ public class MediaDerivativeWorker {
      * same instant and re-forms the burst.
      */
     private Duration backoffAfter(int attempt) {
-        long ceiling = Math.min(
-                maximumBackoff.toMillis(),
-                initialBackoff.toMillis() * (1L << Math.min(attempt, 20)));
+        long ceiling = Math.min(maximumBackoff.toMillis(), initialBackoff.toMillis() * (1L << Math.min(attempt, 20)));
         long half = ceiling / 2;
         return Duration.ofMillis(half + (long) (ThreadLocalRandom.current().nextDouble() * half));
     }

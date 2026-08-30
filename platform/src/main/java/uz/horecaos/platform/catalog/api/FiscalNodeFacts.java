@@ -47,8 +47,7 @@ public interface FiscalNodeFacts {
      * <p>Convenience over {@link #markedNodes}, for the caller that only needs
      * to filter the offered set.
      */
-    default boolean requiresMarkingCapablePayment(UUID tenantId, UUID brandId,
-            Set<UUID> priceableIds) {
+    default boolean requiresMarkingCapablePayment(UUID tenantId, UUID brandId, Set<UUID> priceableIds) {
         return !markedNodes(tenantId, brandId, priceableIds).isEmpty();
     }
 }

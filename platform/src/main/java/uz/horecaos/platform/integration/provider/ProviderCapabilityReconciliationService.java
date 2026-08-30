@@ -3,7 +3,6 @@ package uz.horecaos.platform.integration.provider;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -12,13 +11,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
 import uz.horecaos.platform.integration.api.provider.ProviderCapabilityCatalog;
@@ -46,12 +42,15 @@ public class ProviderCapabilityReconciliationService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
-    public ProviderCapabilityReconciliationService(JdbcClient jdbc,
-            List<ProviderCapabilityCatalog> catalogs, SecretResolver secrets,
-            ObjectMapper objectMapper, Clock clock) {
+    public ProviderCapabilityReconciliationService(
+            JdbcClient jdbc,
+            List<ProviderCapabilityCatalog> catalogs,
+            SecretResolver secrets,
+            ObjectMapper objectMapper,
+            Clock clock) {
         this.jdbc = jdbc;
-        this.catalogs = catalogs.stream().collect(Collectors.toUnmodifiableMap(
-                ProviderCapabilityCatalog::category, catalog -> catalog));
+        this.catalogs = catalogs.stream()
+                .collect(Collectors.toUnmodifiableMap(ProviderCapabilityCatalog::category, catalog -> catalog));
         this.secrets = secrets;
         this.objectMapper = objectMapper;
         this.clock = clock;
@@ -68,19 +67,22 @@ public class ProviderCapabilityReconciliationService {
         }
 
         List<String> configuredCapabilities = bindingCapabilities(tenantId, installationId);
-        Optional<ProviderCapabilityCatalog.Declaration> declaration = Optional
-                .ofNullable(catalogs.get(installation.category()))
+        Optional<ProviderCapabilityCatalog.Declaration> declaration = Optional.ofNullable(
+                        catalogs.get(installation.category()))
                 .flatMap(catalog -> catalog.declarationFor(installation.providerType()));
         Preflight preflight = preflight(installation.secretReference());
 
-        String adapterVersion = declaration.map(ProviderCapabilityCatalog.Declaration::adapterVersion)
+        String adapterVersion = declaration
+                .map(ProviderCapabilityCatalog.Declaration::adapterVersion)
                 .orElse("unwired/%s/v1".formatted(installation.providerType()));
         Set<String> capabilities = new LinkedHashSet<>(configuredCapabilities);
         declaration.ifPresent(found -> capabilities.addAll(found.capabilities()));
 
         Map<String, CapabilityStatus> snapshot = new LinkedHashMap<>();
         for (String capability : capabilities.stream().sorted().toList()) {
-            boolean declared = declaration.map(found -> found.capabilities().contains(capability)).orElse(false);
+            boolean declared = declaration
+                    .map(found -> found.capabilities().contains(capability))
+                    .orElse(false);
             String support = declared && preflight.succeeded() ? "SUPPORTED" : "UNSUPPORTED";
             String evidence = declared
                     ? preflight.evidence()
@@ -90,12 +92,22 @@ public class ProviderCapabilityReconciliationService {
         }
 
         OffsetDateTime checkedAt = OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
-        recordProbe(tenantId, installationId, CONNECTION_CAPABILITY,
-                preflight.succeeded() ? "SUPPORTED" : "UNVERIFIABLE", preflight.evidence(),
-                adapterVersion, checkedAt);
-        snapshot.forEach((capability, status) -> recordProbe(tenantId, installationId, capability,
+        recordProbe(
+                tenantId,
+                installationId,
+                CONNECTION_CAPABILITY,
+                preflight.succeeded() ? "SUPPORTED" : "UNVERIFIABLE",
+                preflight.evidence(),
+                adapterVersion,
+                checkedAt);
+        snapshot.forEach((capability, status) -> recordProbe(
+                tenantId,
+                installationId,
+                capability,
                 "SUPPORTED".equals(status.support()) ? "SUPPORTED" : "UNSUPPORTED",
-                status.evidence(), adapterVersion, checkedAt));
+                status.evidence(),
+                adapterVersion,
+                checkedAt));
 
         String document = snapshotDocument(snapshot, adapterVersion);
         jdbc.sql("""
@@ -134,9 +146,12 @@ public class ProviderCapabilityReconciliationService {
                 .param("installationId", installationId)
                 .update();
 
-        return new Reconciliation(preflight.succeeded() ? "SUCCEEDED" : "FAILED", adapterVersion,
-                snapshot.entrySet().stream().collect(Collectors.toUnmodifiableMap(
-                        Map.Entry::getKey, entry -> entry.getValue().support())));
+        return new Reconciliation(
+                preflight.succeeded() ? "SUCCEEDED" : "FAILED",
+                adapterVersion,
+                snapshot.entrySet().stream()
+                        .collect(Collectors.toUnmodifiableMap(
+                                Map.Entry::getKey, entry -> entry.getValue().support())));
     }
 
     private Optional<Installation> installation(UUID tenantId, UUID installationId) {
@@ -149,7 +164,8 @@ public class ProviderCapabilityReconciliationService {
                 .param("installationId", installationId)
                 .query((row, number) -> new Installation(
                         ProviderCategory.valueOf(row.getString("provider_category")),
-                        row.getString("provider_type"), row.getString("secret_reference")))
+                        row.getString("provider_type"),
+                        row.getString("secret_reference")))
                 .optional();
     }
 
@@ -180,15 +196,20 @@ public class ProviderCapabilityReconciliationService {
             if (secrets.resolve(SecretReference.parse(rawReference)).reveal().isBlank()) {
                 return new Preflight(false, "The configured secret resolves to an empty value");
             }
-            return new Preflight(true,
-                    "Secret reference resolved and the wired adapter declaration was checked");
+            return new Preflight(true, "Secret reference resolved and the wired adapter declaration was checked");
         } catch (RuntimeException unavailable) {
             return new Preflight(false, "The configured secret reference could not be resolved");
         }
     }
 
-    private void recordProbe(UUID tenantId, UUID installationId, String capability, String status,
-            String evidence, String adapterVersion, OffsetDateTime checkedAt) {
+    private void recordProbe(
+            UUID tenantId,
+            UUID installationId,
+            String capability,
+            String status,
+            String evidence,
+            String adapterVersion,
+            OffsetDateTime checkedAt) {
         jdbc.sql("""
                 INSERT INTO integration.provider_capability_probes
                     (id, tenant_id, installation_id, capability_code, probe_status,
@@ -209,18 +230,18 @@ public class ProviderCapabilityReconciliationService {
 
     private String snapshotDocument(Map<String, CapabilityStatus> snapshot, String adapterVersion) {
         Map<String, Object> document = new LinkedHashMap<>();
-        snapshot.forEach((capability, status) -> document.put(capability, Map.of(
-                "support", status.support(), "version", adapterVersion, "evidence", status.evidence())));
+        snapshot.forEach((capability, status) -> document.put(
+                capability,
+                Map.of("support", status.support(), "version", adapterVersion, "evidence", status.evidence())));
         return objectMapper.writeValueAsString(document);
     }
 
     /** Safe result for the control plane; never contains a credential or provider response body. */
-    public record Reconciliation(String connectionStatus, String adapterVersion,
-            Map<String, String> capabilities) { }
+    public record Reconciliation(String connectionStatus, String adapterVersion, Map<String, String> capabilities) {}
 
-    private record Installation(ProviderCategory category, String providerType, String secretReference) { }
+    private record Installation(ProviderCategory category, String providerType, String secretReference) {}
 
-    private record Preflight(boolean succeeded, String evidence) { }
+    private record Preflight(boolean succeeded, String evidence) {}
 
-    private record CapabilityStatus(String support, String evidence) { }
+    private record CapabilityStatus(String support, String evidence) {}
 }

@@ -1,7 +1,6 @@
 package uz.horecaos.platform.commercial.domain;
 
 import java.util.Objects;
-
 import uz.horecaos.platform.commercial.api.EnforcementMode;
 import uz.horecaos.platform.commercial.api.ResetPeriod;
 
@@ -28,19 +27,22 @@ public record PlanEntitlement(
         Objects.requireNonNull(resetPeriod, "A reset period is required");
 
         if ((integerValue == null) == (booleanValue == null)) {
-            throw new IllegalArgumentException(
-                    "A plan entitlement carries exactly one typed value: " + entitlementKey);
+            throw new IllegalArgumentException("A plan entitlement carries exactly one typed value: " + entitlementKey);
         }
         if (overageUnitPriceMinor != null && enforcementMode.canRefuse()) {
-            throw new IllegalArgumentException(
-                    "A refusing mode never bills overage: " + entitlementKey);
+            throw new IllegalArgumentException("A refusing mode never bills overage: " + entitlementKey);
         }
     }
 
-    public static PlanEntitlement counted(String key, long limit, EnforcementMode mode,
-            ResetPeriod resetPeriod, Integer warnThresholdBasisPoints, Long overageUnitPriceMinor) {
-        return new PlanEntitlement(key, limit, null, mode, resetPeriod,
-                warnThresholdBasisPoints, overageUnitPriceMinor);
+    public static PlanEntitlement counted(
+            String key,
+            long limit,
+            EnforcementMode mode,
+            ResetPeriod resetPeriod,
+            Integer warnThresholdBasisPoints,
+            Long overageUnitPriceMinor) {
+        return new PlanEntitlement(
+                key, limit, null, mode, resetPeriod, warnThresholdBasisPoints, overageUnitPriceMinor);
     }
 
     public static PlanEntitlement feature(String key, boolean granted, EnforcementMode mode) {

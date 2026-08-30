@@ -1,17 +1,17 @@
 package uz.horecaos.platform.customers.web;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -23,12 +23,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
-import uz.horecaos.platform.iam.api.protection.Classified;
-import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.customers.api.CurrentCustomer;
 import uz.horecaos.platform.customers.api.CustomerAccountRef;
 import uz.horecaos.platform.customers.api.CustomerOwned;
@@ -39,6 +33,8 @@ import uz.horecaos.platform.customers.application.CustomerProfileService.Contact
 import uz.horecaos.platform.customers.application.CustomerProfileService.CoordinateSource;
 import uz.horecaos.platform.customers.application.CustomerProfileService.RevealedAddress;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
+import uz.horecaos.platform.iam.api.protection.Classified;
+import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -91,8 +87,7 @@ import uz.horecaos.platform.web.idempotency.Idempotent;
  */
 @RestController
 @RequestMapping("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me")
-@Tag(name = "Customer self-service",
-        description = "A customer's own profile and their own saved addresses")
+@Tag(name = "Customer self-service", description = "A customer's own profile and their own saved addresses")
 public class StorefrontCustomerController {
 
     /**
@@ -113,8 +108,11 @@ public class StorefrontCustomerController {
     private final CustomerPolicyLookup policies;
     private final Clock clock;
 
-    public StorefrontCustomerController(CustomerProfileService profiles,
-            CurrentCustomer currentCustomer, CustomerPolicyLookup policies, Clock clock) {
+    public StorefrontCustomerController(
+            CustomerProfileService profiles,
+            CurrentCustomer currentCustomer,
+            CustomerPolicyLookup policies,
+            Clock clock) {
         this.profiles = profiles;
         this.currentCustomer = currentCustomer;
         this.policies = policies;
@@ -125,12 +123,12 @@ public class StorefrontCustomerController {
 
     @GetMapping
     @CustomerOwned
-    @Operation(summary = "The caller's own account and profile",
+    @Operation(
+            summary = "The caller's own account and profile",
             description = "Includes the account id, which is otherwise unlearnable from the "
                     + "storefront, and the scope the profile is shared at. Contact points are "
                     + "listed by type and verification state and never by value.")
-    public ResponseEntity<ProfileResponse> profile(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId) {
+    public ResponseEntity<ProfileResponse> profile(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
 
         UUID accountId = accountId(tenantId, brandId);
         JdbcCustomerStore.AccountRow account = profiles.profile(tenantId, accountId)
@@ -138,7 +136,9 @@ public class StorefrontCustomerController {
 
         return ResponseEntity.ok()
                 .eTag(AggregateVersion.toETag(account.version()))
-                .body(ProfileResponse.of(account, brandId,
+                .body(ProfileResponse.of(
+                        account,
+                        brandId,
                         policies.policyFor(tenantId, clock.instant()).mode().name(),
                         profiles.contactPointSummaries(tenantId, accountId).stream()
                                 .map(ContactPointSummary::of)
@@ -148,21 +148,29 @@ public class StorefrontCustomerController {
     @PatchMapping
     @CustomerOwned
     @Idempotent
-    @Operation(summary = "Change the caller's own display name, language, or timezone",
+    @Operation(
+            summary = "Change the caller's own display name, language, or timezone",
             description = "The three fields a customer owns. Status, identity partition, merge "
                     + "target and policy version are not among them: each decides something "
                     + "about the account, and none is the account holder's to set. Under "
                     + "TENANT_SHARED the change is visible at every brand of the tenant, which "
                     + "is what profileScope says.")
     public ResponseEntity<ProfileResponse> updateProfile(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId,
-            @Valid @RequestBody UpdateProfileRequest body, HttpServletRequest request) {
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @Valid @RequestBody UpdateProfileRequest body,
+            HttpServletRequest request) {
 
         UUID accountId = accountId(tenantId, brandId);
         long expected = AggregateVersion.requireIfMatch(request);
         try {
-            profiles.updateProfile(tenantId, accountId, (int) expected, body.displayName(),
-                    body.preferredLocale(), body.preferredTimezone());
+            profiles.updateProfile(
+                    tenantId,
+                    accountId,
+                    (int) expected,
+                    body.displayName(),
+                    body.preferredLocale(),
+                    body.preferredTimezone());
         } catch (CustomerProfileService.AccountNotFoundException absent) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such account");
         } catch (CustomerProfileService.StaleRecordException stale) {
@@ -175,33 +183,31 @@ public class StorefrontCustomerController {
 
     @GetMapping("/addresses")
     @CustomerOwned
-    @Operation(summary = "The caller's own saved addresses",
+    @Operation(
+            summary = "The caller's own saved addresses",
             description = "Decrypted, because the person they belong to is asking, and the "
                     + "reveal is recorded against a purpose that says so. Archived addresses "
                     + "are not listed.")
-    public ResponseEntity<List<AddressResponse>> addresses(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId) {
+    public ResponseEntity<List<AddressResponse>> addresses(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
 
         UUID accountId = accountId(tenantId, brandId);
-        return ResponseEntity.ok(
-                profiles.revealAddresses(tenantId, accountId, SELF_SERVICE_PURPOSE).stream()
-                        .map(AddressResponse::of)
-                        .toList());
+        return ResponseEntity.ok(profiles.revealAddresses(tenantId, accountId, SELF_SERVICE_PURPOSE).stream()
+                .map(AddressResponse::of)
+                .toList());
     }
 
     @GetMapping("/addresses/{addressId}")
     @CustomerOwned
-    @Operation(summary = "One of the caller's own saved addresses",
+    @Operation(
+            summary = "One of the caller's own saved addresses",
             description = "Not found for an address that is somebody else's, is archived, or "
                     + "never existed. The three are one answer, because telling them apart is "
                     + "how an address id becomes probeable.")
     public ResponseEntity<AddressResponse> address(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId,
-            @PathVariable UUID addressId) {
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID addressId) {
 
         UUID accountId = accountId(tenantId, brandId);
-        RevealedAddress address = profiles
-                .revealAddress(tenantId, accountId, addressId, SELF_SERVICE_PURPOSE)
+        RevealedAddress address = profiles.revealAddress(tenantId, accountId, addressId, SELF_SERVICE_PURPOSE)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such address"));
 
         return ResponseEntity.ok()
@@ -212,7 +218,8 @@ public class StorefrontCustomerController {
     @PostMapping("/addresses")
     @CustomerOwned
     @Idempotent
-    @Operation(summary = "Save a new address",
+    @Operation(
+            summary = "Save a new address",
             description = "The coordinate source is required and must agree with the "
                     + "coordinates: an address awaiting geocoding and one that legitimately has "
                     + "no point — a mahalla house given by its ориентир — are different states, "
@@ -220,23 +227,28 @@ public class StorefrontCustomerController {
                     + "NOT_GEOCODED or LANDMARK_ONLY; the operator and geocoder sources are not "
                     + "theirs to assert.")
     public ResponseEntity<AddressResponse> addAddress(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId,
-            @Valid @RequestBody SaveAddressRequest body) {
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody SaveAddressRequest body) {
 
         UUID accountId = accountId(tenantId, brandId);
         CoordinateSource source = customerAsserted(body.coordinateSource());
         UUID addressId;
         try {
-            addressId = profiles.addAddress(tenantId, accountId, body.label(), body.fields(),
-                    body.deliveryInstructions(), body.latitude(), body.longitude(), source);
+            addressId = profiles.addAddress(
+                    tenantId,
+                    accountId,
+                    body.label(),
+                    body.fields(),
+                    body.deliveryInstructions(),
+                    body.latitude(),
+                    body.longitude(),
+                    source);
         } catch (IllegalArgumentException rejected) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, rejected.getMessage());
         }
 
-        RevealedAddress saved = profiles
-                .revealAddress(tenantId, accountId, addressId, SELF_SERVICE_PURPOSE)
-                .orElseThrow(() -> new IllegalStateException(
-                        "An address just written is not readable by its own account"));
+        RevealedAddress saved = profiles.revealAddress(tenantId, accountId, addressId, SELF_SERVICE_PURPOSE)
+                .orElseThrow(
+                        () -> new IllegalStateException("An address just written is not readable by its own account"));
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .eTag(AggregateVersion.toETag(saved.version()))
@@ -246,19 +258,31 @@ public class StorefrontCustomerController {
     @PutMapping("/addresses/{addressId}")
     @CustomerOwned
     @Idempotent
-    @Operation(summary = "Replace one of the caller's own addresses",
+    @Operation(
+            summary = "Replace one of the caller's own addresses",
             description = "The whole address, never a field of it: the lines live inside one "
                     + "encrypted document, and the coordinate and its source have to move "
                     + "together. Requires If-Match, so a second tab loses loudly.")
     public ResponseEntity<AddressResponse> updateAddress(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID addressId,
-            @Valid @RequestBody SaveAddressRequest body, HttpServletRequest request) {
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID addressId,
+            @Valid @RequestBody SaveAddressRequest body,
+            HttpServletRequest request) {
 
         UUID accountId = accountId(tenantId, brandId);
         long expected = AggregateVersion.requireIfMatch(request);
         try {
-            profiles.updateAddress(tenantId, accountId, addressId, (int) expected, body.label(),
-                    body.fields(), body.deliveryInstructions(), body.latitude(), body.longitude(),
+            profiles.updateAddress(
+                    tenantId,
+                    accountId,
+                    addressId,
+                    (int) expected,
+                    body.label(),
+                    body.fields(),
+                    body.deliveryInstructions(),
+                    body.latitude(),
+                    body.longitude(),
                     customerAsserted(body.coordinateSource()));
         } catch (CustomerProfileService.AddressNotFoundException absent) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such address");
@@ -273,7 +297,8 @@ public class StorefrontCustomerController {
     @DeleteMapping("/addresses/{addressId}")
     @CustomerOwned
     @Idempotent
-    @Operation(summary = "Remove one of the caller's own addresses",
+    @Operation(
+            summary = "Remove one of the caller's own addresses",
             description = "Archived rather than deleted. The row is what a dispute about where "
                     + "an order went is answered from, and nothing depends on it staying "
                     + "readable to the customer: a cart and an order each hold their own copy, "
@@ -281,7 +306,9 @@ public class StorefrontCustomerController {
                     + "This is not an erasure request, which is a governed act over the whole "
                     + "account.")
     public ResponseEntity<Void> removeAddress(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID addressId,
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID addressId,
             HttpServletRequest request) {
 
         UUID accountId = accountId(tenantId, brandId);
@@ -308,10 +335,11 @@ public class StorefrontCustomerController {
      * the brand exists.
      */
     private UUID accountId(UUID tenantId, UUID brandId) {
-        return currentCustomer.account(tenantId, brandId)
+        return currentCustomer
+                .account(tenantId, brandId)
                 .map(CustomerAccountRef::accountId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "This principal has no customer account for this brand"));
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.RESOURCE_NOT_FOUND, "This principal has no customer account for this brand"));
     }
 
     /**
@@ -327,14 +355,19 @@ public class StorefrontCustomerController {
     private static CoordinateSource customerAsserted(CoordinateSource source) {
         return switch (source) {
             case CUSTOMER_PIN, NOT_GEOCODED, LANDMARK_ONLY -> source;
-            case GEOCODER, OPERATOR_PIN, LEGACY_UNSOURCED -> throw new ApiException(
-                    ErrorCode.VALIDATION_FAILED,
-                    "coordinateSource " + source + " records who produced a point and is not a "
-                            + "customer's to claim",
-                    java.util.Map.of("field", "coordinateSource",
-                            "allowed", List.of(CoordinateSource.CUSTOMER_PIN.name(),
-                                    CoordinateSource.NOT_GEOCODED.name(),
-                                    CoordinateSource.LANDMARK_ONLY.name())));
+            case GEOCODER, OPERATOR_PIN, LEGACY_UNSOURCED ->
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED,
+                        "coordinateSource " + source + " records who produced a point and is not a "
+                                + "customer's to claim",
+                        java.util.Map.of(
+                                "field",
+                                "coordinateSource",
+                                "allowed",
+                                List.of(
+                                        CoordinateSource.CUSTOMER_PIN.name(),
+                                        CoordinateSource.NOT_GEOCODED.name(),
+                                        CoordinateSource.LANDMARK_ONLY.name())));
         };
     }
 
@@ -373,30 +406,40 @@ public class StorefrontCustomerController {
              */
             @Classified(value = DataClass.PERSONAL, reason = "the customer's own name")
             String displayName,
+
             String preferredLocale,
             String preferredTimezone,
             List<ContactPointSummary> contactPoints,
             int version,
             Instant createdAt) {
 
-        static ProfileResponse of(JdbcCustomerStore.AccountRow account, UUID brandId,
-                String identityMode, List<ContactPointSummary> contactPoints) {
+        static ProfileResponse of(
+                JdbcCustomerStore.AccountRow account,
+                UUID brandId,
+                String identityMode,
+                List<ContactPointSummary> contactPoints) {
             return new ProfileResponse(
-                    account.id(), brandId, account.status(), identityMode,
+                    account.id(),
+                    brandId,
+                    account.status(),
+                    identityMode,
                     account.partitionBrandId() == null ? "TENANT" : "BRAND",
-                    account.identityPolicyVersion(), account.displayName(),
-                    account.preferredLocale(), account.preferredTimezone(),
-                    contactPoints, account.version(), account.createdAt());
+                    account.identityPolicyVersion(),
+                    account.displayName(),
+                    account.preferredLocale(),
+                    account.preferredTimezone(),
+                    contactPoints,
+                    account.version(),
+                    account.createdAt());
         }
     }
 
     /** A contact point named by kind and state. Never by value — see the class note. */
-    public record ContactPointSummary(UUID id, ContactType type, String verificationStatus,
-            boolean primary) {
+    public record ContactPointSummary(UUID id, ContactType type, String verificationStatus, boolean primary) {
 
         static ContactPointSummary of(CustomerProfileService.ContactPointSummary contact) {
-            return new ContactPointSummary(contact.id(), contact.type(),
-                    contact.verificationStatus(), contact.isPrimary());
+            return new ContactPointSummary(
+                    contact.id(), contact.type(), contact.verificationStatus(), contact.isPrimary());
         }
     }
 
@@ -410,7 +453,7 @@ public class StorefrontCustomerController {
     public record UpdateProfileRequest(
             @Size(max = 200) String displayName,
             @Size(max = 16) String preferredLocale,
-            @Size(max = 64) String preferredTimezone) { }
+            @Size(max = 64) String preferredTimezone) {}
 
     /**
      * An address as the customer sees their own.
@@ -429,9 +472,15 @@ public class StorefrontCustomerController {
             int version) {
 
         static AddressResponse of(RevealedAddress address) {
-            return new AddressResponse(address.id(), address.label(), address.fields(),
-                    address.deliveryInstructions(), address.latitude(), address.longitude(),
-                    address.coordinateSource(), address.version());
+            return new AddressResponse(
+                    address.id(),
+                    address.label(),
+                    address.fields(),
+                    address.deliveryInstructions(),
+                    address.latitude(),
+                    address.longitude(),
+                    address.coordinateSource(),
+                    address.version());
         }
     }
 
@@ -452,5 +501,5 @@ public class StorefrontCustomerController {
             @Size(max = 500) String deliveryInstructions,
             @DecimalMin("-90") @DecimalMax("90") Double latitude,
             @DecimalMin("-180") @DecimalMax("180") Double longitude,
-            @NotNull CoordinateSource coordinateSource) { }
+            @NotNull CoordinateSource coordinateSource) {}
 }

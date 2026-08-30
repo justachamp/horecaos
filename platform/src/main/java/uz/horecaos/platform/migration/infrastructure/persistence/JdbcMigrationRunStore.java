@@ -1,5 +1,10 @@
 package uz.horecaos.platform.migration.infrastructure.persistence;
 
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.documentJson;
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.documentOrEmpty;
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.instantOrNull;
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.utc;
+
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -7,20 +12,12 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.migration.application.MigrationRunStore;
 import uz.horecaos.platform.migration.domain.RunStatus;
 import uz.horecaos.platform.migration.domain.RunType;
-
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.documentJson;
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.documentOrEmpty;
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.instantOrNull;
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.utc;
 
 /**
  * Migration run persistence (ADR 0024).
@@ -58,7 +55,8 @@ public class JdbcMigrationRunStore implements MigrationRunStore {
     @Override
     public Optional<RunRow> findById(UUID tenantId, UUID runId) {
         return jdbc.sql(SELECT_RUN + " WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", runId)
+                .param("tenantId", tenantId)
+                .param("id", runId)
                 .query(this::mapRun)
                 .optional();
     }
@@ -66,7 +64,8 @@ public class JdbcMigrationRunStore implements MigrationRunStore {
     @Override
     public Optional<RunRow> findByIdempotencyKey(UUID tenantId, String idempotencyKey) {
         return jdbc.sql(SELECT_RUN + " WHERE tenant_id = :tenantId AND idempotency_key = :key")
-                .param("tenantId", tenantId).param("key", idempotencyKey)
+                .param("tenantId", tenantId)
+                .param("key", idempotencyKey)
                 .query(this::mapRun)
                 .optional();
     }
@@ -78,7 +77,8 @@ public class JdbcMigrationRunStore implements MigrationRunStore {
                  WHERE tenant_id = :tenantId AND scope_id = :scopeId
                    AND run_type = :runType AND status = 'RUNNING'
                 """)
-                .param("tenantId", tenantId).param("scopeId", scopeId)
+                .param("tenantId", tenantId)
+                .param("scopeId", scopeId)
                 .param("runType", runType.name())
                 .query(this::mapRun)
                 .optional();
@@ -104,7 +104,8 @@ public class JdbcMigrationRunStore implements MigrationRunStore {
                 ORDER BY finished_at DESC, id DESC
                 LIMIT 1
                 """)
-                .param("tenantId", tenantId).param("scopeId", scopeId)
+                .param("tenantId", tenantId)
+                .param("scopeId", scopeId)
                 .param("runType", runType.name())
                 .query((row, number) -> new LastFinishedRun(
                         RunStatus.valueOf(row.getString("status")),
@@ -124,7 +125,7 @@ public class JdbcMigrationRunStore implements MigrationRunStore {
      * happens in Java over the one row the query already found, rather than in a
      * {@code WHERE} clause that would have looked past it.
      */
-    private record LastFinishedRun(RunStatus status, Resumption resumption) { }
+    private record LastFinishedRun(RunStatus status, Resumption resumption) {}
 
     /**
      * {@inheritDoc}
@@ -151,8 +152,10 @@ public class JdbcMigrationRunStore implements MigrationRunStore {
                     :skipped, :quarantined, :checksum, :startedBy, :idempotencyKey,
                     :version, :startedAt, :finishedAt)
                 """)
-                .param("id", run.id()).param("tenantId", run.tenantId())
-                .param("scopeId", run.scopeId()).param("runType", run.runType().name())
+                .param("id", run.id())
+                .param("tenantId", run.tenantId())
+                .param("scopeId", run.scopeId())
+                .param("runType", run.runType().name())
                 .param("status", run.status().name())
                 .params(watermarks(run.sourceWatermark(), run.targetWatermark()))
                 .param("checkpoint", documentJson(objectMapper, run.checkpoint()))
@@ -184,8 +187,13 @@ public class JdbcMigrationRunStore implements MigrationRunStore {
      * running, which is the only thing a checkpoint must not do to a settled run.
      */
     @Override
-    public boolean checkpoint(UUID tenantId, UUID runId, String sourceWatermark,
-            String targetWatermark, Map<String, Object> checkpoint, Counters totals) {
+    public boolean checkpoint(
+            UUID tenantId,
+            UUID runId,
+            String sourceWatermark,
+            String targetWatermark,
+            Map<String, Object> checkpoint,
+            Counters totals) {
         return jdbc.sql("""
                 UPDATE migration.runs
                 SET source_watermark = :sourceWatermark,
@@ -199,11 +207,13 @@ public class JdbcMigrationRunStore implements MigrationRunStore {
                     version = version + 1
                 WHERE tenant_id = :tenantId AND id = :id AND status = 'RUNNING'
                 """)
-                .param("tenantId", tenantId).param("id", runId)
-                .params(watermarks(sourceWatermark, targetWatermark))
-                .param("checkpoint", documentJson(objectMapper, checkpoint))
-                .params(countersOf(totals))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", runId)
+                        .params(watermarks(sourceWatermark, targetWatermark))
+                        .param("checkpoint", documentJson(objectMapper, checkpoint))
+                        .params(countersOf(totals))
+                        .update()
+                == 1;
     }
 
     /**
@@ -222,8 +232,11 @@ public class JdbcMigrationRunStore implements MigrationRunStore {
                     version = version + 1
                 WHERE tenant_id = :tenantId AND id = :id AND status = 'RUNNING'
                 """)
-                .param("tenantId", tenantId).param("id", runId).param("delta", delta)
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", runId)
+                        .param("delta", delta)
+                        .update()
+                == 1;
     }
 
     /**
@@ -241,8 +254,8 @@ public class JdbcMigrationRunStore implements MigrationRunStore {
      * arriving at once must resolve to one winner.
      */
     @Override
-    public Optional<Integer> finish(UUID tenantId, UUID runId, RunStatus terminal, String checksum,
-            int expectedVersion, Instant finishedAt) {
+    public Optional<Integer> finish(
+            UUID tenantId, UUID runId, RunStatus terminal, String checksum, int expectedVersion, Instant finishedAt) {
         return jdbc.sql("""
                 UPDATE migration.runs
                 SET status = :status,
@@ -253,7 +266,8 @@ public class JdbcMigrationRunStore implements MigrationRunStore {
                   AND version = :expectedVersion
                 RETURNING version
                 """)
-                .param("tenantId", tenantId).param("id", runId)
+                .param("tenantId", tenantId)
+                .param("id", runId)
                 .param("status", terminal.name())
                 .param("checksum", checksum)
                 .param("expectedVersion", expectedVersion)

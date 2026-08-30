@@ -10,9 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.integration.api.payment.MerchantApiCall;
 import uz.horecaos.platform.integration.api.payment.MerchantApiTransport;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
@@ -76,8 +74,8 @@ public class ClickMerchantApi {
      * into the request body and is never logged, never held on a field, and never
      * put on the {@link MerchantApiCall}'s {@code toString}.
      */
-    public ClickResponse createInvoice(ProviderBinding binding, String merchantTransId,
-            SomAmount amount, String phoneNumber) {
+    public ClickResponse createInvoice(
+            ProviderBinding binding, String merchantTransId, SomAmount amount, String phoneNumber) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("service_id", binding.merchantAccountReference());
         body.put("amount", som(amount));
@@ -101,10 +99,10 @@ public class ClickMerchantApi {
      * is a bug in the sample, not an alternative API: both the Russian and English
      * documentation pages say {@code GET} with the date.
      */
-    public ClickResponse statusByMerchantTransId(ProviderBinding binding, String merchantTransId,
-            LocalDate businessDate) {
-        String path = "/payment/status_by_mti/" + segment(binding.merchantAccountReference())
-                + "/" + segment(merchantTransId) + "/" + BUSINESS_DATE.format(businessDate);
+    public ClickResponse statusByMerchantTransId(
+            ProviderBinding binding, String merchantTransId, LocalDate businessDate) {
+        String path = "/payment/status_by_mti/" + segment(binding.merchantAccountReference()) + "/"
+                + segment(merchantTransId) + "/" + BUSINESS_DATE.format(businessDate);
         return call(binding, "payment.status_by_mti", "GET", path, null, false);
     }
 
@@ -117,8 +115,7 @@ public class ClickMerchantApi {
      * {@code payment_status: 2} is money.
      */
     public ClickResponse paymentStatus(ProviderBinding binding, String paymentId) {
-        String path = "/payment/status/" + segment(binding.merchantAccountReference())
-                + "/" + segment(paymentId);
+        String path = "/payment/status/" + segment(binding.merchantAccountReference()) + "/" + segment(paymentId);
         return call(binding, "payment.status", "GET", path, null, false);
     }
 
@@ -133,8 +130,7 @@ public class ClickMerchantApi {
      * from here, and the answer arrives as a failure after the fact.
      */
     public ClickResponse reversal(ProviderBinding binding, String paymentId) {
-        String path = "/payment/reversal/" + segment(binding.merchantAccountReference())
-                + "/" + segment(paymentId);
+        String path = "/payment/reversal/" + segment(binding.merchantAccountReference()) + "/" + segment(paymentId);
         return call(binding, "payment.reversal", "DELETE", path, null, true);
     }
 
@@ -153,8 +149,12 @@ public class ClickMerchantApi {
      * response here is resolved by {@link #ofdData} and never by sending the items
      * again.
      */
-    public ClickResponse submitItems(ProviderBinding binding, String paymentId,
-            List<Map<String, Object>> items, TiyinAmount receivedCard, TiyinAmount receivedCash,
+    public ClickResponse submitItems(
+            ProviderBinding binding,
+            String paymentId,
+            List<Map<String, Object>> items,
+            TiyinAmount receivedCard,
+            TiyinAmount receivedCash,
             TiyinAmount receivedEcash) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("service_id", binding.merchantAccountReference());
@@ -163,8 +163,7 @@ public class ClickMerchantApi {
         body.put("received_ecash", receivedEcash.value());
         body.put("received_cash", receivedCash.value());
         body.put("received_card", receivedCard.value());
-        return call(binding, "ofd.submit_items", "POST", "/payment/ofd_data/submit_items",
-                body, true);
+        return call(binding, "ofd.submit_items", "POST", "/payment/ofd_data/submit_items", body, true);
     }
 
     /**
@@ -177,8 +176,7 @@ public class ClickMerchantApi {
      * round trip takes — so an empty answer means "not yet", not "never".
      */
     public ClickResponse ofdData(ProviderBinding binding, String paymentId) {
-        String path = "/payment/ofd_data/" + segment(binding.merchantAccountReference())
-                + "/" + segment(paymentId);
+        String path = "/payment/ofd_data/" + segment(binding.merchantAccountReference()) + "/" + segment(paymentId);
         return call(binding, "ofd.read", "GET", path, null, false);
     }
 
@@ -195,12 +193,16 @@ public class ClickMerchantApi {
         body.put("service_id", binding.merchantAccountReference());
         body.put("payment_id", paymentId);
         body.put("qrcode", qrCodeUrl);
-        return call(binding, "ofd.submit_qrcode", "POST", "/payment/ofd_data/submit_qrcode",
-                body, true);
+        return call(binding, "ofd.submit_qrcode", "POST", "/payment/ofd_data/submit_qrcode", body, true);
     }
 
-    private ClickResponse call(ProviderBinding binding, String operation, String method,
-            String path, Map<String, Object> body, boolean mutating) {
+    private ClickResponse call(
+            ProviderBinding binding,
+            String operation,
+            String method,
+            String path,
+            Map<String, Object> body,
+            boolean mutating) {
 
         String merchantUser = binding.merchantUser().orElse(null);
         if (merchantUser == null || merchantUser.isBlank()) {
@@ -212,8 +214,17 @@ public class ClickMerchantApi {
         }
 
         MerchantApiCall call = new MerchantApiCall(
-                binding.tenantId(), binding.installationId(), PaymentProviderType.CLICK.name(),
-                operation, method, path, body, mutating, authorization(merchantUser), null, TIMEOUT);
+                binding.tenantId(),
+                binding.installationId(),
+                PaymentProviderType.CLICK.name(),
+                operation,
+                method,
+                path,
+                body,
+                mutating,
+                authorization(merchantUser),
+                null,
+                TIMEOUT);
 
         return ClickResponse.of(transport.exchange(call), mutating);
     }
@@ -228,8 +239,10 @@ public class ClickMerchantApi {
      * accepted clock skew, so a cached header is a header that may already be stale.
      */
     private Function<String, Map<String, String>> authorization(String merchantUserId) {
-        return secret -> Map.of("Auth",
-                ClickSignature.authHeader(merchantUserId, secret, clock.instant().getEpochSecond()));
+        return secret -> Map.of(
+                "Auth",
+                ClickSignature.authHeader(
+                        merchantUserId, secret, clock.instant().getEpochSecond()));
     }
 
     /**
@@ -252,17 +265,15 @@ public class ClickMerchantApi {
      *
      * @param body the parsed JSON, never logged as a whole
      */
-    public record ClickResponse(ProviderOutcome.Status status, Map<String, Object> body,
-            boolean mutating) {
+    public record ClickResponse(ProviderOutcome.Status status, Map<String, Object> body, boolean mutating) {
 
         static ClickResponse of(ProviderOutcome outcome, boolean mutating) {
-            return new ClickResponse(outcome.status(),
-                    outcome.normalized() == null ? Map.of() : outcome.normalized(), mutating);
+            return new ClickResponse(
+                    outcome.status(), outcome.normalized() == null ? Map.of() : outcome.normalized(), mutating);
         }
 
         static ClickResponse configurationFailure(String detail) {
-            return new ClickResponse(
-                    ProviderOutcome.Status.REJECTED, Map.of("error_note", detail), false);
+            return new ClickResponse(ProviderOutcome.Status.REJECTED, Map.of("error_note", detail), false);
         }
 
         /**
@@ -292,7 +303,8 @@ public class ClickMerchantApi {
          */
         public boolean uncertain() {
             return status == ProviderOutcome.Status.UNCERTAIN
-                    || (mutating && status == ProviderOutcome.Status.SUCCESS
+                    || (mutating
+                            && status == ProviderOutcome.Status.SUCCESS
                             && ClickErrorCodes.uncertainMutation(body.get("error_code")));
         }
 
@@ -307,8 +319,7 @@ public class ClickMerchantApi {
 
         /** Safe to log: the numeric code and Click's note, truncated. */
         public String describe() {
-            return status + " " + ClickErrorCodes.describe(body.get("error_code"),
-                    body.get("error_note"));
+            return status + " " + ClickErrorCodes.describe(body.get("error_code"), body.get("error_note"));
         }
 
         @Override

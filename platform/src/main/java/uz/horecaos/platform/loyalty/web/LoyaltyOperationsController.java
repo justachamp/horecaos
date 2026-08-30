@@ -1,11 +1,11 @@
 package uz.horecaos.platform.loyalty.web;
 
-import java.util.List;
-import java.util.UUID;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-
+import java.util.List;
+import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -13,10 +13,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.iam.api.Capability;
@@ -52,15 +48,15 @@ public class LoyaltyOperationsController {
     private final LoyaltyQueryService loyalty;
     private final LoyaltyAdjustmentService adjustments;
 
-    public LoyaltyOperationsController(LoyaltyQueryService loyalty,
-            LoyaltyAdjustmentService adjustments) {
+    public LoyaltyOperationsController(LoyaltyQueryService loyalty, LoyaltyAdjustmentService adjustments) {
         this.loyalty = loyalty;
         this.adjustments = adjustments;
     }
 
     @GetMapping("/tenants/{tenantId}/customers/{customerId}/loyalty")
     @RequiresCapability(value = Capability.LOYALTY_READ, scope = ScopeType.TENANT)
-    @Operation(summary = "Every points balance one customer holds",
+    @Operation(
+            summary = "Every points balance one customer holds",
             description = "One per brand, each labelled by the brand that will honour it. Under "
                     + "TENANT_SHARED identity this is a combined read and never a combined pool: "
                     + "points earned at one brand cannot be spent at another.")
@@ -72,20 +68,26 @@ public class LoyaltyOperationsController {
     }
 
     @PostMapping("/tenants/{tenantId}/customers/{customerId}/loyalty/adjustments")
-    @RequiresCapability(value = Capability.LOYALTY_ADJUST, scope = ScopeType.TENANT,
-            mutating = true)
-    @Operation(summary = "Credit or debit a balance by hand",
+    @RequiresCapability(value = Capability.LOYALTY_ADJUST, scope = ScopeType.TENANT, mutating = true)
+    @Operation(
+            summary = "Credit or debit a balance by hand",
             description = "One account, one signed amount, one reason. Above the configured "
                     + "threshold it needs an ADR 0027 approval and returns PENDING until a second "
                     + "person decides it. There is no paired form and no transfer: two offsetting "
                     + "adjustments are two separate approved acts.")
-    public ResponseEntity<AdjustmentResponse> adjust(@PathVariable UUID tenantId,
-            @PathVariable UUID customerId, @RequestBody AdjustmentRequest request) {
+    public ResponseEntity<AdjustmentResponse> adjust(
+            @PathVariable UUID tenantId, @PathVariable UUID customerId, @RequestBody AdjustmentRequest request) {
 
-        ApprovalOutcome outcome = adjustments.adjust(new AdjustmentCommand(tenantId,
-                request.brandId(), customerId, request.amountMinor(), request.currency(),
-                request.reasonCode(), request.reason(),
-                ActorRef.user(request.actorSubject(), null), request.idempotencyKey(),
+        ApprovalOutcome outcome = adjustments.adjust(new AdjustmentCommand(
+                tenantId,
+                request.brandId(),
+                customerId,
+                request.amountMinor(),
+                request.currency(),
+                request.reasonCode(),
+                request.reason(),
+                ActorRef.user(request.actorSubject(), null),
+                request.idempotencyKey(),
                 request.correlationId()));
 
         return ResponseEntity.ok(AdjustmentResponse.of(outcome));
@@ -93,14 +95,14 @@ public class LoyaltyOperationsController {
 
     @GetMapping("/tenants/{tenantId}/reports/loyalty-liability")
     @RequiresCapability(value = Capability.LOYALTY_READ, scope = ScopeType.TENANT)
-    @Operation(summary = "Outstanding points, per brand",
+    @Operation(
+            summary = "Outstanding points, per brand",
             description = "What each brand would owe if every point were spent, and how much of "
                     + "it an unfinished checkout is currently holding. Never pooled into one "
                     + "tenant figure: the liability belongs to the brand's legal entity.")
     public ResponseEntity<List<LiabilityResponse>> liability(@PathVariable UUID tenantId) {
-        return ResponseEntity.ok(loyalty.liability(tenantId).stream()
-                .map(LiabilityResponse::of)
-                .toList());
+        return ResponseEntity.ok(
+                loyalty.liability(tenantId).stream().map(LiabilityResponse::of).toList());
     }
 
     /**
@@ -116,31 +118,26 @@ public class LoyaltyOperationsController {
             @NotBlank String reason,
             @NotBlank String actorSubject,
             @NotBlank String idempotencyKey,
-            String correlationId) {
-    }
+            String correlationId) {}
 
     /** @param status NOT_REQUIRED, PENDING, APPROVED, or DECLINED (ADR 0027) */
     public record AdjustmentResponse(String status, UUID approvalRequestId) {
 
         static AdjustmentResponse of(ApprovalOutcome outcome) {
             return switch (outcome) {
-                case ApprovalOutcome.NotRequired ignored ->
-                        new AdjustmentResponse("NOT_REQUIRED", null);
-                case ApprovalOutcome.Pending pending ->
-                        new AdjustmentResponse("PENDING", pending.requestId());
-                case ApprovalOutcome.Approved approved ->
-                        new AdjustmentResponse("APPROVED", approved.requestId());
-                case ApprovalOutcome.Declined declined ->
-                        new AdjustmentResponse("DECLINED", declined.requestId());
+                case ApprovalOutcome.NotRequired ignored -> new AdjustmentResponse("NOT_REQUIRED", null);
+                case ApprovalOutcome.Pending pending -> new AdjustmentResponse("PENDING", pending.requestId());
+                case ApprovalOutcome.Approved approved -> new AdjustmentResponse("APPROVED", approved.requestId());
+                case ApprovalOutcome.Declined declined -> new AdjustmentResponse("DECLINED", declined.requestId());
             };
         }
     }
 
-    public record LiabilityResponse(UUID brandId, ApiMoney outstanding, ApiMoney held,
-            long accountCount) {
+    public record LiabilityResponse(UUID brandId, ApiMoney outstanding, ApiMoney held, long accountCount) {
 
         static LiabilityResponse of(LiabilityRow row) {
-            return new LiabilityResponse(row.brandId(),
+            return new LiabilityResponse(
+                    row.brandId(),
                     ApiMoney.of(row.outstandingMinor(), row.currency()),
                     ApiMoney.of(row.heldMinor(), row.currency()),
                     row.accountCount());

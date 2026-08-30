@@ -80,8 +80,7 @@ public record SomAmount(long value, String currency) {
     private void requireSameCurrency(SomAmount other) {
         Objects.requireNonNull(other, "An amount is required");
         if (!currency.equals(other.currency)) {
-            throw new IllegalArgumentException(
-                    "Cannot combine " + currency + " with " + other.currency);
+            throw new IllegalArgumentException("Cannot combine " + currency + " with " + other.currency);
         }
     }
 

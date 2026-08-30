@@ -11,10 +11,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.courier.domain.EngagementStatus;
 import uz.horecaos.platform.courier.domain.RegistrationWarningState;
 import uz.horecaos.platform.courier.domain.VerificationMethod;
@@ -55,9 +53,7 @@ public class JdbcCourierStore {
                 VALUES (:id, :tenantId, :code, :displayName, :vehicleClass,
                     :minDistance, :maxDistance, :maxConcurrent, :offerTtl, 'ACTIVE',
                     1, :now, :now)
-                """)
-                .params(typeParams(type))
-                .update();
+                """).params(typeParams(type)).update();
     }
 
     private static Map<String, Object> typeParams(CourierTypeRow type) {
@@ -83,7 +79,8 @@ public class JdbcCourierStore {
                   FROM fulfillment.courier_types
                  WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("id", typeId)
+                .param("tenantId", tenantId)
+                .param("id", typeId)
                 .query(JdbcCourierStore::mapType)
                 .optional();
     }
@@ -98,7 +95,8 @@ public class JdbcCourierStore {
                 VALUES (:id, :tenantId, :typeId, :subject, :reference,
                     :protectedName, 'ACTIVE', 1, :now, :now)
                 """)
-                .param("id", courier.id()).param("tenantId", courier.tenantId())
+                .param("id", courier.id())
+                .param("tenantId", courier.tenantId())
                 .param("typeId", courier.courierTypeId())
                 .param("subject", courier.principalSubject())
                 .param("reference", courier.displayReference())
@@ -109,7 +107,8 @@ public class JdbcCourierStore {
 
     public Optional<CourierRow> findCourier(UUID tenantId, UUID courierId) {
         return jdbc.sql(SELECT_COURIER + " WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", courierId)
+                .param("tenantId", tenantId)
+                .param("id", courierId)
                 .query(JdbcCourierStore::mapCourier)
                 .optional();
     }
@@ -120,9 +119,9 @@ public class JdbcCourierStore {
      * cannot ask about a courier id that is not theirs.
      */
     public Optional<CourierRow> findCourierBySubject(UUID tenantId, String principalSubject) {
-        return jdbc.sql(SELECT_COURIER
-                + " WHERE tenant_id = :tenantId AND principal_subject = :subject")
-                .param("tenantId", tenantId).param("subject", principalSubject)
+        return jdbc.sql(SELECT_COURIER + " WHERE tenant_id = :tenantId AND principal_subject = :subject")
+                .param("tenantId", tenantId)
+                .param("subject", principalSubject)
                 .query(JdbcCourierStore::mapCourier)
                 .optional();
     }
@@ -141,8 +140,11 @@ public class JdbcCourierStore {
         params.put("validUntil", engagement.registrationValidUntil());
         params.put("verifiedAt", utc(engagement.registrationVerifiedAt()));
         params.put("verifiedBy", engagement.registrationVerifiedBy());
-        params.put("method", engagement.verificationMethod() == null
-                ? null : engagement.verificationMethod().name());
+        params.put(
+                "method",
+                engagement.verificationMethod() == null
+                        ? null
+                        : engagement.verificationMethod().name());
         params.put("evidenceId", engagement.evidenceMediaId());
         params.put("dueOn", engagement.reverificationDueOn());
         params.put("warningState", engagement.warningState().name());
@@ -162,14 +164,13 @@ public class JdbcCourierStore {
                     :verifiedAt, :verifiedBy,
                     :method, :evidenceId, :dueOn,
                     :warningState, :now, 1, :now, :now)
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     public Optional<EngagementRow> findEngagement(UUID tenantId, UUID engagementId) {
         return jdbc.sql(SELECT_ENGAGEMENT + " WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", engagementId)
+                .param("tenantId", tenantId)
+                .param("id", engagementId)
                 .query(JdbcCourierStore::mapEngagement)
                 .optional();
     }
@@ -179,7 +180,8 @@ public class JdbcCourierStore {
         return jdbc.sql(SELECT_ENGAGEMENT + """
                  WHERE tenant_id = :tenantId AND courier_id = :courierId AND status <> 'ENDED'
                 """)
-                .param("tenantId", tenantId).param("courierId", courierId)
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
                 .query(JdbcCourierStore::mapEngagement)
                 .optional();
     }
@@ -188,10 +190,18 @@ public class JdbcCourierStore {
      * Records a verification and activates the engagement, conditional on the
      * version the caller read. Returns false when somebody else moved first.
      */
-    public boolean verify(UUID tenantId, UUID engagementId, int expectedVersion,
-            String protectedRegistrationRef, LocalDate validUntil, LocalDate reverificationDueOn,
-            VerificationMethod method, String verifiedBy, UUID evidenceMediaId,
-            RegistrationWarningState warningState, Instant now) {
+    public boolean verify(
+            UUID tenantId,
+            UUID engagementId,
+            int expectedVersion,
+            String protectedRegistrationRef,
+            LocalDate validUntil,
+            LocalDate reverificationDueOn,
+            VerificationMethod method,
+            String verifiedBy,
+            UUID evidenceMediaId,
+            RegistrationWarningState warningState,
+            Instant now) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
@@ -224,17 +234,20 @@ public class JdbcCourierStore {
                        updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
                    AND status <> 'ENDED'
-                """)
-                .params(params)
-                .update() == 1;
+                """).params(params).update() == 1;
     }
 
     /**
      * Suspends an engagement. Used by a manager and by the compliance sweeper,
      * which is why it takes the status rather than assuming one.
      */
-    public boolean suspend(UUID tenantId, UUID engagementId, EngagementStatus status,
-            String reasonCode, RegistrationWarningState warningState, Instant now) {
+    public boolean suspend(
+            UUID tenantId,
+            UUID engagementId,
+            EngagementStatus status,
+            String reasonCode,
+            RegistrationWarningState warningState,
+            Instant now) {
 
         return jdbc.sql("""
                 UPDATE fulfillment.courier_engagements
@@ -247,14 +260,17 @@ public class JdbcCourierStore {
                        updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id AND status IN ('ACTIVE', 'PENDING_VERIFICATION')
                 """)
-                .param("tenantId", tenantId).param("id", engagementId)
-                .param("status", status.name()).param("reasonCode", reasonCode)
-                .param("warningState", warningState.name()).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", engagementId)
+                        .param("status", status.name())
+                        .param("reasonCode", reasonCode)
+                        .param("warningState", warningState.name())
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
-    public void markWarningState(UUID tenantId, UUID engagementId,
-            RegistrationWarningState warningState, Instant now) {
+    public void markWarningState(UUID tenantId, UUID engagementId, RegistrationWarningState warningState, Instant now) {
 
         jdbc.sql("""
                 UPDATE fulfillment.courier_engagements
@@ -264,8 +280,10 @@ public class JdbcCourierStore {
                        updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id AND warning_state <> :warningState
                 """)
-                .param("tenantId", tenantId).param("id", engagementId)
-                .param("warningState", warningState.name()).param("now", utc(now))
+                .param("tenantId", tenantId)
+                .param("id", engagementId)
+                .param("warningState", warningState.name())
+                .param("now", utc(now))
                 .update();
     }
 
@@ -296,7 +314,8 @@ public class JdbcCourierStore {
                    AND reverification_due_on BETWEEN :from AND :to
                  ORDER BY reverification_due_on
                 """)
-                .param("from", from).param("to", to)
+                .param("from", from)
+                .param("to", to)
                 .query(JdbcCourierStore::mapEngagement)
                 .list();
     }
@@ -312,7 +331,8 @@ public class JdbcCourierStore {
                   FROM fulfillment.courier_engagements
                  WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("id", engagementId)
+                .param("tenantId", tenantId)
+                .param("id", engagementId)
                 .query(String.class)
                 .optional();
     }
@@ -324,8 +344,8 @@ public class JdbcCourierStore {
      * that rang it. Conflict-free by the unique key, so two sweeper instances
      * racing produce one notification rather than two.
      */
-    public boolean claimNotice(UUID tenantId, UUID engagementId, int rungDays, String audience,
-            LocalDate validUntil, Instant now) {
+    public boolean claimNotice(
+            UUID tenantId, UUID engagementId, int rungDays, String audience, LocalDate validUntil, Instant now) {
 
         return jdbc.sql("""
                 INSERT INTO fulfillment.courier_registration_notices (
@@ -333,11 +353,15 @@ public class JdbcCourierStore {
                 VALUES (:id, :tenantId, :engagementId, :rungDays, :audience, :validUntil, :now)
                 ON CONFLICT ON CONSTRAINT uq_notice_rung DO NOTHING
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", tenantId)
-                .param("engagementId", engagementId).param("rungDays", rungDays)
-                .param("audience", audience).param("validUntil", validUntil)
-                .param("now", utc(now))
-                .update() == 1;
+                        .param("id", UUID.randomUUID())
+                        .param("tenantId", tenantId)
+                        .param("engagementId", engagementId)
+                        .param("rungDays", rungDays)
+                        .param("audience", audience)
+                        .param("validUntil", validUntil)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -354,7 +378,8 @@ public class JdbcCourierStore {
                   FROM fulfillment.courier_registration_notices
                  WHERE tenant_id = :tenantId AND engagement_id = :engagementId AND rung_days = 0
                 """)
-                .param("tenantId", tenantId).param("engagementId", engagementId)
+                .param("tenantId", tenantId)
+                .param("engagementId", engagementId)
                 .query(OffsetDateTime.class)
                 .optional()
                 .map(OffsetDateTime::toInstant);
@@ -362,16 +387,20 @@ public class JdbcCourierStore {
 
     // ----------------------------------------------------- adjustment reasons
 
-    public void insertAdjustmentReason(UUID id, UUID tenantId, String code, String kind,
-            String outcomeBasis, String displayName) {
+    public void insertAdjustmentReason(
+            UUID id, UUID tenantId, String code, String kind, String outcomeBasis, String displayName) {
 
         jdbc.sql("""
                 INSERT INTO fulfillment.courier_adjustment_reasons (
                     id, tenant_id, code, kind, outcome_basis, display_name, status, created_at)
                 VALUES (:id, :tenantId, :code, :kind, :basis, :displayName, 'ACTIVE', now())
                 """)
-                .param("id", id).param("tenantId", tenantId).param("code", code)
-                .param("kind", kind).param("basis", outcomeBasis).param("displayName", displayName)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("code", code)
+                .param("kind", kind)
+                .param("basis", outcomeBasis)
+                .param("displayName", displayName)
                 .update();
     }
 
@@ -381,32 +410,63 @@ public class JdbcCourierStore {
                   FROM fulfillment.courier_adjustment_reasons
                  WHERE tenant_id = :tenantId AND code = :code
                 """)
-                .param("tenantId", tenantId).param("code", code)
+                .param("tenantId", tenantId)
+                .param("code", code)
                 .query((ResultSet rs, int rowNumber) -> new AdjustmentReasonRow(
-                        rs.getObject("id", UUID.class), rs.getObject("tenant_id", UUID.class),
-                        rs.getString("code"), rs.getString("kind"), rs.getString("outcome_basis"),
-                        rs.getString("display_name"), rs.getString("status")))
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("tenant_id", UUID.class),
+                        rs.getString("code"),
+                        rs.getString("kind"),
+                        rs.getString("outcome_basis"),
+                        rs.getString("display_name"),
+                        rs.getString("status")))
                 .optional();
     }
 
     // ------------------------------------------------------------------- rows
 
-    public record CourierTypeRow(UUID id, UUID tenantId, String code, String displayName,
-            String vehicleClass, int minDistanceMeters, Integer maxDistanceMeters,
-            int maxConcurrentAssignments, int offerTtlSeconds, String status) { }
+    public record CourierTypeRow(
+            UUID id,
+            UUID tenantId,
+            String code,
+            String displayName,
+            String vehicleClass,
+            int minDistanceMeters,
+            Integer maxDistanceMeters,
+            int maxConcurrentAssignments,
+            int offerTtlSeconds,
+            String status) {}
 
-    public record CourierRow(UUID id, UUID tenantId, UUID courierTypeId, String principalSubject,
-            String displayReference, String protectedFullName, String status, int version) { }
+    public record CourierRow(
+            UUID id,
+            UUID tenantId,
+            UUID courierTypeId,
+            String principalSubject,
+            String displayReference,
+            String protectedFullName,
+            String status,
+            int version) {}
 
-    public record EngagementRow(UUID id, UUID tenantId, UUID courierId, EngagementStatus status,
-            LocalDate engagedFrom, LocalDate engagedUntil, String protectedRegistrationRef,
-            LocalDate registrationValidUntil, Instant registrationVerifiedAt,
-            String registrationVerifiedBy, VerificationMethod verificationMethod,
-            UUID evidenceMediaId, LocalDate reverificationDueOn,
-            RegistrationWarningState warningState, String suspensionReasonCode, int version) { }
+    public record EngagementRow(
+            UUID id,
+            UUID tenantId,
+            UUID courierId,
+            EngagementStatus status,
+            LocalDate engagedFrom,
+            LocalDate engagedUntil,
+            String protectedRegistrationRef,
+            LocalDate registrationValidUntil,
+            Instant registrationVerifiedAt,
+            String registrationVerifiedBy,
+            VerificationMethod verificationMethod,
+            UUID evidenceMediaId,
+            LocalDate reverificationDueOn,
+            RegistrationWarningState warningState,
+            String suspensionReasonCode,
+            int version) {}
 
-    public record AdjustmentReasonRow(UUID id, UUID tenantId, String code, String kind,
-            String outcomeBasis, String displayName, String status) { }
+    public record AdjustmentReasonRow(
+            UUID id, UUID tenantId, String code, String kind, String outcomeBasis, String displayName, String status) {}
 
     // ---------------------------------------------------------------- mapping
 

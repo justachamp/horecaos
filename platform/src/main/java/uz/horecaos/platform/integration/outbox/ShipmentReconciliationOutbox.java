@@ -5,12 +5,9 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
-
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.integration.events.EventCatalog;
 import uz.horecaos.platform.integration.events.EventContract;
 
@@ -33,6 +30,7 @@ public class ShipmentReconciliationOutbox {
 
     /** ADR 0032 catalogue keys. Resolved through the catalogue, never hard-coded twice. */
     public static final String COMMAND_EVENT_TYPE = "ShipmentReconciliationRequested";
+
     public static final String SETTLEMENT_EVENT_TYPE = "ShipmentOutcomeReconciled";
     public static final String AGGREGATE_TYPE = "DeliveryOperation";
 
@@ -68,8 +66,8 @@ public class ShipmentReconciliationOutbox {
         append(contract, settlement.operationCommandId(), tenantId, settlement, correlationId);
     }
 
-    private void append(EventContract contract, UUID operationCommandId, UUID tenantId,
-            Object payload, String correlationId) {
+    private void append(
+            EventContract contract, UUID operationCommandId, UUID tenantId, Object payload, String correlationId) {
 
         // The partition key is the delivery command, not the reconciliation, so
         // two reconciliations for one courier call stay in order on one
@@ -137,7 +135,7 @@ public class ShipmentReconciliationOutbox {
             String providerType,
             String capability,
             String externalReference,
-            String uncertainErrorCode) { }
+            String uncertainErrorCode) {}
 
     /**
      * The settled answer.
@@ -160,17 +158,33 @@ public class ShipmentReconciliationOutbox {
             int attempts,
             String reconciledAt) {
 
-        public static Settlement at(Instant instant, UUID operationCommandId, UUID bindingId,
-                String providerType, String capability, String externalReference,
-                String resolution, String providerStatus, String errorCode, int attempts) {
+        public static Settlement at(
+                Instant instant,
+                UUID operationCommandId,
+                UUID bindingId,
+                String providerType,
+                String capability,
+                String externalReference,
+                String resolution,
+                String providerStatus,
+                String errorCode,
+                int attempts) {
 
             // ISO-8601 text rather than an Instant field, so the wire format is
             // decided here and not by whichever ObjectMapper configuration the
             // caller happens to hold. The schema says date-time; a mapper writing
             // epoch seconds would satisfy the record and fail the contract, and
             // it would fail it in a consumer rather than here.
-            return new Settlement(operationCommandId, bindingId, providerType, capability,
-                    externalReference, resolution, providerStatus, errorCode, attempts,
+            return new Settlement(
+                    operationCommandId,
+                    bindingId,
+                    providerType,
+                    capability,
+                    externalReference,
+                    resolution,
+                    providerStatus,
+                    errorCode,
+                    attempts,
                     instant.toString());
         }
     }

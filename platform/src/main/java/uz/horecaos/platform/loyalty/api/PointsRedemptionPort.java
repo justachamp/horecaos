@@ -77,9 +77,14 @@ public interface PointsRedemptionPort {
      * @param channelCode the order's snapshotted channel code, checked against
      *                    the policy's allowed channels
      */
-    record RedemptionQuery(UUID tenantId, UUID brandId, UUID customerAccountId,
-            long orderTotalMinor, long deliveryFeeMinor, String currency, String channelCode) {
-    }
+    record RedemptionQuery(
+            UUID tenantId,
+            UUID brandId,
+            UUID customerAccountId,
+            long orderTotalMinor,
+            long deliveryFeeMinor,
+            String currency,
+            String channelCode) {}
 
     /**
      * @param availableMinor  what the account holds, in whole som
@@ -88,8 +93,7 @@ public interface PointsRedemptionPort {
      *                        that some money must change hands
      * @param refusal         why the maximum is zero, or null when it is not
      */
-    record RedemptionOffer(UUID accountId, long availableMinor, long maximumMinor,
-            String currency, String refusal) {
+    record RedemptionOffer(UUID accountId, long availableMinor, long maximumMinor, String currency, String refusal) {
 
         public boolean redeemable() {
             return maximumMinor > 0;
@@ -104,13 +108,17 @@ public interface PointsRedemptionPort {
      *                 order can redeem only against the identified customer's own
      *                 account. Both consequences are intended
      */
-    record ReserveCommand(UUID tenantId, UUID brandId, UUID customerAccountId, UUID orderId,
-            UUID tenderId, long amountMinor, String currency, String idempotencyKey,
-            String actor) {
-    }
+    record ReserveCommand(
+            UUID tenantId,
+            UUID brandId,
+            UUID customerAccountId,
+            UUID orderId,
+            UUID tenderId,
+            long amountMinor,
+            String currency,
+            String idempotencyKey,
+            String actor) {}
 
     /** @param consumedLots how many lots the hold took, for the receipt of the hold itself */
-    record PointsHold(UUID reservationId, UUID accountId, long amountMinor,
-            long balanceAfterMinor, int consumedLots) {
-    }
+    record PointsHold(UUID reservationId, UUID accountId, long amountMinor, long balanceAfterMinor, int consumedLots) {}
 }

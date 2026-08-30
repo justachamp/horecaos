@@ -5,7 +5,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.customers.application.RandomVerificationCodeSource;
 import uz.horecaos.platform.customers.application.VerificationCodeSource;
 import uz.horecaos.platform.customers.domain.PhoneNumber;
@@ -74,8 +73,7 @@ public class PresetVerificationCodeSource implements VerificationCodeSource {
         // never works.
         this.presetDestination = PhoneNumber.requireDeliverableMobile(presetPhone);
         if (!VerificationCode.isWellFormed(presetCode)) {
-            throw new IllegalStateException(
-                    CODE_PROPERTY + " must be " + VerificationCode.LENGTH + " digits");
+            throw new IllegalStateException(CODE_PROPERTY + " must be " + VerificationCode.LENGTH + " digits");
         }
         this.presetCode = presetCode;
         this.everybodyElse = everybodyElse;
@@ -87,8 +85,6 @@ public class PresetVerificationCodeSource implements VerificationCodeSource {
         // this does not have: the value compared is a phone number the caller
         // supplied, not a secret, and the code behind it is configuration on a
         // laptop.
-        return presetDestination.equals(destination)
-                ? new Code(presetCode, false)
-                : everybodyElse.codeFor(destination);
+        return presetDestination.equals(destination) ? new Code(presetCode, false) : everybodyElse.codeFor(destination);
     }
 }

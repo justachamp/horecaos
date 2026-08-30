@@ -10,10 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.ordering.domain.AmendmentCommandType;
 import uz.horecaos.platform.ordering.domain.AmendmentStatus;
 
@@ -64,20 +62,20 @@ public class JdbcOrderAmendmentStore {
                 VALUES (:id, :tenantId, :orderId, :status, :baseRevision, :quoteId, :delta,
                     :requiresApproval, :approvalRequestId, :idempotencyKey, :expiresAt,
                     :actorType, :actorId, 1, :now, :now)
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
-    public void insertCommand(UUID amendmentId, UUID tenantId, int sequence,
-            AmendmentCommandType type, String payloadJson) {
+    public void insertCommand(
+            UUID amendmentId, UUID tenantId, int sequence, AmendmentCommandType type, String payloadJson) {
         jdbc.sql("""
                 INSERT INTO ordering.order_amendment_commands (
                     amendment_id, sequence, tenant_id, command_type, payload_json)
                 VALUES (:amendmentId, :sequence, :tenantId, :type, :payload::jsonb)
                 """)
-                .param("amendmentId", amendmentId).param("sequence", sequence)
-                .param("tenantId", tenantId).param("type", type.name())
+                .param("amendmentId", amendmentId)
+                .param("sequence", sequence)
+                .param("tenantId", tenantId)
+                .param("type", type.name())
                 .param("payload", payloadJson)
                 .update();
     }
@@ -89,8 +87,8 @@ public class JdbcOrderAmendmentStore {
      * an amendment that expired or was withdrawn between the operator reading the
      * delta aloud and pressing the button.
      */
-    public Optional<Integer> attestConfirmation(UUID tenantId, UUID amendmentId,
-            int expectedVersion, String attestedBy, String channel, Instant now) {
+    public Optional<Integer> attestConfirmation(
+            UUID tenantId, UUID amendmentId, int expectedVersion, String attestedBy, String channel, Instant now) {
         return jdbc.sql("""
                 UPDATE ordering.order_amendments
                 SET confirmation_attested_by = :by,
@@ -103,9 +101,12 @@ public class JdbcOrderAmendmentStore {
                   AND status IN ('PRICED', 'AWAITING_CUSTOMER_CONFIRMATION')
                 RETURNING version
                 """)
-                .param("tenantId", tenantId).param("id", amendmentId)
-                .param("expectedVersion", expectedVersion).param("by", attestedBy)
-                .param("channel", channel).param("now", utc(now))
+                .param("tenantId", tenantId)
+                .param("id", amendmentId)
+                .param("expectedVersion", expectedVersion)
+                .param("by", attestedBy)
+                .param("channel", channel)
+                .param("now", utc(now))
                 .query(Integer.class)
                 .optional();
     }
@@ -117,8 +118,8 @@ public class JdbcOrderAmendmentStore {
      * row and the caller is told the amendment had already settled, rather than
      * appending a second revision for one operator's single click.
      */
-    public Optional<Integer> markApplied(UUID tenantId, UUID amendmentId, int expectedVersion,
-            int appliedRevision, Instant now) {
+    public Optional<Integer> markApplied(
+            UUID tenantId, UUID amendmentId, int expectedVersion, int appliedRevision, Instant now) {
         return jdbc.sql("""
                 UPDATE ordering.order_amendments
                 SET status = 'APPLIED',
@@ -130,8 +131,10 @@ public class JdbcOrderAmendmentStore {
                   AND status = 'PRICED'
                 RETURNING version
                 """)
-                .param("tenantId", tenantId).param("id", amendmentId)
-                .param("expectedVersion", expectedVersion).param("revision", appliedRevision)
+                .param("tenantId", tenantId)
+                .param("id", amendmentId)
+                .param("expectedVersion", expectedVersion)
+                .param("revision", appliedRevision)
                 .param("now", utc(now))
                 .query(Integer.class)
                 .optional();
@@ -147,9 +150,12 @@ public class JdbcOrderAmendmentStore {
                   AND status IN ('DRAFT', 'PRICED', 'AWAITING_CUSTOMER_CONFIRMATION',
                                  'AWAITING_PAYMENT')
                 """)
-                .param("tenantId", tenantId).param("id", amendmentId)
-                .param("reason", reasonCode).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", amendmentId)
+                        .param("reason", reasonCode)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -177,21 +183,23 @@ public class JdbcOrderAmendmentStore {
                 FROM due
                 WHERE amendment.id = due.id
                 """)
-                .param("now", utc(now)).param("batchSize", batchSize)
+                .param("now", utc(now))
+                .param("batchSize", batchSize)
                 .update();
     }
 
     public Optional<AmendmentRow> find(UUID tenantId, UUID amendmentId) {
         return jdbc.sql(SELECT_AMENDMENT + " WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", amendmentId)
+                .param("tenantId", tenantId)
+                .param("id", amendmentId)
                 .query(JdbcOrderAmendmentStore::mapAmendment)
                 .optional();
     }
 
     public Optional<AmendmentRow> findByIdempotencyKey(UUID tenantId, String idempotencyKey) {
-        return jdbc.sql(SELECT_AMENDMENT
-                        + " WHERE tenant_id = :tenantId AND idempotency_key = :key")
-                .param("tenantId", tenantId).param("key", idempotencyKey)
+        return jdbc.sql(SELECT_AMENDMENT + " WHERE tenant_id = :tenantId AND idempotency_key = :key")
+                .param("tenantId", tenantId)
+                .param("key", idempotencyKey)
                 .query(JdbcOrderAmendmentStore::mapAmendment)
                 .optional();
     }
@@ -203,7 +211,8 @@ public class JdbcOrderAmendmentStore {
                    AND status IN ('DRAFT', 'PRICED', 'AWAITING_CUSTOMER_CONFIRMATION',
                                   'AWAITING_PAYMENT')
                 """)
-                .param("tenantId", tenantId).param("orderId", orderId)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
                 .query(JdbcOrderAmendmentStore::mapAmendment)
                 .optional();
     }
@@ -213,7 +222,8 @@ public class JdbcOrderAmendmentStore {
                  WHERE tenant_id = :tenantId AND order_id = :orderId
                  ORDER BY created_at
                 """)
-                .param("tenantId", tenantId).param("orderId", orderId)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
                 .query(JdbcOrderAmendmentStore::mapAmendment)
                 .list();
     }
@@ -226,7 +236,8 @@ public class JdbcOrderAmendmentStore {
                 WHERE tenant_id = :tenantId AND amendment_id = :amendmentId
                 ORDER BY sequence
                 """)
-                .param("tenantId", tenantId).param("amendmentId", amendmentId)
+                .param("tenantId", tenantId)
+                .param("amendmentId", amendmentId)
                 .query((row, number) -> new CommandRow(
                         row.getInt("sequence"),
                         AmendmentCommandType.valueOf(row.getString("command_type")),
@@ -280,18 +291,45 @@ public class JdbcOrderAmendmentStore {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
-    public record NewAmendment(UUID id, UUID tenantId, UUID orderId, AmendmentStatus status,
-            int baseRevision, UUID quoteId, long deltaTotalMinor, boolean requiresApproval,
-            UUID approvalRequestId, String idempotencyKey, Instant expiresAt,
-            String createdByActorType, String createdByActorId, Instant createdAt) { }
+    public record NewAmendment(
+            UUID id,
+            UUID tenantId,
+            UUID orderId,
+            AmendmentStatus status,
+            int baseRevision,
+            UUID quoteId,
+            long deltaTotalMinor,
+            boolean requiresApproval,
+            UUID approvalRequestId,
+            String idempotencyKey,
+            Instant expiresAt,
+            String createdByActorType,
+            String createdByActorId,
+            Instant createdAt) {}
 
-    public record AmendmentRow(UUID id, UUID tenantId, UUID orderId, AmendmentStatus status,
-            int baseRevision, Integer appliedRevision, UUID quoteId, long deltaTotalMinor,
-            boolean requiresApproval, UUID approvalRequestId, String confirmationAttestedBy,
-            Instant confirmationAttestedAt, String confirmationChannel, String idempotencyKey,
-            Instant expiresAt, String rejectedReasonCode, String createdByActorType,
-            String createdByActorId, int version, Instant createdAt, Instant settledAt) { }
+    public record AmendmentRow(
+            UUID id,
+            UUID tenantId,
+            UUID orderId,
+            AmendmentStatus status,
+            int baseRevision,
+            Integer appliedRevision,
+            UUID quoteId,
+            long deltaTotalMinor,
+            boolean requiresApproval,
+            UUID approvalRequestId,
+            String confirmationAttestedBy,
+            Instant confirmationAttestedAt,
+            String confirmationChannel,
+            String idempotencyKey,
+            Instant expiresAt,
+            String rejectedReasonCode,
+            String createdByActorType,
+            String createdByActorId,
+            int version,
+            Instant createdAt,
+            Instant settledAt) {}
 
-    public record CommandRow(int sequence, AmendmentCommandType commandType, String payloadJson,
-            String rejectedReasonCode) { }
+    public record CommandRow(
+            int sequence, AmendmentCommandType commandType, String payloadJson, String rejectedReasonCode) {}
 }

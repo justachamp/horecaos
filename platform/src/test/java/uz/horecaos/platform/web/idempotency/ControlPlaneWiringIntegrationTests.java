@@ -1,27 +1,22 @@
 package uz.horecaos.platform.web.idempotency;
 
-import uz.horecaos.platform.support.TestDatabase;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-
 import java.util.Map;
 import java.util.UUID;
-
-import uz.horecaos.platform.iam.api.Capability;
-import uz.horecaos.platform.iam.api.PlatformRole;
-import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
-
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Bean;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Bean;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -31,9 +26,10 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.DockerClientFactory;
-
-import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.BeforeAll;
+import uz.horecaos.platform.iam.api.Capability;
+import uz.horecaos.platform.iam.api.PlatformRole;
+import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
+import uz.horecaos.platform.support.TestDatabase;
 
 /**
  * Proves the ADR 0025, 0027, and 0031 foundations are actually wired into a
@@ -157,8 +153,7 @@ class ControlPlaneWiringIntegrationTests {
                 .andReturn();
 
         assertThat(result.getResponse().getStatus()).isEqualTo(400);
-        assertThat(result.getResponse().getContentAsString())
-                .contains("IDEMPOTENCY_KEY_REQUIRED");
+        assertThat(result.getResponse().getContentAsString()).contains("IDEMPOTENCY_KEY_REQUIRED");
         assertThat(tenantCount()).isZero();
     }
 
@@ -194,7 +189,8 @@ class ControlPlaneWiringIntegrationTests {
                 .andReturn();
 
         assertThat(retry.getResponse().getStatus()).isEqualTo(201);
-        assertThat(retry.getResponse().getHeader(IdempotencyInterceptor.REPLAYED_HEADER)).isEqualTo("true");
+        assertThat(retry.getResponse().getHeader(IdempotencyInterceptor.REPLAYED_HEADER))
+                .isEqualTo("true");
         assertThat(tenantCount())
                 .as("a retried create must produce exactly one tenant")
                 .isEqualTo(1);
@@ -231,9 +227,12 @@ class ControlPlaneWiringIntegrationTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(tenantBody("acme-six")))
                 .andReturn();
-        String tenantId = jdbc.sql("SELECT id::text FROM tenant.tenants").query(String.class).single();
+        String tenantId = jdbc.sql("SELECT id::text FROM tenant.tenants")
+                .query(String.class)
+                .single();
 
-        MvcResult read = mvc.perform(get(TENANTS + "/" + tenantId).with(platformAdmin())).andReturn();
+        MvcResult read =
+                mvc.perform(get(TENANTS + "/" + tenantId).with(platformAdmin())).andReturn();
 
         assertThat(created.getResponse().getStatus()).isEqualTo(201);
         assertThat(read.getResponse().getStatus())
@@ -287,10 +286,14 @@ class ControlPlaneWiringIntegrationTests {
                 .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "key-1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(tenantBody("acme-seven")));
-        String tenantId = jdbc.sql("SELECT id::text FROM tenant.tenants").query(String.class).single();
+        String tenantId = jdbc.sql("SELECT id::text FROM tenant.tenants")
+                .query(String.class)
+                .single();
 
         assertThat(mvc.perform(get(TENANTS + "/" + tenantId).with(platformAdmin()))
-                .andReturn().getResponse().getStatus())
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
                 .isEqualTo(200);
     }
 
@@ -299,11 +302,15 @@ class ControlPlaneWiringIntegrationTests {
     }
 
     private long idempotencyRecordCount() {
-        return jdbc.sql("SELECT count(*) FROM platform.idempotency_records").query(Long.class).single();
+        return jdbc.sql("SELECT count(*) FROM platform.idempotency_records")
+                .query(Long.class)
+                .single();
     }
 
     private java.util.List<String> auditActions() {
-        return jdbc.sql("SELECT action_code FROM audit.audit_events").query(String.class).list();
+        return jdbc.sql("SELECT action_code FROM audit.audit_events")
+                .query(String.class)
+                .list();
     }
 
     private static String tenantBody(String slug) {
@@ -322,9 +329,10 @@ class ControlPlaneWiringIntegrationTests {
     }
 
     private static org.springframework.test.web.servlet.request.RequestPostProcessor tokenFor(String subject) {
-        return jwt().jwt(builder -> builder
-                .subject(subject)
-                .claim("resource_access", Map.of("horecaos-api", Map.of("roles", java.util.List.of("platform-admin")))));
+        return jwt().jwt(builder -> builder.subject(subject)
+                .claim(
+                        "resource_access",
+                        Map.of("horecaos-api", Map.of("roles", java.util.List.of("platform-admin")))));
     }
 
     /** Avoids contacting a real issuer; this test exercises the MVC chain, not Keycloak. */
@@ -333,7 +341,10 @@ class ControlPlaneWiringIntegrationTests {
 
         @Bean
         JwtDecoder jwtDecoder() {
-            return token -> Jwt.withTokenValue(token).header("alg", "none").claim("sub", "unused").build();
+            return token -> Jwt.withTokenValue(token)
+                    .header("alg", "none")
+                    .claim("sub", "unused")
+                    .build();
         }
     }
 }

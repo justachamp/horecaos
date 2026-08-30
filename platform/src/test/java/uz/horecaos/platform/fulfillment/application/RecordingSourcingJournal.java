@@ -6,7 +6,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.BookingReceipt;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.BookingStatus;
 import uz.horecaos.platform.fulfillment.domain.sourcing.AttemptStatus;
@@ -50,8 +49,7 @@ class RecordingSourcingJournal implements SourcingJournal {
     }
 
     @Override
-    public boolean settlePartnerAttempt(UUID tenantId, UUID attemptId, BookingReceipt receipt,
-            Instant now) {
+    public boolean settlePartnerAttempt(UUID tenantId, UUID attemptId, BookingReceipt receipt, Instant now) {
         Attempt attempt = byId(attemptId);
         attempt.status = switch (receipt.status()) {
             case BOOKED -> AttemptStatus.ACCEPTED;
@@ -88,8 +86,8 @@ class RecordingSourcingJournal implements SourcingJournal {
     }
 
     @Override
-    public void raiseException(UUID tenantId, UUID brandId, UUID locationId, UUID planId,
-            String reasonCode, String detail, Instant now) {
+    public void raiseException(
+            UUID tenantId, UUID brandId, UUID locationId, UUID planId, String reasonCode, String detail, Instant now) {
         exceptions.add(reasonCode);
     }
 
@@ -104,7 +102,8 @@ class RecordingSourcingJournal implements SourcingJournal {
     }
 
     private Attempt byId(UUID attemptId) {
-        return byKey.values().stream().filter(candidate -> candidate.id.equals(attemptId))
+        return byKey.values().stream()
+                .filter(candidate -> candidate.id.equals(attemptId))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("No attempt " + attemptId));
     }

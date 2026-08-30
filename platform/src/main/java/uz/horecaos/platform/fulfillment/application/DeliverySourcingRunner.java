@@ -5,12 +5,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-
 import uz.horecaos.platform.fulfillment.api.DeliveryOrderPort;
 import uz.horecaos.platform.fulfillment.api.DeliveryOrderPort.DeliveryOrder;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.BookingStatus;
@@ -70,17 +68,23 @@ public class DeliverySourcingRunner {
     private final Duration maxBackoff;
     private final int maxAttempts;
 
-    public DeliverySourcingRunner(DeliverySourcingService sourcing, SourcingJournal journal,
-            DeliveryOrderPort orders, JdbcDeliveryPlanStore plans, JdbcSourcingJobStore jobs,
-            JdbcDispatchBranchStore branches, Clock clock,
+    public DeliverySourcingRunner(
+            DeliverySourcingService sourcing,
+            SourcingJournal journal,
+            DeliveryOrderPort orders,
+            JdbcDeliveryPlanStore plans,
+            JdbcSourcingJobStore jobs,
+            JdbcDispatchBranchStore branches,
+            Clock clock,
             @Value("${horecaos.fulfillment.sourcing.initial-backoff:5s}") Duration initialBackoff,
             @Value("${horecaos.fulfillment.sourcing.max-backoff:2m}") Duration maxBackoff,
             @Value("${horecaos.fulfillment.sourcing.max-attempts:12}") int maxAttempts) {
 
-        if (initialBackoff.isNegative() || initialBackoff.isZero()
-                || maxBackoff.compareTo(initialBackoff) < 0 || maxAttempts < 1) {
-            throw new IllegalArgumentException(
-                    "Sourcing retry settings must be positive and consistently ordered");
+        if (initialBackoff.isNegative()
+                || initialBackoff.isZero()
+                || maxBackoff.compareTo(initialBackoff) < 0
+                || maxAttempts < 1) {
+            throw new IllegalArgumentException("Sourcing retry settings must be positive and consistently ordered");
         }
         this.sourcing = sourcing;
         this.journal = journal;
@@ -117,19 +121,21 @@ public class DeliverySourcingRunner {
             // recording it. Deciding again from here is how a real second courier
             // gets booked: the second shipment loses to the unique index, but the
             // partner has already dispatched somebody and will bill for it.
-            log.warn("Plan {} already has shipment {}; the tick that won it did not finish",
-                    plan.id(), shipment.get());
+            log.warn("Plan {} already has shipment {}; the tick that won it did not finish", plan.id(), shipment.get());
             plans.settle(plan.tenantId(), plan.id(), PlanStatus.ASSIGNED, now);
             jobs.complete(job.jobId(), job.leaseToken(), now);
             return Optional.empty();
         }
 
         Optional<DeliveryOrder> order = orders.deliveryOrder(job.tenantId(), plan.orderId());
-        Optional<DispatchBranch> branch =
-                branches.find(plan.tenantId(), plan.brandId(), plan.locationId());
+        Optional<DispatchBranch> branch = branches.find(plan.tenantId(), plan.brandId(), plan.locationId());
         if (order.isEmpty() || branch.isEmpty()) {
-            return Optional.of(handUp(job, plan, DeliveryExceptionReason.ADDRESS_ISSUE,
-                    "the order or its branch can no longer be read for dispatch", now));
+            return Optional.of(handUp(
+                    job,
+                    plan,
+                    DeliveryExceptionReason.ADDRESS_ISSUE,
+                    "the order or its branch can no longer be read for dispatch",
+                    now));
         }
 
         // Before anything is decided, because an offer left OFFERED past its
@@ -137,27 +143,25 @@ public class DeliverySourcingRunner {
         // asked. The planner would see a live offer that is not one.
         journal.expireLapsedOffers(plan.tenantId(), plan.id(), now);
 
-        SourcingProgress progress =
-                journal.progress(plan.tenantId(), plan.id(), job.createdAt());
+        SourcingProgress progress = journal.progress(plan.tenantId(), plan.id(), job.createdAt());
         plans.transition(plan.tenantId(), plan.id(), plan.status(), PlanStatus.SOURCING, now);
 
-        DeliverySourcingService.Outcome outcome =
-                sourcing.source(request(plan, order.get(), branch.get()), progress);
+        DeliverySourcingService.Outcome outcome = sourcing.source(request(plan, order.get(), branch.get()), progress);
 
         return Optional.of(settle(job, plan, outcome, now));
     }
 
     // ------------------------------------------------------- what happens next
 
-    private SourcingDecision settle(ClaimedJob job, DeliveryPlan plan,
-            DeliverySourcingService.Outcome outcome, Instant now) {
+    private SourcingDecision settle(
+            ClaimedJob job, DeliveryPlan plan, DeliverySourcingService.Outcome outcome, Instant now) {
 
         SourcingDecision decision = outcome.decision();
         switch (decision) {
             case SourcingDecision.OfferInternal offer ->
-                    wake(job, plan, offer.expiresAt().plus(AFTER_OFFER), outcome, null, now);
+                wake(job, plan, offer.expiresAt().plus(AFTER_OFFER), outcome, null, now);
             case SourcingDecision.WaitForInternal wait ->
-                    wake(job, plan, wait.retryAt().plus(AFTER_OFFER), outcome, null, now);
+                wake(job, plan, wait.retryAt().plus(AFTER_OFFER), outcome, null, now);
             case SourcingDecision.EscalateToOperations escalate -> {
                 // The exception row is already written by the service. Nothing
                 // automated remains, so the job is finished rather than retried:
@@ -172,45 +176,51 @@ public class DeliverySourcingRunner {
         return decision;
     }
 
-    private void settleBooking(ClaimedJob job, DeliveryPlan plan,
-            DeliverySourcingService.Outcome outcome, SourcingDecision.BookPartner book,
+    private void settleBooking(
+            ClaimedJob job,
+            DeliveryPlan plan,
+            DeliverySourcingService.Outcome outcome,
+            SourcingDecision.BookPartner book,
             Instant now) {
 
         if (outcome.assigned()) {
             plans.settle(plan.tenantId(), plan.id(), PlanStatus.ASSIGNED, now);
             jobs.complete(job.jobId(), job.leaseToken(), now);
-            log.info("Plan {} assigned to {} ({})", plan.id(), book.partner().providerType(),
-                    book.reason());
+            log.info("Plan {} assigned to {} ({})", plan.id(), book.partner().providerType(), book.reason());
             return;
         }
 
-        BookingStatus status = outcome.receipt() == null ? null : outcome.receipt().status();
+        BookingStatus status =
+                outcome.receipt() == null ? null : outcome.receipt().status();
         if (status == BookingStatus.UNCERTAIN || status == BookingStatus.HELD) {
             // ADR 0014: do not book a fallback while the first provider may have
             // accepted. The route already tried to reconcile by query, so this is
             // one the query could not settle either, and a human owns it.
             plans.settle(plan.tenantId(), plan.id(), PlanStatus.MANUAL_ACTION_REQUIRED, now);
-            jobs.abandon(job.jobId(), job.leaseToken(),
-                    DeliveryExceptionReason.AWAITING_RECONCILIATION, now);
-            log.error("Plan {} has an unresolved partner attempt and will not be sourced further",
-                    plan.id());
+            jobs.abandon(job.jobId(), job.leaseToken(), DeliveryExceptionReason.AWAITING_RECONCILIATION, now);
+            log.error("Plan {} has an unresolved partner attempt and will not be sourced further", plan.id());
             return;
         }
 
         if (job.claimedAttempt() >= maxAttempts) {
-            handUp(job, plan, DeliveryExceptionReason.LATE_ASSIGNMENT,
+            handUp(
+                    job,
+                    plan,
+                    DeliveryExceptionReason.LATE_ASSIGNMENT,
                     "sourcing spent its retry budget after " + job.claimedAttempt() + " attempts",
                     now);
             return;
         }
 
-        Duration wait = status == BookingStatus.RETRYABLE
-                ? backoff(job.claimedAttempt())
-                : AFTER_REFUSAL;
-        plans.transition(plan.tenantId(), plan.id(), PlanStatus.SOURCING, PlanStatus.RETRY_PENDING,
+        Duration wait = status == BookingStatus.RETRYABLE ? backoff(job.claimedAttempt()) : AFTER_REFUSAL;
+        plans.transition(plan.tenantId(), plan.id(), PlanStatus.SOURCING, PlanStatus.RETRY_PENDING, now);
+        wake(
+                job,
+                plan,
+                now.plus(wait),
+                outcome,
+                outcome.receipt() == null ? null : outcome.receipt().errorCode(),
                 now);
-        wake(job, plan, now.plus(wait), outcome,
-                outcome.receipt() == null ? null : outcome.receipt().errorCode(), now);
     }
 
     /**
@@ -221,23 +231,24 @@ public class DeliverySourcingRunner {
      * an order whose partner keeps timing out sleeps through its own deadline and
      * an operator hears about it from the customer.
      */
-    private void wake(ClaimedJob job, DeliveryPlan plan, Instant dueAt,
-            DeliverySourcingService.Outcome outcome, String errorCode, Instant now) {
+    private void wake(
+            ClaimedJob job,
+            DeliveryPlan plan,
+            Instant dueAt,
+            DeliverySourcingService.Outcome outcome,
+            String errorCode,
+            Instant now) {
 
         Instant latest = plan.pickup().latestAssignmentAt();
         Instant clamped = dueAt.isAfter(latest) ? latest : dueAt;
-        if (!jobs.reschedule(job.jobId(), job.leaseToken(), clamped,
-                checkpoint(outcome), errorCode, now)) {
-            log.warn("Sourcing lease for plan {} was lost before it could be rescheduled",
-                    plan.id());
+        if (!jobs.reschedule(job.jobId(), job.leaseToken(), clamped, checkpoint(outcome), errorCode, now)) {
+            log.warn("Sourcing lease for plan {} was lost before it could be rescheduled", plan.id());
         }
     }
 
-    private SourcingDecision handUp(ClaimedJob job, DeliveryPlan plan, String reason,
-            String detail, Instant now) {
+    private SourcingDecision handUp(ClaimedJob job, DeliveryPlan plan, String reason, String detail, Instant now) {
 
-        journal.raiseException(plan.tenantId(), plan.brandId(), plan.locationId(), plan.id(),
-                reason, detail, now);
+        journal.raiseException(plan.tenantId(), plan.brandId(), plan.locationId(), plan.id(), reason, detail, now);
         plans.settle(plan.tenantId(), plan.id(), PlanStatus.MANUAL_ACTION_REQUIRED, now);
         jobs.abandon(job.jobId(), job.leaseToken(), reason, now);
         log.error("Plan {} cannot be sourced automatically: {}", plan.id(), reason);
@@ -254,8 +265,8 @@ public class DeliverySourcingRunner {
      */
     private static String checkpoint(DeliverySourcingService.Outcome outcome) {
         return """
-                {"lastDecision":"%s","lastReason":"%s","attempt":"%s"}"""
-                .formatted(outcome.decision().getClass().getSimpleName(),
+                {"lastDecision":"%s","lastReason":"%s","attempt":"%s"}""".formatted(
+                        outcome.decision().getClass().getSimpleName(),
                         outcome.decision().reason(),
                         outcome.attemptId() == null ? "" : outcome.attemptId());
     }
@@ -272,13 +283,22 @@ public class DeliverySourcingRunner {
         return Duration.ofMillis(Math.min(candidate, maxBackoff.toMillis()));
     }
 
-    private static SourcingRequest request(DeliveryPlan plan, DeliveryOrder order,
-            DispatchBranch branch) {
+    private static SourcingRequest request(DeliveryPlan plan, DeliveryOrder order, DispatchBranch branch) {
 
-        return new SourcingRequest(plan.tenantId(), plan.brandId(), plan.locationId(),
-                plan.orderId(), plan.id(), order.orderReference(), plan.pickup(), plan.mode(),
+        return new SourcingRequest(
+                plan.tenantId(),
+                plan.brandId(),
+                plan.locationId(),
+                plan.orderId(),
+                plan.id(),
+                order.orderReference(),
+                plan.pickup(),
+                plan.mode(),
                 plan.distanceMeters() == null ? 0 : plan.distanceMeters(),
-                branch.asWaypoint(), order.dropoff(), order.prepaid(), order.itemValueMinor(),
+                branch.asWaypoint(),
+                order.dropoff(),
+                order.prepaid(),
+                order.itemValueMinor(),
                 order.currency(),
                 // The plan id, not a request id: every log line and every provider
                 // call for this order correlates on the one thing that identifies

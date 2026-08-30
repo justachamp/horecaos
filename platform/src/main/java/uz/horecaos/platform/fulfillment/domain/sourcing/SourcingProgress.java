@@ -47,10 +47,8 @@ public record SourcingProgress(
 
     public SourcingProgress {
         Objects.requireNonNull(startedAt, "A sourcing start instant is required");
-        offeredCouriers = offeredCouriers == null
-                ? Set.of() : Set.copyOf(new LinkedHashSet<>(offeredCouriers));
-        attemptedPartners = attemptedPartners == null
-                ? Set.of() : Set.copyOf(new LinkedHashSet<>(attemptedPartners));
+        offeredCouriers = offeredCouriers == null ? Set.of() : Set.copyOf(new LinkedHashSet<>(offeredCouriers));
+        attemptedPartners = attemptedPartners == null ? Set.of() : Set.copyOf(new LinkedHashSet<>(attemptedPartners));
         if ((outstandingOffer == null) != (offerExpiresAt == null)) {
             // An offer with no expiry never lapses and the plan waits forever; an
             // expiry with no courier is a wait for nobody. Both are the same bug
@@ -68,21 +66,19 @@ public record SourcingProgress(
     public SourcingProgress withOffer(UUID courierId, Instant expiresAt) {
         Set<UUID> offered = new LinkedHashSet<>(offeredCouriers);
         offered.add(courierId);
-        return new SourcingProgress(startedAt, offered, courierId, expiresAt,
-                attemptedPartners, uncertainAttempt);
+        return new SourcingProgress(startedAt, offered, courierId, expiresAt, attemptedPartners, uncertainAttempt);
     }
 
     /** The offer lapsed or was declined. The courier stays on the offered list. */
     public SourcingProgress withoutOffer() {
-        return new SourcingProgress(startedAt, offeredCouriers, null, null,
-                attemptedPartners, uncertainAttempt);
+        return new SourcingProgress(startedAt, offeredCouriers, null, null, attemptedPartners, uncertainAttempt);
     }
 
     public SourcingProgress withPartnerAttempt(UUID bindingId, boolean uncertain) {
         Set<UUID> attempted = new LinkedHashSet<>(attemptedPartners);
         attempted.add(bindingId);
-        return new SourcingProgress(startedAt, offeredCouriers, outstandingOffer, offerExpiresAt,
-                attempted, uncertainAttempt || uncertain);
+        return new SourcingProgress(
+                startedAt, offeredCouriers, outstandingOffer, offerExpiresAt, attempted, uncertainAttempt || uncertain);
     }
 
     public boolean hasLiveOffer(Instant now) {

@@ -1,5 +1,7 @@
 package uz.horecaos.platform.integration.camel;
 
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -9,9 +11,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
 
 /**
  * A provider that fails on demand (ADR 0007).
@@ -30,6 +29,7 @@ public final class ControlledFakeProvider implements AutoCloseable {
 
     /** Never sent by production code; the fake is the only thing that reads it. */
     public static final String SCENARIO_HEADER = "X-HorecaOS-Test-Scenario";
+
     public static final String IDEMPOTENCY_HEADER = "Idempotency-Key";
 
     private final HttpServer server;
@@ -104,9 +104,8 @@ public final class ControlledFakeProvider implements AutoCloseable {
     }
 
     private void handle(HttpExchange exchange) throws IOException {
-        String scenario = override != null
-                ? override.name()
-                : header(exchange, SCENARIO_HEADER, Scenario.SUCCESS.name());
+        String scenario =
+                override != null ? override.name() : header(exchange, SCENARIO_HEADER, Scenario.SUCCESS.name());
         String idempotencyKey = header(exchange, IDEMPOTENCY_HEADER, null);
         requests.add(new RecordedRequest(scenario, idempotencyKey));
 
@@ -197,5 +196,5 @@ public final class ControlledFakeProvider implements AutoCloseable {
         ACCEPTED_THEN_TIMEOUT
     }
 
-    public record RecordedRequest(String scenario, String idempotencyKey) { }
+    public record RecordedRequest(String scenario, String idempotencyKey) {}
 }

@@ -1,10 +1,10 @@
 package uz.horecaos.platform.helpcenter;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.util.List;
 import java.util.UUID;
-
 import javax.sql.DataSource;
-
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -13,13 +13,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.helpcenter.domain.SupportContent.FaqCategory;
 import uz.horecaos.platform.helpcenter.domain.SupportContent.SocialLink;
 import uz.horecaos.platform.helpcenter.infrastructure.persistence.JdbcSupportStore;
 import uz.horecaos.platform.support.TestDatabase;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * A brand's published help (V0094).
@@ -42,8 +39,8 @@ class StorefrontSupportTests {
 
     @BeforeAll
     static void startDatabase() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
-                "Docker is required for help centre tests");
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(), "Docker is required for help centre tests");
         db = TestDatabase.migrated();
     }
 
@@ -59,7 +56,8 @@ class StorefrontSupportTests {
         DataSource dataSource = db.dataSource();
         jdbc = JdbcClient.create(dataSource);
         jdbc.sql("TRUNCATE TABLE support.faq_translations, support.faq_entries, "
-                + "support.faq_categories, support.social_links CASCADE").update();
+                        + "support.faq_categories, support.social_links CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         insertTenancy();
         store = new JdbcSupportStore(jdbc);
@@ -75,11 +73,11 @@ class StorefrontSupportTests {
 
         List<FaqCategory> faq = store.faq(TENANT, BRAND, "uz");
 
-        assertThat(faq).extracting(FaqCategory::code)
+        assertThat(faq)
+                .extracting(FaqCategory::code)
                 .as("sort_order decides, not insertion order")
                 .containsExactly("DELIVERY", "PAYMENT");
-        assertThat(faq.get(0).entries()).extracting(e -> e.code())
-                .containsExactly("FIRST", "SECOND");
+        assertThat(faq.get(0).entries()).extracting(e -> e.code()).containsExactly("FIRST", "SECOND");
         assertThat(faq.get(0).entries().get(0).answer()).isEqualTo("Yo'q.");
         assertThat(payment).isNotNull();
     }
@@ -95,7 +93,8 @@ class StorefrontSupportTests {
         List<FaqCategory> faq = store.faq(TENANT, BRAND, "uz");
 
         assertThat(faq).extracting(FaqCategory::code).containsExactly("DELIVERY");
-        assertThat(faq.get(0).entries()).extracting(e -> e.code())
+        assertThat(faq.get(0).entries())
+                .extracting(e -> e.code())
                 .as("half-written help is worse than none")
                 .containsExactly("LIVE");
     }
@@ -106,9 +105,9 @@ class StorefrontSupportTests {
         category(BRAND, "DELIVERY", 10, "PUBLISHED", "Yetkazish");
         category(OTHER_BRAND, "OTHER", 10, "PUBLISHED", "Boshqa");
 
-        assertThat(store.faq(TENANT, BRAND, "uz")).extracting(FaqCategory::code)
-                .containsExactly("DELIVERY");
-        assertThat(store.faq(TENANT, OTHER_BRAND, "uz")).extracting(FaqCategory::code)
+        assertThat(store.faq(TENANT, BRAND, "uz")).extracting(FaqCategory::code).containsExactly("DELIVERY");
+        assertThat(store.faq(TENANT, OTHER_BRAND, "uz"))
+                .extracting(FaqCategory::code)
                 .containsExactly("OTHER");
     }
 
@@ -183,23 +182,30 @@ class StorefrontSupportTests {
                 INSERT INTO support.faq_categories (id, tenant_id, brand_id, code, sort_order, status)
                 VALUES (:id, :tenantId, :brandId, :code, :sort, :status)
                 """)
-                .param("id", id).param("tenantId", TENANT).param("brandId", brandId)
-                .param("code", code).param("sort", sort).param("status", status)
+                .param("id", id)
+                .param("tenantId", TENANT)
+                .param("brandId", brandId)
+                .param("code", code)
+                .param("sort", sort)
+                .param("status", status)
                 .update();
         translate("CATEGORY", id, "uz", uzName, null);
         return id;
     }
 
-    private UUID entry(UUID categoryId, String code, int sort, String status,
-            String question, String answer) {
+    private UUID entry(UUID categoryId, String code, int sort, String status, String question, String answer) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO support.faq_entries (
                     id, tenant_id, brand_id, category_id, code, sort_order, status)
                 VALUES (:id, :tenantId, :brandId, :categoryId, :code, :sort, :status)
                 """)
-                .param("id", id).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("categoryId", categoryId).param("code", code).param("sort", sort)
+                .param("id", id)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("categoryId", categoryId)
+                .param("code", code)
+                .param("sort", sort)
                 .param("status", status)
                 .update();
         translate("ENTRY", id, "uz", question, answer);
@@ -212,8 +218,12 @@ class StorefrontSupportTests {
                     tenant_id, brand_id, entity_type, entity_id, locale, title, body)
                 VALUES (:tenantId, :brandId, :type, :entityId, :locale, :title, :body)
                 """)
-                .param("tenantId", TENANT).param("brandId", BRAND).param("type", type)
-                .param("entityId", entityId).param("locale", locale).param("title", title)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("type", type)
+                .param("entityId", entityId)
+                .param("locale", locale)
+                .param("title", title)
                 .param("body", body)
                 .update();
     }
@@ -224,9 +234,14 @@ class StorefrontSupportTests {
                     id, tenant_id, brand_id, platform, url, media_asset_id, sort_order, status)
                 VALUES (:id, :tenantId, :brandId, :platform, :url, :assetId, :sort, :status)
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("platform", platform).param("url", url).param("assetId", assetId)
-                .param("sort", sort).param("status", status)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("platform", platform)
+                .param("url", url)
+                .param("assetId", assetId)
+                .param("sort", sort)
+                .param("status", status)
                 .update();
     }
 

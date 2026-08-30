@@ -1,14 +1,11 @@
 package uz.horecaos.platform.integration.inbox;
 
-import uz.horecaos.platform.integration.api.InboxHandler;
-
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
 import org.springframework.stereotype.Component;
-
+import uz.horecaos.platform.integration.api.InboxHandler;
 import uz.horecaos.platform.integration.events.EventCatalog;
 
 /**
@@ -29,9 +26,11 @@ public class InboxHandlerRegistry {
             String key = key(handler.consumerName(), handler.eventType(), handler.eventVersion());
             InboxHandler<?> previous = handlers.put(key, handler);
             if (previous != null) {
-                throw new IllegalStateException(
-                        "Two inbox handlers registered for %s: %s and %s".formatted(
-                                key, previous.getClass().getName(), handler.getClass().getName()));
+                throw new IllegalStateException("Two inbox handlers registered for %s: %s and %s"
+                        .formatted(
+                                key,
+                                previous.getClass().getName(),
+                                handler.getClass().getName()));
             }
         }
     }
@@ -46,7 +45,10 @@ public class InboxHandlerRegistry {
 
     /** Consumer names currently registered, used to fan one record out per consumer. */
     public List<String> consumerNames() {
-        return handlers.values().stream().map(InboxHandler::consumerName).distinct().toList();
+        return handlers.values().stream()
+                .map(InboxHandler::consumerName)
+                .distinct()
+                .toList();
     }
 
     /**

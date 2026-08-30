@@ -10,7 +10,6 @@ package uz.horecaos.platform.payments.settlement;
  * next.
  */
 public enum SettlementStatus {
-
     DRAFT,
     PLANNED,
     PARTIALLY_SETTLED,

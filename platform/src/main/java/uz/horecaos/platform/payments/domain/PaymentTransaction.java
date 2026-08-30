@@ -49,8 +49,8 @@ public record PaymentTransaction(
         Objects.requireNonNull(attemptId, "An attempt id is required");
         Objects.requireNonNull(type, "A transaction type is required");
         Objects.requireNonNull(amount, "An amount is required");
-        Objects.requireNonNull(providerReference,
-                "A provider reference is required; a null one would defeat the replay uniqueness");
+        Objects.requireNonNull(
+                providerReference, "A provider reference is required; a null one would defeat the replay uniqueness");
         Objects.requireNonNull(occurredAt, "An occurrence time is required");
     }
 

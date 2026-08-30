@@ -9,14 +9,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -69,7 +66,6 @@ public class OrderAmendmentService {
      * order and cooking the first, and a guard added after the exporter ships is a
      * guard added after the first double ticket.
      */
-
     private static final Logger log = LoggerFactory.getLogger(OrderAmendmentService.class);
 
     private final JdbcOrderStore orders;
@@ -80,9 +76,14 @@ public class OrderAmendmentService {
     private final Clock clock;
     private final PosExportStatus posExports;
 
-    public OrderAmendmentService(JdbcOrderStore orders, JdbcOrderAmendmentStore amendments,
-            JdbcOrderProcessStore processes, AuditRecorder audit, ObjectMapper objectMapper,
-            Clock clock, PosExportStatus posExports) {
+    public OrderAmendmentService(
+            JdbcOrderStore orders,
+            JdbcOrderAmendmentStore amendments,
+            JdbcOrderProcessStore processes,
+            AuditRecorder audit,
+            ObjectMapper objectMapper,
+            Clock clock,
+            PosExportStatus posExports) {
         this.orders = orders;
         this.amendments = amendments;
         this.processes = processes;
@@ -112,25 +113,25 @@ public class OrderAmendmentService {
         // rather than proposing again is what makes a retried request harmless,
         // and it is checked before the open-amendment guard so a retry is not
         // mistaken for a second operator.
-        Optional<AmendmentRow> replay =
-                amendments.findByIdempotencyKey(tenantId, command.idempotencyKey());
+        Optional<AmendmentRow> replay = amendments.findByIdempotencyKey(tenantId, command.idempotencyKey());
         if (replay.isPresent()) {
             AmendmentRow existing = replay.get();
-            return new AmendmentResult(existing, orders.find(tenantId, orderId)
-                    .map(OrderRow::version).orElse(0), List.of(), true);
+            return new AmendmentResult(
+                    existing,
+                    orders.find(tenantId, orderId).map(OrderRow::version).orElse(0),
+                    List.of(),
+                    true);
         }
 
-        OrderRow order = orders.find(tenantId, orderId)
-                .orElseThrow(() -> new OrderStateService.OrderNotFoundException(orderId));
+        OrderRow order =
+                orders.find(tenantId, orderId).orElseThrow(() -> new OrderStateService.OrderNotFoundException(orderId));
 
         if (order.version() != command.expectedOrderVersion()) {
-            throw new OrderStateService.StaleOrderException(command.expectedOrderVersion(),
-                    order.version());
+            throw new OrderStateService.StaleOrderException(command.expectedOrderVersion(), order.version());
         }
         if (order.status().terminal()) {
             throw new AmendmentNotPermittedException(
-                    "An order that is %s has ended. A change to it is a new order."
-                            .formatted(order.status()));
+                    "An order that is %s has ended. A change to it is a new order.".formatted(order.status()));
         }
 
         requireBuilt(command.commands());
@@ -141,37 +142,64 @@ public class OrderAmendmentService {
         // than being handed a constraint violation.
         amendments.findOpen(tenantId, orderId).ifPresent(open -> {
             if (open.expiresAt().isAfter(now)) {
-                throw new AmendmentInProgressException(open.id(), open.createdByActorId(),
-                        open.expiresAt());
+                throw new AmendmentInProgressException(open.id(), open.createdByActorId(), open.expiresAt());
             }
         });
 
         UUID amendmentId = UUID.randomUUID();
-        amendments.insert(new JdbcOrderAmendmentStore.NewAmendment(amendmentId, tenantId, orderId,
-                AmendmentStatus.PRICED, order.currentRevision(), null, 0L, false, null,
-                command.idempotencyKey(), now.plus(TTL), command.actorType(), command.actorId(),
+        amendments.insert(new JdbcOrderAmendmentStore.NewAmendment(
+                amendmentId,
+                tenantId,
+                orderId,
+                AmendmentStatus.PRICED,
+                order.currentRevision(),
+                null,
+                0L,
+                false,
+                null,
+                command.idempotencyKey(),
+                now.plus(TTL),
+                command.actorType(),
+                command.actorId(),
                 now));
 
         int sequence = 0;
         for (AmendmentCommand issued : command.commands()) {
             sequence++;
-            amendments.insertCommand(amendmentId, tenantId, sequence, issued.type(),
-                    objectMapper.writeValueAsString(issued.payload()));
+            amendments.insertCommand(
+                    amendmentId, tenantId, sequence, issued.type(), objectMapper.writeValueAsString(issued.payload()));
         }
 
-        recordAudit(order, "ordering.order.amendment-proposed", command.actorType(),
-                command.actorId(), command.reason(), order.version(),
-                Map.of("amendmentId", amendmentId.toString(),
-                        "commands", command.commands().stream().map(c -> c.type().name()).toList(),
-                        "baseRevision", order.currentRevision()),
-                command.correlationId(), now);
+        recordAudit(
+                order,
+                "ordering.order.amendment-proposed",
+                command.actorType(),
+                command.actorId(),
+                command.reason(),
+                order.version(),
+                Map.of(
+                        "amendmentId",
+                        amendmentId.toString(),
+                        "commands",
+                        command.commands().stream().map(c -> c.type().name()).toList(),
+                        "baseRevision",
+                        order.currentRevision()),
+                command.correlationId(),
+                now);
 
         AmendmentRow proposed = amendments.find(tenantId, amendmentId).orElseThrow();
         if (!command.applyOnPrice()) {
             return new AmendmentResult(proposed, order.version(), List.of(), false);
         }
-        return apply(tenantId, orderId, amendmentId, order.version(), command.actorType(),
-                command.actorId(), command.reason(), command.correlationId());
+        return apply(
+                tenantId,
+                orderId,
+                amendmentId,
+                order.version(),
+                command.actorType(),
+                command.actorId(),
+                command.reason(),
+                command.correlationId());
     }
 
     /**
@@ -184,13 +212,19 @@ public class OrderAmendmentService {
      * change.
      */
     @Transactional
-    public AmendmentResult apply(UUID tenantId, UUID orderId, UUID amendmentId,
-            int expectedOrderVersion, String actorType, String actorId, String reason,
+    public AmendmentResult apply(
+            UUID tenantId,
+            UUID orderId,
+            UUID amendmentId,
+            int expectedOrderVersion,
+            String actorType,
+            String actorId,
+            String reason,
             String correlationId) {
 
         Instant now = clock.instant();
-        AmendmentRow amendment = amendments.find(tenantId, amendmentId)
-                .orElseThrow(() -> new AmendmentNotFoundException(amendmentId));
+        AmendmentRow amendment =
+                amendments.find(tenantId, amendmentId).orElseThrow(() -> new AmendmentNotFoundException(amendmentId));
 
         if (!amendment.orderId().equals(orderId)) {
             throw new AmendmentNotFoundException(amendmentId);
@@ -198,8 +232,11 @@ public class OrderAmendmentService {
         if (amendment.status().terminal()) {
             // Already settled. The caller is told what happened rather than being
             // allowed to apply on top, exactly as a duplicate approval decision is.
-            return new AmendmentResult(amendment, orders.find(tenantId, orderId)
-                    .map(OrderRow::version).orElse(0), List.of(), true);
+            return new AmendmentResult(
+                    amendment,
+                    orders.find(tenantId, orderId).map(OrderRow::version).orElse(0),
+                    List.of(),
+                    true);
         }
         if (!amendment.expiresAt().isAfter(now)) {
             amendments.markRejected(tenantId, amendmentId, "EXPIRED", now);
@@ -219,8 +256,8 @@ public class OrderAmendmentService {
 
         requirePosExportSettled(tenantId, orderId);
 
-        OrderRow order = orders.find(tenantId, orderId)
-                .orElseThrow(() -> new OrderStateService.OrderNotFoundException(orderId));
+        OrderRow order =
+                orders.find(tenantId, orderId).orElseThrow(() -> new OrderStateService.OrderNotFoundException(orderId));
         if (order.version() != expectedOrderVersion) {
             throw new OrderStateService.StaleOrderException(expectedOrderVersion, order.version());
         }
@@ -232,58 +269,81 @@ public class OrderAmendmentService {
         RevisionRow previous = orders.revisions(tenantId, orderId).stream()
                 .filter(row -> row.revision() == order.currentRevision())
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException(
-                        "Order " + orderId + " has no revision " + order.currentRevision()));
+                .orElseThrow(() ->
+                        new IllegalStateException("Order " + orderId + " has no revision " + order.currentRevision()));
 
         // None of the built commands touches the basket, so the revision carries
         // its predecessor's quote and totals forward unchanged and the delta is
         // zero. Re-accepting the quote would be a second acceptance of one price;
         // recomputing the totals would risk them differing from the ones the
         // customer agreed to for no reason at all.
-        orders.insertRevision(new JdbcOrderStore.NewRevision(orderId, newRevision, tenantId,
-                "AMENDMENT", amendmentId, previous.pricingQuoteId(),
-                previous.pricingContextHash(), previous.currency(), previous.subtotalMinor(),
-                previous.taxMinor(), previous.discountMinor(), previous.feeMinor(),
-                previous.totalMinor(), amendment.deltaTotalMinor(), actorType, actorId, now));
+        orders.insertRevision(new JdbcOrderStore.NewRevision(
+                orderId,
+                newRevision,
+                tenantId,
+                "AMENDMENT",
+                amendmentId,
+                previous.pricingQuoteId(),
+                previous.pricingContextHash(),
+                previous.currency(),
+                previous.subtotalMinor(),
+                previous.taxMinor(),
+                previous.discountMinor(),
+                previous.feeMinor(),
+                previous.totalMinor(),
+                amendment.deltaTotalMinor(),
+                actorType,
+                actorId,
+                now));
 
-        int orderVersion = orders.applyRevision(tenantId, orderId, expectedOrderVersion,
-                        newRevision, patch, actorId, now)
-                .orElseThrow(() -> new OrderStateService.StaleOrderException(expectedOrderVersion,
+        int orderVersion = orders.applyRevision(
+                        tenantId, orderId, expectedOrderVersion, newRevision, patch, actorId, now)
+                .orElseThrow(() -> new OrderStateService.StaleOrderException(
+                        expectedOrderVersion,
                         orders.find(tenantId, orderId).map(OrderRow::version).orElse(0)));
 
-        amendments.markApplied(tenantId, amendmentId, amendment.version(), newRevision, now)
-                .orElseThrow(() -> new AmendmentNotPermittedException(
-                        "The amendment settled while it was being applied"));
+        amendments
+                .markApplied(tenantId, amendmentId, amendment.version(), newRevision, now)
+                .orElseThrow(
+                        () -> new AmendmentNotPermittedException("The amendment settled while it was being applied"));
 
         List<String> warnings = warningsFor(order, patch);
 
-        recordAudit(order, "ordering.order.amendment-applied", actorType, actorId, reason,
+        recordAudit(
+                order,
+                "ordering.order.amendment-applied",
+                actorType,
+                actorId,
+                reason,
                 orderVersion,
-                Map.of("amendmentId", amendmentId.toString(),
-                        "revision", newRevision,
-                        "commands", commands.stream().map(c -> c.commandType().name()).toList(),
-                        "deltaTotalMinor", amendment.deltaTotalMinor()),
-                correlationId, now);
+                Map.of(
+                        "amendmentId",
+                        amendmentId.toString(),
+                        "revision",
+                        newRevision,
+                        "commands",
+                        commands.stream().map(c -> c.commandType().name()).toList(),
+                        "deltaTotalMinor",
+                        amendment.deltaTotalMinor()),
+                correlationId,
+                now);
 
-        log.info("Amendment {} applied to order {} as revision {}", amendmentId, orderId,
-                newRevision);
+        log.info("Amendment {} applied to order {} as revision {}", amendmentId, orderId, newRevision);
 
-        return new AmendmentResult(amendments.find(tenantId, amendmentId).orElseThrow(),
-                orderVersion, warnings, false);
+        return new AmendmentResult(amendments.find(tenantId, amendmentId).orElseThrow(), orderVersion, warnings, false);
     }
 
     /** Records the customer's agreement to an increase, attested by the operator. */
     @Transactional
-    public int attestConfirmation(UUID tenantId, UUID amendmentId, int expectedVersion,
-            String attestedBy, String channel) {
+    public int attestConfirmation(
+            UUID tenantId, UUID amendmentId, int expectedVersion, String attestedBy, String channel) {
         Instant now = clock.instant();
-        AmendmentRow amendment = amendments.find(tenantId, amendmentId)
-                .orElseThrow(() -> new AmendmentNotFoundException(amendmentId));
+        AmendmentRow amendment =
+                amendments.find(tenantId, amendmentId).orElseThrow(() -> new AmendmentNotFoundException(amendmentId));
 
-        return amendments.attestConfirmation(tenantId, amendmentId, expectedVersion, attestedBy,
-                        channel, now)
-                .orElseThrow(() -> new OrderStateService.StaleOrderException(expectedVersion,
-                        amendment.version()));
+        return amendments
+                .attestConfirmation(tenantId, amendmentId, expectedVersion, attestedBy, channel, now)
+                .orElseThrow(() -> new OrderStateService.StaleOrderException(expectedVersion, amendment.version()));
     }
 
     /** Withdraws an open amendment. The row stays: it is evidence of what was tried. */
@@ -321,9 +381,9 @@ public class OrderAmendmentService {
         for (AmendmentCommand command : issued) {
             if (!command.type().built()) {
                 throw new AmendmentNotPermittedException(("%s is declared by ADR 0039 and not "
-                        + "built. It reprices, re-reserves, re-charges or re-fiscalizes, and "
-                        + "carrying out part of that would leave state nobody could "
-                        + "reconstruct. Place a second order instead.")
+                                + "built. It reprices, re-reserves, re-charges or re-fiscalizes, and "
+                                + "carrying out part of that would leave state nobody could "
+                                + "reconstruct. Place a second order instead.")
                         .formatted(command.type()));
             }
         }
@@ -376,14 +436,10 @@ public class OrderAmendmentService {
             @SuppressWarnings("unchecked")
             Map<String, Object> payload = objectMapper.readValue(command.payloadJson(), Map.class);
             switch (command.commandType()) {
-                case SET_KITCHEN_NOTE -> kitchenNote =
-                        String.valueOf(payload.getOrDefault("note", ""));
-                case SET_CALLBACK_REQUESTED -> callbackRequested =
-                        Boolean.TRUE.equals(payload.get("requested"));
-                case SET_CASH_TENDERED -> cashTendered =
-                        ((Number) payload.get("amountMinor")).longValue();
-                default -> throw new IllegalStateException(
-                        "No built handler for " + command.commandType());
+                case SET_KITCHEN_NOTE -> kitchenNote = String.valueOf(payload.getOrDefault("note", ""));
+                case SET_CALLBACK_REQUESTED -> callbackRequested = Boolean.TRUE.equals(payload.get("requested"));
+                case SET_CASH_TENDERED -> cashTendered = ((Number) payload.get("amountMinor")).longValue();
+                default -> throw new IllegalStateException("No built handler for " + command.commandType());
             }
         }
         return new OrderFieldPatch(kitchenNote, callbackRequested, cashTendered);
@@ -399,22 +455,29 @@ public class OrderAmendmentService {
      */
     private List<String> warningsFor(OrderRow order, OrderFieldPatch patch) {
         List<String> warnings = new ArrayList<>();
-        if (patch.cashTenderedExpectedMinor() != null
-                && patch.cashTenderedExpectedMinor() < order.totalMinor()) {
+        if (patch.cashTenderedExpectedMinor() != null && patch.cashTenderedExpectedMinor() < order.totalMinor()) {
             warnings.add("CASH_TENDERED_INSUFFICIENT");
         }
         return warnings;
     }
 
-    private void recordAudit(OrderRow order, String actionCode, String actorType, String actorId,
-            String reason, int version, Map<String, Object> changed, String correlationId,
+    private void recordAudit(
+            OrderRow order,
+            String actionCode,
+            String actorType,
+            String actorId,
+            String reason,
+            int version,
+            Map<String, Object> changed,
+            String correlationId,
             Instant now) {
 
-        ActorRef actor = switch (actorType == null ? "SERVICE" : actorType) {
-            case "USER" -> ActorRef.user(actorId, null);
-            case "SYSTEM_JOB" -> ActorRef.systemJob(actorId == null ? "ordering" : actorId);
-            default -> ActorRef.service(actorId == null ? "ordering" : actorId);
-        };
+        ActorRef actor =
+                switch (actorType == null ? "SERVICE" : actorType) {
+                    case "USER" -> ActorRef.user(actorId, null);
+                    case "SYSTEM_JOB" -> ActorRef.systemJob(actorId == null ? "ordering" : actorId);
+                    default -> ActorRef.service(actorId == null ? "ordering" : actorId);
+                };
 
         audit.record(AuditFact.of(actionCode, AuditClass.BUSINESS)
                 .by(actor)
@@ -461,17 +524,22 @@ public class OrderAmendmentService {
         }
     }
 
-    public record ProposeCommand(int expectedOrderVersion, List<AmendmentCommand> commands,
-            boolean applyOnPrice, String idempotencyKey, String reason, String actorType,
-            String actorId, String correlationId) { }
+    public record ProposeCommand(
+            int expectedOrderVersion,
+            List<AmendmentCommand> commands,
+            boolean applyOnPrice,
+            String idempotencyKey,
+            String reason,
+            String actorType,
+            String actorId,
+            String correlationId) {}
 
     /**
      * @param replayed whether this call found an already-settled amendment rather
      *                 than doing the work, so a retried request gives the same
      *                 answer as the first
      */
-    public record AmendmentResult(AmendmentRow amendment, int orderVersion, List<String> warnings,
-            boolean replayed) { }
+    public record AmendmentResult(AmendmentRow amendment, int orderVersion, List<String> warnings, boolean replayed) {}
 
     public static class AmendmentNotFoundException extends RuntimeException {
         public AmendmentNotFoundException(UUID amendmentId) {
@@ -511,7 +579,8 @@ public class OrderAmendmentService {
     public static class CustomerConfirmationRequiredException extends RuntimeException {
         public CustomerConfirmationRequiredException(long deltaMinor) {
             super(("This amendment raises the total by %d and cannot commit until the customer's "
-                    + "agreement is recorded").formatted(deltaMinor));
+                            + "agreement is recorded")
+                    .formatted(deltaMinor));
         }
     }
 
@@ -519,7 +588,7 @@ public class OrderAmendmentService {
     public static class PosExportUnacknowledgedException extends RuntimeException {
         public PosExportUnacknowledgedException(String processStatus) {
             super(("The POS has not acknowledged this order's export (%s). Amending underneath it "
-                    + "leaves the kitchen holding two tickets for one order.")
+                            + "leaves the kitchen holding two tickets for one order.")
                     .formatted(processStatus));
         }
     }

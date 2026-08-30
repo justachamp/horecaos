@@ -67,12 +67,7 @@ public interface ImportPort<T> {
      *                          to, or null on first import
      */
     record ImportTarget(
-            UUID tenantId,
-            UUID brandId,
-            UUID locationId,
-            UUID scopeId,
-            String legacyId,
-            UUID existingTargetId) {
+            UUID tenantId, UUID brandId, UUID locationId, UUID scopeId, String legacyId, UUID existingTargetId) {
 
         public ImportTarget {
             Objects.requireNonNull(tenantId, "A tenant is required");
@@ -119,6 +114,10 @@ public interface ImportPort<T> {
             return new ImportResult(targetId, targetVersion, Disposition.UNCHANGED);
         }
 
-        public enum Disposition { CREATED, UPDATED, UNCHANGED }
+        public enum Disposition {
+            CREATED,
+            UPDATED,
+            UNCHANGED
+        }
     }
 }

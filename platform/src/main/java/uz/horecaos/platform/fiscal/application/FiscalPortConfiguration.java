@@ -1,13 +1,11 @@
 package uz.horecaos.platform.fiscal.application;
 
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
 import uz.horecaos.platform.fiscal.api.PartnerFiscalizationPort;
 
 /**
@@ -36,10 +34,12 @@ public class FiscalPortConfiguration {
     @Bean
     @ConditionalOnMissingBean(PartnerFiscalizationPort.class)
     PartnerFiscalizationPort unwiredPartnerFiscalization() {
-        log.warn("No PartnerFiscalizationPort implementation is present. The fiscal reporting "
+        log.warn(
+                "No PartnerFiscalizationPort implementation is present. The fiscal reporting "
                         + "sweeper still runs and blocked documents are still visible, but an "
                         + "operator retry cannot reach Click or Payme and every blocked worklist "
-                        + "read carries {}.", PartnerFiscalizationPort.NOT_WIRED_WARNING);
+                        + "read carries {}.",
+                PartnerFiscalizationPort.NOT_WIRED_WARNING);
         return new UnwiredPartnerFiscalization();
     }
 
@@ -55,13 +55,12 @@ public class FiscalPortConfiguration {
      */
     static final class UnwiredPartnerFiscalization implements PartnerFiscalizationPort {
 
-        private static final Logger unwiredLog =
-                LoggerFactory.getLogger(UnwiredPartnerFiscalization.class);
+        private static final Logger unwiredLog = LoggerFactory.getLogger(UnwiredPartnerFiscalization.class);
 
         @Override
         public Outcome retry(UUID tenantId, UUID documentId, String idempotencyKey) {
-            unwiredLog.warn("Retry of fiscal document {} was not sent: no "
-                    + "PartnerFiscalizationPort is wired.", documentId);
+            unwiredLog.warn(
+                    "Retry of fiscal document {} was not sent: no " + "PartnerFiscalizationPort is wired.", documentId);
             return Outcome.NOT_WIRED;
         }
 

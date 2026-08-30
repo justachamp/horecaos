@@ -5,12 +5,9 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.fulfillment.api.DeliveryOrderPort;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.Waypoint;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
@@ -63,8 +60,7 @@ public class JdbcDeliveryOrderPort implements DeliveryOrderPort {
      * later still falls inside it.
      */
     private static final String SOURCEABLE_STATUSES = Stream.of(
-                    OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY,
-                    OrderStatus.FULFILLING)
+                    OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.FULFILLING)
             .map(status -> "'" + status.name() + "'")
             .collect(Collectors.joining(", "));
 
@@ -72,8 +68,7 @@ public class JdbcDeliveryOrderPort implements DeliveryOrderPort {
     private final FieldProtection protection;
     private final ObjectMapper objectMapper;
 
-    public JdbcDeliveryOrderPort(JdbcClient jdbc, FieldProtection protection,
-            ObjectMapper objectMapper) {
+    public JdbcDeliveryOrderPort(JdbcClient jdbc, FieldProtection protection, ObjectMapper objectMapper) {
         this.jdbc = jdbc;
         this.protection = protection;
         this.objectMapper = objectMapper;
@@ -124,7 +119,8 @@ public class JdbcDeliveryOrderPort implements DeliveryOrderPort {
                   AND o.fulfillment_mode = 'DELIVERY'
                   AND o.status IN (%s)
                 """.formatted(SOURCEABLE_STATUSES))
-                .param("tenantId", tenantId).param("orderId", orderId)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
                 .query((row, number) -> new OrderRow(
                         row.getObject("id", UUID.class),
                         row.getString("public_order_number"),
@@ -145,8 +141,7 @@ public class JdbcDeliveryOrderPort implements DeliveryOrderPort {
 
     private DeliveryOrder assemble(UUID tenantId, OrderRow row) {
         DeliveryDestination destination = objectMapper.readValue(
-                reveal(tenantId, row.orderId(), ADDRESS_COLUMN, row.addressEncrypted()),
-                DeliveryDestination.class);
+                reveal(tenantId, row.orderId(), ADDRESS_COLUMN, row.addressEncrypted()), DeliveryDestination.class);
 
         Waypoint dropoff = new Waypoint(
                 destination.latitude(),
@@ -196,23 +191,33 @@ public class JdbcDeliveryOrderPort implements DeliveryOrderPort {
      * a kitchen that has not started.
      */
     private static Duration preparation(Integer prepMinutes) {
-        return Duration.ofMinutes(prepMinutes == null
-                ? OrderPromise.DEFAULT_PREP_MINUTES : prepMinutes);
+        return Duration.ofMinutes(prepMinutes == null ? OrderPromise.DEFAULT_PREP_MINUTES : prepMinutes);
     }
 
     private String reveal(UUID tenantId, UUID orderId, String column, String ciphertext) {
         if (ciphertext == null) {
             return null;
         }
-        return protection.reveal(tenantId, ProtectedValue.deserialize(ciphertext),
-                new RecordRef(SNAPSHOT_TABLE, column, orderId), PURPOSE);
+        return protection.reveal(
+                tenantId,
+                ProtectedValue.deserialize(ciphertext),
+                new RecordRef(SNAPSHOT_TABLE, column, orderId),
+                PURPOSE);
     }
 
     /** Four ciphertexts and the commercial facts around them. Never printed whole. */
     private record OrderRow(
-            UUID orderId, String publicOrderNumber, Integer prepMinutes, String currency,
-            long feeMinor, long totalMinor, String paymentStatus, String nameEncrypted,
-            String contactEncrypted, String addressEncrypted, String instructionsEncrypted,
+            UUID orderId,
+            String publicOrderNumber,
+            Integer prepMinutes,
+            String currency,
+            long feeMinor,
+            long totalMinor,
+            String paymentStatus,
+            String nameEncrypted,
+            String contactEncrypted,
+            String addressEncrypted,
+            String instructionsEncrypted,
             UUID deliveryFeeResolutionId) {
 
         @Override

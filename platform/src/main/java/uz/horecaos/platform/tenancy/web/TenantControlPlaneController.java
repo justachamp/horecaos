@@ -1,9 +1,8 @@
 package uz.horecaos.platform.tenancy.web;
 
-import java.net.URI;
-import java.util.List;
-import java.util.UUID;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
@@ -11,7 +10,9 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-
+import java.net.URI;
+import java.util.List;
+import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,11 +22,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.tenancy.api.BrandId;
@@ -74,7 +70,9 @@ public class TenantControlPlaneController {
 
     @GetMapping("/{tenantId}")
     @RequiresCapability(Capability.TENANT_READ)
-    @Operation(summary = "Get a tenant", description = "Requires platform access or membership in the tenant organization.")
+    @Operation(
+            summary = "Get a tenant",
+            description = "Requires platform access or membership in the tenant organization.")
     TenantView getTenant(@PathVariable UUID tenantId) {
         return service.getTenant(new TenantId(tenantId));
     }
@@ -85,8 +83,7 @@ public class TenantControlPlaneController {
             summary = "Reconcile a tenant's Keycloak organization link",
             description = "Idempotently stores the immutable Keycloak organization ID. Requires platform-admin.")
     TenantView linkKeycloakOrganization(
-            @PathVariable UUID tenantId,
-            @Valid @RequestBody LinkKeycloakOrganizationRequest request) {
+            @PathVariable UUID tenantId, @Valid @RequestBody LinkKeycloakOrganizationRequest request) {
         return service.linkKeycloakOrganization(new TenantId(tenantId), request.organizationId());
     }
 
@@ -94,11 +91,9 @@ public class TenantControlPlaneController {
     @RequiresCapability(value = Capability.BRAND_WRITE, mutating = true)
     @Operation(summary = "Create a brand within a tenant")
     ResponseEntity<BrandView> createBrand(
-            @PathVariable UUID tenantId,
-            @Valid @RequestBody CreateOperatingUnitRequest request) {
+            @PathVariable UUID tenantId, @Valid @RequestBody CreateOperatingUnitRequest request) {
         BrandView brand = service.createBrand(
-                new TenantId(tenantId),
-                new CreateBrandCommand(request.code(), request.slug(), request.displayName()));
+                new TenantId(tenantId), new CreateBrandCommand(request.code(), request.slug(), request.displayName()));
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{brandId}")
                 .buildAndExpand(brand.id())
@@ -123,8 +118,7 @@ public class TenantControlPlaneController {
         LocationView location = service.createLocation(
                 new TenantId(tenantId),
                 new BrandId(brandId),
-                new CreateLocationCommand(
-                        request.code(), request.slug(), request.displayName(), request.timezone()));
+                new CreateLocationCommand(request.code(), request.slug(), request.displayName(), request.timezone()));
         URI resourceLocation = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{locationId}")
                 .buildAndExpand(location.id())
@@ -159,9 +153,14 @@ public class TenantControlPlaneController {
                 new BrandId(brandId),
                 new LocationId(locationId),
                 new DescribeLocationCommand(
-                        request.addressLine(), request.district(), request.city(),
-                        request.landmark(), request.contactPhone(),
-                        request.latitude(), request.longitude(), request.coordinateSource()));
+                        request.addressLine(),
+                        request.district(),
+                        request.city(),
+                        request.landmark(),
+                        request.contactPhone(),
+                        request.latitude(),
+                        request.longitude(),
+                        request.coordinateSource()));
     }
 
     /**
@@ -175,43 +174,55 @@ public class TenantControlPlaneController {
             @Size(max = 120) String district,
             @Size(max = 120) String city,
             @Size(max = 200) String landmark,
-            @Size(max = 32) @Pattern(regexp = "\\+[1-9][0-9]{7,14}")
-            @Schema(example = "+998712000000") String contactPhone,
-            @DecimalMin("-90.0") @DecimalMax("90.0")
-            @Schema(example = "41.311081") Double latitude,
-            @DecimalMin("-180.0") @DecimalMax("180.0")
-            @Schema(example = "69.240562") Double longitude,
-            CoordinateSource coordinateSource) { }
+
+            @Size(max = 32) @Pattern(regexp = "\\+[1-9][0-9]{7,14}") @Schema(example = "+998712000000")
+            String contactPhone,
+
+            @DecimalMin("-90.0") @DecimalMax("90.0") @Schema(example = "41.311081")
+            Double latitude,
+
+            @DecimalMin("-180.0") @DecimalMax("180.0") @Schema(example = "69.240562")
+            Double longitude,
+
+            CoordinateSource coordinateSource) {}
 
     record CreateTenantRequest(
-            @NotBlank @Size(max = 63)
-            @Pattern(regexp = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")
+            @NotBlank @Size(max = 63) @Pattern(regexp = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")
             String slug,
+
             @NotBlank @Size(max = 200) String legalName,
             @NotBlank @Size(max = 200) String displayName,
-            @NotBlank @Pattern(regexp = "[A-Za-z]{3}")
-            @Schema(example = "UZS") String defaultCurrency,
-            @NotBlank @Size(max = 63)
-            @Schema(example = "Asia/Tashkent") String defaultTimezone,
-            @NotNull CustomerIdentityMode customerIdentityMode) { }
+
+            @NotBlank @Pattern(regexp = "[A-Za-z]{3}") @Schema(example = "UZS")
+            String defaultCurrency,
+
+            @NotBlank @Size(max = 63) @Schema(example = "Asia/Tashkent")
+            String defaultTimezone,
+
+            @NotNull CustomerIdentityMode customerIdentityMode) {}
 
     record LinkKeycloakOrganizationRequest(
-            @NotBlank @Size(max = 64)
-            @Schema(description = "Immutable Keycloak organization UUID")
-            String organizationId) { }
+            @NotBlank @Size(max = 64) @Schema(description = "Immutable Keycloak organization UUID")
+            String organizationId) {}
 
     record CreateOperatingUnitRequest(
-            @NotBlank @Size(max = 32)
-            @Pattern(regexp = "[A-Za-z0-9][A-Za-z0-9_-]{0,31}") String code,
-            @NotBlank @Size(max = 63)
-            @Pattern(regexp = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?") String slug,
-            @NotBlank @Size(max = 200) String displayName) { }
+            @NotBlank @Size(max = 32) @Pattern(regexp = "[A-Za-z0-9][A-Za-z0-9_-]{0,31}")
+            String code,
+
+            @NotBlank @Size(max = 63) @Pattern(regexp = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")
+            String slug,
+
+            @NotBlank @Size(max = 200) String displayName) {}
 
     record CreateLocationRequest(
-            @NotBlank @Size(max = 32)
-            @Pattern(regexp = "[A-Za-z0-9][A-Za-z0-9_-]{0,31}") String code,
-            @NotBlank @Size(max = 63)
-            @Pattern(regexp = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?") String slug,
+            @NotBlank @Size(max = 32) @Pattern(regexp = "[A-Za-z0-9][A-Za-z0-9_-]{0,31}")
+            String code,
+
+            @NotBlank @Size(max = 63) @Pattern(regexp = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")
+            String slug,
+
             @NotBlank @Size(max = 200) String displayName,
-            @NotBlank @Size(max = 63) @Schema(example = "Asia/Tashkent") String timezone) { }
+
+            @NotBlank @Size(max = 63) @Schema(example = "Asia/Tashkent")
+            String timezone) {}
 }

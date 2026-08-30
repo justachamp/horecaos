@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
-
 import uz.horecaos.platform.integration.api.pos.PosApiCall;
 import uz.horecaos.platform.integration.api.pos.PosApiTransport;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;

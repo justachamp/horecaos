@@ -7,9 +7,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Set;
-
 import javax.sql.DataSource;
-
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
@@ -26,15 +24,13 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
-
-import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.integration.outbox.JdbcOutboxStore;
 import uz.horecaos.platform.integration.outbox.TenancyOutboxEventListener;
+import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.CreateTenantCommand;
 import uz.horecaos.platform.tenancy.application.port.TenantControlPlaneStore;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityMode;
@@ -54,8 +50,7 @@ class TenantOutboxTransactionIntegrationTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        dataSource = new DriverManagerDataSource(
-                db.jdbcUrl(), db.username(), db.password());
+        dataSource = new DriverManagerDataSource(db.jdbcUrl(), db.username(), db.password());
     }
 
     @AfterAll
@@ -67,7 +62,9 @@ class TenantOutboxTransactionIntegrationTests {
 
     @BeforeEach
     void setUp() {
-        JdbcClient.create(dataSource).sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
+        JdbcClient.create(dataSource)
+                .sql("TRUNCATE TABLE tenant.tenants CASCADE")
+                .update();
         TestConfiguration.dataSource = dataSource;
         context = new AnnotationConfigApplicationContext(TestConfiguration.class);
     }
@@ -91,20 +88,21 @@ class TenantOutboxTransactionIntegrationTests {
 
         JdbcClient jdbc = context.getBean(JdbcClient.class);
         assertThat(jdbc.sql("SELECT count(*) FROM tenant.tenants WHERE id = :tenantId")
-                .param("tenantId", tenant.id())
-                .query(Long.class)
-                .single()).isEqualTo(1);
+                        .param("tenantId", tenant.id())
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
         assertThat(jdbc.sql("""
                         SELECT event_type, tenant_id, aggregate_id, status, payload->>'slug' AS slug
                         FROM integration.outbox_events
                         """)
-                .query((resultSet, rowNumber) -> Map.of(
-                        "eventType", resultSet.getString("event_type"),
-                        "tenantId", resultSet.getObject("tenant_id"),
-                        "aggregateId", resultSet.getObject("aggregate_id"),
-                        "status", resultSet.getString("status"),
-                        "slug", resultSet.getString("slug")))
-                .single())
+                        .query((resultSet, rowNumber) -> Map.of(
+                                "eventType", resultSet.getString("event_type"),
+                                "tenantId", resultSet.getObject("tenant_id"),
+                                "aggregateId", resultSet.getObject("aggregate_id"),
+                                "status", resultSet.getString("status"),
+                                "slug", resultSet.getString("slug")))
+                        .single())
                 .containsEntry("eventType", "TenantCreated")
                 .containsEntry("tenantId", tenant.id())
                 .containsEntry("aggregateId", tenant.id())
@@ -140,8 +138,7 @@ class TenantOutboxTransactionIntegrationTests {
 
         @Bean
         CurrentActor currentActor() {
-            AuthenticatedActor actor = new AuthenticatedActor(
-                    "platform-admin", Set.of("platform-admin"), Map.of());
+            AuthenticatedActor actor = new AuthenticatedActor("platform-admin", Set.of("platform-admin"), Map.of());
             return () -> actor;
         }
 
@@ -166,15 +163,12 @@ class TenantOutboxTransactionIntegrationTests {
         }
 
         @Bean
-        TenancyOutboxEventListener tenancyOutboxEventListener(
-                JdbcOutboxStore outbox,
-                ObjectMapper objectMapper) {
+        TenancyOutboxEventListener tenancyOutboxEventListener(JdbcOutboxStore outbox, ObjectMapper objectMapper) {
             return new TenancyOutboxEventListener(outbox, objectMapper, "tenancy.events");
         }
 
         @Bean
-        uz.horecaos.platform.audit.api.AuditRecorder auditRecorder(
-                JdbcClient jdbc, ObjectMapper objectMapper) {
+        uz.horecaos.platform.audit.api.AuditRecorder auditRecorder(JdbcClient jdbc, ObjectMapper objectMapper) {
             return new uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder(jdbc, objectMapper);
         }
 
@@ -186,8 +180,7 @@ class TenantOutboxTransactionIntegrationTests {
                 ApplicationEventPublisher events,
                 uz.horecaos.platform.audit.api.AuditRecorder auditRecorder,
                 CurrentActor currentActor) {
-            return new TenantControlPlaneService(
-                    store, accessPolicy, clock, events, auditRecorder, currentActor);
+            return new TenantControlPlaneService(store, accessPolicy, clock, events, auditRecorder, currentActor);
         }
     }
 
@@ -198,13 +191,17 @@ class TenantOutboxTransactionIntegrationTests {
     private static uz.horecaos.platform.iam.api.AuthorizationService denyAll() {
         return new uz.horecaos.platform.iam.api.AuthorizationService() {
             @Override
-            public boolean has(String subject, uz.horecaos.platform.iam.api.Capability capability,
+            public boolean has(
+                    String subject,
+                    uz.horecaos.platform.iam.api.Capability capability,
                     uz.horecaos.platform.iam.api.ResourceScope scope) {
                 return false;
             }
 
             @Override
-            public void require(String subject, uz.horecaos.platform.iam.api.Capability capability,
+            public void require(
+                    String subject,
+                    uz.horecaos.platform.iam.api.Capability capability,
                     uz.horecaos.platform.iam.api.ResourceScope scope) {
                 throw new AccessDeniedException(capability, scope);
             }

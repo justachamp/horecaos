@@ -1,12 +1,10 @@
 package uz.horecaos.platform.customers.infrastructure.security;
 
 import jakarta.servlet.http.HttpServletRequest;
-
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.customers.domain.CustomerSessionToken;
 
 /**

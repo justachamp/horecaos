@@ -1,15 +1,15 @@
 package uz.horecaos.platform.fulfillment.domain;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.fulfillment.domain.tariff.DeliveryFeeCalculator;
 import uz.horecaos.platform.fulfillment.domain.tariff.DeliveryTariff;
 import uz.horecaos.platform.fulfillment.domain.tariff.LegacyTariffImport;
@@ -19,8 +19,6 @@ import uz.horecaos.platform.fulfillment.domain.tariff.LegacyTariffImport.LegacyP
 import uz.horecaos.platform.fulfillment.domain.tariff.LegacyTariffImport.LegacyStep;
 import uz.horecaos.platform.fulfillment.domain.tariff.LegacyTariffImport.LegacyWindow;
 import uz.horecaos.platform.fulfillment.domain.tariff.TariffBand;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The migrated fee is the legacy fee (ADR 0037, V0032).
@@ -67,8 +65,14 @@ class LegacyDeliveryParityTests {
         // 7,000 m of free distance. Deliberately clear of the legacy's own
         // off-by-one in that branch, which the test below pins on its own.
         LegacyDeliveryConfig legacy = new LegacyDeliveryConfig(
-                3_000, 12_000, 12_000L, 30_000L,
-                new LegacyDiscount(7_000L, "distance", 25_000L,
+                3_000,
+                12_000,
+                12_000L,
+                30_000L,
+                new LegacyDiscount(
+                        7_000L,
+                        "distance",
+                        25_000L,
                         List.of(new LegacyWindow(LocalTime.of(11, 0), LocalTime.of(15, 0)))),
                 List.of(new LegacyStep(2_000, 1_500L), new LegacyStep(5_000, 2_000L)),
                 List.of());
@@ -85,8 +89,8 @@ class LegacyDeliveryParityTests {
         // Fifteen of the legacy rows carry no discount and barely any tariff. The
         // free tail is the interesting part: past the base distance the legacy loop
         // has no steps to walk and charges nothing more.
-        LegacyDeliveryConfig legacy = new LegacyDeliveryConfig(
-                5_000, 20_000, 15_000L, null, null, List.of(), List.of());
+        LegacyDeliveryConfig legacy =
+                new LegacyDeliveryConfig(5_000, 20_000, 15_000L, null, null, List.of(), List.of());
 
         DeliveryTariff tariff = LegacyTariffImport.toTariff(TARIFF, legacy, UZS, ROUTING);
 
@@ -101,15 +105,22 @@ class LegacyDeliveryParityTests {
     @DisplayName("a peak window that wraps midnight agrees on both sides of it")
     void theWrappingPeakWindowAgreesEverywhere() {
         LegacyDeliveryConfig legacy = new LegacyDeliveryConfig(
-                2_000, 10_000, 10_000L, null,
-                new LegacyDiscount(3_000L, "amount", null,
-                        List.of(new LegacyWindow(LocalTime.of(9, 0), LocalTime.of(11, 0)))),
+                2_000,
+                10_000,
+                10_000L,
+                null,
+                new LegacyDiscount(
+                        3_000L, "amount", null, List.of(new LegacyWindow(LocalTime.of(9, 0), LocalTime.of(11, 0)))),
                 List.of(new LegacyStep(8_000, 1_800L)),
                 // 21:00 through to 02:00. One row in the legacy, two rules here,
                 // because a single row that wraps needs a special case in the
                 // evaluator and that special case is what goes missing.
-                List.of(new LegacyPeak(LocalTime.of(21, 0), LocalTime.of(2, 0),
-                        1_000, 14_000L, List.of(new LegacyStep(9_000, 2_600L)))));
+                List.of(new LegacyPeak(
+                        LocalTime.of(21, 0),
+                        LocalTime.of(2, 0),
+                        1_000,
+                        14_000L,
+                        List.of(new LegacyStep(9_000, 2_600L)))));
 
         DeliveryTariff tariff = LegacyTariffImport.toTariff(TARIFF, legacy, UZS, ROUTING);
 
@@ -162,8 +173,7 @@ class LegacyDeliveryParityTests {
         // A per-kilometre rate that lands the gross exactly on a half-step. Half up
         // would answer 5,500 here and the branch has always charged 5,000.
         LegacyDeliveryConfig legacy = new LegacyDeliveryConfig(
-                1_000, 10_000, 4_000L, null, null,
-                List.of(new LegacyStep(9_000, 1_000L)), List.of());
+                1_000, 10_000, 4_000L, null, null, List.of(new LegacyStep(9_000, 1_000L)), List.of());
         DeliveryTariff tariff = LegacyTariffImport.toTariff(TARIFF, legacy, UZS, ROUTING);
 
         // 4,000 + 1,250 m at 1,000/km = 5,250, which is 10.5 steps of 500.
@@ -184,10 +194,14 @@ class LegacyDeliveryParityTests {
         // two base distances silently loses its per-kilometre part. 3,000 m base and
         // a 4,500 m allowance sits squarely in that hole.
         LegacyDeliveryConfig legacy = new LegacyDeliveryConfig(
-                3_000, 12_000, 12_000L, null,
-                new LegacyDiscount(4_500L, "distance", null,
-                        List.of(new LegacyWindow(LocalTime.of(0, 0), LocalTime.of(23, 59)))),
-                List.of(new LegacyStep(9_000, 2_000L)), List.of());
+                3_000,
+                12_000,
+                12_000L,
+                null,
+                new LegacyDiscount(
+                        4_500L, "distance", null, List.of(new LegacyWindow(LocalTime.of(0, 0), LocalTime.of(23, 59)))),
+                List.of(new LegacyStep(9_000, 2_000L)),
+                List.of());
         DeliveryTariff tariff = LegacyTariffImport.toTariff(TARIFF, legacy, UZS, ROUTING);
 
         long legacyDiscount = LegacyDeliveryOracle.discount(legacy, 9_000, noon());
@@ -228,9 +242,13 @@ class LegacyDeliveryParityTests {
     @DisplayName("a discount with no time windows imports as no discount, because it never applied")
     void aWindowlessDiscountNeverApplied() {
         LegacyDeliveryConfig legacy = new LegacyDeliveryConfig(
-                3_000, 12_000, 12_000L, null,
+                3_000,
+                12_000,
+                12_000L,
+                null,
                 new LegacyDiscount(5_000L, "amount", null, null),
-                List.of(new LegacyStep(9_000, 2_000L)), List.of());
+                List.of(new LegacyStep(9_000, 2_000L)),
+                List.of());
         DeliveryTariff tariff = LegacyTariffImport.toTariff(TARIFF, legacy, UZS, ROUTING);
 
         // The legacy reader only ever sets apply_discount inside the window loop, so
@@ -253,8 +271,7 @@ class LegacyDeliveryParityTests {
         // 12,001 and the same address is still served — and 12,001 m, which the
         // legacy refused, is refused here too.
         assertThat(tariff.maxDistanceMeters()).isEqualTo(12_001);
-        assertThat(feeAt(tariff, 12_000, noon()))
-                .isEqualTo(LegacyDeliveryOracle.price(legacy, 12_000, noon()));
+        assertThat(feeAt(tariff, 12_000, noon())).isEqualTo(LegacyDeliveryOracle.price(legacy, 12_000, noon()));
     }
 
     @Test
@@ -270,10 +287,13 @@ class LegacyDeliveryParityTests {
         LocalDateTime lastPeakSecond = LocalDateTime.of(DAY, LocalTime.of(22, 0, 0));
         assertThat(feeAt(tariff, 6_000, lastPeakSecond))
                 .isEqualTo(LegacyDeliveryOracle.price(legacy, 6_000, lastPeakSecond));
-        assertThat(DeliveryFeeCalculator.compute(tariff, 6_000, lastPeakSecond).rule()).isNotNull();
+        assertThat(DeliveryFeeCalculator.compute(tariff, 6_000, lastPeakSecond).rule())
+                .isNotNull();
 
         LocalDateTime firstOffPeakSecond = LocalDateTime.of(DAY, LocalTime.of(22, 0, 1));
-        assertThat(DeliveryFeeCalculator.compute(tariff, 6_000, firstOffPeakSecond).rule()).isNull();
+        assertThat(DeliveryFeeCalculator.compute(tariff, 6_000, firstOffPeakSecond)
+                        .rule())
+                .isNull();
     }
 
     @Test
@@ -294,12 +314,18 @@ class LegacyDeliveryParityTests {
     /** The shape most of the migrating population has: a fare, two steps, one peak, one discount. */
     private static LegacyDeliveryConfig realisticBranch() {
         return new LegacyDeliveryConfig(
-                3_000, 12_000, 12_000L, 30_000L,
-                new LegacyDiscount(5_000L, "amount", 25_000L,
-                        List.of(new LegacyWindow(LocalTime.of(10, 0), LocalTime.of(14, 0)))),
+                3_000,
+                12_000,
+                12_000L,
+                30_000L,
+                new LegacyDiscount(
+                        5_000L, "amount", 25_000L, List.of(new LegacyWindow(LocalTime.of(10, 0), LocalTime.of(14, 0)))),
                 List.of(new LegacyStep(2_000, 1_500L), new LegacyStep(5_000, 2_000L)),
-                List.of(new LegacyPeak(LocalTime.of(18, 0), LocalTime.of(22, 0),
-                        2_000, 15_000L,
+                List.of(new LegacyPeak(
+                        LocalTime.of(18, 0),
+                        LocalTime.of(22, 0),
+                        2_000,
+                        15_000L,
                         List.of(new LegacyStep(3_000, 2_500L), new LegacyStep(6_000, 3_000L)))));
     }
 
@@ -321,11 +347,15 @@ class LegacyDeliveryParityTests {
                 long expectedDiscount = LegacyDeliveryOracle.discount(legacy, meters, moment);
 
                 var computation = DeliveryFeeCalculator.compute(tariff, meters, moment);
-                if (computation.finalFeeMinor() != expectedFee
-                        || computation.discountMinor() != expectedDiscount) {
-                    disagreements.add("%s at %d m: legacy %d-%d, HorecaOS %d-%d".formatted(
-                            moment.toLocalTime(), meters, expectedFee, expectedDiscount,
-                            computation.finalFeeMinor(), computation.discountMinor()));
+                if (computation.finalFeeMinor() != expectedFee || computation.discountMinor() != expectedDiscount) {
+                    disagreements.add("%s at %d m: legacy %d-%d, HorecaOS %d-%d"
+                            .formatted(
+                                    moment.toLocalTime(),
+                                    meters,
+                                    expectedFee,
+                                    expectedDiscount,
+                                    computation.finalFeeMinor(),
+                                    computation.discountMinor()));
                 }
                 if (disagreements.size() > 5) {
                     break;

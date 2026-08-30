@@ -1,12 +1,9 @@
 package uz.horecaos.platform.ordering.application;
 
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.ordering.domain.CustomerRefund;
@@ -45,8 +42,12 @@ public class OrderOutcomeService {
     private final FieldProtection protection;
     private final ObjectMapper objectMapper;
 
-    public OrderOutcomeService(OrderStateService orderState, OrderOutcomeReasonService reasons,
-            JdbcOrderStore orders, FieldProtection protection, ObjectMapper objectMapper) {
+    public OrderOutcomeService(
+            OrderStateService orderState,
+            OrderOutcomeReasonService reasons,
+            JdbcOrderStore orders,
+            FieldProtection protection,
+            ObjectMapper objectMapper) {
         this.orderState = orderState;
         this.reasons = reasons;
         this.orders = orders;
@@ -63,19 +64,17 @@ public class OrderOutcomeService {
      * the thing that stops it being a guess.
      */
     @Transactional
-    public OrderStateService.DecisionResult cancel(UUID tenantId, UUID orderId,
-            int expectedVersion, CancelCommand command) {
+    public OrderStateService.DecisionResult cancel(
+            UUID tenantId, UUID orderId, int expectedVersion, CancelCommand command) {
 
-        OrderRow order = orders.find(tenantId, orderId)
-                .orElseThrow(() -> new OrderStateService.OrderNotFoundException(orderId));
+        OrderRow order =
+                orders.find(tenantId, orderId).orElseThrow(() -> new OrderStateService.OrderNotFoundException(orderId));
 
         ReasonRow reason = reasons.find(tenantId, command.reasonId())
-                .orElseThrow(() -> new OrderOutcomeReasonService.ReasonNotFoundException(
-                        command.reasonId()));
+                .orElseThrow(() -> new OrderOutcomeReasonService.ReasonNotFoundException(command.reasonId()));
         if (reason.kind() != OutcomeReasonKind.CANCELLATION) {
             throw new IllegalArgumentException(
-                    "%s is a completion reason and cannot cancel an order"
-                            .formatted(reason.internalName()));
+                    "%s is a completion reason and cannot cancel an order".formatted(reason.internalName()));
         }
         if (!"ACTIVE".equals(reason.status())) {
             // An archived reason still resolves for outcomes recorded under it,
@@ -90,14 +89,14 @@ public class OrderOutcomeService {
         // cancellation always releases and the reason's disposition is ignored;
         // after it, the disposition decides and the reservation is never reopened.
         boolean committed = order.confirmedAt() != null;
-        StockDisposition disposition = committed
-                ? StockDisposition.valueOf(reason.stockDisposition())
-                : StockDisposition.RELEASE;
+        StockDisposition disposition =
+                committed ? StockDisposition.valueOf(reason.stockDisposition()) : StockDisposition.RELEASE;
 
         OrderOutcome outcome = new OrderOutcome(
                 TerminalOutcomeKind.CANCELLED,
                 OutcomeSystemCategory.valueOf(reason.systemCategory()),
-                reason.id(), reason.version(),
+                reason.id(),
+                reason.version(),
                 objectMapper.writeValueAsString(reasons.snapshotOf(reason)),
                 disposition,
                 LiabilityParty.valueOf(reason.liabilityParty()),
@@ -105,8 +104,15 @@ public class OrderOutcomeService {
                 committed,
                 encryptNote(tenantId, orderId, command.note()));
 
-        return orderState.cancel(tenantId, orderId, expectedVersion, reason.systemCategory(),
-                command.actorType(), command.actorId(), command.correlationId(), outcome);
+        return orderState.cancel(
+                tenantId,
+                orderId,
+                expectedVersion,
+                reason.systemCategory(),
+                command.actorType(),
+                command.actorId(),
+                command.correlationId(),
+                outcome);
     }
 
     /**
@@ -120,46 +126,64 @@ public class OrderOutcomeService {
      *                 implies
      */
     @Transactional
-    public OrderStateService.DecisionResult complete(UUID tenantId, UUID orderId,
-            int expectedVersion, UUID reasonId, String actorType, String actorId,
+    public OrderStateService.DecisionResult complete(
+            UUID tenantId,
+            UUID orderId,
+            int expectedVersion,
+            UUID reasonId,
+            String actorType,
+            String actorId,
             String correlationId) {
 
-        OrderRow order = orders.find(tenantId, orderId)
-                .orElseThrow(() -> new OrderStateService.OrderNotFoundException(orderId));
+        OrderRow order =
+                orders.find(tenantId, orderId).orElseThrow(() -> new OrderStateService.OrderNotFoundException(orderId));
 
         OrderOutcome outcome = null;
-        String reasonCode = OutcomeSystemCategory
-                .defaultCompletionFor(order.fulfillmentMode()).name();
+        String reasonCode = OutcomeSystemCategory.defaultCompletionFor(order.fulfillmentMode())
+                .name();
 
         if (reasonId != null) {
             ReasonRow reason = reasons.find(tenantId, reasonId)
-                    .orElseThrow(() -> new OrderOutcomeReasonService.ReasonNotFoundException(
-                            reasonId));
+                    .orElseThrow(() -> new OrderOutcomeReasonService.ReasonNotFoundException(reasonId));
             if (reason.kind() != OutcomeReasonKind.COMPLETION) {
                 throw new IllegalArgumentException(
-                        "%s is a cancellation reason and cannot complete an order"
-                                .formatted(reason.internalName()));
+                        "%s is a cancellation reason and cannot complete an order".formatted(reason.internalName()));
             }
             if (!"ACTIVE".equals(reason.status())) {
                 throw new IllegalArgumentException(
                         "%s has been archived and cannot be used".formatted(reason.internalName()));
             }
-            if (!reason.allowedFulfillmentModes().contains(order.fulfillmentMode().name())) {
+            if (!reason.allowedFulfillmentModes()
+                    .contains(order.fulfillmentMode().name())) {
                 throw new IllegalArgumentException(("%s is not valid for a %s order. Recording it "
-                        + "would drop the order out of the courier SLA report and the "
-                        + "external-logistics settlement.")
+                                + "would drop the order out of the courier SLA report and the "
+                                + "external-logistics settlement.")
                         .formatted(reason.internalName(), order.fulfillmentMode()));
             }
             reasonCode = reason.systemCategory();
-            outcome = new OrderOutcome(TerminalOutcomeKind.COMPLETED,
+            outcome = new OrderOutcome(
+                    TerminalOutcomeKind.COMPLETED,
                     OutcomeSystemCategory.valueOf(reason.systemCategory()),
-                    reason.id(), reason.version(),
+                    reason.id(),
+                    reason.version(),
                     objectMapper.writeValueAsString(reasons.snapshotOf(reason)),
-                    StockDisposition.NO_EFFECT, null, null, true, null);
+                    StockDisposition.NO_EFFECT,
+                    null,
+                    null,
+                    true,
+                    null);
         }
 
-        return orderState.advance(tenantId, orderId, OrderStatus.COMPLETED, expectedVersion,
-                reasonCode, actorType, actorId, correlationId, outcome);
+        return orderState.advance(
+                tenantId,
+                orderId,
+                OrderStatus.COMPLETED,
+                expectedVersion,
+                reasonCode,
+                actorType,
+                actorId,
+                correlationId,
+                outcome);
     }
 
     /**
@@ -175,13 +199,14 @@ public class OrderOutcomeService {
         if (note == null || note.isBlank()) {
             return null;
         }
-        return protection.protect(tenantId, DataClass.PERSONAL,
-                        new FieldProtection.RecordRef("ordering.order_outcomes", "note_encrypted",
-                                orderId),
+        return protection
+                .protect(
+                        tenantId,
+                        DataClass.PERSONAL,
+                        new FieldProtection.RecordRef("ordering.order_outcomes", "note_encrypted", orderId),
                         note)
                 .serialize();
     }
 
-    public record CancelCommand(UUID reasonId, String note, String actorType, String actorId,
-            String correlationId) { }
+    public record CancelCommand(UUID reasonId, String note, String actorType, String actorId, String correlationId) {}
 }

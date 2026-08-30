@@ -33,8 +33,7 @@ package uz.horecaos.platform.catalog.api;
  */
 public final class FiscalVatRate {
 
-    private FiscalVatRate() {
-    }
+    private FiscalVatRate() {}
 
     /**
      * The whole percent both providers require, or a refusal.
@@ -48,11 +47,11 @@ public final class FiscalVatRate {
      */
     public static int wholePercentOf(int rateBasisPoints) {
         if (rateBasisPoints < 0) {
-            throw new UnrepresentableVatRate(rateBasisPoints,
-                    "a negative VAT rate is not a rate");
+            throw new UnrepresentableVatRate(rateBasisPoints, "a negative VAT rate is not a rate");
         }
         if (rateBasisPoints % 100 != 0) {
-            throw new UnrepresentableVatRate(rateBasisPoints,
+            throw new UnrepresentableVatRate(
+                    rateBasisPoints,
                     "Click's VATPercent and Payme's vat_percent are integer percents, so "
                             + "%d basis points (%.2f percent) cannot be stated on a receipt. "
                                     .formatted(rateBasisPoints, rateBasisPoints / 100.0)

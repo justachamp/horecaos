@@ -63,9 +63,7 @@ public record Measurement(
 
     /** Exact, and for a checksum that means the two digests are equal. */
     public boolean agrees() {
-        return measureKind == MeasureKind.CHECKSUM
-                ? expectedChecksum.equals(actualChecksum)
-                : expected.equals(actual);
+        return measureKind == MeasureKind.CHECKSUM ? expectedChecksum.equals(actualChecksum) : expected.equals(actual);
     }
 
     /**
@@ -81,19 +79,25 @@ public record Measurement(
     }
 
     public static Measurement count(String dimensionKey, long expected, long actual) {
-        return new Measurement(dimensionKey, MeasureKind.COUNT,
-                BigInteger.valueOf(expected), BigInteger.valueOf(actual), null, null, null, null);
+        return new Measurement(
+                dimensionKey,
+                MeasureKind.COUNT,
+                BigInteger.valueOf(expected),
+                BigInteger.valueOf(actual),
+                null,
+                null,
+                null,
+                null);
     }
 
-    public static Measurement amount(String dimensionKey, String currency,
-            BigInteger expectedMinor, BigInteger actualMinor) {
-        return new Measurement(dimensionKey, MeasureKind.AMOUNT,
-                expectedMinor, actualMinor, currency, null, null, null);
+    public static Measurement amount(
+            String dimensionKey, String currency, BigInteger expectedMinor, BigInteger actualMinor) {
+        return new Measurement(
+                dimensionKey, MeasureKind.AMOUNT, expectedMinor, actualMinor, currency, null, null, null);
     }
 
     public static Measurement checksum(String dimensionKey, String expected, String actual) {
-        return new Measurement(dimensionKey, MeasureKind.CHECKSUM,
-                null, null, null, expected, actual, null);
+        return new Measurement(dimensionKey, MeasureKind.CHECKSUM, null, null, null, expected, actual, null);
     }
 
     private static void requireNumbers(BigInteger expected, BigInteger actual) {
@@ -119,5 +123,9 @@ public record Measurement(
     }
 
     /** Matching {@code migration.reconciliation_results.measure_kind}. */
-    public enum MeasureKind { COUNT, AMOUNT, CHECKSUM }
+    public enum MeasureKind {
+        COUNT,
+        AMOUNT,
+        CHECKSUM
+    }
 }

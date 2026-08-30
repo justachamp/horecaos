@@ -3,7 +3,6 @@ package uz.horecaos.platform.payments.application;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -33,8 +32,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class PaymentLegalEntityConfiguration {
 
-    private static final Logger log =
-            LoggerFactory.getLogger(PaymentLegalEntityConfiguration.class);
+    private static final Logger log = LoggerFactory.getLogger(PaymentLegalEntityConfiguration.class);
 
     @Bean
     @ConditionalOnMissingBean(PaymentLegalEntityResolver.class)

@@ -8,10 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.pos.domain.ExportCandidate;
 import uz.horecaos.platform.pos.domain.ExportState;
 
@@ -68,9 +66,7 @@ public class JdbcPosExportStore {
                 VALUES (:id, :tenantId, :orderId, :bindingId, :installationId, 'PENDING',
                         :correlation, :fingerprint, :phoneHash, :venue, :requestedAt)
                 ON CONFLICT (tenant_id, order_id) DO NOTHING
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
 
         return jdbc.sql("""
                 SELECT id FROM integration.pos_order_exports
@@ -140,8 +136,15 @@ public class JdbcPosExportStore {
     }
 
     /** Records what one attempt came to. Append-only. */
-    public void recordAttempt(UUID tenantId, UUID exportId, int attemptNumber, String outcomeStatus,
-            String errorCode, String detail, Instant startedAt, Instant finishedAt) {
+    public void recordAttempt(
+            UUID tenantId,
+            UUID exportId,
+            int attemptNumber,
+            String outcomeStatus,
+            String errorCode,
+            String detail,
+            Instant startedAt,
+            Instant finishedAt) {
 
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("id", UUID.randomUUID());
@@ -152,8 +155,7 @@ public class JdbcPosExportStore {
         parameters.put("errorCode", errorCode);
         parameters.put("detail", detail);
         parameters.put("startedAt", OffsetDateTime.ofInstant(startedAt, ZoneOffset.UTC));
-        parameters.put("finishedAt", finishedAt == null ? null
-                : OffsetDateTime.ofInstant(finishedAt, ZoneOffset.UTC));
+        parameters.put("finishedAt", finishedAt == null ? null : OffsetDateTime.ofInstant(finishedAt, ZoneOffset.UTC));
 
         jdbc.sql("""
                 INSERT INTO integration.pos_export_attempts
@@ -171,8 +173,14 @@ public class JdbcPosExportStore {
     }
 
     /** Settles an attempt's outcome onto the export. Conditional on SENT. */
-    public boolean settle(UUID tenantId, UUID exportId, ExportState to, String externalOrderId,
-            String errorCode, String detail, Instant now) {
+    public boolean settle(
+            UUID tenantId,
+            UUID exportId,
+            ExportState to,
+            String externalOrderId,
+            String errorCode,
+            String detail,
+            Instant now) {
 
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
@@ -194,9 +202,7 @@ public class JdbcPosExportStore {
                        version = version + 1,
                        updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id AND state = 'SENT'
-                """)
-                .params(parameters)
-                .update() == 1;
+                """).params(parameters).update() == 1;
     }
 
     /**
@@ -206,8 +212,15 @@ public class JdbcPosExportStore {
      * and a time, and this is the only method that writes one, so an export
      * cannot come to be resolved by nobody.
      */
-    public boolean resolve(UUID tenantId, UUID exportId, ExportState from, ExportState to,
-            String resolutionKind, String externalOrderId, String reason, String resolvedBy,
+    public boolean resolve(
+            UUID tenantId,
+            UUID exportId,
+            ExportState from,
+            ExportState to,
+            String resolutionKind,
+            String externalOrderId,
+            String reason,
+            String resolvedBy,
             Instant now) {
 
         Map<String, Object> parameters = new HashMap<>();
@@ -234,9 +247,7 @@ public class JdbcPosExportStore {
                        version = version + 1,
                        updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id AND state = :from
-                """)
-                .params(parameters)
-                .update() == 1;
+                """).params(parameters).update() == 1;
     }
 
     /**
@@ -246,16 +257,13 @@ public class JdbcPosExportStore {
      * read, and a list that grew across three reads would show an operator the
      * same provider order three times and imply three orders.
      */
-    public void replaceCandidates(UUID tenantId, UUID exportId, List<ExportCandidate> candidates,
-            int attemptNumber, Instant now) {
+    public void replaceCandidates(
+            UUID tenantId, UUID exportId, List<ExportCandidate> candidates, int attemptNumber, Instant now) {
 
         jdbc.sql("""
                 DELETE FROM integration.pos_export_candidates
                  WHERE tenant_id = :tenantId AND export_id = :exportId
-                """)
-                .param("tenantId", tenantId)
-                .param("exportId", exportId)
-                .update();
+                """).param("tenantId", tenantId).param("exportId", exportId).update();
 
         for (ExportCandidate candidate : candidates) {
             Map<String, Object> parameters = new HashMap<>();
@@ -264,8 +272,11 @@ public class JdbcPosExportStore {
             parameters.put("exportId", exportId);
             parameters.put("externalOrderId", candidate.externalOrderId());
             parameters.put("externalStatus", candidate.externalStatus());
-            parameters.put("externalCreatedAt", candidate.externalCreatedAt() == null ? null
-                    : OffsetDateTime.ofInstant(candidate.externalCreatedAt(), ZoneOffset.UTC));
+            parameters.put(
+                    "externalCreatedAt",
+                    candidate.externalCreatedAt() == null
+                            ? null
+                            : OffsetDateTime.ofInstant(candidate.externalCreatedAt(), ZoneOffset.UTC));
             parameters.put("echoed", candidate.correlationEchoed());
             parameters.put("phoneMatches", candidate.phoneMatches());
             parameters.put("fingerprintMatches", candidate.fingerprintMatches());
@@ -283,9 +294,7 @@ public class JdbcPosExportStore {
                             :externalCreatedAt, :echoed, :phoneMatches,
                             :fingerprintMatches, :delta, :discoveredAt, :attempt)
                     ON CONFLICT (export_id, external_order_id) DO NOTHING
-                    """)
-                    .params(parameters)
-                    .update();
+                    """).params(parameters).update();
         }
     }
 
@@ -353,14 +362,31 @@ public class JdbcPosExportStore {
     }
 
     public record NewExport(
-            UUID id, UUID tenantId, UUID orderId, UUID bindingId, UUID installationId,
-            String correlationReference, String lineFingerprint, String customerPhoneHash,
-            String externalVenueReference, Instant requestedAt) { }
+            UUID id,
+            UUID tenantId,
+            UUID orderId,
+            UUID bindingId,
+            UUID installationId,
+            String correlationReference,
+            String lineFingerprint,
+            String customerPhoneHash,
+            String externalVenueReference,
+            Instant requestedAt) {}
 
     public record ExportRow(
-            UUID id, UUID tenantId, UUID orderId, UUID bindingId, UUID installationId,
-            ExportState state, int attemptCount, String correlationReference,
-            String externalOrderId, String externalReceiptId, String lineFingerprint,
-            String customerPhoneHash, String externalVenueReference, Instant requestedAt,
-            long version) { }
+            UUID id,
+            UUID tenantId,
+            UUID orderId,
+            UUID bindingId,
+            UUID installationId,
+            ExportState state,
+            int attemptCount,
+            String correlationReference,
+            String externalOrderId,
+            String externalReceiptId,
+            String lineFingerprint,
+            String customerPhoneHash,
+            String externalVenueReference,
+            Instant requestedAt,
+            long version) {}
 }

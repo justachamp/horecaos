@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-
 import uz.horecaos.platform.pos.domain.SyncDifference.DifferenceCategory;
 import uz.horecaos.platform.pos.domain.SyncDifference.EntityType;
 import uz.horecaos.platform.pos.domain.SyncDifference.FieldAuthority;
@@ -78,8 +77,8 @@ public final class DifferenceEngine {
         detectRemovals(snapshot, target, absences, snapshot.walkStable(), differences);
 
         differences.sort(ORDER);
-        conflicts.sort(Comparator
-                .comparing((SyncConflict conflict) -> conflict.entityType().name())
+        conflicts.sort(Comparator.comparing(
+                        (SyncConflict conflict) -> conflict.entityType().name())
                 .thenComparing(SyncConflict::externalEntityId)
                 .thenComparing(conflict -> conflict.kind().name()));
 
@@ -91,18 +90,27 @@ public final class DifferenceEngine {
     // ------------------------------------------------------------------
 
     private static void detectDuplicates(CatalogSnapshot snapshot, List<SyncConflict> conflicts) {
-        duplicatesOf(snapshot.products().stream().map(CatalogSnapshot.Product::externalId).toList())
-                .forEach(id -> conflicts.add(new SyncConflict(EntityType.PRODUCT, id,
+        duplicatesOf(snapshot.products().stream()
+                        .map(CatalogSnapshot.Product::externalId)
+                        .toList())
+                .forEach(id -> conflicts.add(new SyncConflict(
+                        EntityType.PRODUCT,
+                        id,
                         SyncConflict.Kind.DUPLICATE_EXTERNAL_ID,
                         "The snapshot contains this product identifier more than once, so it is not a "
                                 + "consistent read of the catalog. An offset walk over a catalog being "
                                 + "edited returns a row twice as readily as it skips one.",
                         List.of())));
 
-        duplicatesOf(snapshot.variants().stream().map(CatalogSnapshot.Variant::externalId).toList())
-                .forEach(id -> conflicts.add(new SyncConflict(EntityType.VARIANT, id,
+        duplicatesOf(snapshot.variants().stream()
+                        .map(CatalogSnapshot.Variant::externalId)
+                        .toList())
+                .forEach(id -> conflicts.add(new SyncConflict(
+                        EntityType.VARIANT,
+                        id,
                         SyncConflict.Kind.DUPLICATE_EXTERNAL_ID,
-                        "The snapshot contains this variant identifier more than once.", List.of())));
+                        "The snapshot contains this variant identifier more than once.",
+                        List.of())));
     }
 
     private static void detectMissingParents(CatalogSnapshot snapshot, List<SyncConflict> conflicts) {
@@ -112,13 +120,15 @@ public final class DifferenceEngine {
 
         for (CatalogSnapshot.Variant variant : snapshot.variants()) {
             if (!productIds.contains(variant.externalProductId())) {
-                conflicts.add(new SyncConflict(EntityType.VARIANT, variant.externalId(),
+                conflicts.add(new SyncConflict(
+                        EntityType.VARIANT,
+                        variant.externalId(),
                         SyncConflict.Kind.MISSING_PARENT,
                         // The likeliest cause is the pagination race, and saying so
                         // saves an operator from hunting for a deletion that did not
                         // happen.
                         "This variant's parent product %s is not in the snapshot. Either it was "
-                                .formatted(variant.externalProductId())
+                                        .formatted(variant.externalProductId())
                                 + "deleted between our reads, or the paged walk skipped it.",
                         List.of(variant.externalProductId())));
             }
@@ -133,8 +143,7 @@ public final class DifferenceEngine {
      * cannot order their coffee without sugar and a restaurant that never finds
      * out why.
      */
-    private static void detectUnrepresentableModifiers(CatalogSnapshot snapshot,
-            List<SyncConflict> conflicts) {
+    private static void detectUnrepresentableModifiers(CatalogSnapshot snapshot, List<SyncConflict> conflicts) {
 
         Map<String, CatalogSnapshot.Product> byId = new LinkedHashMap<>();
         snapshot.products().forEach(product -> byId.put(product.externalId(), product));
@@ -142,19 +151,22 @@ public final class DifferenceEngine {
         for (CatalogSnapshot.ModifierGroup group : snapshot.modifierGroups()) {
             CatalogSnapshot.Product owner = byId.get(group.externalProductId());
             if (owner == null) {
-                conflicts.add(new SyncConflict(EntityType.MODIFIER_GROUP, group.externalId(),
+                conflicts.add(new SyncConflict(
+                        EntityType.MODIFIER_GROUP,
+                        group.externalId(),
                         SyncConflict.Kind.MISSING_PARENT,
-                        "This modifier group's product %s is not in the snapshot."
-                                .formatted(group.externalProductId()),
+                        "This modifier group's product %s is not in the snapshot.".formatted(group.externalProductId()),
                         List.of(group.externalProductId())));
                 continue;
             }
             if (owner.sourceKind() != SourceKind.DISH) {
-                conflicts.add(new SyncConflict(EntityType.MODIFIER_GROUP, group.externalId(),
+                conflicts.add(new SyncConflict(
+                        EntityType.MODIFIER_GROUP,
+                        group.externalId(),
                         SyncConflict.Kind.UNREPRESENTABLE_STRUCTURE,
                         ("The provider attaches modifiers only to dishes, and product %s is a %s. "
-                                + "HorecaOS can express this and the provider cannot, so the two catalogs "
-                                + "cannot be kept equivalent for this group.")
+                                        + "HorecaOS can express this and the provider cannot, so the two catalogs "
+                                        + "cannot be kept equivalent for this group.")
                                 .formatted(owner.externalId(), owner.sourceKind()),
                         List.of(owner.externalId())));
             }
@@ -165,8 +177,8 @@ public final class DifferenceEngine {
     // Differences
     // ------------------------------------------------------------------
 
-    private void compareProducts(CatalogSnapshot snapshot, TargetCatalog target,
-            Set<String> conflicted, List<SyncDifference> differences) {
+    private void compareProducts(
+            CatalogSnapshot snapshot, TargetCatalog target, Set<String> conflicted, List<SyncDifference> differences) {
 
         for (CatalogSnapshot.Product product : snapshot.comparableProducts()) {
             if (conflicted.contains(product.externalId())) {
@@ -177,21 +189,43 @@ public final class DifferenceEngine {
                 differences.add(addition(EntityType.PRODUCT, product.externalId(), product.name()));
                 continue;
             }
-            compareField(differences, EntityType.PRODUCT, product.externalId(), mapped,
-                    "product.name", mapped.fields().get("product.name"), product.name());
-            compareField(differences, EntityType.PRODUCT, product.externalId(), mapped,
-                    "product.price", mapped.fields().get("product.price"), money(product.priceMinor()));
-            compareField(differences, EntityType.PRODUCT, product.externalId(), mapped,
-                    "product.sourceKind", mapped.fields().get("product.sourceKind"),
+            compareField(
+                    differences,
+                    EntityType.PRODUCT,
+                    product.externalId(),
+                    mapped,
+                    "product.name",
+                    mapped.fields().get("product.name"),
+                    product.name());
+            compareField(
+                    differences,
+                    EntityType.PRODUCT,
+                    product.externalId(),
+                    mapped,
+                    "product.price",
+                    mapped.fields().get("product.price"),
+                    money(product.priceMinor()));
+            compareField(
+                    differences,
+                    EntityType.PRODUCT,
+                    product.externalId(),
+                    mapped,
+                    "product.sourceKind",
+                    mapped.fields().get("product.sourceKind"),
                     product.sourceKind().name());
-            compareField(differences, EntityType.PRODUCT, product.externalId(), mapped,
-                    "product.governmentCode", mapped.fields().get("product.governmentCode"),
+            compareField(
+                    differences,
+                    EntityType.PRODUCT,
+                    product.externalId(),
+                    mapped,
+                    "product.governmentCode",
+                    mapped.fields().get("product.governmentCode"),
                     product.governmentCode());
         }
     }
 
-    private void compareVariants(CatalogSnapshot snapshot, TargetCatalog target,
-            Set<String> conflicted, List<SyncDifference> differences) {
+    private void compareVariants(
+            CatalogSnapshot snapshot, TargetCatalog target, Set<String> conflicted, List<SyncDifference> differences) {
 
         for (CatalogSnapshot.Variant variant : snapshot.variants()) {
             if (conflicted.contains(variant.externalId())) {
@@ -202,10 +236,22 @@ public final class DifferenceEngine {
                 differences.add(addition(EntityType.VARIANT, variant.externalId(), variant.name()));
                 continue;
             }
-            compareField(differences, EntityType.VARIANT, variant.externalId(), mapped,
-                    "variant.name", mapped.fields().get("variant.name"), variant.name());
-            compareField(differences, EntityType.VARIANT, variant.externalId(), mapped,
-                    "variant.price", mapped.fields().get("variant.price"), money(variant.priceMinor()));
+            compareField(
+                    differences,
+                    EntityType.VARIANT,
+                    variant.externalId(),
+                    mapped,
+                    "variant.name",
+                    mapped.fields().get("variant.name"),
+                    variant.name());
+            compareField(
+                    differences,
+                    EntityType.VARIANT,
+                    variant.externalId(),
+                    mapped,
+                    "variant.price",
+                    mapped.fields().get("variant.price"),
+                    money(variant.priceMinor()));
         }
     }
 
@@ -217,44 +263,61 @@ public final class DifferenceEngine {
      * signal with a warning on it — because a queue item an operator must learn
      * to ignore is worse than no queue item.
      */
-    private void detectRemovals(CatalogSnapshot snapshot, TargetCatalog target,
-            AbsenceHistory absences, boolean walkStable, List<SyncDifference> differences) {
+    private void detectRemovals(
+            CatalogSnapshot snapshot,
+            TargetCatalog target,
+            AbsenceHistory absences,
+            boolean walkStable,
+            List<SyncDifference> differences) {
 
         Set<String> present = new HashSet<>();
         snapshot.products().forEach(product -> present.add(product.externalId()));
         Set<String> presentVariants = new HashSet<>();
         snapshot.variants().forEach(variant -> presentVariants.add(variant.externalId()));
 
-        for (Map.Entry<String, TargetCatalog.Entity> entry
-                : target.entities(EntityType.PRODUCT).entrySet()) {
+        for (Map.Entry<String, TargetCatalog.Entity> entry :
+                target.entities(EntityType.PRODUCT).entrySet()) {
             if (present.contains(entry.getKey())) {
                 continue;
             }
-            differences.add(removal(EntityType.PRODUCT, entry.getKey(), entry.getValue(),
+            differences.add(removal(
+                    EntityType.PRODUCT,
+                    entry.getKey(),
+                    entry.getValue(),
                     absences.consecutiveAbsentRuns(EntityType.PRODUCT, entry.getKey()),
                     walkStable && absences.everyWalkStable(EntityType.PRODUCT, entry.getKey())));
         }
 
-        for (Map.Entry<String, TargetCatalog.Entity> entry
-                : target.entities(EntityType.VARIANT).entrySet()) {
+        for (Map.Entry<String, TargetCatalog.Entity> entry :
+                target.entities(EntityType.VARIANT).entrySet()) {
             if (presentVariants.contains(entry.getKey())) {
                 continue;
             }
-            differences.add(removal(EntityType.VARIANT, entry.getKey(), entry.getValue(),
+            differences.add(removal(
+                    EntityType.VARIANT,
+                    entry.getKey(),
+                    entry.getValue(),
                     absences.consecutiveAbsentRuns(EntityType.VARIANT, entry.getKey()),
                     walkStable && absences.everyWalkStable(EntityType.VARIANT, entry.getKey())));
         }
     }
 
-    private SyncDifference removal(EntityType type, String externalId, TargetCatalog.Entity mapped,
-            int consecutiveAbsentRuns, boolean everyWalkStable) {
+    private SyncDifference removal(
+            EntityType type,
+            String externalId,
+            TargetCatalog.Entity mapped,
+            int consecutiveAbsentRuns,
+            boolean everyWalkStable) {
 
         boolean actionable = RemovalQuorum.actionable(consecutiveAbsentRuns, everyWalkStable);
         return new SyncDifference(
-                type, externalId, mapped.horecaosId(),
+                type,
+                externalId,
+                mapped.horecaosId(),
                 actionable ? DifferenceCategory.REMOVAL_SIGNAL : DifferenceCategory.NO_CHANGE,
                 null,
-                "present", "absent",
+                "present",
+                "absent",
                 FieldAuthority.MAPPING,
                 actionable ? Severity.WARNING : Severity.INFO,
                 // Even an actionable removal is only ever a review. ADR 0012
@@ -266,8 +329,14 @@ public final class DifferenceEngine {
                         : RemovalQuorum.inconclusiveReason(consecutiveAbsentRuns));
     }
 
-    private void compareField(List<SyncDifference> differences, EntityType type, String externalId,
-            TargetCatalog.Entity mapped, String fieldPath, String current, String imported) {
+    private void compareField(
+            List<SyncDifference> differences,
+            EntityType type,
+            String externalId,
+            TargetCatalog.Entity mapped,
+            String fieldPath,
+            String current,
+            String imported) {
 
         if (Objects.equals(normalise(current), normalise(imported))) {
             return;
@@ -278,8 +347,14 @@ public final class DifferenceEngine {
                 : DifferenceCategory.AUTHORIZED_CHANGE;
 
         differences.add(new SyncDifference(
-                type, externalId, mapped.horecaosId(), category, fieldPath,
-                current, imported, authority,
+                type,
+                externalId,
+                mapped.horecaosId(),
+                category,
+                fieldPath,
+                current,
+                imported,
+                authority,
                 // A protected field disagreeing is worth noticing and is not a
                 // problem: it is usually a restaurant editing their own till,
                 // which is exactly what they are entitled to do.
@@ -291,8 +366,17 @@ public final class DifferenceEngine {
     }
 
     private static SyncDifference addition(EntityType type, String externalId, String name) {
-        return new SyncDifference(type, externalId, null, DifferenceCategory.ADDITION, null,
-                null, name, FieldAuthority.MAPPING, Severity.INFO, RecommendedAction.REVIEW,
+        return new SyncDifference(
+                type,
+                externalId,
+                null,
+                DifferenceCategory.ADDITION,
+                null,
+                null,
+                name,
+                FieldAuthority.MAPPING,
+                Severity.INFO,
+                RecommendedAction.REVIEW,
                 // Draft, never live. A product created from an import has no
                 // translation, no photograph and no reviewed price.
                 "New at the provider. May be created as a DRAFT HorecaOS product with a proposed mapping.");
@@ -323,8 +407,8 @@ public final class DifferenceEngine {
     }
 
     /** Deterministic ordering, so two runs over one snapshot produce one report. */
-    private static final Comparator<SyncDifference> ORDER = Comparator
-            .comparing((SyncDifference difference) -> difference.entityType().name())
+    private static final Comparator<SyncDifference> ORDER = Comparator.comparing(
+                    (SyncDifference difference) -> difference.entityType().name())
             .thenComparing(SyncDifference::externalEntityId)
             .thenComparing(difference -> difference.fieldPath() == null ? "" : difference.fieldPath())
             .thenComparing(difference -> difference.category().name());
@@ -394,6 +478,6 @@ public final class DifferenceEngine {
             return streak == null || streak.allWalksStable();
         }
 
-        public record Streak(int runs, boolean allWalksStable) { }
+        public record Streak(int runs, boolean allWalksStable) {}
     }
 }

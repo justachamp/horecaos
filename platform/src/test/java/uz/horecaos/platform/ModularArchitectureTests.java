@@ -1,25 +1,43 @@
 package uz.horecaos.platform;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Stream;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.modulith.core.ApplicationModules;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class ModularArchitectureTests {
 
     /** Domain modules. Integration is excluded: it is where the adapters belong. */
     private static final List<String> DOMAIN_MODULES = List.of(
-            "audit", "catalog", "commercial", "configuration", "courier", "customers", "dinein",
-            "fiscal", "fulfillment", "iam", "inventory", "loyalty", "marketing", "media",
-            "notifications", "observability", "ordering", "payments", "pricing", "reporting",
-            "telemetry", "tenancy", "web");
+            "audit",
+            "catalog",
+            "commercial",
+            "configuration",
+            "courier",
+            "customers",
+            "dinein",
+            "fiscal",
+            "fulfillment",
+            "iam",
+            "inventory",
+            "loyalty",
+            "marketing",
+            "media",
+            "notifications",
+            "observability",
+            "ordering",
+            "payments",
+            "pricing",
+            "reporting",
+            "telemetry",
+            "tenancy",
+            "web");
 
     @Test
     void verifiesModuleBoundaries() {
@@ -53,8 +71,7 @@ class ModularArchitectureTests {
         // other's.
         Path delivery = Path.of("src/main/java/uz/horecaos/platform/integration/camel/delivery");
         try (Stream<Path> paths = Files.walk(delivery)) {
-            List<String> offenders = paths
-                    .filter(path -> path.toString().endsWith(".java"))
+            List<String> offenders = paths.filter(path -> path.toString().endsWith(".java"))
                     .filter(path -> {
                         String source = read(path);
                         boolean isNoor = path.toString().contains("/noor/");
@@ -73,12 +90,12 @@ class ModularArchitectureTests {
         Path root = Path.of("src/main/java/uz/horecaos/platform");
         return Files.walk(root)
                 .filter(path -> path.toString().endsWith(".java"))
-                .filter(path -> modules.stream()
-                        .anyMatch(module -> path.startsWith(root.resolve(module))));
+                .filter(path -> modules.stream().anyMatch(module -> path.startsWith(root.resolve(module))));
     }
 
     private static boolean importsCamel(Path source) {
-        return read(source).lines()
+        return read(source)
+                .lines()
                 .filter(line -> line.startsWith("import "))
                 .anyMatch(line -> line.contains("org.apache.camel"));
     }

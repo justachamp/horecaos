@@ -50,8 +50,7 @@ import java.util.UUID;
  */
 public final class RedemptionAllocation {
 
-    private RedemptionAllocation() {
-    }
+    private RedemptionAllocation() {}
 
     /**
      * One line as the quote snapshot recorded it.
@@ -70,8 +69,7 @@ public final class RedemptionAllocation {
     }
 
     /** The discount to write onto one {@code fiscal.fiscal_document_lines} row. */
-    public record LineDiscount(UUID lineId, long discountMinor) {
-    }
+    public record LineDiscount(UUID lineId, long discountMinor) {}
 
     /**
      * Allocates a settled points tender across the order's lines.
@@ -89,7 +87,9 @@ public final class RedemptionAllocation {
         if (redeemedMinor < 0) {
             throw new IllegalArgumentException("A redemption is not negative");
         }
-        List<Line> eligible = lines.stream().filter(Line::eligible).filter(l -> l.grossMinor() > 0)
+        List<Line> eligible = lines.stream()
+                .filter(Line::eligible)
+                .filter(l -> l.grossMinor() > 0)
                 .toList();
         long eligibleTotal = eligible.stream().mapToLong(Line::grossMinor).sum();
 
@@ -98,11 +98,13 @@ public final class RedemptionAllocation {
                 throw new IllegalArgumentException(
                         "A redemption of " + redeemedMinor + " has no eligible line to reduce");
             }
-            return lines.stream().map(line -> new LineDiscount(line.lineId(), 0L)).toList();
+            return lines.stream()
+                    .map(line -> new LineDiscount(line.lineId(), 0L))
+                    .toList();
         }
         if (redeemedMinor > eligibleTotal) {
-            throw new IllegalArgumentException("A redemption of " + redeemedMinor
-                    + " exceeds the eligible line value of " + eligibleTotal);
+            throw new IllegalArgumentException(
+                    "A redemption of " + redeemedMinor + " exceeds the eligible line value of " + eligibleTotal);
         }
 
         // Pro rata to line value, truncated, so every line is at or below its

@@ -2,6 +2,7 @@ package uz.horecaos.platform.telemetry.infrastructure.realtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -9,9 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.MockConsumer;
@@ -20,11 +18,9 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
-
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -59,8 +55,7 @@ class RealtimeSignalConsumerRestartTests {
 
         awaitUntil(() -> consumer.attempts.get() >= 2);
         assertThat(consumer.isRunning())
-                .as("a transient broker failure must not disable realtime push for the life of "
-                        + "the process")
+                .as("a transient broker failure must not disable realtime push for the life of " + "the process")
                 .isTrue();
     }
 
@@ -118,9 +113,10 @@ class RealtimeSignalConsumerRestartTests {
         private final int failures;
 
         RestartableConsumer(int failures) {
-            super(new DefaultKafkaConsumerFactory<>(Map.of()),
-                    new SseStreamRegistry(JsonMapper.builder().build(), Clock.systemUTC(),
-                            new SimpleMeterRegistry(), List.of()),
+            super(
+                    new DefaultKafkaConsumerFactory<>(Map.of()),
+                    new SseStreamRegistry(
+                            JsonMapper.builder().build(), Clock.systemUTC(), new SimpleMeterRegistry(), List.of()),
                     JsonMapper.builder().build(),
                     TOPIC);
             this.failures = failures;
@@ -133,8 +129,10 @@ class RealtimeSignalConsumerRestartTests {
             }
             SlowPollingMockConsumer mock = new SlowPollingMockConsumer();
             TopicPartition partition = new TopicPartition(TOPIC, 0);
-            mock.updatePartitions(TOPIC, List.of(new PartitionInfo(
-                    TOPIC, 0, Node.noNode(), new Node[] {Node.noNode()}, new Node[] {Node.noNode()})));
+            mock.updatePartitions(
+                    TOPIC,
+                    List.of(new PartitionInfo(
+                            TOPIC, 0, Node.noNode(), new Node[] {Node.noNode()}, new Node[] {Node.noNode()})));
             mock.updateBeginningOffsets(Map.of(partition, 0L));
             mock.updateEndOffsets(Map.of(partition, 0L));
             return mock;

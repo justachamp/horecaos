@@ -2,7 +2,6 @@ package uz.horecaos.platform.payments.settlement;
 
 /** The life of a granted future-discount entitlement. */
 public enum EntitlementStatus {
-
     ACTIVE,
 
     /** Every granted use has been redeemed. Terminal. */

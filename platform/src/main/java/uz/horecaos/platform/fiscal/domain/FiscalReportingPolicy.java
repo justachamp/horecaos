@@ -31,9 +31,7 @@ import java.util.Map;
  *                                  not name
  * @param deadlineMinutesByProvider overrides keyed by provider type, uppercase
  */
-public record FiscalReportingPolicy(
-        int deadlineMinutes,
-        Map<String, Integer> deadlineMinutesByProvider) {
+public record FiscalReportingPolicy(int deadlineMinutes, Map<String, Integer> deadlineMinutesByProvider) {
 
     /** ADR 0038's stated default: sixty minutes. */
     public static final int DEFAULT_MINUTES = 60;
@@ -50,12 +48,10 @@ public record FiscalReportingPolicy(
     private static final int MAX_MINUTES = 7 * 24 * 60;
 
     public FiscalReportingPolicy {
-        deadlineMinutesByProvider = deadlineMinutesByProvider == null
-                ? Map.of()
-                : Map.copyOf(deadlineMinutesByProvider);
+        deadlineMinutesByProvider =
+                deadlineMinutesByProvider == null ? Map.of() : Map.copyOf(deadlineMinutesByProvider);
         requireSane("deadlineMinutes", deadlineMinutes);
-        deadlineMinutesByProvider.forEach(
-                (provider, minutes) -> requireSane(provider, minutes == null ? 0 : minutes));
+        deadlineMinutesByProvider.forEach((provider, minutes) -> requireSane(provider, minutes == null ? 0 : minutes));
     }
 
     /**
@@ -87,9 +83,8 @@ public record FiscalReportingPolicy(
 
     private static void requireSane(String field, int minutes) {
         if (minutes < MIN_MINUTES || minutes > MAX_MINUTES) {
-            throw new IllegalArgumentException(
-                    "A reporting deadline must be between %d and %d minutes: %s was %d"
-                            .formatted(MIN_MINUTES, MAX_MINUTES, field, minutes));
+            throw new IllegalArgumentException("A reporting deadline must be between %d and %d minutes: %s was %d"
+                    .formatted(MIN_MINUTES, MAX_MINUTES, field, minutes));
         }
     }
 }

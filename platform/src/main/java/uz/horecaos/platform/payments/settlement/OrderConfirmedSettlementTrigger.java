@@ -3,7 +3,6 @@ package uz.horecaos.platform.payments.settlement;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
-
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 
 /**

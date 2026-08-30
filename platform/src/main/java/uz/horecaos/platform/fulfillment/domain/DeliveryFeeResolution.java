@@ -3,7 +3,6 @@ package uz.horecaos.platform.fulfillment.domain;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeOutcome;
 import uz.horecaos.platform.fulfillment.api.ResolvedDeliveryCharge;
 import uz.horecaos.platform.fulfillment.domain.tariff.DistanceMode;
@@ -71,12 +70,19 @@ public record DeliveryFeeResolution(
     /** The narrow view pricing consumes. Everything else here is evidence, not contract. */
     public ResolvedDeliveryCharge toCharge() {
         return new ResolvedDeliveryCharge(
-                outcome, currency,
+                outcome,
+                currency,
                 finalFeeMinor == null ? 0L : finalFeeMinor,
                 tariffDiscountMinor == null ? 0L : tariffDiscountMinor,
-                minBasketMinor, freeDeliveryFromMinor,
-                zoneId, zoneVersion, tariffId, tariffVersion,
-                bandSequence, timeRuleSequence, distanceMeters,
+                minBasketMinor,
+                freeDeliveryFromMinor,
+                zoneId,
+                zoneVersion,
+                tariffId,
+                tariffVersion,
+                bandSequence,
+                timeRuleSequence,
+                distanceMeters,
                 distanceMode == null ? null : distanceMode.name(),
                 distanceSource == null ? null : distanceSource.name(),
                 losingZoneIds);

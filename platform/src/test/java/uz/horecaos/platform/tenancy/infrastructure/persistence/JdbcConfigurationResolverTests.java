@@ -1,12 +1,10 @@
 package uz.horecaos.platform.tenancy.infrastructure.persistence;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.UUID;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -14,16 +12,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
-import uz.horecaos.platform.support.TestDatabase;
-import uz.horecaos.platform.tenancy.api.BrandId;
-import uz.horecaos.platform.tenancy.api.ConfigurationKey;
-import uz.horecaos.platform.tenancy.api.LocationId;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
-import uz.horecaos.platform.tenancy.api.TenantId;
+import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.api.ConfigurationKey;
 
 /**
  * ADR 0030 at the SQL boundary: precedence over real rows, and the ancestry and
@@ -31,10 +24,10 @@ import uz.horecaos.platform.tenancy.api.TenantId;
  */
 class JdbcConfigurationResolverTests {
 
-    private static final ConfigurationKey<Integer> TIMEOUT =
-            ConfigurationKey.of("ordering.approval_timeout_seconds", Integer.class)
-                    .defaultValue(600)
-                    .build();
+    private static final ConfigurationKey<Integer> TIMEOUT = ConfigurationKey.of(
+                    "ordering.approval_timeout_seconds", Integer.class)
+            .defaultValue(600)
+            .build();
 
     private static final UUID TENANT = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120301");
     private static final UUID BRAND = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120302");
@@ -163,10 +156,10 @@ class JdbcConfigurationResolverTests {
                     (id, key_code, scope_type, tenant_id, value_type, integer_value, is_explicit_null, set_by)
                 VALUES (:id, :keyCode, 'TENANT', :tenantId, 'INTEGER', 5, true, 'test')
                 """)
-                .param("id", UUID.randomUUID())
-                .param("keyCode", TIMEOUT.code())
-                .param("tenantId", TENANT)
-                .update())
+                        .param("id", UUID.randomUUID())
+                        .param("keyCode", TIMEOUT.code())
+                        .param("tenantId", TENANT)
+                        .update())
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -193,18 +186,20 @@ class JdbcConfigurationResolverTests {
     }
 
     private void insertTenantHierarchy(
-            UUID tenantId, String tenantSlug,
-            UUID brandId, String brandCode, String brandSlug,
-            UUID locationId, String locationCode, String locationSlug) {
+            UUID tenantId,
+            String tenantSlug,
+            UUID brandId,
+            String brandCode,
+            String brandSlug,
+            UUID locationId,
+            String locationCode,
+            String locationSlug) {
 
         jdbc.sql("""
                 INSERT INTO tenant.tenants
                     (id, slug, legal_name, display_name, default_currency, default_timezone, status, version)
                 VALUES (:id, :slug, 'Legal', 'Display', 'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
-                """)
-                .param("id", tenantId)
-                .param("slug", tenantSlug)
-                .update();
+                """).param("id", tenantId).param("slug", tenantSlug).update();
 
         if (brandId == null) {
             return;

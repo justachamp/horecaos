@@ -2,10 +2,8 @@ package uz.horecaos.platform.catalog.application;
 
 import java.util.List;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierGroup;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierOption;
@@ -49,24 +47,40 @@ public class CatalogAuthoringService {
      * state an operator has to remember to come back to.
      */
     @Transactional
-    public ProductCreated createProduct(UUID tenantId, UUID brandId, UUID catalogId,
-            String code, String name, String description, String locale,
-            String sku, String unitCode, FiscalClassification fiscal, UUID actorId) {
+    public ProductCreated createProduct(
+            UUID tenantId,
+            UUID brandId,
+            UUID catalogId,
+            String code,
+            String name,
+            String description,
+            String locale,
+            String sku,
+            String unitCode,
+            FiscalClassification fiscal,
+            UUID actorId) {
 
         UUID productId = UUID.randomUUID();
         UUID variantId = UUID.randomUUID();
 
         store.insertProduct(productId, tenantId, brandId, code, Status.ACTIVE);
-        store.insertVariant(variantId, tenantId, brandId, productId, sku,
-                unitCode == null ? "PIECE" : unitCode, true, 0, Status.ACTIVE);
+        store.insertVariant(
+                variantId,
+                tenantId,
+                brandId,
+                productId,
+                sku,
+                unitCode == null ? "PIECE" : unitCode,
+                true,
+                0,
+                Status.ACTIVE);
         // The classification lands on the default variant, not on the product.
         // The variant is what carries a price and therefore what appears on a
         // receipt line; a code on the product would have to be resolved through
         // a row the published snapshot does not contain (ADR 0038).
         classify(tenantId, brandId, PriceableNode.variant(variantId), fiscal, actorId);
         store.addProductToCatalog(tenantId, brandId, catalogId, productId, 0);
-        store.upsertTranslation(tenantId, brandId, EntityType.PRODUCT, productId,
-                locale, name, description);
+        store.upsertTranslation(tenantId, brandId, EntityType.PRODUCT, productId, locale, name, description);
 
         return new ProductCreated(productId, variantId);
     }
@@ -78,12 +92,28 @@ public class CatalogAuthoringService {
      *               inherit from a sibling
      */
     @Transactional
-    public UUID addVariant(UUID tenantId, UUID brandId, UUID productId, String sku,
-            String unitCode, String name, String locale, int sortOrder,
-            FiscalClassification fiscal, UUID actorId) {
+    public UUID addVariant(
+            UUID tenantId,
+            UUID brandId,
+            UUID productId,
+            String sku,
+            String unitCode,
+            String name,
+            String locale,
+            int sortOrder,
+            FiscalClassification fiscal,
+            UUID actorId) {
         UUID variantId = UUID.randomUUID();
-        store.insertVariant(variantId, tenantId, brandId, productId, sku,
-                unitCode == null ? "PIECE" : unitCode, false, sortOrder, Status.ACTIVE);
+        store.insertVariant(
+                variantId,
+                tenantId,
+                brandId,
+                productId,
+                sku,
+                unitCode == null ? "PIECE" : unitCode,
+                false,
+                sortOrder,
+                Status.ACTIVE);
         classify(tenantId, brandId, PriceableNode.variant(variantId), fiscal, actorId);
         if (name != null) {
             store.upsertTranslation(tenantId, brandId, EntityType.VARIANT, variantId, locale, name, null);
@@ -92,27 +122,41 @@ public class CatalogAuthoringService {
     }
 
     @Transactional
-    public UUID createCategory(UUID tenantId, UUID brandId, UUID catalogId, UUID parentCategoryId,
-            String code, String name, String locale, int sortOrder) {
+    public UUID createCategory(
+            UUID tenantId,
+            UUID brandId,
+            UUID catalogId,
+            UUID parentCategoryId,
+            String code,
+            String name,
+            String locale,
+            int sortOrder) {
         UUID categoryId = UUID.randomUUID();
-        store.insertCategory(categoryId, tenantId, brandId, catalogId, parentCategoryId,
-                code, sortOrder, Status.ACTIVE);
+        store.insertCategory(
+                categoryId, tenantId, brandId, catalogId, parentCategoryId, code, sortOrder, Status.ACTIVE);
         store.upsertTranslation(tenantId, brandId, EntityType.CATEGORY, categoryId, locale, name, null);
         return categoryId;
     }
 
     @Transactional
-    public void placeProductInCategory(UUID tenantId, UUID brandId, UUID categoryId,
-            UUID productId, int sortOrder) {
+    public void placeProductInCategory(UUID tenantId, UUID brandId, UUID categoryId, UUID productId, int sortOrder) {
         store.addProductToCategory(tenantId, brandId, categoryId, productId, sortOrder);
     }
 
     @Transactional
-    public UUID createModifierGroup(UUID tenantId, UUID brandId, String code, String name,
-            String locale, boolean required, int minimum, int maximum, boolean allowRepeat) {
+    public UUID createModifierGroup(
+            UUID tenantId,
+            UUID brandId,
+            String code,
+            String name,
+            String locale,
+            boolean required,
+            int minimum,
+            int maximum,
+            boolean allowRepeat) {
         UUID groupId = UUID.randomUUID();
-        store.insertModifierGroup(new ModifierGroup(groupId, tenantId, brandId, code,
-                required, minimum, maximum, allowRepeat, 0, Status.ACTIVE, 1));
+        store.insertModifierGroup(new ModifierGroup(
+                groupId, tenantId, brandId, code, required, minimum, maximum, allowRepeat, 0, Status.ACTIVE, 1));
         store.upsertTranslation(tenantId, brandId, EntityType.MODIFIER_GROUP, groupId, locale, name, null);
         return groupId;
     }
@@ -124,12 +168,30 @@ public class CatalogAuthoringService {
      *               sellable
      */
     @Transactional
-    public UUID addModifierOption(UUID tenantId, UUID brandId, UUID groupId, String code,
-            String name, String locale, UUID linkedVariantId, int maximumQuantity, int sortOrder,
-            FiscalClassification fiscal, UUID actorId) {
+    public UUID addModifierOption(
+            UUID tenantId,
+            UUID brandId,
+            UUID groupId,
+            String code,
+            String name,
+            String locale,
+            UUID linkedVariantId,
+            int maximumQuantity,
+            int sortOrder,
+            FiscalClassification fiscal,
+            UUID actorId) {
         UUID optionId = UUID.randomUUID();
-        store.insertModifierOption(new ModifierOption(optionId, tenantId, brandId, groupId, code,
-                linkedVariantId, maximumQuantity, sortOrder, Status.ACTIVE, 1));
+        store.insertModifierOption(new ModifierOption(
+                optionId,
+                tenantId,
+                brandId,
+                groupId,
+                code,
+                linkedVariantId,
+                maximumQuantity,
+                sortOrder,
+                Status.ACTIVE,
+                1));
         classify(tenantId, brandId, PriceableNode.modifierOption(optionId), fiscal, actorId);
         store.upsertTranslation(tenantId, brandId, EntityType.MODIFIER_OPTION, optionId, locale, name, null);
         return optionId;
@@ -149,8 +211,7 @@ public class CatalogAuthoringService {
      * human chose from one a machine carried in.
      */
     @Transactional
-    public void classify(UUID tenantId, UUID brandId, PriceableNode node,
-            FiscalClassification fiscal, UUID actorId) {
+    public void classify(UUID tenantId, UUID brandId, PriceableNode node, FiscalClassification fiscal, UUID actorId) {
         if (fiscal == null || fiscal.isEmpty()) {
             return;
         }
@@ -172,22 +233,26 @@ public class CatalogAuthoringService {
      * this classification exists to prevent.
      */
     @Transactional
-    public UUID classifyFee(UUID tenantId, UUID brandId, String feeCode,
-            FiscalClassification fiscal, UUID actorId) {
+    public UUID classifyFee(UUID tenantId, UUID brandId, String feeCode, FiscalClassification fiscal, UUID actorId) {
         UUID feeId = store.ensureFee(tenantId, brandId, feeCode);
         classify(tenantId, brandId, PriceableNode.fee(feeId), fiscal, actorId);
         return feeId;
     }
 
     @Transactional
-    public void attachModifierGroup(UUID tenantId, UUID brandId, UUID productId,
-            UUID modifierGroupId, int sortOrder) {
+    public void attachModifierGroup(UUID tenantId, UUID brandId, UUID productId, UUID modifierGroupId, int sortOrder) {
         store.attachModifierGroupToProduct(tenantId, brandId, productId, modifierGroupId, sortOrder);
     }
 
     @Transactional
-    public void attachMedia(UUID tenantId, UUID brandId, EntityType entityType, UUID entityId,
-            MediaAssetId assetId, String role, int sortOrder) {
+    public void attachMedia(
+            UUID tenantId,
+            UUID brandId,
+            EntityType entityType,
+            UUID entityId,
+            MediaAssetId assetId,
+            String role,
+            int sortOrder) {
         store.attachMedia(tenantId, brandId, entityType, entityId, assetId.value(), role, sortOrder);
     }
 
@@ -199,10 +264,14 @@ public class CatalogAuthoringService {
      * would mean the whole menu had to be re-validated to hide one item.
      */
     @Transactional
-    public void setOffering(UUID tenantId, UUID brandId, UUID locationId, UUID variantId,
-            OfferingStatus status, List<String> fulfillmentModes) {
-        store.upsertOffering(tenantId, brandId, locationId, variantId, status,
-                String.join(",", fulfillmentModes));
+    public void setOffering(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID variantId,
+            OfferingStatus status,
+            List<String> fulfillmentModes) {
+        store.upsertOffering(tenantId, brandId, locationId, variantId, status, String.join(",", fulfillmentModes));
     }
 
     /**
@@ -227,8 +296,14 @@ public class CatalogAuthoringService {
      * catalog ids. Same shape as the courier evidence path after V0069.
      */
     @Transactional
-    public void translate(UUID tenantId, UUID brandId, EntityType entityType, UUID entityId,
-            String locale, String name, String description) {
+    public void translate(
+            UUID tenantId,
+            UUID brandId,
+            EntityType entityType,
+            UUID entityId,
+            String locale,
+            String name,
+            String description) {
         if (!store.entityExistsInBrand(tenantId, brandId, entityType, entityId)) {
             throw new UnknownCatalogEntityException(entityType, entityId);
         }
@@ -263,5 +338,5 @@ public class CatalogAuthoringService {
         }
     }
 
-    public record ProductCreated(UUID productId, UUID defaultVariantId) { }
+    public record ProductCreated(UUID productId, UUID defaultVariantId) {}
 }

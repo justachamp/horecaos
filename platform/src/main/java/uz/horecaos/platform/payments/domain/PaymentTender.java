@@ -10,7 +10,6 @@ package uz.horecaos.platform.payments.domain;
  * that it deliberately carries no fiscal receipt.
  */
 public enum PaymentTender {
-
     CASH,
 
     PROVIDER;

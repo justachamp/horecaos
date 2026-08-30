@@ -27,8 +27,7 @@ public interface MigrationQuarantineStore {
      * report a backlog that does not exist, and the backlog is what gates
      * retirement.
      */
-    Optional<QuarantineItemRow> findByKey(UUID tenantId, UUID runId, String entityType,
-            String legacyId);
+    Optional<QuarantineItemRow> findByKey(UUID tenantId, UUID runId, String entityType, String legacyId);
 
     void insert(QuarantineItemRow item, Instant now);
 
@@ -48,8 +47,15 @@ public interface MigrationQuarantineStore {
      *         with a target entity to dispose of, not a fresh quarantine, and the
      *         caller is told rather than having it done quietly.
      */
-    boolean upsertQuarantinedMapping(UUID mappingId, UUID tenantId, UUID scopeId, UUID runId,
-            String entityType, String legacyId, int transformationVersion, Instant now);
+    boolean upsertQuarantinedMapping(
+            UUID mappingId,
+            UUID tenantId,
+            UUID scopeId,
+            UUID runId,
+            String entityType,
+            String legacyId,
+            int transformationVersion,
+            Instant now);
 
     Optional<QuarantineItemRow> findById(UUID tenantId, UUID itemId);
 
@@ -62,8 +68,7 @@ public interface MigrationQuarantineStore {
      *
      * @return false when the item was already resolved
      */
-    boolean resolve(UUID tenantId, UUID itemId, String resolutionCode, String resolvedBy,
-            Instant resolvedAt);
+    boolean resolve(UUID tenantId, UUID itemId, String resolutionCode, String resolvedBy, Instant resolvedAt);
 
     /**
      * Open items filed by any run of this scope, via {@code ix_quarantine_open}.

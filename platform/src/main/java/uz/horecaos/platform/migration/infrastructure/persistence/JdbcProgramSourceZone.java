@@ -4,10 +4,8 @@ import java.time.DateTimeException;
 import java.time.ZoneId;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.migration.application.importing.ProgramSourceZone;
 
 /**
@@ -38,8 +36,8 @@ public class JdbcProgramSourceZone implements ProgramSourceZone {
                 // The outer optional is "no such program"; this one is "the program
                 // exists and nobody has read its deployment yet". Both are a stop,
                 // and flattening them here is safe because neither may be defaulted.
-                .flatMap(zone -> zone == null || zone.isBlank() ? Optional.empty()
-                        : Optional.of(parse(zone, programId)));
+                .flatMap(zone ->
+                        zone == null || zone.isBlank() ? Optional.empty() : Optional.of(parse(zone, programId)));
     }
 
     /**
@@ -53,8 +51,9 @@ public class JdbcProgramSourceZone implements ProgramSourceZone {
         } catch (DateTimeException unknown) {
             throw new IllegalStateException(
                     ("Program %s names source time zone '%s', which is not an IANA zone this JVM "
-                            + "knows. Falling back to the system default would silently reintroduce "
-                            + "the UTC assumption (ADR 0024).").formatted(programId, zone),
+                                    + "knows. Falling back to the system default would silently reintroduce "
+                                    + "the UTC assumption (ADR 0024).")
+                            .formatted(programId, zone),
                     unknown);
         }
     }

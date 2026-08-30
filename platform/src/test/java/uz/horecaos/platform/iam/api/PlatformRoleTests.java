@@ -6,11 +6,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.Set;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 
 /**
@@ -55,9 +53,7 @@ class PlatformRoleTests {
      * role does not hold them without treating that absence as an unresolved gap.
      */
     private static final Set<Capability> NON_STAFF_RELATIONSHIP_AUTHORIZED = EnumSet.of(
-            Capability.MARKETPLACE_ORDER_RECEIVE,
-            Capability.COURIER_SHIFT_OPEN,
-            Capability.COURIER_SHIFT_BREAK);
+            Capability.MARKETPLACE_ORDER_RECEIVE, Capability.COURIER_SHIFT_OPEN, Capability.COURIER_SHIFT_BREAK);
 
     /**
      * ADR 0045: capabilities that are in no bundle because being in one is the
@@ -101,12 +97,10 @@ class PlatformRoleTests {
         orphaned.removeAll(NON_STAFF_RELATIONSHIP_AUTHORIZED);
         orphaned.removeAll(GRANTED_ONLY_PER_PERSON);
 
-        assertThat(orphaned)
-                .as("""
+        assertThat(orphaned).as("""
                         A capability only the superuser holds is a job nobody can be
                         given. Put it in the bundle whose name claims the job, or record
-                        it above as platform-only or as having no staff principal.""")
-                .isEmpty();
+                        it above as platform-only or as having no staff principal.""").isEmpty();
     }
 
     /**
@@ -142,8 +136,8 @@ class PlatformRoleTests {
     @Test
     void onlyThePlatformAdministratorHoldsPlatformAdmin() {
         assertThat(Arrays.stream(PlatformRole.values())
-                .filter(role -> role.grants(Capability.PLATFORM_ADMIN))
-                .toList())
+                        .filter(role -> role.grants(Capability.PLATFORM_ADMIN))
+                        .toList())
                 .as("ADR 0025: platform.admin is never granted through tenant administration")
                 .containsExactly(PlatformRole.PLATFORM_ADMIN);
     }
@@ -158,8 +152,8 @@ class PlatformRoleTests {
     @Test
     void aSuperuserDoesNotSilentlyHoldTheTrackReveal() {
         assertThat(Arrays.stream(PlatformRole.values())
-                .filter(role -> role.grants(Capability.COURIER_TRACK_REVEAL))
-                .toList())
+                        .filter(role -> role.grants(Capability.COURIER_TRACK_REVEAL))
+                        .toList())
                 .as("""
                         courier.track.reveal is granted per person with a declared purpose
                         and an audit entry (ADR 0045). A bundle holding it is standing
@@ -175,19 +169,22 @@ class PlatformRoleTests {
     @Test
     void theLiveCourierMapIsHeldByDispatchAndTheBranchOnly() {
         assertThat(Arrays.stream(PlatformRole.values())
-                .filter(role -> role != PlatformRole.PLATFORM_ADMIN)
-                .filter(role -> role.grants(Capability.COURIER_POSITION_READ))
-                .toList())
+                        .filter(role -> role != PlatformRole.PLATFORM_ADMIN)
+                        .filter(role -> role.grants(Capability.COURIER_POSITION_READ))
+                        .toList())
                 .as("a cross-tenant or tenant-wide standing fleet map is not what ADR 0045 decided")
-                .containsExactlyInAnyOrder(
-                        PlatformRole.COURIER_DISPATCHER, PlatformRole.LOCATION_MANAGER);
+                .containsExactlyInAnyOrder(PlatformRole.COURIER_DISPATCHER, PlatformRole.LOCATION_MANAGER);
     }
 
     @Test
     void platformSupportCanReadButNeverMutate() {
         Set<Capability> mutations = EnumSet.of(
-                Capability.TENANT_WRITE, Capability.CATALOG_PUBLISH, Capability.INVENTORY_ADJUST,
-                Capability.ORDER_APPROVE, Capability.REFUND_EXECUTE, Capability.CUSTOMER_MANAGE);
+                Capability.TENANT_WRITE,
+                Capability.CATALOG_PUBLISH,
+                Capability.INVENTORY_ADJUST,
+                Capability.ORDER_APPROVE,
+                Capability.REFUND_EXECUTE,
+                Capability.CUSTOMER_MANAGE);
 
         assertThat(PlatformRole.PLATFORM_SUPPORT.capabilities())
                 .as("cross-tenant support is read-only by construction")
@@ -198,9 +195,9 @@ class PlatformRoleTests {
     @Test
     void refundExecutionIsLimitedToOwnerAndFinance() {
         assertThat(Arrays.stream(PlatformRole.values())
-                .filter(role -> role != PlatformRole.PLATFORM_ADMIN)
-                .filter(role -> role.grants(Capability.REFUND_EXECUTE))
-                .toList())
+                        .filter(role -> role != PlatformRole.PLATFORM_ADMIN)
+                        .filter(role -> role.grants(Capability.REFUND_EXECUTE))
+                        .toList())
                 .as("refund execution moves money out of the tenant's merchant account")
                 .containsExactlyInAnyOrder(PlatformRole.TENANT_OWNER, PlatformRole.TENANT_FINANCE);
     }
@@ -208,9 +205,11 @@ class PlatformRoleTests {
     @Test
     void rolesThatCanRequestARefundOutnumberThoseThatCanExecuteIt() {
         long requesters = Arrays.stream(PlatformRole.values())
-                .filter(role -> role.grants(Capability.REFUND_REQUEST)).count();
+                .filter(role -> role.grants(Capability.REFUND_REQUEST))
+                .count();
         long executors = Arrays.stream(PlatformRole.values())
-                .filter(role -> role.grants(Capability.REFUND_EXECUTE)).count();
+                .filter(role -> role.grants(Capability.REFUND_EXECUTE))
+                .count();
 
         assertThat(requesters)
                 .as("front-line staff raise refunds; a narrower set executes them")
@@ -234,9 +233,9 @@ class PlatformRoleTests {
     @Test
     void integrationInstallationIsLimitedToTenantOwnerAndAdmin() {
         assertThat(Arrays.stream(PlatformRole.values())
-                .filter(role -> role != PlatformRole.PLATFORM_ADMIN)
-                .filter(role -> role.grants(Capability.INTEGRATION_INSTALLATION_MANAGE))
-                .toList())
+                        .filter(role -> role != PlatformRole.PLATFORM_ADMIN)
+                        .filter(role -> role.grants(Capability.INTEGRATION_INSTALLATION_MANAGE))
+                        .toList())
                 .containsExactlyInAnyOrder(PlatformRole.TENANT_OWNER, PlatformRole.TENANT_ADMIN);
     }
 
@@ -245,9 +244,7 @@ class PlatformRoleTests {
         assertThat(PlatformRole.TENANT_ADMIN.capabilities())
                 .as("subscription and refund execution stay with the owner and finance")
                 .doesNotContain(
-                        Capability.REFUND_EXECUTE,
-                        Capability.COMMERCIAL_SUBSCRIPTION_MANAGE,
-                        Capability.TENANT_WRITE);
+                        Capability.REFUND_EXECUTE, Capability.COMMERCIAL_SUBSCRIPTION_MANAGE, Capability.TENANT_WRITE);
     }
 
     @ParameterizedTest

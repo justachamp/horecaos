@@ -18,10 +18,8 @@ import java.util.stream.Collectors;
  * resolution signal has been flat and its tenant coverage has been checked.
  */
 public enum ApprovalAction {
-
     PAYMENTS_REMEDY_RECORD("payments.remedy.record", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL),
-    PAYMENTS_REMEDY_FUTURE_DISCOUNT(
-            "payments.remedy.future-discount", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL),
+    PAYMENTS_REMEDY_FUTURE_DISCOUNT("payments.remedy.future-discount", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL),
     LOYALTY_BALANCE_ADJUST("loyalty.balance.adjust", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL),
     COURIER_PAYOUT_AUTHORISE("courier.payout.authorise", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL),
     COURIER_ADJUSTMENT_CREATE("courier.adjustment.create", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL),
@@ -31,12 +29,10 @@ public enum ApprovalAction {
      * missing-policy mode is therefore fail closed from the outset; this replaces
      * the former generic "not granted" error with a stable configuration error.
      */
-    COURIER_MANUAL_PENALTY(
-            "courier.adjustment.create.manual-penalty", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY),
+    COURIER_MANUAL_PENALTY("courier.adjustment.create.manual-penalty", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY),
 
     TENANT_ACTIVATE("tenant.activate", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL),
-    INTEGRATION_FAILURE_RESOLVE(
-            "integration.failure.resolve", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL);
+    INTEGRATION_FAILURE_RESOLVE("integration.failure.resolve", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL);
 
     /** What an action does when no valid policy resolves at the requested scope. */
     public enum MissingPolicyMode {
@@ -47,8 +43,8 @@ public enum ApprovalAction {
         REQUIRE_CONFIGURED_POLICY
     }
 
-    private static final Map<String, ApprovalAction> BY_CODE = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(ApprovalAction::code, Function.identity()));
+    private static final Map<String, ApprovalAction> BY_CODE =
+            Arrays.stream(values()).collect(Collectors.toUnmodifiableMap(ApprovalAction::code, Function.identity()));
 
     private final String code;
     private final MissingPolicyMode missingPolicyMode;
@@ -77,8 +73,7 @@ public enum ApprovalAction {
     /** Raised before an undeclared approval action can inherit a default. */
     public static final class UnknownApprovalActionException extends IllegalArgumentException {
         public UnknownApprovalActionException(String code) {
-            super("Unknown approval action \"%s\". Declare it in ApprovalAction (ADR 0050)."
-                    .formatted(code));
+            super("Unknown approval action \"%s\". Declare it in ApprovalAction (ADR 0050).".formatted(code));
         }
     }
 }

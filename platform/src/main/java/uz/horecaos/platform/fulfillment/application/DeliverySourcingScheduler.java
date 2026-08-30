@@ -1,20 +1,17 @@
 package uz.horecaos.platform.fulfillment.application;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcSourcingJobStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcSourcingJobStore.ClaimedJob;
 
@@ -40,10 +37,7 @@ import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcSourcingJ
  * preserved, operations assigning by hand.
  */
 @Component
-@ConditionalOnProperty(
-        name = "horecaos.fulfillment.sourcing.enabled",
-        havingValue = "true",
-        matchIfMissing = true)
+@ConditionalOnProperty(name = "horecaos.fulfillment.sourcing.enabled", havingValue = "true", matchIfMissing = true)
 public class DeliverySourcingScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(DeliverySourcingScheduler.class);
@@ -64,8 +58,11 @@ public class DeliverySourcingScheduler {
      */
     private final AtomicBoolean running = new AtomicBoolean();
 
-    public DeliverySourcingScheduler(JdbcSourcingJobStore jobs, DeliverySourcingRunner runner,
-            Clock clock, MeterRegistry meterRegistry,
+    public DeliverySourcingScheduler(
+            JdbcSourcingJobStore jobs,
+            DeliverySourcingRunner runner,
+            Clock clock,
+            MeterRegistry meterRegistry,
             // A small batch and a short lease, which is the opposite of the
             // outbox's trade-off and deliberately so. A batch is claimed under one
             // lease, so the lease has to outlast the whole batch — and every
@@ -88,8 +85,7 @@ public class DeliverySourcingScheduler {
             // still running, and a second worker then re-runs a tick whose partner
             // call is in flight. The idempotency key saves it; the alert nobody
             // gets does not.
-            throw new IllegalArgumentException(
-                    "The sourcing lease must outlast the batch's worst-case tick time");
+            throw new IllegalArgumentException("The sourcing lease must outlast the batch's worst-case tick time");
         }
         this.jobs = jobs;
         this.runner = runner;
@@ -99,10 +95,8 @@ public class DeliverySourcingScheduler {
         // Which process holds a lease. A pod name where one exists, so an operator
         // reading a stuck job can find the worker rather than a random uuid.
         this.workerId = applicationName + "@" + hostName();
-        this.sourcedCounter = meterRegistry.counter("horecaos.delivery.sourcing.ticks",
-                "outcome", "decided");
-        this.failedCounter = meterRegistry.counter("horecaos.delivery.sourcing.ticks",
-                "outcome", "failed");
+        this.sourcedCounter = meterRegistry.counter("horecaos.delivery.sourcing.ticks", "outcome", "decided");
+        this.failedCounter = meterRegistry.counter("horecaos.delivery.sourcing.ticks", "outcome", "failed");
     }
 
     @Scheduled(fixedDelayString = "${horecaos.fulfillment.sourcing.poll-interval:1s}")
@@ -137,8 +131,7 @@ public class DeliverySourcingScheduler {
             //
             // The plan id and nothing else: a delivery failure's most tempting log
             // line is the address it could not reach.
-            log.error("Sourcing tick failed for plan {}; its lease will expire", job.planId(),
-                    failure);
+            log.error("Sourcing tick failed for plan {}; its lease will expire", job.planId(), failure);
         }
     }
 

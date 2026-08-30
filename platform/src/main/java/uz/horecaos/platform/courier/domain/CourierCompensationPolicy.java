@@ -37,8 +37,8 @@ public record CourierCompensationPolicy(
         int confirmationPointRetentionDays) {
 
     /** ADR 0042's provisional values, in force until finance and operations answer. */
-    public static final CourierCompensationPolicy DEFAULTS = new CourierCompensationPolicy(
-            180, 30, 14, 5_000_000L, 200_000L, ShiftEnforcement.ADVISORY, 300, 30);
+    public static final CourierCompensationPolicy DEFAULTS =
+            new CourierCompensationPolicy(180, 30, 14, 5_000_000L, 200_000L, ShiftEnforcement.ADVISORY, 300, 30);
 
     public CourierCompensationPolicy {
         if (reverificationDays < 1 || warningDays < 1 || settlementPeriodDays < 1) {

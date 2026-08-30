@@ -1,7 +1,5 @@
 package uz.horecaos.platform.iam.application;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -10,7 +8,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.UUID;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -18,12 +16,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.json.JsonMapper;
-
-import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.audit.application.GrantAuditListener;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.iam.api.AuthorizationService;
@@ -32,6 +26,7 @@ import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.infrastructure.authorization.JdbcAuthorizationService;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
+import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -60,11 +55,13 @@ class GrantManagementServiceTests {
      * constants exist to ask whether that is true.
      */
     private static final UUID OTHER_TENANT = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac1212f1");
+
     private static final UUID OTHER_TENANTS_ROLE = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac1212f2");
     private static final String OTHER_TENANTS_ROLE_CODE = "their-closer";
 
     /** A role this tenant defined for itself, which it may legitimately grant. */
     private static final UUID OWN_ROLE = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac1212f3");
+
     private static final String OWN_ROLE_CODE = "our-closer";
 
     /**
@@ -125,7 +122,9 @@ class GrantManagementServiceTests {
         GrantAuditListener auditListener = new GrantAuditListener(
                 new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()));
         service = new GrantManagementService(
-                jdbc, authorization, authorization,
+                jdbc,
+                authorization,
+                authorization,
                 event -> {
                     if (event instanceof uz.horecaos.platform.iam.api.GrantChanged change) {
                         auditListener.onGrantChanged(change);
@@ -140,21 +139,27 @@ class GrantManagementServiceTests {
 
     @Test
     void anOwnerGrantsALocationRoleWithinItsTenant() {
-        UUID grantId = service.grant(new GrantManagementService.GrantCommand(
-                "staff-1", "location-staff",
-                ResourceScope.location(TENANT, BRAND, LOCATION),
-                "New hire at Chilonzor", null), OWNER);
+        UUID grantId = service.grant(
+                new GrantManagementService.GrantCommand(
+                        "staff-1",
+                        "location-staff",
+                        ResourceScope.location(TENANT, BRAND, LOCATION),
+                        "New hire at Chilonzor",
+                        null),
+                OWNER);
 
         assertThat(grantId).isNotNull();
-        assertThat(authorization.has("staff-1", Capability.ORDER_APPROVE,
-                ResourceScope.location(TENANT, BRAND, LOCATION))).isTrue();
+        assertThat(authorization.has(
+                        "staff-1", Capability.ORDER_APPROVE, ResourceScope.location(TENANT, BRAND, LOCATION)))
+                .isTrue();
     }
 
     @Test
     void aGrantIsAuditedAsASecurityFact() {
-        service.grant(new GrantManagementService.GrantCommand(
-                "staff-1", "location-staff", ResourceScope.location(TENANT, BRAND, LOCATION),
-                "New hire", null), OWNER);
+        service.grant(
+                new GrantManagementService.GrantCommand(
+                        "staff-1", "location-staff", ResourceScope.location(TENANT, BRAND, LOCATION), "New hire", null),
+                OWNER);
 
         assertThat(jdbc.sql("""
                 SELECT count(*) FROM audit.audit_events
@@ -168,9 +173,10 @@ class GrantManagementServiceTests {
         insertGrant("manager-1", PlatformRole.LOCATION_MANAGER, "LOCATION", LOCATION);
         String manager = "manager-1";
 
-        assertThatThrownBy(() -> service.grant(new GrantManagementService.GrantCommand(
-                "accomplice", "tenant-owner", ResourceScope.tenant(TENANT),
-                "escalation attempt", null), manager))
+        assertThatThrownBy(() -> service.grant(
+                        new GrantManagementService.GrantCommand(
+                                "accomplice", "tenant-owner", ResourceScope.tenant(TENANT), "escalation attempt", null),
+                        manager))
                 .as("a grant API that can confer more than its caller holds is an escalation path")
                 .isInstanceOf(AuthorizationService.AccessDeniedException.class);
     }
@@ -180,17 +186,23 @@ class GrantManagementServiceTests {
         insertGrant("brand-manager-1", PlatformRole.BRAND_MANAGER, "BRAND", BRAND);
         String brandManager = "brand-manager-1";
 
-        assertThatThrownBy(() -> service.grant(new GrantManagementService.GrantCommand(
-                "someone", "brand-manager", ResourceScope.brand(TENANT, OTHER_BRAND),
-                "sideways attempt", null), brandManager))
+        assertThatThrownBy(() -> service.grant(
+                        new GrantManagementService.GrantCommand(
+                                "someone",
+                                "brand-manager",
+                                ResourceScope.brand(TENANT, OTHER_BRAND),
+                                "sideways attempt",
+                                null),
+                        brandManager))
                 .isInstanceOf(AuthorizationService.AccessDeniedException.class);
     }
 
     @Test
     void platformAdminIsNeverGrantableThroughThisApi() {
-        assertThatThrownBy(() -> service.grant(new GrantManagementService.GrantCommand(
-                "someone", "platform-admin", ResourceScope.tenant(TENANT),
-                "escalation attempt", null), OWNER))
+        assertThatThrownBy(() -> service.grant(
+                        new GrantManagementService.GrantCommand(
+                                "someone", "platform-admin", ResourceScope.tenant(TENANT), "escalation attempt", null),
+                        OWNER))
                 .as("a tenant-facing API conferring platform.admin makes the tenant boundary decorative")
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Keycloak");
@@ -198,25 +210,28 @@ class GrantManagementServiceTests {
 
     @Test
     void revokingTakesEffectImmediately() {
-        UUID grantId = service.grant(new GrantManagementService.GrantCommand(
-                "staff-1", "location-staff", ResourceScope.location(TENANT, BRAND, LOCATION),
-                "New hire", null), OWNER);
-        assertThat(authorization.has("staff-1", Capability.ORDER_APPROVE,
-                ResourceScope.location(TENANT, BRAND, LOCATION))).isTrue();
+        UUID grantId = service.grant(
+                new GrantManagementService.GrantCommand(
+                        "staff-1", "location-staff", ResourceScope.location(TENANT, BRAND, LOCATION), "New hire", null),
+                OWNER);
+        assertThat(authorization.has(
+                        "staff-1", Capability.ORDER_APPROVE, ResourceScope.location(TENANT, BRAND, LOCATION)))
+                .isTrue();
 
         assertThat(service.revoke(TENANT, grantId, OWNER, "Left the company")).isTrue();
 
-        assertThat(authorization.has("staff-1", Capability.ORDER_APPROVE,
-                ResourceScope.location(TENANT, BRAND, LOCATION)))
+        assertThat(authorization.has(
+                        "staff-1", Capability.ORDER_APPROVE, ResourceScope.location(TENANT, BRAND, LOCATION)))
                 .as("a revoked grant must stop working now, not when a cache expires")
                 .isFalse();
     }
 
     @Test
     void revokingAnAlreadyRevokedGrantReportsNoChange() {
-        UUID grantId = service.grant(new GrantManagementService.GrantCommand(
-                "staff-1", "location-staff", ResourceScope.location(TENANT, BRAND, LOCATION),
-                "New hire", null), OWNER);
+        UUID grantId = service.grant(
+                new GrantManagementService.GrantCommand(
+                        "staff-1", "location-staff", ResourceScope.location(TENANT, BRAND, LOCATION), "New hire", null),
+                OWNER);
         service.revoke(TENANT, grantId, OWNER, "Left");
 
         assertThat(service.revoke(TENANT, grantId, OWNER, "Left again")).isFalse();
@@ -224,9 +239,10 @@ class GrantManagementServiceTests {
 
     @Test
     void aGrantCannotBeRevokedThroughAnotherTenant() {
-        UUID grantId = service.grant(new GrantManagementService.GrantCommand(
-                "staff-1", "location-staff", ResourceScope.location(TENANT, BRAND, LOCATION),
-                "New hire", null), OWNER);
+        UUID grantId = service.grant(
+                new GrantManagementService.GrantCommand(
+                        "staff-1", "location-staff", ResourceScope.location(TENANT, BRAND, LOCATION), "New hire", null),
+                OWNER);
 
         // The attacker holds IAM_GRANT_MANAGE in their own tenant and knows the
         // victim's grant id, which is an opaque UUID that travels through support
@@ -239,16 +255,18 @@ class GrantManagementServiceTests {
                 .as("a grant id from another tenant must not be revocable")
                 .isFalse();
 
-        assertThat(authorization.has("staff-1", Capability.ORDER_APPROVE,
-                ResourceScope.location(TENANT, BRAND, LOCATION)))
+        assertThat(authorization.has(
+                        "staff-1", Capability.ORDER_APPROVE, ResourceScope.location(TENANT, BRAND, LOCATION)))
                 .as("the victim's grant must still work")
                 .isTrue();
     }
 
     @Test
     void anUnknownRoleIsRejected() {
-        assertThatThrownBy(() -> service.grant(new GrantManagementService.GrantCommand(
-                "someone", "wizard", ResourceScope.tenant(TENANT), "typo", null), OWNER))
+        assertThatThrownBy(() -> service.grant(
+                        new GrantManagementService.GrantCommand(
+                                "someone", "wizard", ResourceScope.tenant(TENANT), "typo", null),
+                        OWNER))
                 .isInstanceOf(GrantManagementService.NoSuchRoleException.class)
                 .hasMessage("No such role");
     }
@@ -278,12 +296,12 @@ class GrantManagementServiceTests {
                 VALUES (:id, :tenantId, 'intruder', :roleId, false, 'TENANT', :scopeId,
                         'ACTIVE', 'fixture', 'fixture', :validFrom)
                 """)
-                .param("id", UUID.randomUUID())
-                .param("tenantId", TENANT)
-                .param("roleId", OTHER_TENANTS_ROLE)
-                .param("scopeId", TENANT)
-                .param("validFrom", CLOCK_INSTANT.minusSeconds(3600).atOffset(ZoneOffset.UTC))
-                .update())
+                        .param("id", UUID.randomUUID())
+                        .param("tenantId", TENANT)
+                        .param("roleId", OTHER_TENANTS_ROLE)
+                        .param("scopeId", TENANT)
+                        .param("validFrom", CLOCK_INSTANT.minusSeconds(3600).atOffset(ZoneOffset.UTC))
+                        .update())
                 .as("a grant is the authorization primitive; it must not name a role "
                         + "the database says belongs to somebody else")
                 .isInstanceOf(DataIntegrityViolationException.class)
@@ -309,9 +327,14 @@ class GrantManagementServiceTests {
      */
     @Test
     void theServiceRefusesToGrantAnotherTenantsCustomRole() {
-        assertThatThrownBy(() -> service.grant(new GrantManagementService.GrantCommand(
-                "staff-1", OTHER_TENANTS_ROLE_CODE, ResourceScope.tenant(TENANT),
-                "borrowing their role", null), OWNER))
+        assertThatThrownBy(() -> service.grant(
+                        new GrantManagementService.GrantCommand(
+                                "staff-1",
+                                OTHER_TENANTS_ROLE_CODE,
+                                ResourceScope.tenant(TENANT),
+                                "borrowing their role",
+                                null),
+                        OWNER))
                 .isInstanceOf(GrantManagementService.NoSuchRoleException.class);
 
         assertThat(authorization.has("staff-1", Capability.ORDER_CANCEL, ResourceScope.tenant(TENANT)))
@@ -329,12 +352,12 @@ class GrantManagementServiceTests {
     void refusingAnotherTenantsRoleIsIndistinguishableFromNoSuchRole() {
         Throwable foreign = catchThrowable(() -> service.grant(
                 new GrantManagementService.GrantCommand(
-                        "staff-1", OTHER_TENANTS_ROLE_CODE, ResourceScope.tenant(TENANT),
-                        "borrowing their role", null), OWNER));
+                        "staff-1", OTHER_TENANTS_ROLE_CODE, ResourceScope.tenant(TENANT), "borrowing their role", null),
+                OWNER));
         Throwable absent = catchThrowable(() -> service.grant(
                 new GrantManagementService.GrantCommand(
-                        "staff-1", "no-such-role-anywhere", ResourceScope.tenant(TENANT),
-                        "typo", null), OWNER));
+                        "staff-1", "no-such-role-anywhere", ResourceScope.tenant(TENANT), "typo", null),
+                OWNER));
 
         assertThat(foreign).isInstanceOf(ApiException.class);
         assertThat(absent).isInstanceOf(ApiException.class);
@@ -350,26 +373,30 @@ class GrantManagementServiceTests {
     /** The other half of the disjunction a composite key could not express. */
     @Test
     void aPlatformRoleIsStillGrantable() {
-        UUID grantId = service.grant(new GrantManagementService.GrantCommand(
-                "staff-1", "location-staff", ResourceScope.location(TENANT, BRAND, LOCATION),
-                "New hire", null), OWNER);
+        UUID grantId = service.grant(
+                new GrantManagementService.GrantCommand(
+                        "staff-1", "location-staff", ResourceScope.location(TENANT, BRAND, LOCATION), "New hire", null),
+                OWNER);
 
         assertThat(grantId).isNotNull();
-        assertThat(authorization.has("staff-1", Capability.ORDER_APPROVE,
-                ResourceScope.location(TENANT, BRAND, LOCATION)))
+        assertThat(authorization.has(
+                        "staff-1", Capability.ORDER_APPROVE, ResourceScope.location(TENANT, BRAND, LOCATION)))
                 .as("a platform role has tenant_id NULL and every tenant may name it")
                 .isTrue();
     }
 
     @Test
     void aTenantMayGrantARoleItDefinedItself() {
-        UUID grantId = service.grant(new GrantManagementService.GrantCommand(
-                "staff-1", OWN_ROLE_CODE, ResourceScope.tenant(TENANT),
-                "Our own bundle", null), OWNER);
+        UUID grantId = service.grant(
+                new GrantManagementService.GrantCommand(
+                        "staff-1", OWN_ROLE_CODE, ResourceScope.tenant(TENANT), "Our own bundle", null),
+                OWNER);
 
         assertThat(grantId).isNotNull();
         assertThat(jdbc.sql("SELECT role_id FROM iam.grants WHERE id = :id")
-                .param("id", grantId).query(UUID.class).single())
+                        .param("id", grantId)
+                        .query(UUID.class)
+                        .single())
                 .as("the grant names the tenant's own role row, not a platform one")
                 .isEqualTo(OWN_ROLE);
         assertThat(authorization.has("staff-1", Capability.ORDER_CANCEL, ResourceScope.tenant(TENANT)))
@@ -385,8 +412,7 @@ class GrantManagementServiceTests {
      */
     @Test
     void aTenantsOwnRoleStillCannotConferMoreThanTheGranterHolds() {
-        insertCustomRole(
-                UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac1212f4"), TENANT, "our-auditor");
+        insertCustomRole(UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac1212f4"), TENANT, "our-auditor");
         jdbc.sql("""
                 INSERT INTO iam.role_capabilities (role_id, capability_code)
                 VALUES (:roleId, :capability)
@@ -395,9 +421,14 @@ class GrantManagementServiceTests {
                 .param("capability", Capability.COURIER_TRACK_REVEAL.code())
                 .update();
 
-        assertThatThrownBy(() -> service.grant(new GrantManagementService.GrantCommand(
-                "staff-1", "our-auditor", ResourceScope.tenant(TENANT),
-                "escalation attempt wearing a custom role", null), OWNER))
+        assertThatThrownBy(() -> service.grant(
+                        new GrantManagementService.GrantCommand(
+                                "staff-1",
+                                "our-auditor",
+                                ResourceScope.tenant(TENANT),
+                                "escalation attempt wearing a custom role",
+                                null),
+                        OWNER))
                 .isInstanceOf(AuthorizationService.AccessDeniedException.class);
     }
 
@@ -409,15 +440,15 @@ class GrantManagementServiceTests {
      */
     @Test
     void aRoleCannotBeReparentedOutFromUnderItsGrants() {
-        service.grant(new GrantManagementService.GrantCommand(
-                "staff-1", OWN_ROLE_CODE, ResourceScope.tenant(TENANT),
-                "Our own bundle", null), OWNER);
+        service.grant(
+                new GrantManagementService.GrantCommand(
+                        "staff-1", OWN_ROLE_CODE, ResourceScope.tenant(TENANT), "Our own bundle", null),
+                OWNER);
 
-        assertThatThrownBy(() -> jdbc.sql(
-                "UPDATE iam.roles SET tenant_id = :other WHERE id = :id")
-                .param("other", OTHER_TENANT)
-                .param("id", OWN_ROLE)
-                .update())
+        assertThatThrownBy(() -> jdbc.sql("UPDATE iam.roles SET tenant_id = :other WHERE id = :id")
+                        .param("other", OTHER_TENANT)
+                        .param("id", OWN_ROLE)
+                        .update())
                 .as("re-parenting the role would strand a grant in a tenant that no "
                         + "longer owns it, which is the same breach by another route")
                 .isInstanceOf(DataIntegrityViolationException.class);
@@ -425,12 +456,14 @@ class GrantManagementServiceTests {
 
     @Test
     void listingShowsOnlyActiveGrantsForTheTenant() {
-        UUID kept = service.grant(new GrantManagementService.GrantCommand(
-                "staff-1", "location-staff", ResourceScope.location(TENANT, BRAND, LOCATION),
-                "Kept", null), OWNER);
-        UUID revoked = service.grant(new GrantManagementService.GrantCommand(
-                "staff-2", "location-staff", ResourceScope.location(TENANT, BRAND, LOCATION),
-                "Revoked", null), OWNER);
+        UUID kept = service.grant(
+                new GrantManagementService.GrantCommand(
+                        "staff-1", "location-staff", ResourceScope.location(TENANT, BRAND, LOCATION), "Kept", null),
+                OWNER);
+        UUID revoked = service.grant(
+                new GrantManagementService.GrantCommand(
+                        "staff-2", "location-staff", ResourceScope.location(TENANT, BRAND, LOCATION), "Revoked", null),
+                OWNER);
         service.revoke(TENANT, revoked, OWNER, "Left");
 
         assertThat(service.listForTenant(TENANT))
@@ -476,7 +509,11 @@ class GrantManagementServiceTests {
                 INSERT INTO tenant.locations
                     (id, tenant_id, brand_id, code, slug, display_name, timezone, status, version)
                 VALUES (:id, :tenantId, :brandId, 'LOC_A', 'loc-a', 'Location', 'Asia/Tashkent', 'ACTIVE', 0)
-                """).param("id", LOCATION).param("tenantId", TENANT).param("brandId", BRAND).update();
+                """)
+                .param("id", LOCATION)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
         jdbc.sql("""
                 INSERT INTO tenant.tenants
                     (id, slug, legal_name, display_name, default_currency, default_timezone, status, version)

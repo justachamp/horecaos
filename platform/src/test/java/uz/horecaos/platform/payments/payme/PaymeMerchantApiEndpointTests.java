@@ -1,12 +1,20 @@
 package uz.horecaos.platform.payments.payme;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.Base64;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,7 +29,6 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.payments.application.PaymentBindingResolver;
@@ -31,15 +38,6 @@ import uz.horecaos.platform.payments.infrastructure.payme.PaymeErrors;
 import uz.horecaos.platform.payments.infrastructure.payme.PaymeMerchantApi;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcProviderCallbackStore;
 import uz.horecaos.platform.support.TestDatabase;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * The endpoint through the real filter chain, which is the only way to prove the
@@ -108,8 +106,8 @@ class PaymeMerchantApiEndpointTests {
 
     @BeforeAll
     static void requireDocker() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
-                "Docker is required for the Payme endpoint test");
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(), "Docker is required for the Payme endpoint test");
     }
 
     @DynamicPropertySource
@@ -140,10 +138,9 @@ class PaymeMerchantApiEndpointTests {
     @BeforeEach
     void resolveTheCashbox() {
         when(bindings.byCallbackSegment(SEGMENT)).thenReturn(Optional.of(binding()));
-        when(bindings.byCallbackSegment(anyString())).thenAnswer(invocation ->
-                SEGMENT.equals(invocation.getArgument(0))
-                        ? Optional.of(binding())
-                        : Optional.empty());
+        when(bindings.byCallbackSegment(anyString()))
+                .thenAnswer(invocation ->
+                        SEGMENT.equals(invocation.getArgument(0)) ? Optional.of(binding()) : Optional.empty());
     }
 
     // -----------------------------------------------------------------------
@@ -253,9 +250,7 @@ class PaymeMerchantApiEndpointTests {
     @Test
     @DisplayName("authentication is answered before anything is said about the body")
     void authenticationPrecedesParsing() throws Exception {
-        mvc.perform(post(PATH)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{not json at all"))
+        mvc.perform(post(PATH).contentType(MediaType.APPLICATION_JSON).content("{not json at all"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.error.code").value(-32504));
     }
@@ -291,8 +286,7 @@ class PaymeMerchantApiEndpointTests {
     @Test
     @DisplayName("an unimplemented method is -32601 with the name in data")
     void unknownMethodIsMinus32601() throws Exception {
-        when(merchantApi.dispatch(any(), any(), any()))
-                .thenThrow(PaymeErrors.methodNotFound("ChangePassword"));
+        when(merchantApi.dispatch(any(), any(), any())).thenThrow(PaymeErrors.methodNotFound("ChangePassword"));
 
         mvc.perform(post(PATH)
                         .header("Authorization", basic("Paycom:" + CASHBOX_KEY))
@@ -312,8 +306,7 @@ class PaymeMerchantApiEndpointTests {
     @Test
     @DisplayName("an unexpected fault is -32400 in an HTTP 200 body")
     void unexpectedFaultIsMinus32400() throws Exception {
-        when(merchantApi.dispatch(any(), any(), any()))
-                .thenThrow(new IllegalStateException("the database is gone"));
+        when(merchantApi.dispatch(any(), any(), any())).thenThrow(new IllegalStateException("the database is gone"));
 
         mvc.perform(post(PATH)
                         .header("Authorization", basic("Paycom:" + CASHBOX_KEY))
@@ -359,14 +352,25 @@ class PaymeMerchantApiEndpointTests {
     }
 
     private static String basic(String credential) {
-        return "Basic " + Base64.getEncoder()
-                .encodeToString(credential.getBytes(StandardCharsets.UTF_8));
+        return "Basic " + Base64.getEncoder().encodeToString(credential.getBytes(StandardCharsets.UTF_8));
     }
 
     private static ProviderBinding binding() {
-        return new ProviderBinding(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                PaymentProviderType.PAYME, UUID.randomUUID(), UUID.randomUUID(),
-                "587f72c72cac0d162c722ae2", null, null, SECRET, SEGMENT, false, true,
-                LocalDate.of(2026, 1, 1), null);
+        return new ProviderBinding(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                PaymentProviderType.PAYME,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "587f72c72cac0d162c722ae2",
+                null,
+                null,
+                SECRET,
+                SEGMENT,
+                false,
+                true,
+                LocalDate.of(2026, 1, 1),
+                null);
     }
 }

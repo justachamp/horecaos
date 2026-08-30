@@ -9,12 +9,10 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PublicationItem;
 import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
@@ -41,8 +39,12 @@ public class CatalogPublicationService {
     private final SalesChannelLookup channels;
     private final Clock clock;
 
-    public CatalogPublicationService(JdbcCatalogStore store, CatalogValidator validator,
-            CatalogSnapshotLoader snapshots, SalesChannelLookup channels, Clock clock) {
+    public CatalogPublicationService(
+            JdbcCatalogStore store,
+            CatalogValidator validator,
+            CatalogSnapshotLoader snapshots,
+            SalesChannelLookup channels,
+            Clock clock) {
         this.store = store;
         this.validator = validator;
         this.snapshots = snapshots;
@@ -65,8 +67,7 @@ public class CatalogPublicationService {
      * rejection that leaves no row is a support conversation with no evidence.
      */
     @Transactional
-    public PublicationResult publish(UUID tenantId, UUID brandId, UUID catalogId,
-            String channel, UUID actorId) {
+    public PublicationResult publish(UUID tenantId, UUID brandId, UUID catalogId, String channel, UUID actorId) {
 
         requireOwnership(tenantId, brandId, catalogId);
         requireRegisteredChannel(tenantId, channel);
@@ -80,15 +81,37 @@ public class CatalogPublicationService {
         Instant now = clock.instant();
 
         if (!report.publishable()) {
-            store.insertPublication(publicationId, tenantId, brandId, catalogId, channel,
-                    PublicationStatus.REJECTED, contentHash, report, actorId, now, null);
-            log.info("Catalog {} publication rejected with {} blockers",
-                    catalogId, report.blockers().size());
+            store.insertPublication(
+                    publicationId,
+                    tenantId,
+                    brandId,
+                    catalogId,
+                    channel,
+                    PublicationStatus.REJECTED,
+                    contentHash,
+                    report,
+                    actorId,
+                    now,
+                    null);
+            log.info(
+                    "Catalog {} publication rejected with {} blockers",
+                    catalogId,
+                    report.blockers().size());
             return new PublicationResult(publicationId, PublicationStatus.REJECTED, contentHash, report);
         }
 
-        store.insertPublication(publicationId, tenantId, brandId, catalogId, channel,
-                PublicationStatus.READY, contentHash, report, actorId, now, null);
+        store.insertPublication(
+                publicationId,
+                tenantId,
+                brandId,
+                catalogId,
+                channel,
+                PublicationStatus.READY,
+                contentHash,
+                report,
+                actorId,
+                now,
+                null);
         store.insertPublicationItems(publicationId, tenantId, brandId, items);
 
         // Retire the outgoing publication before promoting this one. The partial
@@ -131,8 +154,11 @@ public class CatalogPublicationService {
         store.activatePublication(publicationId, now);
 
         log.info("Rolled brand {} back to publication {}", brandId, publicationId);
-        return new PublicationResult(publicationId, PublicationStatus.PUBLISHED,
-                target.contentHash(), new ValidationFinding.Report(List.of()));
+        return new PublicationResult(
+                publicationId,
+                PublicationStatus.PUBLISHED,
+                target.contentHash(),
+                new ValidationFinding.Report(List.of()));
     }
 
     @Transactional(readOnly = true)
@@ -157,8 +183,7 @@ public class CatalogPublicationService {
                         "No sales channel \"%s\" is registered for this tenant".formatted(channel)));
         if (registered.status() == SalesChannel.Status.ARCHIVED) {
             throw new IllegalArgumentException(
-                    "Sales channel \"%s\" is archived and cannot receive a publication"
-                            .formatted(channel));
+                    "Sales channel \"%s\" is archived and cannot receive a publication".formatted(channel));
         }
     }
 
@@ -173,8 +198,7 @@ public class CatalogPublicationService {
      */
     private void requireOwnership(UUID tenantId, UUID brandId, UUID catalogId) {
         if (!store.catalogBelongsTo(tenantId, brandId, catalogId)) {
-            throw new IllegalArgumentException(
-                    "Catalog %s does not belong to brand %s".formatted(catalogId, brandId));
+            throw new IllegalArgumentException("Catalog %s does not belong to brand %s".formatted(catalogId, brandId));
         }
     }
 
@@ -207,12 +231,12 @@ public class CatalogPublicationService {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             items.stream()
-                    .sorted(java.util.Comparator
-                            .comparing((PublicationItem item) -> item.entityType().name())
+                    .sorted(java.util.Comparator.comparing(
+                                    (PublicationItem item) -> item.entityType().name())
                             .thenComparing(item -> item.entityId().toString()))
-                    .forEach(item -> digest.update(
-                            (item.entityType() + ":" + item.entityId() + ":"
-                                    + canonical(item.content())).getBytes(StandardCharsets.UTF_8)));
+                    .forEach(item ->
+                            digest.update((item.entityType() + ":" + item.entityId() + ":" + canonical(item.content()))
+                                    .getBytes(StandardCharsets.UTF_8)));
             return HexFormat.of().formatHex(digest.digest());
         } catch (NoSuchAlgorithmException impossible) {
             throw new IllegalStateException("SHA-256 is required", impossible);
@@ -226,8 +250,7 @@ public class CatalogPublicationService {
     private static String canonical(Object value) {
         if (value instanceof java.util.Map<?, ?> map) {
             return map.entrySet().stream()
-                    .sorted(java.util.Map.Entry.comparingByKey(
-                            java.util.Comparator.comparing(String::valueOf)))
+                    .sorted(java.util.Map.Entry.comparingByKey(java.util.Comparator.comparing(String::valueOf)))
                     .map(entry -> String.valueOf(entry.getKey()) + "=" + canonical(entry.getValue()))
                     .collect(java.util.stream.Collectors.joining(",", "{", "}"));
         }
@@ -241,6 +264,6 @@ public class CatalogPublicationService {
         return String.valueOf(value);
     }
 
-    public record PublicationResult(UUID publicationId, PublicationStatus status,
-            String contentHash, ValidationFinding.Report report) { }
+    public record PublicationResult(
+            UUID publicationId, PublicationStatus status, String contentHash, ValidationFinding.Report report) {}
 }

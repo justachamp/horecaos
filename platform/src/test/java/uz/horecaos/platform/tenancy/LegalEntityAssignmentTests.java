@@ -1,7 +1,5 @@
 package uz.horecaos.platform.tenancy;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -11,7 +9,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -19,9 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.FiscalSeller;
 import uz.horecaos.platform.tenancy.application.LegalEntityService;
@@ -130,8 +126,7 @@ class LegalEntityAssignmentTests {
     @Test
     @DisplayName("a taxpayer number that is not nine digits is refused before it reaches a receipt")
     void aTaxpayerNumberIsNineDigits() {
-        assertThatThrownBy(() -> new TaxpayerNumber("12345678"))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new TaxpayerNumber("12345678")).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new TaxpayerNumber("30512345678901"))
                 .as("fourteen digits is a PINFL, which identifies a person and not a company")
                 .isInstanceOf(IllegalArgumentException.class);
@@ -158,8 +153,7 @@ class LegalEntityAssignmentTests {
 
         insertAssignment(LOCATION, first, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 9, 1));
 
-        assertThatThrownBy(() -> insertAssignment(LOCATION, second,
-                LocalDate.of(2026, 8, 1), null))
+        assertThatThrownBy(() -> insertAssignment(LOCATION, second, LocalDate.of(2026, 8, 1), null))
                 .as("two overlapping assignments mean two INNs are simultaneously correct and "
                         + "the resolver picks by row order")
                 .hasMessageContaining("ex_location_fiscal_assignment_no_overlap");
@@ -171,10 +165,14 @@ class LegalEntityAssignmentTests {
         UUID first = activated("FIRST", "123456789");
         UUID second = activated("SECOND", "223456789");
 
-        service.assign(TENANT, new AssignLocationCommand(BRAND, LOCATION, first,
-                LocalDate.of(2026, 1, 1), "finance@example.test", "board-2026-01"));
-        service.assign(TENANT, new AssignLocationCommand(BRAND, LOCATION, second,
-                LocalDate.of(2026, 9, 1), "finance@example.test", "board-2026-09"));
+        service.assign(
+                TENANT,
+                new AssignLocationCommand(
+                        BRAND, LOCATION, first, LocalDate.of(2026, 1, 1), "finance@example.test", "board-2026-01"));
+        service.assign(
+                TENANT,
+                new AssignLocationCommand(
+                        BRAND, LOCATION, second, LocalDate.of(2026, 9, 1), "finance@example.test", "board-2026-09"));
 
         // 31 August belongs to the first company, 1 September to the second, and no
         // day belongs to both or to neither.
@@ -191,10 +189,14 @@ class LegalEntityAssignmentTests {
         UUID first = activated("FIRST", "123456789");
         UUID second = activated("SECOND", "223456789");
 
-        service.assign(TENANT, new AssignLocationCommand(BRAND, LOCATION, first,
-                LocalDate.of(2026, 1, 1), "finance@example.test", null));
-        service.assign(TENANT, new AssignLocationCommand(BRAND, LOCATION, second,
-                LocalDate.of(2026, 8, 20), "finance@example.test", null));
+        service.assign(
+                TENANT,
+                new AssignLocationCommand(
+                        BRAND, LOCATION, first, LocalDate.of(2026, 1, 1), "finance@example.test", null));
+        service.assign(
+                TENANT,
+                new AssignLocationCommand(
+                        BRAND, LOCATION, second, LocalDate.of(2026, 8, 20), "finance@example.test", null));
 
         FiscalSeller onTheOrdersDate = sellerOn(LocalDate.of(2026, 7, 4)).orElseThrow();
 
@@ -209,22 +211,27 @@ class LegalEntityAssignmentTests {
     @DisplayName("a branch with no assignment on that date resolves nobody, and never a default")
     void anUnassignedBranchResolvesNobody() {
         UUID entity = activated("FIRST", "123456789");
-        service.assign(TENANT, new AssignLocationCommand(BRAND, LOCATION, entity,
-                LocalDate.of(2026, 8, 1), "finance@example.test", null));
+        service.assign(
+                TENANT,
+                new AssignLocationCommand(
+                        BRAND, LOCATION, entity, LocalDate.of(2026, 8, 1), "finance@example.test", null));
 
         assertThat(sellerOn(LocalDate.of(2026, 7, 31)))
                 .as("a receipt that cannot name a seller must not be issued under whichever "
                         + "company the tenant happens to hold")
                 .isEmpty();
-        assertThat(store.sellerFor(TENANT, OTHER_LOCATION, LocalDate.of(2026, 8, 24))).isEmpty();
+        assertThat(store.sellerFor(TENANT, OTHER_LOCATION, LocalDate.of(2026, 8, 24)))
+                .isEmpty();
     }
 
     @Test
     @DisplayName("another tenant's location never resolves this tenant's company")
     void resolutionIsScopedToTheTenantAndTheLocationTogether() {
         UUID entity = activated("FIRST", "123456789");
-        service.assign(TENANT, new AssignLocationCommand(BRAND, LOCATION, entity,
-                LocalDate.of(2026, 1, 1), "finance@example.test", null));
+        service.assign(
+                TENANT,
+                new AssignLocationCommand(
+                        BRAND, LOCATION, entity, LocalDate.of(2026, 1, 1), "finance@example.test", null));
 
         assertThat(store.sellerFor(OTHER_TENANT, LOCATION, LocalDate.of(2026, 8, 24)))
                 .as("a location id arriving from another module's row is not evidence of "
@@ -241,8 +248,10 @@ class LegalEntityAssignmentTests {
                 VALUES (:id, :t, 'FOREIGN', 'Another company', '999999999', 'ACTIVE')
                 """).param("id", foreign).param("t", OTHER_TENANT).update();
 
-        assertThatThrownBy(() -> service.assign(TENANT, new AssignLocationCommand(
-                BRAND, LOCATION, foreign, LocalDate.of(2026, 1, 1), "finance@example.test", null)))
+        assertThatThrownBy(() -> service.assign(
+                        TENANT,
+                        new AssignLocationCommand(
+                                BRAND, LOCATION, foreign, LocalDate.of(2026, 1, 1), "finance@example.test", null)))
                 .as("the tenant predicate is on the read as well as on the constraint")
                 .isInstanceOf(RuntimeException.class);
 
@@ -255,8 +264,10 @@ class LegalEntityAssignmentTests {
         UUID entity = activated("FIRST", "123456789");
         service.suspend(TENANT, entity, 2);
 
-        assertThatThrownBy(() -> service.assign(TENANT, new AssignLocationCommand(
-                BRAND, LOCATION, entity, LocalDate.of(2026, 1, 1), "finance@example.test", null)))
+        assertThatThrownBy(() -> service.assign(
+                        TENANT,
+                        new AssignLocationCommand(
+                                BRAND, LOCATION, entity, LocalDate.of(2026, 1, 1), "finance@example.test", null)))
                 .isInstanceOf(TenantResourceConflictException.class)
                 .hasMessageContaining("SUSPENDED");
     }
@@ -266,10 +277,14 @@ class LegalEntityAssignmentTests {
     void oneCompanyMayHoldSeveralBranches() {
         UUID entity = activated("FIRST", "123456789");
 
-        service.assign(TENANT, new AssignLocationCommand(BRAND, LOCATION, entity,
-                LocalDate.of(2026, 1, 1), "finance@example.test", null));
-        service.assign(TENANT, new AssignLocationCommand(OTHER_BRAND, OTHER_LOCATION, entity,
-                LocalDate.of(2026, 1, 1), "finance@example.test", null));
+        service.assign(
+                TENANT,
+                new AssignLocationCommand(
+                        BRAND, LOCATION, entity, LocalDate.of(2026, 1, 1), "finance@example.test", null));
+        service.assign(
+                TENANT,
+                new AssignLocationCommand(
+                        OTHER_BRAND, OTHER_LOCATION, entity, LocalDate.of(2026, 1, 1), "finance@example.test", null));
 
         assertThat(sellerOn(LocalDate.of(2026, 8, 24)).orElseThrow().legalEntityId())
                 .isEqualTo(entity);
@@ -286,8 +301,10 @@ class LegalEntityAssignmentTests {
     }
 
     private LegalEntity register(String code, String tin) {
-        return service.register(TENANT, new RegisterLegalEntityCommand(
-                code, code + " MCHJ", code, tin, false, null, null, "Tashkent", "+998901234567"));
+        return service.register(
+                TENANT,
+                new RegisterLegalEntityCommand(
+                        code, code + " MCHJ", code, tin, false, null, null, "Tashkent", "+998901234567"));
     }
 
     private UUID activated(String code, String tin) {
@@ -303,10 +320,13 @@ class LegalEntityAssignmentTests {
                     location_id, legal_entity_id, effective_from, effective_until, approved_by)
                 VALUES (:id, :t, :b, :loc, :e, :from, :until, 'finance@example.test')
                 """)
-                .param("id", UUID.randomUUID()).param("t", TENANT)
+                .param("id", UUID.randomUUID())
+                .param("t", TENANT)
                 .param("b", locationId.equals(LOCATION) ? BRAND : OTHER_BRAND)
-                .param("loc", locationId).param("e", entityId)
-                .param("from", from).param("until", until)
+                .param("loc", locationId)
+                .param("e", entityId)
+                .param("from", from)
+                .param("until", until)
                 .update();
     }
 
@@ -341,6 +361,10 @@ class LegalEntityAssignmentTests {
                 INSERT INTO tenant.locations (id, tenant_id, brand_id, code, slug, display_name,
                     timezone, status, version)
                 VALUES (:id, :t, :b, 'YUN', 'yunusobod', 'Yunusobod', 'Asia/Tashkent', 'ACTIVE', 0)
-                """).param("id", OTHER_LOCATION).param("t", TENANT).param("b", OTHER_BRAND).update();
+                """)
+                .param("id", OTHER_LOCATION)
+                .param("t", TENANT)
+                .param("b", OTHER_BRAND)
+                .update();
     }
 }

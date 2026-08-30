@@ -32,8 +32,7 @@ public final class DeliveryExceptionReason {
     public static final String COURIER_NO_SHOW = "COURIER_NO_SHOW";
     public static final String ADDRESS_ISSUE = "ADDRESS_ISSUE";
 
-    private DeliveryExceptionReason() {
-    }
+    private DeliveryExceptionReason() {}
 
     /**
      * The exception a sourcing decision's reason code becomes.
@@ -47,9 +46,9 @@ public final class DeliveryExceptionReason {
             case SourcingDecision.PROMISE_UNREACHABLE -> PROMISE_UNREACHABLE;
             case SourcingDecision.AWAITING_RECONCILIATION -> AWAITING_RECONCILIATION;
             case SourcingDecision.NO_PARTNER_CONFIGURED,
-                 SourcingDecision.PARTNERS_EXHAUSTED,
-                 SourcingDecision.NO_INTERNAL_CANDIDATE,
-                 SourcingDecision.FLEET_DECLINED -> NO_PROVIDER;
+                    SourcingDecision.PARTNERS_EXHAUSTED,
+                    SourcingDecision.NO_INTERNAL_CANDIDATE,
+                    SourcingDecision.FLEET_DECLINED -> NO_PROVIDER;
             // FLEET_BUDGET_SPENT, MANUAL_MODE and anything added later: the plan
             // still has clock left but no automated move, which is the case an
             // operator can actually rescue by assigning somebody by hand.

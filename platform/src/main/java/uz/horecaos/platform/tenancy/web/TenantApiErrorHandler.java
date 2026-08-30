@@ -3,7 +3,6 @@ package uz.horecaos.platform.tenancy.web;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-
 import uz.horecaos.platform.tenancy.application.TenantResourceConflictException;
 import uz.horecaos.platform.tenancy.application.TenantResourceNotFoundException;
 import uz.horecaos.platform.web.api.ApiProblem;
@@ -17,12 +16,13 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * {@code GlobalApiErrorHandler}. Only failures this module alone can raise
  * belong here.
  */
-@RestControllerAdvice(assignableTypes = {
-        TenantControlPlaneController.class,
-        SalesChannelController.class,
-        ServiceScheduleController.class,
-        LocationServiceOperationsController.class
-})
+@RestControllerAdvice(
+        assignableTypes = {
+            TenantControlPlaneController.class,
+            SalesChannelController.class,
+            ServiceScheduleController.class,
+            LocationServiceOperationsController.class
+        })
 public class TenantApiErrorHandler {
 
     @ExceptionHandler(TenantResourceNotFoundException.class)

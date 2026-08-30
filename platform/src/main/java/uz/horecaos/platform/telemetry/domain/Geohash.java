@@ -22,8 +22,7 @@ public final class Geohash {
     private static final char[] BASE32 = "0123456789bcdefghjkmnpqrstuvwxyz".toCharArray();
     private static final int EARTH_RADIUS_METERS = 6_371_000;
 
-    private Geohash() {
-    }
+    private Geohash() {}
 
     /** The five-character geohash of a point. */
     public static String encode5(double latitude, double longitude) {
@@ -75,14 +74,15 @@ public final class Geohash {
      * the value that was computed. A distance is never a double past this point:
      * every reader of it is a person arguing about a delivery.
      */
-    public static int distanceMeters(double fromLatitude, double fromLongitude,
-            double toLatitude, double toLongitude) {
+    public static int distanceMeters(double fromLatitude, double fromLongitude, double toLatitude, double toLongitude) {
 
         double deltaLatitude = Math.toRadians(toLatitude - fromLatitude);
         double deltaLongitude = Math.toRadians(toLongitude - fromLongitude);
         double a = Math.sin(deltaLatitude / 2) * Math.sin(deltaLatitude / 2)
-                + Math.cos(Math.toRadians(fromLatitude)) * Math.cos(Math.toRadians(toLatitude))
-                * Math.sin(deltaLongitude / 2) * Math.sin(deltaLongitude / 2);
+                + Math.cos(Math.toRadians(fromLatitude))
+                        * Math.cos(Math.toRadians(toLatitude))
+                        * Math.sin(deltaLongitude / 2)
+                        * Math.sin(deltaLongitude / 2);
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return (int) Math.round(EARTH_RADIUS_METERS * c);
     }

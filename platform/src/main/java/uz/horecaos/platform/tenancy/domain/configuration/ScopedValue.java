@@ -1,7 +1,6 @@
 package uz.horecaos.platform.tenancy.domain.configuration;
 
 import java.util.Objects;
-
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 
 /**

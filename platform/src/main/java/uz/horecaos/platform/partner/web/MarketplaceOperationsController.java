@@ -1,13 +1,13 @@
 package uz.horecaos.platform.partner.web;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -16,10 +16,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -75,26 +71,28 @@ public class MarketplaceOperationsController {
 
     @GetMapping("/order-references")
     @RequiresCapability(value = Capability.ORDER_READ, scope = ScopeType.TENANT)
-    @Operation(summary = "Find an order by the number a partner quotes",
+    @Operation(
+            summary = "Find an order by the number a partner quotes",
             description = "Matches a hyphenated, spaced, lowercase or #-prefixed rendering of the "
                     + "same code. May return several rows across providers.")
     public ResponseEntity<List<ReferenceMatchResponse>> search(
             @PathVariable UUID tenantId, @RequestParam String reference) {
 
-        List<JdbcPartnerStore.ReferenceMatch> matches = store.searchByReference(
-                tenantId, ExternalReference.normalise(reference), SEARCH_LIMIT);
+        List<JdbcPartnerStore.ReferenceMatch> matches =
+                store.searchByReference(tenantId, ExternalReference.normalise(reference), SEARCH_LIMIT);
 
-        return ResponseEntity.ok(matches.stream().map(ReferenceMatchResponse::of).toList());
+        return ResponseEntity.ok(
+                matches.stream().map(ReferenceMatchResponse::of).toList());
     }
 
     @PostMapping("/orders/{orderId}/handover-verifications")
     @RequiresCapability(value = Capability.ORDER_ADVANCE, scope = ScopeType.TENANT, mutating = true)
-    @Operation(summary = "Verify a handover code",
+    @Operation(
+            summary = "Verify a handover code",
             description = "Consumes one attempt whether or not the code matches. The response says "
                     + "how many attempts remain and nothing about the expected value.")
     public ResponseEntity<VerificationResponse> verify(
-            @PathVariable UUID tenantId, @PathVariable UUID orderId,
-            @Valid @RequestBody VerificationRequest body) {
+            @PathVariable UUID tenantId, @PathVariable UUID orderId, @Valid @RequestBody VerificationRequest body) {
 
         // Declared against ORDER_ADVANCE rather than ADR 0040's stated
         // kitchen.handover.complete, which ADR 0041 owns and has not registered.
@@ -104,64 +102,99 @@ public class MarketplaceOperationsController {
         HandoverVerificationService.Verification result = handovers.verify(
                 tenantId, orderId, body.code(), currentActor.get().subject());
 
-        return ResponseEntity.ok(new VerificationResponse(
-                result.verified(), result.status().name(), result.attemptsRemaining()));
+        return ResponseEntity.ok(
+                new VerificationResponse(result.verified(), result.status().name(), result.attemptsRemaining()));
     }
 
     @PostMapping("/orders/{orderId}/handover-bypasses")
-    @RequiresCapability(value = Capability.MARKETPLACE_HANDOVER_BYPASS, scope = ScopeType.TENANT,
-            mutating = true)
-    @Operation(summary = "Override handover verification",
+    @RequiresCapability(value = Capability.MARKETPLACE_HANDOVER_BYPASS, scope = ScopeType.TENANT, mutating = true)
+    @Operation(
+            summary = "Override handover verification",
             description = "Requires a reason code and writes an ADR 0027 audit fact naming the "
                     + "supervisor. Available after attempts are exhausted as well as before.")
     public ResponseEntity<Void> bypass(
-            @PathVariable UUID tenantId, @PathVariable UUID orderId,
-            @Valid @RequestBody BypassRequest body) {
+            @PathVariable UUID tenantId, @PathVariable UUID orderId, @Valid @RequestBody BypassRequest body) {
 
-        handovers.bypass(tenantId, ResourceScope.tenant(tenantId), orderId, body.reasonCode(),
-                currentActor.get().subject(), body.supervisorName(), null);
+        handovers.bypass(
+                tenantId,
+                ResourceScope.tenant(tenantId),
+                orderId,
+                body.reasonCode(),
+                currentActor.get().subject(),
+                body.supervisorName(),
+                null);
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/liveness")
     @RequiresCapability(value = Capability.MARKETPLACE_LIVENESS_READ, scope = ScopeType.TENANT)
-    @Operation(summary = "The locations by bindings liveness matrix",
+    @Operation(
+            summary = "The locations by bindings liveness matrix",
             description = "silenceSeconds is null where nothing has ever arrived, which is an "
                     + "unfinished configuration rather than a channel that stopped.")
     public ResponseEntity<List<LivenessResponse>> liveness(@PathVariable UUID tenantId) {
-        return ResponseEntity.ok(liveness.matrix(tenantId).stream()
-                .map(LivenessResponse::of)
-                .toList());
+        return ResponseEntity.ok(
+                liveness.matrix(tenantId).stream().map(LivenessResponse::of).toList());
     }
 
-    public record VerificationRequest(@NotBlank @Size(max = 64) String code) { }
+    public record VerificationRequest(
+            @NotBlank @Size(max = 64) String code) {}
 
     public record BypassRequest(
             @NotBlank @Size(max = 48) String reasonCode,
-            @NotBlank @Size(max = 255) String supervisorName) { }
+            @NotBlank @Size(max = 255) String supervisorName) {}
 
-    public record VerificationResponse(boolean verified, String status, int attemptsRemaining) { }
+    public record VerificationResponse(boolean verified, String status, int attemptsRemaining) {}
 
-    public record ReferenceMatchResponse(UUID orderId, String publicOrderNumber, String orderStatus,
-            String referenceType, String referenceValue, UUID bindingId, UUID locationId) {
+    public record ReferenceMatchResponse(
+            UUID orderId,
+            String publicOrderNumber,
+            String orderStatus,
+            String referenceType,
+            String referenceValue,
+            UUID bindingId,
+            UUID locationId) {
 
         static ReferenceMatchResponse of(JdbcPartnerStore.ReferenceMatch match) {
-            return new ReferenceMatchResponse(match.orderId(), match.publicOrderNumber(),
-                    match.orderStatus(), match.referenceType(), match.referenceValue(),
-                    match.bindingId(), match.locationId());
+            return new ReferenceMatchResponse(
+                    match.orderId(),
+                    match.publicOrderNumber(),
+                    match.orderStatus(),
+                    match.referenceType(),
+                    match.referenceValue(),
+                    match.bindingId(),
+                    match.locationId());
         }
     }
 
-    public record LivenessResponse(UUID bindingId, UUID locationId, String providerName,
-            String direction, Instant lastSuccessAt, String lastSuccessReference,
-            Instant lastFailureAt, String lastFailureCode, int staleAfterSeconds,
-            Integer observedMedianIntervalSeconds, String alertState, Long silenceSeconds) {
+    public record LivenessResponse(
+            UUID bindingId,
+            UUID locationId,
+            String providerName,
+            String direction,
+            Instant lastSuccessAt,
+            String lastSuccessReference,
+            Instant lastFailureAt,
+            String lastFailureCode,
+            int staleAfterSeconds,
+            Integer observedMedianIntervalSeconds,
+            String alertState,
+            Long silenceSeconds) {
 
         static LivenessResponse of(JdbcPartnerStore.LivenessRow row) {
-            return new LivenessResponse(row.bindingId(), row.locationId(), row.providerName(),
-                    row.direction(), row.lastSuccessAt(), row.lastSuccessReference(),
-                    row.lastFailureAt(), row.lastFailureCode(), row.staleAfterSeconds(),
-                    row.observedMedianIntervalSeconds(), row.alertState(), row.silenceSeconds());
+            return new LivenessResponse(
+                    row.bindingId(),
+                    row.locationId(),
+                    row.providerName(),
+                    row.direction(),
+                    row.lastSuccessAt(),
+                    row.lastSuccessReference(),
+                    row.lastFailureAt(),
+                    row.lastFailureCode(),
+                    row.staleAfterSeconds(),
+                    row.observedMedianIntervalSeconds(),
+                    row.alertState(),
+                    row.silenceSeconds());
         }
     }
 }

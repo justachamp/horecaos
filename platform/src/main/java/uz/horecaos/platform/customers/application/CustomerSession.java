@@ -3,7 +3,6 @@ package uz.horecaos.platform.customers.application;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
-
 import uz.horecaos.platform.customers.api.CustomerIdentityPolicy;
 
 /**
@@ -57,8 +56,7 @@ public record CustomerSession(
      * session, which under a shift to {@code BRAND_ISOLATED} is exactly the
      * cross-brand exposure the mode was changed to end.
      */
-    public boolean covers(UUID requestedTenantId, UUID requestedBrandId,
-            CustomerIdentityPolicy modeInForce) {
+    public boolean covers(UUID requestedTenantId, UUID requestedBrandId, CustomerIdentityPolicy modeInForce) {
 
         return tenantId.equals(requestedTenantId)
                 && Objects.equals(identityPartitionBrandId, modeInForce.partitionFor(requestedBrandId));

@@ -24,15 +24,12 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.ProviderCall;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 
@@ -50,7 +47,7 @@ public class ProviderHttpClient {
 
     private static final Logger log = LoggerFactory.getLogger(ProviderHttpClient.class);
 
-    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() { };
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
     /**
      * The most of a provider's answer this client will hold in memory.
@@ -74,9 +71,18 @@ public class ProviderHttpClient {
      * all outside envelope encryption.
      */
     private static final List<String> DIAGNOSTIC_FIELDS = List.of(
-            "error", "error_code", "errorCode", "code", "error_note",
-            "message", "reason", "title", "description",
-            "request_id", "trace_id", "correlation_id");
+            "error",
+            "error_code",
+            "errorCode",
+            "code",
+            "error_note",
+            "message",
+            "reason",
+            "title",
+            "description",
+            "request_id",
+            "trace_id",
+            "correlation_id");
 
     /**
      * Fields whose value is the provider's own opaque handle for the call, never
@@ -92,6 +98,7 @@ public class ProviderHttpClient {
      * number, which are the shapes that actually turn up embedded in a message.
      */
     private static final Pattern DIGIT_RUN = Pattern.compile("\\d{5,}");
+
     private static final Pattern EMAIL = Pattern.compile("[\\w.+-]+@[\\w-]+\\.[\\w.-]+");
 
     /** Long enough for "HorecaOS's integrator registration is unknown", short enough to be no story. */
@@ -117,22 +124,37 @@ public class ProviderHttpClient {
                 .build();
     }
 
-    public ProviderOutcome post(ProviderCall call, String path, Map<String, String> headers,
-            Object body, Function<Map<String, Object>, ProviderOutcome> onSuccess) {
+    public ProviderOutcome post(
+            ProviderCall call,
+            String path,
+            Map<String, String> headers,
+            Object body,
+            Function<Map<String, Object>, ProviderOutcome> onSuccess) {
         return exchange(call, "POST", path, headers, body, onSuccess);
     }
 
-    public ProviderOutcome patch(ProviderCall call, String path, Map<String, String> headers,
-            Object body, Function<Map<String, Object>, ProviderOutcome> onSuccess) {
+    public ProviderOutcome patch(
+            ProviderCall call,
+            String path,
+            Map<String, String> headers,
+            Object body,
+            Function<Map<String, Object>, ProviderOutcome> onSuccess) {
         return exchange(call, "PATCH", path, headers, body, onSuccess);
     }
 
-    public ProviderOutcome put(ProviderCall call, String path, Map<String, String> headers,
-            Object body, Function<Map<String, Object>, ProviderOutcome> onSuccess) {
+    public ProviderOutcome put(
+            ProviderCall call,
+            String path,
+            Map<String, String> headers,
+            Object body,
+            Function<Map<String, Object>, ProviderOutcome> onSuccess) {
         return exchange(call, "PUT", path, headers, body, onSuccess);
     }
 
-    public ProviderOutcome get(ProviderCall call, String path, Map<String, String> headers,
+    public ProviderOutcome get(
+            ProviderCall call,
+            String path,
+            Map<String, String> headers,
             Function<Map<String, Object>, ProviderOutcome> onSuccess) {
         return exchange(call, "GET", path, headers, null, onSuccess);
     }
@@ -145,13 +167,20 @@ public class ProviderHttpClient {
      * deletion — and a reversal is not something to reach for a second HTTP client
      * to perform.
      */
-    public ProviderOutcome delete(ProviderCall call, String path, Map<String, String> headers,
+    public ProviderOutcome delete(
+            ProviderCall call,
+            String path,
+            Map<String, String> headers,
             Function<Map<String, Object>, ProviderOutcome> onSuccess) {
         return exchange(call, "DELETE", path, headers, null, onSuccess);
     }
 
-    private ProviderOutcome exchange(ProviderCall call, String method, String path,
-            Map<String, String> headers, Object body,
+    private ProviderOutcome exchange(
+            ProviderCall call,
+            String method,
+            String path,
+            Map<String, String> headers,
+            Object body,
             Function<Map<String, Object>, ProviderOutcome> onSuccess) {
 
         try {
@@ -163,9 +192,11 @@ public class ProviderHttpClient {
                     .timeout(deadline)
                     .header("Content-Type", "application/json")
                     .header("Accept", "application/json")
-                    .method(method, body == null
-                            ? HttpRequest.BodyPublishers.noBody()
-                            : HttpRequest.BodyPublishers.ofByteArray(payload));
+                    .method(
+                            method,
+                            body == null
+                                    ? HttpRequest.BodyPublishers.noBody()
+                                    : HttpRequest.BodyPublishers.ofByteArray(payload));
             headers.forEach(request::header);
 
             BoundedBody collected = new BoundedBody();
@@ -181,8 +212,7 @@ public class ProviderHttpClient {
             // The credential is never in scope here, and the message logged is
             // the classifier's rather than the provider's body: provider errors
             // have been known to echo request content back.
-            log.warn("Provider call {} {} failed: {} ({})",
-                    method, path, outcome.status(), outcome.errorCode());
+            log.warn("Provider call {} {} failed: {} ({})", method, path, outcome.status(), outcome.errorCode());
             return outcome;
         } catch (RuntimeException failure) {
             return classifier.classify(failure, mayHaveReachedProvider(failure));
@@ -210,8 +240,8 @@ public class ProviderHttpClient {
     private HttpResponse<Void> send(HttpRequest request, BoundedBody collected, Duration deadline)
             throws IOException, InterruptedException {
 
-        CompletableFuture<HttpResponse<Void>> pending = client.sendAsync(
-                request, HttpResponse.BodyHandlers.ofByteArrayConsumer(collected));
+        CompletableFuture<HttpResponse<Void>> pending =
+                client.sendAsync(request, HttpResponse.BodyHandlers.ofByteArrayConsumer(collected));
         try {
             return pending.get(deadline.toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException expired) {
@@ -271,8 +301,8 @@ public class ProviderHttpClient {
      * retryable transport fault. On a partner whose create is immediately live,
      * that difference is a second courier.
      */
-    private ProviderOutcome handle(HttpResponse<Void> response, BoundedBody body,
-            Function<Map<String, Object>, ProviderOutcome> onSuccess) {
+    private ProviderOutcome handle(
+            HttpResponse<Void> response, BoundedBody body, Function<Map<String, Object>, ProviderOutcome> onSuccess) {
 
         int status = response.statusCode();
         byte[] raw = body.bytes();
@@ -285,12 +315,9 @@ public class ProviderHttpClient {
                 // in more than MAX_RESPONSE_BYTES. The caller's catch turns this
                 // into RESPONSE_UNREADABLE, which is what it is: the provider
                 // answered and we cannot say what it said.
-                throw new IllegalStateException(
-                        "Provider response exceeded " + MAX_RESPONSE_BYTES + " bytes");
+                throw new IllegalStateException("Provider response exceeded " + MAX_RESPONSE_BYTES + " bytes");
             }
-            Map<String, Object> parsed = raw.length == 0
-                    ? Map.of()
-                    : objectMapper.readValue(raw, MAP_TYPE);
+            Map<String, Object> parsed = raw.length == 0 ? Map.of() : objectMapper.readValue(raw, MAP_TYPE);
             return onSuccess.apply(parsed);
         }
 
@@ -300,7 +327,9 @@ public class ProviderHttpClient {
         // path — was the unsafe one. One implementation cannot disagree with
         // itself.
         return classifier.classifyFailureStatus(
-                status, describeFailure(raw, body.truncated()), retryAfter(response).orElse(null));
+                status,
+                describeFailure(raw, body.truncated()),
+                retryAfter(response).orElse(null));
     }
 
     /**

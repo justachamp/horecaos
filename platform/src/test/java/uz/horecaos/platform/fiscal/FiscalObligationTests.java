@@ -1,7 +1,5 @@
 package uz.horecaos.platform.fiscal;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Clock;
@@ -12,7 +10,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -20,11 +18,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.fiscal.api.PartnerFiscalizationPort;
 import uz.horecaos.platform.fiscal.application.FiscalObligationService;
 import uz.horecaos.platform.fiscal.application.FiscalObligationService.ClaimedSubmission;
@@ -127,10 +122,14 @@ class FiscalObligationTests {
     }
 
     private FiscalObligationService build(Instant now, Duration lookback) {
-        return new FiscalObligationService(store, entities,
+        return new FiscalObligationService(
+                store,
+                entities,
                 new FiscalReportingPolicyService(
                         new JdbcPolicyResolver(jdbc, JsonMapper.builder().build())),
-                Clock.fixed(now, ZoneOffset.UTC), "Asia/Tashkent", lookback);
+                Clock.fixed(now, ZoneOffset.UTC),
+                "Asia/Tashkent",
+                lookback);
     }
 
     // ------------------------------------------------- opening the obligation
@@ -203,7 +202,8 @@ class FiscalObligationTests {
     void aSuspendedCompanyBlocksItsBranch() {
         assign(firstCompany, LocalDate.of(2026, 1, 1));
         jdbc.sql("UPDATE tenant.legal_entities SET status = 'SUSPENDED' WHERE id = :id")
-                .param("id", firstCompany).update();
+                .param("id", firstCompany)
+                .update();
 
         UUID order = completedOrder("O-5", "PAYME", "PAID", NOW.minusSeconds(3600));
         obligations.openObligations(50);
@@ -220,8 +220,7 @@ class FiscalObligationTests {
         assign(secondCompany, LocalDate.of(2026, 8, 20));
 
         // Closed on 4 July, well before the handover.
-        UUID order = completedOrder("O-6", "CLICK", "PAID",
-                Instant.parse("2026-07-04T10:00:00Z"));
+        UUID order = completedOrder("O-6", "CLICK", "PAID", Instant.parse("2026-07-04T10:00:00Z"));
 
         obligations.openObligations(50);
 
@@ -239,8 +238,7 @@ class FiscalObligationTests {
         assign(firstCompany, LocalDate.of(2026, 1, 1));
         assign(secondCompany, LocalDate.of(2026, 8, 20));
 
-        UUID order = completedOrder("O-7", "CLICK", "PAID",
-                Instant.parse("2026-08-19T19:30:00Z"));
+        UUID order = completedOrder("O-7", "CLICK", "PAID", Instant.parse("2026-08-19T19:30:00Z"));
 
         obligations.openObligations(50);
 
@@ -277,11 +275,10 @@ class FiscalObligationTests {
                 .as("the cash NOT_APPLICABLE row is the payments seam's, written with the "
                         + "intent; opening a second document over it would be a second sale")
                 .isZero();
-        assertThat(store.forOrder(TENANT, order)).singleElement()
-                .satisfies(row -> {
-                    assertThat(row.id()).isEqualTo(existing);
-                    assertThat(row.state()).isEqualTo(FiscalDocumentState.NOT_APPLICABLE);
-                });
+        assertThat(store.forOrder(TENANT, order)).singleElement().satisfies(row -> {
+            assertThat(row.id()).isEqualTo(existing);
+            assertThat(row.state()).isEqualTo(FiscalDocumentState.NOT_APPLICABLE);
+        });
     }
 
     @Test
@@ -300,8 +297,7 @@ class FiscalObligationTests {
     @DisplayName("an order that completed before the lookback window is not this pass's to open")
     void thePassHasAFloorRatherThanScanningEveryOrderEverPlaced() {
         assign(firstCompany, LocalDate.of(2026, 1, 1));
-        UUID order = completedOrder("O-11", "PAYME", "PAID",
-                Instant.parse("2026-07-04T10:00:00Z"));
+        UUID order = completedOrder("O-11", "PAYME", "PAID", Instant.parse("2026-07-04T10:00:00Z"));
 
         assertThat(build(NOW, Duration.ofDays(7)).openObligations(50))
                 .as("without a floor every run scans the whole order history to find nothing, "
@@ -449,9 +445,17 @@ class FiscalObligationTests {
     }
 
     private NewFiscalDocument newDocument(UUID orderId, FiscalDocumentState state, UUID entityId) {
-        return new NewFiscalDocument(UUID.randomUUID(), TENANT, orderId, entityId,
-                intentId(orderId), "PAYME", state, FiscalReasonCode.AWAITING_CAPTURE,
-                "awaiting capture", NOW);
+        return new NewFiscalDocument(
+                UUID.randomUUID(),
+                TENANT,
+                orderId,
+                entityId,
+                intentId(orderId),
+                "PAYME",
+                state,
+                FiscalReasonCode.AWAITING_CAPTURE,
+                "awaiting capture",
+                NOW);
     }
 
     private void assign(UUID entityId, LocalDate from) {
@@ -460,25 +464,30 @@ class FiscalObligationTests {
                 SET effective_until = :from
                 WHERE tenant_id = :t AND location_id = :loc AND effective_until IS NULL
                 """)
-                .param("from", from).param("t", TENANT).param("loc", LOCATION).update();
+                .param("from", from)
+                .param("t", TENANT)
+                .param("loc", LOCATION)
+                .update();
         jdbc.sql("""
                 INSERT INTO tenant.location_fiscal_assignments (id, tenant_id, brand_id,
                     location_id, legal_entity_id, effective_from, approved_by)
                 VALUES (:id, :t, :b, :loc, :e, :from, 'finance@example.test')
                 """)
-                .param("id", UUID.randomUUID()).param("t", TENANT).param("b", BRAND)
-                .param("loc", LOCATION).param("e", entityId).param("from", from)
+                .param("id", UUID.randomUUID())
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", LOCATION)
+                .param("e", entityId)
+                .param("from", from)
                 .update();
     }
 
-    private UUID completedOrder(String seed, String providerType, String intentStatus,
-            Instant closedAt) {
+    private UUID completedOrder(String seed, String providerType, String intentStatus, Instant closedAt) {
         UUID orderId = order(seed, providerType, "COMPLETED", intentStatus, closedAt);
         return orderId;
     }
 
-    private UUID order(String seed, String providerType, String status, String intentStatus,
-            Instant closedAt) {
+    private UUID order(String seed, String providerType, String status, String intentStatus, Instant closedAt) {
         UUID orderId = UUID.nameUUIDFromBytes(("order:" + seed).getBytes());
         UUID cartId = UUID.nameUUIDFromBytes(("cart:" + seed).getBytes());
         UUID quoteId = UUID.nameUUIDFromBytes(("quote:" + seed).getBytes());
@@ -489,9 +498,14 @@ class FiscalObligationTests {
                     converted_order_id)
                 VALUES (:id, :t, :b, :loc, :ch, :cust, 'DELIVERY', 'UZS', 'CONVERTED', :at, :orderId)
                 """)
-                .param("id", cartId).param("t", TENANT).param("b", BRAND).param("loc", LOCATION)
-                .param("ch", channelId).param("cust", CUSTOMER)
-                .param("at", closedAt.atOffset(ZoneOffset.UTC)).param("orderId", orderId)
+                .param("id", cartId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", LOCATION)
+                .param("ch", channelId)
+                .param("cust", CUSTOMER)
+                .param("at", closedAt.atOffset(ZoneOffset.UTC))
+                .param("orderId", orderId)
                 .update();
 
         jdbc.sql("""
@@ -502,8 +516,13 @@ class FiscalObligationTests {
                 VALUES (:id, :t, :b, :loc, :cust, 'UZS', 'ACCEPTED', :pub, 1, :hash,
                     50000, 0, 0, 0, 50000, :at, :at)
                 """)
-                .param("id", quoteId).param("t", TENANT).param("b", BRAND).param("loc", LOCATION)
-                .param("cust", CUSTOMER).param("pub", publicationId).param("hash", "hash-" + seed)
+                .param("id", quoteId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", LOCATION)
+                .param("cust", CUSTOMER)
+                .param("pub", publicationId)
+                .param("hash", "hash-" + seed)
                 .param("at", closedAt.atOffset(ZoneOffset.UTC))
                 .update();
 
@@ -519,17 +538,24 @@ class FiscalObligationTests {
                     'AUTO_CONFIRM', 'NONE', :status, 'UZS', 50000, 0, 0, 0, 50000,
                     :quote, :hash, :pub, :cart, :key, 'NOT_PROMISED', 1, :at, :at, :at)
                 """)
-                .param("id", orderId).param("number", seed).param("t", TENANT).param("b", BRAND)
-                .param("loc", LOCATION).param("ch", channelId).param("cust", CUSTOMER)
+                .param("id", orderId)
+                .param("number", seed)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", LOCATION)
+                .param("ch", channelId)
+                .param("cust", CUSTOMER)
                 .param("status", status)
-                .param("quote", quoteId).param("hash", "hash-" + seed).param("pub", publicationId)
-                .param("cart", cartId).param("key", "idem-" + seed)
+                .param("quote", quoteId)
+                .param("hash", "hash-" + seed)
+                .param("pub", publicationId)
+                .param("cart", cartId)
+                .param("key", "idem-" + seed)
                 .param("at", closedAt.atOffset(ZoneOffset.UTC))
                 .update();
 
         if (providerType != null) {
-            insertIntent(seed, orderId, "PROVIDER", providerType, providerType, intentStatus,
-                    closedAt);
+            insertIntent(seed, orderId, "PROVIDER", providerType, providerType, intentStatus, closedAt);
         }
         return orderId;
     }
@@ -538,8 +564,14 @@ class FiscalObligationTests {
         insertIntent("cash-" + orderId, orderId, "CASH", "CASH", null, "PAID", NOW);
     }
 
-    private void insertIntent(String seed, UUID orderId, String tender, String methodCode,
-            String providerType, String status, Instant at) {
+    private void insertIntent(
+            String seed,
+            UUID orderId,
+            String tender,
+            String methodCode,
+            String providerType,
+            String status,
+            Instant at) {
         boolean settled = !("PENDING".equals(status) || "AUTHORIZING".equals(status));
         jdbc.sql("""
                 INSERT INTO payments.payment_intents (id, tenant_id, order_id, brand_id,
@@ -550,8 +582,13 @@ class FiscalObligationTests {
                     :status, :timing, :key, :settledAt, 1, :at, :at)
                 """)
                 .param("id", UUID.nameUUIDFromBytes(("intent:" + seed).getBytes()))
-                .param("t", TENANT).param("o", orderId).param("b", BRAND).param("loc", LOCATION)
-                .param("tender", tender).param("code", methodCode).param("provider", providerType)
+                .param("t", TENANT)
+                .param("o", orderId)
+                .param("b", BRAND)
+                .param("loc", LOCATION)
+                .param("tender", tender)
+                .param("code", methodCode)
+                .param("provider", providerType)
                 .param("status", status)
                 .param("timing", providerType == null ? "ON_HANDOVER" : "BEFORE_CONFIRMATION")
                 .param("key", "intent-" + seed)
@@ -569,7 +606,9 @@ class FiscalObligationTests {
                 VALUES (:id, :t, :o, :i, 'SALE', 'NOT_APPLICABLE', :reason,
                     'no payment provider can fiscalize a cash tender', :at, :at)
                 """)
-                .param("id", id).param("t", TENANT).param("o", orderId)
+                .param("id", id)
+                .param("t", TENANT)
+                .param("o", orderId)
                 .param("i", intentId(orderId))
                 .param("reason", FiscalReasonCode.CASH_TENDER_NO_PROVIDER_FISCALIZATION)
                 .param("at", NOW.atOffset(ZoneOffset.UTC))
@@ -578,10 +617,12 @@ class FiscalObligationTests {
     }
 
     private UUID intentId(UUID orderId) {
-        return jdbc.sql("SELECT id FROM payments.payment_intents WHERE tenant_id = :t "
-                        + "AND order_id = :o")
-                .param("t", TENANT).param("o", orderId)
-                .query(UUID.class).optional().orElse(null);
+        return jdbc.sql("SELECT id FROM payments.payment_intents WHERE tenant_id = :t " + "AND order_id = :o")
+                .param("t", TENANT)
+                .param("o", orderId)
+                .query(UUID.class)
+                .optional()
+                .orElse(null);
     }
 
     private void seedTenancy() {
@@ -617,15 +658,23 @@ class FiscalObligationTests {
         jdbc.sql("""
                 INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
                 VALUES (:id, :t, :b, 'MAIN', 'Main menu', 'ACTIVE')
-                """).param("id", catalogId).param("t", TENANT).param("b", BRAND).update();
+                """)
+                .param("id", catalogId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .update();
 
         publicationId = UUID.nameUUIDFromBytes("obligation-publication".getBytes());
         jdbc.sql("""
                 INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel,
                     status, content_hash, activated_at)
                 VALUES (:id, :t, :b, :cat, 'TELEGRAM', 'PUBLISHED', 'hash', now())
-                """).param("id", publicationId).param("t", TENANT).param("b", BRAND)
-                .param("cat", catalogId).update();
+                """)
+                .param("id", publicationId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("cat", catalogId)
+                .update();
 
         firstCompany = UUID.nameUUIDFromBytes("company:first".getBytes());
         secondCompany = UUID.nameUUIDFromBytes("company:second".getBytes());

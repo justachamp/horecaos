@@ -2,11 +2,9 @@ package uz.horecaos.platform.audit.infrastructure.persistence;
 
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ApprovalRequestOwnership;
 
 /**
@@ -45,8 +43,7 @@ public class JdbcApprovalRequestOwnership implements ApprovalRequestOwnership {
                 """)
                 .param("id", approvalRequestId)
                 .param("tenantId", tenantId)
-                .query((resultSet, rowNumber) ->
-                        resultSet.getBoolean("platform_owned") ? Owner.PLATFORM : Owner.CALLER)
+                .query((resultSet, rowNumber) -> resultSet.getBoolean("platform_owned") ? Owner.PLATFORM : Owner.CALLER)
                 .optional();
     }
 }

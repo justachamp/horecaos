@@ -6,11 +6,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -60,24 +58,28 @@ public class FloorPlanService {
      *               and again by V0034, per ADR 0011's rule that an unsupported
      *               provider capability may never be the sole business path
      */
-    public record BranchSettings(UUID tenantId, UUID brandId, UUID locationId, String qrMode,
-            Integer turnaroundMinutes, Integer guestSessionTtlMinutes,
-            Integer serviceChargeRateBp) {
-    }
+    public record BranchSettings(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            String qrMode,
+            Integer turnaroundMinutes,
+            Integer guestSessionTtlMinutes,
+            Integer serviceChargeRateBp) {}
 
     @Transactional
     public SettingsRow configure(BranchSettings request, String actorSubject, String reason) {
-        SettingsRow current = store.findSettings(request.tenantId(), request.locationId())
-                .orElse(null);
+        SettingsRow current =
+                store.findSettings(request.tenantId(), request.locationId()).orElse(null);
 
         SettingsRow desired = new SettingsRow(
-                request.tenantId(), request.brandId(), request.locationId(),
+                request.tenantId(),
+                request.brandId(),
+                request.locationId(),
                 QrMode.require(request.qrMode()),
                 orDefault(request.turnaroundMinutes(), current == null ? 15 : current.turnaroundMinutes()),
-                orDefault(request.guestSessionTtlMinutes(),
-                        current == null ? 240 : current.guestSessionTtlMinutes()),
-                orDefault(request.serviceChargeRateBp(),
-                        current == null ? 0 : current.serviceChargeRateBp()),
+                orDefault(request.guestSessionTtlMinutes(), current == null ? 240 : current.guestSessionTtlMinutes()),
+                orDefault(request.serviceChargeRateBp(), current == null ? 0 : current.serviceChargeRateBp()),
                 1);
 
         SettingsRow saved = store.upsertSettings(desired, clock.instant());
@@ -110,27 +112,32 @@ public class FloorPlanService {
      */
     public SettingsRow settings(UUID tenantId, UUID brandId, UUID locationId) {
         return store.findSettings(tenantId, locationId)
-                .orElseGet(() -> new SettingsRow(tenantId, brandId, locationId,
-                        QrMode.VIEW_ONLY, 15, 240, 0, 1));
+                .orElseGet(() -> new SettingsRow(tenantId, brandId, locationId, QrMode.VIEW_ONLY, 15, 240, 0, 1));
     }
 
     // -------------------------------------------------------------- sections
 
-    public record NewSection(UUID tenantId, UUID brandId, UUID locationId, String code,
-            String displayName, Integer sortOrder) {
-    }
+    public record NewSection(
+            UUID tenantId, UUID brandId, UUID locationId, String code, String displayName, Integer sortOrder) {}
 
     @Transactional
     public SectionRow createSection(NewSection request) {
-        SectionRow section = new SectionRow(UUID.randomUUID(), request.tenantId(),
-                request.brandId(), request.locationId(), request.code(), request.displayName(),
-                request.sortOrder() == null ? 0 : request.sortOrder(), "ACTIVE", 1);
+        SectionRow section = new SectionRow(
+                UUID.randomUUID(),
+                request.tenantId(),
+                request.brandId(),
+                request.locationId(),
+                request.code(),
+                request.displayName(),
+                request.sortOrder() == null ? 0 : request.sortOrder(),
+                "ACTIVE",
+                1);
 
         try {
             store.insertSection(section, clock.instant());
         } catch (DuplicateKeyException alreadyThere) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
-                    "Section %s already exists at this branch".formatted(request.code()));
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT, "Section %s already exists at this branch".formatted(request.code()));
         }
         return section;
     }
@@ -141,23 +148,42 @@ public class FloorPlanService {
 
     // ---------------------------------------------------------------- tables
 
-    public record NewTable(UUID tenantId, UUID brandId, UUID locationId, UUID sectionId,
-            String code, String displayName, int seats, boolean joinable, BigDecimal layoutX,
-            BigDecimal layoutY) {
-    }
+    public record NewTable(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID sectionId,
+            String code,
+            String displayName,
+            int seats,
+            boolean joinable,
+            BigDecimal layoutX,
+            BigDecimal layoutY) {}
 
     @Transactional
     public TableRow createTable(NewTable request) {
-        TableRow table = new TableRow(UUID.randomUUID(), request.tenantId(), request.brandId(),
-                request.locationId(), request.sectionId(), request.code(), request.displayName(),
-                request.seats(), request.joinable(), request.layoutX(), request.layoutY(),
-                "ACTIVE", null, null, 1);
+        TableRow table = new TableRow(
+                UUID.randomUUID(),
+                request.tenantId(),
+                request.brandId(),
+                request.locationId(),
+                request.sectionId(),
+                request.code(),
+                request.displayName(),
+                request.seats(),
+                request.joinable(),
+                request.layoutX(),
+                request.layoutY(),
+                "ACTIVE",
+                null,
+                null,
+                1);
 
         try {
             store.insertTable(table, clock.instant());
         } catch (DuplicateKeyException alreadyThere) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
-                    "Table %s already exists at this branch".formatted(request.code()));
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT, "Table %s already exists at this branch".formatted(request.code()));
         }
         return table;
     }
@@ -175,9 +201,8 @@ public class FloorPlanService {
      *                  and there is no endpoint that will ever return it again:
      *                  losing it means rotating, which is the same operation.
      */
-    public record IssuedQrToken(UUID tableId, String plaintext, Instant rotatedAt, int version,
-            int revokedGuestSessions) {
-    }
+    public record IssuedQrToken(
+            UUID tableId, String plaintext, Instant rotatedAt, int version, int revokedGuestSessions) {}
 
     /**
      * Issues or rotates a table's QR token.
@@ -194,14 +219,15 @@ public class FloorPlanService {
      * the decision they just took.
      */
     @Transactional
-    public IssuedQrToken rotateQrToken(UUID tenantId, UUID tableId, int expectedVersion,
-            String actorSubject, String reason) {
+    public IssuedQrToken rotateQrToken(
+            UUID tenantId, UUID tableId, int expectedVersion, String actorSubject, String reason) {
 
         TableRow table = store.findTable(tenantId, tableId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such table"));
 
         if ("ARCHIVED".equals(table.status())) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST,
+            throw new ApiException(
+                    ErrorCode.INVALID_REQUEST,
                     "An archived table takes no orders, so a code for it would scan to nothing");
         }
 
@@ -212,8 +238,7 @@ public class FloorPlanService {
             throw ApiException.staleVersion(expectedVersion, table.version());
         }
 
-        int revoked = store.revokeGuestSessionsForTable(tenantId, tableId,
-                "TABLE_TOKEN_ROTATED", now);
+        int revoked = store.revokeGuestSessionsForTable(tenantId, tableId, "TABLE_TOKEN_ROTATED", now);
 
         // The digest is recorded and the token is not. An audit trail that carries
         // the credential it was written to protect is a second copy of the thing
@@ -225,9 +250,12 @@ public class FloorPlanService {
                 .targetVersion((long) expectedVersion + 1)
                 .because(reason)
                 .changed(Map.of(
-                        "tableCode", table.code(),
-                        "previouslyIssued", table.qrTokenHash() != null,
-                        "revokedGuestSessions", revoked))
+                        "tableCode",
+                        table.code(),
+                        "previouslyIssued",
+                        table.qrTokenHash() != null,
+                        "revokedGuestSessions",
+                        revoked))
                 .evidence(issued.hash())
                 .usingCapability("dinein.qr.rotate")
                 .correlatedBy(tableId.toString())
@@ -245,8 +273,8 @@ public class FloorPlanService {
      * working, and nobody is going to remember to rotate it first.
      */
     @Transactional
-    public TableRow changeTableStatus(UUID tenantId, UUID tableId, int expectedVersion,
-            String status, String actorSubject, String reason) {
+    public TableRow changeTableStatus(
+            UUID tenantId, UUID tableId, int expectedVersion, String status, String actorSubject, String reason) {
 
         TableRow table = store.findTable(tenantId, tableId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such table"));

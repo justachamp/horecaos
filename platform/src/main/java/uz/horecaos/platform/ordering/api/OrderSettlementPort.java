@@ -72,8 +72,7 @@ public interface OrderSettlementPort {
      * @param settlementId  the settlement, existing or newly planned
      * @param moneyDueMinor whole som a provider or a courier is actually to collect
      */
-    record PlannedSettlement(UUID settlementId, long moneyDueMinor) {
-    }
+    record PlannedSettlement(UUID settlementId, long moneyDueMinor) {}
 
     /**
      * Records that the order was handed over, settling the tenders whose money
@@ -122,10 +121,17 @@ public interface OrderSettlementPort {
      *                                fiscal path and nothing for a courier to
      *                                collect
      */
-    record SettlementRequest(UUID tenantId, UUID brandId, UUID orderId, UUID customerAccountId,
-            String currency, long totalMinor, String paymentMethodCode,
-            long redeemFromBalanceMinor, String idempotencyKey, String actor) {
-    }
+    record SettlementRequest(
+            UUID tenantId,
+            UUID brandId,
+            UUID orderId,
+            UUID customerAccountId,
+            String currency,
+            long totalMinor,
+            String paymentMethodCode,
+            long redeemFromBalanceMinor,
+            String idempotencyKey,
+            String actor) {}
 
     /**
      * Whether a real implementation is present.

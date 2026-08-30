@@ -10,7 +10,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -35,8 +34,7 @@ class CaddyEdgeConfigurationTests {
 
     /** A public site block opens with the origin placeholder the deploy substitutes. */
     private static final Pattern SITE_BLOCK =
-            Pattern.compile("^\\{\\$(HORECAOS_\\w+_ORIGIN)\\} \\{$(.*?)^\\}$",
-                    Pattern.DOTALL | Pattern.MULTILINE);
+            Pattern.compile("^\\{\\$(HORECAOS_\\w+_ORIGIN)\\} \\{$(.*?)^\\}$", Pattern.DOTALL | Pattern.MULTILINE);
 
     private record Site(String origin, String body) {}
 
@@ -53,9 +51,9 @@ class CaddyEdgeConfigurationTests {
     @Test
     @DisplayName("every public origin is found, so the assertions below cover all of them")
     void allThreeOriginsAreParsed() throws IOException {
-        assertThat(sites()).extracting(Site::origin)
-                .containsExactlyInAnyOrder(
-                        "HORECAOS_API_ORIGIN", "HORECAOS_AUTH_ORIGIN", "HORECAOS_MEDIA_ORIGIN");
+        assertThat(sites())
+                .extracting(Site::origin)
+                .containsExactlyInAnyOrder("HORECAOS_API_ORIGIN", "HORECAOS_AUTH_ORIGIN", "HORECAOS_MEDIA_ORIGIN");
     }
 
     @Test

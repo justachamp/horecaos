@@ -10,18 +10,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
-import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.telemetry.api.RealtimeSignal;
 import uz.horecaos.platform.telemetry.api.RealtimeSignalPublisher;
 import uz.horecaos.platform.telemetry.api.ScopeKey;
@@ -36,6 +32,7 @@ import uz.horecaos.platform.telemetry.infrastructure.persistence.JdbcTelemetrySt
 import uz.horecaos.platform.telemetry.infrastructure.persistence.JdbcTelemetryStore.DutySessionRow;
 import uz.horecaos.platform.telemetry.infrastructure.persistence.JdbcTelemetryStore.LivePositionRow;
 import uz.horecaos.platform.telemetry.infrastructure.persistence.JdbcTelemetryStore.TrackWindowRow;
+import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.cache.RateLimiter;
@@ -87,10 +84,15 @@ public class TelemetryIngestService {
     private final ObjectMapper json;
     private final Clock clock;
 
-    public TelemetryIngestService(JdbcTelemetryStore store, DutySessionService sessions,
-            FieldProtection protection, ConfigurationResolver configuration,
-            RealtimeSignalPublisher signals, RateLimiter rateLimiter,
-            ObjectMapper json, Clock clock) {
+    public TelemetryIngestService(
+            JdbcTelemetryStore store,
+            DutySessionService sessions,
+            FieldProtection protection,
+            ConfigurationResolver configuration,
+            RealtimeSignalPublisher signals,
+            RateLimiter rateLimiter,
+            ObjectMapper json,
+            Clock clock) {
         this.store = store;
         this.sessions = sessions;
         this.protection = protection;
@@ -102,19 +104,21 @@ public class TelemetryIngestService {
     }
 
     @Transactional
-    public IngestOutcome ingest(UUID tenantId, UUID courierId, int activeAssignmentCount,
-            List<TrackObservation> batch) {
+    public IngestOutcome ingest(
+            UUID tenantId, UUID courierId, int activeAssignmentCount, List<TrackObservation> batch) {
 
         if (batch.isEmpty()) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "A batch carries at least one observation");
         }
         if (batch.size() > LivePositionRules.MAXIMUM_BATCH_SIZE) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
                     "A batch carries at most %d observations".formatted(LivePositionRules.MAXIMUM_BATCH_SIZE));
         }
 
         DutySessionRow session = sessions.openSession(tenantId, courierId)
-                .orElseThrow(() -> new ApiException(ErrorCode.UNPROCESSABLE_STATE,
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.UNPROCESSABLE_STATE,
                         "This courier has no open duty session, so nothing about their location is "
                                 + "collected. Sign on first (ADR 0045).",
                         Map.of("reason", "NO_OPEN_DUTY_SESSION")));
@@ -125,8 +129,10 @@ public class TelemetryIngestService {
             return IngestOutcome.onBreak();
         }
         if (!session.status().accepts()) {
-            throw new ApiException(ErrorCode.UNPROCESSABLE_STATE,
-                    "This duty session is closed", Map.of("reason", "DUTY_SESSION_CLOSED"));
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    "This duty session is closed",
+                    Map.of("reason", "DUTY_SESSION_CLOSED"));
         }
 
         CollectionGate gate = resolveGate(tenantId, session);
@@ -141,7 +147,8 @@ public class TelemetryIngestService {
                 // and data they pay for themselves.
                 new RateLimiter.Policy(1, LivePositionRules.MINIMUM_BATCH_INTERVAL, false));
         if (!decision.allowed()) {
-            throw new ApiException(ErrorCode.RATE_LIMIT_EXCEEDED,
+            throw new ApiException(
+                    ErrorCode.RATE_LIMIT_EXCEEDED,
                     "One batch per %d seconds per courier"
                             .formatted(LivePositionRules.MINIMUM_BATCH_INTERVAL.toSeconds()),
                     Map.of("retryAfterSeconds", decision.retryAfter().toSeconds()));
@@ -160,8 +167,14 @@ public class TelemetryIngestService {
             // receiving it reads the live row it already has access to and pushes
             // a snapshot to the subscribers authorized for that location; the
             // coordinate never touches a topic.
-            signals.publish(RealtimeSignal.of(tenantId, StreamChannel.COURIER_POSITIONS,
-                    ScopeKey.location(session.locationId()), "COURIER", courierId, null, now));
+            signals.publish(RealtimeSignal.of(
+                    tenantId,
+                    StreamChannel.COURIER_POSITIONS,
+                    ScopeKey.location(session.locationId()),
+                    "COURIER",
+                    courierId,
+                    null,
+                    now));
         }
 
         return new IngestOutcome(ordered.size(), windowsWritten, pinMoved, gate, false);
@@ -179,8 +192,9 @@ public class TelemetryIngestService {
     private int writeTrackWindows(DutySessionRow session, List<TrackObservation> ordered, Instant now) {
         Map<Instant, List<TrackObservation>> byMinute = new TreeMap<>();
         for (TrackObservation observation : ordered) {
-            byMinute.computeIfAbsent(observation.capturedAt().truncatedTo(ChronoUnit.MINUTES),
-                    minute -> new ArrayList<>()).add(observation);
+            byMinute.computeIfAbsent(
+                            observation.capturedAt().truncatedTo(ChronoUnit.MINUTES), minute -> new ArrayList<>())
+                    .add(observation);
         }
 
         int written = 0;
@@ -190,23 +204,33 @@ public class TelemetryIngestService {
             TrackObservation last = window.getLast();
 
             UUID windowId = UUID.randomUUID();
-            String plaintext = json.writeValueAsString(window.stream()
-                    .map(TelemetryIngestService::wireForm)
-                    .toList());
+            String plaintext = json.writeValueAsString(
+                    window.stream().map(TelemetryIngestService::wireForm).toList());
 
-            String protectedTrack = protection.protect(
-                    session.tenantId(), DataClass.PERSONAL_SENSITIVE,
-                    new FieldProtection.RecordRef(
-                            "fulfillment.courier_location_tracks", "protected_track", windowId),
-                    plaintext)
+            String protectedTrack = protection
+                    .protect(
+                            session.tenantId(),
+                            DataClass.PERSONAL_SENSITIVE,
+                            new FieldProtection.RecordRef(
+                                    "fulfillment.courier_location_tracks", "protected_track", windowId),
+                            plaintext)
                     .serialize();
 
             written += store.upsertTrackWindow(new TrackWindowRow(
-                    windowId, session.tenantId(), session.courierId(), session.id(),
-                    entry.getKey(), last.capturedAt(),
-                    Geohash.encode5(first.latitude(), first.longitude()),
-                    Geohash.encode5(last.latitude(), last.longitude()),
-                    window.size(), observedDistanceMeters(window), protectedTrack, now)) ? 1 : 0;
+                            windowId,
+                            session.tenantId(),
+                            session.courierId(),
+                            session.id(),
+                            entry.getKey(),
+                            last.capturedAt(),
+                            Geohash.encode5(first.latitude(), first.longitude()),
+                            Geohash.encode5(last.latitude(), last.longitude()),
+                            window.size(),
+                            observedDistanceMeters(window),
+                            protectedTrack,
+                            now))
+                    ? 1
+                    : 0;
         }
         return written;
     }
@@ -219,8 +243,8 @@ public class TelemetryIngestService {
      * track above. It simply does not become a dot, because a 900 m accuracy
      * circle rendered as a dot sends a courier to the wrong street.
      */
-    private boolean writeLivePosition(DutySessionRow session, List<TrackObservation> ordered,
-            int activeAssignmentCount, Instant now) {
+    private boolean writeLivePosition(
+            DutySessionRow session, List<TrackObservation> ordered, int activeAssignmentCount, Instant now) {
 
         for (int index = ordered.size() - 1; index >= 0; index--) {
             TrackObservation candidate = ordered.get(index);
@@ -229,12 +253,21 @@ public class TelemetryIngestService {
                 continue;
             }
             return store.upsertLivePosition(new LivePositionRow(
-                    session.tenantId(), session.courierId(), session.id(),
-                    session.brandId(), session.locationId(),
-                    candidate.latitude(), candidate.longitude(), candidate.accuracyMeters(),
-                    candidate.headingDegrees(), candidate.speedMps(),
-                    candidate.batteryPercent(), candidate.deviceCharging(),
-                    activeAssignmentCount, candidate.capturedAt(), now));
+                    session.tenantId(),
+                    session.courierId(),
+                    session.id(),
+                    session.brandId(),
+                    session.locationId(),
+                    candidate.latitude(),
+                    candidate.longitude(),
+                    candidate.accuracyMeters(),
+                    candidate.headingDegrees(),
+                    candidate.speedMps(),
+                    candidate.batteryPercent(),
+                    candidate.deviceCharging(),
+                    activeAssignmentCount,
+                    candidate.capturedAt(),
+                    now));
         }
         return false;
     }
@@ -254,8 +287,8 @@ public class TelemetryIngestService {
         for (int index = 1; index < window.size(); index++) {
             TrackObservation previous = window.get(index - 1);
             TrackObservation current = window.get(index);
-            total += Geohash.distanceMeters(previous.latitude(), previous.longitude(),
-                    current.latitude(), current.longitude());
+            total += Geohash.distanceMeters(
+                    previous.latitude(), previous.longitude(), current.latitude(), current.longitude());
         }
         return total;
     }
@@ -267,8 +300,10 @@ public class TelemetryIngestService {
 
         return CollectionGate.find(configured).orElseGet(() -> {
             // A gate nobody can parse must not silently become the wider one.
-            log.warn("Unparseable collection gate \"{}\"; falling back to the session's own {}",
-                    configured, session.collectionGate());
+            log.warn(
+                    "Unparseable collection gate \"{}\"; falling back to the session's own {}",
+                    configured,
+                    session.collectionGate());
             return session.collectionGate();
         });
     }
@@ -302,8 +337,11 @@ public class TelemetryIngestService {
      *                  truthfully that collection has stopped
      */
     public record IngestOutcome(
-            int observationsAccepted, int windowsWritten, boolean livePositionMoved,
-            CollectionGate gate, boolean suspended) {
+            int observationsAccepted,
+            int windowsWritten,
+            boolean livePositionMoved,
+            CollectionGate gate,
+            boolean suspended) {
 
         static IngestOutcome onBreak() {
             return new IngestOutcome(0, 0, false, CollectionGate.ON_DUTY, true);

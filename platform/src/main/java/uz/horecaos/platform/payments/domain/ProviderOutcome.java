@@ -72,26 +72,43 @@ public record ProviderOutcome(
         Objects.requireNonNull(classification, "A classification is required");
     }
 
-    public static ProviderOutcome success(PaymentAttemptStatus observedStatus,
-            ProviderEvidence evidence, String externalPaymentId, SomAmount observedAmount) {
-        return new ProviderOutcome(Classification.SUCCESS, observedStatus, evidence,
-                externalPaymentId, null, observedAmount, null, null, null);
+    public static ProviderOutcome success(
+            PaymentAttemptStatus observedStatus,
+            ProviderEvidence evidence,
+            String externalPaymentId,
+            SomAmount observedAmount) {
+        return new ProviderOutcome(
+                Classification.SUCCESS,
+                observedStatus,
+                evidence,
+                externalPaymentId,
+                null,
+                observedAmount,
+                null,
+                null,
+                null);
     }
 
-    public static ProviderOutcome rejected(String failureCode, String detail,
-            ProviderEvidence evidence) {
-        return new ProviderOutcome(Classification.REJECTED, PaymentAttemptStatus.FAILED, evidence,
-                null, null, null, failureCode, detail, null);
+    public static ProviderOutcome rejected(String failureCode, String detail, ProviderEvidence evidence) {
+        return new ProviderOutcome(
+                Classification.REJECTED,
+                PaymentAttemptStatus.FAILED,
+                evidence,
+                null,
+                null,
+                null,
+                failureCode,
+                detail,
+                null);
     }
 
     public static ProviderOutcome retryable(String failureCode, String detail, Duration retryAfter) {
-        return new ProviderOutcome(Classification.RETRYABLE, null, null, null, null, null,
-                failureCode, detail, retryAfter);
+        return new ProviderOutcome(
+                Classification.RETRYABLE, null, null, null, null, null, failureCode, detail, retryAfter);
     }
 
     public static ProviderOutcome uncertain(String failureCode, String detail) {
-        return new ProviderOutcome(Classification.UNCERTAIN, null, null, null, null, null,
-                failureCode, detail, null);
+        return new ProviderOutcome(Classification.UNCERTAIN, null, null, null, null, null, failureCode, detail, null);
     }
 
     public boolean requiresReconciliation() {

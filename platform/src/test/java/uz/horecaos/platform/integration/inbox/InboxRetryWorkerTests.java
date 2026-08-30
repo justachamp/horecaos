@@ -1,19 +1,15 @@
 package uz.horecaos.platform.integration.inbox;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -21,12 +17,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.integration.api.ExternalEventEnvelope;
 import uz.horecaos.platform.integration.api.InboxHandler;
 import uz.horecaos.platform.support.TestDatabase;
@@ -158,12 +151,16 @@ class InboxRetryWorkerTests {
     }
 
     private InboxResult offer(
-            Instant at, UUID eventId, String value, long offset,
-            String eventType, int version, String occurredAt) {
-        return executorAt(at).execute(
-                CONSUMER, AGGREGATE.toString(),
-                body(eventId, value, eventType, version, occurredAt),
-                Map.of(), TOPIC, 0, offset);
+            Instant at, UUID eventId, String value, long offset, String eventType, int version, String occurredAt) {
+        return executorAt(at)
+                .execute(
+                        CONSUMER,
+                        AGGREGATE.toString(),
+                        body(eventId, value, eventType, version, occurredAt),
+                        Map.of(),
+                        TOPIC,
+                        0,
+                        offset);
     }
 
     private InboxExecutor executorAt(Instant at) {
@@ -181,10 +178,7 @@ class InboxRetryWorkerTests {
     private InboxRetryWorker workerAt(Instant at) {
         Clock clock = Clock.fixed(at, ZoneOffset.UTC);
         return new InboxRetryWorker(
-                new JdbcInboxStore(jdbc, clock),
-                executorAt(at),
-                new InboxHandlerRegistry(List.of(handler)),
-                20);
+                new JdbcInboxStore(jdbc, clock), executorAt(at), new InboxHandlerRegistry(List.of(handler)), 20);
     }
 
     /** What the ADR 0006 resolve endpoint leaves behind, without its authorization. */
@@ -214,24 +208,26 @@ class InboxRetryWorkerTests {
                 .update();
     }
 
-    private static String body(
-            UUID eventId, String value, String eventType, int version, String occurredAt) {
+    private static String body(UUID eventId, String value, String eventType, int version, String occurredAt) {
         return """
                 {"eventId":"%s","eventType":"%s","eventVersion":%d,"tenantId":"%s",
                  "aggregateType":"Tenant","aggregateId":"%s","correlationId":"correlation-1",
                  "causationId":null,"occurredAt":"%s",
-                 "payload":{"value":"%s"}}"""
-                .formatted(eventId, eventType, version, TENANT, AGGREGATE, occurredAt, value);
+                 "payload":{"value":"%s"}}""".formatted(eventId, eventType, version, TENANT, AGGREGATE, occurredAt, value);
     }
 
     private String status(UUID eventId) {
         return jdbc.sql("SELECT status FROM integration.inbox_messages WHERE event_id = :id")
-                .param("id", eventId).query(String.class).single();
+                .param("id", eventId)
+                .query(String.class)
+                .single();
     }
 
     private long sideEffectCount() {
         return jdbc.sql("SELECT count(*) FROM integration.inbox_test_effects WHERE consumer_name = :consumer")
-                .param("consumer", CONSUMER).query(Long.class).single();
+                .param("consumer", CONSUMER)
+                .query(Long.class)
+                .single();
     }
 
     private void insertTenant() {

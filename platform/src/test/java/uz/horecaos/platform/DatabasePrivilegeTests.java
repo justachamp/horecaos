@@ -31,7 +31,7 @@ import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -39,10 +39,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import javax.sql.DataSource;
 import org.springframework.mock.env.MockEnvironment;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.audit.infrastructure.persistence.AuditPartitionManager;
 import uz.horecaos.platform.configuration.DatabasePrivilegeGuard;
 import uz.horecaos.platform.reporting.infrastructure.persistence.ReportingPartitionManager;
@@ -126,8 +124,8 @@ class DatabasePrivilegeTests {
             try {
                 TestDatabase.onCluster("DROP ROLE IF EXISTS " + probe);
             } catch (RuntimeException leftover) {
-                System.err.println("DatabasePrivilegeTests: " + probe + " outlived the suite ("
-                        + leftover.getMessage() + ")");
+                System.err.println(
+                        "DatabasePrivilegeTests: " + probe + " outlived the suite (" + leftover.getMessage() + ")");
             }
         }
     }
@@ -160,7 +158,8 @@ class DatabasePrivilegeTests {
                 .containsEntry("in_application_role", true);
 
         assertThat(owner.sql("SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user)")
-                .query(Boolean.class).single())
+                        .query(Boolean.class)
+                        .single())
                 .as("the migration role is the owner, which is exactly why it cannot be the one under test")
                 .isTrue();
     }
@@ -209,7 +208,9 @@ class DatabasePrivilegeTests {
                     .isFalse();
         }
 
-        assertThatThrownBy(() -> application.sql("UPDATE audit.audit_events_2026 SET reason = 'x'").update())
+        assertThatThrownBy(() -> application
+                        .sql("UPDATE audit.audit_events_2026 SET reason = 'x'")
+                        .update())
                 .as("and the refusal is real, not only a catalogue entry")
                 .isInstanceOf(DataAccessException.class);
     }
@@ -256,14 +257,17 @@ class DatabasePrivilegeTests {
                 "approved_by = 'somebody-else'",
                 "version = 99")) {
             assertThatThrownBy(() -> application
-                    .sql("UPDATE audit.approval_policies SET " + column + " WHERE id = :id")
-                    .param("id", policyId).update())
+                            .sql("UPDATE audit.approval_policies SET " + column + " WHERE id = :id")
+                            .param("id", policyId)
+                            .update())
                     .as("a snapshotted policy's terms must not be rewritable: %s", column)
                     .isInstanceOf(DataAccessException.class);
         }
 
         assertThatThrownBy(() -> application
-                .sql("DELETE FROM audit.approval_policies WHERE id = :id").param("id", policyId).update())
+                        .sql("DELETE FROM audit.approval_policies WHERE id = :id")
+                        .param("id", policyId)
+                        .update())
                 .as("nor may a version be made to have never existed")
                 .isInstanceOf(DataAccessException.class);
 
@@ -284,7 +288,9 @@ class DatabasePrivilegeTests {
                  WHERE schemaname = 'reporting' ORDER BY 1
                 """).query(String.class).list();
 
-        assertThat(tables).as("V0031 must have run for this probe to mean anything").isNotEmpty();
+        assertThat(tables)
+                .as("V0031 must have run for this probe to mean anything")
+                .isNotEmpty();
 
         for (String table : tables) {
             assertThat(privilege(REPORTING_PROBE, table, "SELECT"))
@@ -297,8 +303,8 @@ class DatabasePrivilegeTests {
             }
         }
 
-        assertThatThrownBy(() -> reporting
-                .sql("DELETE FROM reporting.fact_order").update())
+        assertThatThrownBy(
+                        () -> reporting.sql("DELETE FROM reporting.fact_order").update())
                 .isInstanceOf(DataAccessException.class);
 
         assertThat(privilege(REPORTING_PROBE, "ordering.orders", "SELECT"))
@@ -327,9 +333,10 @@ class DatabasePrivilegeTests {
         refused.put("build an index", "CREATE INDEX probe_idx ON audit.approval_requests (id)");
         refused.put("create a role", "CREATE ROLE probe_should_not_exist");
 
-        refused.forEach((what, sql) -> assertThatThrownBy(() -> application.sql(sql).update())
-                .as("the application role must not be able to %s", what)
-                .isInstanceOf(DataAccessException.class));
+        refused.forEach(
+                (what, sql) -> assertThatThrownBy(() -> application.sql(sql).update())
+                        .as("the application role must not be able to %s", what)
+                        .isInstanceOf(DataAccessException.class));
 
         // Widening its own grant is the one attempt that does not raise. PostgreSQL
         // answers a GRANT from a role holding no grant option with a WARNING and
@@ -337,7 +344,9 @@ class DatabasePrivilegeTests {
         // move. Asserted on the privilege rather than on an exception, because
         // asserting on the exception is how this case would be written wrongly and
         // then read as covered.
-        application.sql("GRANT UPDATE ON audit.audit_events TO horecaos_application").update();
+        application
+                .sql("GRANT UPDATE ON audit.audit_events TO horecaos_application")
+                .update();
         assertThat(privilege("audit.audit_events", "UPDATE"))
                 .as("a GRANT issued by a role with no grant option must move nothing")
                 .isFalse();
@@ -396,8 +405,8 @@ class DatabasePrivilegeTests {
         // --- ADR 0045. The full hourly sweep: provision, expire pins, drop
         // expired partitions. It threw on its first statement, which is why the
         // two after it stopped running at all.
-        TrackRetentionSweeper tracks = new TrackRetentionSweeper(
-                application, new JdbcTelemetryStore(application), clock, false, 30);
+        TrackRetentionSweeper tracks =
+                new TrackRetentionSweeper(application, new JdbcTelemetryStore(application), clock, false, 30);
 
         LocalDate wellAhead = databaseToday().plusDays(400);
         assertThat(tracks.ensurePartition(wellAhead)).isTrue();
@@ -405,8 +414,10 @@ class DatabasePrivilegeTests {
         assertThat(privilege("fulfillment." + trackPartition(wellAhead), "INSERT"))
                 .as("a track partition the application cannot insert into is not a partition")
                 .isTrue();
-        assertThat(privilege("fulfillment." + trackPartition(wellAhead), "SELECT")).isTrue();
-        assertThat(privilege("fulfillment." + trackPartition(wellAhead), "UPDATE")).isFalse();
+        assertThat(privilege("fulfillment." + trackPartition(wellAhead), "SELECT"))
+                .isTrue();
+        assertThat(privilege("fulfillment." + trackPartition(wellAhead), "UPDATE"))
+                .isFalse();
 
         assertThatCode(tracks::sweep)
                 .as("ensurePartitions, expireLivePositions and dropExpiredPartitions in one pass")
@@ -419,7 +430,8 @@ class DatabasePrivilegeTests {
         assertThatCode(() -> facts.ensurePartitionsFor(LocalDate.of(2087, 3, 1)))
                 .doesNotThrowAnyException();
         assertThat(privilege("reporting.fact_order_208703", "INSERT")).isTrue();
-        assertThat(privilege(REPORTING_PROBE, "reporting.fact_order_208703", "SELECT")).isTrue();
+        assertThat(privilege(REPORTING_PROBE, "reporting.fact_order_208703", "SELECT"))
+                .isTrue();
         assertThat(privilege(REPORTING_PROBE, "reporting.fact_order_208703", "INSERT"))
                 .as("and the reporting role's read-only separation reaches a partition made at "
                         + "runtime, not only the ones a migration made")
@@ -441,8 +453,11 @@ class DatabasePrivilegeTests {
     @DisplayName("V0075: the retention sweep drops only what is expired, and takes no table name")
     void theRetentionSweepCannotBeTalkedIntoDroppingSomethingElse() {
         TrackRetentionSweeper tracks = new TrackRetentionSweeper(
-                application, new JdbcTelemetryStore(application),
-                Clock.fixed(Instant.parse("2026-08-26T03:00:00Z"), ZoneOffset.UTC), false, 30);
+                application,
+                new JdbcTelemetryStore(application),
+                Clock.fixed(Instant.parse("2026-08-26T03:00:00Z"), ZoneOffset.UTC),
+                false,
+                30);
 
         // The database's clock, not a fixture's — which is the point. This job's
         // window is deliberately not movable by the Clock injected above.
@@ -456,13 +471,13 @@ class DatabasePrivilegeTests {
                 .as("a caller asking for a retention of nothing must still not shorten the window")
                 .contains(trackPartition(expired))
                 .doesNotContain(trackPartition(young), "courier_location_tracks_default");
-        assertThat(sweep(-100_000))
-                .as("nor a negative one")
-                .doesNotContain(trackPartition(young));
+        assertThat(sweep(-100_000)).as("nor a negative one").doesNotContain(trackPartition(young));
 
         assertThatThrownBy(() -> application
-                .sql("SELECT fulfillment.sweep_expired_track_partitions('fulfillment.courier_track_summaries', 30)")
-                .query(String.class).list())
+                        .sql(
+                                "SELECT fulfillment.sweep_expired_track_partitions('fulfillment.courier_track_summaries', 30)")
+                        .query(String.class)
+                        .list())
                 .as("there is no table-name parameter to abuse, so naming one is a type error")
                 .isInstanceOf(DataAccessException.class);
 
@@ -506,7 +521,8 @@ class DatabasePrivilegeTests {
                 "reporting.ensure_fact_partition(text, date)");
 
         for (String function : functions) {
-            Map<String, Object> shape = owner.sql("""
+            Map<String, Object> shape =
+                    owner.sql("""
                     SELECT p.prosecdef AS definer,
                            pg_get_userbyid(p.proowner) AS owner_role,
                            coalesce(array_to_string(p.proconfig, ','), '') AS settings,
@@ -517,23 +533,28 @@ class DatabasePrivilegeTests {
                     """).param("function", function).query().singleRow();
 
             assertThat(shape)
-                    .as("%s must run as its owner; SECURITY INVOKER makes the EXECUTE grant "
-                            + "buy the right to call a function that cannot do its job", function)
+                    .as(
+                            "%s must run as its owner; SECURITY INVOKER makes the EXECUTE grant "
+                                    + "buy the right to call a function that cannot do its job",
+                            function)
                     .containsEntry("definer", true);
             assertThat(shape)
                     .as("%s must be owned by the migration role", function)
                     .containsEntry("owner_role", TestDatabase.MIGRATOR_ROLE);
             assertThat((String) shape.get("settings"))
-                    .as("%s must pin search_path, or an unqualified name inside it is the "
-                            + "caller's to bend", function)
+                    .as(
+                            "%s must pin search_path, or an unqualified name inside it is the " + "caller's to bend",
+                            function)
                     .contains("search_path=pg_catalog");
             assertThat(shape)
                     .as("%s is granted to the application by name", function)
                     .containsEntry("app_may_call", true);
             assertThat(shape)
-                    .as("%s must not be callable by PUBLIC — that is the default on a new "
-                            + "function and it is a privilege escalation waiting for a role "
-                            + "nobody thought about", function)
+                    .as(
+                            "%s must not be callable by PUBLIC — that is the default on a new "
+                                    + "function and it is a privilege escalation waiting for a role "
+                                    + "nobody thought about",
+                            function)
                     .containsEntry("public_may_call", false);
         }
     }
@@ -568,8 +589,7 @@ class DatabasePrivilegeTests {
      * </ul>
      */
     @Test
-    @DisplayName("V0080: every SECURITY DEFINER function names pg_temp last and qualifies its "
-            + "catalogue reads")
+    @DisplayName("V0080: every SECURITY DEFINER function names pg_temp last and qualifies its " + "catalogue reads")
     void noSecurityDefinerFunctionCanBeRedirectedThroughTheTemporarySchema() {
         List<Map<String, Object>> definers = owner.sql("""
                 SELECT p.oid::regprocedure::text AS signature,
@@ -592,7 +612,8 @@ class DatabasePrivilegeTests {
                 .isNotEmpty();
         assertThat(definers.stream().map(row -> (String) row.get("signature")))
                 .as("the four the application may call must be among them")
-                .contains("audit.ensure_event_partition(integer)",
+                .contains(
+                        "audit.ensure_event_partition(integer)",
                         "fulfillment.ensure_track_partition(date)",
                         "fulfillment.sweep_expired_track_partitions(integer,boolean)",
                         "reporting.ensure_fact_partition(text,date)");
@@ -610,14 +631,17 @@ class DatabasePrivilegeTests {
 
             Matcher path = SEARCH_PATH.matcher(settings);
             assertThat(path.find())
-                    .as("%s must pin search_path; without one it inherits the caller's, and "
-                            + "SECURITY DEFINER makes that the caller's choice of what this "
-                            + "function reads (settings were %s)", signature, settings)
+                    .as(
+                            "%s must pin search_path; without one it inherits the caller's, and "
+                                    + "SECURITY DEFINER makes that the caller's choice of what this "
+                                    + "function reads (settings were %s)",
+                            signature, settings)
                     .isTrue();
             List<String> entries = Stream.of(path.group(1).split(","))
-                    .map(String::trim).filter(entry -> !entry.isEmpty()).toList();
-            assertThat(entries)
-                    .as("""
+                    .map(String::trim)
+                    .filter(entry -> !entry.isEmpty())
+                    .toList();
+            assertThat(entries).as("""
                             %s must name pg_temp LAST in search_path. Omitting it does not \
                             leave the temporary schema out — PostgreSQL then searches it \
                             FIRST, ahead of pg_catalog, for every relation and type name in \
@@ -626,9 +650,7 @@ class DatabasePrivilegeTests {
                             pg_class carrying today's partition name and an expired \
                             partition's bound, and fulfillment.sweep_expired_track_partitions \
                             dropped a live day of ADR 0029 courier tracks. Writing pg_temp \
-                            last is the documented remedy (V0080).""", signature)
-                    .isNotEmpty()
-                    .last().isEqualTo("pg_temp");
+                            last is the documented remedy (V0080).""", signature).isNotEmpty().last().isEqualTo("pg_temp");
 
             assertThat(unqualifiedCatalogReads((String) function.get("body")))
                     .as("""
@@ -636,8 +658,7 @@ class DatabasePrivilegeTests {
                             search_path pin above is supposed to make that safe and it is the \
                             declaration that was wrong in all four functions at once, so the \
                             body does not get to depend on it: write pg_catalog.pg_class, \
-                            pg_catalog.pg_inherits, pg_catalog.pg_namespace (V0080).""",
-                            signature)
+                            pg_catalog.pg_inherits, pg_catalog.pg_namespace (V0080).""", signature)
                     .isEmpty();
         }
     }
@@ -664,7 +685,8 @@ class DatabasePrivilegeTests {
     @Test
     @DisplayName("V0080: a forged pg_class cannot make the retention sweep drop a live partition")
     void theRetentionSweepCannotBeRedirectedThroughAForgedCatalogue() {
-        assertThatThrownBy(() -> application.sql("CREATE TEMP TABLE forgery (oid oid)").update())
+        assertThatThrownBy(() ->
+                        application.sql("CREATE TEMP TABLE forgery (oid oid)").update())
                 .as("the application role has no business creating temporary tables, and "
                         + "TEMPORARY is granted to PUBLIC by default until a migration says "
                         + "otherwise (V0080)")
@@ -679,16 +701,23 @@ class DatabasePrivilegeTests {
 
         LocalDate today = databaseToday();
         LocalDate expired = today.minusDays(500);
-        new TrackRetentionSweeper(application, new JdbcTelemetryStore(application),
-                Clock.fixed(Instant.parse("2026-08-26T03:00:00Z"), ZoneOffset.UTC), false, 30)
+        new TrackRetentionSweeper(
+                        application,
+                        new JdbcTelemetryStore(application),
+                        Clock.fixed(Instant.parse("2026-08-26T03:00:00Z"), ZoneOffset.UTC),
+                        false,
+                        30)
                 .ensurePartition(today);
-        application.sql("SELECT fulfillment.ensure_track_partition(:day)")
-                .param("day", expired).query(Boolean.class).single();
+        application
+                .sql("SELECT fulfillment.ensure_track_partition(:day)")
+                .param("day", expired)
+                .query(Boolean.class)
+                .single();
         assertThat(tableExists("fulfillment", trackPartition(today))).isTrue();
         assertThat(tableExists("fulfillment", trackPartition(expired))).isTrue();
 
-        owner.sql("GRANT TEMPORARY ON DATABASE " + db.databaseName()
-                + " TO " + APP_PROBE).update();
+        owner.sql("GRANT TEMPORARY ON DATABASE " + db.databaseName() + " TO " + APP_PROBE)
+                .update();
         List<String> swept = new ArrayList<>();
         try (Connection session = asApplication.getConnection();
                 Statement statement = session.createStatement()) {
@@ -732,8 +761,8 @@ class DatabasePrivilegeTests {
                            'fulfillment'::name AS nspname
                     """);
 
-            try (ResultSet dropped = statement.executeQuery(
-                    "SELECT fulfillment.sweep_expired_track_partitions(30, false)")) {
+            try (ResultSet dropped =
+                    statement.executeQuery("SELECT fulfillment.sweep_expired_track_partitions(30, false)")) {
                 while (dropped.next()) {
                     swept.add(dropped.getString(1));
                 }
@@ -741,26 +770,22 @@ class DatabasePrivilegeTests {
         } catch (SQLException refused) {
             throw new IllegalStateException("the forgery could not be driven at all", refused);
         } finally {
-            owner.sql("REVOKE TEMPORARY ON DATABASE " + db.databaseName()
-                    + " FROM " + APP_PROBE).update();
+            owner.sql("REVOKE TEMPORARY ON DATABASE " + db.databaseName() + " FROM " + APP_PROBE)
+                    .update();
         }
 
-        assertThat(swept)
-                .as("""
+        assertThat(swept).as("""
                         The sweep must read the real catalogue. Before V0080 this call \
                         answered with TODAY's partition name and dropped it — a live day of \
                         courier GPS tracks — because the forged pg_class above was searched \
                         ahead of pg_catalog, while the partition that was genuinely expired \
-                        went untouched.""")
-                .contains(trackPartition(expired))
-                .doesNotContain(trackPartition(today));
+                        went untouched.""").contains(trackPartition(expired)).doesNotContain(trackPartition(today));
 
         assertThat(tableExists("fulfillment", trackPartition(today)))
                 .as("today's tracks are still there")
                 .isTrue();
         assertThat(tableExists("fulfillment", trackPartition(expired)))
-                .as("and the sweep did the job it was asked for while refusing the one it "
-                        + "was pointed at")
+                .as("and the sweep did the job it was asked for while refusing the one it " + "was pointed at")
                 .isFalse();
     }
 
@@ -780,13 +805,16 @@ class DatabasePrivilegeTests {
      * that finds its own row and replaces it.
      */
     @Test
-    @DisplayName("V0080: the telemetry upsert writes and replaces a track window under the "
-            + "application role")
+    @DisplayName("V0080: the telemetry upsert writes and replaces a track window under the " + "application role")
     void theTrackUpsertCanActuallyUpdateOnConflict() {
         JdbcTelemetryStore store = new JdbcTelemetryStore(application);
         LocalDate today = databaseToday();
-        new TrackRetentionSweeper(application, store,
-                Clock.fixed(Instant.parse("2026-08-26T03:00:00Z"), ZoneOffset.UTC), false, 30)
+        new TrackRetentionSweeper(
+                        application,
+                        store,
+                        Clock.fixed(Instant.parse("2026-08-26T03:00:00Z"), ZoneOffset.UTC),
+                        false,
+                        30)
                 .ensurePartition(today);
 
         UUID tenantId = UUID.randomUUID();
@@ -795,9 +823,18 @@ class DatabasePrivilegeTests {
         Instant windowStart = today.atStartOfDay(ZoneOffset.UTC).toInstant().plusSeconds(36_000);
 
         assertThat(store.upsertTrackWindow(new JdbcTelemetryStore.TrackWindowRow(
-                UUID.randomUUID(), tenantId, courierId, sessionId,
-                windowStart, windowStart.plusSeconds(60), "u9ded", "u9ded",
-                6, 120, "ciphertext-v1", Instant.parse("2026-08-26T10:01:00Z"))))
+                        UUID.randomUUID(),
+                        tenantId,
+                        courierId,
+                        sessionId,
+                        windowStart,
+                        windowStart.plusSeconds(60),
+                        "u9ded",
+                        "u9ded",
+                        6,
+                        120,
+                        "ciphertext-v1",
+                        Instant.parse("2026-08-26T10:01:00Z"))))
                 .as("""
                         An ON CONFLICT ... DO UPDATE needs the UPDATE privilege on its target \
                         whether or not a row ever conflicts, and V0041 granted SELECT and \
@@ -808,9 +845,18 @@ class DatabasePrivilegeTests {
                 .isTrue();
 
         assertThat(store.upsertTrackWindow(new JdbcTelemetryStore.TrackWindowRow(
-                UUID.randomUUID(), tenantId, courierId, sessionId,
-                windowStart, windowStart.plusSeconds(60), "u9ded", "u9dej",
-                9, 210, "ciphertext-v2", Instant.parse("2026-08-26T10:01:30Z"))))
+                        UUID.randomUUID(),
+                        tenantId,
+                        courierId,
+                        sessionId,
+                        windowStart,
+                        windowStart.plusSeconds(60),
+                        "u9ded",
+                        "u9dej",
+                        9,
+                        210,
+                        "ciphertext-v2",
+                        Instant.parse("2026-08-26T10:01:30Z"))))
                 .as("and the conflicting write — a later batch completing a minute an earlier "
                         + "one only started — must replace it")
                 .isTrue();
@@ -877,20 +923,19 @@ class DatabasePrivilegeTests {
                     """)
                     .param("object", requirement.object())
                     .param("privilege", requirement.privilege())
-                    .query(Boolean.class).single();
+                    .query(Boolean.class)
+                    .single();
             if (!Boolean.TRUE.equals(granted)) {
                 gaps.add("%s needs %s (%s)".formatted(requirement.object(), requirement.privilege(), source));
             }
         });
 
-        assertThat(gaps)
-                .as("""
+        assertThat(gaps).as("""
                         The application's SQL uses a privilege no migration granted. Under the owner \
                         connection this succeeds and nobody notices; under horecaos_app it is \
                         'permission denied', at whatever hour the code path first runs. The fix is a \
                         GRANT in a forward migration, never a statement typed on the server — grants \
-                        live with the objects, and the next restore drops anything typed by hand.""")
-                .isEmpty();
+                        live with the objects, and the next restore drops anything typed by hand.""").isEmpty();
     }
 
     // -----------------------------------------------------------------------
@@ -921,14 +966,12 @@ class DatabasePrivilegeTests {
         List<String> violations = new ArrayList<>();
         try (Stream<Path> sources = Files.walk(Path.of("src", "main", "java"))) {
             sources.filter(path -> path.getFileName().toString().endsWith(".java"))
-                    .forEach(path -> ddlViolations(read(path))
-                            .forEach(found -> violations.add(path + ": " + found)));
+                    .forEach(path -> ddlViolations(read(path)).forEach(found -> violations.add(path + ": " + found)));
         } catch (IOException unreadable) {
             throw new UncheckedIOException(unreadable);
         }
 
-        assertThat(violations)
-                .as("""
+        assertThat(violations).as("""
                         Application code is issuing a statement the application role cannot run. \
                         horecaos_application holds USAGE and no CREATE on every schema, no DDL of any \
                         kind, and no grant option, so this is not fixed by a GRANT: a CREATE or a \
@@ -938,8 +981,7 @@ class DatabasePrivilegeTests {
                         scheduled thread. Put the statement in a migration, or behind a SECURITY \
                         DEFINER function owned by horecaos_migrator whose identifiers come from an \
                         allowlist or a formatted date and never from a caller's string \
-                        (V0075, V0070).""")
-                .isEmpty();
+                        (V0075, V0070).""").isEmpty();
     }
 
     /**
@@ -959,19 +1001,16 @@ class DatabasePrivilegeTests {
                             FOR VALUES FROM ('%d-01-01 00:00:00+00') TO ('%d-01-01 00:00:00+00')
                         ""\".formatted(table, year, year + 1)).update();
                 """)).isNotEmpty();
-        assertThat(ddlViolations(
-                "jdbc.sql(\"GRANT INSERT, SELECT ON audit.%s TO horecaos_application\").update();"))
+        assertThat(ddlViolations("jdbc.sql(\"GRANT INSERT, SELECT ON audit.%s TO horecaos_application\").update();"))
                 .isNotEmpty();
         assertThat(ddlViolations("""
                 jdbc.sql(""\"
                         CREATE TABLE fulfillment.%s PARTITION OF fulfillment.courier_location_tracks
                         ""\").update();
                 """)).isNotEmpty();
-        assertThat(ddlViolations(
-                "jdbc.sql(\"GRANT SELECT, INSERT ON fulfillment.%s TO horecaos_application\")"))
+        assertThat(ddlViolations("jdbc.sql(\"GRANT SELECT, INSERT ON fulfillment.%s TO horecaos_application\")"))
                 .isNotEmpty();
-        assertThat(ddlViolations(
-                "jdbc.sql(\"DROP TABLE fulfillment.%s\".formatted(table)).update();"))
+        assertThat(ddlViolations("jdbc.sql(\"DROP TABLE fulfillment.%s\".formatted(table)).update();"))
                 .isNotEmpty();
 
         for (String alsoRefused : List.of(
@@ -1046,8 +1085,8 @@ class DatabasePrivilegeTests {
         for (Map.Entry<Pattern, String> statement : STATEMENTS) {
             Matcher matcher = statement.getKey().matcher(upsert);
             while (matcher.find()) {
-                owned(matcher.group(1), matcher.group(2)).ifPresent(table ->
-                        headVerbsOnly.add(new Requirement(table, statement.getValue())));
+                owned(matcher.group(1), matcher.group(2))
+                        .ifPresent(table -> headVerbsOnly.add(new Requirement(table, statement.getValue())));
             }
         }
         assertThat(headVerbsOnly)
@@ -1101,8 +1140,10 @@ class DatabasePrivilegeTests {
                 "SELECT id FROM ordering.order_timers WHERE fires_at < :now FOR NO KEY UPDATE",
                 "SELECT id FROM ordering.order_timers WHERE tenant_id = :tenantId FOR SHARE")) {
             assertThat(statementPrivileges("jdbc.sql(\"\"\"\n" + locking + "\n\"\"\")"))
-                    .as("%s takes a row lock, and every lock strength needs UPDATE — FOR SHARE "
-                            + "included, which is not what its name suggests", locking)
+                    .as(
+                            "%s takes a row lock, and every lock strength needs UPDATE — FOR SHARE "
+                                    + "included, which is not what its name suggests",
+                            locking)
                     .contains(new Requirement("ordering.order_timers", "UPDATE"));
         }
 
@@ -1126,7 +1167,8 @@ class DatabasePrivilegeTests {
                 """))
                 .as("DELETE ... USING reads the table it joins, and the verb at the head of the "
                         + "statement says DELETE")
-                .contains(new Requirement("fulfillment.courier_duty_sessions", "SELECT"),
+                .contains(
+                        new Requirement("fulfillment.courier_duty_sessions", "SELECT"),
                         new Requirement("fulfillment.courier_positions_live", "DELETE"));
 
         assertThat(privilege("fulfillment.courier_location_tracks", "UPDATE"))
@@ -1174,8 +1216,8 @@ class DatabasePrivilegeTests {
     private static void createLoginRole(String name, String password, String groupRole) {
         owner.sql("DROP ROLE IF EXISTS " + name).update();
         owner.sql("CREATE ROLE " + name + " LOGIN PASSWORD '" + password + "'").update();
-        owner.sql("ALTER ROLE " + name
-                + " NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION INHERIT").update();
+        owner.sql("ALTER ROLE " + name + " NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION INHERIT")
+                .update();
         owner.sql("GRANT " + groupRole + " TO " + name).update();
     }
 
@@ -1184,12 +1226,12 @@ class DatabasePrivilegeTests {
     }
 
     private static boolean privilege(String role, String object, String privilege) {
-        return Boolean.TRUE.equals(owner
-                .sql("SELECT has_table_privilege(:role, :object, :privilege)")
+        return Boolean.TRUE.equals(owner.sql("SELECT has_table_privilege(:role, :object, :privilege)")
                 .param("role", role)
                 .param("object", object)
                 .param("privilege", privilege)
-                .query(Boolean.class).single());
+                .query(Boolean.class)
+                .single());
     }
 
     /** One schema-qualified table and one privilege the application's SQL needs on it. */
@@ -1207,29 +1249,50 @@ class DatabasePrivilegeTests {
      * path — is not a table of ours and is left alone.
      */
     private static final Set<String> OWNED_SCHEMAS = Set.of(
-            "audit", "catalog", "commercial", "courier", "customer", "dinein", "fiscal",
-            "fulfillment", "iam", "integration", "inventory", "kitchen", "loyalty",
-            "marketing", "media", "migration", "notifications", "ordering", "partner",
-            "payments", "platform", "pos", "pricing", "reporting", "telemetry", "tenant");
+            "audit",
+            "catalog",
+            "commercial",
+            "courier",
+            "customer",
+            "dinein",
+            "fiscal",
+            "fulfillment",
+            "iam",
+            "integration",
+            "inventory",
+            "kitchen",
+            "loyalty",
+            "marketing",
+            "media",
+            "migration",
+            "notifications",
+            "ordering",
+            "partner",
+            "payments",
+            "platform",
+            "pos",
+            "pricing",
+            "reporting",
+            "telemetry",
+            "tenant");
 
     private static final List<Map.Entry<Pattern, String>> STATEMENTS = List.of(
-            Map.entry(Pattern.compile("\\bINSERT\\s+INTO\\s+([a-z_]+)\\.([a-z_0-9]+)",
-                    Pattern.CASE_INSENSITIVE), "INSERT"),
-            Map.entry(Pattern.compile("\\bUPDATE\\s+([a-z_]+)\\.([a-z_0-9]+)",
-                    Pattern.CASE_INSENSITIVE), "UPDATE"),
-            Map.entry(Pattern.compile("\\bDELETE\\s+FROM\\s+([a-z_]+)\\.([a-z_0-9]+)",
-                    Pattern.CASE_INSENSITIVE), "DELETE"),
-            Map.entry(Pattern.compile("\\bTRUNCATE\\s+(?:TABLE\\s+)?([a-z_]+)\\.([a-z_0-9]+)",
-                    Pattern.CASE_INSENSITIVE), "TRUNCATE"),
-            Map.entry(Pattern.compile("\\bFROM\\s+([a-z_]+)\\.([a-z_0-9]+)",
-                    Pattern.CASE_INSENSITIVE), "SELECT"),
-            Map.entry(Pattern.compile("\\bJOIN\\s+([a-z_]+)\\.([a-z_0-9]+)",
-                    Pattern.CASE_INSENSITIVE), "SELECT"),
+            Map.entry(
+                    Pattern.compile("\\bINSERT\\s+INTO\\s+([a-z_]+)\\.([a-z_0-9]+)", Pattern.CASE_INSENSITIVE),
+                    "INSERT"),
+            Map.entry(Pattern.compile("\\bUPDATE\\s+([a-z_]+)\\.([a-z_0-9]+)", Pattern.CASE_INSENSITIVE), "UPDATE"),
+            Map.entry(
+                    Pattern.compile("\\bDELETE\\s+FROM\\s+([a-z_]+)\\.([a-z_0-9]+)", Pattern.CASE_INSENSITIVE),
+                    "DELETE"),
+            Map.entry(
+                    Pattern.compile("\\bTRUNCATE\\s+(?:TABLE\\s+)?([a-z_]+)\\.([a-z_0-9]+)", Pattern.CASE_INSENSITIVE),
+                    "TRUNCATE"),
+            Map.entry(Pattern.compile("\\bFROM\\s+([a-z_]+)\\.([a-z_0-9]+)", Pattern.CASE_INSENSITIVE), "SELECT"),
+            Map.entry(Pattern.compile("\\bJOIN\\s+([a-z_]+)\\.([a-z_0-9]+)", Pattern.CASE_INSENSITIVE), "SELECT"),
             // DELETE ... USING joins a second table and reads it. The verb at the
             // head of the statement is DELETE and the privilege this needs is
             // SELECT, on a table the head never names.
-            Map.entry(Pattern.compile("\\bUSING\\s+([a-z_]+)\\.([a-z_0-9]+)",
-                    Pattern.CASE_INSENSITIVE), "SELECT"));
+            Map.entry(Pattern.compile("\\bUSING\\s+([a-z_]+)\\.([a-z_0-9]+)", Pattern.CASE_INSENSITIVE), "SELECT"));
 
     // -----------------------------------------------------------------------
     // The privileges a statement needs and does not spell
@@ -1281,8 +1344,7 @@ class DatabasePrivilegeTests {
      * thread rather than a request anybody sees.
      */
     private static final Pattern ROW_LOCK = Pattern.compile(
-            "\\bFOR\\s+(?:NO\\s+KEY\\s+)?UPDATE\\b|\\bFOR\\s+(?:KEY\\s+)?SHARE\\b",
-            Pattern.CASE_INSENSITIVE);
+            "\\bFOR\\s+(?:NO\\s+KEY\\s+)?UPDATE\\b|\\bFOR\\s+(?:KEY\\s+)?SHARE\\b", Pattern.CASE_INSENSITIVE);
 
     private static final Pattern LOCK_CANDIDATE = Pattern.compile(
             "\\b(?:FROM|JOIN)\\s+([a-z_]+)\\.([a-z_0-9]+)(?:\\s+(?:AS\\s+)?([a-z][a-z_0-9]*))?",
@@ -1290,8 +1352,7 @@ class DatabasePrivilegeTests {
 
     /** {@code FOR UPDATE OF d SKIP LOCKED} — the aliases the lock actually names. */
     private static final Pattern LOCK_NAMES = Pattern.compile(
-            "\\AFOR\\s+(?:NO\\s+KEY\\s+)?UPDATE\\s+OF\\s+([a-z_0-9,\\s]*?)"
-                    + "(?:\\s+SKIP\\b|\\s+NOWAIT\\b|\\n)",
+            "\\AFOR\\s+(?:NO\\s+KEY\\s+)?UPDATE\\s+OF\\s+([a-z_0-9,\\s]*?)" + "(?:\\s+SKIP\\b|\\s+NOWAIT\\b|\\n)",
             Pattern.CASE_INSENSITIVE);
 
     /**
@@ -1342,9 +1403,7 @@ class DatabasePrivilegeTests {
     /** The table, if the schema is one a migration of ours creates. */
     private static Optional<String> owned(String schema, String table) {
         String lowered = schema.toLowerCase();
-        return OWNED_SCHEMAS.contains(lowered)
-                ? Optional.of(lowered + "." + table.toLowerCase())
-                : Optional.empty();
+        return OWNED_SCHEMAS.contains(lowered) ? Optional.of(lowered + "." + table.toLowerCase()) : Optional.empty();
     }
 
     private static boolean insideAComment(String source, int at) {
@@ -1381,8 +1440,7 @@ class DatabasePrivilegeTests {
             });
         }
 
-        Matcher named = LOCK_NAMES.matcher(source.substring(at,
-                Math.min(source.length(), at + 200)));
+        Matcher named = LOCK_NAMES.matcher(source.substring(at, Math.min(source.length(), at + 200)));
         if (named.find()) {
             List<String> targets = Stream.of(named.group(1).split(","))
                     .map(alias -> byAlias.get(alias.trim().toLowerCase()))
@@ -1398,9 +1456,10 @@ class DatabasePrivilegeTests {
     private static Map<Requirement, String> requiredPrivileges() {
         Map<Requirement, String> found = new LinkedHashMap<>();
         try (Stream<Path> sources = Files.walk(Path.of("src", "main", "java"))) {
-            sources.filter(path -> path.getFileName().toString().endsWith(".java")).forEach(path ->
-                    statementPrivileges(read(path)).forEach(requirement ->
-                            found.putIfAbsent(requirement, path.getFileName().toString())));
+            sources.filter(path -> path.getFileName().toString().endsWith(".java"))
+                    .forEach(path -> statementPrivileges(read(path))
+                            .forEach(requirement -> found.putIfAbsent(
+                                    requirement, path.getFileName().toString())));
         } catch (IOException unreadable) {
             throw new UncheckedIOException(unreadable);
         }
@@ -1420,8 +1479,7 @@ class DatabasePrivilegeTests {
     // -----------------------------------------------------------------------
 
     /** {@code (?:audit|catalog|…)\s*\.} — one of ours, and nothing else. */
-    private static final String OWNED =
-            "(?:" + String.join("|", new TreeSet<>(OWNED_SCHEMAS)) + ")\\s*\\.";
+    private static final String OWNED = "(?:" + String.join("|", new TreeSet<>(OWNED_SCHEMAS)) + ")\\s*\\.";
 
     /** Every privilege name that can stand after GRANT or REVOKE. */
     private static final String PRIVILEGES =
@@ -1439,47 +1497,58 @@ class DatabasePrivilegeTests {
      * a {@code REVOKE}.
      */
     private static final List<Map.Entry<Pattern, String>> FORBIDDEN = List.of(
-            Map.entry(Pattern.compile(
-                    "\\bCREATE\\s+(?:UNLOGGED\\s+|GLOBAL\\s+|LOCAL\\s+|TEMP\\w*\\s+)*TABLE\\s+"
-                            + "(?:IF\\s+NOT\\s+EXISTS\\s+)?" + OWNED,
-                    Pattern.CASE_INSENSITIVE), "CREATE TABLE"),
-            Map.entry(Pattern.compile(
-                    "\\bDROP\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?" + OWNED,
-                    Pattern.CASE_INSENSITIVE), "DROP TABLE"),
-            Map.entry(Pattern.compile(
-                    "\\bALTER\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?(?:ONLY\\s+)?" + OWNED,
-                    Pattern.CASE_INSENSITIVE), "ALTER TABLE"),
-            Map.entry(Pattern.compile(
-                    "\\bTRUNCATE\\s+(?:TABLE\\s+)?(?:ONLY\\s+)?" + OWNED,
-                    Pattern.CASE_INSENSITIVE), "TRUNCATE"),
-            Map.entry(Pattern.compile(
-                    "\\bLOCK\\s+(?:TABLE\\s+)?" + OWNED,
-                    Pattern.CASE_INSENSITIVE), "LOCK TABLE"),
-            Map.entry(Pattern.compile(
-                    "\\bREFRESH\\s+MATERIALIZED\\s+VIEW\\b", Pattern.CASE_INSENSITIVE),
+            Map.entry(
+                    Pattern.compile(
+                            "\\bCREATE\\s+(?:UNLOGGED\\s+|GLOBAL\\s+|LOCAL\\s+|TEMP\\w*\\s+)*TABLE\\s+"
+                                    + "(?:IF\\s+NOT\\s+EXISTS\\s+)?" + OWNED,
+                            Pattern.CASE_INSENSITIVE),
+                    "CREATE TABLE"),
+            Map.entry(
+                    Pattern.compile("\\bDROP\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?" + OWNED, Pattern.CASE_INSENSITIVE),
+                    "DROP TABLE"),
+            Map.entry(
+                    Pattern.compile(
+                            "\\bALTER\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?(?:ONLY\\s+)?" + OWNED,
+                            Pattern.CASE_INSENSITIVE),
+                    "ALTER TABLE"),
+            Map.entry(
+                    Pattern.compile("\\bTRUNCATE\\s+(?:TABLE\\s+)?(?:ONLY\\s+)?" + OWNED, Pattern.CASE_INSENSITIVE),
+                    "TRUNCATE"),
+            Map.entry(Pattern.compile("\\bLOCK\\s+(?:TABLE\\s+)?" + OWNED, Pattern.CASE_INSENSITIVE), "LOCK TABLE"),
+            Map.entry(
+                    Pattern.compile("\\bREFRESH\\s+MATERIALIZED\\s+VIEW\\b", Pattern.CASE_INSENSITIVE),
                     "REFRESH MATERIALIZED VIEW"),
-            Map.entry(Pattern.compile(
-                    "\\bCREATE\\s+(?:OR\\s+REPLACE\\s+)?(?:UNIQUE\\s+)?"
-                            + "(?:INDEX|SCHEMA|ROLE|USER|VIEW|MATERIALIZED\\s+VIEW|SEQUENCE"
-                            + "|TRIGGER|FUNCTION|PROCEDURE|EXTENSION|TYPE|DATABASE|TABLESPACE"
-                            + "|PUBLICATION|SUBSCRIPTION)\\b",
-                    Pattern.CASE_INSENSITIVE), "CREATE"),
-            Map.entry(Pattern.compile(
-                    "\\bDROP\\s+(?:INDEX|SCHEMA|ROLE|USER|VIEW|MATERIALIZED\\s+VIEW|SEQUENCE"
-                            + "|TRIGGER|FUNCTION|PROCEDURE|EXTENSION|TYPE|DATABASE|CONSTRAINT"
-                            + "|COLUMN|PUBLICATION|SUBSCRIPTION)\\b",
-                    Pattern.CASE_INSENSITIVE), "DROP"),
-            Map.entry(Pattern.compile(
-                    "\\bALTER\\s+(?:ROLE|USER|SCHEMA|SEQUENCE|INDEX|FUNCTION|DATABASE|SYSTEM|TYPE)\\b",
-                    Pattern.CASE_INSENSITIVE), "ALTER"),
-            Map.entry(Pattern.compile(
-                    "\\b(?:REINDEX|CLUSTER|VACUUM)\\s+(?:TABLE\\s+|VERBOSE\\s+|FULL\\s+)*" + OWNED,
-                    Pattern.CASE_INSENSITIVE), "maintenance DDL"),
-            Map.entry(Pattern.compile(
-                    "\\bCOMMENT\\s+ON\\s+(?:TABLE|COLUMN|FUNCTION|SCHEMA|INDEX)\\b",
-                    Pattern.CASE_INSENSITIVE), "COMMENT ON"),
-            Map.entry(Pattern.compile(
-                    "\\bSET\\s+(?:ROLE|SESSION\\s+AUTHORIZATION)\\b", Pattern.CASE_INSENSITIVE),
+            Map.entry(
+                    Pattern.compile(
+                            "\\bCREATE\\s+(?:OR\\s+REPLACE\\s+)?(?:UNIQUE\\s+)?"
+                                    + "(?:INDEX|SCHEMA|ROLE|USER|VIEW|MATERIALIZED\\s+VIEW|SEQUENCE"
+                                    + "|TRIGGER|FUNCTION|PROCEDURE|EXTENSION|TYPE|DATABASE|TABLESPACE"
+                                    + "|PUBLICATION|SUBSCRIPTION)\\b",
+                            Pattern.CASE_INSENSITIVE),
+                    "CREATE"),
+            Map.entry(
+                    Pattern.compile(
+                            "\\bDROP\\s+(?:INDEX|SCHEMA|ROLE|USER|VIEW|MATERIALIZED\\s+VIEW|SEQUENCE"
+                                    + "|TRIGGER|FUNCTION|PROCEDURE|EXTENSION|TYPE|DATABASE|CONSTRAINT"
+                                    + "|COLUMN|PUBLICATION|SUBSCRIPTION)\\b",
+                            Pattern.CASE_INSENSITIVE),
+                    "DROP"),
+            Map.entry(
+                    Pattern.compile(
+                            "\\bALTER\\s+(?:ROLE|USER|SCHEMA|SEQUENCE|INDEX|FUNCTION|DATABASE|SYSTEM|TYPE)\\b",
+                            Pattern.CASE_INSENSITIVE),
+                    "ALTER"),
+            Map.entry(
+                    Pattern.compile(
+                            "\\b(?:REINDEX|CLUSTER|VACUUM)\\s+(?:TABLE\\s+|VERBOSE\\s+|FULL\\s+)*" + OWNED,
+                            Pattern.CASE_INSENSITIVE),
+                    "maintenance DDL"),
+            Map.entry(
+                    Pattern.compile(
+                            "\\bCOMMENT\\s+ON\\s+(?:TABLE|COLUMN|FUNCTION|SCHEMA|INDEX)\\b", Pattern.CASE_INSENSITIVE),
+                    "COMMENT ON"),
+            Map.entry(
+                    Pattern.compile("\\bSET\\s+(?:ROLE|SESSION\\s+AUTHORIZATION)\\b", Pattern.CASE_INSENSITIVE),
                     "SET ROLE"),
             // The one that does not raise. A grant from a role with no grant
             // option is a WARNING and a no-op, so it has to be caught here or it
@@ -1488,15 +1557,19 @@ class DatabasePrivilegeTests {
             // The privilege list has to be followed by ON or TO, which is what
             // keeps "Grant references location %s outside tenant %s" — a sentence
             // in an authorization error — from reading as a GRANT statement.
-            Map.entry(Pattern.compile(
-                    "\\bGRANT\\s+" + PRIVILEGES + "(?:\\s*,\\s*" + PRIVILEGES + ")*\\s+(?:ON|TO)\\b",
-                    Pattern.CASE_INSENSITIVE), "GRANT"),
-            Map.entry(Pattern.compile(
-                    "\\bREVOKE\\s+(?:GRANT\\s+OPTION\\s+FOR\\s+)?" + PRIVILEGES
-                            + "(?:\\s*,\\s*" + PRIVILEGES + ")*\\s+(?:ON|FROM)\\b",
-                    Pattern.CASE_INSENSITIVE), "REVOKE"),
-            Map.entry(Pattern.compile(
-                    "\\b(?:GRANT|REVOKE)\\s+horecaos_\\w+\\s+(?:TO|FROM)\\b", Pattern.CASE_INSENSITIVE),
+            Map.entry(
+                    Pattern.compile(
+                            "\\bGRANT\\s+" + PRIVILEGES + "(?:\\s*,\\s*" + PRIVILEGES + ")*\\s+(?:ON|TO)\\b",
+                            Pattern.CASE_INSENSITIVE),
+                    "GRANT"),
+            Map.entry(
+                    Pattern.compile(
+                            "\\bREVOKE\\s+(?:GRANT\\s+OPTION\\s+FOR\\s+)?" + PRIVILEGES + "(?:\\s*,\\s*" + PRIVILEGES
+                                    + ")*\\s+(?:ON|FROM)\\b",
+                            Pattern.CASE_INSENSITIVE),
+                    "REVOKE"),
+            Map.entry(
+                    Pattern.compile("\\b(?:GRANT|REVOKE)\\s+horecaos_\\w+\\s+(?:TO|FROM)\\b", Pattern.CASE_INSENSITIVE),
                     "role membership"));
 
     /**
@@ -1512,8 +1585,10 @@ class DatabasePrivilegeTests {
         for (Map.Entry<Pattern, String> forbidden : FORBIDDEN) {
             Matcher matcher = forbidden.getKey().matcher(source);
             while (matcher.find()) {
-                found.add("%s — %s".formatted(forbidden.getValue(),
-                        matcher.group().replaceAll("\\s+", " ").trim()));
+                found.add("%s — %s"
+                        .formatted(
+                                forbidden.getValue(),
+                                matcher.group().replaceAll("\\s+", " ").trim()));
             }
         }
         return found;
@@ -1534,8 +1609,8 @@ class DatabasePrivilegeTests {
      * catalogue tables and views that actually appear in bodies here, plus the ones
      * a partition or privilege helper would reach for next.
      */
-    private static final Pattern UNQUALIFIED_CATALOG = Pattern.compile(
-            "(?<!pg_catalog\\.)\\bpg_(class|namespace|inherits|proc|attribute|constraint|index"
+    private static final Pattern UNQUALIFIED_CATALOG =
+            Pattern.compile("(?<!pg_catalog\\.)\\bpg_(class|namespace|inherits|proc|attribute|constraint|index"
                     + "|indexes|depend|type|tables|views|matviews|roles|database|partitioned_table"
                     + "|authid|shdepend|rewrite|trigger|extension)\\b");
 
@@ -1580,6 +1655,7 @@ class DatabasePrivilegeTests {
                 """)
                 .param("schema", schema)
                 .param("table", table)
-                .query(Boolean.class).single());
+                .query(Boolean.class)
+                .single());
     }
 }

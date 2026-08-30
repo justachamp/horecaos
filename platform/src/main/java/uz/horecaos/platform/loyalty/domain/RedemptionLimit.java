@@ -23,8 +23,7 @@ public final class RedemptionLimit {
     /** The smallest money tender an order may settle with. */
     private static final long MINIMUM_MONEY_MINOR = 1L;
 
-    private RedemptionLimit() {
-    }
+    private RedemptionLimit() {}
 
     /**
      * @param orderTotalMinor    the whole order, delivery fee included
@@ -34,8 +33,12 @@ public final class RedemptionLimit {
      * @param excludesDeliveryFee whether the fee is outside the eligible value
      * @return the largest amount a redemption may cover, possibly zero
      */
-    public static long maximumRedeemable(long orderTotalMinor, long deliveryFeeMinor,
-            int maxShareBasisPoints, long minOrderMinor, boolean excludesDeliveryFee) {
+    public static long maximumRedeemable(
+            long orderTotalMinor,
+            long deliveryFeeMinor,
+            int maxShareBasisPoints,
+            long minOrderMinor,
+            boolean excludesDeliveryFee) {
 
         if (orderTotalMinor <= 0 || maxShareBasisPoints <= 0) {
             return 0L;
@@ -47,9 +50,7 @@ public final class RedemptionLimit {
             return 0L;
         }
 
-        long eligible = excludesDeliveryFee
-                ? Math.max(0L, orderTotalMinor - deliveryFeeMinor)
-                : orderTotalMinor;
+        long eligible = excludesDeliveryFee ? Math.max(0L, orderTotalMinor - deliveryFeeMinor) : orderTotalMinor;
 
         // Truncated downwards. Rounding a cap upwards is how a redemption ends up
         // one som over a limit somebody signed off.

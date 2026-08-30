@@ -6,10 +6,8 @@ import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.partner.application.port.MarketplaceOrderIntake;
 import uz.horecaos.platform.partner.domain.ExternalReference;
 import uz.horecaos.platform.partner.domain.ExternalTotals;
@@ -117,9 +115,7 @@ public class JdbcMarketplaceOrderIntake implements MarketplaceOrderIntake {
                     'NOT_PROMISED', 'MARKETPLACE', 'EXTERNAL', 'PARTNER',
                     'API', :bindingId, 'PROVIDER',
                     :createdByActorId, 1, :createdAt)
-                """)
-                .params(row)
-                .update();
+                """).params(row).update();
 
         // The promise is deliberately NOT_PROMISED. The partner made a promise
         // to the customer and HorecaOS did not; copying it into promise columns
@@ -149,9 +145,7 @@ public class JdbcMarketplaceOrderIntake implements MarketplaceOrderIntake {
                     NULL, :currency, :subtotal, :tax,
                     :discount, :fee, :total, 0,
                     'PROVIDER', 'marketplace')
-                """)
-                .params(revision)
-                .update();
+                """).params(revision).update();
 
         int lineNumber = 1;
         for (IntakeLine line : order.lines()) {
@@ -183,9 +177,7 @@ public class JdbcMarketplaceOrderIntake implements MarketplaceOrderIntake {
                         :unit, :amount, :amount,
                         :tax, 1, :mappingStatus,
                         :externalItemReference)
-                    """)
-                    .params(lineRow)
-                    .update();
+                    """).params(lineRow).update();
         }
 
         Map<String, Object> pricing = new HashMap<>();
@@ -212,9 +204,7 @@ public class JdbcMarketplaceOrderIntake implements MarketplaceOrderIntake {
                     :orderId, :tenantId, :bindingId, :currency, :total,
                     :subtotal, :discount, :fee,
                     :tax, :funding, true, CAST(:rawTotals AS jsonb))
-                """)
-                .params(pricing)
-                .update();
+                """).params(pricing).update();
 
         for (ExternalReference reference : order.references()) {
             Map<String, Object> referenceRow = new HashMap<>();
@@ -234,9 +224,7 @@ public class JdbcMarketplaceOrderIntake implements MarketplaceOrderIntake {
                     VALUES (
                         :id, :tenantId, :orderId, :bindingId, :type,
                         :value, :normalised, :issuedBy)
-                    """)
-                    .params(referenceRow)
-                    .update();
+                    """).params(referenceRow).update();
         }
 
         UUID challengeId = UUID.randomUUID();
@@ -247,8 +235,7 @@ public class JdbcMarketplaceOrderIntake implements MarketplaceOrderIntake {
         challenge.put("bindingId", order.bindingId());
         challenge.put("type", order.challengeType().name());
         challenge.put("issuedBy", order.challengeIssuedBy());
-        challenge.put("hash", order.challengeType() == HandoverChallengeType.NONE
-                ? null : order.handoverCodeHash());
+        challenge.put("hash", order.challengeType() == HandoverChallengeType.NONE ? null : order.handoverCodeHash());
 
         jdbc.sql("""
                 INSERT INTO ordering.order_handover_challenges (
@@ -257,9 +244,7 @@ public class JdbcMarketplaceOrderIntake implements MarketplaceOrderIntake {
                 VALUES (
                     :id, :tenantId, :orderId, :bindingId, :type, :issuedBy,
                     :hash, 0, 5, 'PENDING')
-                """)
-                .params(challenge)
-                .update();
+                """).params(challenge).update();
 
         return new Created(orderId, publicOrderNumber, challengeId);
     }

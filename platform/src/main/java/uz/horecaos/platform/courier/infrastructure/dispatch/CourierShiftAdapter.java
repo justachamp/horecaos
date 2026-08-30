@@ -2,9 +2,7 @@ package uz.horecaos.platform.courier.infrastructure.dispatch;
 
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.courier.domain.ShiftStatus;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore.ShiftRow;
@@ -95,7 +93,7 @@ public class CourierShiftAdapter implements CourierShiftPort {
         }
 
         ShiftRow row = shift.get();
-        return Optional.of(new OpenShift(row.id(), row.locationId(), row.brandId(),
-                engagement.get().registrationValidUntil()));
+        return Optional.of(new OpenShift(
+                row.id(), row.locationId(), row.brandId(), engagement.get().registrationValidUntil()));
     }
 }

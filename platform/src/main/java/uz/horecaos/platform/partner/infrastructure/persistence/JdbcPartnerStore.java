@@ -8,10 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.partner.domain.HandoverChallengeStatus;
 import uz.horecaos.platform.partner.domain.HandoverChallengeType;
 import uz.horecaos.platform.partner.domain.PartnerClientStatus;
@@ -141,8 +139,7 @@ public class JdbcPartnerStore {
      * means a customer who has already paid the aggregator gets nothing while the
      * branch never learns why.
      */
-    public Map<String, UUID> resolveMenuItems(UUID tenantId, UUID bindingId,
-            List<String> externalItemIds) {
+    public Map<String, UUID> resolveMenuItems(UUID tenantId, UUID bindingId, List<String> externalItemIds) {
 
         if (externalItemIds.isEmpty()) {
             return Map.of();
@@ -160,9 +157,8 @@ public class JdbcPartnerStore {
                 .param("tenantId", tenantId)
                 .param("bindingId", bindingId)
                 .param("ids", externalItemIds)
-                .query((row, number) -> Map.entry(
-                        row.getString("external_entity_id"),
-                        row.getObject("horecaos_entity_id", UUID.class)))
+                .query((row, number) ->
+                        Map.entry(row.getString("external_entity_id"), row.getObject("horecaos_entity_id", UUID.class)))
                 .list()
                 .forEach(entry -> resolved.put(entry.getKey(), entry.getValue()));
         return resolved;
@@ -197,8 +193,11 @@ public class JdbcPartnerStore {
         row.put("outcome", outcome);
         row.put("rejectionCode", rejectionCode);
         row.put("orderId", orderId);
-        row.put("pickupAt", push.pickupExpectedAt() == null
-                ? null : OffsetDateTime.ofInstant(push.pickupExpectedAt(), ZoneOffset.UTC));
+        row.put(
+                "pickupAt",
+                push.pickupExpectedAt() == null
+                        ? null
+                        : OffsetDateTime.ofInstant(push.pickupExpectedAt(), ZoneOffset.UTC));
         row.put("receivedAt", OffsetDateTime.ofInstant(push.receivedAt(), ZoneOffset.UTC));
 
         jdbc.sql("""
@@ -210,9 +209,7 @@ public class JdbcPartnerStore {
                     :id, :tenantId, :bindingId, :externalOrderId, :receivedAt,
                     :payload, :hash, :outcome, :rejectionCode,
                     :orderId, :pickupAt)
-                """)
-                .params(row)
-                .update();
+                """).params(row).update();
     }
 
     /**
@@ -228,8 +225,7 @@ public class JdbcPartnerStore {
      * order issues a new identifier for it, which every aggregator protocol
      * permits and which leaves both versions visible.
      */
-    public Optional<StagedOutcome> findStagedOutcome(UUID tenantId, UUID bindingId,
-            String externalOrderId) {
+    public Optional<StagedOutcome> findStagedOutcome(UUID tenantId, UUID bindingId, String externalOrderId) {
 
         return jdbc.sql("""
                 SELECT outcome, rejection_code, order_id
@@ -375,8 +371,13 @@ public class JdbcPartnerStore {
     }
 
     /** Settles a challenge. Returns false when somebody else settled it first. */
-    public boolean settleChallenge(UUID tenantId, UUID challengeId, HandoverChallengeStatus status,
-            String verifiedBy, String bypassReasonCode, Instant at) {
+    public boolean settleChallenge(
+            UUID tenantId,
+            UUID challengeId,
+            HandoverChallengeStatus status,
+            String verifiedBy,
+            String bypassReasonCode,
+            Instant at) {
 
         Map<String, Object> row = new HashMap<>();
         row.put("tenantId", tenantId);
@@ -396,9 +397,7 @@ public class JdbcPartnerStore {
                     updated_at = now()
                 WHERE tenant_id = :tenantId AND id = :id
                   AND status IN ('PENDING', 'FAILED')
-                """)
-                .params(row)
-                .update() == 1;
+                """).params(row).update() == 1;
     }
 
     // ------------------------------------------------------------ partner clients
@@ -469,8 +468,14 @@ public class JdbcPartnerStore {
      * liveness recording depends on a setup step somebody might skip is a channel
      * that goes stale invisibly, which is the exact failure this table exists for.
      */
-    public void recordSuccess(UUID tenantId, UUID bindingId, UUID locationId, String direction,
-            String reference, int staleAfterSeconds, Instant at) {
+    public void recordSuccess(
+            UUID tenantId,
+            UUID bindingId,
+            UUID locationId,
+            String direction,
+            String reference,
+            int staleAfterSeconds,
+            Instant at) {
 
         Map<String, Object> row = new HashMap<>();
         row.put("tenantId", tenantId);
@@ -496,13 +501,17 @@ public class JdbcPartnerStore {
                     alert_raised_at = NULL,
                     version = integration.provider_activity_watermarks.version + 1,
                     updated_at = now()
-                """)
-                .params(row)
-                .update();
+                """).params(row).update();
     }
 
-    public void recordFailure(UUID tenantId, UUID bindingId, UUID locationId, String direction,
-            String failureCode, int staleAfterSeconds, Instant at) {
+    public void recordFailure(
+            UUID tenantId,
+            UUID bindingId,
+            UUID locationId,
+            String direction,
+            String failureCode,
+            int staleAfterSeconds,
+            Instant at) {
 
         Map<String, Object> row = new HashMap<>();
         row.put("tenantId", tenantId);
@@ -526,9 +535,7 @@ public class JdbcPartnerStore {
                     location_id = EXCLUDED.location_id,
                     version = integration.provider_activity_watermarks.version + 1,
                     updated_at = now()
-                """)
-                .params(row)
-                .update();
+                """).params(row).update();
     }
 
     /**
@@ -605,22 +612,53 @@ public class JdbcPartnerStore {
 
     // -------------------------------------------------------------------- rows
 
-    public record Venue(UUID bindingId, UUID installationId, UUID brandId, UUID locationId,
-            UUID channelId, String channelCode, String tenantDefaultCurrency) { }
+    public record Venue(
+            UUID bindingId,
+            UUID installationId,
+            UUID brandId,
+            UUID locationId,
+            UUID channelId,
+            String channelCode,
+            String tenantDefaultCurrency) {}
 
-    public record InboundPush(UUID tenantId, UUID bindingId, String externalOrderId,
-            String encryptedPayload, String payloadSha256, Instant pickupExpectedAt,
-            Instant receivedAt) { }
+    public record InboundPush(
+            UUID tenantId,
+            UUID bindingId,
+            String externalOrderId,
+            String encryptedPayload,
+            String payloadSha256,
+            Instant pickupExpectedAt,
+            Instant receivedAt) {}
 
-    public record ReferenceMatch(UUID orderId, String referenceType, String referenceValue,
-            UUID bindingId, String publicOrderNumber, UUID locationId, String orderStatus) { }
+    public record ReferenceMatch(
+            UUID orderId,
+            String referenceType,
+            String referenceValue,
+            UUID bindingId,
+            String publicOrderNumber,
+            UUID locationId,
+            String orderStatus) {}
 
-    public record Challenge(UUID id, UUID tenantId, UUID orderId, UUID bindingId,
-            HandoverChallengeType type, String issuedBy, String expectedValueHash,
-            int attempts, int maxAttempts, HandoverChallengeStatus status, int version) { }
+    public record Challenge(
+            UUID id,
+            UUID tenantId,
+            UUID orderId,
+            UUID bindingId,
+            HandoverChallengeType type,
+            String issuedBy,
+            String expectedValueHash,
+            int attempts,
+            int maxAttempts,
+            HandoverChallengeStatus status,
+            int version) {}
 
-    public record PartnerClient(UUID id, UUID tenantId, UUID installationId, String clientId,
-            PartnerClientStatus status, Instant secretExpiresAt) { }
+    public record PartnerClient(
+            UUID id,
+            UUID tenantId,
+            UUID installationId,
+            String clientId,
+            PartnerClientStatus status,
+            Instant secretExpiresAt) {}
 
     public record StagedOutcome(String outcome, String rejectionCode, UUID orderId) {
 
@@ -629,8 +667,17 @@ public class JdbcPartnerStore {
         }
     }
 
-    public record LivenessRow(UUID bindingId, UUID locationId, String direction,
-            String providerName, Instant lastSuccessAt, String lastSuccessReference,
-            Instant lastFailureAt, String lastFailureCode, int staleAfterSeconds,
-            Integer observedMedianIntervalSeconds, String alertState, Long silenceSeconds) { }
+    public record LivenessRow(
+            UUID bindingId,
+            UUID locationId,
+            String direction,
+            String providerName,
+            Instant lastSuccessAt,
+            String lastSuccessReference,
+            Instant lastFailureAt,
+            String lastFailureCode,
+            int staleAfterSeconds,
+            Integer observedMedianIntervalSeconds,
+            String alertState,
+            Long silenceSeconds) {}
 }

@@ -10,14 +10,12 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
-import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.ApprovalAction;
+import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.ApprovalRequestCommand;
 import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditClass;
@@ -79,8 +77,8 @@ public class LoyaltyAdjustmentService {
      * that account need a second pair of eyes for something nobody chose — and an
      * approval queue full of those is an approval queue nobody reads.
      */
-    private static final List<String> UNCOUNTED_REASONS = List.of(
-            REASON_ACCOUNT_MERGE, REASON_LEGACY_OPENING_BALANCE, REASON_ORDER_ACCRUAL_CLAWBACK);
+    private static final List<String> UNCOUNTED_REASONS =
+            List.of(REASON_ACCOUNT_MERGE, REASON_LEGACY_OPENING_BALANCE, REASON_ORDER_ACCRUAL_CLAWBACK);
 
     /**
      * How far back the aggregate looks.
@@ -109,10 +107,12 @@ public class LoyaltyAdjustmentService {
     private final Clock clock;
     private final long approvalThresholdMinor;
 
-    public LoyaltyAdjustmentService(JdbcLoyaltyStore store, ApprovalService approvals,
-            AuditRecorder audit, Clock clock,
-            @Value("${horecaos.loyalty.adjustment-approval-threshold-minor:100000}")
-            long approvalThresholdMinor) {
+    public LoyaltyAdjustmentService(
+            JdbcLoyaltyStore store,
+            ApprovalService approvals,
+            AuditRecorder audit,
+            Clock clock,
+            @Value("${horecaos.loyalty.adjustment-approval-threshold-minor:100000}") long approvalThresholdMinor) {
         this.store = store;
         this.approvals = approvals;
         this.audit = audit;
@@ -125,10 +125,17 @@ public class LoyaltyAdjustmentService {
      *                    them. There is no second account on this command and
      *                    there is no overload that takes one
      */
-    public record AdjustmentCommand(UUID tenantId, UUID brandId, UUID customerAccountId,
-            long amountMinor, String currency, String reasonCode, String reason, ActorRef actor,
-            String idempotencyKey, String correlationId) {
-    }
+    public record AdjustmentCommand(
+            UUID tenantId,
+            UUID brandId,
+            UUID customerAccountId,
+            long amountMinor,
+            String currency,
+            String reasonCode,
+            String reason,
+            ActorRef actor,
+            String idempotencyKey,
+            String correlationId) {}
 
     /**
      * <p>The threshold is aggregate, not per-adjustment. Ten credits of 20 000 to
@@ -148,14 +155,12 @@ public class LoyaltyAdjustmentService {
     @Transactional
     public ApprovalOutcome adjust(AdjustmentCommand command) {
         if (command.amountMinor() == 0) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "An adjustment moves a non-zero amount");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "An adjustment moves a non-zero amount");
         }
         Instant now = clock.instant();
 
         ResourceScope scope = ResourceScope.brand(command.tenantId(), command.brandId());
-        long weighed = Math.abs(command.amountMinor())
-                + recentAdjustmentsMinor(command, now);
+        long weighed = Math.abs(command.amountMinor()) + recentAdjustmentsMinor(command, now);
         if (weighed >= approvalThresholdMinor) {
             ApprovalOutcome outcome = approvals.requireApproval(new ApprovalRequestCommand(
                     ApprovalAction.LOYALTY_BALANCE_ADJUST.code(),
@@ -181,26 +186,44 @@ public class LoyaltyAdjustmentService {
         return new ApprovalOutcome.NotRequired();
     }
 
-    private void apply(AdjustmentCommand command, ResourceScope scope, UUID approvalId,
-            Instant now) {
+    private void apply(AdjustmentCommand command, ResourceScope scope, UUID approvalId, Instant now) {
 
-        AccountRow account = store.openAccount(UUID.randomUUID(), command.tenantId(),
-                command.brandId(), command.customerAccountId(), command.currency(), now);
+        AccountRow account = store.openAccount(
+                UUID.randomUUID(),
+                command.tenantId(),
+                command.brandId(),
+                command.customerAccountId(),
+                command.currency(),
+                now);
 
         long balanceAfter = account.balanceMinor() + command.amountMinor();
         if (balanceAfter < 0) {
             // The balance floor, restated where an operator would hit it. A
             // clawback larger than what is left is a WRITE_OFF against the
             // tenant, not a negative balance the customer finds later.
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "An adjustment cannot take a balance below zero");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "An adjustment cannot take a balance below zero");
         }
 
         UUID entryId = UUID.randomUUID();
-        boolean recorded = store.appendEntry(new JdbcLoyaltyStore.NewEntry(entryId,
-                command.tenantId(), account.id(), EntryType.ADJUSTMENT, command.amountMinor(),
-                balanceAfter, null, null, null, null, null, command.reasonCode(),
-                command.actor().subject(), approvalId, command.idempotencyKey(), now), now);
+        boolean recorded = store.appendEntry(
+                new JdbcLoyaltyStore.NewEntry(
+                        entryId,
+                        command.tenantId(),
+                        account.id(),
+                        EntryType.ADJUSTMENT,
+                        command.amountMinor(),
+                        balanceAfter,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        command.reasonCode(),
+                        command.actor().subject(),
+                        approvalId,
+                        command.idempotencyKey(),
+                        now),
+                now);
         if (!recorded) {
             return;
         }
@@ -211,22 +234,47 @@ public class LoyaltyAdjustmentService {
             // other point. A credit with no lot would be a balance that never
             // decays, which is the shape finance finds as a liability line growing
             // against no sale.
-            store.insertLot(UUID.randomUUID(), command.tenantId(), account.id(), entryId,
-                    command.amountMinor(), now, now.plus(Duration.ofDays(180)),
-                    LotStatus.ACTIVE, now);
+            store.insertLot(
+                    UUID.randomUUID(),
+                    command.tenantId(),
+                    account.id(),
+                    entryId,
+                    command.amountMinor(),
+                    now,
+                    now.plus(Duration.ofDays(180)),
+                    LotStatus.ACTIVE,
+                    now);
         } else {
             consumeFromOldestLots(command.tenantId(), account.id(), -command.amountMinor(), now);
             store.destroyBalance(command.tenantId(), account.id(), -command.amountMinor(), now);
         }
 
-        audit.record(new AuditFact(UUID.randomUUID(), AuditClass.BUSINESS,
-                "loyalty.balance.adjust", command.actor(), scope, "loyalty.account", account.id(),
-                (long) account.version(), AuditFact.Outcome.SUCCEEDED, command.reason(),
+        audit.record(new AuditFact(
+                UUID.randomUUID(),
+                AuditClass.BUSINESS,
+                "loyalty.balance.adjust",
+                command.actor(),
+                scope,
+                "loyalty.account",
+                account.id(),
+                (long) account.version(),
+                AuditFact.Outcome.SUCCEEDED,
+                command.reason(),
                 // No contact point, no name, no order history. ADR 0029 keeps the
                 // change document to the movement itself.
-                Map.of("amountMinor", command.amountMinor(), "reasonCode", command.reasonCode(),
-                        "balanceAfterMinor", balanceAfter),
-                null, "loyalty.adjust", approvalId, command.correlationId(), null, now));
+                Map.of(
+                        "amountMinor",
+                        command.amountMinor(),
+                        "reasonCode",
+                        command.reasonCode(),
+                        "balanceAfterMinor",
+                        balanceAfter),
+                null,
+                "loyalty.adjust",
+                approvalId,
+                command.correlationId(),
+                null,
+                now));
     }
 
     /**
@@ -268,28 +316,38 @@ public class LoyaltyAdjustmentService {
      *         covered the clawback in full
      */
     @Transactional
-    public long clawBack(UUID tenantId, UUID brandId, UUID customerAccountId, long amountMinor,
-            UUID orderId, String actor) {
+    public long clawBack(
+            UUID tenantId, UUID brandId, UUID customerAccountId, long amountMinor, UUID orderId, String actor) {
         if (amountMinor <= 0) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A clawback takes back a positive amount");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A clawback takes back a positive amount");
         }
         Instant now = clock.instant();
         AccountRow account = store.findAccount(tenantId, brandId, customerAccountId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "The customer holds no points account at this brand"));
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.RESOURCE_NOT_FOUND, "The customer holds no points account at this brand"));
 
         long recoverable = Math.min(amountMinor, account.balanceMinor());
         long shortfall = Math.subtractExact(amountMinor, recoverable);
 
         // The first write of the transaction, so that a redelivery is refused
         // here rather than after it has moved something.
-        if (!store.recordClawback(new JdbcLoyaltyStore.ClawbackRow(UUID.randomUUID(), tenantId,
-                brandId, account.id(), orderId, amountMinor, recoverable, shortfall,
-                REASON_ORDER_ACCRUAL_CLAWBACK, actor, now), now)) {
+        if (!store.recordClawback(
+                new JdbcLoyaltyStore.ClawbackRow(
+                        UUID.randomUUID(),
+                        tenantId,
+                        brandId,
+                        account.id(),
+                        orderId,
+                        amountMinor,
+                        recoverable,
+                        shortfall,
+                        REASON_ORDER_ACCRUAL_CLAWBACK,
+                        actor,
+                        now),
+                now)) {
             return store.findClawback(tenantId, orderId)
-                    .orElseThrow(() -> new IllegalStateException(
-                            "A clawback of order " + orderId + " is recorded and unreadable"))
+                    .orElseThrow(() ->
+                            new IllegalStateException("A clawback of order " + orderId + " is recorded and unreadable"))
                     .writtenOffMinor();
         }
 
@@ -298,11 +356,25 @@ public class LoyaltyAdjustmentService {
             // the gate above has already established that this is the first
             // delivery, so a used key here means a movement recorded under it
             // that this transaction is about to make a second time.
-            store.requireEntry(new JdbcLoyaltyStore.NewEntry(UUID.randomUUID(), tenantId,
-                    account.id(), EntryType.ADJUSTMENT, -recoverable,
-                    Math.subtractExact(account.balanceMinor(), recoverable), null, orderId, null,
-                    null, null, REASON_ORDER_ACCRUAL_CLAWBACK, actor, null,
-                    "CLAWBACK:" + orderId, now), now);
+            store.requireEntry(
+                    new JdbcLoyaltyStore.NewEntry(
+                            UUID.randomUUID(),
+                            tenantId,
+                            account.id(),
+                            EntryType.ADJUSTMENT,
+                            -recoverable,
+                            Math.subtractExact(account.balanceMinor(), recoverable),
+                            null,
+                            orderId,
+                            null,
+                            null,
+                            null,
+                            REASON_ORDER_ACCRUAL_CLAWBACK,
+                            actor,
+                            null,
+                            "CLAWBACK:" + orderId,
+                            now),
+                    now);
             consumeFromOldestLots(tenantId, account.id(), recoverable, now);
             if (!store.destroyBalance(tenantId, account.id(), recoverable, now)) {
                 // A redemption committed between the read above and this
@@ -310,8 +382,7 @@ public class LoyaltyAdjustmentService {
                 // claims. Rolling back is the whole of the repair: the clawback
                 // row goes with it and the redelivery starts again from the
                 // balance as it now is.
-                throw new IllegalStateException(
-                        "The balance moved inside the clawback of order " + orderId);
+                throw new IllegalStateException("The balance moved inside the clawback of order " + orderId);
             }
         }
         return shortfall;
@@ -325,12 +396,10 @@ public class LoyaltyAdjustmentService {
      * that moves money, and there is no other method on this class that could.
      */
     @Transactional
-    public long forfeit(UUID tenantId, UUID accountId, String reasonCode, ActorRef actor,
-            String correlationId) {
+    public long forfeit(UUID tenantId, UUID accountId, String reasonCode, ActorRef actor, String correlationId) {
         Instant now = clock.instant();
         AccountRow account = store.findAccountById(tenantId, accountId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No such points account"));
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such points account"));
 
         long forfeited = 0L;
         long running = account.balanceMinor();
@@ -348,20 +417,48 @@ public class LoyaltyAdjustmentService {
             // already been reduced for. requireEntry rather than a discarded
             // boolean, because that argument is about today's callers and the
             // destroyBalance above is unconditional.
-            store.requireEntry(new JdbcLoyaltyStore.NewEntry(UUID.randomUUID(), tenantId, accountId,
-                    EntryType.FORFEITURE, -remaining, running, lot.id(), null, null, null, null,
-                    reasonCode, actor.subject(), null, "FORFEITURE:" + lot.id(), now), now);
+            store.requireEntry(
+                    new JdbcLoyaltyStore.NewEntry(
+                            UUID.randomUUID(),
+                            tenantId,
+                            accountId,
+                            EntryType.FORFEITURE,
+                            -remaining,
+                            running,
+                            lot.id(),
+                            null,
+                            null,
+                            null,
+                            null,
+                            reasonCode,
+                            actor.subject(),
+                            null,
+                            "FORFEITURE:" + lot.id(),
+                            now),
+                    now);
             forfeited += remaining;
         }
 
         store.setAccountStatus(tenantId, accountId, AccountStatus.CLOSED, now);
 
-        audit.record(new AuditFact(UUID.randomUUID(), AuditClass.BUSINESS, "loyalty.balance.forfeit",
-                actor, ResourceScope.brand(tenantId, account.brandId()), "loyalty.account",
-                accountId, (long) account.version(), AuditFact.Outcome.SUCCEEDED,
+        audit.record(new AuditFact(
+                UUID.randomUUID(),
+                AuditClass.BUSINESS,
+                "loyalty.balance.forfeit",
+                actor,
+                ResourceScope.brand(tenantId, account.brandId()),
+                "loyalty.account",
+                accountId,
+                (long) account.version(),
+                AuditFact.Outcome.SUCCEEDED,
                 "Account closed under " + reasonCode,
-                Map.of("forfeitedMinor", forfeited, "reasonCode", reasonCode), null,
-                "loyalty.adjust", null, correlationId, null, now));
+                Map.of("forfeitedMinor", forfeited, "reasonCode", reasonCode),
+                null,
+                "loyalty.adjust",
+                null,
+                correlationId,
+                null,
+                now));
         return forfeited;
     }
 
@@ -387,19 +484,15 @@ public class LoyaltyAdjustmentService {
      * points that no redemption could ever reach.
      */
     @Transactional
-    public long merge(UUID tenantId, UUID sourceAccountId, UUID targetAccountId, ActorRef actor,
-            String correlationId) {
+    public long merge(UUID tenantId, UUID sourceAccountId, UUID targetAccountId, ActorRef actor, String correlationId) {
         Instant now = clock.instant();
         AccountRow source = store.findAccountById(tenantId, sourceAccountId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No such points account"));
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such points account"));
         AccountRow target = store.findAccountById(tenantId, targetAccountId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No such points account"));
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such points account"));
 
         if (!source.brandId().equals(target.brandId())) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A merge cannot move points between brands");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A merge cannot move points between brands");
         }
 
         long moved = 0L;
@@ -431,13 +524,27 @@ public class LoyaltyAdjustmentService {
                 }
                 sourceRunning -= remaining;
                 if (!store.destroyBalance(tenantId, sourceAccountId, remaining, now)) {
-                    throw new IllegalStateException(
-                            "A lot holds more than its account's balance: " + lot.id());
+                    throw new IllegalStateException("A lot holds more than its account's balance: " + lot.id());
                 }
-                store.requireEntry(new JdbcLoyaltyStore.NewEntry(UUID.randomUUID(), tenantId,
-                        sourceAccountId, EntryType.EXPIRY, -remaining, sourceRunning, lot.id(),
-                        null, null, null, null, "LOT_EXPIRED", actor.subject(), null,
-                        LedgerKeys.expiry(lot.id(), now), now), now);
+                store.requireEntry(
+                        new JdbcLoyaltyStore.NewEntry(
+                                UUID.randomUUID(),
+                                tenantId,
+                                sourceAccountId,
+                                EntryType.EXPIRY,
+                                -remaining,
+                                sourceRunning,
+                                lot.id(),
+                                null,
+                                null,
+                                null,
+                                null,
+                                "LOT_EXPIRED",
+                                actor.subject(),
+                                null,
+                                LedgerKeys.expiry(lot.id(), now),
+                                now),
+                        now);
                 continue;
             }
 
@@ -453,21 +560,58 @@ public class LoyaltyAdjustmentService {
             // moved points between two accounts with one of its two entries
             // missing is a balance nobody could reconcile on either side.
             UUID debit = UUID.randomUUID();
-            store.requireEntry(new JdbcLoyaltyStore.NewEntry(debit, tenantId, sourceAccountId,
-                    EntryType.ADJUSTMENT, -remaining, sourceRunning, lot.id(), null, null, null,
-                    null, REASON_ACCOUNT_MERGE, actor.subject(), null,
-                    "MERGE_OUT:" + lot.id(), now), now);
+            store.requireEntry(
+                    new JdbcLoyaltyStore.NewEntry(
+                            debit,
+                            tenantId,
+                            sourceAccountId,
+                            EntryType.ADJUSTMENT,
+                            -remaining,
+                            sourceRunning,
+                            lot.id(),
+                            null,
+                            null,
+                            null,
+                            null,
+                            REASON_ACCOUNT_MERGE,
+                            actor.subject(),
+                            null,
+                            "MERGE_OUT:" + lot.id(),
+                            now),
+                    now);
 
             targetRunning += remaining;
             UUID credit = UUID.randomUUID();
-            store.requireEntry(new JdbcLoyaltyStore.NewEntry(credit, tenantId, targetAccountId,
-                    EntryType.ADJUSTMENT, remaining, targetRunning, null, null, null, null, null,
-                    REASON_ACCOUNT_MERGE, actor.subject(), null, "MERGE_IN:" + lot.id(), now), now);
+            store.requireEntry(
+                    new JdbcLoyaltyStore.NewEntry(
+                            credit,
+                            tenantId,
+                            targetAccountId,
+                            EntryType.ADJUSTMENT,
+                            remaining,
+                            targetRunning,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            REASON_ACCOUNT_MERGE,
+                            actor.subject(),
+                            null,
+                            "MERGE_IN:" + lot.id(),
+                            now),
+                    now);
             store.creditBalance(tenantId, targetAccountId, remaining, 0L, now);
             // Only PENDING or ACTIVE reaches here: an already-expired lot was
             // expired on the source above rather than opened again on the target.
-            store.insertLot(UUID.randomUUID(), tenantId, targetAccountId, credit, remaining,
-                    lot.earnsAt(), lot.expiresAt(),
+            store.insertLot(
+                    UUID.randomUUID(),
+                    tenantId,
+                    targetAccountId,
+                    credit,
+                    remaining,
+                    lot.earnsAt(),
+                    lot.expiresAt(),
                     lot.earnsAt().isAfter(now) ? LotStatus.PENDING : LotStatus.ACTIVE,
                     now);
             moved += remaining;
@@ -475,18 +619,29 @@ public class LoyaltyAdjustmentService {
 
         store.setAccountStatus(tenantId, sourceAccountId, AccountStatus.CLOSED, now);
 
-        audit.record(new AuditFact(UUID.randomUUID(), AuditClass.BUSINESS, "loyalty.account.merge",
-                actor, ResourceScope.brand(tenantId, source.brandId()), "loyalty.account",
-                targetAccountId, (long) target.version(), AuditFact.Outcome.SUCCEEDED,
+        audit.record(new AuditFact(
+                UUID.randomUUID(),
+                AuditClass.BUSINESS,
+                "loyalty.account.merge",
+                actor,
+                ResourceScope.brand(tenantId, source.brandId()),
+                "loyalty.account",
+                targetAccountId,
+                (long) target.version(),
+                AuditFact.Outcome.SUCCEEDED,
                 "ADR 0015 account merge",
-                Map.of("movedMinor", moved, "sourceAccountId", sourceAccountId.toString()), null,
-                "loyalty.adjust", null, correlationId, null, now));
+                Map.of("movedMinor", moved, "sourceAccountId", sourceAccountId.toString()),
+                null,
+                "loyalty.adjust",
+                null,
+                correlationId,
+                null,
+                now));
         return moved;
     }
 
     /** Takes value off the oldest-expiring lots, which is where a debit comes from. */
-    private void consumeFromOldestLots(UUID tenantId, UUID accountId, long amountMinor,
-            Instant now) {
+    private void consumeFromOldestLots(UUID tenantId, UUID accountId, long amountMinor, Instant now) {
         long outstanding = amountMinor;
         List<LotRow> lots = store.openLots(tenantId, accountId);
         for (LotRow lot : lots) {
@@ -501,8 +656,7 @@ public class LoyaltyAdjustmentService {
             outstanding -= taken;
         }
         if (outstanding > 0) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "The account's lots do not hold that many points");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "The account's lots do not hold that many points");
         }
     }
 
@@ -523,10 +677,8 @@ public class LoyaltyAdjustmentService {
      */
     private long recentAdjustmentsMinor(AdjustmentCommand command, Instant now) {
         Instant since = now.minus(AGGREGATE_WINDOW);
-        return store.findAccount(command.tenantId(), command.brandId(),
-                        command.customerAccountId())
-                .map(account -> store.entries(command.tenantId(), account.id(), AGGREGATE_SCAN)
-                        .stream()
+        return store.findAccount(command.tenantId(), command.brandId(), command.customerAccountId())
+                .map(account -> store.entries(command.tenantId(), account.id(), AGGREGATE_SCAN).stream()
                         .filter(entry -> entry.entryType() == EntryType.ADJUSTMENT)
                         .filter(entry -> !UNCOUNTED_REASONS.contains(entry.reasonCode()))
                         .filter(entry -> entry.occurredAt().isAfter(since))
@@ -550,8 +702,7 @@ public class LoyaltyAdjustmentService {
                 + command.customerAccountId() + "|" + command.amountMinor() + "|"
                 + command.currency() + "|" + command.reasonCode();
         try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest(material.getBytes(StandardCharsets.UTF_8));
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(material.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(digest);
         } catch (NoSuchAlgorithmException impossible) {
             throw new IllegalStateException("SHA-256 is required", impossible);

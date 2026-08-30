@@ -3,11 +3,9 @@ package uz.horecaos.platform.payments.infrastructure.payme;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.payments.application.FiscalReceiptPort;
 import uz.horecaos.platform.payments.domain.FiscalDocument;
 import uz.horecaos.platform.payments.domain.FiscalSubmission;
@@ -100,7 +98,8 @@ public class PaymeFiscalAdapter implements FiscalReceiptPort {
             // simply could not be run.
             return FiscalSubmission.uncertain(
                     "The payment intent behind this document could not be read, so the receipt "
-                            + "lines cannot be checked against the amount charged", now);
+                            + "lines cannot be checked against the amount charged",
+                    now);
         }
 
         try {
@@ -108,8 +107,10 @@ public class PaymeFiscalAdapter implements FiscalReceiptPort {
         } catch (PaymeReceiptDetail.PaymeReceiptRefused refused) {
             // A HorecaOS code and not a Payme one, because none of these conditions has
             // a Payme code: Payme would have accepted the wrong receipt.
-            log.warn("Fiscal document {} cannot be expressed in Payme's detail object: {}",
-                    document.id(), refused.code());
+            log.warn(
+                    "Fiscal document {} cannot be expressed in Payme's detail object: {}",
+                    document.id(),
+                    refused.code());
             return FiscalSubmission.rejected(refused.code(), refused.getMessage(), now);
         }
 

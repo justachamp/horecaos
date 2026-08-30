@@ -52,8 +52,7 @@ public record Money(long minor, String currency) {
         if (!currency.equals(other.currency)) {
             // Currencies are never converted implicitly. A quote that silently
             // added som to dollars would produce a plausible, wrong total.
-            throw new IllegalArgumentException(
-                    "Cannot combine %s and %s".formatted(currency, other.currency));
+            throw new IllegalArgumentException("Cannot combine %s and %s".formatted(currency, other.currency));
         }
     }
 

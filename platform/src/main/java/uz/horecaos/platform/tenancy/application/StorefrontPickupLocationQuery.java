@@ -4,10 +4,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 import uz.horecaos.platform.tenancy.api.Serviceability;
@@ -35,8 +33,8 @@ public class StorefrontPickupLocationQuery {
     private final ServiceabilityResolver serviceability;
     private final Clock clock;
 
-    public StorefrontPickupLocationQuery(JdbcStorefrontPickupLocationStore locations,
-            ServiceabilityResolver serviceability, Clock clock) {
+    public StorefrontPickupLocationQuery(
+            JdbcStorefrontPickupLocationStore locations, ServiceabilityResolver serviceability, Clock clock) {
         this.locations = locations;
         this.serviceability = serviceability;
         this.clock = clock;
@@ -45,8 +43,7 @@ public class StorefrontPickupLocationQuery {
     @Transactional(readOnly = true)
     public PickupLocations nearby(GeoPoint point, int limit) {
         if (limit < 1 || limit > MAXIMUM_LIMIT) {
-            throw new IllegalArgumentException(
-                    "limit must be between 1 and " + MAXIMUM_LIMIT);
+            throw new IllegalArgumentException("limit must be between 1 and " + MAXIMUM_LIMIT);
         }
 
         Instant now = clock.instant();
@@ -58,8 +55,12 @@ public class StorefrontPickupLocationQuery {
 
     private PickupLocation viewOf(PickupLocationCandidate candidate, Instant now) {
         Serviceability answer = serviceability.resolve(
-                candidate.tenantId(), candidate.brandId(), candidate.locationId(),
-                candidate.channelId(), FulfillmentMode.PICKUP, now);
+                candidate.tenantId(),
+                candidate.brandId(),
+                candidate.locationId(),
+                candidate.channelId(),
+                FulfillmentMode.PICKUP,
+                now);
         return new PickupLocation(
                 candidate.tenantId(),
                 candidate.brandId(),
@@ -77,7 +78,7 @@ public class StorefrontPickupLocationQuery {
     }
 
     /** The response envelope permits new browse metadata without breaking list consumers. */
-    public record PickupLocations(List<PickupLocation> locations) { }
+    public record PickupLocations(List<PickupLocation> locations) {}
 
     /** One branch a customer may browse, plus its current pickup availability. */
     public record PickupLocation(
@@ -93,5 +94,5 @@ public class StorefrontPickupLocationQuery {
             boolean available,
             String reason,
             boolean acceptsScheduledOrders,
-            Integer preparationMinutes) { }
+            Integer preparationMinutes) {}
 }

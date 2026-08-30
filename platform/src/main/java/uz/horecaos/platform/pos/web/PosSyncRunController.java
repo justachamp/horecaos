@@ -1,12 +1,12 @@
 package uz.horecaos.platform.pos.web;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotNull;
-
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -15,10 +15,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -45,8 +41,7 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  */
 @RestController
 @RequestMapping("/api/v1/control-plane/tenants/{tenantId}/pos-sync-runs")
-@Tag(name = "POS catalog synchronization",
-        description = "Reviewed catalog imports from a point of sale")
+@Tag(name = "POS catalog synchronization", description = "Reviewed catalog imports from a point of sale")
 public class PosSyncRunController {
 
     private final PosCatalogSyncService sync;
@@ -56,8 +51,12 @@ public class PosSyncRunController {
     private final CurrentActor currentActor;
     private final java.time.Clock clock;
 
-    public PosSyncRunController(PosCatalogSyncService sync, PosCapabilityService capabilities,
-            JdbcPosSyncStore runs, AuditRecorder audit, CurrentActor currentActor,
+    public PosSyncRunController(
+            PosCatalogSyncService sync,
+            PosCapabilityService capabilities,
+            JdbcPosSyncStore runs,
+            AuditRecorder audit,
+            CurrentActor currentActor,
             java.time.Clock clock) {
         this.sync = sync;
         this.capabilities = capabilities;
@@ -69,7 +68,8 @@ public class PosSyncRunController {
 
     @PostMapping
     @RequiresCapability(value = Capability.POS_SYNC_EXECUTE, mutating = true)
-    @Operation(summary = "Start a catalog import",
+    @Operation(
+            summary = "Start a catalog import",
             description = "Reads the provider, stages a snapshot, and produces a difference report. "
                     + "It stops there: nothing in this call changes a menu.")
     ResponseEntity<Map<String, Object>> start(
@@ -77,8 +77,7 @@ public class PosSyncRunController {
             @RequestParam(defaultValue = "true") boolean dryRun,
             @Valid @RequestBody StartRequest request) {
 
-        PosCatalogSyncService.RunResult result =
-                sync.run(tenantId, request.bindingId(), "MANUAL", dryRun);
+        PosCatalogSyncService.RunResult result = sync.run(tenantId, request.bindingId(), "MANUAL", dryRun);
 
         if (result.started()) {
             audit.record(AuditFact.of("pos.catalog_sync_started", AuditClass.BUSINESS)
@@ -86,8 +85,7 @@ public class PosSyncRunController {
                     .at(ResourceScope.tenant(tenantId))
                     .target("PosSyncRun", result.runId())
                     .because("Manual catalog import")
-                    .changed(Map.of("bindingId", request.bindingId().toString(),
-                            "dryRun", Boolean.toString(dryRun)))
+                    .changed(Map.of("bindingId", request.bindingId().toString(), "dryRun", Boolean.toString(dryRun)))
                     .usingCapability(Capability.POS_SYNC_EXECUTE.code())
                     .correlatedBy(result.runId().toString())
                     .occurredAt(clock.instant())
@@ -99,16 +97,21 @@ public class PosSyncRunController {
                 "status", result.status(),
                 "differenceCount", result.differenceCount(),
                 "conflictCount", result.conflictCount(),
-                "detail", result.outcome().detail() == null ? "" : result.outcome().detail()));
+                "detail",
+                        result.outcome().detail() == null
+                                ? ""
+                                : result.outcome().detail()));
     }
 
     @GetMapping("/{runId}/differences")
     @RequiresCapability(Capability.POS_SYNC_READ)
-    @Operation(summary = "The difference report",
+    @Operation(
+            summary = "The difference report",
             description = "Deterministic: re-running the comparison over the same snapshot produces "
                     + "this list again, in this order.")
     Page<DifferenceView> differences(
-            @PathVariable UUID tenantId, @PathVariable UUID runId,
+            @PathVariable UUID tenantId,
+            @PathVariable UUID runId,
             @RequestParam(required = false) Integer limit,
             @RequestParam(defaultValue = "0") int offset) {
 
@@ -124,29 +127,31 @@ public class PosSyncRunController {
         // the comparison ran, and the comparison does not run again for that run.
         // The cursor is therefore the next offset, and the null that ends the
         // iteration is a short page.
-        return rows.size() < size
-                ? Page.last(rows)
-                : new Page<>(rows, Integer.toString(offset + size));
+        return rows.size() < size ? Page.last(rows) : new Page<>(rows, Integer.toString(offset + size));
     }
 
     @PostMapping("/capability-reconciliation")
     @RequiresCapability(value = Capability.INTEGRATION_INSTALLATION_MANAGE, mutating = true)
-    @Operation(summary = "Rediscover what an installation can do",
+    @Operation(
+            summary = "Rediscover what an installation can do",
             description = "Probes the provider with this restaurant's own credential. Capability "
                     + "varies per installation because the credential acts as a staff user the "
                     + "restaurant chose, so this is discovery and not a lookup.")
     ResponseEntity<Map<String, Object>> reconcileCapabilities(
             @PathVariable UUID tenantId, @Valid @RequestBody ReconcileRequest request) {
 
-        return capabilities.reconcile(tenantId, request.installationId(), request.providerType())
+        return capabilities
+                .reconcile(tenantId, request.installationId(), request.providerType())
                 .map(snapshot -> ResponseEntity.ok(Map.<String, Object>of(
                         "installationId", request.installationId().toString(),
-                        "adapterVersion", snapshot.adapterVersion() == null
-                                ? "" : snapshot.adapterVersion(),
-                        "capabilities", snapshot.entries().entrySet().stream()
-                                .collect(java.util.stream.Collectors.toMap(
-                                        entry -> entry.getKey().code(),
-                                        entry -> entry.getValue().support().name())))))
+                        "adapterVersion", snapshot.adapterVersion() == null ? "" : snapshot.adapterVersion(),
+                        "capabilities",
+                                snapshot.entries().entrySet().stream()
+                                        .collect(java.util.stream.Collectors.toMap(
+                                                entry -> entry.getKey().code(),
+                                                entry -> entry.getValue()
+                                                        .support()
+                                                        .name())))))
                 .orElseGet(() -> ResponseEntity.ok(Map.of(
                         "installationId", request.installationId().toString(),
                         "capabilities", Map.of(),
@@ -167,9 +172,10 @@ public class PosSyncRunController {
                 difference.recommendedAction().name());
     }
 
-    public record StartRequest(@NotNull UUID bindingId) { }
+    public record StartRequest(@NotNull UUID bindingId) {}
 
-    public record ReconcileRequest(@NotNull UUID installationId, @NotNull String providerType) { }
+    public record ReconcileRequest(
+            @NotNull UUID installationId, @NotNull String providerType) {}
 
     /**
      * @param authority who owns this field. A {@code HORECAOS} authority with a
@@ -178,7 +184,14 @@ public class PosSyncRunController {
      *                  provider does not win
      */
     public record DifferenceView(
-            String entityType, String externalEntityId, UUID horecaosEntityId, String category,
-            String fieldPath, String currentValue, String importedValue, String authority,
-            String severity, String recommendedAction) { }
+            String entityType,
+            String externalEntityId,
+            UUID horecaosEntityId,
+            String category,
+            String fieldPath,
+            String currentValue,
+            String importedValue,
+            String authority,
+            String severity,
+            String recommendedAction) {}
 }

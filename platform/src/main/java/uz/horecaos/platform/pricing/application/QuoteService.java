@@ -9,18 +9,14 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeOutcome;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeePort;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeQuery;
 import uz.horecaos.platform.fulfillment.api.ResolvedDeliveryCharge;
-import uz.horecaos.platform.tenancy.api.SalesChannel;
-import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
 import uz.horecaos.platform.pricing.api.CartPricingPort;
 import uz.horecaos.platform.pricing.api.QuoteAcceptance;
 import uz.horecaos.platform.pricing.api.QuoteAcceptancePort;
@@ -29,6 +25,8 @@ import uz.horecaos.platform.pricing.domain.Money;
 import uz.horecaos.platform.pricing.domain.Quote;
 import uz.horecaos.platform.pricing.domain.QuoteRequest;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
+import uz.horecaos.platform.tenancy.api.SalesChannel;
+import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
 
 /**
  * The quote lifecycle (ADR 0018).
@@ -61,9 +59,13 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
     private final DeliveryFeePort deliveryFees;
     private final Clock clock;
 
-    public QuoteService(JdbcPricingStore store, PricingEngine engine,
-            CatalogPricingContext catalog, SalesChannelLookup channels,
-            DeliveryFeePort deliveryFees, Clock clock) {
+    public QuoteService(
+            JdbcPricingStore store,
+            PricingEngine engine,
+            CatalogPricingContext catalog,
+            SalesChannelLookup channels,
+            DeliveryFeePort deliveryFees,
+            Clock clock) {
         this.store = store;
         this.engine = engine;
         this.catalog = catalog;
@@ -84,8 +86,7 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         Instant now = clock.instant();
 
         if (request.idempotencyKey() != null) {
-            Optional<UUID> existing =
-                    store.findByIdempotencyKey(request.tenantId(), request.idempotencyKey());
+            Optional<UUID> existing = store.findByIdempotencyKey(request.tenantId(), request.idempotencyKey());
             if (existing.isPresent()) {
                 log.debug("Returning existing quote {} for idempotency key", existing.get());
                 return reload(request.tenantId(), existing.get())
@@ -102,24 +103,21 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         var publication = catalog.activePublicationId(request.tenantId(), request.brandId(), request.channel())
                 .orElseThrow(() -> new NoPublishedMenuException(request.brandId()));
 
-        var priceBook = store.resolvePriceBook(request.tenantId(), request.brandId(),
-                        request.locationId(), pricingChannelId, now)
+        var priceBook = store.resolvePriceBook(
+                        request.tenantId(), request.brandId(), request.locationId(), pricingChannelId, now)
                 .orElseThrow(() -> new NoPriceBookException(request.brandId(), request.locationId()));
 
-        var taxProfile = store.resolveTaxProfile(request.tenantId(), request.brandId(),
-                        DEFAULT_JURISDICTION, now)
+        var taxProfile = store.resolveTaxProfile(request.tenantId(), request.brandId(), DEFAULT_JURISDICTION, now)
                 .orElseThrow(() -> new NoTaxProfileException(request.brandId()));
 
-        Set<UUID> variantIds = request.lines().stream()
-                .map(QuoteRequest.Line::variantId)
-                .collect(Collectors.toUnmodifiableSet());
+        Set<UUID> variantIds =
+                request.lines().stream().map(QuoteRequest.Line::variantId).collect(Collectors.toUnmodifiableSet());
         Set<UUID> modifierIds = request.lines().stream()
                 .flatMap(line -> line.modifierOptionIds().stream())
                 .collect(Collectors.toUnmodifiableSet());
 
         Map<UUID, Long> variantPrices = store.pricesFor(priceBook.id(), "VARIANT", variantIds, now);
-        Map<UUID, Long> modifierPrices =
-                store.pricesFor(priceBook.id(), "MODIFIER_OPTION", modifierIds, now);
+        Map<UUID, Long> modifierPrices = store.pricesFor(priceBook.id(), "MODIFIER_OPTION", modifierIds, now);
 
         // ADR 0037. The delivery charge is resolved here, before the engine runs,
         // for the same reason the price book is: everything that could differ
@@ -133,8 +131,8 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         // stitching the id on afterwards would need an UPDATE against a table that
         // is deliberately write-once.
         UUID quoteId = UUID.randomUUID();
-        ResolvedDeliveryCharge charge = resolveDeliveryCharge(request, quoteId,
-                priceBook.currency(), goodsSubtotal(request, variantPrices, modifierPrices), now);
+        ResolvedDeliveryCharge charge = resolveDeliveryCharge(
+                request, quoteId, priceBook.currency(), goodsSubtotal(request, variantPrices, modifierPrices), now);
 
         var inputs = new PricingEngine.PricingInputs(
                 priceBook.currency(),
@@ -153,12 +151,25 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         var result = engine.price(request, inputs, now);
 
         Quote quote = new Quote(
-                quoteId, request.tenantId(), request.brandId(), request.locationId(),
-                request.customerAccountId(), priceBook.currency(), Quote.Status.ACTIVE,
-                publication, PricingEngine.CALCULATION_VERSION, result.contextHash(),
-                result.subtotal(), result.tax(), result.fees(), result.discount(), result.total(),
-                result.lines(), result.adjustments(),
-                now.plus(QUOTE_TTL), now);
+                quoteId,
+                request.tenantId(),
+                request.brandId(),
+                request.locationId(),
+                request.customerAccountId(),
+                priceBook.currency(),
+                Quote.Status.ACTIVE,
+                publication,
+                PricingEngine.CALCULATION_VERSION,
+                result.contextHash(),
+                result.subtotal(),
+                result.tax(),
+                result.fees(),
+                result.discount(),
+                result.total(),
+                result.lines(),
+                result.adjustments(),
+                now.plus(QUOTE_TTL),
+                now);
 
         store.insertQuote(quote, request.idempotencyKey(), evidence(request, inputs, result));
         return quote;
@@ -180,21 +191,26 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
      * storefront renders, and the quote still returns — with no fee line — so the
      * customer sees their basket and the reason together instead of an error page.
      */
-    private ResolvedDeliveryCharge resolveDeliveryCharge(QuoteRequest request, UUID quoteId,
-            String currency, long goodsSubtotal, Instant now) {
+    private ResolvedDeliveryCharge resolveDeliveryCharge(
+            QuoteRequest request, UUID quoteId, String currency, long goodsSubtotal, Instant now) {
 
         if (request.delivery() == null) {
             return null;
         }
         ResolvedDeliveryCharge charge = deliveryFees.resolve(new DeliveryFeeQuery(
-                request.tenantId(), request.brandId(), request.locationId(), quoteId,
-                request.delivery().destination(), currency, goodsSubtotal,
-                request.delivery().pricingAuthority(), now));
+                request.tenantId(),
+                request.brandId(),
+                request.locationId(),
+                quoteId,
+                request.delivery().destination(),
+                currency,
+                goodsSubtotal,
+                request.delivery().pricingAuthority(),
+                now));
 
         if (charge.outcome() != DeliveryFeeOutcome.RESOLVED
                 && charge.outcome() != DeliveryFeeOutcome.EXTERNALLY_PRICED) {
-            log.info("Delivery fee not resolved for location {}: {}",
-                    request.locationId(), charge.outcome());
+            log.info("Delivery fee not resolved for location {}: {}", request.locationId(), charge.outcome());
         }
         return charge;
     }
@@ -207,8 +223,8 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
      * from a helper whose job is a threshold comparison would move that error to a
      * place that cannot explain it.
      */
-    private static long goodsSubtotal(QuoteRequest request, Map<UUID, Long> variantPrices,
-            Map<UUID, Long> modifierPrices) {
+    private static long goodsSubtotal(
+            QuoteRequest request, Map<UUID, Long> variantPrices, Map<UUID, Long> modifierPrices) {
         long subtotal = 0;
         for (QuoteRequest.Line line : request.lines()) {
             Long unit = variantPrices.get(line.variantId());
@@ -236,8 +252,7 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
     public Acceptance accept(UUID tenantId, UUID quoteId, String expectedContextHash) {
         Instant now = clock.instant();
 
-        var row = store.findQuote(tenantId, quoteId)
-                .orElseThrow(() -> new IllegalArgumentException("No such quote"));
+        var row = store.findQuote(tenantId, quoteId).orElseThrow(() -> new IllegalArgumentException("No such quote"));
 
         if (!row.contextHash().equals(expectedContextHash)) {
             return Acceptance.contextChanged();
@@ -272,11 +287,14 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
     @Transactional
     public QuoteSnapshot priceCart(PricingCommand command) {
         var request = new QuoteRequest(
-                command.tenantId(), command.brandId(), command.locationId(),
-                command.customerAccountId(), command.channelCode(),
+                command.tenantId(),
+                command.brandId(),
+                command.locationId(),
+                command.customerAccountId(),
+                command.channelCode(),
                 command.items().stream()
-                        .map(item -> new QuoteRequest.Line(item.lineKey(), item.variantId(),
-                                item.quantity(), item.modifierOptionIds()))
+                        .map(item -> new QuoteRequest.Line(
+                                item.lineKey(), item.variantId(), item.quantity(), item.modifierOptionIds()))
                         .toList(),
                 command.idempotencyKey(),
                 // Null until ordering supplies a destination on the command. Until
@@ -293,20 +311,15 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
             return store.findQuoteSnapshot(command.tenantId(), quote.quoteId())
                     .orElseThrow(() -> new IllegalStateException("Quote vanished mid-transaction"));
         } catch (PricingEngine.UnpricedItemException unpriced) {
-            throw new PricingRefusedException("ITEM_NOT_PRICED", unpriced.priceableId(),
-                    unpriced.getMessage());
+            throw new PricingRefusedException("ITEM_NOT_PRICED", unpriced.priceableId(), unpriced.getMessage());
         } catch (NoPublishedMenuException noMenu) {
-            throw new PricingRefusedException("NO_PUBLISHED_MENU", command.brandId(),
-                    noMenu.getMessage());
+            throw new PricingRefusedException("NO_PUBLISHED_MENU", command.brandId(), noMenu.getMessage());
         } catch (NoPriceBookException noBook) {
-            throw new PricingRefusedException("NO_PRICE_BOOK", command.locationId(),
-                    noBook.getMessage());
+            throw new PricingRefusedException("NO_PRICE_BOOK", command.locationId(), noBook.getMessage());
         } catch (NoTaxProfileException noTax) {
-            throw new PricingRefusedException("NO_TAX_PROFILE", command.brandId(),
-                    noTax.getMessage());
+            throw new PricingRefusedException("NO_TAX_PROFILE", command.brandId(), noTax.getMessage());
         } catch (PricingEngine.UnsupportedTaxModeException unsupported) {
-            throw new PricingRefusedException("UNSUPPORTED_TAX_MODE", command.brandId(),
-                    unsupported.getMessage());
+            throw new PricingRefusedException("UNSUPPORTED_TAX_MODE", command.brandId(), unsupported.getMessage());
         }
     }
 
@@ -322,8 +335,11 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
     public QuoteAcceptance acceptQuote(UUID tenantId, UUID quoteId, String expectedContextHash) {
         Acceptance acceptance = accept(tenantId, quoteId, expectedContextHash);
         return switch (acceptance.outcome()) {
-            case ACCEPTED -> new QuoteAcceptance(QuoteAcceptance.Outcome.ACCEPTED,
-                    acceptance.total().minor(), acceptance.total().currency());
+            case ACCEPTED ->
+                new QuoteAcceptance(
+                        QuoteAcceptance.Outcome.ACCEPTED,
+                        acceptance.total().minor(),
+                        acceptance.total().currency());
             case PRICE_CHANGED -> new QuoteAcceptance(QuoteAcceptance.Outcome.PRICE_CHANGED, 0L, null);
             case EXPIRED -> new QuoteAcceptance(QuoteAcceptance.Outcome.EXPIRED, 0L, null);
         };
@@ -348,17 +364,32 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
     private Optional<Quote> reload(UUID tenantId, UUID quoteId) {
         // The stored row is the authority for an idempotent replay; the lines and
         // adjustments are re-read only when a caller asks for the detail.
-        return store.findQuote(tenantId, quoteId).map(row -> new Quote(
-                row.id(), tenantId, null, null, null, row.currency(), row.status(),
-                row.catalogPublicationId(), row.calculationVersion(), row.contextHash(),
-                Money.zero(row.currency()), Money.zero(row.currency()), Money.zero(row.currency()),
-                Money.zero(row.currency()), Money.of(row.totalMinor(), row.currency()),
-                java.util.List.of(), java.util.List.of(), row.expiresAt(), row.expiresAt()));
+        return store.findQuote(tenantId, quoteId)
+                .map(row -> new Quote(
+                        row.id(),
+                        tenantId,
+                        null,
+                        null,
+                        null,
+                        row.currency(),
+                        row.status(),
+                        row.catalogPublicationId(),
+                        row.calculationVersion(),
+                        row.contextHash(),
+                        Money.zero(row.currency()),
+                        Money.zero(row.currency()),
+                        Money.zero(row.currency()),
+                        Money.zero(row.currency()),
+                        Money.of(row.totalMinor(), row.currency()),
+                        java.util.List.of(),
+                        java.util.List.of(),
+                        row.expiresAt(),
+                        row.expiresAt()));
     }
 
     /** The calculation inputs, stored as evidence beside the normalized columns. */
-    private static Map<String, Object> evidence(QuoteRequest request,
-            PricingEngine.PricingInputs inputs, PricingEngine.Result result) {
+    private static Map<String, Object> evidence(
+            QuoteRequest request, PricingEngine.PricingInputs inputs, PricingEngine.Result result) {
         Map<String, Object> document = new LinkedHashMap<>();
         document.put("calculationVersion", PricingEngine.CALCULATION_VERSION);
         document.put("priceBookId", String.valueOf(inputs.priceBookId()));
@@ -374,9 +405,11 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
             // single row explains the total without a cross-schema join.
             document.put("deliveryOutcome", inputs.deliveryCharge().outcome().name());
             document.put("deliveryFeeMinor", inputs.deliveryCharge().feeMinor());
-            document.put("deliveryZoneId", String.valueOf(inputs.deliveryCharge().zoneId()));
+            document.put(
+                    "deliveryZoneId", String.valueOf(inputs.deliveryCharge().zoneId()));
             document.put("deliveryZoneVersion", inputs.deliveryCharge().zoneVersion());
-            document.put("deliveryTariffId", String.valueOf(inputs.deliveryCharge().tariffId()));
+            document.put(
+                    "deliveryTariffId", String.valueOf(inputs.deliveryCharge().tariffId()));
             document.put("deliveryTariffVersion", inputs.deliveryCharge().tariffVersion());
             document.put("deliveryDistanceMeters", inputs.deliveryCharge().distanceMeters());
             document.put("deliveryDistanceSource", inputs.deliveryCharge().distanceSource());
@@ -389,7 +422,11 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
 
     public record Acceptance(Outcome outcome, Money total) {
 
-        public enum Outcome { ACCEPTED, PRICE_CHANGED, EXPIRED }
+        public enum Outcome {
+            ACCEPTED,
+            PRICE_CHANGED,
+            EXPIRED
+        }
 
         static Acceptance accepted(Money total) {
             return new Acceptance(Outcome.ACCEPTED, total);

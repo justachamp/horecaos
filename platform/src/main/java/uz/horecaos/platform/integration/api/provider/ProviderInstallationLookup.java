@@ -36,5 +36,5 @@ public interface ProviderInstallationLookup {
             String baseUrl,
             String status,
             String secretReference,
-            String adapterVersion) { }
+            String adapterVersion) {}
 }

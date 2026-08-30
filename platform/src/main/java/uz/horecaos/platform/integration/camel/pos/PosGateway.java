@@ -3,11 +3,9 @@ package uz.horecaos.platform.integration.camel.pos;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
 import uz.horecaos.platform.iam.api.secrets.SecretValue;
@@ -16,9 +14,9 @@ import uz.horecaos.platform.integration.api.pos.PosApiCall;
 import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
 import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup.InstallationSnapshot;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
+import uz.horecaos.platform.integration.camel.common.ProviderHttpClient;
 import uz.horecaos.platform.migration.api.ExternalEffect;
 import uz.horecaos.platform.migration.api.ImportSuppression;
-import uz.horecaos.platform.integration.camel.common.ProviderHttpClient;
 
 /**
  * Turns an ADR 0026 installation into a base URL and a live credential, and puts
@@ -62,8 +60,7 @@ public class PosGateway {
     private final SecretResolver secrets;
     private final ProviderHttpClient http;
 
-    public PosGateway(ProviderInstallationLookup installations, SecretResolver secrets,
-            ProviderHttpClient http) {
+    public PosGateway(ProviderInstallationLookup installations, SecretResolver secrets, ProviderHttpClient http) {
         this.installations = installations;
         this.secrets = secrets;
         this.http = http;
@@ -76,14 +73,14 @@ public class PosGateway {
         // a 2021 order to a live till" are different facts and only one of them is
         // true. A POS create is also the effect with the loudest physical
         // consequence in this list: it prints a ticket in a working kitchen.
-        ImportSuppression.refuse(ExternalEffect.POS_PROVIDER_CALL,
+        ImportSuppression.refuse(
+                ExternalEffect.POS_PROVIDER_CALL,
                 "%s on POS installation %s".formatted(call.operation(), call.installationId()));
 
-        Optional<InstallationSnapshot> snapshot =
-                installations.installation(call.tenantId(), call.installationId());
+        Optional<InstallationSnapshot> snapshot = installations.installation(call.tenantId(), call.installationId());
         if (snapshot.isEmpty()) {
-            return ProviderOutcome.rejected("INSTALLATION_MISSING",
-                    "Installation " + call.installationId() + " is not available");
+            return ProviderOutcome.rejected(
+                    "INSTALLATION_MISSING", "Installation " + call.installationId() + " is not available");
         }
         InstallationSnapshot installation = snapshot.get();
         if (!"ACTIVE".equals(installation.status())) {
@@ -92,8 +89,8 @@ public class PosGateway {
             // cannot rotate a client secret without a support ticket — so
             // "suspended" may well mean "we believe this credential is
             // compromised", and calling anyway would be worse than useless.
-            return ProviderOutcome.rejected("INSTALLATION_INACTIVE",
-                    "Installation " + call.installationId() + " is " + installation.status());
+            return ProviderOutcome.rejected(
+                    "INSTALLATION_INACTIVE", "Installation " + call.installationId() + " is " + installation.status());
         }
 
         SecretReference reference = SecretReference.parse(installation.secretReference());
@@ -108,16 +105,17 @@ public class PosGateway {
             // and a revoked client secret arrive as the same 401, and only a
             // fresh read separates "our cached token aged out" from "the
             // restaurant switched the integration off".
-            log.warn("POS {} rejected the cached credential for installation {}; refreshing once",
-                    call.providerType(), call.installationId());
+            log.warn(
+                    "POS {} rejected the cached credential for installation {}; refreshing once",
+                    call.providerType(),
+                    call.installationId());
             outcome = send(call, installation, secrets.resolveFresh(reference));
         }
 
         return classifyForPos(call, outcome);
     }
 
-    private ProviderOutcome send(PosApiCall call, InstallationSnapshot installation,
-            SecretValue credential) {
+    private ProviderOutcome send(PosApiCall call, InstallationSnapshot installation, SecretValue credential) {
 
         Map<String, String> headers;
         Map<String, Object> payload;
@@ -129,12 +127,15 @@ public class PosGateway {
             // programming error in the adapter, and saying so beats a timeout.
             // The exception's message is deliberately dropped: the function that
             // threw was holding the credential when it did.
-            return ProviderOutcome.rejected("AUTHORIZATION_UNBUILDABLE",
-                    failure.getClass().getSimpleName());
+            return ProviderOutcome.rejected(
+                    "AUTHORIZATION_UNBUILDABLE", failure.getClass().getSimpleName());
         }
 
-        ProviderCall providerCall = new ProviderCall(installation.baseUrl(), credential.reveal(),
-                call.correlationId(), call.timeout() == null ? DEFAULT_TIMEOUT : call.timeout());
+        ProviderCall providerCall = new ProviderCall(
+                installation.baseUrl(),
+                credential.reveal(),
+                call.correlationId(),
+                call.timeout() == null ? DEFAULT_TIMEOUT : call.timeout());
 
         return switch (call.method()) {
             case "GET" -> http.get(providerCall, call.path(), headers, PosGateway::body);
@@ -165,7 +166,8 @@ public class PosGateway {
         if ("CIRCUIT_OPEN".equals(outcome.errorCode())) {
             return outcome;
         }
-        return ProviderOutcome.uncertain(outcome.errorCode(),
+        return ProviderOutcome.uncertain(
+                outcome.errorCode(),
                 "A create with no idempotency key failed after the request was built. "
                         + "Resolve by reading the provider, never by sending it again");
     }

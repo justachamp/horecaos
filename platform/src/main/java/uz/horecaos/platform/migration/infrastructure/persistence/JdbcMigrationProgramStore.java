@@ -1,5 +1,8 @@
 package uz.horecaos.platform.migration.infrastructure.persistence;
 
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.instantOrNull;
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.utc;
+
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -7,15 +10,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.migration.application.MigrationProgramStore;
 import uz.horecaos.platform.migration.application.ProgramStatus;
-
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.instantOrNull;
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.utc;
 
 /**
  * Migration program persistence (ADR 0024).
@@ -85,7 +83,8 @@ public class JdbcMigrationProgramStore implements MigrationProgramStore {
                 VALUES (:id, :name, :status, :source, :target, :policyVersion,
                         :startedAt, :completedAt, :version, :now, :now)
                 """)
-                .param("id", program.id()).param("name", program.name())
+                .param("id", program.id())
+                .param("name", program.name())
                 .param("status", program.status().name())
                 .param("source", program.sourceEnvironment())
                 .param("target", program.targetEnvironment())
@@ -106,8 +105,14 @@ public class JdbcMigrationProgramStore implements MigrationProgramStore {
      * its own outcome on top of the winner's.
      */
     @Override
-    public Optional<Integer> updateStatus(UUID programId, ProgramStatus from, ProgramStatus to,
-            int expectedVersion, Instant startedAt, Instant completedAt, Instant now) {
+    public Optional<Integer> updateStatus(
+            UUID programId,
+            ProgramStatus from,
+            ProgramStatus to,
+            int expectedVersion,
+            Instant startedAt,
+            Instant completedAt,
+            Instant now) {
 
         Map<String, Object> timestamps = new HashMap<>();
         timestamps.put("startedAt", utc(startedAt));
@@ -123,9 +128,12 @@ public class JdbcMigrationProgramStore implements MigrationProgramStore {
                 WHERE id = :id AND status = :from AND version = :expectedVersion
                 RETURNING version
                 """)
-                .param("id", programId).param("from", from.name()).param("to", to.name())
+                .param("id", programId)
+                .param("from", from.name())
+                .param("to", to.name())
                 .params(timestamps)
-                .param("expectedVersion", expectedVersion).param("now", utc(now))
+                .param("expectedVersion", expectedVersion)
+                .param("now", utc(now))
                 .query(Integer.class)
                 .optional();
     }

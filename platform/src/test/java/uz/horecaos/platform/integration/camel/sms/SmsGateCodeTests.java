@@ -1,13 +1,12 @@
 package uz.horecaos.platform.integration.camel.sms;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The provider's code table and the sentence it carries, held to
@@ -16,8 +15,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SmsGateCodeTests {
 
     /** Every code the document lists. A gap here is a code that would read as undocumented. */
-    private static final List<Integer> DOCUMENTED = List.of(
-            0, 1, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27);
+    private static final List<Integer> DOCUMENTED =
+            List.of(0, 1, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27);
 
     @Test
     @DisplayName("every code the document lists is known, and nothing else is")
@@ -54,8 +53,7 @@ class SmsGateCodeTests {
     void blacklistIsNotFoldedIntoAGenericRefusal() {
         // Shared with any other code, this would reach a customer as "try again"
         // — and they never can.
-        assertThat(SmsGateCode.RECEIVER_IN_BLACKLIST.reasonCode())
-                .isEqualTo("SMS_RECEIVER_BLACKLISTED");
+        assertThat(SmsGateCode.RECEIVER_IN_BLACKLIST.reasonCode()).isEqualTo("SMS_RECEIVER_BLACKLISTED");
 
         long sharing = java.util.Arrays.stream(SmsGateCode.values())
                 .filter(code -> code.reasonCode().equals("SMS_RECEIVER_BLACKLISTED"))
@@ -77,7 +75,9 @@ class SmsGateCodeTests {
                     .as("%s renders outside ASCII", locale)
                     .asString(StandardCharsets.US_ASCII)
                     .isEqualTo(text);
-            assertThat(text.length()).as("%s is longer than one segment", locale).isLessThan(70);
+            assertThat(text.length())
+                    .as("%s is longer than one segment", locale)
+                    .isLessThan(70);
             assertThat(text).contains("482913");
         }
     }

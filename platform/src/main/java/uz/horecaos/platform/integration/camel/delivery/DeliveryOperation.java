@@ -2,7 +2,6 @@ package uz.horecaos.platform.integration.camel.delivery;
 
 import java.util.Objects;
 import java.util.UUID;
-
 import uz.horecaos.platform.integration.api.delivery.DeliveryCapability;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.DeliveryRequest;
 import uz.horecaos.platform.integration.api.provider.BindingRef;

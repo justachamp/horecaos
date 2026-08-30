@@ -53,8 +53,7 @@ public final class ImageCostLimits {
      */
     public static final int MAX_DIMENSION_PX = 12_000;
 
-    private ImageCostLimits() {
-    }
+    private ImageCostLimits() {}
 
     /** @return true when this header describes an image the platform will decode */
     public static boolean withinBudget(ProbedImage image) {

@@ -6,7 +6,6 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
@@ -19,9 +18,8 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
-
-import uz.horecaos.platform.customers.api.CustomerOwned;
 import uz.horecaos.platform.courier.api.CourierSelfAuthorized;
+import uz.horecaos.platform.customers.api.CustomerOwned;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.ordering.web.OperationsOrderController;
 import uz.horecaos.platform.partner.api.PartnerBound;
@@ -65,8 +63,7 @@ class EndpointCapabilityDeclarationTests {
 
             if (path.contains("{locationId}") && declaration.scope() == ScopeType.TENANT) {
                 tooWide.add(where + " names a location but requires TENANT");
-            } else if (path.contains("{brandId}")
-                    && declaration.scope() == ScopeType.TENANT) {
+            } else if (path.contains("{brandId}") && declaration.scope() == ScopeType.TENANT) {
                 tooWide.add(where + " names a brand but requires TENANT");
             }
         }
@@ -82,7 +79,8 @@ class EndpointCapabilityDeclarationTests {
         List<String> undeclared = new ArrayList<>();
 
         for (Method handler : mutatingHandlers()) {
-            if (isProviderCallback(handler) || isGuestBearerEndpoint(handler)
+            if (isProviderCallback(handler)
+                    || isGuestBearerEndpoint(handler)
                     || isPreAccountIdentityEndpoint(handler)) {
                 continue;
             }
@@ -91,12 +89,10 @@ class EndpointCapabilityDeclarationTests {
             }
         }
 
-        assertThat(undeclared)
-                .as("""
+        assertThat(undeclared).as("""
                         A mutating endpoint must declare one of @RequiresCapability,
                         @CustomerOwned, @PartnerBound, or @CourierSelfAuthorized. None
-                        ships with no authorization decision (ADR 0025, ADR 0049).""")
-                .isEmpty();
+                        ships with no authorization decision (ADR 0025, ADR 0049).""").isEmpty();
     }
 
     @Test
@@ -130,7 +126,8 @@ class EndpointCapabilityDeclarationTests {
         List<String> notIdempotent = new ArrayList<>();
 
         for (Method handler : mutatingHandlers()) {
-            if (isProviderCallback(handler) || isGuestBearerEndpoint(handler)
+            if (isProviderCallback(handler)
+                    || isGuestBearerEndpoint(handler)
                     || isPreAccountIdentityEndpoint(handler)) {
                 continue;
             }
@@ -139,13 +136,11 @@ class EndpointCapabilityDeclarationTests {
             }
         }
 
-        assertThat(notIdempotent)
-                .as("""
+        assertThat(notIdempotent).as("""
                         POST, PUT, PATCH, and DELETE cause an effect, so ADR 0031 requires
                         replay protection. Mark the staff capability mutating = true, add
                         @Idempotent, or document a database natural key with
-                        @NaturallyIdempotent.""")
-                .isEmpty();
+                        @NaturallyIdempotent.""").isEmpty();
     }
 
     @Test
@@ -306,8 +301,7 @@ class EndpointCapabilityDeclarationTests {
      */
     private static boolean isProviderCallback(Method handler) {
         RequestMapping mapping = handler.getDeclaringClass().getAnnotation(RequestMapping.class);
-        return mapping != null && mapping.value().length > 0
-                && mapping.value()[0].startsWith("/providers/");
+        return mapping != null && mapping.value().length > 0 && mapping.value()[0].startsWith("/providers/");
     }
 
     /** Every handler on every controller that declares a capability. */
@@ -348,7 +342,9 @@ class EndpointCapabilityDeclarationTests {
     /** The full request path: the controller's class-level mapping plus the method's. */
     private static String pathOf(Method handler) {
         RequestMapping classMapping = handler.getDeclaringClass().getAnnotation(RequestMapping.class);
-        String base = classMapping != null && classMapping.value().length > 0 ? classMapping.value()[0] : "";
+        String base = classMapping != null && classMapping.value().length > 0
+                ? classMapping.value()[0]
+                : "";
         return base + methodPath(handler);
     }
 
@@ -378,8 +374,7 @@ class EndpointCapabilityDeclarationTests {
 
     private static List<Class<?>> controllers() {
         List<Class<?>> found = new ArrayList<>();
-        ClassPathScanningCandidateComponentProvider scanner =
-                new ClassPathScanningCandidateComponentProvider(false);
+        ClassPathScanningCandidateComponentProvider scanner = new ClassPathScanningCandidateComponentProvider(false);
         scanner.addIncludeFilter(new AnnotationTypeFilter(RestController.class));
         for (BeanDefinition definition : scanner.findCandidateComponents(BASE_PACKAGE)) {
             try {
@@ -394,8 +389,7 @@ class EndpointCapabilityDeclarationTests {
     private static List<Method> mutatingHandlers() {
         List<Method> handlers = new ArrayList<>();
 
-        ClassPathScanningCandidateComponentProvider scanner =
-                new ClassPathScanningCandidateComponentProvider(false);
+        ClassPathScanningCandidateComponentProvider scanner = new ClassPathScanningCandidateComponentProvider(false);
         scanner.addIncludeFilter(new AnnotationTypeFilter(RestController.class));
 
         for (BeanDefinition definition : scanner.findCandidateComponents(BASE_PACKAGE)) {

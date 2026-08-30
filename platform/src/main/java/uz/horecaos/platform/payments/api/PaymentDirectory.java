@@ -26,8 +26,7 @@ public interface PaymentDirectory {
      * {@code NOT_APPLICABLE} as a value is that it is queryable. If the 2026-08-22
      * decision reverses, this is what finds the affected orders.
      */
-    List<UnfiscalizedCashOrder> unfiscalizedCashOrders(UUID tenantId, Instant from, Instant to,
-            int limit);
+    List<UnfiscalizedCashOrder> unfiscalizedCashOrders(UUID tenantId, Instant from, Instant to, int limit);
 
     /**
      * @param paid           whether the money has arrived, which is not the same as
@@ -54,14 +53,8 @@ public interface PaymentDirectory {
             long returnedMinor,
             String currency,
             String fiscalStatus,
-            String fiscalReasonCode) {
-    }
+            String fiscalReasonCode) {}
 
     record UnfiscalizedCashOrder(
-            UUID orderId,
-            UUID fiscalDocumentId,
-            String reasonCode,
-            String reasonNote,
-            Instant recordedAt) {
-    }
+            UUID orderId, UUID fiscalDocumentId, String reasonCode, String reasonNote, Instant recordedAt) {}
 }

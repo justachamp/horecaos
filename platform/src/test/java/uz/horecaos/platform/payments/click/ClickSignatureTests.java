@@ -1,19 +1,17 @@
 package uz.horecaos.platform.payments.click;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.payments.domain.SomAmount;
 import uz.horecaos.platform.payments.infrastructure.click.ClickCallbackRequest;
 import uz.horecaos.platform.payments.infrastructure.click.ClickCheckoutLink;
 import uz.horecaos.platform.payments.infrastructure.click.ClickPrepareId;
 import uz.horecaos.platform.payments.infrastructure.click.ClickSignature;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Click's two signatures, and the defect that otherwise reaches production
@@ -43,16 +41,23 @@ class ClickSignatureTests {
     @Test
     @DisplayName("Prepare signs seven fields with the secret in the middle")
     void prepareDigestMatchesTheWorkedExample() {
-        assertThat(ClickSignature.prepare(SECRET, CLICK_TRANS_ID, SERVICE_ID, MERCHANT_TRANS_ID,
-                AMOUNT, "0", PREPARE_SIGN_TIME))
+        assertThat(ClickSignature.prepare(
+                        SECRET, CLICK_TRANS_ID, SERVICE_ID, MERCHANT_TRANS_ID, AMOUNT, "0", PREPARE_SIGN_TIME))
                 .isEqualTo(PREPARE_DIGEST);
     }
 
     @Test
     @DisplayName("Complete signs eight, inserting merchant_prepare_id after merchant_trans_id")
     void completeDigestMatchesTheWorkedExample() {
-        assertThat(ClickSignature.complete(SECRET, CLICK_TRANS_ID, SERVICE_ID, MERCHANT_TRANS_ID,
-                MERCHANT_PREPARE_ID, AMOUNT, "1", COMPLETE_SIGN_TIME))
+        assertThat(ClickSignature.complete(
+                        SECRET,
+                        CLICK_TRANS_ID,
+                        SERVICE_ID,
+                        MERCHANT_TRANS_ID,
+                        MERCHANT_PREPARE_ID,
+                        AMOUNT,
+                        "1",
+                        COMPLETE_SIGN_TIME))
                 .isEqualTo(COMPLETE_DIGEST);
     }
 
@@ -62,8 +67,8 @@ class ClickSignatureTests {
         // The two calls sign different field lists. Verifying a Complete with the
         // Prepare formula is the mistake a single shared helper invites, and it
         // presents as an intermittent -1 on exactly the call that credits an order.
-        String prepareFormulaOverCompleteFields = ClickSignature.prepare(SECRET, CLICK_TRANS_ID,
-                SERVICE_ID, MERCHANT_TRANS_ID, AMOUNT, "1", COMPLETE_SIGN_TIME);
+        String prepareFormulaOverCompleteFields = ClickSignature.prepare(
+                SECRET, CLICK_TRANS_ID, SERVICE_ID, MERCHANT_TRANS_ID, AMOUNT, "1", COMPLETE_SIGN_TIME);
 
         assertThat(ClickSignature.matches(prepareFormulaOverCompleteFields, COMPLETE_DIGEST))
                 .isFalse();
@@ -76,23 +81,23 @@ class ClickSignatureTests {
         // may legitimately send 1000, 1000.0 or 1000.00 for one figure. Parsing it
         // to a number and rendering it back — even to the same value — changes the
         // MD5, and it is the commonest cause of a spurious -1 SIGN CHECK FAILED!.
-        String overTheRawString = ClickSignature.prepare(SECRET, CLICK_TRANS_ID, SERVICE_ID,
-                MERCHANT_TRANS_ID, "1000.00", "0", PREPARE_SIGN_TIME);
-        String overTheReformattedString = ClickSignature.prepare(SECRET, CLICK_TRANS_ID, SERVICE_ID,
-                MERCHANT_TRANS_ID, "1000", "0", PREPARE_SIGN_TIME);
+        String overTheRawString = ClickSignature.prepare(
+                SECRET, CLICK_TRANS_ID, SERVICE_ID, MERCHANT_TRANS_ID, "1000.00", "0", PREPARE_SIGN_TIME);
+        String overTheReformattedString = ClickSignature.prepare(
+                SECRET, CLICK_TRANS_ID, SERVICE_ID, MERCHANT_TRANS_ID, "1000", "0", PREPARE_SIGN_TIME);
 
         assertThat(overTheRawString).isEqualTo(PREPARE_DIGEST);
         assertThat(overTheReformattedString).isNotEqualTo(overTheRawString);
-        assertThat(ClickSignature.matches(overTheReformattedString, PREPARE_DIGEST)).isFalse();
+        assertThat(ClickSignature.matches(overTheReformattedString, PREPARE_DIGEST))
+                .isFalse();
     }
 
     @Test
     @DisplayName("the digest is taken from the request exactly as it arrived")
     void expectedReadsTheRawRequest() {
-        ClickCallbackRequest prepare = ClickCallbackRequest.fromForm(
-                form("0", AMOUNT, PREPARE_SIGN_TIME, null));
-        ClickCallbackRequest complete = ClickCallbackRequest.fromForm(
-                form("1", AMOUNT, COMPLETE_SIGN_TIME, MERCHANT_PREPARE_ID));
+        ClickCallbackRequest prepare = ClickCallbackRequest.fromForm(form("0", AMOUNT, PREPARE_SIGN_TIME, null));
+        ClickCallbackRequest complete =
+                ClickCallbackRequest.fromForm(form("1", AMOUNT, COMPLETE_SIGN_TIME, MERCHANT_PREPARE_ID));
 
         assertThat(ClickSignature.expected(SECRET, prepare)).isEqualTo(PREPARE_DIGEST);
         assertThat(ClickSignature.expected(SECRET, complete)).isEqualTo(COMPLETE_DIGEST);
@@ -113,8 +118,10 @@ class ClickSignatureTests {
     @Test
     @DisplayName("the comparison tolerates casing and refuses a missing signature")
     void comparisonIsCaseInsensitiveAndNullSafe() {
-        assertThat(ClickSignature.matches(PREPARE_DIGEST, PREPARE_DIGEST.toUpperCase())).isTrue();
-        assertThat(ClickSignature.matches(PREPARE_DIGEST, "  " + PREPARE_DIGEST + " ")).isTrue();
+        assertThat(ClickSignature.matches(PREPARE_DIGEST, PREPARE_DIGEST.toUpperCase()))
+                .isTrue();
+        assertThat(ClickSignature.matches(PREPARE_DIGEST, "  " + PREPARE_DIGEST + " "))
+                .isTrue();
         assertThat(ClickSignature.matches(PREPARE_DIGEST, null)).isFalse();
         assertThat(ClickSignature.matches(PREPARE_DIGEST, "")).isFalse();
     }
@@ -143,27 +150,32 @@ class ClickSignatureTests {
     @Test
     @DisplayName("the payment link is unsigned, and its amount is formatted N.NN")
     void checkoutLinkCarriesNoSignature() {
-        String link = ClickCheckoutLink.build("777", SERVICE_ID, "3333", MERCHANT_TRANS_ID,
-                new SomAmount(1_000_000, "UZS"), null, null);
+        String link = ClickCheckoutLink.build(
+                "777", SERVICE_ID, "3333", MERCHANT_TRANS_ID, new SomAmount(1_000_000, "UZS"), null, null);
 
-        assertThat(link).startsWith(ClickCheckoutLink.BASE)
+        assertThat(link)
+                .startsWith(ClickCheckoutLink.BASE)
                 .contains("amount=1000000.00")
                 .contains("transaction_param=" + MERCHANT_TRANS_ID)
                 // Unsigned by construction. The amount here is attacker-controlled,
                 // which is why the amount HorecaOS enforces is the one checked in
                 // Prepare against the committed attempt.
-                .doesNotContain("sign_string").doesNotContain("SIGN_STRING");
+                .doesNotContain("sign_string")
+                .doesNotContain("SIGN_STRING");
     }
 
     @Test
     @DisplayName("an amount that is not whole som is refused rather than rounded")
     void fractionalAmountsAreNotAccepted() {
         assertThat(ClickCallbackRequest.fromForm(form("0", "1000.00", PREPARE_SIGN_TIME, null))
-                .amountAsSom()).contains(1000L);
+                        .amountAsSom())
+                .contains(1000L);
         assertThat(ClickCallbackRequest.fromForm(form("0", "1000.50", PREPARE_SIGN_TIME, null))
-                .amountAsSom()).isEmpty();
+                        .amountAsSom())
+                .isEmpty();
         assertThat(ClickCallbackRequest.fromForm(form("0", "nonsense", PREPARE_SIGN_TIME, null))
-                .amountAsSom()).isEmpty();
+                        .amountAsSom())
+                .isEmpty();
     }
 
     @Test
@@ -175,19 +187,21 @@ class ClickSignatureTests {
         missingSignTime.remove("sign_time");
 
         assertThat(ClickCallbackRequest.fromForm(form("0", AMOUNT, PREPARE_SIGN_TIME, null))
-                .hasEveryRequiredField()).isTrue();
-        assertThat(ClickCallbackRequest.fromForm(missingSignTime).hasEveryRequiredField()).isFalse();
+                        .hasEveryRequiredField())
+                .isTrue();
+        assertThat(ClickCallbackRequest.fromForm(missingSignTime).hasEveryRequiredField())
+                .isFalse();
 
         // Complete needs merchant_prepare_id and Prepare does not.
         assertThat(ClickCallbackRequest.fromForm(form("1", AMOUNT, COMPLETE_SIGN_TIME, null))
-                .hasEveryRequiredField()).isFalse();
-        assertThat(ClickCallbackRequest.fromForm(
-                form("1", AMOUNT, COMPLETE_SIGN_TIME, MERCHANT_PREPARE_ID))
-                .hasEveryRequiredField()).isTrue();
+                        .hasEveryRequiredField())
+                .isFalse();
+        assertThat(ClickCallbackRequest.fromForm(form("1", AMOUNT, COMPLETE_SIGN_TIME, MERCHANT_PREPARE_ID))
+                        .hasEveryRequiredField())
+                .isTrue();
     }
 
-    private static Map<String, String> form(String action, String amount, String signTime,
-            String merchantPrepareId) {
+    private static Map<String, String> form(String action, String amount, String signTime, String merchantPrepareId) {
         Map<String, String> form = new LinkedHashMap<>();
         form.put("click_trans_id", CLICK_TRANS_ID);
         form.put("service_id", SERVICE_ID);

@@ -6,10 +6,8 @@ import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
 import org.springframework.http.HttpStatusCode;
 import org.springframework.web.client.RestClient;
-
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
 import uz.horecaos.platform.iam.api.secrets.SecretValue;
@@ -79,17 +77,18 @@ public class OpenBaoSecretResolver implements SecretResolver {
      * in the adapter, so the reference format never learns about OpenBao.
      */
     static String pathFor(SecretReference reference) {
-        return "%s/%s/%s/%s".formatted(
-                reference.environment(),
-                reference.category().name().toLowerCase(Locale.ROOT),
-                reference.ownerScope(),
-                reference.opaqueId());
+        return "%s/%s/%s/%s"
+                .formatted(
+                        reference.environment(),
+                        reference.category().name().toLowerCase(Locale.ROOT),
+                        reference.ownerScope(),
+                        reference.opaqueId());
     }
 
-    private record CachedSecret(SecretValue value, Instant expiresAt) { }
+    private record CachedSecret(SecretValue value, Instant expiresAt) {}
 
     /** The subset of the KV v2 response this adapter reads. */
     record KvResponse(Data data) {
-        record Data(Map<String, String> data) { }
+        record Data(Map<String, String> data) {}
     }
 }

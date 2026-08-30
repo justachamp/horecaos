@@ -11,8 +11,7 @@ import java.util.UUID;
  */
 final class LedgerKeys {
 
-    private LedgerKeys() {
-    }
+    private LedgerKeys() {}
 
     /**
      * The key of the {@code EXPIRY} entry that destroys what a lot still holds.

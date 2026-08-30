@@ -2,7 +2,6 @@ package uz.horecaos.platform.courier.domain;
 
 /** The delivery's punctuality, computed once at delivery (ADR 0042). */
 public enum OnTimeOutcome {
-
     ON_TIME,
 
     /** Late, with the kitchen handover inside the plan's pickup window. */

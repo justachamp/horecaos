@@ -8,11 +8,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
@@ -47,7 +45,8 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
                 FROM tenant.sales_channels
                 WHERE tenant_id = :tenantId AND id = :channelId
                 """)
-                .param("tenantId", tenantId).param("channelId", channelId)
+                .param("tenantId", tenantId)
+                .param("channelId", channelId)
                 .query(JdbcSalesChannelStore::toChannel)
                 .optional();
     }
@@ -58,7 +57,8 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
                 FROM tenant.sales_channels
                 WHERE tenant_id = :tenantId AND code = :code
                 """)
-                .param("tenantId", tenantId).param("code", code)
+                .param("tenantId", tenantId)
+                .param("code", code)
                 .query(JdbcSalesChannelStore::toChannel)
                 .optional();
     }
@@ -84,7 +84,8 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
                     :pricePlane, :externallyPriced, :guestOrdersAllowed,
                     :installationId, :version, :now, :now)
                 """)
-                .param("id", channel.id()).param("tenantId", channel.tenantId())
+                .param("id", channel.id())
+                .param("tenantId", channel.tenantId())
                 .param("code", channel.code())
                 .param("systemType", channel.systemType().name())
                 .param("displayName", channel.displayName())
@@ -105,17 +106,20 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
      * deleted row makes that order unattributable in every report — so
      * {@code ARCHIVED} is the end of the lifecycle and the row stays.
      */
-    public boolean updateStatus(UUID tenantId, UUID channelId, SalesChannel.Status status,
-            int expectedVersion, Instant now) {
+    public boolean updateStatus(
+            UUID tenantId, UUID channelId, SalesChannel.Status status, int expectedVersion, Instant now) {
         return jdbc.sql("""
                 UPDATE tenant.sales_channels
                 SET status = :status, version = version + 1, updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :channelId AND version = :expectedVersion
                 """)
-                .param("tenantId", tenantId).param("channelId", channelId)
-                .param("status", status.name()).param("expectedVersion", expectedVersion)
-                .param("now", timestamp(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("channelId", channelId)
+                        .param("status", status.name())
+                        .param("expectedVersion", expectedVersion)
+                        .param("now", timestamp(now))
+                        .update()
+                == 1;
     }
 
     // ------------------------------------------------------------------ matrices
@@ -128,59 +132,66 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
      * neither would see anything wrong. The version check is what makes the second
      * tab lose loudly instead of silently overwriting the first.
      */
-    public boolean replacePaymentMethods(UUID tenantId, UUID channelId,
-            Map<String, Boolean> matrix, int expectedVersion, Instant now) {
+    public boolean replacePaymentMethods(
+            UUID tenantId, UUID channelId, Map<String, Boolean> matrix, int expectedVersion, Instant now) {
 
         if (!bumpVersion(tenantId, channelId, expectedVersion, now)) {
             return false;
         }
         jdbc.sql("DELETE FROM tenant.channel_payment_methods "
                         + "WHERE tenant_id = :tenantId AND channel_id = :channelId")
-                .param("tenantId", tenantId).param("channelId", channelId)
+                .param("tenantId", tenantId)
+                .param("channelId", channelId)
                 .update();
         matrix.forEach((code, enabled) -> jdbc.sql("""
                 INSERT INTO tenant.channel_payment_methods (
                     tenant_id, channel_id, payment_method_code, enabled, created_at, updated_at)
                 VALUES (:tenantId, :channelId, :code, :enabled, :now, :now)
                 """)
-                .param("tenantId", tenantId).param("channelId", channelId)
-                .param("code", code).param("enabled", enabled)
+                .param("tenantId", tenantId)
+                .param("channelId", channelId)
+                .param("code", code)
+                .param("enabled", enabled)
                 .param("now", timestamp(now))
                 .update());
         return true;
     }
 
-    public boolean replaceFulfillmentModes(UUID tenantId, UUID channelId,
-            Map<FulfillmentMode, Boolean> matrix, int expectedVersion, Instant now) {
+    public boolean replaceFulfillmentModes(
+            UUID tenantId, UUID channelId, Map<FulfillmentMode, Boolean> matrix, int expectedVersion, Instant now) {
 
         if (!bumpVersion(tenantId, channelId, expectedVersion, now)) {
             return false;
         }
         jdbc.sql("DELETE FROM tenant.channel_fulfillment_modes "
                         + "WHERE tenant_id = :tenantId AND channel_id = :channelId")
-                .param("tenantId", tenantId).param("channelId", channelId)
+                .param("tenantId", tenantId)
+                .param("channelId", channelId)
                 .update();
         matrix.forEach((mode, enabled) -> jdbc.sql("""
                 INSERT INTO tenant.channel_fulfillment_modes (
                     tenant_id, channel_id, fulfillment_mode, enabled, created_at, updated_at)
                 VALUES (:tenantId, :channelId, :mode, :enabled, :now, :now)
                 """)
-                .param("tenantId", tenantId).param("channelId", channelId)
-                .param("mode", mode.name()).param("enabled", enabled)
+                .param("tenantId", tenantId)
+                .param("channelId", channelId)
+                .param("mode", mode.name())
+                .param("enabled", enabled)
                 .param("now", timestamp(now))
                 .update());
         return true;
     }
 
-    public boolean replaceLocations(UUID tenantId, UUID channelId, List<UUID> locationIds,
-            int expectedVersion, Instant now) {
+    public boolean replaceLocations(
+            UUID tenantId, UUID channelId, List<UUID> locationIds, int expectedVersion, Instant now) {
 
         if (!bumpVersion(tenantId, channelId, expectedVersion, now)) {
             return false;
         }
         jdbc.sql("DELETE FROM tenant.sales_channel_locations "
                         + "WHERE tenant_id = :tenantId AND channel_id = :channelId")
-                .param("tenantId", tenantId).param("channelId", channelId)
+                .param("tenantId", tenantId)
+                .param("channelId", channelId)
                 .update();
         for (UUID locationId : locationIds) {
             jdbc.sql("""
@@ -188,7 +199,8 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
                         tenant_id, channel_id, location_id, status, created_at, updated_at)
                     VALUES (:tenantId, :channelId, :locationId, 'ACTIVE', :now, :now)
                     """)
-                    .param("tenantId", tenantId).param("channelId", channelId)
+                    .param("tenantId", tenantId)
+                    .param("channelId", channelId)
                     .param("locationId", locationId)
                     .param("now", timestamp(now))
                     .update();
@@ -203,9 +215,9 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
                 WHERE tenant_id = :tenantId AND channel_id = :channelId
                 ORDER BY payment_method_code
                 """)
-                .param("tenantId", tenantId).param("channelId", channelId)
-                .query((row, number) -> Map.entry(
-                        row.getString("payment_method_code"), row.getBoolean("enabled")))
+                .param("tenantId", tenantId)
+                .param("channelId", channelId)
+                .query((row, number) -> Map.entry(row.getString("payment_method_code"), row.getBoolean("enabled")))
                 .list()
                 .forEach(entry -> matrix.put(entry.getKey(), entry.getValue()));
         return matrix;
@@ -227,7 +239,8 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
                 WHERE tenant_id = :tenantId AND channel_id = :channelId AND enabled
                 ORDER BY payment_method_code
                 """)
-                .param("tenantId", tenantId).param("channelId", channelId)
+                .param("tenantId", tenantId)
+                .param("channelId", channelId)
                 .query(String.class)
                 .list());
     }
@@ -239,10 +252,10 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
                 WHERE tenant_id = :tenantId AND channel_id = :channelId
                 ORDER BY fulfillment_mode
                 """)
-                .param("tenantId", tenantId).param("channelId", channelId)
+                .param("tenantId", tenantId)
+                .param("channelId", channelId)
                 .query((row, number) -> Map.entry(
-                        FulfillmentMode.valueOf(row.getString("fulfillment_mode")),
-                        row.getBoolean("enabled")))
+                        FulfillmentMode.valueOf(row.getString("fulfillment_mode")), row.getBoolean("enabled")))
                 .list()
                 .forEach(entry -> matrix.put(entry.getKey(), entry.getValue()));
         return matrix;
@@ -254,7 +267,8 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
                 WHERE tenant_id = :tenantId AND channel_id = :channelId AND status = 'ACTIVE'
                 ORDER BY location_id
                 """)
-                .param("tenantId", tenantId).param("channelId", channelId)
+                .param("tenantId", tenantId)
+                .param("channelId", channelId)
                 .query(UUID.class)
                 .list();
     }
@@ -270,8 +284,11 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
                 SELECT count(*) FROM tenant.sales_channels
                 WHERE tenant_id = :tenantId AND price_plane_channel_id = :channelId
                 """)
-                .param("tenantId", tenantId).param("channelId", channelId)
-                .query(Long.class).single() > 0;
+                        .param("tenantId", tenantId)
+                        .param("channelId", channelId)
+                        .query(Long.class)
+                        .single()
+                > 0;
     }
 
     /** Translates the composite foreign keys into the sentence they are protecting. */
@@ -295,10 +312,12 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
                 SET version = version + 1, updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :channelId AND version = :expectedVersion
                 """)
-                .param("tenantId", tenantId).param("channelId", channelId)
-                .param("expectedVersion", expectedVersion)
-                .param("now", timestamp(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("channelId", channelId)
+                        .param("expectedVersion", expectedVersion)
+                        .param("now", timestamp(now))
+                        .update()
+                == 1;
     }
 
     private static SalesChannel toChannel(java.sql.ResultSet row, int number) throws java.sql.SQLException {

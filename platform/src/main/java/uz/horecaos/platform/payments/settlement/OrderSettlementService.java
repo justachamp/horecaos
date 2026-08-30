@@ -5,10 +5,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.loyalty.api.PointsRedemptionPort;
 import uz.horecaos.platform.payments.settlement.JdbcSettlementStore.MethodRow;
 import uz.horecaos.platform.payments.settlement.JdbcSettlementStore.SettlementRow;
@@ -58,26 +56,30 @@ public class OrderSettlementService {
     private final PointsRedemptionPort points;
     private final Clock clock;
 
-    public OrderSettlementService(JdbcSettlementStore store, PointsRedemptionPort points,
-            Clock clock) {
+    public OrderSettlementService(JdbcSettlementStore store, PointsRedemptionPort points, Clock clock) {
         this.store = store;
         this.points = points;
         this.clock = clock;
     }
 
     /** One line of a tender plan, as the checkout proposes it. */
-    public record PlannedTender(UUID paymentMethodId, long amountMinor) {
-    }
+    public record PlannedTender(UUID paymentMethodId, long amountMinor) {}
 
     /**
      * @param customerAccountId null for a guest checkout, which cannot include a
      *                          balance tender because there is no account for one
      *                          to draw on
      */
-    public record SettlementPlan(UUID tenantId, UUID brandId, UUID orderId,
-            UUID customerAccountId, String currency, long totalMinor,
-            List<PlannedTender> tenders, String idempotencyKey, String actor) {
-    }
+    public record SettlementPlan(
+            UUID tenantId,
+            UUID brandId,
+            UUID orderId,
+            UUID customerAccountId,
+            String currency,
+            long totalMinor,
+            List<PlannedTender> tenders,
+            String idempotencyKey,
+            String actor) {}
 
     /**
      * Plans the settlement and takes the points hold.
@@ -89,8 +91,7 @@ public class OrderSettlementService {
     @Transactional
     public SettlementRow plan(SettlementPlan plan) {
         if (plan.tenders() == null || plan.tenders().isEmpty()) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A settlement names at least one tender");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A settlement names at least one tender");
         }
 
         long sum = 0L;
@@ -100,15 +101,14 @@ public class OrderSettlementService {
 
         for (PlannedTender tender : plan.tenders()) {
             if (tender.amountMinor() <= 0) {
-                throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                        "A tender settles a positive amount");
+                throw new ApiException(ErrorCode.VALIDATION_FAILED, "A tender settles a positive amount");
             }
             MethodRow method = store.findMethod(plan.tenantId(), tender.paymentMethodId())
-                    .orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_FAILED,
-                            "The tender names a payment method that is not registered"));
+                    .orElseThrow(() -> new ApiException(
+                            ErrorCode.VALIDATION_FAILED, "The tender names a payment method that is not registered"));
             if (!"ACTIVE".equals(method.status())) {
-                throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                        "The tender names a payment method that is not enabled");
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED, "The tender names a payment method that is not enabled");
             }
             methods.add(method);
             sum = Math.addExact(sum, tender.amountMinor());
@@ -122,23 +122,33 @@ public class OrderSettlementService {
         if (sum != plan.totalMinor()) {
             // Checked before any provider call, so a plan that does not sum is
             // refused rather than half-executed against Click.
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
                     "The tenders sum to " + sum + " and the order total is " + plan.totalMinor());
         }
         if (balanceTenders > 1) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A settlement carries at most one balance tender");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A settlement carries at most one balance tender");
         }
         if (moneyMinor <= 0) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
                     "An order settles at least partly with money: a zero-consideration sale "
                             + "has no fiscal path and no cash for a courier to collect");
         }
 
         Instant now = clock.instant();
         UUID settlementId = UUID.randomUUID();
-        store.insertSettlement(new SettlementRow(settlementId, plan.tenantId(), plan.orderId(),
-                plan.currency(), plan.totalMinor(), 0L, SettlementStatus.PLANNED, 1), now);
+        store.insertSettlement(
+                new SettlementRow(
+                        settlementId,
+                        plan.tenantId(),
+                        plan.orderId(),
+                        plan.currency(),
+                        plan.totalMinor(),
+                        0L,
+                        SettlementStatus.PLANNED,
+                        1),
+                now);
 
         // Balance tenders first. The sequence is the settlement order, and it is
         // what makes "reserve locally before initiating anything external" a
@@ -161,24 +171,40 @@ public class OrderSettlementService {
             PlannedTender planned = plan.tenders().get(index);
             UUID tenderId = UUID.randomUUID();
 
-            store.insertTender(new TenderRow(tenderId, plan.tenantId(), settlementId, sequence,
-                            method.id(), method.settlesFromBalance(), planned.amountMinor(),
-                            plan.currency(), TenderStatus.PLANNED, null, null, 0L, 1),
-                    plan.idempotencyKey() + ":" + sequence, now);
+            store.insertTender(
+                    new TenderRow(
+                            tenderId,
+                            plan.tenantId(),
+                            settlementId,
+                            sequence,
+                            method.id(),
+                            method.settlesFromBalance(),
+                            planned.amountMinor(),
+                            plan.currency(),
+                            TenderStatus.PLANNED,
+                            null,
+                            null,
+                            0L,
+                            1),
+                    plan.idempotencyKey() + ":" + sequence,
+                    now);
 
             if (method.settlesFromBalance()) {
                 if (plan.customerAccountId() == null) {
-                    throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                            "A guest checkout cannot redeem points");
+                    throw new ApiException(ErrorCode.VALIDATION_FAILED, "A guest checkout cannot redeem points");
                 }
-                PointsRedemptionPort.PointsHold hold = points.reserve(
-                        new PointsRedemptionPort.ReserveCommand(plan.tenantId(), plan.brandId(),
-                                plan.customerAccountId(), plan.orderId(), tenderId,
-                                planned.amountMinor(), plan.currency(),
-                                plan.idempotencyKey() + ":points", plan.actor()));
+                PointsRedemptionPort.PointsHold hold = points.reserve(new PointsRedemptionPort.ReserveCommand(
+                        plan.tenantId(),
+                        plan.brandId(),
+                        plan.customerAccountId(),
+                        plan.orderId(),
+                        tenderId,
+                        planned.amountMinor(),
+                        plan.currency(),
+                        plan.idempotencyKey() + ":points",
+                        plan.actor()));
                 store.attachReservation(plan.tenantId(), tenderId, hold.reservationId(), now);
-                store.transitionTender(plan.tenantId(), tenderId, TenderStatus.PLANNED,
-                        TenderStatus.RESERVED, now);
+                store.transitionTender(plan.tenantId(), tenderId, TenderStatus.PLANNED, TenderStatus.RESERVED, now);
             }
             sequence++;
         }
@@ -227,15 +253,15 @@ public class OrderSettlementService {
      * {@code PointsRedemptionPort.settle} now refuses outright.
      */
     @Transactional
-    public SettlementStatus recordTenderSettled(UUID tenantId, UUID orderId, UUID tenderId,
-            String actor) {
+    public SettlementStatus recordTenderSettled(UUID tenantId, UUID orderId, UUID tenderId, String actor) {
         Instant now = clock.instant();
         SettlementRow settlement = require(tenantId, orderId);
 
         List<TenderRow> tenders = store.tendersOf(tenantId, settlement.id());
-        TenderRow tender = tenders.stream().filter(row -> row.id().equals(tenderId)).findFirst()
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No such tender on this settlement"));
+        TenderRow tender = tenders.stream()
+                .filter(row -> row.id().equals(tenderId))
+                .findFirst()
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such tender on this settlement"));
 
         TenderStatus from = tender.settlesFromBalance() ? TenderStatus.RESERVED : tender.status();
         if (!store.transitionTender(tenantId, tenderId, from, TenderStatus.SETTLED, now)) {
@@ -246,15 +272,13 @@ public class OrderSettlementService {
         }
 
         long settled = tenders.stream()
-                .mapToLong(row -> row.id().equals(tenderId) || row.status() == TenderStatus.SETTLED
-                        ? row.amountMinor() : 0L)
+                .mapToLong(row ->
+                        row.id().equals(tenderId) || row.status() == TenderStatus.SETTLED ? row.amountMinor() : 0L)
                 .sum();
 
-        SettlementStatus next = settled == settlement.totalDueMinor()
-                ? SettlementStatus.SETTLED
-                : SettlementStatus.PARTIALLY_SETTLED;
-        store.transitionSettlement(tenantId, settlement.id(), settlement.status(), next, settled,
-                now);
+        SettlementStatus next =
+                settled == settlement.totalDueMinor() ? SettlementStatus.SETTLED : SettlementStatus.PARTIALLY_SETTLED;
+        store.transitionSettlement(tenantId, settlement.id(), settlement.status(), next, settled, now);
         return next;
     }
 
@@ -282,15 +306,12 @@ public class OrderSettlementService {
         for (TenderRow tender : store.tendersOf(tenantId, settlement.id())) {
             if (tender.settlesFromBalance() && tender.status() == TenderStatus.RESERVED) {
                 points.release(tenantId, tender.id(), reasonCode, actor);
-                store.transitionTender(tenantId, tender.id(), TenderStatus.RESERVED,
-                        TenderStatus.RELEASED, now);
+                store.transitionTender(tenantId, tender.id(), TenderStatus.RESERVED, TenderStatus.RELEASED, now);
             } else if (tender.status() == TenderStatus.PLANNED) {
-                store.transitionTender(tenantId, tender.id(), TenderStatus.PLANNED,
-                        TenderStatus.FAILED, now);
+                store.transitionTender(tenantId, tender.id(), TenderStatus.PLANNED, TenderStatus.FAILED, now);
             }
         }
-        store.transitionSettlement(tenantId, settlement.id(), settlement.status(),
-                SettlementStatus.FAILED, 0L, now);
+        store.transitionSettlement(tenantId, settlement.id(), settlement.status(), SettlementStatus.FAILED, 0L, now);
     }
 
     /**
@@ -307,8 +328,7 @@ public class OrderSettlementService {
      * @return how much of the refund the money tenders absorbed
      */
     @Transactional
-    public long refund(UUID tenantId, UUID orderId, long amountMinor, String reasonCode,
-            String actor) {
+    public long refund(UUID tenantId, UUID orderId, long amountMinor, String reasonCode, String actor) {
         Instant now = clock.instant();
         SettlementRow settlement = require(tenantId, orderId);
 
@@ -334,7 +354,8 @@ public class OrderSettlementService {
             // Claim it before spending it. The bound is enforced in the statement,
             // so two concurrent refunds cannot both see the same headroom.
             if (!store.addRefunded(tenantId, tender.id(), refundable, now)) {
-                throw new ApiException(ErrorCode.STALE_VERSION,
+                throw new ApiException(
+                        ErrorCode.STALE_VERSION,
                         "This tender was refunded concurrently. Re-read the settlement and retry.");
             }
             if (tender.settlesFromBalance()) {
@@ -343,15 +364,13 @@ public class OrderSettlementService {
                 asMoney += refundable;
             }
             if (refundable == tender.refundableMinor()) {
-                store.transitionTender(tenantId, tender.id(), TenderStatus.SETTLED,
-                        TenderStatus.REVERSED, now);
+                store.transitionTender(tenantId, tender.id(), TenderStatus.SETTLED, TenderStatus.REVERSED, now);
             }
             outstanding -= refundable;
         }
 
         if (outstanding > 0) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A refund cannot exceed what the tenders settled");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A refund cannot exceed what the tenders settled");
         }
         return asMoney;
     }
@@ -364,7 +383,6 @@ public class OrderSettlementService {
 
     private SettlementRow require(UUID tenantId, UUID orderId) {
         return store.findSettlement(tenantId, orderId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "The order has no settlement"));
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "The order has no settlement"));
     }
 }

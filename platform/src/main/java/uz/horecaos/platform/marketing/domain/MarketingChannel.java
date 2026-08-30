@@ -17,7 +17,6 @@ package uz.horecaos.platform.marketing.domain;
  * cash and everything in uninstalls.
  */
 public enum MarketingChannel {
-
     SMS(true),
     EMAIL(true),
     PUSH(false),

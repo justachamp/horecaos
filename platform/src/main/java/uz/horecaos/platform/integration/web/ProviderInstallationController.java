@@ -1,16 +1,16 @@
 package uz.horecaos.platform.integration.web;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
-
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,10 +19,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -60,7 +56,10 @@ public class ProviderInstallationController {
     private final ProviderCapabilityReconciliationService reconciliation;
 
     public ProviderInstallationController(
-            JdbcClient jdbc, AuditRecorder audit, CurrentActor currentActor, java.time.Clock clock,
+            JdbcClient jdbc,
+            AuditRecorder audit,
+            CurrentActor currentActor,
+            java.time.Clock clock,
             ProviderCapabilityReconciliationService reconciliation) {
         this.jdbc = jdbc;
         this.audit = audit;
@@ -97,7 +96,8 @@ public class ProviderInstallationController {
 
     @PostMapping
     @RequiresCapability(value = Capability.INTEGRATION_INSTALLATION_MANAGE, mutating = true)
-    @Operation(summary = "Install a provider",
+    @Operation(
+            summary = "Install a provider",
             description = "The environment is chosen from an approved catalogue; a tenant never "
                     + "supplies a URL, which closes the request-forgery path at the model.")
     ResponseEntity<Map<String, Object>> install(
@@ -109,7 +109,8 @@ public class ProviderInstallationController {
                 """)
                 .param("code", request.environmentCode())
                 .param("category", request.category().name())
-                .query(Boolean.class).single();
+                .query(Boolean.class)
+                .single();
 
         if (!environmentExists) {
             throw new ApiException(
@@ -135,23 +136,28 @@ public class ProviderInstallationController {
                 .param("account", request.externalAccountReference())
                 .update();
 
-        record(tenantId, "integration.installation_created", id,
-                "Provider installed", Map.of(
+        record(
+                tenantId,
+                "integration.installation_created",
+                id,
+                "Provider installed",
+                Map.of(
                         "category", request.category().name(),
                         "providerType", request.providerType(),
-                        "environment", request.environmentCode()), Capability.INTEGRATION_INSTALLATION_MANAGE);
+                        "environment", request.environmentCode()),
+                Capability.INTEGRATION_INSTALLATION_MANAGE);
 
         return ResponseEntity.ok(Map.of("installationId", id, "status", "DRAFT"));
     }
 
     @PostMapping("/{installationId}/bindings")
     @RequiresCapability(value = Capability.INTEGRATION_INSTALLATION_MANAGE, mutating = true)
-    @Operation(summary = "Bind an installation to a brand or location",
+    @Operation(
+            summary = "Bind an installation to a brand or location",
             description = "Created suspended. Activation is separate, so a binding cannot go live "
                     + "before someone has confirmed it points at the intended restaurant.")
     ResponseEntity<Map<String, Object>> bind(
-            @PathVariable UUID tenantId, @PathVariable UUID installationId,
-            @Valid @RequestBody BindRequest request) {
+            @PathVariable UUID tenantId, @PathVariable UUID installationId, @Valid @RequestBody BindRequest request) {
 
         UUID id = UUID.randomUUID();
         jdbc.sql("""
@@ -180,17 +186,23 @@ public class ProviderInstallationController {
                     .update();
         }
 
-        record(tenantId, "integration.binding_created", id,
-                "Provider bound", Map.of(
+        record(
+                tenantId,
+                "integration.binding_created",
+                id,
+                "Provider bound",
+                Map.of(
                         "installationId", installationId.toString(),
-                        "capabilities", request.capabilities()), Capability.INTEGRATION_INSTALLATION_MANAGE);
+                        "capabilities", request.capabilities()),
+                Capability.INTEGRATION_INSTALLATION_MANAGE);
 
         return ResponseEntity.ok(Map.of("bindingId", id, "status", "SUSPENDED"));
     }
 
     @PostMapping("/{installationId}/capability-reconciliation")
     @RequiresCapability(value = Capability.INTEGRATION_INSTALLATION_MANAGE, mutating = true)
-    @Operation(summary = "Reconcile an installation's declared capabilities",
+    @Operation(
+            summary = "Reconcile an installation's declared capabilities",
             description = "Records append-only preflight evidence: the secret reference must resolve "
                     + "and the wired adapter must declare each capability. POS uses its specialised "
                     + "live discovery endpoint instead.")
@@ -198,21 +210,29 @@ public class ProviderInstallationController {
             @PathVariable UUID tenantId, @PathVariable UUID installationId) {
         ProviderCapabilityReconciliationService.Reconciliation result =
                 reconciliation.reconcile(tenantId, installationId);
-        record(tenantId, "integration.capabilities_reconciled", installationId,
-                "Provider capability preflight completed", Map.of(
+        record(
+                tenantId,
+                "integration.capabilities_reconciled",
+                installationId,
+                "Provider capability preflight completed",
+                Map.of(
                         "connectionStatus", result.connectionStatus(),
                         "adapterVersion", result.adapterVersion(),
-                        "capabilities", result.capabilities()), Capability.INTEGRATION_INSTALLATION_MANAGE);
+                        "capabilities", result.capabilities()),
+                Capability.INTEGRATION_INSTALLATION_MANAGE);
         return ResponseEntity.ok(result);
     }
 
     @PostMapping("/{installationId}/bindings/{bindingId}/activate")
     @RequiresCapability(value = Capability.INTEGRATION_BINDING_ACTIVATE, mutating = true)
-    @Operation(summary = "Activate a binding",
+    @Operation(
+            summary = "Activate a binding",
             description = "Refused until the installation has passed a connection check.")
     ResponseEntity<Map<String, Object>> activateBinding(
-            @PathVariable UUID tenantId, @PathVariable UUID installationId,
-            @PathVariable UUID bindingId, @Valid @RequestBody ReasonRequest request) {
+            @PathVariable UUID tenantId,
+            @PathVariable UUID installationId,
+            @PathVariable UUID bindingId,
+            @Valid @RequestBody ReasonRequest request) {
 
         InstallationActivationGate gate = jdbc.sql("""
                 SELECT i.status, i.last_connection_status,
@@ -233,13 +253,16 @@ public class ProviderInstallationController {
                           AND b.installation_id = i.id
                    )
                 """)
-                .param("id", installationId).param("bindingId", bindingId).param("tenantId", tenantId)
+                .param("id", installationId)
+                .param("bindingId", bindingId)
+                .param("tenantId", tenantId)
                 .query((row, number) -> new InstallationActivationGate(
-                        row.getString("status"), row.getString("last_connection_status"),
+                        row.getString("status"),
+                        row.getString("last_connection_status"),
                         row.getBoolean("has_unverified_capability")))
                 .optional()
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "Installation or binding is not available"));
+                .orElseThrow(() ->
+                        new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "Installation or binding is not available"));
 
         if (!"SUCCEEDED".equals(gate.connectionStatus())) {
             // ADR 0026: a capability the provider has not demonstrated must not
@@ -249,12 +272,12 @@ public class ProviderInstallationController {
                     "This installation has no successful connection check, so its binding cannot activate");
         }
         if (!"DRAFT".equals(gate.status()) && !"ACTIVE".equals(gate.status())) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST,
-                    "A suspended or retired installation cannot activate a binding");
+            throw new ApiException(
+                    ErrorCode.INVALID_REQUEST, "A suspended or retired installation cannot activate a binding");
         }
         if (gate.hasUnverifiedCapability()) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST,
-                    "Every enabled binding capability must be verified before activation");
+            throw new ApiException(
+                    ErrorCode.INVALID_REQUEST, "Every enabled binding capability must be verified before activation");
         }
 
         int activated = jdbc.sql("""
@@ -263,7 +286,9 @@ public class ProviderInstallationController {
                  WHERE id = :id AND installation_id = :installationId
                    AND tenant_id = :tenantId AND status = 'SUSPENDED'
                 """)
-                .param("id", bindingId).param("installationId", installationId).param("tenantId", tenantId)
+                .param("id", bindingId)
+                .param("installationId", installationId)
+                .param("tenantId", tenantId)
                 .param("now", OffsetDateTime.now(ZoneOffset.UTC))
                 .update();
 
@@ -273,45 +298,63 @@ public class ProviderInstallationController {
                        SET status = 'ACTIVE', version = version + 1, updated_at = :now
                      WHERE id = :installationId AND tenant_id = :tenantId AND status = 'DRAFT'
                     """)
-                    .param("installationId", installationId).param("tenantId", tenantId)
+                    .param("installationId", installationId)
+                    .param("tenantId", tenantId)
                     .param("now", OffsetDateTime.now(ZoneOffset.UTC))
                     .update();
-            record(tenantId, "integration.binding_activated", bindingId,
-                    request.reason(), Map.of("installationId", installationId.toString()),
+            record(
+                    tenantId,
+                    "integration.binding_activated",
+                    bindingId,
+                    request.reason(),
+                    Map.of("installationId", installationId.toString()),
                     Capability.INTEGRATION_BINDING_ACTIVATE);
         }
-        return ResponseEntity.ok(Map.of(
-                "changed", activated == 1, "outcome", activated == 1 ? "activated" : "no_change"));
+        return ResponseEntity.ok(
+                Map.of("changed", activated == 1, "outcome", activated == 1 ? "activated" : "no_change"));
     }
 
     @PostMapping("/{installationId}/bindings/{bindingId}/suspend")
     @RequiresCapability(value = Capability.INTEGRATION_BINDING_ACTIVATE, mutating = true)
-    @Operation(summary = "Suspend a binding",
+    @Operation(
+            summary = "Suspend a binding",
             description = "The rollback path: operations return to a manual process while mappings "
                     + "and evidence are retained for reconciliation.")
     ResponseEntity<Map<String, Object>> suspendBinding(
-            @PathVariable UUID tenantId, @PathVariable UUID installationId,
-            @PathVariable UUID bindingId, @Valid @RequestBody ReasonRequest request) {
+            @PathVariable UUID tenantId,
+            @PathVariable UUID installationId,
+            @PathVariable UUID bindingId,
+            @Valid @RequestBody ReasonRequest request) {
 
         int suspended = jdbc.sql("""
                 UPDATE integration.bindings
                    SET status = 'SUSPENDED', version = version + 1, updated_at = :now
                  WHERE id = :id AND tenant_id = :tenantId AND status = 'ACTIVE'
                 """)
-                .param("id", bindingId).param("tenantId", tenantId)
+                .param("id", bindingId)
+                .param("tenantId", tenantId)
                 .param("now", OffsetDateTime.now(ZoneOffset.UTC))
                 .update();
 
         if (suspended == 1) {
-            record(tenantId, "integration.binding_suspended", bindingId, request.reason(), Map.of(),
+            record(
+                    tenantId,
+                    "integration.binding_suspended",
+                    bindingId,
+                    request.reason(),
+                    Map.of(),
                     Capability.INTEGRATION_BINDING_ACTIVATE);
         }
-        return ResponseEntity.ok(Map.of(
-                "changed", suspended == 1, "outcome", suspended == 1 ? "suspended" : "no_change"));
+        return ResponseEntity.ok(
+                Map.of("changed", suspended == 1, "outcome", suspended == 1 ? "suspended" : "no_change"));
     }
 
     private void record(
-            UUID tenantId, String actionCode, UUID targetId, String reason, Map<String, Object> changes,
+            UUID tenantId,
+            String actionCode,
+            UUID targetId,
+            String reason,
+            Map<String, Object> changes,
             Capability capability) {
         audit.record(AuditFact.of(actionCode, AuditClass.SECURITY)
                 .by(ActorRef.user(currentActor.get().subject(), null))
@@ -336,23 +379,29 @@ public class ProviderInstallationController {
             @NotBlank @Size(max = 64) String environmentCode,
             @NotBlank @Size(max = 255) String displayName,
             @Size(max = 512) String secretReference,
-            @Size(max = 255) String externalAccountReference) { }
+            @Size(max = 255) String externalAccountReference) {}
 
     public record BindRequest(
             UUID brandId,
             UUID locationId,
             int priority,
             @NotNull List<String> capabilities,
-            @NotNull List<String> primaryCapabilities) { }
+            @NotNull List<String> primaryCapabilities) {}
 
-    public record ReasonRequest(@NotBlank @Size(max = 1000) String reason) { }
+    public record ReasonRequest(@NotBlank @Size(max = 1000) String reason) {}
 
     private record InstallationActivationGate(
-            String status, String connectionStatus, boolean hasUnverifiedCapability) { }
+            String status, String connectionStatus, boolean hasUnverifiedCapability) {}
 
     /** Never carries a secret value, only its reference. */
     public record InstallationView(
-            UUID id, String category, String providerType, String environmentCode,
-            String displayName, String status, String secretReference,
-            String lastConnectionStatus, String adapterVersion) { }
+            UUID id,
+            String category,
+            String providerType,
+            String environmentCode,
+            String displayName,
+            String status,
+            String secretReference,
+            String lastConnectionStatus,
+            String adapterVersion) {}
 }

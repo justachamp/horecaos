@@ -3,6 +3,10 @@ package uz.horecaos.platform.reporting.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.sql.Connection;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -10,17 +14,11 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
-import java.sql.Connection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import javax.sql.DataSource;
-
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -28,9 +26,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
@@ -39,8 +35,8 @@ import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.reporting.domain.BusinessDayBoundary;
 import uz.horecaos.platform.reporting.domain.Grain;
-import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore;
+import uz.horecaos.platform.support.TestDatabase;
 
 /**
  * The day-grain slice of ADR 0043, end to end against PostgreSQL.
@@ -101,7 +97,8 @@ class DayCloseAndMetricLayerTests {
         DataSource dataSource = db.dataSource();
         jdbc = JdbcClient.create(counting(dataSource, statements));
 
-        jdbc.sql("TRUNCATE TABLE reporting.aggregate_divergences, reporting.close_runs").update();
+        jdbc.sql("TRUNCATE TABLE reporting.aggregate_divergences, reporting.close_runs")
+                .update();
         jdbc.sql("""
                 TRUNCATE TABLE reporting.fact_order, reporting.fact_order_line,
                     reporting.fact_refund, reporting.agg_branch_day, reporting.agg_sla_bucket_day,
@@ -118,8 +115,7 @@ class DayCloseAndMetricLayerTests {
         store = new JdbcReportingStore(jdbc);
         auditRecorder = new RecordingAuditRecorder();
         BusinessDayService businessDays = new BusinessDayService(store);
-        close = new DayCloseService(store, businessDays, new SubjectPseudonym(new StubProtection()),
-                clock);
+        close = new DayCloseService(store, businessDays, new SubjectPseudonym(new StubProtection()), clock);
         queries = new ReportQueryService(store, businessDays, clock);
         signing = new MetricSigningService(store, auditRecorder, clock);
 
@@ -159,28 +155,35 @@ class DayCloseAndMetricLayerTests {
                   FROM reporting.fact_order WHERE tenant_id = :t
                 """).param("t", TENANT).query().singleRow();
 
-        assertThat(fact).containsEntry("gross_revenue_som", 100_000L)
+        assertThat(fact)
+                .containsEntry("gross_revenue_som", 100_000L)
                 .containsEntry("discount_som", 10_000L)
                 .containsEntry("net_revenue_som", 90_000L);
     }
 
     @Test
     void anOrderPastItsPromiseIsLateAndOneWithNoPromiseIsNeither() {
-        insertOrder("LATE", ENTITY_A, "COMPLETED", tashkent(18, 0), tashkent(19, 10), 50_000, 0,
-                tashkent(18, 40));
-        insertOrder("UNPROMISED", ENTITY_A, "COMPLETED", tashkent(18, 5), tashkent(19, 30),
-                50_000, 0, null);
+        insertOrder("LATE", ENTITY_A, "COMPLETED", tashkent(18, 0), tashkent(19, 10), 50_000, 0, tashkent(18, 40));
+        insertOrder("UNPROMISED", ENTITY_A, "COMPLETED", tashkent(18, 5), tashkent(19, 30), 50_000, 0, null);
 
         close.close(TENANT, DAY);
 
         Map<String, Object> late = jdbc.sql("""
                 SELECT seconds_late FROM reporting.fact_order
                  WHERE tenant_id = :t AND order_id = :id
-                """).param("t", TENANT).param("id", orderId("LATE")).query().singleRow();
+                """)
+                .param("t", TENANT)
+                .param("id", orderId("LATE"))
+                .query()
+                .singleRow();
         Map<String, Object> unpromised = jdbc.sql("""
                 SELECT seconds_late FROM reporting.fact_order
                  WHERE tenant_id = :t AND order_id = :id
-                """).param("t", TENANT).param("id", orderId("UNPROMISED")).query().singleRow();
+                """)
+                .param("t", TENANT)
+                .param("id", orderId("UNPROMISED"))
+                .query()
+                .singleRow();
 
         assertThat(late).containsEntry("seconds_late", 1800);
         assertThat(unpromised.get("seconds_late"))
@@ -203,7 +206,9 @@ class DayCloseAndMetricLayerTests {
         long netBefore = metric(DAY, DAY, "revenue.net.v1");
 
         LocalDate refundDay = DAY.plusDays(3);
-        insertRefund(orderId("A-1"), 50_000,
+        insertRefund(
+                orderId("A-1"),
+                50_000,
                 ZonedDateTime.of(refundDay, LocalTime.of(11, 0), TASHKENT).toInstant());
         close.close(TENANT, refundDay);
 
@@ -225,7 +230,8 @@ class DayCloseAndMetricLayerTests {
         close.close(TENANT, DAY);
 
         LocalDate refundDay = DAY.plusDays(1);
-        Instant midMorning = ZonedDateTime.of(refundDay, LocalTime.of(11, 0), TASHKENT).toInstant();
+        Instant midMorning =
+                ZonedDateTime.of(refundDay, LocalTime.of(11, 0), TASHKENT).toInstant();
         // Two refunds against one order: a partial, then the rest of it. The order
         // is looked up once and both refunds have to be filed against it, which is
         // what a set-based read gets wrong if it walks the orders it found instead
@@ -246,7 +252,10 @@ class DayCloseAndMetricLayerTests {
                         SELECT count(*) FROM reporting.fact_refund
                          WHERE tenant_id = :t AND business_date = :day
                         """)
-                .param("t", TENANT).param("day", refundDay).query(Integer.class).single())
+                        .param("t", TENANT)
+                        .param("day", refundDay)
+                        .query(Integer.class)
+                        .single())
                 .isEqualTo(31);
 
         // Each refund also keeps the order's own business date, which is the whole
@@ -255,7 +264,10 @@ class DayCloseAndMetricLayerTests {
                         SELECT DISTINCT order_business_date FROM reporting.fact_refund
                          WHERE tenant_id = :t AND business_date = :day
                         """)
-                .param("t", TENANT).param("day", refundDay).query(LocalDate.class).list())
+                        .param("t", TENANT)
+                        .param("day", refundDay)
+                        .query(LocalDate.class)
+                        .list())
                 .containsExactly(DAY);
 
         // Thirty-one refunds cost one read of the orders behind them, not
@@ -278,7 +290,8 @@ class DayCloseAndMetricLayerTests {
         // late correction or a projection bug is exactly what a person has to
         // decide, which is why the stored figure stays put.
         jdbc.sql("UPDATE reporting.agg_branch_day SET gross_som = 999_000 WHERE tenant_id = :t")
-                .param("t", TENANT).update();
+                .param("t", TENANT)
+                .update();
 
         var result = close.recut(TENANT, DAY);
 
@@ -287,7 +300,9 @@ class DayCloseAndMetricLayerTests {
         assertThat(result.divergences().getFirst().difference()).isEqualTo(120_000L - 999_000L);
 
         assertThat(jdbc.sql("SELECT gross_som FROM reporting.agg_branch_day WHERE tenant_id = :t")
-                .param("t", TENANT).query(Long.class).single())
+                        .param("t", TENANT)
+                        .query(Long.class)
+                        .single())
                 .as("somebody may already have acted on the earlier figure, so it is left alone")
                 .isEqualTo(999_000L);
 
@@ -311,8 +326,8 @@ class DayCloseAndMetricLayerTests {
         insertOrder("B-1", ENTITY_B, "COMPLETED", tashkent(14, 0), tashkent(14, 40), 80_000, 0);
         close.close(TENANT, DAY);
 
-        assertThatThrownBy(() -> queries.run(new ReportQuery(TENANT, DAY, DAY,
-                List.of("revenue.gross.v1"), List.of(), List.of(), List.of())))
+        assertThatThrownBy(() -> queries.run(new ReportQuery(
+                        TENANT, DAY, DAY, List.of("revenue.gross.v1"), List.of(), List.of(), List.of())))
                 .isInstanceOf(ReportingRefusals.CombinedEntityTotalException.class)
                 .hasMessageContaining("neither tax filing");
     }
@@ -323,13 +338,19 @@ class DayCloseAndMetricLayerTests {
         insertOrder("B-1", ENTITY_B, "COMPLETED", tashkent(14, 0), tashkent(14, 40), 80_000, 0);
         close.close(TENANT, DAY);
 
-        var result = queries.run(new ReportQuery(TENANT, DAY, DAY, List.of("revenue.gross.v1"),
-                List.of(Grain.Dimension.LEGAL_ENTITY), List.of(), List.of()));
+        var result = queries.run(new ReportQuery(
+                TENANT,
+                DAY,
+                DAY,
+                List.of("revenue.gross.v1"),
+                List.of(Grain.Dimension.LEGAL_ENTITY),
+                List.of(),
+                List.of()));
 
         assertThat(result.rows()).hasSize(2);
         assertThat(result.rows().stream()
-                .mapToLong(row -> row.values().get("revenue.gross.v1"))
-                .sum())
+                        .mapToLong(row -> row.values().get("revenue.gross.v1"))
+                        .sum())
                 .as("the parts exist and reconcile; it is only the platform printing the sum "
                         + "as one figure that ADR 0038 forbids")
                 .isEqualTo(200_000L);
@@ -341,8 +362,8 @@ class DayCloseAndMetricLayerTests {
         insertOrder("B-1", ENTITY_B, "COMPLETED", tashkent(14, 0), tashkent(14, 40), 80_000, 0);
         close.close(TENANT, DAY);
 
-        var result = queries.run(new ReportQuery(TENANT, DAY, DAY, List.of("orders.count.v1"),
-                List.of(), List.of(), List.of()));
+        var result = queries.run(
+                new ReportQuery(TENANT, DAY, DAY, List.of("orders.count.v1"), List.of(), List.of(), List.of()));
 
         assertThat(result.rows()).hasSize(1);
         assertThat(result.rows().getFirst().values()).containsEntry("orders.count.v1", 2L);
@@ -352,17 +373,27 @@ class DayCloseAndMetricLayerTests {
 
     @Test
     void anUnknownMetricIsRejectedRatherThanIgnored() {
-        assertThatThrownBy(() -> queries.run(new ReportQuery(TENANT, DAY, DAY,
-                List.of("revenue.gross.v1", "revenue.imaginary.v1"),
-                List.of(Grain.Dimension.LEGAL_ENTITY), List.of(), List.of())))
+        assertThatThrownBy(() -> queries.run(new ReportQuery(
+                        TENANT,
+                        DAY,
+                        DAY,
+                        List.of("revenue.gross.v1", "revenue.imaginary.v1"),
+                        List.of(Grain.Dimension.LEGAL_ENTITY),
+                        List.of(),
+                        List.of())))
                 .hasMessageContaining("revenue.imaginary.v1");
     }
 
     @Test
     void anUnbuiltMetricIsRefusedRatherThanAnsweredWithZero() {
-        assertThatThrownBy(() -> queries.run(new ReportQuery(TENANT, DAY, DAY,
-                List.of("delivery_cost_variance.v1"), List.of(Grain.Dimension.LEGAL_ENTITY),
-                List.of(), List.of())))
+        assertThatThrownBy(() -> queries.run(new ReportQuery(
+                        TENANT,
+                        DAY,
+                        DAY,
+                        List.of("delivery_cost_variance.v1"),
+                        List.of(Grain.Dimension.LEGAL_ENTITY),
+                        List.of(),
+                        List.of())))
                 .isInstanceOf(ReportingRefusals.MetricNotBuiltException.class);
     }
 
@@ -371,9 +402,15 @@ class DayCloseAndMetricLayerTests {
         insertOrder("A-1", ENTITY_A, "COMPLETED", tashkent(13, 0), tashkent(13, 40), 120_000, 0);
         close.close(TENANT, DAY);
 
-        var provenance = queries.run(new ReportQuery(TENANT, DAY, DAY,
-                List.of("revenue.gross.v1"), List.of(Grain.Dimension.LEGAL_ENTITY),
-                List.of(), List.of())).provenance();
+        var provenance = queries.run(new ReportQuery(
+                        TENANT,
+                        DAY,
+                        DAY,
+                        List.of("revenue.gross.v1"),
+                        List.of(Grain.Dimension.LEGAL_ENTITY),
+                        List.of(),
+                        List.of()))
+                .provenance();
 
         assertThat(provenance.metricVersions()).containsExactly("revenue.gross.v1");
         assertThat(provenance.timezone()).isEqualTo("Asia/Tashkent");
@@ -386,16 +423,15 @@ class DayCloseAndMetricLayerTests {
 
     @Test
     void aSignatureIsRecordedOnceAndAudited() {
-        signing.sign("revenue.gross.v1", ActorRef.user("finance-1", "Finance"),
-                "Signed at the 21 August finance review");
+        signing.sign(
+                "revenue.gross.v1", ActorRef.user("finance-1", "Finance"), "Signed at the 21 August finance review");
 
         assertThat(auditRecorder.facts).hasSize(1);
         assertThat(auditRecorder.facts.getFirst().actionCode()).isEqualTo("reporting.metric.signed");
-        assertThat(auditRecorder.facts.getFirst().changeDocument())
-                .containsKey("definitionDigest");
+        assertThat(auditRecorder.facts.getFirst().changeDocument()).containsKey("definitionDigest");
 
-        assertThatThrownBy(() -> signing.sign("revenue.gross.v1",
-                ActorRef.user("finance-2", "Finance"), "Signing again"))
+        assertThatThrownBy(
+                        () -> signing.sign("revenue.gross.v1", ActorRef.user("finance-2", "Finance"), "Signing again"))
                 .isInstanceOf(MetricSigningService.AlreadySignedException.class);
     }
 
@@ -415,17 +451,23 @@ class DayCloseAndMetricLayerTests {
 
     @Test
     void aRangeSpanningAnUnfinishedBoundaryRecutIsRefused() {
-        new BusinessDayService(store).setBoundary(TENANT,
-                new BusinessDayBoundary(TASHKENT, LocalTime.of(9, 0), 2), DAY, DAY);
+        new BusinessDayService(store)
+                .setBoundary(TENANT, new BusinessDayBoundary(TASHKENT, LocalTime.of(9, 0), 2), DAY, DAY);
 
-        assertThatThrownBy(() -> queries.run(new ReportQuery(TENANT, DAY.minusDays(2),
-                DAY.plusDays(2), List.of("orders.count.v1"), List.of(), List.of(), List.of())))
+        assertThatThrownBy(() -> queries.run(new ReportQuery(
+                        TENANT,
+                        DAY.minusDays(2),
+                        DAY.plusDays(2),
+                        List.of("orders.count.v1"),
+                        List.of(),
+                        List.of(),
+                        List.of())))
                 .isInstanceOf(ReportingRefusals.MixedBoundaryRegimeException.class);
 
         // Either side of the frontier on its own is answerable, so the refusal is
         // exactly as wide as the problem.
-        queries.run(new ReportQuery(TENANT, DAY.plusDays(1), DAY.plusDays(2),
-                List.of("orders.count.v1"), List.of(), List.of(), List.of()));
+        queries.run(new ReportQuery(
+                TENANT, DAY.plusDays(1), DAY.plusDays(2), List.of("orders.count.v1"), List.of(), List.of(), List.of()));
     }
 
     // ---------------------------------------------------------- isolation
@@ -445,12 +487,14 @@ class DayCloseAndMetricLayerTests {
                 VALUES (:t, :d, :loc, :e, 'TELEGRAM', 'DELIVERY', 1, 1, 99, 0, 999_999, 0,
                     999_999, 0, 0, 0, 0, 0)
                 """)
-                .param("t", OTHER_TENANT).param("d", DAY).param("loc", UUID.randomUUID())
+                .param("t", OTHER_TENANT)
+                .param("d", DAY)
+                .param("loc", UUID.randomUUID())
                 .param("e", ENTITY_A)
                 .update();
 
-        var result = queries.run(new ReportQuery(TENANT, DAY, DAY, List.of("orders.count.v1"),
-                List.of(), List.of(), List.of()));
+        var result = queries.run(
+                new ReportQuery(TENANT, DAY, DAY, List.of("orders.count.v1"), List.of(), List.of(), List.of()));
 
         assertThat(result.rows()).hasSize(1);
         assertThat(result.rows().getFirst().values()).containsEntry("orders.count.v1", 1L);
@@ -467,9 +511,10 @@ class DayCloseAndMetricLayerTests {
 
             statement.execute("SET ROLE horecaos_reporting_read");
 
-            try (var reading = statement.executeQuery(
-                    "SELECT count(*) FROM reporting.agg_branch_day")) {
-                assertThat(reading.next()).as("the role can read what it exists to read").isTrue();
+            try (var reading = statement.executeQuery("SELECT count(*) FROM reporting.agg_branch_day")) {
+                assertThat(reading.next())
+                        .as("the role can read what it exists to read")
+                        .isTrue();
             }
 
             assertThatThrownBy(() -> statement.execute("""
@@ -477,8 +522,7 @@ class DayCloseAndMetricLayerTests {
                         status, boundary_version, metric_calculation_version, started_at)
                     VALUES (gen_random_uuid(), gen_random_uuid(), current_date, 'CLOSE',
                         'RUNNING', 1, 1, now())
-                    """))
-                    .hasMessageContaining("permission denied");
+                    """)).hasMessageContaining("permission denied");
 
             assertThatThrownBy(() -> statement.executeQuery("SELECT count(*) FROM ordering.orders"))
                     .as("a reporting query that reaches a module table fails at the database "
@@ -490,8 +534,8 @@ class DayCloseAndMetricLayerTests {
     // ------------------------------------------------------------- fixtures
 
     private long metric(LocalDate from, LocalDate to, String code) {
-        var result = queries.run(new ReportQuery(TENANT, from, to, List.of(code),
-                List.of(Grain.Dimension.LEGAL_ENTITY), List.of(), List.of()));
+        var result = queries.run(new ReportQuery(
+                TENANT, from, to, List.of(code), List.of(Grain.Dimension.LEGAL_ENTITY), List.of(), List.of()));
         return result.rows().stream()
                 .map(row -> row.values().get(code))
                 .filter(java.util.Objects::nonNull)
@@ -519,13 +563,15 @@ class DayCloseAndMetricLayerTests {
      */
     private static DataSource counting(DataSource delegate, AtomicInteger prepared) {
         ClassLoader loader = DayCloseAndMetricLayerTests.class.getClassLoader();
-        return (DataSource) Proxy.newProxyInstance(loader, new Class<?>[] {DataSource.class},
-                (proxy, method, arguments) -> {
+        return (DataSource) Proxy.newProxyInstance(
+                loader, new Class<?>[] {DataSource.class}, (proxy, method, arguments) -> {
                     Object result = invoke(method, delegate, arguments);
                     if (!(result instanceof Connection connection)) {
                         return result;
                     }
-                    return Proxy.newProxyInstance(loader, new Class<?>[] {Connection.class},
+                    return Proxy.newProxyInstance(
+                            loader,
+                            new Class<?>[] {Connection.class},
                             (connectionProxy, connectionMethod, connectionArguments) -> {
                                 if (connectionMethod.getName().startsWith("prepare")) {
                                     prepared.incrementAndGet();
@@ -553,14 +599,26 @@ class DayCloseAndMetricLayerTests {
         return UUID.nameUUIDFromBytes(("order:" + seed).getBytes());
     }
 
-    private void insertOrder(String seed, UUID legalEntityId, String status, Instant createdAt,
-            Instant closedAt, long totalMinor, long discountMinor) {
-        insertOrder(seed, legalEntityId, status, createdAt, closedAt, totalMinor, discountMinor,
-                null);
+    private void insertOrder(
+            String seed,
+            UUID legalEntityId,
+            String status,
+            Instant createdAt,
+            Instant closedAt,
+            long totalMinor,
+            long discountMinor) {
+        insertOrder(seed, legalEntityId, status, createdAt, closedAt, totalMinor, discountMinor, null);
     }
 
-    private void insertOrder(String seed, UUID legalEntityId, String status, Instant createdAt,
-            Instant closedAt, long totalMinor, long discountMinor, Instant promisedAt) {
+    private void insertOrder(
+            String seed,
+            UUID legalEntityId,
+            String status,
+            Instant createdAt,
+            Instant closedAt,
+            long totalMinor,
+            long discountMinor,
+            Instant promisedAt) {
 
         UUID orderId = orderId(seed);
         UUID cartId = UUID.nameUUIDFromBytes(("cart:" + seed).getBytes());
@@ -574,8 +632,12 @@ class DayCloseAndMetricLayerTests {
                 VALUES (:id, :t, :b, :loc, :ch, :cust, 'DELIVERY', 'UZS', 'CONVERTED',
                     :expires, :orderId)
                 """)
-                .param("id", cartId).param("t", TENANT).param("b", BRAND).param("loc", LOCATION)
-                .param("ch", channelId).param("cust", CUSTOMER)
+                .param("id", cartId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", LOCATION)
+                .param("ch", channelId)
+                .param("cust", CUSTOMER)
                 .param("expires", createdAt.atOffset(ZoneOffset.UTC))
                 .param("orderId", orderId)
                 .update();
@@ -588,9 +650,15 @@ class DayCloseAndMetricLayerTests {
                 VALUES (:id, :t, :b, :loc, :cust, 'UZS', 'ACCEPTED', :pub, 1, :hash,
                     :subtotal, 0, 0, :discount, :total, :expires, :accepted)
                 """)
-                .param("id", quoteId).param("t", TENANT).param("b", BRAND).param("loc", LOCATION)
-                .param("cust", CUSTOMER).param("pub", publicationId).param("hash", "hash-" + seed)
-                .param("subtotal", subtotal).param("discount", discountMinor)
+                .param("id", quoteId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", LOCATION)
+                .param("cust", CUSTOMER)
+                .param("pub", publicationId)
+                .param("hash", "hash-" + seed)
+                .param("subtotal", subtotal)
+                .param("discount", discountMinor)
                 .param("total", totalMinor)
                 .param("expires", createdAt.atOffset(ZoneOffset.UTC))
                 .param("accepted", createdAt.atOffset(ZoneOffset.UTC))
@@ -611,12 +679,22 @@ class DayCloseAndMetricLayerTests {
                     :cart, :key, :promisedAt, :basis, :prep,
                     1, :createdAt, :confirmedAt, :closedAt)
                 """)
-                .param("id", orderId).param("number", seed).param("t", TENANT).param("b", BRAND)
-                .param("loc", LOCATION).param("ch", channelId).param("cust", CUSTOMER)
-                .param("status", status).param("subtotal", subtotal)
-                .param("discount", discountMinor).param("total", totalMinor)
-                .param("quote", quoteId).param("hash", "hash-" + seed).param("pub", publicationId)
-                .param("cart", cartId).param("key", "idem-" + seed)
+                .param("id", orderId)
+                .param("number", seed)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", LOCATION)
+                .param("ch", channelId)
+                .param("cust", CUSTOMER)
+                .param("status", status)
+                .param("subtotal", subtotal)
+                .param("discount", discountMinor)
+                .param("total", totalMinor)
+                .param("quote", quoteId)
+                .param("hash", "hash-" + seed)
+                .param("pub", publicationId)
+                .param("cart", cartId)
+                .param("key", "idem-" + seed)
                 .param("promisedAt", promisedAt == null ? null : promisedAt.atOffset(ZoneOffset.UTC))
                 .param("basis", promisedAt == null ? "NOT_PROMISED" : "PREPARATION_BAND")
                 .param("prep", promisedAt == null ? null : 40)
@@ -632,8 +710,12 @@ class DayCloseAndMetricLayerTests {
                 VALUES (gen_random_uuid(), :t, :orderId, :b, :loc, :entity, 'CASH', 'CASH',
                     :amount, 'UZS', 'PAID', 'ON_HANDOVER', :key, :createdAt, :createdAt)
                 """)
-                .param("t", TENANT).param("orderId", orderId).param("b", BRAND)
-                .param("loc", LOCATION).param("entity", legalEntityId).param("amount", totalMinor)
+                .param("t", TENANT)
+                .param("orderId", orderId)
+                .param("b", BRAND)
+                .param("loc", LOCATION)
+                .param("entity", legalEntityId)
+                .param("amount", totalMinor)
                 .param("key", "intent-" + seed)
                 .param("createdAt", createdAt.atOffset(ZoneOffset.UTC))
                 .update();
@@ -643,7 +725,11 @@ class DayCloseAndMetricLayerTests {
         UUID intentId = jdbc.sql("""
                 SELECT id FROM payments.payment_intents
                  WHERE tenant_id = :t AND order_id = :o
-                """).param("t", TENANT).param("o", orderId).query(UUID.class).single();
+                """)
+                .param("t", TENANT)
+                .param("o", orderId)
+                .query(UUID.class)
+                .single();
 
         UUID attemptId = UUID.randomUUID();
         jdbc.sql("""
@@ -653,8 +739,11 @@ class DayCloseAndMetricLayerTests {
                 VALUES (:id, :t, :intent, 'CLICK', :binding, :trans, :day, :amount, 'UZS',
                     'CAPTURED', :at, :at)
                 """)
-                .param("id", attemptId).param("t", TENANT).param("intent", intentId)
-                .param("binding", merchantBindingId).param("trans", "trans-" + attemptId)
+                .param("id", attemptId)
+                .param("t", TENANT)
+                .param("intent", intentId)
+                .param("binding", merchantBindingId)
+                .param("trans", "trans-" + attemptId)
                 .param("day", DAY)
                 .param("amount", amountMinor)
                 .param("at", occurredAt.atOffset(ZoneOffset.UTC))
@@ -666,8 +755,11 @@ class DayCloseAndMetricLayerTests {
                 VALUES (gen_random_uuid(), :t, :intent, :attempt, 'REFUND', :amount, 'UZS',
                     :reference, :at)
                 """)
-                .param("t", TENANT).param("intent", intentId).param("attempt", attemptId)
-                .param("amount", amountMinor).param("reference", "LOCAL:" + UUID.randomUUID())
+                .param("t", TENANT)
+                .param("intent", intentId)
+                .param("attempt", attemptId)
+                .param("amount", amountMinor)
+                .param("reference", "LOCAL:" + UUID.randomUUID())
                 .param("at", occurredAt.atOffset(ZoneOffset.UTC))
                 .update();
     }
@@ -684,7 +776,9 @@ class DayCloseAndMetricLayerTests {
                     ON i.id = a.intent_id AND i.tenant_id = a.tenant_id
                  WHERE a.tenant_id = :t AND i.order_id = :o
                 """)
-                .param("t", TENANT).param("o", orderId).param("amount", amountMinor)
+                .param("t", TENANT)
+                .param("o", orderId)
+                .param("amount", amountMinor)
                 .param("reference", "LOCAL:" + UUID.randomUUID())
                 .param("at", occurredAt.atOffset(ZoneOffset.UTC))
                 .update();
@@ -723,15 +817,23 @@ class DayCloseAndMetricLayerTests {
         jdbc.sql("""
                 INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
                 VALUES (:id, :t, :b, 'MAIN', 'Main menu', 'ACTIVE')
-                """).param("id", catalogId).param("t", TENANT).param("b", BRAND).update();
+                """)
+                .param("id", catalogId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .update();
 
         publicationId = UUID.nameUUIDFromBytes("publication".getBytes());
         jdbc.sql("""
                 INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel,
                     status, content_hash, activated_at)
                 VALUES (:id, :t, :b, :cat, 'TELEGRAM', 'PUBLISHED', 'hash', now())
-                """).param("id", publicationId).param("t", TENANT).param("b", BRAND)
-                .param("cat", catalogId).update();
+                """)
+                .param("id", publicationId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("cat", catalogId)
+                .update();
     }
 
     /**
@@ -760,8 +862,12 @@ class DayCloseAndMetricLayerTests {
         jdbc.sql("""
                 INSERT INTO integration.bindings (id, tenant_id, installation_id, brand_id, status)
                 VALUES (:id, :t, :installation, :b, 'ACTIVE')
-                """).param("id", bindingId).param("t", TENANT)
-                .param("installation", installationId).param("b", BRAND).update();
+                """)
+                .param("id", bindingId)
+                .param("t", TENANT)
+                .param("installation", installationId)
+                .param("b", BRAND)
+                .update();
 
         // V0053 made merchant_bindings.legal_entity_id a real foreign key. The
         // column existed before it and pointed at nothing, which is exactly why a
@@ -784,9 +890,14 @@ class DayCloseAndMetricLayerTests {
                     supports_partner_fiscalization, status, effective_from)
                 VALUES (:id, :t, :entity, 'CLICK', :installation, :binding, 'service-1',
                     'horecaos:test:provider_payment:tenant:click-1', 'reporting-click-1', true, false, 'ACTIVE', :from)
-                """).param("id", merchantBindingId).param("t", TENANT).param("entity", ENTITY_A)
-                .param("installation", installationId).param("binding", bindingId)
-                .param("from", DAY.minusDays(30)).update();
+                """)
+                .param("id", merchantBindingId)
+                .param("t", TENANT)
+                .param("entity", ENTITY_A)
+                .param("installation", installationId)
+                .param("binding", bindingId)
+                .param("from", DAY.minusDays(30))
+                .update();
     }
 
     private void seedOtherTenant() {
@@ -807,21 +918,18 @@ class DayCloseAndMetricLayerTests {
     private static final class StubProtection implements FieldProtection {
 
         @Override
-        public ProtectedValue protect(UUID tenantId, DataClass dataClass, RecordRef record,
-                String plaintext) {
+        public ProtectedValue protect(UUID tenantId, DataClass dataClass, RecordRef record, String plaintext) {
             throw new UnsupportedOperationException("Reporting stores no protected values");
         }
 
         @Override
-        public String reveal(UUID tenantId, ProtectedValue value, RecordRef record,
-                String purpose) {
+        public String reveal(UUID tenantId, ProtectedValue value, RecordRef record, String purpose) {
             throw new UnsupportedOperationException("Reporting reveals nothing");
         }
 
         @Override
         public String lookupHash(UUID tenantId, String lookupDomain, String normalizedValue) {
-            return Integer.toHexString((tenantId + "|" + lookupDomain + "|" + normalizedValue)
-                    .hashCode());
+            return Integer.toHexString((tenantId + "|" + lookupDomain + "|" + normalizedValue).hashCode());
         }
     }
 

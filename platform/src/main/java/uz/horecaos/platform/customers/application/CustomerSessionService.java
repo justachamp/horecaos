@@ -6,14 +6,12 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -98,9 +96,10 @@ public class CustomerSessionService {
         Redemption redemption = verification.redeemAsProvenNumber(tenantId, brandId, grantSecret);
         UUID accountId = redemption.account().accountId();
 
-        UUID partition = customers.account(tenantId, accountId)
-                .orElseThrow(() -> new IllegalStateException(
-                        "The account just resolved is not readable in tenant " + tenantId))
+        UUID partition = customers
+                .account(tenantId, accountId)
+                .orElseThrow(() ->
+                        new IllegalStateException("The account just resolved is not readable in tenant " + tenantId))
                 .partitionBrandId();
 
         Instant now = clock.instant();
@@ -108,20 +107,27 @@ public class CustomerSessionService {
         CustomerSessionToken.Issued token = CustomerSessionToken.issue();
         UUID sessionId = UUID.randomUUID();
 
-        sessions.insert(new NewSession(sessionId, tenantId, brandId, accountId, partition,
-                token.hash(), now, expiresAt));
+        sessions.insert(
+                new NewSession(sessionId, tenantId, brandId, accountId, partition, token.hash(), now, expiresAt));
 
-        audit.record(fact("CUSTOMER_SESSION_ESTABLISHED", tenantId, brandId, sessionId,
-                Map.of("accountId", accountId.toString(),
-                        "accountCreated", redemption.created(),
-                        "expiresAt", expiresAt.toString()),
+        audit.record(fact(
+                "CUSTOMER_SESSION_ESTABLISHED",
+                tenantId,
+                brandId,
+                sessionId,
+                Map.of(
+                        "accountId",
+                        accountId.toString(),
+                        "accountCreated",
+                        redemption.created(),
+                        "expiresAt",
+                        expiresAt.toString()),
                 now));
 
         // The session and the account, and nothing about the person. Not the
         // number that proved it, not its hash, and not the token (ADR 0029,
         // ADR 0028).
-        log.info("Established customer session {} for account {} in tenant {}",
-                sessionId, accountId, tenantId);
+        log.info("Established customer session {} for account {} in tenant {}", sessionId, accountId, tenantId);
 
         return new Established(token.plaintext(), expiresAt, accountId, redemption.created());
     }
@@ -160,11 +166,17 @@ public class CustomerSessionService {
         // Followed through its merge redirect here rather than at every call site.
         // A session names the account that existed when it was minted, and two
         // accounts can be joined while somebody is holding one.
-        UUID effective = identity.effective(stored.tenantId(), stored.accountId()).accountId();
+        UUID effective =
+                identity.effective(stored.tenantId(), stored.accountId()).accountId();
 
-        return Resolution.active(new CustomerSession(stored.sessionId(), stored.tenantId(),
-                stored.brandId(), effective, stored.identityPartitionBrandId(),
-                stored.issuedAt(), stored.expiresAt()));
+        return Resolution.active(new CustomerSession(
+                stored.sessionId(),
+                stored.tenantId(),
+                stored.brandId(),
+                effective,
+                stored.identityPartitionBrandId(),
+                stored.issuedAt(),
+                stored.expiresAt()));
     }
 
     /**
@@ -191,28 +203,26 @@ public class CustomerSessionService {
         Instant now = clock.instant();
         int ended = sessions.revokeForAccount(tenantId, accountId, now);
         if (ended > 0) {
-            audit.record(fact("CUSTOMER_SESSIONS_REVOKED", tenantId, null, accountId,
-                    Map.of("sessionsEnded", ended), now));
+            audit.record(
+                    fact("CUSTOMER_SESSIONS_REVOKED", tenantId, null, accountId, Map.of("sessionsEnded", ended), now));
         }
         return ended;
     }
 
-    private AuditFact fact(String action, UUID tenantId, UUID brandId, UUID targetId,
-            Map<String, Object> changes, Instant now) {
+    private AuditFact fact(
+            String action, UUID tenantId, UUID brandId, UUID targetId, Map<String, Object> changes, Instant now) {
 
         // A service actor, as on verification: there is no operator here, and
         // AuditFact demands a reason only of a USER actor.
         return AuditFact.of(action, AuditClass.SECURITY)
                 .by(ActorRef.service("storefront-session"))
-                .at(brandId == null ? ResourceScope.tenant(tenantId)
-                        : ResourceScope.brand(tenantId, brandId))
+                .at(brandId == null ? ResourceScope.tenant(tenantId) : ResourceScope.brand(tenantId, brandId))
                 .target("customer_session", targetId)
                 // Identifiers and instants. A token or a number in a change
                 // document would put a live credential and personal data into a
                 // record designed to be kept for years.
                 .changed(changes)
-                .correlatedBy(Optional.ofNullable(MDC.get("correlationId"))
-                        .orElse("customer-session"))
+                .correlatedBy(Optional.ofNullable(MDC.get("correlationId")).orElse("customer-session"))
                 .occurredAt(now)
                 .build();
     }
@@ -227,8 +237,7 @@ public class CustomerSessionService {
         /** A record's generated {@code toString} would print the token. */
         @Override
         public String toString() {
-            return "Established[accountId=%s, expiresAt=%s, created=%s]"
-                    .formatted(accountId, expiresAt, created);
+            return "Established[accountId=%s, expiresAt=%s, created=%s]".formatted(accountId, expiresAt, created);
         }
     }
 

@@ -9,7 +9,6 @@ package uz.horecaos.platform.marketing.domain;
  * and extend the catalogue rather than the language.
  */
 public enum PredicateOperator {
-
     AT_LEAST,
     AT_MOST,
     BETWEEN,

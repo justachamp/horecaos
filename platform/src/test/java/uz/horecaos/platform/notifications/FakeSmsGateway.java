@@ -1,5 +1,7 @@
 package uz.horecaos.platform.notifications;
 
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -11,9 +13,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
 
 /**
  * An SMS gateway that fails on demand (ADR 0007, ADR 0020).
@@ -90,8 +89,7 @@ public final class FakeSmsGateway implements AutoCloseable {
         switch (scenario.get()) {
             case SUCCESS -> {
                 String reference = acceptOnce(idempotencyKey, body);
-                respond(exchange, 200,
-                        """
+                respond(exchange, 200, """
                         {"status":"ACCEPTED","externalReference":"%s"}""".formatted(reference));
             }
             case RATE_LIMITED -> {
@@ -121,8 +119,7 @@ public final class FakeSmsGateway implements AutoCloseable {
      * gateway rejecting the query itself.
      */
     private void handleStatusQuery(HttpExchange exchange) throws IOException {
-        String key = exchange.getRequestURI().getPath()
-                .substring("/provider/commands/".length());
+        String key = exchange.getRequestURI().getPath().substring("/provider/commands/".length());
         String reference = accepted.get(key);
 
         if (reference == null) {

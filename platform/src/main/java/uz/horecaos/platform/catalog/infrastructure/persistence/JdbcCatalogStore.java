@@ -13,12 +13,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Category;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Fee;
@@ -62,8 +59,11 @@ public class JdbcCatalogStore {
                 INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
                 VALUES (:id, :tenantId, :brandId, :code, :name, 'DRAFT')
                 """)
-                .param("id", id).param("tenantId", tenantId).param("brandId", brandId)
-                .param("code", code).param("name", name)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("code", code)
+                .param("name", name)
                 .update();
     }
 
@@ -72,14 +72,24 @@ public class JdbcCatalogStore {
                 INSERT INTO catalog.products (id, tenant_id, brand_id, code, status)
                 VALUES (:id, :tenantId, :brandId, :code, :status)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("brandId", brandId)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("code", code)
                 .param("status", status.name())
                 .update();
     }
 
-    public void insertVariant(UUID id, UUID tenantId, UUID brandId, UUID productId, String sku,
-            String unitCode, boolean isDefault, int sortOrder, Status status) {
+    public void insertVariant(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID productId,
+            String sku,
+            String unitCode,
+            boolean isDefault,
+            int sortOrder,
+            Status status) {
         jdbc.sql("""
                 INSERT INTO catalog.variants (
                     id, tenant_id, brand_id, product_id, sku, unit_code,
@@ -87,23 +97,40 @@ public class JdbcCatalogStore {
                 VALUES (:id, :tenantId, :brandId, :productId, :sku, :unitCode,
                     :isDefault, :sortOrder, :status)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("brandId", brandId)
-                .param("productId", productId).param("sku", sku).param("unitCode", unitCode)
-                .param("isDefault", isDefault).param("sortOrder", sortOrder)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("productId", productId)
+                .param("sku", sku)
+                .param("unitCode", unitCode)
+                .param("isDefault", isDefault)
+                .param("sortOrder", sortOrder)
                 .param("status", status.name())
                 .update();
     }
 
-    public void insertCategory(UUID id, UUID tenantId, UUID brandId, UUID catalogId,
-            UUID parentCategoryId, String code, int sortOrder, Status status) {
+    public void insertCategory(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID catalogId,
+            UUID parentCategoryId,
+            String code,
+            int sortOrder,
+            Status status) {
         jdbc.sql("""
                 INSERT INTO catalog.categories (
                     id, tenant_id, brand_id, catalog_id, parent_category_id, code, sort_order, status)
                 VALUES (:id, :tenantId, :brandId, :catalogId, :parentId, :code, :sortOrder, :status)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("brandId", brandId)
-                .param("catalogId", catalogId).param("parentId", parentCategoryId)
-                .param("code", code).param("sortOrder", sortOrder).param("status", status.name())
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("catalogId", catalogId)
+                .param("parentId", parentCategoryId)
+                .param("code", code)
+                .param("sortOrder", sortOrder)
+                .param("status", status.name())
                 .update();
     }
 
@@ -115,12 +142,16 @@ public class JdbcCatalogStore {
                 VALUES (:id, :tenantId, :brandId, :code, :required, :minimum,
                     :maximum, :allowRepeat, :sortOrder, :status)
                 """)
-                .param("id", group.id()).param("tenantId", group.tenantId())
-                .param("brandId", group.brandId()).param("code", group.code())
-                .param("required", group.required()).param("minimum", group.minimumSelections())
+                .param("id", group.id())
+                .param("tenantId", group.tenantId())
+                .param("brandId", group.brandId())
+                .param("code", group.code())
+                .param("required", group.required())
+                .param("minimum", group.minimumSelections())
                 .param("maximum", group.maximumSelections())
                 .param("allowRepeat", group.allowSameOptionMultipleTimes())
-                .param("sortOrder", group.sortOrder()).param("status", group.status().name())
+                .param("sortOrder", group.sortOrder())
+                .param("status", group.status().name())
                 .update();
     }
 
@@ -132,11 +163,15 @@ public class JdbcCatalogStore {
                 VALUES (:id, :tenantId, :brandId, :groupId, :code, :linkedVariantId,
                     :maximumQuantity, :sortOrder, :status)
                 """)
-                .param("id", option.id()).param("tenantId", option.tenantId())
-                .param("brandId", option.brandId()).param("groupId", option.modifierGroupId())
-                .param("code", option.code()).param("linkedVariantId", option.linkedVariantId())
+                .param("id", option.id())
+                .param("tenantId", option.tenantId())
+                .param("brandId", option.brandId())
+                .param("groupId", option.modifierGroupId())
+                .param("code", option.code())
+                .param("linkedVariantId", option.linkedVariantId())
                 .param("maximumQuantity", option.maximumQuantity())
-                .param("sortOrder", option.sortOrder()).param("status", option.status().name())
+                .param("sortOrder", option.sortOrder())
+                .param("status", option.status().name())
                 .update();
     }
 
@@ -146,8 +181,10 @@ public class JdbcCatalogStore {
                 VALUES (:tenantId, :brandId, :catalogId, :productId, :sortOrder)
                 ON CONFLICT (catalog_id, product_id) DO UPDATE SET sort_order = EXCLUDED.sort_order
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
-                .param("catalogId", catalogId).param("productId", productId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("catalogId", catalogId)
+                .param("productId", productId)
                 .param("sortOrder", sortOrder)
                 .update();
     }
@@ -158,22 +195,26 @@ public class JdbcCatalogStore {
                 VALUES (:tenantId, :brandId, :categoryId, :productId, :sortOrder)
                 ON CONFLICT (category_id, product_id) DO UPDATE SET sort_order = EXCLUDED.sort_order
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
-                .param("categoryId", categoryId).param("productId", productId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("categoryId", categoryId)
+                .param("productId", productId)
                 .param("sortOrder", sortOrder)
                 .update();
     }
 
-    public void attachModifierGroupToProduct(UUID tenantId, UUID brandId, UUID productId,
-            UUID modifierGroupId, int sortOrder) {
+    public void attachModifierGroupToProduct(
+            UUID tenantId, UUID brandId, UUID productId, UUID modifierGroupId, int sortOrder) {
         jdbc.sql("""
                 INSERT INTO catalog.product_modifier_groups (
                     tenant_id, brand_id, product_id, modifier_group_id, sort_order)
                 VALUES (:tenantId, :brandId, :productId, :groupId, :sortOrder)
                 ON CONFLICT (product_id, modifier_group_id) DO UPDATE SET sort_order = EXCLUDED.sort_order
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
-                .param("productId", productId).param("groupId", modifierGroupId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("productId", productId)
+                .param("groupId", modifierGroupId)
                 .param("sortOrder", sortOrder)
                 .update();
     }
@@ -191,25 +232,27 @@ public class JdbcCatalogStore {
      * <p>The table is chosen by a switch over the enum rather than interpolated
      * from a string, so there is no path from a caller's value to a table name.
      */
-    public boolean entityExistsInBrand(UUID tenantId, UUID brandId, EntityType entityType,
-            UUID entityId) {
-        String sql = switch (entityType) {
-            case CATALOG -> "SELECT 1 FROM catalog.catalogs";
-            case CATEGORY -> "SELECT 1 FROM catalog.categories";
-            case PRODUCT -> "SELECT 1 FROM catalog.products";
-            case VARIANT -> "SELECT 1 FROM catalog.variants";
-            case MODIFIER_GROUP -> "SELECT 1 FROM catalog.modifier_groups";
-            case MODIFIER_OPTION -> "SELECT 1 FROM catalog.modifier_options";
-            // ADR 0038: a fee reaches a receipt as a line without being a catalog
-            // item. It has no row anywhere, and no translations, so there is
-            // nothing to resolve and nothing that may be written against it.
-            case FEE -> null;
-        };
+    public boolean entityExistsInBrand(UUID tenantId, UUID brandId, EntityType entityType, UUID entityId) {
+        String sql =
+                switch (entityType) {
+                    case CATALOG -> "SELECT 1 FROM catalog.catalogs";
+                    case CATEGORY -> "SELECT 1 FROM catalog.categories";
+                    case PRODUCT -> "SELECT 1 FROM catalog.products";
+                    case VARIANT -> "SELECT 1 FROM catalog.variants";
+                    case MODIFIER_GROUP -> "SELECT 1 FROM catalog.modifier_groups";
+                    case MODIFIER_OPTION -> "SELECT 1 FROM catalog.modifier_options";
+                    // ADR 0038: a fee reaches a receipt as a line without being a catalog
+                    // item. It has no row anywhere, and no translations, so there is
+                    // nothing to resolve and nothing that may be written against it.
+                    case FEE -> null;
+                };
         if (sql == null) {
             return false;
         }
         return jdbc.sql(sql + " WHERE id = :entityId AND tenant_id = :tenantId AND brand_id = :brandId")
-                .param("entityId", entityId).param("tenantId", tenantId).param("brandId", brandId)
+                .param("entityId", entityId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .query(Integer.class)
                 .optional()
                 .isPresent();
@@ -231,8 +274,14 @@ public class JdbcCatalogStore {
      * {@code CatalogAuthoringService.translate} stops a tenant writing a row of
      * its own against somebody else's entity id, because no key can.
      */
-    public void upsertTranslation(UUID tenantId, UUID brandId, EntityType entityType, UUID entityId,
-            String locale, String name, String description) {
+    public void upsertTranslation(
+            UUID tenantId,
+            UUID brandId,
+            EntityType entityType,
+            UUID entityId,
+            String locale,
+            String name,
+            String description) {
         jdbc.sql("""
                 INSERT INTO catalog.translations (
                     tenant_id, brand_id, entity_type, entity_id, locale, name, description)
@@ -243,14 +292,24 @@ public class JdbcCatalogStore {
                     version = catalog.translations.version + 1,
                     updated_at = now()
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
-                .param("entityType", entityType.name()).param("entityId", entityId)
-                .param("locale", locale).param("name", name).param("description", description)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("entityType", entityType.name())
+                .param("entityId", entityId)
+                .param("locale", locale)
+                .param("name", name)
+                .param("description", description)
                 .update();
     }
 
-    public void attachMedia(UUID tenantId, UUID brandId, EntityType entityType, UUID entityId,
-            UUID mediaAssetId, String role, int sortOrder) {
+    public void attachMedia(
+            UUID tenantId,
+            UUID brandId,
+            EntityType entityType,
+            UUID entityId,
+            UUID mediaAssetId,
+            String role,
+            int sortOrder) {
         jdbc.sql("""
                 INSERT INTO catalog.media_relations (
                     tenant_id, brand_id, entity_type, entity_id, media_asset_id, role, sort_order)
@@ -258,9 +317,13 @@ public class JdbcCatalogStore {
                 ON CONFLICT (entity_type, entity_id, media_asset_id, role)
                 DO UPDATE SET sort_order = EXCLUDED.sort_order
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
-                .param("entityType", entityType.name()).param("entityId", entityId)
-                .param("assetId", mediaAssetId).param("role", role).param("sortOrder", sortOrder)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("entityType", entityType.name())
+                .param("entityId", entityId)
+                .param("assetId", mediaAssetId)
+                .param("role", role)
+                .param("sortOrder", sortOrder)
                 .update();
     }
 
@@ -270,8 +333,13 @@ public class JdbcCatalogStore {
      * <p>An upsert because this is toggled constantly during service — a kitchen
      * running out of a dish should not need to know whether a row already exists.
      */
-    public void upsertOffering(UUID tenantId, UUID brandId, UUID locationId, UUID variantId,
-            OfferingStatus status, String fulfillmentModes) {
+    public void upsertOffering(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID variantId,
+            OfferingStatus status,
+            String fulfillmentModes) {
         jdbc.sql("""
                 INSERT INTO catalog.location_offerings (
                     id, tenant_id, brand_id, location_id, variant_id, status, fulfillment_modes)
@@ -282,9 +350,13 @@ public class JdbcCatalogStore {
                     version = catalog.location_offerings.version + 1,
                     updated_at = now()
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", tenantId).param("brandId", brandId)
-                .param("locationId", locationId).param("variantId", variantId)
-                .param("status", status.name()).param("modes", fulfillmentModes)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("variantId", variantId)
+                .param("status", status.name())
+                .param("modes", fulfillmentModes)
                 .update();
     }
 
@@ -306,16 +378,15 @@ public class JdbcCatalogStore {
      * {@code .param(...)} with a null value is fine, but building the row by
      * three branches of an if is where the third branch gets forgotten.
      */
-    public void upsertFiscalClassification(UUID tenantId, UUID brandId, PriceableNode node,
-            FiscalClassification fiscal, String source, UUID actorId) {
+    public void upsertFiscalClassification(
+            UUID tenantId, UUID brandId, PriceableNode node, FiscalClassification fiscal, String source, UUID actorId) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("id", UUID.randomUUID());
         params.put("tenantId", tenantId);
         params.put("brandId", brandId);
         params.put("variantId", node.type() == PriceableType.VARIANT ? node.id() : null);
-        params.put("modifierOptionId",
-                node.type() == PriceableType.MODIFIER_OPTION ? node.id() : null);
+        params.put("modifierOptionId", node.type() == PriceableType.MODIFIER_OPTION ? node.id() : null);
         params.put("feeId", node.type() == PriceableType.FEE ? node.id() : null);
         params.put("mxikCode", fiscal.mxikCode());
         params.put("packageCode", fiscal.packageCode());
@@ -357,9 +428,7 @@ public class JdbcCatalogStore {
                     classified_at = now(),
                     version = catalog.fiscal_classifications.version + 1,
                     updated_at = now()
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     /** Every classified node in one brand, keyed by the node it classifies. */
@@ -372,9 +441,9 @@ public class JdbcCatalogStore {
                 FROM catalog.fiscal_classifications
                 WHERE tenant_id = :tenantId AND brand_id = :brandId
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
-                .query((row, number) -> Map.entry(
-                        row.getObject("priceable_id", UUID.class), mapClassification(row)))
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query((row, number) -> Map.entry(row.getObject("priceable_id", UUID.class), mapClassification(row)))
                 .list()
                 .forEach(entry -> byNode.put(entry.getKey(), entry.getValue()));
         return Map.copyOf(byNode);
@@ -399,7 +468,8 @@ public class JdbcCatalogStore {
                   AND marking_required
                   AND priceable_id = ANY(:ids)
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("ids", priceableIds.toArray(UUID[]::new))
                 .query(UUID.class)
                 .list());
@@ -413,7 +483,8 @@ public class JdbcCatalogStore {
                 WHERE tenant_id = :tenantId AND brand_id = :brandId
                 ORDER BY code
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .query((row, number) -> new Fee(
                         row.getObject("id", UUID.class),
                         row.getObject("tenant_id", UUID.class),
@@ -440,15 +511,19 @@ public class JdbcCatalogStore {
                 VALUES (:id, :tenantId, :brandId, :code)
                 ON CONFLICT (tenant_id, brand_id, code) DO NOTHING
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", tenantId)
-                .param("brandId", brandId).param("code", code)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("code", code)
                 .update();
 
         return jdbc.sql("""
                 SELECT id FROM catalog.fees
                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND code = :code
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId).param("code", code)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("code", code)
                 .query(UUID.class)
                 .single();
     }
@@ -476,8 +551,9 @@ public class JdbcCatalogStore {
     /** Whether the official list has been imported at all. */
     public boolean mxikReferenceIsLoaded() {
         return jdbc.sql("SELECT count(*) FROM catalog.mxik_reference")
-                .query(Long.class)
-                .single() > 0;
+                        .query(Long.class)
+                        .single()
+                > 0;
     }
 
     // ------------------------------------------------------------------- reads
@@ -488,9 +564,12 @@ public class JdbcCatalogStore {
                 SELECT count(*) FROM catalog.catalogs
                 WHERE id = :catalogId AND tenant_id = :tenantId AND brand_id = :brandId
                 """)
-                .param("catalogId", catalogId).param("tenantId", tenantId).param("brandId", brandId)
-                .query(Long.class)
-                .single() > 0;
+                        .param("catalogId", catalogId)
+                        .param("tenantId", tenantId)
+                        .param("brandId", brandId)
+                        .query(Long.class)
+                        .single()
+                > 0;
     }
 
     public List<Product> productsInCatalog(UUID tenantId, UUID brandId, UUID catalogId) {
@@ -500,7 +579,9 @@ public class JdbcCatalogStore {
                 WHERE p.tenant_id = :tenantId AND p.brand_id = :brandId AND cp.catalog_id = :catalogId
                 ORDER BY cp.sort_order, p.code
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId).param("catalogId", catalogId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("catalogId", catalogId)
                 .query(JdbcCatalogStore::mapProduct)
                 .list();
     }
@@ -512,7 +593,9 @@ public class JdbcCatalogStore {
                 WHERE v.tenant_id = :tenantId AND v.brand_id = :brandId AND cp.catalog_id = :catalogId
                 ORDER BY v.sort_order
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId).param("catalogId", catalogId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("catalogId", catalogId)
                 .query(JdbcCatalogStore::mapVariant)
                 .list();
     }
@@ -523,7 +606,9 @@ public class JdbcCatalogStore {
                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND catalog_id = :catalogId
                 ORDER BY sort_order, code
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId).param("catalogId", catalogId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("catalogId", catalogId)
                 .query(JdbcCatalogStore::mapCategory)
                 .list();
     }
@@ -543,7 +628,9 @@ public class JdbcCatalogStore {
                 WHERE mg.tenant_id = :tenantId AND mg.brand_id = :brandId AND cp.catalog_id = :catalogId
                 ORDER BY mg.sort_order, mg.code
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId).param("catalogId", catalogId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("catalogId", catalogId)
                 .query(JdbcCatalogStore::mapModifierGroup)
                 .list();
     }
@@ -572,7 +659,9 @@ public class JdbcCatalogStore {
                   AND c.catalog_id = :catalogId AND link.catalog_id = :catalogId
                 ORDER BY cp.sort_order
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId).param("catalogId", catalogId));
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("catalogId", catalogId));
     }
 
     /**
@@ -582,8 +671,7 @@ public class JdbcCatalogStore {
      * nothing writes it, so a variant-level read here would return an empty map
      * on every catalog and quietly suggest the feature works.
      */
-    public Map<UUID, List<UUID>> modifierGroupIdsByProduct(UUID tenantId, UUID brandId,
-            UUID catalogId) {
+    public Map<UUID, List<UUID>> modifierGroupIdsByProduct(UUID tenantId, UUID brandId, UUID catalogId) {
         return membership(jdbc.sql("""
                 SELECT pmg.product_id AS parent_id, pmg.modifier_group_id AS child_id
                 FROM catalog.product_modifier_groups pmg
@@ -596,7 +684,9 @@ public class JdbcCatalogStore {
                   AND link.catalog_id = :catalogId
                 ORDER BY pmg.sort_order
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId).param("catalogId", catalogId));
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("catalogId", catalogId));
     }
 
     /**
@@ -605,12 +695,10 @@ public class JdbcCatalogStore {
      */
     private static Map<UUID, List<UUID>> membership(JdbcClient.StatementSpec spec) {
         Map<UUID, List<UUID>> byParent = new LinkedHashMap<>();
-        spec.query((row, number) -> Map.entry(
-                        row.getObject("parent_id", UUID.class),
-                        row.getObject("child_id", UUID.class)))
+        spec.query((row, number) ->
+                        Map.entry(row.getObject("parent_id", UUID.class), row.getObject("child_id", UUID.class)))
                 .list()
-                .forEach(entry -> byParent
-                        .computeIfAbsent(entry.getKey(), key -> new ArrayList<>())
+                .forEach(entry -> byParent.computeIfAbsent(entry.getKey(), key -> new ArrayList<>())
                         .add(entry.getValue()));
         return Map.copyOf(byParent);
     }
@@ -625,7 +713,8 @@ public class JdbcCatalogStore {
                   AND modifier_group_id = ANY(:groupIds)
                 ORDER BY sort_order, code
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("groupIds", groupIds.toArray(UUID[]::new))
                 .query(JdbcCatalogStore::mapModifierOption)
                 .list();
@@ -637,7 +726,8 @@ public class JdbcCatalogStore {
                 FROM catalog.translations
                 WHERE tenant_id = :tenantId AND brand_id = :brandId
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .query((row, number) -> new TranslationRow(
                         EntityType.valueOf(row.getString("entity_type")),
                         row.getObject("entity_id", UUID.class),
@@ -654,7 +744,8 @@ public class JdbcCatalogStore {
                 WHERE tenant_id = :tenantId AND brand_id = :brandId
                 ORDER BY sort_order
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .query((row, number) -> new MediaRelationRow(
                         EntityType.valueOf(row.getString("entity_type")),
                         row.getObject("entity_id", UUID.class),
@@ -668,7 +759,8 @@ public class JdbcCatalogStore {
                 SELECT * FROM catalog.location_offerings
                 WHERE tenant_id = :tenantId AND brand_id = :brandId
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .query(JdbcCatalogStore::mapOffering)
                 .list();
     }
@@ -678,16 +770,26 @@ public class JdbcCatalogStore {
                 SELECT * FROM catalog.location_offerings
                 WHERE tenant_id = :tenantId AND location_id = :locationId AND status <> 'HIDDEN'
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
                 .query(JdbcCatalogStore::mapOffering)
                 .list();
     }
 
     // ------------------------------------------------------------ publications
 
-    public void insertPublication(UUID id, UUID tenantId, UUID brandId, UUID catalogId, String channel,
-            PublicationStatus status, String contentHash, ValidationFinding.Report report,
-            UUID actorId, Instant createdAt, Instant activatedAt) {
+    public void insertPublication(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID catalogId,
+            String channel,
+            PublicationStatus status,
+            String contentHash,
+            ValidationFinding.Report report,
+            UUID actorId,
+            Instant createdAt,
+            Instant activatedAt) {
         jdbc.sql("""
                 INSERT INTO catalog.publications (
                     id, tenant_id, brand_id, catalog_id, channel, status, content_hash,
@@ -695,19 +797,23 @@ public class JdbcCatalogStore {
                 VALUES (:id, :tenantId, :brandId, :catalogId, :channel, :status, :contentHash,
                     CAST(:report AS jsonb), :createdBy, :createdAt, :activatedAt)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("brandId", brandId)
-                .param("catalogId", catalogId).param("channel", channel)
-                .param("status", status.name()).param("contentHash", contentHash)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("catalogId", catalogId)
+                .param("channel", channel)
+                .param("status", status.name())
+                .param("contentHash", contentHash)
                 .param("report", jsonb(report))
                 .param("createdBy", actorId)
                 .param("createdAt", OffsetDateTime.ofInstant(createdAt, ZoneOffset.UTC))
-                .param("activatedAt", activatedAt == null
-                        ? null : OffsetDateTime.ofInstant(activatedAt, ZoneOffset.UTC))
+                .param(
+                        "activatedAt",
+                        activatedAt == null ? null : OffsetDateTime.ofInstant(activatedAt, ZoneOffset.UTC))
                 .update();
     }
 
-    public void insertPublicationItems(UUID publicationId, UUID tenantId, UUID brandId,
-            List<PublicationItem> items) {
+    public void insertPublicationItems(UUID publicationId, UUID tenantId, UUID brandId, List<PublicationItem> items) {
         for (PublicationItem item : items) {
             jdbc.sql("""
                     INSERT INTO catalog.publication_items (
@@ -716,9 +822,12 @@ public class JdbcCatalogStore {
                     VALUES (:publicationId, :tenantId, :brandId, :entityType, :entityId,
                         :entityVersion, CAST(:content AS jsonb))
                     """)
-                    .param("publicationId", publicationId).param("tenantId", tenantId)
-                    .param("brandId", brandId).param("entityType", item.entityType().name())
-                    .param("entityId", item.entityId()).param("entityVersion", item.entityVersion())
+                    .param("publicationId", publicationId)
+                    .param("tenantId", tenantId)
+                    .param("brandId", brandId)
+                    .param("entityType", item.entityType().name())
+                    .param("entityId", item.entityId())
+                    .param("entityVersion", item.entityVersion())
                     .param("content", jsonb(item.content()))
                     .update();
         }
@@ -731,7 +840,9 @@ public class JdbcCatalogStore {
                 WHERE tenant_id = :tenantId AND brand_id = :brandId
                   AND channel = :channel AND status = 'PUBLISHED'
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId).param("channel", channel)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("channel", channel)
                 .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
                 .update();
     }
@@ -753,7 +864,9 @@ public class JdbcCatalogStore {
                 FROM catalog.publications
                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId).param("id", publicationId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("id", publicationId)
                 .query((row, number) -> new PublicationRow(
                         row.getObject("id", UUID.class),
                         PublicationStatus.valueOf(row.getString("status")),
@@ -769,7 +882,9 @@ public class JdbcCatalogStore {
                 WHERE tenant_id = :tenantId AND brand_id = :brandId
                   AND channel = :channel AND status = 'PUBLISHED'
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId).param("channel", channel)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("channel", channel)
                 .query(UUID.class)
                 .optional();
     }
@@ -781,7 +896,8 @@ public class JdbcCatalogStore {
                 FROM catalog.publication_items
                 WHERE publication_id = :publicationId AND entity_type = :entityType
                 """)
-                .param("publicationId", publicationId).param("entityType", entityType.name())
+                .param("publicationId", publicationId)
+                .param("entityType", entityType.name())
                 .query((row, number) -> new PublicationItem(
                         EntityType.valueOf(row.getString("entity_type")),
                         row.getObject("entity_id", UUID.class),
@@ -907,11 +1023,11 @@ public class JdbcCatalogStore {
         return objectMapper.readValue(json, java.util.Map.class);
     }
 
-    public record PublicationRow(UUID id, PublicationStatus status, String contentHash,
-            UUID catalogId, String channel) { }
+    public record PublicationRow(
+            UUID id, PublicationStatus status, String contentHash, UUID catalogId, String channel) {}
 
-    public record TranslationRow(EntityType entityType, UUID entityId, String locale,
-            String name, String description) { }
+    public record TranslationRow(
+            EntityType entityType, UUID entityId, String locale, String name, String description) {}
 
-    public record MediaRelationRow(EntityType entityType, UUID entityId, UUID mediaAssetId, String role) { }
+    public record MediaRelationRow(EntityType entityType, UUID entityId, UUID mediaAssetId, String role) {}
 }

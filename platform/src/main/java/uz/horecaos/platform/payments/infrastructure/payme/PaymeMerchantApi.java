@@ -12,14 +12,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import tools.jackson.databind.JsonNode;
-
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.payments.application.PaymentAttemptService;
 import uz.horecaos.platform.payments.domain.FiscalDocument;
@@ -88,9 +85,14 @@ public class PaymeMerchantApi {
     private final OrderDirectory orders;
     private final Clock clock;
 
-    public PaymeMerchantApi(JdbcPaymentAttemptStore attempts, JdbcPaymentIntentStore intents,
-            JdbcFiscalDocumentStore fiscalDocuments, JdbcPaymeTransactionView view,
-            PaymentAttemptService attemptService, OrderDirectory orders, Clock clock) {
+    public PaymeMerchantApi(
+            JdbcPaymentAttemptStore attempts,
+            JdbcPaymentIntentStore intents,
+            JdbcFiscalDocumentStore fiscalDocuments,
+            JdbcPaymeTransactionView view,
+            PaymentAttemptService attemptService,
+            OrderDirectory orders,
+            Clock clock) {
         this.attempts = attempts;
         this.intents = intents;
         this.fiscalDocuments = fiscalDocuments;
@@ -180,8 +182,7 @@ public class PaymeMerchantApi {
         Instant paymeCreatedAt = requireTimestamp(params, "time");
 
         Optional<PaymentAttempt> known =
-                attempts.findByExternalPaymentId(binding.tenantId(), PaymentProviderType.PAYME,
-                        paymeTransactionId);
+                attempts.findByExternalPaymentId(binding.tenantId(), PaymentProviderType.PAYME, paymeTransactionId);
 
         if (known.isPresent()) {
             return recreate(binding, known.get(), paymeTransactionId, paymeCreatedAt);
@@ -208,18 +209,30 @@ public class PaymeMerchantApi {
             throw PaymeErrors.transactionExpired();
         }
 
-        attemptService.recordProviderEvent(attempt, PaymentTransactionType.RESERVE,
-                PaymentAttemptStatus.RESERVED, attempt.amount(), paymeTransactionId,
+        attemptService.recordProviderEvent(
+                attempt,
+                PaymentTransactionType.RESERVE,
+                PaymentAttemptStatus.RESERVED,
+                attempt.amount(),
+                paymeTransactionId,
                 new ProviderEvidence(String.valueOf(PaymeState.CREATED.code()), null, now),
-                paymeTransactionId, null, now, null, null);
+                paymeTransactionId,
+                null,
+                now,
+                null,
+                null);
 
         // The twelve-hour deadline, derived from Payme's clock and written now so
         // that the expiry sweep can find it without re-reading params.time. The
         // write is refused unless this caller's Payme id is the one that claimed
         // the attempt above, so a concurrent loser cannot stamp its own longer
         // window onto the winner's row on its way to being told no.
-        if (!attempts.recordProviderCreation(binding.tenantId(), attempt.id(),
-                paymeTransactionId, paymeCreatedAt, paymeCreatedAt.plus(TRANSACTION_TIMEOUT))) {
+        if (!attempts.recordProviderCreation(
+                binding.tenantId(),
+                attempt.id(),
+                paymeTransactionId,
+                paymeCreatedAt,
+                paymeCreatedAt.plus(TRANSACTION_TIMEOUT))) {
             throw PaymeErrors.anotherTransactionIsActive();
         }
 
@@ -229,8 +242,8 @@ public class PaymeMerchantApi {
         // conditional UPDATE inside recordProviderEvent is what picks a winner, and
         // this is where the loser finds out. Without it the loser would answer
         // state 1 for a transaction that owns nothing.
-        PaymentAttempt reserved = attempts.find(binding.tenantId(), attempt.id())
-                .orElseThrow(PaymeErrors::internalError);
+        PaymentAttempt reserved =
+                attempts.find(binding.tenantId(), attempt.id()).orElseThrow(PaymeErrors::internalError);
         if (reserved.status() != PaymentAttemptStatus.RESERVED
                 || !paymeTransactionId.equals(reserved.externalPaymentId())) {
             throw PaymeErrors.anotherTransactionIsActive();
@@ -250,8 +263,8 @@ public class PaymeMerchantApi {
      * timeout cancellation followed by {@code -31008}, or {@code -31008} because
      * this transaction is no longer in state {@code 1}.
      */
-    private Map<String, Object> recreate(ProviderBinding binding, PaymentAttempt attempt,
-            String paymeTransactionId, Instant paymeCreatedAt) {
+    private Map<String, Object> recreate(
+            ProviderBinding binding, PaymentAttempt attempt, String paymeTransactionId, Instant paymeCreatedAt) {
         requireSameBinding(binding, attempt, PaymeErrors::anotherTransactionIsActive);
 
         PaymeState state = stateOf(attempt);
@@ -292,10 +305,18 @@ public class PaymeMerchantApi {
                     throw PaymeErrors.transactionExpired();
                 }
 
-                attemptService.recordProviderEvent(attempt, PaymentTransactionType.CAPTURE,
-                        PaymentAttemptStatus.CAPTURED, attempt.amount(), paymeTransactionId,
+                attemptService.recordProviderEvent(
+                        attempt,
+                        PaymentTransactionType.CAPTURE,
+                        PaymentAttemptStatus.CAPTURED,
+                        attempt.amount(),
+                        paymeTransactionId,
                         new ProviderEvidence(String.valueOf(PaymeState.PERFORMED.code()), null, now),
-                        paymeTransactionId, null, now, null, null);
+                        paymeTransactionId,
+                        null,
+                        now,
+                        null,
+                        null);
 
                 Map<String, Object> result = new LinkedHashMap<>();
                 result.put("transaction", attempt.id().toString());
@@ -331,11 +352,18 @@ public class PaymeMerchantApi {
         Instant now = clock.instant();
         return switch (stateOf(attempt)) {
             case CREATED -> {
-                attemptService.recordProviderEvent(attempt, PaymentTransactionType.CANCEL,
-                        PaymentAttemptStatus.CANCELLED, attempt.amount(), paymeTransactionId,
-                        new ProviderEvidence(String.valueOf(PaymeState.CANCELLED.code()),
-                                String.valueOf(reason), now),
-                        paymeTransactionId, null, now, null, null);
+                attemptService.recordProviderEvent(
+                        attempt,
+                        PaymentTransactionType.CANCEL,
+                        PaymentAttemptStatus.CANCELLED,
+                        attempt.amount(),
+                        paymeTransactionId,
+                        new ProviderEvidence(String.valueOf(PaymeState.CANCELLED.code()), String.valueOf(reason), now),
+                        paymeTransactionId,
+                        null,
+                        now,
+                        null,
+                        null);
                 yield cancellation(attempt, now, PaymeState.CANCELLED);
             }
             case PERFORMED -> {
@@ -351,12 +379,19 @@ public class PaymeMerchantApi {
                 // Payme cabinet and arrived here, and recording it under the
                 // outbound type would make the settlement reconciliation report a
                 // call HorecaOS never made.
-                attemptService.recordProviderEvent(attempt, PaymentTransactionType.REFUND,
-                        PaymentAttemptStatus.REVERSED, attempt.amount(), paymeTransactionId,
+                attemptService.recordProviderEvent(
+                        attempt,
+                        PaymentTransactionType.REFUND,
+                        PaymentAttemptStatus.REVERSED,
+                        attempt.amount(),
+                        paymeTransactionId,
                         new ProviderEvidence(
-                                String.valueOf(PaymeState.CANCELLED_AFTER_PERFORM.code()),
-                                String.valueOf(reason), now),
-                        paymeTransactionId, null, now, null, null);
+                                String.valueOf(PaymeState.CANCELLED_AFTER_PERFORM.code()), String.valueOf(reason), now),
+                        paymeTransactionId,
+                        null,
+                        now,
+                        null,
+                        null);
                 yield cancellation(attempt, now, PaymeState.CANCELLED_AFTER_PERFORM);
             }
             // Terminal, and idempotent: the stored answer, unchanged. Payme's Java
@@ -374,8 +409,7 @@ public class PaymeMerchantApi {
         };
     }
 
-    private static Map<String, Object> cancellation(PaymentAttempt attempt, Instant now,
-            PaymeState state) {
+    private static Map<String, Object> cancellation(PaymentAttempt attempt, Instant now, PaymeState state) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("transaction", attempt.id().toString());
         result.put("cancel_time", now.toEpochMilli());
@@ -446,10 +480,9 @@ public class PaymeMerchantApi {
             throw PaymeErrors.invalidRequest("from must be earlier than to");
         }
 
-        List<Map<String, Object>> rows =
-                view.between(binding.tenantId(), binding.bindingId(), from, to).stream()
-                        .map(PaymeTransactionView::asStatementRow)
-                        .toList();
+        List<Map<String, Object>> rows = view.between(binding.tenantId(), binding.bindingId(), from, to).stream()
+                .map(PaymeTransactionView::asStatementRow)
+                .toList();
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("transactions", rows);
@@ -493,17 +526,15 @@ public class PaymeMerchantApi {
             throw PaymeErrors.fiscalInvalidParameters("fiscal_data");
         }
 
-        PaymentAttempt attempt = attempts
-                .findByExternalPaymentId(binding.tenantId(), PaymentProviderType.PAYME,
-                        paymeTransactionId)
+        PaymentAttempt attempt = attempts.findByExternalPaymentId(
+                        binding.tenantId(), PaymentProviderType.PAYME, paymeTransactionId)
                 .filter(candidate -> candidate.merchantBindingId().equals(binding.bindingId()))
                 .orElseThrow(PaymeErrors::fiscalReceiptNotFound);
 
-        PaymentIntent intent = intents.find(attempt.tenantId(), attempt.intentId())
-                .orElseThrow(PaymeErrors::fiscalReceiptNotFound);
+        PaymentIntent intent =
+                intents.find(attempt.tenantId(), attempt.intentId()).orElseThrow(PaymeErrors::fiscalReceiptNotFound);
 
-        List<FiscalDocument> documents = fiscalDocuments.listForOrder(intent.tenantId(),
-                intent.orderId());
+        List<FiscalDocument> documents = fiscalDocuments.listForOrder(intent.tenantId(), intent.orderId());
         FiscalDocument sale = documents.stream()
                 .filter(document -> document.documentType() == FiscalDocumentType.SALE)
                 .filter(document -> document.status() != FiscalStatus.NOT_APPLICABLE)
@@ -523,18 +554,31 @@ public class PaymeMerchantApi {
                 message);
 
         Instant now = clock.instant();
-        FiscalDocument target = "PERFORM".equals(type)
-                ? sale
-                : cancellationDocument(intent, sale, documents, now);
+        FiscalDocument target = "PERFORM".equals(type) ? sale : cancellationDocument(intent, sale, documents, now);
 
         if (issued(statusCode, evidence)) {
-            fiscalDocuments.recordEvidence(intent.tenantId(), target.id(), FiscalStatus.ISSUED,
-                    FiscalReason.PARTNER_FISCALIZED, evidence, null, now);
+            fiscalDocuments.recordEvidence(
+                    intent.tenantId(),
+                    target.id(),
+                    FiscalStatus.ISSUED,
+                    FiscalReason.PARTNER_FISCALIZED,
+                    evidence,
+                    null,
+                    now);
         } else {
-            log.warn("Payme reported fiscal status {} for document {}; the document is FAILED "
-                    + "and needs an operator.", statusCode, target.id());
-            fiscalDocuments.recordEvidence(intent.tenantId(), target.id(), FiscalStatus.FAILED,
-                    FiscalReason.PROVIDER_REJECTED, evidence, null, now);
+            log.warn(
+                    "Payme reported fiscal status {} for document {}; the document is FAILED "
+                            + "and needs an operator.",
+                    statusCode,
+                    target.id());
+            fiscalDocuments.recordEvidence(
+                    intent.tenantId(),
+                    target.id(),
+                    FiscalStatus.FAILED,
+                    FiscalReason.PROVIDER_REJECTED,
+                    evidence,
+                    null,
+                    now);
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -552,8 +596,8 @@ public class PaymeMerchantApi {
      * first time; {@code recordEvidence} then refuses to rewrite it once it is
      * {@code ISSUED}.
      */
-    private FiscalDocument cancellationDocument(PaymentIntent intent, FiscalDocument sale,
-            List<FiscalDocument> documents, Instant now) {
+    private FiscalDocument cancellationDocument(
+            PaymentIntent intent, FiscalDocument sale, List<FiscalDocument> documents, Instant now) {
         Optional<FiscalDocument> existing = documents.stream()
                 .filter(document -> document.documentType() == FiscalDocumentType.REFUND)
                 .filter(document -> sale.id().equals(document.correctsDocumentId()))
@@ -563,10 +607,22 @@ public class PaymeMerchantApi {
         }
 
         FiscalDocument refund = new FiscalDocument(
-                UUID.randomUUID(), intent.tenantId(), intent.orderId(), intent.legalEntityId(),
-                intent.id(), null, PaymentProviderType.PAYME, FiscalDocumentType.REFUND,
-                sale.id(), FiscalStatus.SUBMITTED, FiscalReason.AWAITING_PROVIDER,
-                "Payme reported a cancellation receipt for this order", List.of(), null, 1, now);
+                UUID.randomUUID(),
+                intent.tenantId(),
+                intent.orderId(),
+                intent.legalEntityId(),
+                intent.id(),
+                null,
+                PaymentProviderType.PAYME,
+                FiscalDocumentType.REFUND,
+                sale.id(),
+                FiscalStatus.SUBMITTED,
+                FiscalReason.AWAITING_PROVIDER,
+                "Payme reported a cancellation receipt for this order",
+                List.of(),
+                null,
+                1,
+                now);
         fiscalDocuments.insert(refund);
         return refund;
     }
@@ -584,8 +640,10 @@ public class PaymeMerchantApi {
      */
     private static boolean issued(String statusCode, FiscalDocument.FiscalEvidence evidence) {
         return "0".equals(statusCode)
-                && evidence.fiscalSign() != null && !evidence.fiscalSign().isBlank()
-                && evidence.externalReceiptId() != null && !evidence.externalReceiptId().isBlank();
+                && evidence.fiscalSign() != null
+                && !evidence.fiscalSign().isBlank()
+                && evidence.externalReceiptId() != null
+                && !evidence.externalReceiptId().isBlank();
     }
 
     private static Instant registeredAt(String value) {
@@ -593,7 +651,9 @@ public class PaymeMerchantApi {
             return null;
         }
         try {
-            return LocalDateTime.parse(value.strip(), FISCAL_DATE).atZone(FISCAL_ZONE).toInstant();
+            return LocalDateTime.parse(value.strip(), FISCAL_DATE)
+                    .atZone(FISCAL_ZONE)
+                    .toInstant();
         } catch (DateTimeParseException unparseable) {
             // A timestamp we cannot read is not a reason to reject a receipt that
             // otherwise carries a fiscal sign. It is recorded as absent and the
@@ -616,16 +676,13 @@ public class PaymeMerchantApi {
      * to another cashbox must answer exactly what an unknown one answers.
      */
     private PaymentAttempt attemptFor(ProviderBinding binding, String orderReference) {
-        return attempts
-                .findByMerchantTransId(binding.tenantId(), PaymentProviderType.PAYME, orderReference)
+        return attempts.findByMerchantTransId(binding.tenantId(), PaymentProviderType.PAYME, orderReference)
                 .filter(attempt -> attempt.merchantBindingId().equals(binding.bindingId()))
                 .orElseThrow(PaymeErrors::orderNotFound);
     }
 
     private PaymentAttempt transactionFor(ProviderBinding binding, String paymeTransactionId) {
-        return attempts
-                .findByExternalPaymentId(binding.tenantId(), PaymentProviderType.PAYME,
-                        paymeTransactionId)
+        return attempts.findByExternalPaymentId(binding.tenantId(), PaymentProviderType.PAYME, paymeTransactionId)
                 .filter(attempt -> attempt.merchantBindingId().equals(binding.bindingId()))
                 .orElseThrow(PaymeErrors::transactionNotFound);
     }
@@ -635,8 +692,8 @@ public class PaymeMerchantApi {
                 .orElseThrow(PaymeErrors::transactionNotFound);
     }
 
-    private static void requireSameBinding(ProviderBinding binding, PaymentAttempt attempt,
-            java.util.function.Supplier<PaymeRpcException> otherwise) {
+    private static void requireSameBinding(
+            ProviderBinding binding, PaymentAttempt attempt, java.util.function.Supplier<PaymeRpcException> otherwise) {
         if (!attempt.merchantBindingId().equals(binding.bindingId())) {
             throw otherwise.get();
         }
@@ -674,13 +731,14 @@ public class PaymeMerchantApi {
      */
     private void requirePayable(PaymentAttempt attempt) {
         switch (attempt.status()) {
-            case INITIATED, PRESENTED -> { }
+            case INITIATED, PRESENTED -> {}
             case RESERVED -> throw PaymeErrors.anotherTransactionIsActive();
             case CAPTURED -> throw PaymeErrors.orderAlreadyPaid();
-            case UNCERTAIN -> throw PaymeErrors.operationNotPermitted(new PaymeMessage(
-                    "Состояние оплаты заказа уточняется. Повторите попытку позже.",
-                    "Haridning to'lov holati aniqlanmoqda. Keyinroq urinib ko'ring.",
-                    "The order's payment state is being resolved. Please try again later."));
+            case UNCERTAIN ->
+                throw PaymeErrors.operationNotPermitted(new PaymeMessage(
+                        "Состояние оплаты заказа уточняется. Повторите попытку позже.",
+                        "Haridning to'lov holati aniqlanmoqda. Keyinroq urinib ko'ring.",
+                        "The order's payment state is being resolved. Please try again later."));
             case CANCELLED, EXPIRED, REVERSED, FAILED -> throw PaymeErrors.orderNotPayable();
         }
 
@@ -688,8 +746,7 @@ public class PaymeMerchantApi {
             if (intent.status() == PaymentIntentStatus.PAID) {
                 throw PaymeErrors.orderAlreadyPaid();
             }
-            if (intent.status() != PaymentIntentStatus.PENDING
-                    && intent.status() != PaymentIntentStatus.AUTHORIZING) {
+            if (intent.status() != PaymentIntentStatus.PENDING && intent.status() != PaymentIntentStatus.AUTHORIZING) {
                 throw PaymeErrors.orderNotPayable();
             }
         });
@@ -709,11 +766,21 @@ public class PaymeMerchantApi {
      * decision on both providers; Click has no expiry state at all and is never told.
      */
     private void expireByTimeout(PaymentAttempt attempt, Instant now) {
-        attemptService.recordProviderEvent(attempt, PaymentTransactionType.EXPIRE,
-                PaymentAttemptStatus.EXPIRED, attempt.amount(), null,
-                new ProviderEvidence(String.valueOf(PaymeState.CANCELLED.code()),
-                        String.valueOf(PaymeCancellationReason.TIMEOUT), now),
-                null, null, now, null, null);
+        attemptService.recordProviderEvent(
+                attempt,
+                PaymentTransactionType.EXPIRE,
+                PaymentAttemptStatus.EXPIRED,
+                attempt.amount(),
+                null,
+                new ProviderEvidence(
+                        String.valueOf(PaymeState.CANCELLED.code()),
+                        String.valueOf(PaymeCancellationReason.TIMEOUT),
+                        now),
+                null,
+                null,
+                now,
+                null,
+                null);
     }
 
     private static boolean hasExpired(Instant paymeCreatedAt, Instant now) {
@@ -722,9 +789,11 @@ public class PaymeMerchantApi {
 
     private PaymeState stateOf(PaymentAttempt attempt) {
         return PaymeState.of(attempt.status()).orElseThrow(() -> {
-            log.error("Attempt {} carries a Payme transaction id in status {}, which Payme has no "
-                    + "state for. Answering -32400 rather than inventing one.",
-                    attempt.id(), attempt.status());
+            log.error(
+                    "Attempt {} carries a Payme transaction id in status {}, which Payme has no "
+                            + "state for. Answering -32400 rather than inventing one.",
+                    attempt.id(),
+                    attempt.status());
             return PaymeErrors.internalError();
         });
     }
@@ -771,9 +840,7 @@ public class PaymeMerchantApi {
      */
     private static int optionalReason(JsonNode params) {
         JsonNode reason = params.path("reason");
-        return reason.isIntegralNumber()
-                ? (int) reason.longValue()
-                : PaymeCancellationReason.UNKNOWN;
+        return reason.isIntegralNumber() ? (int) reason.longValue() : PaymeCancellationReason.UNKNOWN;
     }
 
     private static String truncate(String value, int limit) {

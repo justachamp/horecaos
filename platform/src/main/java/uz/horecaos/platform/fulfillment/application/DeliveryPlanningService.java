@@ -4,15 +4,13 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.fulfillment.api.DeliveryOrderPort;
-import uz.horecaos.platform.fulfillment.api.DeliveryPlanner;
 import uz.horecaos.platform.fulfillment.api.DeliveryOrderPort.DeliveryOrder;
+import uz.horecaos.platform.fulfillment.api.DeliveryPlanner;
 import uz.horecaos.platform.fulfillment.domain.BranchOrigin;
 import uz.horecaos.platform.fulfillment.domain.Haversine;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryPlan;
@@ -62,9 +60,13 @@ public class DeliveryPlanningService implements DeliveryPlanner {
     private final PolicyResolver policies;
     private final Clock clock;
 
-    public DeliveryPlanningService(DeliveryOrderPort orders, JdbcDeliveryPlanStore plans,
-            JdbcSourcingJobStore jobs, JdbcDispatchBranchStore branches,
-            PolicyResolver policies, Clock clock) {
+    public DeliveryPlanningService(
+            DeliveryOrderPort orders,
+            JdbcDeliveryPlanStore plans,
+            JdbcSourcingJobStore jobs,
+            JdbcDispatchBranchStore branches,
+            PolicyResolver policies,
+            Clock clock) {
         this.orders = orders;
         this.plans = plans;
         this.jobs = jobs;
@@ -74,8 +76,7 @@ public class DeliveryPlanningService implements DeliveryPlanner {
     }
 
     @Override
-    public Optional<UUID> planFor(UUID tenantId, UUID brandId, UUID locationId, UUID orderId,
-            Instant confirmedAt) {
+    public Optional<UUID> planFor(UUID tenantId, UUID brandId, UUID locationId, UUID orderId, Instant confirmedAt) {
         return open(tenantId, brandId, locationId, orderId, confirmedAt).map(DeliveryPlan::id);
     }
 
@@ -94,8 +95,8 @@ public class DeliveryPlanningService implements DeliveryPlanner {
      *         those is an error a confirmation should be failed for
      */
     @Transactional
-    public Optional<DeliveryPlan> open(UUID tenantId, UUID brandId, UUID locationId,
-            UUID orderId, Instant confirmedAt) {
+    public Optional<DeliveryPlan> open(
+            UUID tenantId, UUID brandId, UUID locationId, UUID orderId, Instant confirmedAt) {
 
         Optional<DeliveryOrder> order = orders.deliveryOrder(tenantId, orderId);
         if (order.isEmpty()) {
@@ -104,8 +105,7 @@ public class DeliveryPlanningService implements DeliveryPlanner {
         }
         Optional<DispatchBranch> branch = branches.find(tenantId, brandId, locationId);
         if (branch.isEmpty()) {
-            log.warn("Location {} is not this brand's, so order {} cannot be planned",
-                    locationId, orderId);
+            log.warn("Location {} is not this brand's, so order {} cannot be planned", locationId, orderId);
             return Optional.empty();
         }
 
@@ -117,28 +117,50 @@ public class DeliveryPlanningService implements DeliveryPlanner {
             // outcome, and failing the confirmation for it would take the
             // restaurant's revenue for a problem the operator can fix in a minute.
             // The order stands and nobody is dispatched.
-            log.warn("Branch {} has no coordinate, so order {} has no delivery plan: {}",
-                    locationId, orderId, unplaced.getMessage());
+            log.warn(
+                    "Branch {} has no coordinate, so order {} has no delivery plan: {}",
+                    locationId,
+                    orderId,
+                    unplaced.getMessage());
             return Optional.empty();
         }
 
         ResolvedPolicy<DeliverySourcingPolicy> policy = resolvePolicy(tenantId, brandId, locationId);
-        PickupPlan pickup = PickupPlan.forOrder(confirmedAt, order.get().preparation(),
-                branch.get().timezone(), policy.document());
+        PickupPlan pickup = PickupPlan.forOrder(
+                confirmedAt, order.get().preparation(), branch.get().timezone(), policy.document());
 
         DeliveryOrder details = order.get();
         DeliveryPlan created = plans.create(new DeliveryPlan(
-                UUID.randomUUID(), tenantId, brandId, locationId, orderId,
-                PlanStatus.PLANNED, SourcingMode.FLEET_FIRST, DeliveryPlan.STANDARD,
-                details.deliveryFeeMinor(), details.currency(), details.deliveryFeeResolutionId(),
-                pickup, null, null,
-                Haversine.metersBetween(origin.point(),
-                        new GeoPoint(details.dropoff().latitude(), details.dropoff().longitude())),
-                RADIUS, policy.policyId(), policy.policyVersion(), 1));
+                UUID.randomUUID(),
+                tenantId,
+                brandId,
+                locationId,
+                orderId,
+                PlanStatus.PLANNED,
+                SourcingMode.FLEET_FIRST,
+                DeliveryPlan.STANDARD,
+                details.deliveryFeeMinor(),
+                details.currency(),
+                details.deliveryFeeResolutionId(),
+                pickup,
+                null,
+                null,
+                Haversine.metersBetween(
+                        origin.point(),
+                        new GeoPoint(
+                                details.dropoff().latitude(), details.dropoff().longitude())),
+                RADIUS,
+                policy.policyId(),
+                policy.policyVersion(),
+                1));
 
-        if (jobs.enqueue(UUID.randomUUID(), tenantId, created.id(), created.pickup().sourceAt())) {
-            log.info("Delivery plan {} for order {} will be sourced at {}",
-                    created.id(), orderId, created.pickup().sourceAt());
+        if (jobs.enqueue(
+                UUID.randomUUID(), tenantId, created.id(), created.pickup().sourceAt())) {
+            log.info(
+                    "Delivery plan {} for order {} will be sourced at {}",
+                    created.id(),
+                    orderId,
+                    created.pickup().sourceAt());
         }
         return Optional.of(created);
     }
@@ -160,19 +182,20 @@ public class DeliveryPlanningService implements DeliveryPlanner {
             return false;
         }
         DeliveryPlan plan = existing.get();
-        ResolvedPolicy<DeliverySourcingPolicy> policy =
-                resolvePolicy(tenantId, plan.brandId(), plan.locationId());
+        ResolvedPolicy<DeliverySourcingPolicy> policy = resolvePolicy(tenantId, plan.brandId(), plan.locationId());
         PickupPlan revisedPickup = plan.pickup().withPreparation(revised, policy.document());
         return jobs.moveDueTime(tenantId, planId, revisedPickup.sourceAt(), clock.instant());
     }
 
-    private ResolvedPolicy<DeliverySourcingPolicy> resolvePolicy(UUID tenantId, UUID brandId,
-            UUID locationId) {
+    private ResolvedPolicy<DeliverySourcingPolicy> resolvePolicy(UUID tenantId, UUID brandId, UUID locationId) {
         ResourceScope scope = ResourceScope.location(tenantId, brandId, locationId);
         return policies.resolve(DeliverySourcingPolicies.SOURCING, scope)
                 .orElseGet(() -> new ResolvedPolicy<>(
                         DeliverySourcingPolicies.SOURCING.code(),
-                        DeliverySourcingService.DEFAULTS_ID, 1, scope.type(), "defaults",
+                        DeliverySourcingService.DEFAULTS_ID,
+                        1,
+                        scope.type(),
+                        "defaults",
                         DeliverySourcingPolicy.DEFAULTS));
     }
 }

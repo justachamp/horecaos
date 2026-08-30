@@ -8,12 +8,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -63,9 +61,13 @@ public class AudienceService {
     private final AuditRecorder audit;
     private final Clock clock;
 
-    public AudienceService(JdbcAudienceStore audiences, JdbcCustomerMetricStore metrics,
-            JdbcEngagementStore engagement, MarketingEligibility eligibility,
-            AuditRecorder audit, Clock clock) {
+    public AudienceService(
+            JdbcAudienceStore audiences,
+            JdbcCustomerMetricStore metrics,
+            JdbcEngagementStore engagement,
+            MarketingEligibility eligibility,
+            AuditRecorder audit,
+            Clock clock) {
         this.audiences = audiences;
         this.metrics = metrics;
         this.engagement = engagement;
@@ -75,8 +77,14 @@ public class AudienceService {
     }
 
     @Transactional
-    public UUID define(UUID tenantId, UUID brandId, String name, String description,
-            List<AudiencePredicate> predicates, UUID authorId, String correlationId) {
+    public UUID define(
+            UUID tenantId,
+            UUID brandId,
+            String name,
+            String description,
+            List<AudiencePredicate> predicates,
+            UUID authorId,
+            String correlationId) {
 
         requireWorkablePredicates(predicates);
 
@@ -107,12 +115,19 @@ public class AudienceService {
      * that tells a half-built snapshot from a finished one.
      */
     @Transactional
-    public SnapshotResult buildSnapshot(UUID tenantId, UUID brandId, UUID audienceId,
-            MarketingChannel channel, String consentPurpose, ActorRef actor, String correlationId) {
+    public SnapshotResult buildSnapshot(
+            UUID tenantId,
+            UUID brandId,
+            UUID audienceId,
+            MarketingChannel channel,
+            String consentPurpose,
+            ActorRef actor,
+            String correlationId) {
 
-        AudienceRow audience = audiences.findAudience(tenantId, audienceId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "No audience %s belongs to this tenant".formatted(audienceId)));
+        AudienceRow audience = audiences
+                .findAudience(tenantId, audienceId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("No audience %s belongs to this tenant".formatted(audienceId)));
 
         // The endpoint declares a BRAND-scoped capability, so the caller was
         // authorised for the brand in the URL -- and everything below then works
@@ -120,8 +135,7 @@ public class AudienceService {
         // for one brand would otherwise be enough to build, and later message, a
         // sibling brand's customer list.
         if (!audience.brandId().equals(brandId)) {
-            throw new IllegalArgumentException(
-                    "No audience %s belongs to this brand".formatted(audienceId));
+            throw new IllegalArgumentException("No audience %s belongs to this brand".formatted(audienceId));
         }
 
         Instant now = clock.instant();
@@ -134,21 +148,35 @@ public class AudienceService {
         UUID snapshotId = UUID.randomUUID();
         Instant watermark = metrics.watermark(tenantId, audience.brandId()).orElse(null);
 
-        audiences.openSnapshot(snapshotId, tenantId, audience.brandId(), audienceId,
-                audience.definitionVersion(), channel.name(), consentPurpose, watermark,
-                MetricDefinitions.CURRENT_VERSION, actorId(actor), now);
+        audiences.openSnapshot(
+                snapshotId,
+                tenantId,
+                audience.brandId(),
+                audienceId,
+                audience.definitionVersion(),
+                channel.name(),
+                consentPurpose,
+                watermark,
+                MetricDefinitions.CURRENT_VERSION,
+                actorId(actor),
+                now);
 
-        List<CandidateRow> candidates =
-                audiences.candidates(tenantId, audience.brandId(), predicates, brandToday);
+        List<CandidateRow> candidates = audiences.candidates(tenantId, audience.brandId(), predicates, brandToday);
 
         int included = 0;
         for (CandidateRow candidate : candidates) {
-            Optional<RefusalReason> refusal = eligibility.refusalFor(tenantId, audience.brandId(),
-                    candidate.customerAccountId(), channel, consentPurpose, policy,
-                    candidate.isReachableAccount(), now);
+            Optional<RefusalReason> refusal = eligibility.refusalFor(
+                    tenantId,
+                    audience.brandId(),
+                    candidate.customerAccountId(),
+                    channel,
+                    consentPurpose,
+                    policy,
+                    candidate.isReachableAccount(),
+                    now);
 
-            audiences.recordMember(snapshotId, tenantId, candidate.customerAccountId(),
-                    refusal.orElse(null), candidate);
+            audiences.recordMember(
+                    snapshotId, tenantId, candidate.customerAccountId(), refusal.orElse(null), candidate);
             if (refusal.isEmpty()) {
                 included++;
             }
@@ -175,8 +203,12 @@ public class AudienceService {
                 .occurredAt(now)
                 .build());
 
-        log.info("Audience {} snapshot {} evaluated {} candidates to {} members",
-                audienceId, snapshotId, candidates.size(), included);
+        log.info(
+                "Audience {} snapshot {} evaluated {} candidates to {} members",
+                audienceId,
+                snapshotId,
+                candidates.size(),
+                included);
 
         return new SnapshotResult(snapshotId, candidates.size(), included, watermark);
     }
@@ -196,16 +228,15 @@ public class AudienceService {
      * competitor's desk.
      */
     @Transactional
-    public List<UUID> export(UUID tenantId, UUID snapshotId, ActorRef actor, String statedPurpose,
-            String correlationId, int limit) {
+    public List<UUID> export(
+            UUID tenantId, UUID snapshotId, ActorRef actor, String statedPurpose, String correlationId, int limit) {
 
-        var snapshot = audiences.findSnapshot(tenantId, snapshotId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "No snapshot %s belongs to this tenant".formatted(snapshotId)));
+        var snapshot = audiences
+                .findSnapshot(tenantId, snapshotId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("No snapshot %s belongs to this tenant".formatted(snapshotId)));
 
-        List<UUID> ids = audiences
-                .includedMembersAfter(tenantId, snapshotId, null, limit)
-                .stream()
+        List<UUID> ids = audiences.includedMembersAfter(tenantId, snapshotId, null, limit).stream()
                 .map(JdbcAudienceStore.SnapshotMemberRow::customerAccountId)
                 .toList();
 
@@ -237,13 +268,11 @@ public class AudienceService {
             // is occasionally what a marketer means and never what they should get
             // by leaving a form empty, so it has to be said out loud with a
             // predicate that says it.
-            throw new IllegalArgumentException(
-                    "An audience needs at least one predicate: an empty definition is the "
-                            + "whole customer base, which must be asked for rather than defaulted to");
+            throw new IllegalArgumentException("An audience needs at least one predicate: an empty definition is the "
+                    + "whole customer base, which must be asked for rather than defaulted to");
         }
         if (predicates.size() > MAX_PREDICATES) {
-            throw new IllegalArgumentException(
-                    "An audience takes at most %d predicates".formatted(MAX_PREDICATES));
+            throw new IllegalArgumentException("An audience takes at most %d predicates".formatted(MAX_PREDICATES));
         }
     }
 
@@ -266,6 +295,5 @@ public class AudienceService {
     }
 
     /** What a build produced, before any campaign is attached to it. */
-    public record SnapshotResult(UUID snapshotId, int candidateCount, int memberCount,
-            Instant metricWatermarkAt) { }
+    public record SnapshotResult(UUID snapshotId, int candidateCount, int memberCount, Instant metricWatermarkAt) {}
 }

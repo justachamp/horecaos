@@ -19,7 +19,6 @@ import java.util.Optional;
  * number that is still bad will occasionally be messaged again.
  */
 public enum SuppressionReason {
-
     UNSUBSCRIBE(null),
     HARD_BOUNCE(Duration.ofDays(365)),
     INVALID_NUMBER(Duration.ofDays(365)),

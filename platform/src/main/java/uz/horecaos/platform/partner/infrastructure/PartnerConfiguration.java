@@ -1,11 +1,9 @@
 package uz.horecaos.platform.partner.infrastructure;
 
 import java.nio.charset.StandardCharsets;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
@@ -33,8 +31,7 @@ public class PartnerConfiguration {
 
     @Bean
     HandoverCodeHasher handoverCodeHasher(
-            SecretResolver secrets,
-            @Value("${horecaos.partner.handover-pepper-reference}") String peppperReference) {
+            SecretResolver secrets, @Value("${horecaos.partner.handover-pepper-reference}") String peppperReference) {
 
         SecretReference reference = SecretReference.parse(peppperReference);
         if (reference.category() != SecretCategory.DATA_ENCRYPTION) {
@@ -42,10 +39,8 @@ public class PartnerConfiguration {
             // be readable by a runtime role that has no business holding it. The
             // category is part of the access decision in ADR 0028, so it is
             // checked here rather than assumed.
-            throw new IllegalStateException(
-                    "The handover pepper must be a DATA_ENCRYPTION secret (ADR 0028)");
+            throw new IllegalStateException("The handover pepper must be a DATA_ENCRYPTION secret (ADR 0028)");
         }
-        return new HandoverCodeHasher(
-                secrets.resolve(reference).reveal().getBytes(StandardCharsets.UTF_8));
+        return new HandoverCodeHasher(secrets.resolve(reference).reveal().getBytes(StandardCharsets.UTF_8));
     }
 }

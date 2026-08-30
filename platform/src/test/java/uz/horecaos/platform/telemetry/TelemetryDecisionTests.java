@@ -6,12 +6,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
@@ -48,15 +46,16 @@ class TelemetryDecisionTests {
         // dispute window put the floor at 14, and the configured 30 clears it
         // with room for a longer calendar nobody has asked for yet.
         assertThat(TrackRetentionFloor.floorDays(7, 7)).isEqualTo(14);
-        assertThat(TrackRetentionFloor.check("configured",
-                TrackRetentionFloor.CONFIGURED_TRACK_RETENTION_DAYS, 7, 7).outcome())
+        assertThat(TrackRetentionFloor.check("configured", TrackRetentionFloor.CONFIGURED_TRACK_RETENTION_DAYS, 7, 7)
+                        .outcome())
                 .isEqualTo(Outcome.WITHIN_FLOOR);
 
         // The point of deriving it: finance lengthening the settlement period to a
         // calendar month moves the floor, and the same 30 that was comfortable
         // becomes a breach the next start refuses.
         assertThat(TrackRetentionFloor.floorDays(31, 14)).isEqualTo(45);
-        assertThat(TrackRetentionFloor.check("configured", 30, 31, 14).refusesStartup()).isTrue();
+        assertThat(TrackRetentionFloor.check("configured", 30, 31, 14).refusesStartup())
+                .isTrue();
     }
 
     @Test
@@ -89,10 +88,8 @@ class TelemetryDecisionTests {
 
     @Test
     void aCalendarWithNoPeriodOrNoDisputeWindowIsNotACalendar() {
-        assertThatThrownBy(() -> TrackRetentionFloor.floorDays(0, 7))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> TrackRetentionFloor.floorDays(7, 0))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> TrackRetentionFloor.floorDays(0, 7)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> TrackRetentionFloor.floorDays(7, 0)).isInstanceOf(IllegalArgumentException.class);
     }
 
     // --------------------------------------------------------- the channel catalogue
@@ -117,8 +114,7 @@ class TelemetryDecisionTests {
     @Test
     @DisplayName("the courier map is the only channel gated on courier.position.read")
     void thePositionChannelIsGatedOnThePositionCapability() {
-        assertThat(StreamChannel.COURIER_POSITIONS.capability())
-                .isEqualTo(Capability.COURIER_POSITION_READ);
+        assertThat(StreamChannel.COURIER_POSITIONS.capability()).isEqualTo(Capability.COURIER_POSITION_READ);
         assertThat(StreamChannel.COURIER_POSITIONS.scopeTypes()).containsExactly(ScopeType.LOCATION);
 
         // The track reveal is never a stream. A capability granted per person for
@@ -165,8 +161,10 @@ class TelemetryDecisionTests {
 
     @Test
     void theLiveMapIsLocationScopedAndNotCrossTenant() {
-        assertThat(PlatformRole.COURIER_DISPATCHER.grants(Capability.COURIER_POSITION_READ)).isTrue();
-        assertThat(PlatformRole.LOCATION_MANAGER.grants(Capability.COURIER_POSITION_READ)).isTrue();
+        assertThat(PlatformRole.COURIER_DISPATCHER.grants(Capability.COURIER_POSITION_READ))
+                .isTrue();
+        assertThat(PlatformRole.LOCATION_MANAGER.grants(Capability.COURIER_POSITION_READ))
+                .isTrue();
         assertThat(PlatformRole.PLATFORM_SUPPORT.grants(Capability.COURIER_POSITION_READ))
                 .as("cross-tenant support with a standing fleet map is not what ADR 0045 decided")
                 .isFalse();
@@ -218,14 +216,18 @@ class TelemetryDecisionTests {
     void anObservationOlderThanTenMinutesNeverMovesTheMap() {
         Instant now = Instant.parse("2026-08-23T12:00:00Z");
 
-        assertThat(LivePositionRules.freshEnoughForTheMap(now.minusSeconds(30), now)).isTrue();
-        assertThat(LivePositionRules.freshEnoughForTheMap(now.minusSeconds(9 * 60), now)).isTrue();
-        assertThat(LivePositionRules.freshEnoughForTheMap(now.minusSeconds(11 * 60), now)).isFalse();
+        assertThat(LivePositionRules.freshEnoughForTheMap(now.minusSeconds(30), now))
+                .isTrue();
+        assertThat(LivePositionRules.freshEnoughForTheMap(now.minusSeconds(9 * 60), now))
+                .isTrue();
+        assertThat(LivePositionRules.freshEnoughForTheMap(now.minusSeconds(11 * 60), now))
+                .isFalse();
 
         // A handset with a wrong clock is the other direction of the same failure:
         // accepted once, it pins the courier in the future until real time catches
         // up, because every later reading then looks older.
-        assertThat(LivePositionRules.freshEnoughForTheMap(now.plusSeconds(3600), now)).isFalse();
+        assertThat(LivePositionRules.freshEnoughForTheMap(now.plusSeconds(3600), now))
+                .isFalse();
     }
 
     @Test
@@ -259,7 +261,8 @@ class TelemetryDecisionTests {
         String centre = Geohash.encode5(41.311081, 69.240562);
         assertThat(centre).hasSize(5).matches("[0-9b-hjkmnp-z]{5}");
 
-        assertThat(Geohash.distanceMeters(41.311081, 69.240562, 41.311081, 69.240562)).isZero();
+        assertThat(Geohash.distanceMeters(41.311081, 69.240562, 41.311081, 69.240562))
+                .isZero();
         assertThat(Geohash.distanceMeters(41.311081, 69.240562, 41.326000, 69.228000))
                 .isBetween(1500, 2500);
     }
@@ -274,13 +277,14 @@ class TelemetryDecisionTests {
         assertThat(ScopeKey.location(location).canonical()).isEqualTo("LOCATION:" + location);
         assertThat(ScopeKey.parse("LOCATION:" + location)).isEqualTo(ScopeKey.location(location));
 
-        assertThat(ScopeKey.location(location).authorizationScope(tenant, brand, location).type())
+        assertThat(ScopeKey.location(location)
+                        .authorizationScope(tenant, brand, location)
+                        .type())
                 .isEqualTo(ScopeType.LOCATION);
 
         // The attack this closes: an operator authorized at their own branch
         // sending a neighbouring branch's identifier in the scope parameter.
-        assertThatThrownBy(() -> ScopeKey.location(somebodyElsesBranch)
-                .authorizationScope(tenant, brand, location))
+        assertThatThrownBy(() -> ScopeKey.location(somebodyElsesBranch).authorizationScope(tenant, brand, location))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("was not opened at");
     }
@@ -299,8 +303,14 @@ class TelemetryDecisionTests {
     void aSignalIsRefusedAtAScopeItsChannelDoesNotCarry() {
         UUID tenant = UUID.randomUUID();
 
-        assertThatThrownBy(() -> RealtimeSignal.of(tenant, StreamChannel.COURIER_POSITIONS,
-                ScopeKey.tenant(tenant), "COURIER", UUID.randomUUID(), null, Instant.now()))
+        assertThatThrownBy(() -> RealtimeSignal.of(
+                        tenant,
+                        StreamChannel.COURIER_POSITIONS,
+                        ScopeKey.tenant(tenant),
+                        "COURIER",
+                        UUID.randomUUID(),
+                        null,
+                        Instant.now()))
                 .as("a tenant-wide courier map would show one branch's fleet to every branch")
                 .isInstanceOf(IllegalArgumentException.class);
     }

@@ -11,15 +11,15 @@ import java.util.UUID;
  * contract. Adding a permitted subtype without a catalogue entry fails the
  * build, which is the point.
  */
-public sealed interface TenancyEvent permits
-        TenantCreated,
-        BrandCreated,
-        LocationCreated,
-        TenantOnboardingStarted,
-        TenantOnboardingStepCompleted,
-        TenantOnboardingFailed,
-        TenantReady,
-        TenantActivated {
+public sealed interface TenancyEvent
+        permits TenantCreated,
+                BrandCreated,
+                LocationCreated,
+                TenantOnboardingStarted,
+                TenantOnboardingStepCompleted,
+                TenantOnboardingFailed,
+                TenantReady,
+                TenantActivated {
 
     UUID eventId();
 

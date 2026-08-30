@@ -1,10 +1,10 @@
 package uz.horecaos.platform.observability;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The half of the scrape rule that an integration test cannot reach: a request
@@ -23,7 +23,8 @@ class LocalMetricsScrapeMatcherTests {
     @Test
     @DisplayName("a call from inside the container is permitted")
     void loopbackIsPermitted() {
-        assertThat(matcher.matches(request("/actuator/prometheus", "127.0.0.1"))).isTrue();
+        assertThat(matcher.matches(request("/actuator/prometheus", "127.0.0.1")))
+                .isTrue();
         assertThat(matcher.matches(request("/actuator/prometheus", "::1"))).isTrue();
     }
 
@@ -53,7 +54,8 @@ class LocalMetricsScrapeMatcherTests {
     @DisplayName("it grants nothing beyond the scrape")
     void onlyTheScrapePath() {
         assertThat(matcher.matches(request("/actuator/env", "127.0.0.1"))).isFalse();
-        assertThat(matcher.matches(request("/api/v1/control-plane/tenants", "127.0.0.1"))).isFalse();
+        assertThat(matcher.matches(request("/api/v1/control-plane/tenants", "127.0.0.1")))
+                .isFalse();
     }
 
     private static MockHttpServletRequest request(String path, String remoteAddress) {

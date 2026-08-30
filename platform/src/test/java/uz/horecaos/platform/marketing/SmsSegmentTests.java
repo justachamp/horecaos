@@ -4,10 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Map;
 import java.util.Optional;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.marketing.application.CampaignCostEstimator;
 import uz.horecaos.platform.marketing.domain.MarketingChannel;
 import uz.horecaos.platform.marketing.domain.SmsSegments;
@@ -90,19 +88,19 @@ class SmsSegmentTests {
 
         // A locale with members and no body is a send that cannot happen rather
         // than a free one.
-        assertThat(estimator.estimate(MarketingChannel.SMS, Map.of("ru", "hi"),
-                Map.of("ru", 10, "en", 5), 200L, "UZS")).isEmpty();
+        assertThat(estimator.estimate(MarketingChannel.SMS, Map.of("ru", "hi"), Map.of("ru", 10, "en", 5), 200L, "UZS"))
+                .isEmpty();
 
         // No configured price per segment is the same kind of unknown.
-        assertThat(estimator.estimate(MarketingChannel.SMS, Map.of("ru", "hi"),
-                Map.of("ru", 10), null, "UZS")).isEmpty();
+        assertThat(estimator.estimate(MarketingChannel.SMS, Map.of("ru", "hi"), Map.of("ru", 10), null, "UZS"))
+                .isEmpty();
     }
 
     @Test
     @DisplayName("a channel with no marginal money is free, and still capped elsewhere")
     void pushCostsNothing() {
-        assertThat(estimator.estimate(MarketingChannel.PUSH, Map.of(), Map.of("ru", 40_000),
-                null, "UZS")).hasValueSatisfying(estimate -> {
+        assertThat(estimator.estimate(MarketingChannel.PUSH, Map.of(), Map.of("ru", 40_000), null, "UZS"))
+                .hasValueSatisfying(estimate -> {
                     assertThat(estimate.lowMinor()).isZero();
                     assertThat(estimate.highMinor()).isZero();
                 });

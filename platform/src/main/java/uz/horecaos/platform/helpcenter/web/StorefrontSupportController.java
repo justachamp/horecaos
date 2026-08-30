@@ -1,9 +1,10 @@
 package uz.horecaos.platform.helpcenter.web;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
-
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -11,10 +12,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.helpcenter.application.SupportQuery;
 import uz.horecaos.platform.helpcenter.domain.SupportContent.FaqCategory;
 import uz.horecaos.platform.helpcenter.domain.SupportContent.SocialLink;
@@ -47,15 +44,15 @@ public class StorefrontSupportController {
     }
 
     @GetMapping("/faq")
-    @Operation(summary = "The brand's published FAQ",
+    @Operation(
+            summary = "The brand's published FAQ",
             description = "Categories in authored order, each with its published entries. Text "
                     + "resolves to the requested locale and falls back to any other published "
                     + "translation rather than to the authoring code. A brand with no published "
                     + "FAQ answers an empty list, which is a screen with no questions and not a "
                     + "failure.")
     public ResponseEntity<List<FaqResponse>> faq(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId,
-            @RequestParam(defaultValue = "uz") String locale) {
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @RequestParam(defaultValue = "uz") String locale) {
 
         List<FaqResponse> body = support.faq(tenantId, brandId, locale).stream()
                 .map(FaqResponse::of)
@@ -66,7 +63,8 @@ public class StorefrontSupportController {
     }
 
     @GetMapping("/social-links")
-    @Operation(summary = "Where a customer can reach this brand",
+    @Operation(
+            summary = "Where a customer can reach this brand",
             description = "Published links in authored order. The platform is a checked "
                     + "vocabulary so a storefront can choose an icon from it, and the URL is "
                     + "constrained at the database to http(s), tel: and mailto:.")
@@ -82,11 +80,13 @@ public class StorefrontSupportController {
     }
 
     /** @param code the authoring handle, carried so a deep link can name a section. */
-    public record FaqResponse(UUID categoryId, String code, String name,
-            List<FaqEntryResponse> entries) {
+    public record FaqResponse(UUID categoryId, String code, String name, List<FaqEntryResponse> entries) {
 
         static FaqResponse of(FaqCategory category) {
-            return new FaqResponse(category.categoryId(), category.code(), category.name(),
+            return new FaqResponse(
+                    category.categoryId(),
+                    category.code(),
+                    category.name(),
                     category.entries().stream().map(FaqEntryResponse::of).toList());
         }
     }
@@ -94,8 +94,7 @@ public class StorefrontSupportController {
     public record FaqEntryResponse(UUID entryId, String code, String question, String answer) {
 
         static FaqEntryResponse of(uz.horecaos.platform.helpcenter.domain.SupportContent.FaqEntry entry) {
-            return new FaqEntryResponse(entry.entryId(), entry.code(), entry.question(),
-                    entry.answer());
+            return new FaqEntryResponse(entry.entryId(), entry.code(), entry.question(), entry.answer());
         }
     }
 
@@ -103,8 +102,7 @@ public class StorefrontSupportController {
     public record SocialLinkResponse(UUID linkId, String platform, String url, String imageUrl) {
 
         static SocialLinkResponse of(SocialLink link) {
-            return new SocialLinkResponse(link.linkId(), link.platform(), link.url(),
-                    link.imageUrl());
+            return new SocialLinkResponse(link.linkId(), link.platform(), link.url(), link.imageUrl());
         }
     }
 }

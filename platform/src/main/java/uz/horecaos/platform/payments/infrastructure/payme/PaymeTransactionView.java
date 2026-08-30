@@ -4,7 +4,6 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
-
 import uz.horecaos.platform.payments.domain.PaymentAttemptStatus;
 import uz.horecaos.platform.payments.domain.SomAmount;
 import uz.horecaos.platform.payments.domain.TiyinAmount;
@@ -57,9 +56,8 @@ public record PaymeTransactionView(
 
     public int state() {
         return PaymeState.of(status)
-                .orElseThrow(() -> new IllegalStateException(
-                        "A Payme transaction is attached to an attempt in " + status
-                                + ", which Payme has no state for"))
+                .orElseThrow(() -> new IllegalStateException("A Payme transaction is attached to an attempt in "
+                        + status + ", which Payme has no state for"))
                 .code();
     }
 

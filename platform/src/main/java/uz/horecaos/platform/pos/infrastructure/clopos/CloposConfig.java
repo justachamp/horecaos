@@ -92,6 +92,5 @@ public final class CloposConfig {
      */
     public static final String CORRELATION_ECHO_VERIFIED = "clopos.correlationEchoVerified";
 
-    private CloposConfig() {
-    }
+    private CloposConfig() {}
 }

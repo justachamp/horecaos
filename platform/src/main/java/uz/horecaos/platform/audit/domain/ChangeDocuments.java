@@ -23,15 +23,39 @@ public final class ChangeDocuments {
     public static final String REDACTED = "[redacted]";
 
     private static final Set<String> PROTECTED_TERMS = Set.of(
-            "phone", "email", "passport", "birth", "dateofbirth",
-            "firstname", "lastname", "middlename", "fullname", "personname",
-            "address", "latitude", "longitude", "coordinate", "geolocation",
-            "password", "secret", "token", "credential", "apikey",
-            "cardnumber", "pan", "cvv", "iban", "ssn", "jshir", "tin",
-            "note", "comment", "instructions", "devicefingerprint");
+            "phone",
+            "email",
+            "passport",
+            "birth",
+            "dateofbirth",
+            "firstname",
+            "lastname",
+            "middlename",
+            "fullname",
+            "personname",
+            "address",
+            "latitude",
+            "longitude",
+            "coordinate",
+            "geolocation",
+            "password",
+            "secret",
+            "token",
+            "credential",
+            "apikey",
+            "cardnumber",
+            "pan",
+            "cvv",
+            "iban",
+            "ssn",
+            "jshir",
+            "tin",
+            "note",
+            "comment",
+            "instructions",
+            "devicefingerprint");
 
-    private ChangeDocuments() {
-    }
+    private ChangeDocuments() {}
 
     /**
      * Records a single field changing from one value to another.
@@ -70,8 +94,8 @@ public final class ChangeDocuments {
                 Map<String, Object> marked = new LinkedHashMap<>();
                 // A null stays null: "the field was unset" is evidence, and it must
                 // stay distinguishable from "a value existed and is hidden".
-                nested.forEach((key, nestedValue) ->
-                        marked.put(String.valueOf(key), nestedValue == null ? null : REDACTED));
+                nested.forEach(
+                        (key, nestedValue) -> marked.put(String.valueOf(key), nestedValue == null ? null : REDACTED));
                 return marked;
             }
             return sanitize((Map<String, Object>) nested);

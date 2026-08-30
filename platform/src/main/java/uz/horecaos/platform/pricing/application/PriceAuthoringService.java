@@ -5,15 +5,13 @@ import java.time.Instant;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
+import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
 
 /**
  * Price authoring (ADR 0018).
@@ -49,8 +47,8 @@ public class PriceAuthoringService {
     private final SalesChannelLookup channels;
     private final Clock clock;
 
-    public PriceAuthoringService(JdbcPricingStore store, CatalogPricingContext catalog,
-            SalesChannelLookup channels, Clock clock) {
+    public PriceAuthoringService(
+            JdbcPricingStore store, CatalogPricingContext catalog, SalesChannelLookup channels, Clock clock) {
         this.store = store;
         this.catalog = catalog;
         this.channels = channels;
@@ -75,9 +73,16 @@ public class PriceAuthoringService {
             throw new IllegalArgumentException("A price book's window must end after it starts");
         }
 
-        store.insertPriceBook(priceBookId, tenantId, brandId, command.name(),
-                command.currency().toUpperCase(Locale.ROOT), validFrom,
-                command.validUntil(), command.priority(), now);
+        store.insertPriceBook(
+                priceBookId,
+                tenantId,
+                brandId,
+                command.name(),
+                command.currency().toUpperCase(Locale.ROOT),
+                validFrom,
+                command.validUntil(),
+                command.priority(),
+                now);
 
         log.info("Price book {} drafted for brand {}", priceBookId, brandId);
         return require(tenantId, brandId, priceBookId);
@@ -100,14 +105,13 @@ public class PriceAuthoringService {
      * price book that simply never applies.
      */
     @Transactional
-    public PriceBook assign(UUID tenantId, UUID brandId, UUID priceBookId, AssignmentScope scope,
-            UUID scopeId, Assignment command) {
+    public PriceBook assign(
+            UUID tenantId, UUID brandId, UUID priceBookId, AssignmentScope scope, UUID scopeId, Assignment command) {
 
         PriceBook book = require(tenantId, brandId, priceBookId);
         requireAuthorable(book);
 
-        if (scope == AssignmentScope.CHANNEL
-                && channels.byId(tenantId, scopeId).isEmpty()) {
+        if (scope == AssignmentScope.CHANNEL && channels.byId(tenantId, scopeId).isEmpty()) {
             throw new UnknownAssignmentScopeException(scope, scopeId);
         }
 
@@ -117,9 +121,15 @@ public class PriceAuthoringService {
             throw new IllegalArgumentException("An assignment's window must end after it starts");
         }
 
-        store.upsertAssignment(tenantId, brandId, priceBookId, scope.name(),
+        store.upsertAssignment(
+                tenantId,
+                brandId,
+                priceBookId,
+                scope.name(),
                 scope == AssignmentScope.BRAND ? null : scopeId,
-                command.priority(), validFrom, command.validUntil());
+                command.priority(),
+                validFrom,
+                command.validUntil());
         store.touchPriceBook(tenantId, brandId, priceBookId, now);
 
         return require(tenantId, brandId, priceBookId);
@@ -137,8 +147,8 @@ public class PriceAuthoringService {
      * extracts the tax from inside it rather than adding tax on top.
      */
     @Transactional
-    public PriceBook setPrice(UUID tenantId, UUID brandId, UUID priceBookId, PriceableType type,
-            UUID priceableId, long amountMinor) {
+    public PriceBook setPrice(
+            UUID tenantId, UUID brandId, UUID priceBookId, PriceableType type, UUID priceableId, long amountMinor) {
 
         PriceBook book = require(tenantId, brandId, priceBookId);
         requireAuthorable(book);
@@ -175,8 +185,7 @@ public class PriceAuthoringService {
         PriceBook book = require(tenantId, brandId, priceBookId);
 
         if (book.status() != Status.DRAFT) {
-            throw new PriceBookLifecycleException(
-                    "A %s price book cannot be activated".formatted(book.status()));
+            throw new PriceBookLifecycleException("A %s price book cannot be activated".formatted(book.status()));
         }
         if (store.openPriceCount(tenantId, brandId, priceBookId) == 0) {
             // An active book that prices nothing is worse than no book at all: it
@@ -191,10 +200,8 @@ public class PriceAuthoringService {
                             + "give one of them a higher priority or end the other's window");
         }
 
-        if (!store.activatePriceBook(tenantId, brandId, priceBookId, expectedVersion,
-                clock.instant())) {
-            throw new OptimisticLockingFailureException(
-                    "The price book changed since it was read");
+        if (!store.activatePriceBook(tenantId, brandId, priceBookId, expectedVersion, clock.instant())) {
+            throw new OptimisticLockingFailureException("The price book changed since it was read");
         }
 
         log.info("Price book {} activated for brand {}", priceBookId, brandId);
@@ -216,8 +223,8 @@ public class PriceAuthoringService {
      * operator can act on it.
      */
     @Transactional
-    public TaxProfile setTaxProfile(UUID tenantId, UUID brandId, String jurisdictionCode,
-            PricingEngine.TaxMode mode, int rateBasisPoints) {
+    public TaxProfile setTaxProfile(
+            UUID tenantId, UUID brandId, String jurisdictionCode, PricingEngine.TaxMode mode, int rateBasisPoints) {
 
         if (mode != PricingEngine.TaxMode.INCLUSIVE) {
             throw new PricingEngine.UnsupportedTaxModeException(mode);
@@ -233,10 +240,9 @@ public class PriceAuthoringService {
             throw new IllegalArgumentException("A jurisdiction code is 1 to 16 characters");
         }
 
-        UUID profileId = store.supersedeTaxProfile(tenantId, brandId, jurisdictionCode,
-                        mode.name(), rateBasisPoints, clock.instant())
-                .orElseThrow(() -> new OptimisticLockingFailureException(
-                        "The tax profile changed since it was read"));
+        UUID profileId = store.supersedeTaxProfile(
+                        tenantId, brandId, jurisdictionCode, mode.name(), rateBasisPoints, clock.instant())
+                .orElseThrow(() -> new OptimisticLockingFailureException("The tax profile changed since it was read"));
 
         log.info("Tax profile {} set to {} bp for brand {}", profileId, rateBasisPoints, brandId);
         return store.findTaxProfileHeader(tenantId, brandId, jurisdictionCode)
@@ -258,41 +264,69 @@ public class PriceAuthoringService {
      */
     private static void requireAuthorable(PriceBook book) {
         if (book.status() == Status.ARCHIVED) {
-            throw new PriceBookLifecycleException(
-                    "An archived price book cannot be edited; draft a new one");
+            throw new PriceBookLifecycleException("An archived price book cannot be edited; draft a new one");
         }
     }
 
-    public enum Status { DRAFT, ACTIVE, ARCHIVED }
+    public enum Status {
+        DRAFT,
+        ACTIVE,
+        ARCHIVED
+    }
 
-    public enum AssignmentScope { BRAND, LOCATION, CHANNEL }
+    public enum AssignmentScope {
+        BRAND,
+        LOCATION,
+        CHANNEL
+    }
 
     /**
      * @param priority settles overlap deterministically, so row order and
      *                 wall-clock timing never decide a price
      */
-    public record NewPriceBook(String name, String currency, Instant validFrom, Instant validUntil,
-            int priority) { }
+    public record NewPriceBook(String name, String currency, Instant validFrom, Instant validUntil, int priority) {}
 
-    public record Assignment(int priority, Instant validFrom, Instant validUntil) { }
+    public record Assignment(int priority, Instant validFrom, Instant validUntil) {}
 
-    public record PriceBook(UUID id, String name, String currency, Status status,
-            Instant validFrom, Instant validUntil, int priority, int version) {
+    public record PriceBook(
+            UUID id,
+            String name,
+            String currency,
+            Status status,
+            Instant validFrom,
+            Instant validUntil,
+            int priority,
+            int version) {
 
         static PriceBook of(JdbcPricingStore.PriceBookHeader header) {
-            return new PriceBook(header.id(), header.name(), header.currency(),
-                    Status.valueOf(header.status()), header.validFrom(), header.validUntil(),
-                    header.priority(), header.version());
+            return new PriceBook(
+                    header.id(),
+                    header.name(),
+                    header.currency(),
+                    Status.valueOf(header.status()),
+                    header.validFrom(),
+                    header.validUntil(),
+                    header.priority(),
+                    header.version());
         }
     }
 
-    public record TaxProfile(UUID id, String jurisdictionCode, PricingEngine.TaxMode mode,
-            int rateBasisPoints, Instant validFrom, int version) {
+    public record TaxProfile(
+            UUID id,
+            String jurisdictionCode,
+            PricingEngine.TaxMode mode,
+            int rateBasisPoints,
+            Instant validFrom,
+            int version) {
 
         static TaxProfile of(JdbcPricingStore.TaxProfileHeader header) {
-            return new TaxProfile(header.id(), header.jurisdictionCode(),
-                    PricingEngine.TaxMode.valueOf(header.mode()), header.rateBasisPoints(),
-                    header.validFrom(), header.version());
+            return new TaxProfile(
+                    header.id(),
+                    header.jurisdictionCode(),
+                    PricingEngine.TaxMode.valueOf(header.mode()),
+                    header.rateBasisPoints(),
+                    header.validFrom(),
+                    header.version());
         }
     }
 

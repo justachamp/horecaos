@@ -1,17 +1,17 @@
 package uz.horecaos.platform.customers.web;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.UUID;
-
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,10 +21,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.customers.api.CustomerOwned;
 import uz.horecaos.platform.customers.application.CustomerSessionService;
 import uz.horecaos.platform.customers.application.CustomerSessionService.Established;
@@ -70,7 +66,8 @@ import uz.horecaos.platform.web.idempotency.Idempotent;
  */
 @RestController
 @RequestMapping("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity")
-@Tag(name = "Customer identity",
+@Tag(
+        name = "Customer identity",
         description = "Requesting a one-time code, proving a phone number, and becoming a customer")
 public class StorefrontCustomerIdentityController {
 
@@ -79,7 +76,8 @@ public class StorefrontCustomerIdentityController {
     private final CurrentActor currentActor;
     private final String trustedIssuer;
 
-    public StorefrontCustomerIdentityController(CustomerVerificationService verification,
+    public StorefrontCustomerIdentityController(
+            CustomerVerificationService verification,
             CustomerSessionService sessions,
             CurrentActor currentActor,
             @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}") String trustedIssuer) {
@@ -90,7 +88,8 @@ public class StorefrontCustomerIdentityController {
     }
 
     @PostMapping("/verification-challenges")
-    @Operation(summary = "Ask for a one-time code",
+    @Operation(
+            summary = "Ask for a one-time code",
             description = "Answers the same way whether or not the number already has an account: "
                     + "nothing on this path reads the customer tables, so it cannot leak what it "
                     + "never looks at. Limited per number in the database and per caller in "
@@ -101,19 +100,22 @@ public class StorefrontCustomerIdentityController {
             @Valid @RequestBody RequestCodeRequest body,
             HttpServletRequest request) {
 
-        Challenge challenge = verification.issue(tenantId, brandId, body.phone(),
-                callerKey(request));
+        Challenge challenge = verification.issue(tenantId, brandId, body.phone(), callerKey(request));
 
         // 202 rather than 201. What was created is a challenge, but what the
         // caller cares about is a message that is on its way through somebody
         // else's network, and no status here can promise it arrived.
-        return ResponseEntity.accepted().body(new ChallengeResponse(
-                challenge.challengeId(), challenge.expiresAt(), challenge.attemptsAllowed(),
-                challenge.codeLength()));
+        return ResponseEntity.accepted()
+                .body(new ChallengeResponse(
+                        challenge.challengeId(),
+                        challenge.expiresAt(),
+                        challenge.attemptsAllowed(),
+                        challenge.codeLength()));
     }
 
     @PostMapping("/verification-challenges/{challengeId}/attempts")
-    @Operation(summary = "Submit a code",
+    @Operation(
+            summary = "Submit a code",
             description = "Costs one of the challenge's attempts however it turns out. A wrong "
                     + "code says how many attempts are left; an unknown, expired, superseded, "
                     + "exhausted or already-used challenge all answer identically. Success "
@@ -131,36 +133,34 @@ public class StorefrontCustomerIdentityController {
     }
 
     @PostMapping("/sessions")
-    @Operation(summary = "Turn a proven number into a session",
+    @Operation(
+            summary = "Turn a proven number into a session",
             description = "The step that was missing. Redeems a single-use grant, finds or "
                     + "creates the account the proven number belongs to, and returns an opaque "
                     + "bearer the storefront presents on every later call. Unauthenticated, "
                     + "because a customer signing in for the first time has nothing to "
                     + "authenticate with — the grant is the authorisation, and it is spent here.")
     public ResponseEntity<CustomerSessionResponse> signIn(
-            @PathVariable UUID tenantId,
-            @PathVariable UUID brandId,
-            @Valid @RequestBody SignInRequest body) {
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody SignInRequest body) {
 
         Established established = sessions.establish(tenantId, brandId, body.grant());
 
         return ResponseEntity.status(established.created() ? HttpStatus.CREATED : HttpStatus.OK)
-                .body(new CustomerSessionResponse(established.token(), established.expiresAt(),
-                        established.accountId(), established.created()));
+                .body(new CustomerSessionResponse(
+                        established.token(), established.expiresAt(), established.accountId(), established.created()));
     }
 
     @DeleteMapping("/sessions/current")
     @CustomerOwned
     @Idempotent
-    @Operation(summary = "Sign out",
+    @Operation(
+            summary = "Sign out",
             description = "Ends the session the caller is holding, and only that one. The "
                     + "session is named by the token in the Authorization header rather than by "
                     + "an id in the path, so there is nothing to edit in order to end somebody "
                     + "else's. Tapping it twice is not an error.")
     public ResponseEntity<Void> signOut(
-            @PathVariable UUID tenantId,
-            @PathVariable UUID brandId,
-            HttpServletRequest request) {
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, HttpServletRequest request) {
 
         sessions.endCurrent(CustomerSessionBearerTokenResolver.presentedBearer(request));
         return ResponseEntity.noContent().build();
@@ -169,27 +169,29 @@ public class StorefrontCustomerIdentityController {
     @PostMapping("/registrations")
     @CustomerOwned
     @Idempotent
-    @Operation(summary = "Turn a verified number and a token into a customer account",
+    @Operation(
+            summary = "Turn a verified number and a token into a customer account",
             description = "The identity comes from the caller's own token — issuer and subject, "
                     + "never a phone number, because a recycled number would otherwise hand one "
                     + "person another's order history. The grant is single-use and is only "
                     + "honoured at the brand it was proved for.")
     public ResponseEntity<RegistrationResponse> register(
-            @PathVariable UUID tenantId,
-            @PathVariable UUID brandId,
-            @Valid @RequestBody RegisterRequest body) {
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody RegisterRequest body) {
 
         // The subject comes from the verified token and the issuer from
         // configuration, never from the request or from a claim read back out of
         // the token being checked. A subject is unique only within the realm that
         // minted it, so trusting an issuer from the token would let a second
         // trusted realm mint a matching subject and resolve to somebody's account.
-        Redemption redemption = verification.redeem(tenantId, brandId, body.grant(),
-                trustedIssuer, currentActor.get().subject());
+        Redemption redemption = verification.redeem(
+                tenantId,
+                brandId,
+                body.grant(),
+                trustedIssuer,
+                currentActor.get().subject());
 
         return ResponseEntity.status(redemption.created() ? HttpStatus.CREATED : HttpStatus.OK)
-                .body(new RegistrationResponse(
-                        redemption.account().accountId(), redemption.created()));
+                .body(new RegistrationResponse(redemption.account().accountId(), redemption.created()));
     }
 
     /**
@@ -217,8 +219,8 @@ public class StorefrontCustomerIdentityController {
             return "unattributed";
         }
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(address.getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256").digest(address.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException impossible) {
             throw new IllegalStateException("SHA-256 is unavailable", impossible);
         }
@@ -229,13 +231,14 @@ public class StorefrontCustomerIdentityController {
      *              Canonicalised before it is hashed, so one number cannot get two
      *              rate-limit budgets by being typed two ways
      */
-    public record RequestCodeRequest(@NotBlank @Size(max = 32) String phone) { }
+    public record RequestCodeRequest(
+            @NotBlank @Size(max = 32) String phone) {}
 
     /** Never the phone number, and never anything derived from it. */
-    public record ChallengeResponse(UUID challengeId, Instant expiresAt, int attemptsAllowed,
-            int codeLength) { }
+    public record ChallengeResponse(UUID challengeId, Instant expiresAt, int attemptsAllowed, int codeLength) {}
 
-    public record SubmitCodeRequest(@NotBlank @Size(max = 16) String code) { }
+    public record SubmitCodeRequest(
+            @NotBlank @Size(max = 16) String code) {}
 
     /**
      * @param grant proof of the number, single-use and short-lived. Not a session:
@@ -251,11 +254,11 @@ public class StorefrontCustomerIdentityController {
         }
     }
 
-    public record RegisterRequest(@NotBlank @Size(max = 128) String grant) { }
+    public record RegisterRequest(@NotBlank @Size(max = 128) String grant) {}
 
-    public record RegistrationResponse(UUID accountId, boolean created) { }
+    public record RegistrationResponse(UUID accountId, boolean created) {}
 
-    public record SignInRequest(@NotBlank @Size(max = 128) String grant) { }
+    public record SignInRequest(@NotBlank @Size(max = 128) String grant) {}
 
     /**
      * Named {@code CustomerSessionResponse} and not {@code SessionResponse}, and
@@ -278,8 +281,7 @@ public class StorefrontCustomerIdentityController {
      *                  which is when a storefront should ask for consent rather
      *                  than assume it
      */
-    public record CustomerSessionResponse(String token, Instant expiresAt, UUID accountId,
-            boolean created) {
+    public record CustomerSessionResponse(String token, Instant expiresAt, UUID accountId, boolean created) {
 
         /** A record's generated {@code toString} would print the session token. */
         @Override

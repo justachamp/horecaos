@@ -3,9 +3,7 @@ package uz.horecaos.platform.courier.infrastructure.entity;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.courier.application.port.LegalEntityResolver;
 
 /**

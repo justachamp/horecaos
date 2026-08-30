@@ -55,8 +55,7 @@ public final class DeliveryFeeCalculator {
     /** Thousandths of a minor unit. Metres divide by this and so nothing else has to. */
     private static final long MILLI = 1_000L;
 
-    private DeliveryFeeCalculator() {
-    }
+    private DeliveryFeeCalculator() {}
 
     /**
      * @throws UnpriceableDistanceException when the band set in force has no band
@@ -64,8 +63,7 @@ public final class DeliveryFeeCalculator {
      *                                      validation is supposed to have made
      *                                      impossible
      */
-    public static Computation compute(DeliveryTariff tariff, int distanceMeters,
-            LocalDateTime localMoment) {
+    public static Computation compute(DeliveryTariff tariff, int distanceMeters, LocalDateTime localMoment) {
 
         DayOfWeek day = localMoment.getDayOfWeek();
         LocalTime time = localMoment.toLocalTime();
@@ -79,10 +77,10 @@ public final class DeliveryFeeCalculator {
             throw new UnpriceableDistanceException(tariff, set, distanceMeters);
         }
 
-        long multiplied = rule
-                .map(matched -> roundHalfUp(accrued.milliMinor(), matched.multiplierBasisPoints()))
+        long multiplied = rule.map(matched -> roundHalfUp(accrued.milliMinor(), matched.multiplierBasisPoints()))
                 .orElse(accrued.milliMinor());
-        long withSurchargeMilli = Math.addExact(multiplied,
+        long withSurchargeMilli = Math.addExact(
+                multiplied,
                 Math.multiplyExact(rule.map(TariffTimeRule::surchargeMinor).orElse(0L), MILLI));
 
         long stepped = settle(tariff, withSurchargeMilli);
@@ -94,12 +92,11 @@ public final class DeliveryFeeCalculator {
 
         final long feeMinor = clamped;
         Optional<TariffDiscount> discount = matchingDiscount(tariff, day, time);
-        long discountMinor = discount
-                .map(matched -> discountFor(tariff, matched, bands, feeMinor))
+        long discountMinor = discount.map(matched -> discountFor(tariff, matched, bands, feeMinor))
                 .orElse(0L);
 
-        return new Computation(accrued.band(), rule.orElse(null), discount.orElse(null),
-                stepped, feeMinor, discountMinor);
+        return new Computation(
+                accrued.band(), rule.orElse(null), discount.orElse(null), stepped, feeMinor, discountMinor);
     }
 
     /**
@@ -131,8 +128,7 @@ public final class DeliveryFeeCalculator {
      *               tail rather than failing, which is what the legacy reader does
      *               when its loop runs out of steps
      */
-    private static Accrued accrue(List<TariffBand> bands, int distanceMeters,
-            DistanceAccrual accrual, boolean strict) {
+    private static Accrued accrue(List<TariffBand> bands, int distanceMeters, DistanceAccrual accrual, boolean strict) {
 
         long milli = 0L;
         TariffBand containing = null;
@@ -167,9 +163,7 @@ public final class DeliveryFeeCalculator {
                 // metres * perKm / 1000 kept exact by leaving the division to the
                 // milli scale everything else is already in.
                 ? Math.multiplyExact((long) covered, perKmMinor)
-                : Math.multiplyExact(
-                        ceilDivide(covered, METERS_PER_KILOMETER),
-                        Math.multiplyExact(perKmMinor, MILLI));
+                : Math.multiplyExact(ceilDivide(covered, METERS_PER_KILOMETER), Math.multiplyExact(perKmMinor, MILLI));
     }
 
     /**
@@ -180,18 +174,19 @@ public final class DeliveryFeeCalculator {
      * customer to order — and two independent reductions that can each exceed the
      * fee sum below zero, which is the failure ADR 0037 already refuses at stage 9.
      */
-    private static long discountFor(DeliveryTariff tariff, TariffDiscount discount,
-            List<TariffBand> bands, long feeMinor) {
+    private static long discountFor(
+            DeliveryTariff tariff, TariffDiscount discount, List<TariffBand> bands, long feeMinor) {
 
-        long rawMilli = switch (discount.kind()) {
-            case AMOUNT -> Math.multiplyExact(discount.amountMinor(), MILLI);
-            // The band charge for the allowance under the table currently in force,
-            // which is what "the first N metres are free" has to mean if it is to
-            // stay true during a peak window.
-            case DISTANCE_ALLOWANCE ->
-                    accrue(bands, discount.allowanceMeters(), tariff.distanceAccrual(), false)
-                            .milliMinor();
-        };
+        long rawMilli =
+                switch (discount.kind()) {
+                    case AMOUNT -> Math.multiplyExact(discount.amountMinor(), MILLI);
+                    // The band charge for the allowance under the table currently in force,
+                    // which is what "the first N metres are free" has to mean if it is to
+                    // stay true during a peak window.
+                    case DISTANCE_ALLOWANCE ->
+                        accrue(bands, discount.allowanceMeters(), tariff.distanceAccrual(), false)
+                                .milliMinor();
+                };
         return Math.min(settle(tariff, rawMilli), feeMinor);
     }
 
@@ -223,22 +218,23 @@ public final class DeliveryFeeCalculator {
      * windows overlapping at 19:00 must not surcharge differently depending on
      * which row came back first.
      */
-    private static Optional<TariffTimeRule> matchingRule(DeliveryTariff tariff, DayOfWeek day,
-            LocalTime localTime) {
+    private static Optional<TariffTimeRule> matchingRule(DeliveryTariff tariff, DayOfWeek day, LocalTime localTime) {
 
         return tariff.timeRules().stream()
                 .filter(rule -> rule.matches(day, localTime))
-                .min(Comparator.comparingInt(TariffTimeRule::priority).reversed()
+                .min(Comparator.comparingInt(TariffTimeRule::priority)
+                        .reversed()
                         .thenComparingInt(TariffTimeRule::sequence));
     }
 
     /** Same total order as the time rules, and for the same reason. */
-    private static Optional<TariffDiscount> matchingDiscount(DeliveryTariff tariff, DayOfWeek day,
-            LocalTime localTime) {
+    private static Optional<TariffDiscount> matchingDiscount(
+            DeliveryTariff tariff, DayOfWeek day, LocalTime localTime) {
 
         return tariff.discounts().stream()
                 .filter(discount -> discount.matches(day, localTime))
-                .min(Comparator.comparingInt(TariffDiscount::priority).reversed()
+                .min(Comparator.comparingInt(TariffDiscount::priority)
+                        .reversed()
                         .thenComparingInt(TariffDiscount::sequence));
     }
 
@@ -275,7 +271,7 @@ public final class DeliveryFeeCalculator {
         return quotient;
     }
 
-    private record Accrued(long milliMinor, TariffBand band) { }
+    private record Accrued(long milliMinor, TariffBand band) {}
 
     /**
      * @param band             the band the journey ended in, which is what the
@@ -289,8 +285,13 @@ public final class DeliveryFeeCalculator {
      *                         than subtracted into it, because a fee shown net
      *                         cannot be told apart from a cheaper tariff
      */
-    public record Computation(TariffBand band, TariffTimeRule rule, TariffDiscount discount,
-            long computedFeeMinor, long finalFeeMinor, long discountMinor) {
+    public record Computation(
+            TariffBand band,
+            TariffTimeRule rule,
+            TariffDiscount discount,
+            long computedFeeMinor,
+            long finalFeeMinor,
+            long discountMinor) {
 
         /** What the customer actually pays for delivery under this tariff alone. */
         public long netFeeMinor() {
@@ -307,8 +308,7 @@ public final class DeliveryFeeCalculator {
      * the confusion ADR 0037 refuses to allow anywhere.
      */
     public static final class UnpriceableDistanceException extends RuntimeException {
-        public UnpriceableDistanceException(DeliveryTariff tariff, String bandSet,
-                int distanceMeters) {
+        public UnpriceableDistanceException(DeliveryTariff tariff, String bandSet, int distanceMeters) {
             super("Tariff %s version %d band set '%s' has no band covering %d m; it does not tile"
                     .formatted(tariff.tariffId(), tariff.version(), bandSet, distanceMeters));
         }

@@ -19,7 +19,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.support.TestDatabase;
 
 /** Exercises the same profile and unauthenticated requests documented for a local developer. */
@@ -37,7 +36,8 @@ class LocalFixtureStorefrontTests {
 
     @BeforeAll
     static void requireDocker() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for the local fixture storefront test");
     }
 
@@ -59,8 +59,7 @@ class LocalFixtureStorefrontTests {
         mvc.perform(get("/api/v1/storefront/pickup-locations?lat=41.311341&lon=69.282722"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.locations.length()").value(1))
-                .andExpect(jsonPath("$.locations[0].locationId")
-                        .value("10000000-0000-0000-0000-000000000003"))
+                .andExpect(jsonPath("$.locations[0].locationId").value("10000000-0000-0000-0000-000000000003"))
                 .andExpect(jsonPath("$.locations[0].available").value(true))
                 .andExpect(jsonPath("$.locations[0].distanceMeters").isNumber());
 
@@ -85,8 +84,7 @@ class LocalFixtureStorefrontTests {
                 .andExpect(jsonPath("$.available").value(true))
                 .andExpect(jsonPath("$.preparationMinutes").value(20));
 
-        mvc.perform(get(LOCATION_PATH
-                        + "/delivery-fee?lat=41.3120&lon=69.2410&currency=UZS&subtotalMinor=100000"))
+        mvc.perform(get(LOCATION_PATH + "/delivery-fee?lat=41.3120&lon=69.2410&currency=UZS&subtotalMinor=100000"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.available").value(true))
                 .andExpect(jsonPath("$.currency").value("UZS"));
@@ -98,7 +96,10 @@ class LocalFixtureStorefrontTests {
 
         @Bean
         JwtDecoder jwtDecoder() {
-            return token -> Jwt.withTokenValue(token).header("alg", "none").claim("sub", "unused").build();
+            return token -> Jwt.withTokenValue(token)
+                    .header("alg", "none")
+                    .claim("sub", "unused")
+                    .build();
         }
     }
 }

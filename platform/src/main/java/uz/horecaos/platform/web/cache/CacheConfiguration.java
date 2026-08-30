@@ -1,15 +1,13 @@
 package uz.horecaos.platform.web.cache;
 
+import com.github.benmanes.caffeine.cache.Caffeine;
 import java.util.Arrays;
 import java.util.List;
-
 import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cache.caffeine.CaffeineCacheManager;
 import org.springframework.context.annotation.Bean;
-import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Configuration;
-
-import com.github.benmanes.caffeine.cache.Caffeine;
 
 /**
  * Builds one in-process cache per {@link CacheRegistry} entry (ADR 0033).
@@ -32,12 +30,14 @@ public class CacheConfiguration {
                 .toList();
         manager.setCacheNames(names);
 
-        Arrays.stream(CacheRegistry.values()).forEach(registered ->
-                manager.registerCustomCache(registered.cacheName(), Caffeine.newBuilder()
-                        .expireAfterWrite(registered.ttl())
-                        .maximumSize(registered.maximumSize())
-                        .recordStats()
-                        .build()));
+        Arrays.stream(CacheRegistry.values())
+                .forEach(registered -> manager.registerCustomCache(
+                        registered.cacheName(),
+                        Caffeine.newBuilder()
+                                .expireAfterWrite(registered.ttl())
+                                .maximumSize(registered.maximumSize())
+                                .recordStats()
+                                .build()));
         return manager;
     }
 }

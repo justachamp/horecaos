@@ -1,15 +1,16 @@
 package uz.horecaos.platform.telemetry.web;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+import org.slf4j.MDC;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,12 +19,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
-import org.slf4j.MDC;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
@@ -74,8 +69,11 @@ public class OperationsCourierPositionController {
     private final CurrentActor currentActor;
     private final Clock clock;
 
-    public OperationsCourierPositionController(CourierPositionQueryService positions,
-            CourierTrackRevealService reveals, CurrentActor currentActor, Clock clock) {
+    public OperationsCourierPositionController(
+            CourierPositionQueryService positions,
+            CourierTrackRevealService reveals,
+            CurrentActor currentActor,
+            Clock clock) {
         this.positions = positions;
         this.reveals = reveals;
         this.currentActor = currentActor;
@@ -84,7 +82,8 @@ public class OperationsCourierPositionController {
 
     @GetMapping("/positions")
     @RequiresCapability(value = Capability.COURIER_POSITION_READ, scope = ScopeType.LOCATION)
-    @Operation(summary = "Where this branch's on-duty couriers are now",
+    @Operation(
+            summary = "Where this branch's on-duty couriers are now",
             description = "Only couriers with an open duty session appear, because the table this "
                     + "reads is a working set rather than a history. A fix worse than 100 metres "
                     + "or older than ten minutes is returned without a coordinate: the courier is "
@@ -99,9 +98,9 @@ public class OperationsCourierPositionController {
     }
 
     @PostMapping("/{courierId}/track-reveals")
-    @RequiresCapability(value = Capability.COURIER_TRACK_REVEAL, scope = ScopeType.LOCATION,
-            mutating = true)
-    @Operation(summary = "Open one courier's stored track for a stated purpose",
+    @RequiresCapability(value = Capability.COURIER_TRACK_REVEAL, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "Open one courier's stored track for a stated purpose",
             description = "Requires courier.track.reveal, which is in no default role bundle and "
                     + "which platform.admin does not imply: somebody granted it to a named person "
                     + "on purpose. The purpose is mandatory and is recorded with the actor, the "
@@ -110,17 +109,25 @@ public class OperationsCourierPositionController {
                     + "track\" is not a request anybody can make, and nothing survives past the "
                     + "retention floor to be revealed.")
     public ResponseEntity<RevealResponse> reveal(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId,
-            @PathVariable UUID locationId, @PathVariable UUID courierId,
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID courierId,
             @Valid @RequestBody RevealRequest body) {
 
         Reveal reveal = reveals.reveal(new RevealCommand(
-                tenantId, brandId, locationId, courierId, body.from(), body.to(), body.purpose(),
+                tenantId,
+                brandId,
+                locationId,
+                courierId,
+                body.from(),
+                body.to(),
+                body.purpose(),
                 ActorRef.user(currentActor.get().subject(), null),
                 MDC.get("correlationId") == null ? UUID.randomUUID().toString() : MDC.get("correlationId")));
 
-        return ResponseEntity.ok(new RevealResponse(
-                reveal.courierId(), reveal.from(), reveal.to(), reveal.purpose(), reveal.windows()));
+        return ResponseEntity.ok(
+                new RevealResponse(reveal.courierId(), reveal.from(), reveal.to(), reveal.purpose(), reveal.windows()));
     }
 
     /**
@@ -134,17 +141,19 @@ public class OperationsCourierPositionController {
     public record RevealRequest(
             @NotNull Instant from,
             @NotNull Instant to,
-            @NotBlank @Size(min = 12, max = 500) String purpose) {
-    }
+            @NotBlank @Size(min = 12, max = 500) String purpose) {}
 
-    public record FleetResponse(List<CourierPin> pins, List<CoarseCourier> withoutPin) {
-    }
+    public record FleetResponse(List<CourierPin> pins, List<CoarseCourier> withoutPin) {}
 
     public record RevealResponse(
             UUID courierId,
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
+
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            Instant from,
+
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            Instant to,
+
             String purpose,
-            List<RevealedWindow> windows) {
-    }
+            List<RevealedWindow> windows) {}
 }

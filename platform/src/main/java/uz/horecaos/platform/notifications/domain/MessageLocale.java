@@ -14,7 +14,6 @@ import java.util.Optional;
  * they did not choose or no message at all.
  */
 public enum MessageLocale {
-
     RU("ru"),
     UZ_LATN("uz-Latn"),
     EN("en");
@@ -60,7 +59,8 @@ public enum MessageLocale {
     }
 
     public static MessageLocale of(String tag) {
-        return parse(tag).orElseThrow(() -> new IllegalArgumentException(
-                "%s is not one of the supported locales %s".formatted(tag, required())));
+        return parse(tag)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "%s is not one of the supported locales %s".formatted(tag, required())));
     }
 }

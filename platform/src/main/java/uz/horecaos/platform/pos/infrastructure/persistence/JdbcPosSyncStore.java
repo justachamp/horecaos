@@ -12,12 +12,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.pos.domain.CatalogSnapshot;
 import uz.horecaos.platform.pos.domain.DifferenceEngine.AbsenceHistory;
 import uz.horecaos.platform.pos.domain.SyncConflict;
@@ -60,8 +57,14 @@ public class JdbcPosSyncStore {
         this.objectMapper = objectMapper;
     }
 
-    public UUID openRun(UUID tenantId, UUID bindingId, String triggerType, boolean dryRun,
-            String adapterVersion, int fieldPolicyVersion, Instant now) {
+    public UUID openRun(
+            UUID tenantId,
+            UUID bindingId,
+            String triggerType,
+            boolean dryRun,
+            String adapterVersion,
+            int fieldPolicyVersion,
+            Instant now) {
 
         UUID runId = UUID.randomUUID();
         Map<String, Object> parameters = new HashMap<>();
@@ -80,34 +83,30 @@ public class JdbcPosSyncStore {
                      adapter_version, field_policy_version, started_at)
                 VALUES (:id, :tenantId, :bindingId, :trigger, 'REQUESTED', :dryRun,
                         :adapterVersion, :policyVersion, :startedAt)
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
         return runId;
     }
 
-    public void markStatus(UUID tenantId, UUID runId, String status, String timestampColumn,
-            Instant now) {
+    public void markStatus(UUID tenantId, UUID runId, String status, String timestampColumn, Instant now) {
 
         // The timestamp column is chosen from a closed set in code rather than
         // taken from a caller's string, because a column name cannot be a bound
         // parameter and an interpolated one from outside would be an injection.
-        String column = switch (timestampColumn == null ? "" : timestampColumn) {
-            case "fetched_at" -> "fetched_at";
-            case "normalized_at" -> "normalized_at";
-            case "compared_at" -> "compared_at";
-            case "applied_at" -> "applied_at";
-            case "completed_at" -> "completed_at";
-            default -> null;
-        };
+        String column =
+                switch (timestampColumn == null ? "" : timestampColumn) {
+                    case "fetched_at" -> "fetched_at";
+                    case "normalized_at" -> "normalized_at";
+                    case "compared_at" -> "compared_at";
+                    case "applied_at" -> "applied_at";
+                    case "completed_at" -> "completed_at";
+                    default -> null;
+                };
 
-        String sql = column == null
-                ? """
+        String sql = column == null ? """
                   UPDATE integration.pos_sync_runs
                      SET status = :status, version = version + 1
                    WHERE tenant_id = :tenantId AND id = :id
-                  """
-                : """
+                  """ : """
                   UPDATE integration.pos_sync_runs
                      SET status = :status, %s = :now, version = version + 1
                    WHERE tenant_id = :tenantId AND id = :id
@@ -135,9 +134,7 @@ public class JdbcPosSyncStore {
                    SET status = 'FAILED', last_error_code = :errorCode, last_error = :error,
                        version = version + 1
                  WHERE tenant_id = :tenantId AND id = :id
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
     }
 
     /**
@@ -151,7 +148,8 @@ public class JdbcPosSyncStore {
     public void stage(UUID tenantId, UUID runId, CatalogSnapshot snapshot) {
         clearStaging(tenantId, runId);
 
-        List<Map<String, Object>> categories = new ArrayList<>(snapshot.categories().size());
+        List<Map<String, Object>> categories =
+                new ArrayList<>(snapshot.categories().size());
         for (CatalogSnapshot.Category category : snapshot.categories()) {
             Map<String, Object> parameters = base(tenantId, runId, category.externalId());
             parameters.put("parentId", category.externalParentId());
@@ -162,7 +160,8 @@ public class JdbcPosSyncStore {
             parameters.put("raw", json(category.raw()));
             categories.add(parameters);
         }
-        insertRows("""
+        insertRows(
+                """
                 INSERT INTO integration.pos_staged_categories
                     (run_id, tenant_id, external_entity_id, external_parent_id,
                      name, sort_order, active, depth, raw_payload)
@@ -191,7 +190,8 @@ public class JdbcPosSyncStore {
             parameters.put("raw", json(product.raw()));
             products.add(parameters);
         }
-        insertRows("""
+        insertRows(
+                """
                 INSERT INTO integration.pos_staged_products
                     (run_id, tenant_id, external_entity_id, name, external_category_id,
                      source_kind, comparable, parent_only, price_minor, currency,
@@ -215,7 +215,8 @@ public class JdbcPosSyncStore {
             parameters.put("raw", json(variant.raw()));
             variants.add(parameters);
         }
-        insertRows("""
+        insertRows(
+                """
                 INSERT INTO integration.pos_staged_variants
                     (run_id, tenant_id, external_entity_id, external_product_id, name,
                      price_minor, currency, active, external_unit_reference, raw_payload)
@@ -225,7 +226,8 @@ public class JdbcPosSyncStore {
                 "ON CONFLICT (run_id, external_entity_id) DO NOTHING",
                 variants);
 
-        List<Map<String, Object>> groups = new ArrayList<>(snapshot.modifierGroups().size());
+        List<Map<String, Object>> groups =
+                new ArrayList<>(snapshot.modifierGroups().size());
         for (CatalogSnapshot.ModifierGroup group : snapshot.modifierGroups()) {
             Map<String, Object> parameters = base(tenantId, runId, group.externalId());
             parameters.put("productId", group.externalProductId());
@@ -236,17 +238,18 @@ public class JdbcPosSyncStore {
             parameters.put("raw", json(group.raw()));
             groups.add(parameters);
         }
-        insertRows("""
+        insertRows(
+                """
                 INSERT INTO integration.pos_staged_modifier_groups
                     (run_id, tenant_id, external_entity_id, external_product_id, name,
                      minimum_selections, maximum_selections, required, raw_payload)
                 VALUES """,
-                "(:runId, :tenantId, :externalId, :productId, :name, "
-                        + ":min, :max, :required, cast(:raw AS jsonb))",
+                "(:runId, :tenantId, :externalId, :productId, :name, " + ":min, :max, :required, cast(:raw AS jsonb))",
                 "ON CONFLICT (run_id, external_entity_id) DO NOTHING",
                 groups);
 
-        List<Map<String, Object>> modifiers = new ArrayList<>(snapshot.modifiers().size());
+        List<Map<String, Object>> modifiers =
+                new ArrayList<>(snapshot.modifiers().size());
         for (CatalogSnapshot.Modifier modifier : snapshot.modifiers()) {
             Map<String, Object> parameters = base(tenantId, runId, modifier.externalId());
             parameters.put("groupId", modifier.externalGroupId());
@@ -257,7 +260,8 @@ public class JdbcPosSyncStore {
             parameters.put("raw", json(modifier.raw()));
             modifiers.add(parameters);
         }
-        insertRows("""
+        insertRows(
+                """
                 INSERT INTO integration.pos_staged_modifiers
                     (run_id, tenant_id, external_entity_id, external_group_id, name,
                      price_minor, currency, active, raw_payload)
@@ -267,29 +271,34 @@ public class JdbcPosSyncStore {
                 "ON CONFLICT (run_id, external_entity_id) DO NOTHING",
                 modifiers);
 
-        List<Map<String, Object>> availability = new ArrayList<>(snapshot.availability().size());
+        List<Map<String, Object>> availability =
+                new ArrayList<>(snapshot.availability().size());
         for (CatalogSnapshot.Availability entry : snapshot.availability()) {
             Map<String, Object> parameters = base(tenantId, runId, entry.externalId());
             parameters.put("stockLimit", entry.stockLimit());
-            parameters.put("observedAt", entry.observedAt() == null ? null
-                    : OffsetDateTime.ofInstant(entry.observedAt(), ZoneOffset.UTC));
+            parameters.put(
+                    "observedAt",
+                    entry.observedAt() == null ? null : OffsetDateTime.ofInstant(entry.observedAt(), ZoneOffset.UTC));
             parameters.put("raw", json(entry.raw()));
             availability.add(parameters);
         }
-        insertRows("""
+        insertRows(
+                """
                 INSERT INTO integration.pos_staged_availability
                     (run_id, tenant_id, external_entity_id, stock_limit, observed_at, raw_payload)
                 VALUES """,
-                "(:runId, :tenantId, :externalId, :stockLimit, :observedAt, "
-                        + "cast(:raw AS jsonb))",
+                "(:runId, :tenantId, :externalId, :stockLimit, :observedAt, " + "cast(:raw AS jsonb))",
                 "ON CONFLICT (run_id, external_entity_id) DO NOTHING",
                 availability);
 
         Map<String, Object> counters = new HashMap<>();
         counters.put("tenantId", tenantId);
         counters.put("id", runId);
-        counters.put("received", snapshot.products().size() + snapshot.variants().size());
-        counters.put("valid", snapshot.comparableProducts().size() + snapshot.variants().size());
+        counters.put(
+                "received", snapshot.products().size() + snapshot.variants().size());
+        counters.put(
+                "valid",
+                snapshot.comparableProducts().size() + snapshot.variants().size());
         counters.put("pageCount", snapshot.pageCount());
         counters.put("walkKind", snapshot.walkStable() ? "KEYSET" : "OFFSET");
 
@@ -311,9 +320,14 @@ public class JdbcPosSyncStore {
      *
      * @return the streaks as they now stand, including this run
      */
-    public AbsenceHistory recordAbsences(UUID tenantId, UUID bindingId, UUID runId,
-            Map<EntityType, Set<String>> mapped, Map<EntityType, Set<String>> present,
-            boolean walkStable, Instant now) {
+    public AbsenceHistory recordAbsences(
+            UUID tenantId,
+            UUID bindingId,
+            UUID runId,
+            Map<EntityType, Set<String>> mapped,
+            Map<EntityType, Set<String>> present,
+            boolean walkStable,
+            Instant now) {
 
         OffsetDateTime observedAt = OffsetDateTime.ofInstant(now, ZoneOffset.UTC);
 
@@ -346,7 +360,8 @@ public class JdbcPosSyncStore {
                            AND entity_type = :entityType
                            AND external_entity_id = ANY(:externalIds)
                         """)
-                        .param("tenantId", tenantId).param("bindingId", bindingId)
+                        .param("tenantId", tenantId)
+                        .param("bindingId", bindingId)
                         .param("entityType", type.name())
                         .param("externalIds", reappeared.toArray(String[]::new))
                         .update();
@@ -355,7 +370,8 @@ public class JdbcPosSyncStore {
             // Safe to fold into one statement despite the DO UPDATE, which errors
             // when a statement touches the same conflicting row twice: the ids
             // arrive as a set per entity type, so no key repeats inside a chunk.
-            insertRows("""
+            insertRows(
+                    """
                     INSERT INTO integration.pos_absence_observations
                         (tenant_id, binding_id, entity_type, external_entity_id,
                          consecutive_absent_runs, first_absent_run_id, first_absent_at,
@@ -390,7 +406,8 @@ public class JdbcPosSyncStore {
                 .param("bindingId", bindingId)
                 .query((row, number) -> Map.entry(
                         row.getString("entity_type"),
-                        Map.entry(row.getString("external_entity_id"),
+                        Map.entry(
+                                row.getString("external_entity_id"),
                                 new AbsenceHistory.Streak(
                                         // Minus one: the history the engine wants
                                         // is the streak before this run, and it
@@ -398,17 +415,16 @@ public class JdbcPosSyncStore {
                                         Math.max(0, row.getInt("consecutive_absent_runs") - 1),
                                         row.getBoolean("all_walks_stable")))))
                 .list()
-                .forEach(entry -> streaks
-                        .computeIfAbsent(EntityType.valueOf(entry.getKey()),
-                                key -> new LinkedHashMap<>())
+                .forEach(entry -> streaks.computeIfAbsent(
+                                EntityType.valueOf(entry.getKey()), key -> new LinkedHashMap<>())
                         .put(entry.getValue().getKey(), entry.getValue().getValue()));
 
         return new AbsenceHistory(streaks);
     }
 
     /** Records the comparison. Repeating it over the same snapshot is a no-op. */
-    public void recordFindings(UUID tenantId, UUID runId, List<SyncDifference> differences,
-            List<SyncConflict> conflicts) {
+    public void recordFindings(
+            UUID tenantId, UUID runId, List<SyncDifference> differences, List<SyncConflict> conflicts) {
 
         List<Map<String, Object>> differenceRows = new ArrayList<>(differences.size());
         for (SyncDifference difference : differences) {
@@ -428,7 +444,8 @@ public class JdbcPosSyncStore {
             parameters.put("action", difference.recommendedAction().name());
             differenceRows.add(parameters);
         }
-        insertRows("""
+        insertRows(
+                """
                 INSERT INTO integration.pos_sync_differences
                     (id, tenant_id, run_id, entity_type, external_entity_id, horecaos_entity_id,
                      category, field_path, current_value, imported_value,
@@ -450,17 +467,18 @@ public class JdbcPosSyncStore {
             parameters.put("externalId", conflict.externalEntityId());
             parameters.put("kind", conflict.kind().name());
             parameters.put("detail", conflict.detail());
-            parameters.put("candidates", conflict.candidateEntityIds().isEmpty()
-                    ? null : String.join(",", conflict.candidateEntityIds()));
+            parameters.put(
+                    "candidates",
+                    conflict.candidateEntityIds().isEmpty() ? null : String.join(",", conflict.candidateEntityIds()));
             conflictRows.add(parameters);
         }
-        insertRows("""
+        insertRows(
+                """
                 INSERT INTO integration.pos_sync_conflicts
                     (id, tenant_id, run_id, entity_type, external_entity_id,
                      conflict_kind, detail, candidate_entity_ids)
                 VALUES """,
-                "(:id, :tenantId, :runId, :entityType, :externalId, "
-                        + ":kind, :detail, :candidates)",
+                "(:id, :tenantId, :runId, :entityType, :externalId, " + ":kind, :detail, :candidates)",
                 "ON CONFLICT (run_id, entity_type, external_entity_id, conflict_kind) DO NOTHING",
                 conflictRows);
 
@@ -468,7 +486,8 @@ public class JdbcPosSyncStore {
         counters.put("tenantId", tenantId);
         counters.put("id", runId);
         counters.put("additions", count(differences, SyncDifference.DifferenceCategory.ADDITION));
-        counters.put("changes",
+        counters.put(
+                "changes",
                 count(differences, SyncDifference.DifferenceCategory.AUTHORIZED_CHANGE)
                         + count(differences, SyncDifference.DifferenceCategory.PROTECTED_FIELD_CHANGE));
         counters.put("removals", count(differences, SyncDifference.DifferenceCategory.REMOVAL_SIGNAL));
@@ -480,9 +499,7 @@ public class JdbcPosSyncStore {
                        removal_count = :removals, conflict_count = :conflicts,
                        version = version + 1
                  WHERE tenant_id = :tenantId AND id = :id
-                """)
-                .params(counters)
-                .update();
+                """).params(counters).update();
     }
 
     public List<SyncDifference> differences(UUID tenantId, UUID runId, int limit, int offset) {
@@ -515,12 +532,15 @@ public class JdbcPosSyncStore {
 
     private void clearStaging(UUID tenantId, UUID runId) {
         for (String table : List.of(
-                "pos_staged_categories", "pos_staged_products", "pos_staged_variants",
-                "pos_staged_modifier_groups", "pos_staged_modifiers", "pos_staged_availability")) {
+                "pos_staged_categories",
+                "pos_staged_products",
+                "pos_staged_variants",
+                "pos_staged_modifier_groups",
+                "pos_staged_modifiers",
+                "pos_staged_availability")) {
             // The table name is from a literal list in this method, never from a
             // caller, because a table name cannot be a bound parameter.
-            jdbc.sql("DELETE FROM integration.%s WHERE tenant_id = :tenantId AND run_id = :runId"
-                    .formatted(table))
+            jdbc.sql("DELETE FROM integration.%s WHERE tenant_id = :tenantId AND run_id = :runId".formatted(table))
                     .param("tenantId", tenantId)
                     .param("runId", runId)
                     .update();
@@ -545,12 +565,10 @@ public class JdbcPosSyncStore {
      * @param row      one {@code (...)} tuple, named as {@code parameters}' keys are
      * @param conflict the {@code ON CONFLICT} clause, applied to the whole statement
      */
-    private void insertRows(String prefix, String row, String conflict,
-            List<Map<String, Object>> rows) {
+    private void insertRows(String prefix, String row, String conflict, List<Map<String, Object>> rows) {
 
         for (int start = 0; start < rows.size(); start += ROWS_PER_STATEMENT) {
-            List<Map<String, Object>> chunk =
-                    rows.subList(start, Math.min(rows.size(), start + ROWS_PER_STATEMENT));
+            List<Map<String, Object>> chunk = rows.subList(start, Math.min(rows.size(), start + ROWS_PER_STATEMENT));
 
             StringBuilder values = new StringBuilder();
             Map<String, Object> parameters = new HashMap<>();
@@ -559,15 +577,16 @@ public class JdbcPosSyncStore {
                     values.append(",\n");
                 }
                 int suffix = index;
-                values.append(PARAMETER.matcher(row)
-                        .replaceAll(match -> ":" + match.group(1) + "_" + suffix));
+                values.append(PARAMETER.matcher(row).replaceAll(match -> ":" + match.group(1) + "_" + suffix));
                 chunk.get(index).forEach((name, value) -> parameters.put(name + "_" + suffix, value));
             }
 
             // Newline-joined rather than concatenated: a text block strips the
             // trailing space off its last line, so "VALUES " and the first tuple
             // would arrive as one word.
-            jdbc.sql(prefix + "\n" + values + "\n" + conflict).params(parameters).update();
+            jdbc.sql(prefix + "\n" + values + "\n" + conflict)
+                    .params(parameters)
+                    .update();
         }
     }
 
@@ -583,8 +602,9 @@ public class JdbcPosSyncStore {
         return objectMapper.writeValueAsString(raw == null ? Map.of() : raw);
     }
 
-    private static long count(List<SyncDifference> differences,
-            SyncDifference.DifferenceCategory category) {
-        return differences.stream().filter(difference -> difference.category() == category).count();
+    private static long count(List<SyncDifference> differences, SyncDifference.DifferenceCategory category) {
+        return differences.stream()
+                .filter(difference -> difference.category() == category)
+                .count();
     }
 }

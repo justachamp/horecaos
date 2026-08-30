@@ -8,7 +8,6 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
@@ -123,20 +122,16 @@ public class JdbcOutboxStore {
                           AND status = 'PUBLISHING'
                           AND claim_token = :claimToken
                         """)
-                .param("eventId", eventId)
-                .param("claimToken", claimToken)
-                .param("publishedAt", utc(publishedAt))
-                .update() == 1;
+                        .param("eventId", eventId)
+                        .param("claimToken", claimToken)
+                        .param("publishedAt", utc(publishedAt))
+                        .update()
+                == 1;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean markFailed(
-            UUID eventId,
-            UUID claimToken,
-            Instant now,
-            Instant nextAttemptAt,
-            String error,
-            boolean deadLetter) {
+            UUID eventId, UUID claimToken, Instant now, Instant nextAttemptAt, String error, boolean deadLetter) {
         return jdbc.sql("""
                         UPDATE integration.outbox_events
                         SET status = CASE WHEN :deadLetter THEN 'DEAD_LETTER' ELSE 'PENDING' END,
@@ -150,17 +145,17 @@ public class JdbcOutboxStore {
                           AND status = 'PUBLISHING'
                           AND claim_token = :claimToken
                         """)
-                .param("eventId", eventId)
-                .param("claimToken", claimToken)
-                .param("now", utc(now))
-                .param("nextAttemptAt", utc(nextAttemptAt))
-                .param("error", error)
-                .param("deadLetter", deadLetter)
-                .update() == 1;
+                        .param("eventId", eventId)
+                        .param("claimToken", claimToken)
+                        .param("now", utc(now))
+                        .param("nextAttemptAt", utc(nextAttemptAt))
+                        .param("error", error)
+                        .param("deadLetter", deadLetter)
+                        .update()
+                == 1;
     }
 
-    private static ClaimedOutboxEvent mapClaimedEvent(ResultSet resultSet, int rowNumber)
-            throws SQLException {
+    private static ClaimedOutboxEvent mapClaimedEvent(ResultSet resultSet, int rowNumber) throws SQLException {
         return new ClaimedOutboxEvent(
                 resultSet.getObject("event_id", UUID.class),
                 resultSet.getString("event_type"),

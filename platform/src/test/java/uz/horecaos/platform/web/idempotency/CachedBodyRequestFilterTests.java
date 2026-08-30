@@ -2,12 +2,10 @@ package uz.horecaos.platform.web.idempotency;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.nio.charset.StandardCharsets;
-import java.util.concurrent.atomic.AtomicReference;
-
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
-
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -31,8 +29,8 @@ class CachedBodyRequestFilterTests {
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         AtomicReference<String> seenByHandler = new AtomicReference<>();
-        FilterChain chain = (passed, passedResponse) -> seenByHandler.set(
-                new String(passed.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
+        FilterChain chain = (passed, passedResponse) ->
+                seenByHandler.set(new String(passed.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
 
         new CachedBodyRequestFilter(CAP).doFilter(request, response, chain);
 
@@ -59,7 +57,8 @@ class CachedBodyRequestFilterTests {
         assertThat(chain.getRequest())
                 .as("nothing downstream, including Spring Security, should see the request")
                 .isNull();
-        assertThat(request.getAttribute(CachedBodyRequestFilter.CACHED_BODY_ATTRIBUTE)).isNull();
+        assertThat(request.getAttribute(CachedBodyRequestFilter.CACHED_BODY_ATTRIBUTE))
+                .isNull();
     }
 
     @Test
@@ -125,8 +124,7 @@ class CachedBodyRequestFilterTests {
 
     private static boolean shouldNotFilter(CachedBodyRequestFilter filter, HttpServletRequest request) {
         try {
-            var method = CachedBodyRequestFilter.class
-                    .getDeclaredMethod("shouldNotFilter", HttpServletRequest.class);
+            var method = CachedBodyRequestFilter.class.getDeclaredMethod("shouldNotFilter", HttpServletRequest.class);
             method.setAccessible(true);
             return (boolean) method.invoke(filter, request);
         } catch (ReflectiveOperationException unreachable) {

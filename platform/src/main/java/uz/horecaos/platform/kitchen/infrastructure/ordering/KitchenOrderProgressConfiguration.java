@@ -1,13 +1,11 @@
 package uz.horecaos.platform.kitchen.infrastructure.ordering;
 
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
 import uz.horecaos.platform.fulfillment.api.OrderProgressPort;
 
 /**
@@ -34,8 +32,7 @@ import uz.horecaos.platform.fulfillment.api.OrderProgressPort;
 @Configuration
 public class KitchenOrderProgressConfiguration {
 
-    private static final Logger log =
-            LoggerFactory.getLogger(KitchenOrderProgressConfiguration.class);
+    private static final Logger log = LoggerFactory.getLogger(KitchenOrderProgressConfiguration.class);
 
     @Bean
     @ConditionalOnMissingBean(OrderProgressPort.class)
@@ -43,13 +40,21 @@ public class KitchenOrderProgressConfiguration {
         return new OrderProgressPort() {
 
             @Override
-            public ProposalOutcome propose(UUID tenantId, UUID orderId, OrderProgress progress,
-                    String idempotencyKey, String reasonCode, String actorType, String actorId,
+            public ProposalOutcome propose(
+                    UUID tenantId,
+                    UUID orderId,
+                    OrderProgress progress,
+                    String idempotencyKey,
+                    String reasonCode,
+                    String actorType,
+                    String actorId,
                     String correlationId) {
 
-                log.warn("Kitchen would propose {} for order {} but no OrderProgressPort is "
-                        + "wired; the order must be advanced by an operator (ADR 0041)",
-                        progress, orderId);
+                log.warn(
+                        "Kitchen would propose {} for order {} but no OrderProgressPort is "
+                                + "wired; the order must be advanced by an operator (ADR 0041)",
+                        progress,
+                        orderId);
                 return ProposalOutcome.NOT_WIRED;
             }
 

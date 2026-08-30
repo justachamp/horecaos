@@ -23,7 +23,8 @@ public final class SecretValue {
     }
 
     public static SecretValue of(String value) {
-        return new SecretValue(Objects.requireNonNull(value, "A secret value is required").toCharArray());
+        return new SecretValue(
+                Objects.requireNonNull(value, "A secret value is required").toCharArray());
     }
 
     /** Exposes the value to the caller that needs it. Never log the result. */

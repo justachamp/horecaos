@@ -1,12 +1,10 @@
 package uz.horecaos.platform.payments.infrastructure.payme;
 
 import java.util.Optional;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
 import uz.horecaos.platform.payments.application.PaymentProviderPort;
 import uz.horecaos.platform.payments.domain.PaymentAttempt;
@@ -55,10 +53,11 @@ public class PaymeProviderAdapter implements PaymentProviderPort {
      *                                   only arbiter. It is a property so that the
      *                                   sandbox can settle it without a release
      */
-    public PaymeProviderAdapter(ProviderInstallationLookup installations,
+    public PaymeProviderAdapter(
+            ProviderInstallationLookup installations,
             JdbcPaymentAttemptStore attempts,
             @Value("${horecaos.payments.payme.checkout.percent-encode-path-separator:true}")
-            boolean percentEncodePathSeparator) {
+                    boolean percentEncodePathSeparator) {
         this.installations = installations;
         this.attempts = attempts;
         this.percentEncodePathSeparator = percentEncodePathSeparator;
@@ -92,27 +91,28 @@ public class PaymeProviderAdapter implements PaymentProviderPort {
      * proves nothing either way.
      */
     @Override
-    public ProviderInvoice createInvoice(PaymentAttempt attempt, ProviderBinding binding,
-            PresentationRequest request) {
+    public ProviderInvoice createInvoice(PaymentAttempt attempt, ProviderBinding binding, PresentationRequest request) {
 
         if (request.preferredKind() == PresentationKind.INVOICE_PUSH) {
-            throw new PresentationFailure.Refused("PAYME_PUSH_UNSUPPORTED",
+            throw new PresentationFailure.Refused(
+                    "PAYME_PUSH_UNSUPPORTED",
                     "Payme has no merchant-initiated invoice call; the customer follows a link");
         }
 
-        String checkoutHost = installations.installation(binding.tenantId(), binding.installationId())
+        String checkoutHost = installations
+                .installation(binding.tenantId(), binding.installationId())
                 .map(ProviderInstallationLookup.InstallationSnapshot::baseUrl)
                 .filter(host -> host != null && !host.isBlank())
-                .orElseThrow(() -> new PresentationFailure.Refused("PAYME_CHECKOUT_HOST_MISSING",
+                .orElseThrow(() -> new PresentationFailure.Refused(
+                        "PAYME_CHECKOUT_HOST_MISSING",
                         // Never defaulted to the production host. An installation
                         // that does not say where it points is a configuration
                         // error, and guessing it is how a sandbox cashbox sends a
                         // customer to a live checkout page.
-                        "Payme installation " + binding.installationId()
-                                + " declares no checkout host"));
+                        "Payme installation " + binding.installationId() + " declares no checkout host"));
 
-        String payload = PaymeCheckoutLink.payload(binding.merchantAccountReference(),
-                attempt.merchantTransId(), TiyinAmount.of(attempt.amount()));
+        String payload = PaymeCheckoutLink.payload(
+                binding.merchantAccountReference(), attempt.merchantTransId(), TiyinAmount.of(attempt.amount()));
         String url = PaymeCheckoutLink.url(checkoutHost, payload, percentEncodePathSeparator);
 
         // The QR encodes the same URL. There is no documented payme:// deeplink
@@ -120,8 +120,8 @@ public class PaymeProviderAdapter implements PaymentProviderPort {
         // is the Android card-tokenisation SDK, which is a different protocol. Both
         // are returned whichever was asked for, and the requested kind only decides
         // which one the caller is told it is looking at.
-        PresentationKind kind = request.preferredKind() == PresentationKind.QR
-                ? PresentationKind.QR : PresentationKind.PAYMENT_LINK;
+        PresentationKind kind =
+                request.preferredKind() == PresentationKind.QR ? PresentationKind.QR : PresentationKind.PAYMENT_LINK;
         return new ProviderInvoice(kind, url, url, null, null, null, null);
     }
 
@@ -147,18 +147,33 @@ public class PaymeProviderAdapter implements PaymentProviderPort {
         PaymentAttemptStatus status = current.status();
 
         return switch (status) {
-            case CAPTURED -> ProviderOutcome.success(PaymentAttemptStatus.CAPTURED,
-                    current.evidence(), current.externalPaymentId(), current.amount());
-            case CANCELLED, EXPIRED, REVERSED, FAILED -> new ProviderOutcome(
-                    ProviderOutcome.Classification.SUCCESS, status, current.evidence(),
-                    current.externalPaymentId(), null, null, null,
-                    "Payme reported this transaction as " + status, null);
-            case RESERVED -> ProviderOutcome.uncertain("PAYME_TRANSACTION_IN_FLIGHT",
-                    "Payme created the transaction and has not performed or cancelled it yet");
-            case INITIATED, PRESENTED -> ProviderOutcome.uncertain("PAYME_NO_TRANSACTION",
-                    "Payme has not created a transaction against this attempt");
-            case UNCERTAIN -> ProviderOutcome.uncertain("PAYME_STATE_UNRESOLVED",
-                    "Nothing in HorecaOS's record settles this attempt");
+            case CAPTURED ->
+                ProviderOutcome.success(
+                        PaymentAttemptStatus.CAPTURED,
+                        current.evidence(),
+                        current.externalPaymentId(),
+                        current.amount());
+            case CANCELLED, EXPIRED, REVERSED, FAILED ->
+                new ProviderOutcome(
+                        ProviderOutcome.Classification.SUCCESS,
+                        status,
+                        current.evidence(),
+                        current.externalPaymentId(),
+                        null,
+                        null,
+                        null,
+                        "Payme reported this transaction as " + status,
+                        null);
+            case RESERVED ->
+                ProviderOutcome.uncertain(
+                        "PAYME_TRANSACTION_IN_FLIGHT",
+                        "Payme created the transaction and has not performed or cancelled it yet");
+            case INITIATED, PRESENTED ->
+                ProviderOutcome.uncertain(
+                        "PAYME_NO_TRANSACTION", "Payme has not created a transaction against this attempt");
+            case UNCERTAIN ->
+                ProviderOutcome.uncertain(
+                        "PAYME_STATE_UNRESOLVED", "Nothing in HorecaOS's record settles this attempt");
         };
     }
 
@@ -174,9 +189,12 @@ public class PaymeProviderAdapter implements PaymentProviderPort {
      */
     @Override
     public ProviderOutcome reverse(PaymentAttempt attempt, ProviderBinding binding, String reason) {
-        log.warn("A reversal was requested for Payme attempt {}; Payme has no outbound refund and "
-                + "the refund must be issued from the Payme merchant cabinet.", attempt.id());
-        return ProviderOutcome.rejected("PAYME_REVERSAL_IS_INBOUND",
+        log.warn(
+                "A reversal was requested for Payme attempt {}; Payme has no outbound refund and "
+                        + "the refund must be issued from the Payme merchant cabinet.",
+                attempt.id());
+        return ProviderOutcome.rejected(
+                "PAYME_REVERSAL_IS_INBOUND",
                 "Payme refunds are initiated in the Payme merchant cabinet and arrive as "
                         + "CancelTransaction; HorecaOS can only accept or veto them",
                 Optional.ofNullable(attempt.evidence()).orElse(null));

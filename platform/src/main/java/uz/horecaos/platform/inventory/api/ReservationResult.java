@@ -14,8 +14,7 @@ import java.util.UUID;
  * @param expiresAt     when the hold lapses; matches the ADR 0018 quote TTL, so
  *                      stock is never held for a price nobody can still accept
  */
-public record ReservationResult(UUID reservationId, Instant expiresAt,
-        AvailabilityDecision refusal) {
+public record ReservationResult(UUID reservationId, Instant expiresAt, AvailabilityDecision refusal) {
 
     public boolean isHeld() {
         return reservationId != null;

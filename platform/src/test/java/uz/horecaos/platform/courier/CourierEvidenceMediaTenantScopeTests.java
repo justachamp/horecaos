@@ -1,5 +1,8 @@
 package uz.horecaos.platform.courier;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
+
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -9,9 +12,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
-
 import javax.sql.DataSource;
-
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.AfterAll;
@@ -24,7 +25,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
@@ -46,9 +46,6 @@ import uz.horecaos.platform.tenancy.api.PolicyResolver;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * The evidence media reference on a courier engagement belongs to the tenant
@@ -102,7 +99,8 @@ class CourierEvidenceMediaTenantScopeTests {
 
     @BeforeAll
     static void startDatabase() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for courier evidence media tests");
         db = TestDatabase.migrated();
     }
@@ -130,7 +128,10 @@ class CourierEvidenceMediaTenantScopeTests {
 
         audit = new RecordingAudit();
         courierStore = new JdbcCourierStore(jdbc);
-        engagements = new CourierEngagementService(courierStore, new ReversibleProtection(), audit,
+        engagements = new CourierEngagementService(
+                courierStore,
+                new ReversibleProtection(),
+                audit,
                 new CourierPolicyResolver(new NoPolicies()),
                 new AssetsTableAvailability(jdbc),
                 Clock.fixed(NOON, ZoneOffset.UTC));
@@ -141,11 +142,19 @@ class CourierEvidenceMediaTenantScopeTests {
         assetOfB = seedPrivateScan(TENANT_B);
 
         UUID typeOfB = UUID.randomUUID();
-        courierStore.insertType(new CourierTypeRow(typeOfB, TENANT_B, "SCOOTER", "Scooter",
-                "SCOOTER", 0, 15_000, 2, 60, "ACTIVE"));
-        engagementOfB = engagements.register(new CourierEngagementService.NewCourier(
-                        TENANT_B, typeOfB, "keycloak-courier-b", "K-001", "Alisher Karimov",
-                        today(), manager(), "onboarding a rider", "corr"))
+        courierStore.insertType(
+                new CourierTypeRow(typeOfB, TENANT_B, "SCOOTER", "Scooter", "SCOOTER", 0, 15_000, 2, 60, "ACTIVE"));
+        engagementOfB = engagements
+                .register(new CourierEngagementService.NewCourier(
+                        TENANT_B,
+                        typeOfB,
+                        "keycloak-courier-b",
+                        "K-001",
+                        "Alisher Karimov",
+                        today(),
+                        manager(),
+                        "onboarding a rider",
+                        "corr"))
                 .engagementId();
 
         // The opening fact belongs to the seed, not to the test. Cleared here so
@@ -156,8 +165,7 @@ class CourierEvidenceMediaTenantScopeTests {
     // -------------------------------------------------------------- the service
 
     @Test
-    @DisplayName("a tenant citing another tenant's private scan is refused cleanly, not by a "
-            + "constraint violation")
+    @DisplayName("a tenant citing another tenant's private scan is refused cleanly, not by a " + "constraint violation")
     void theCrossTenantVerifyIsRefusedCleanly() {
         Throwable refused = catchThrowable(() -> engagements.verify(verifyWith(assetOfA)));
 
@@ -170,7 +178,8 @@ class CourierEvidenceMediaTenantScopeTests {
 
         // Nothing was written. The engagement is still awaiting verification and
         // holds no pointer into tenant A's evidence.
-        EngagementRow after = courierStore.findEngagement(TENANT_B, engagementOfB).orElseThrow();
+        EngagementRow after =
+                courierStore.findEngagement(TENANT_B, engagementOfB).orElseThrow();
         assertThat(after.evidenceMediaId()).isNull();
         assertThat(after.registrationVerifiedAt()).isNull();
         assertThat(audit.facts).isEmpty();
@@ -182,13 +191,14 @@ class CourierEvidenceMediaTenantScopeTests {
     void theRefusalDoesNotRevealWhetherTheAssetExists() {
         UUID neverAllocated = UUID.fromString("99999999-9999-9999-9999-999999999999");
         assertThat(jdbc.sql("SELECT count(*) FROM media.assets WHERE asset_id = :id")
-                .param("id", neverAllocated).query(Long.class).single())
+                        .param("id", neverAllocated)
+                        .query(Long.class)
+                        .single())
                 .as("the fabricated id must genuinely exist nowhere for this test to mean anything")
                 .isZero();
 
         Throwable foreignThrown = catchThrowable(() -> engagements.verify(verifyWith(assetOfA)));
-        Throwable fabricatedThrown =
-                catchThrowable(() -> engagements.verify(verifyWith(neverAllocated)));
+        Throwable fabricatedThrown = catchThrowable(() -> engagements.verify(verifyWith(neverAllocated)));
         assertThat(foreignThrown).isInstanceOf(ApiException.class);
         assertThat(fabricatedThrown).isInstanceOf(ApiException.class);
 
@@ -207,14 +217,14 @@ class CourierEvidenceMediaTenantScopeTests {
     }
 
     @Test
-    @DisplayName("the tenant's own scan still verifies, and reaches the engagement and the audit "
-            + "evidence field")
+    @DisplayName("the tenant's own scan still verifies, and reaches the engagement and the audit " + "evidence field")
     void theSameTenantVerifyStillWorks() {
         EngagementRow verified = engagements.verify(verifyWith(assetOfB));
 
         assertThat(verified.evidenceMediaId()).isEqualTo(assetOfB);
         assertThat(verified.registrationVerifiedAt()).isEqualTo(NOON);
-        assertThat(audit.facts).singleElement()
+        assertThat(audit.facts)
+                .singleElement()
                 .satisfies(fact -> assertThat(fact.evidenceReference()).isEqualTo(assetOfB.toString()));
     }
 
@@ -237,7 +247,9 @@ class CourierEvidenceMediaTenantScopeTests {
                    SET evidence_media_id = :assetId
                  WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("assetId", assetOfA).param("tenantId", TENANT_B).param("id", engagementOfB)
+                .param("assetId", assetOfA)
+                .param("tenantId", TENANT_B)
+                .param("id", engagementOfB)
                 .update());
 
         assertThat(refused).isInstanceOf(DataIntegrityViolationException.class);
@@ -250,8 +262,11 @@ class CourierEvidenceMediaTenantScopeTests {
                    SET evidence_media_id = :assetId
                  WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("assetId", assetOfB).param("tenantId", TENANT_B).param("id", engagementOfB)
-                .update()).isEqualTo(1);
+                        .param("assetId", assetOfB)
+                        .param("tenantId", TENANT_B)
+                        .param("id", engagementOfB)
+                        .update())
+                .isEqualTo(1);
     }
 
     @Test
@@ -263,8 +278,8 @@ class CourierEvidenceMediaTenantScopeTests {
                    AND conrelid = 'fulfillment.courier_engagements'::regclass
                 """).query(String.class).single();
 
-        assertThat(definition).isEqualTo(
-                "FOREIGN KEY (evidence_media_id, tenant_id) REFERENCES media.assets(asset_id, tenant_id)");
+        assertThat(definition)
+                .isEqualTo("FOREIGN KEY (evidence_media_id, tenant_id) REFERENCES media.assets(asset_id, tenant_id)");
     }
 
     // ------------------------------------------------------------ the migration
@@ -285,9 +300,11 @@ class CourierEvidenceMediaTenantScopeTests {
             // 0067 rather than "the one before mine", because V0068 belongs to
             // another change in flight and this test must not depend on whether it
             // has landed. Everything V0069 touches exists by 0067.
-            Flyway.configure().dataSource(legacySource)
+            Flyway.configure()
+                    .dataSource(legacySource)
                     .target(MigrationVersion.fromVersion("0067"))
-                    .load().migrate();
+                    .load()
+                    .migrate();
 
             JdbcClient old = JdbcClient.create(legacySource);
             assertThat(old.sql("""
@@ -319,14 +336,18 @@ class CourierEvidenceMediaTenantScopeTests {
             assertThat(old.sql("""
                     SELECT evidence_media_id FROM fulfillment.courier_engagement_evidence_orphans
                      WHERE tenant_id = :tenantId AND engagement_id = :id
-                    """).param("tenantId", TENANT_B).param("id", crossTenant)
-                    .query(UUID.class).list())
+                    """)
+                            .param("tenantId", TENANT_B)
+                            .param("id", crossTenant)
+                            .query(UUID.class)
+                            .list())
                     .as("a migration that silently discards a row is worse than one that fails; the "
                             + "pointer somebody once attached is the only record that they did")
                     .containsExactly(scanOfA);
 
             assertThat(old.sql("SELECT count(*) FROM fulfillment.courier_engagement_evidence_orphans")
-                    .query(Long.class).single())
+                            .query(Long.class)
+                            .single())
                     .as("only the unsatisfiable row is quarantined")
                     .isEqualTo(1L);
 
@@ -337,9 +358,16 @@ class CourierEvidenceMediaTenantScopeTests {
     // ------------------------------------------------------------------ helpers
 
     private CourierEngagementService.VerifyRegistration verifyWith(UUID evidenceMediaId) {
-        return new CourierEngagementService.VerifyRegistration(TENANT_B, engagementOfB,
-                "312345678901", today().plusYears(1), VerificationMethod.MANUAL_ATTESTATION,
-                evidenceMediaId, manager(), "sighted the registration certificate", "corr");
+        return new CourierEngagementService.VerifyRegistration(
+                TENANT_B,
+                engagementOfB,
+                "312345678901",
+                today().plusYears(1),
+                VerificationMethod.MANUAL_ATTESTATION,
+                evidenceMediaId,
+                manager(),
+                "sighted the registration certificate",
+                "corr");
     }
 
     private LocalDate today() {
@@ -377,15 +405,15 @@ class CourierEvidenceMediaTenantScopeTests {
                     :objectKey, 'PRIVATE', 'AVAILABLE', 'image/jpeg', 1024,
                     'image/jpeg', 1024, repeat('0', 64))
                 """)
-                .param("assetId", assetId).param("tenantId", tenantId)
+                .param("assetId", assetId)
+                .param("tenantId", tenantId)
                 .param("objectKey", tenantId + "/tenant/" + tenantId + "/" + assetId)
                 .update();
         return assetId;
     }
 
     /** Written with SQL rather than the service, because the point is the row. */
-    private static UUID seedEngagement(JdbcClient client, UUID tenantId, String reference,
-            UUID evidenceMediaId) {
+    private static UUID seedEngagement(JdbcClient client, UUID tenantId, String reference, UUID evidenceMediaId) {
 
         UUID typeId = UUID.randomUUID();
         UUID courierId = UUID.randomUUID();
@@ -394,28 +422,44 @@ class CourierEvidenceMediaTenantScopeTests {
                 INSERT INTO fulfillment.courier_types (id, tenant_id, code, display_name,
                     vehicle_class)
                 VALUES (:id, :tenantId, :code, 'Scooter', 'SCOOTER')
-                """).param("id", typeId).param("tenantId", tenantId)
-                .param("code", reference.replace('-', '_')).update();
+                """)
+                .param("id", typeId)
+                .param("tenantId", tenantId)
+                .param("code", reference.replace('-', '_'))
+                .update();
         client.sql("""
                 INSERT INTO fulfillment.couriers (id, tenant_id, courier_type_id,
                     principal_subject, display_reference, protected_full_name, status)
                 VALUES (:id, :tenantId, :typeId, :subject, :reference, 'protected', 'ACTIVE')
-                """).param("id", courierId).param("tenantId", tenantId).param("typeId", typeId)
-                .param("subject", "keycloak-" + reference).param("reference", reference).update();
+                """)
+                .param("id", courierId)
+                .param("tenantId", tenantId)
+                .param("typeId", typeId)
+                .param("subject", "keycloak-" + reference)
+                .param("reference", reference)
+                .update();
         client.sql("""
                 INSERT INTO fulfillment.courier_engagements (id, tenant_id, courier_id,
                     engagement_type, status, engaged_from, evidence_media_id)
                 VALUES (:id, :tenantId, :courierId, 'SELF_EMPLOYED', 'PENDING_VERIFICATION',
                     DATE '2026-01-01', :evidence)
-                """).param("id", engagementId).param("tenantId", tenantId)
-                .param("courierId", courierId).param("evidence", evidenceMediaId).update();
+                """)
+                .param("id", engagementId)
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
+                .param("evidence", evidenceMediaId)
+                .update();
         return engagementId;
     }
 
     private static UUID evidenceOf(JdbcClient client, UUID engagementId) {
         return client.sql("""
                 SELECT evidence_media_id FROM fulfillment.courier_engagements WHERE id = :id
-                """).param("id", engagementId).query(UUID.class).optional().orElse(null);
+                """)
+                .param("id", engagementId)
+                .query(UUID.class)
+                .optional()
+                .orElse(null);
     }
 
     private static ActorRef manager() {
@@ -441,8 +485,10 @@ class CourierEvidenceMediaTenantScopeTests {
                          WHERE tenant_id = :tenantId AND asset_id = :assetId
                            AND status = 'AVAILABLE'
                         """)
-                        .param("tenantId", tenantId).param("assetId", assetId.value())
-                        .query(Long.class).single();
+                        .param("tenantId", tenantId)
+                        .param("assetId", assetId.value())
+                        .query(Long.class)
+                        .single();
                 if (found == 0) {
                     return false;
                 }
@@ -460,8 +506,7 @@ class CourierEvidenceMediaTenantScopeTests {
         }
 
         @Override
-        public <P> Optional<ResolvedPolicy<P>> pinned(PolicyKey<P> key, UUID policyId,
-                int policyVersion) {
+        public <P> Optional<ResolvedPolicy<P>> pinned(PolicyKey<P> key, UUID policyId, int policyVersion) {
             return Optional.empty();
         }
     }
@@ -479,17 +524,17 @@ class CourierEvidenceMediaTenantScopeTests {
     private static final class ReversibleProtection implements FieldProtection {
 
         @Override
-        public ProtectedValue protect(UUID tenantId, DataClass dataClass, RecordRef record,
-                String plaintext) {
-            byte[] reversed = new StringBuilder(plaintext).reverse().toString()
-                    .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        public ProtectedValue protect(UUID tenantId, DataClass dataClass, RecordRef record, String plaintext) {
+            byte[] reversed =
+                    new StringBuilder(plaintext).reverse().toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
             return new ProtectedValue("test-key", "TEST", new byte[] {1}, reversed, 1);
         }
 
         @Override
         public String reveal(UUID tenantId, ProtectedValue value, RecordRef record, String purpose) {
-            return new StringBuilder(new String(value.ciphertext(),
-                    java.nio.charset.StandardCharsets.UTF_8)).reverse().toString();
+            return new StringBuilder(new String(value.ciphertext(), java.nio.charset.StandardCharsets.UTF_8))
+                    .reverse()
+                    .toString();
         }
 
         @Override

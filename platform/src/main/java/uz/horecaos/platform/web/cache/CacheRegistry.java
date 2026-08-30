@@ -32,8 +32,7 @@ public enum CacheRegistry {
     TENANT_POLICY_CURRENT("tenant.policy_current", Duration.ofSeconds(60), 20_000, "PolicyActivated"),
 
     /** ADR 0021 entitlement snapshots. */
-    COMMERCIAL_ENTITLEMENTS("commercial.entitlements", Duration.ofSeconds(60), 10_000,
-            "TenantEntitlementsChanged"),
+    COMMERCIAL_ENTITLEMENTS("commercial.entitlements", Duration.ofSeconds(60), 10_000, "TenantEntitlementsChanged"),
 
     /** ADR 0026 provider environments; reference data that changes on deployment. */
     INTEGRATION_ENVIRONMENTS("integration.environments", Duration.ofHours(1), 1_000, "deployment"),
@@ -89,8 +88,7 @@ public enum CacheRegistry {
     }
 
     public static CacheRegistry require(String cacheName) {
-        return find(cacheName).orElseThrow(() -> new UnregisteredCacheException(
-                """
+        return find(cacheName).orElseThrow(() -> new UnregisteredCacheException("""
                 Cache "%s" is not registered. Declare it in CacheRegistry with a TTL \
                 and an invalidation source (ADR 0033).""".formatted(cacheName)));
     }

@@ -9,10 +9,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.inventory.api.TrackingMode;
 
 /** Inventory persistence (ADR 0017). */
@@ -25,8 +23,8 @@ public class JdbcInventoryStore {
         this.jdbc = jdbc;
     }
 
-    public UUID createStockItem(UUID tenantId, UUID brandId, UUID locationId, UUID variantId,
-            TrackingMode mode, Instant now) {
+    public UUID createStockItem(
+            UUID tenantId, UUID brandId, UUID locationId, UUID variantId, TrackingMode mode, Instant now) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO inventory.stock_items (
@@ -34,8 +32,11 @@ public class JdbcInventoryStore {
                     created_at, updated_at)
                 VALUES (:id, :tenantId, :brandId, :locationId, :variantId, :mode, :now, :now)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("brandId", brandId)
-                .param("locationId", locationId).param("variantId", variantId)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("variantId", variantId)
                 .param("mode", mode.name())
                 .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
                 .update();
@@ -47,7 +48,9 @@ public class JdbcInventoryStore {
                     stock_item_id, tenant_id, brand_id, location_id, binary_available, updated_at)
                 VALUES (:id, :tenantId, :brandId, :locationId, :available, :now)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("brandId", brandId)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("locationId", locationId)
                 .param("available", mode == TrackingMode.BINARY ? Boolean.TRUE : null)
                 .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
@@ -63,7 +66,8 @@ public class JdbcInventoryStore {
                 WHERE s.tenant_id = :tenantId AND s.location_id = :locationId
                   AND s.variant_id = :variantId AND s.status = 'ACTIVE'
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
                 .param("variantId", variantId)
                 .query(JdbcInventoryStore::mapStockItem)
                 .optional();
@@ -82,10 +86,10 @@ public class JdbcInventoryStore {
                 WHERE s.tenant_id = :tenantId AND s.location_id = :locationId
                   AND s.variant_id = ANY(:ids) AND s.status = 'ACTIVE'
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
                 .param("ids", variantIds.toArray(UUID[]::new))
-                .query((row, number) -> Map.entry(
-                        row.getObject("variant_id", UUID.class), mapStockItem(row, number)))
+                .query((row, number) -> Map.entry(row.getObject("variant_id", UUID.class), mapStockItem(row, number)))
                 .list()
                 .forEach(entry -> byVariant.put(entry.getKey(), entry.getValue()));
         return byVariant;
@@ -99,8 +103,15 @@ public class JdbcInventoryStore {
      * it. Writing only the position would leave "why is this sold out" with no
      * answer at all.
      */
-    public void setBinaryAvailability(UUID tenantId, UUID stockItemId, boolean available,
-            String idempotencyKey, String reasonCode, String actorType, UUID actorId, Instant now) {
+    public void setBinaryAvailability(
+            UUID tenantId,
+            UUID stockItemId,
+            boolean available,
+            String idempotencyKey,
+            String reasonCode,
+            String actorType,
+            UUID actorId,
+            Instant now) {
 
         jdbc.sql("""
                 INSERT INTO inventory.movements (
@@ -116,10 +127,14 @@ public class JdbcInventoryStore {
                 WHERE s.id = :stockItemId AND s.tenant_id = :tenantId
                 ON CONFLICT (tenant_id, stock_item_id, idempotency_key) DO NOTHING
                 """)
-                .param("movementId", UUID.randomUUID()).param("stockItemId", stockItemId)
-                .param("tenantId", tenantId).param("available", available)
-                .param("idempotencyKey", idempotencyKey).param("reason", reasonCode)
-                .param("actorType", actorType).param("actorId", actorId)
+                .param("movementId", UUID.randomUUID())
+                .param("stockItemId", stockItemId)
+                .param("tenantId", tenantId)
+                .param("available", available)
+                .param("idempotencyKey", idempotencyKey)
+                .param("reason", reasonCode)
+                .param("actorType", actorType)
+                .param("actorId", actorId)
                 .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
                 .update();
 
@@ -131,7 +146,8 @@ public class JdbcInventoryStore {
                     updated_at = :now
                 WHERE stock_item_id = :stockItemId AND tenant_id = :tenantId
                 """)
-                .param("stockItemId", stockItemId).param("tenantId", tenantId)
+                .param("stockItemId", stockItemId)
+                .param("tenantId", tenantId)
                 .param("available", available)
                 .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
                 .update();
@@ -146,8 +162,15 @@ public class JdbcInventoryStore {
      *
      * @return true if this call created the hold
      */
-    public boolean insertReservation(UUID reservationId, UUID tenantId, UUID brandId,
-            UUID locationId, String ownerType, UUID ownerId, Instant expiresAt, Instant now) {
+    public boolean insertReservation(
+            UUID reservationId,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            String ownerType,
+            UUID ownerId,
+            Instant expiresAt,
+            Instant now) {
         return jdbc.sql("""
                 INSERT INTO inventory.reservations (
                     id, tenant_id, brand_id, location_id, owner_type, owner_id,
@@ -156,24 +179,30 @@ public class JdbcInventoryStore {
                     'HELD', :expiresAt, :now, :now)
                 ON CONFLICT (tenant_id, owner_type, owner_id) DO NOTHING
                 """)
-                .param("id", reservationId).param("tenantId", tenantId).param("brandId", brandId)
-                .param("locationId", locationId).param("ownerType", ownerType)
-                .param("ownerId", ownerId)
-                .param("expiresAt", OffsetDateTime.ofInstant(expiresAt, ZoneOffset.UTC))
-                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
-                .update() == 1;
+                        .param("id", reservationId)
+                        .param("tenantId", tenantId)
+                        .param("brandId", brandId)
+                        .param("locationId", locationId)
+                        .param("ownerType", ownerType)
+                        .param("ownerId", ownerId)
+                        .param("expiresAt", OffsetDateTime.ofInstant(expiresAt, ZoneOffset.UTC))
+                        .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                        .update()
+                == 1;
     }
 
-    public void insertReservationLine(UUID reservationId, UUID tenantId, UUID stockItemId,
-            java.math.BigDecimal quantity) {
+    public void insertReservationLine(
+            UUID reservationId, UUID tenantId, UUID stockItemId, java.math.BigDecimal quantity) {
         jdbc.sql("""
                 INSERT INTO inventory.reservation_lines (
                     reservation_id, stock_item_id, tenant_id, quantity)
                 VALUES (:reservationId, :stockItemId, :tenantId, :quantity)
                 ON CONFLICT (reservation_id, stock_item_id) DO NOTHING
                 """)
-                .param("reservationId", reservationId).param("stockItemId", stockItemId)
-                .param("tenantId", tenantId).param("quantity", quantity)
+                .param("reservationId", reservationId)
+                .param("stockItemId", stockItemId)
+                .param("tenantId", tenantId)
+                .param("quantity", quantity)
                 .update();
     }
 
@@ -182,7 +211,9 @@ public class JdbcInventoryStore {
                 SELECT id, status, expires_at FROM inventory.reservations
                 WHERE tenant_id = :tenantId AND owner_type = :ownerType AND owner_id = :ownerId
                 """)
-                .param("tenantId", tenantId).param("ownerType", ownerType).param("ownerId", ownerId)
+                .param("tenantId", tenantId)
+                .param("ownerType", ownerType)
+                .param("ownerId", ownerId)
                 .query((row, number) -> new ReservationRow(
                         row.getObject("id", UUID.class),
                         row.getString("status"),
@@ -203,10 +234,12 @@ public class JdbcInventoryStore {
                 SET status = :toStatus, version = version + 1, updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :id AND status = 'HELD'
                 """)
-                .param("tenantId", tenantId).param("id", reservationId)
-                .param("toStatus", toStatus)
-                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", reservationId)
+                        .param("toStatus", toStatus)
+                        .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                        .update()
+                == 1;
     }
 
     /** Expires holds past their TTL, so abandoned carts stop holding stock. */
@@ -227,12 +260,13 @@ public class JdbcInventoryStore {
                 SELECT count(*) FROM inventory.movements
                 WHERE tenant_id = :tenantId AND stock_item_id = :stockItemId
                 """)
-                .param("tenantId", tenantId).param("stockItemId", stockItemId)
-                .query(Long.class).single();
+                .param("tenantId", tenantId)
+                .param("stockItemId", stockItemId)
+                .query(Long.class)
+                .single();
     }
 
-    private static StockItemRow mapStockItem(java.sql.ResultSet row, int number)
-            throws java.sql.SQLException {
+    private static StockItemRow mapStockItem(java.sql.ResultSet row, int number) throws java.sql.SQLException {
         return new StockItemRow(
                 row.getObject("id", UUID.class),
                 TrackingMode.valueOf(row.getString("tracking_mode")),
@@ -240,8 +274,8 @@ public class JdbcInventoryStore {
                 row.getLong("position_sequence"));
     }
 
-    public record StockItemRow(UUID stockItemId, TrackingMode trackingMode,
-            Boolean binaryAvailable, long positionSequence) { }
+    public record StockItemRow(
+            UUID stockItemId, TrackingMode trackingMode, Boolean binaryAvailable, long positionSequence) {}
 
-    public record ReservationRow(UUID id, String status, Instant expiresAt) { }
+    public record ReservationRow(UUID id, String status, Instant expiresAt) {}
 }

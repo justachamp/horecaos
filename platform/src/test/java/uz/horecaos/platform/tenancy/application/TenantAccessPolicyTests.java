@@ -8,10 +8,8 @@ import java.util.Currency;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.AccessDeniedException;
-
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.domain.Slug;
@@ -32,38 +30,29 @@ class TenantAccessPolicyTests {
 
     @Test
     void allowsMembersToReadOnlyTheirOrganization() {
-        TenantAccessPolicy policy = policy(actor(
-                Set.of(),
-                Map.of("keycloak-organization-a", Set.of("tenant-viewer"))));
+        TenantAccessPolicy policy = policy(actor(Set.of(), Map.of("keycloak-organization-a", Set.of("tenant-viewer"))));
 
         assertThatNoException().isThrownBy(() -> policy.requireTenantRead(TENANT));
     }
 
     @Test
     void deniesCrossTenantReads() {
-        TenantAccessPolicy policy = policy(actor(
-                Set.of(),
-                Map.of("another-organization", Set.of("tenant-owner"))));
+        TenantAccessPolicy policy = policy(actor(Set.of(), Map.of("another-organization", Set.of("tenant-owner"))));
 
-        assertThatThrownBy(() -> policy.requireTenantRead(TENANT))
-                .isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> policy.requireTenantRead(TENANT)).isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
     void doesNotTreatAGlobalTenantRoleAsPermissionForEveryOrganization() {
-        TenantAccessPolicy policy = policy(actor(
-                Set.of("tenant-admin"),
-                Map.of("keycloak-organization-a", Set.of("tenant-viewer"))));
+        TenantAccessPolicy policy =
+                policy(actor(Set.of("tenant-admin"), Map.of("keycloak-organization-a", Set.of("tenant-viewer"))));
 
-        assertThatThrownBy(() -> policy.requireTenantManagement(TENANT))
-                .isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> policy.requireTenantManagement(TENANT)).isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
     void allowsAnOrganizationSpecificAdministratorToManageThatTenant() {
-        TenantAccessPolicy policy = policy(actor(
-                Set.of(),
-                Map.of("keycloak-organization-a", Set.of("tenant-admin"))));
+        TenantAccessPolicy policy = policy(actor(Set.of(), Map.of("keycloak-organization-a", Set.of("tenant-admin"))));
 
         assertThatNoException().isThrownBy(() -> policy.requireTenantManagement(TENANT));
     }
@@ -73,9 +62,8 @@ class TenantAccessPolicyTests {
         // The narrowing ADR 0025 exists for. Organization membership used to be
         // the whole read rule, which meant a single-location employee could read
         // every location's orders and revenue in the tenant.
-        TenantAccessPolicy policy = enforcingPolicy(
-                actor(Set.of(), Map.of("keycloak-organization-a", Set.of("tenant-viewer"))),
-                denyAll());
+        TenantAccessPolicy policy =
+                enforcingPolicy(actor(Set.of(), Map.of("keycloak-organization-a", Set.of("tenant-viewer"))), denyAll());
 
         assertThatThrownBy(() -> policy.requireTenantRead(TENANT))
                 .isInstanceOf(uz.horecaos.platform.iam.api.AuthorizationService.AccessDeniedException.class);
@@ -84,8 +72,7 @@ class TenantAccessPolicyTests {
     @Test
     void underEnforcementAMemberHoldingTheCapabilityIsStillAllowed() {
         TenantAccessPolicy policy = enforcingPolicy(
-                actor(Set.of(), Map.of("keycloak-organization-a", Set.of("tenant-viewer"))),
-                allowAll());
+                actor(Set.of(), Map.of("keycloak-organization-a", Set.of("tenant-viewer"))), allowAll());
 
         assertThatNoException().isThrownBy(() -> policy.requireTenantRead(TENANT));
     }
@@ -95,12 +82,10 @@ class TenantAccessPolicyTests {
         // Both halves of the conjunction, in the order that matters: a grant is
         // never a substitute for belonging to the tenant, so a principal from
         // another organization is refused before its capabilities are consulted.
-        TenantAccessPolicy policy = enforcingPolicy(
-                actor(Set.of(), Map.of("another-organization", Set.of("tenant-owner"))),
-                allowAll());
+        TenantAccessPolicy policy =
+                enforcingPolicy(actor(Set.of(), Map.of("another-organization", Set.of("tenant-owner"))), allowAll());
 
-        assertThatThrownBy(() -> policy.requireTenantRead(TENANT))
-                .isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> policy.requireTenantRead(TENANT)).isInstanceOf(AccessDeniedException.class);
     }
 
     /** Shadow mode, which the build no longer runs in but still supports. */
@@ -117,13 +102,17 @@ class TenantAccessPolicyTests {
     private static uz.horecaos.platform.iam.api.AuthorizationService allowAll() {
         return new uz.horecaos.platform.iam.api.AuthorizationService() {
             @Override
-            public boolean has(String subject, uz.horecaos.platform.iam.api.Capability capability,
+            public boolean has(
+                    String subject,
+                    uz.horecaos.platform.iam.api.Capability capability,
                     uz.horecaos.platform.iam.api.ResourceScope scope) {
                 return true;
             }
 
             @Override
-            public void require(String subject, uz.horecaos.platform.iam.api.Capability capability,
+            public void require(
+                    String subject,
+                    uz.horecaos.platform.iam.api.Capability capability,
                     uz.horecaos.platform.iam.api.ResourceScope scope) {
                 // Held, so nothing to refuse.
             }
@@ -136,9 +125,7 @@ class TenantAccessPolicyTests {
         };
     }
 
-    private static AuthenticatedActor actor(
-            Set<String> globalRoles,
-            Map<String, Set<String>> organizationRoles) {
+    private static AuthenticatedActor actor(Set<String> globalRoles, Map<String, Set<String>> organizationRoles) {
         return new AuthenticatedActor("keycloak-user-42", globalRoles, organizationRoles);
     }
 
@@ -149,13 +136,17 @@ class TenantAccessPolicyTests {
     private static uz.horecaos.platform.iam.api.AuthorizationService denyAll() {
         return new uz.horecaos.platform.iam.api.AuthorizationService() {
             @Override
-            public boolean has(String subject, uz.horecaos.platform.iam.api.Capability capability,
+            public boolean has(
+                    String subject,
+                    uz.horecaos.platform.iam.api.Capability capability,
                     uz.horecaos.platform.iam.api.ResourceScope scope) {
                 return false;
             }
 
             @Override
-            public void require(String subject, uz.horecaos.platform.iam.api.Capability capability,
+            public void require(
+                    String subject,
+                    uz.horecaos.platform.iam.api.Capability capability,
                     uz.horecaos.platform.iam.api.ResourceScope scope) {
                 throw new AccessDeniedException(capability, scope);
             }

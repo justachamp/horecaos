@@ -4,10 +4,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.payments.api.PaymentDirectory;
 import uz.horecaos.platform.payments.domain.FiscalDocument;
 import uz.horecaos.platform.payments.domain.FiscalReason;
@@ -38,8 +36,11 @@ public class PaymentQueryService implements PaymentDirectory {
     private final JdbcPaymentTransactionStore transactions;
     private final JdbcFiscalDocumentStore documents;
 
-    public PaymentQueryService(JdbcPaymentIntentStore intents, JdbcPaymentAttemptStore attempts,
-            JdbcPaymentTransactionStore transactions, JdbcFiscalDocumentStore documents) {
+    public PaymentQueryService(
+            JdbcPaymentIntentStore intents,
+            JdbcPaymentAttemptStore attempts,
+            JdbcPaymentTransactionStore transactions,
+            JdbcFiscalDocumentStore documents) {
         this.intents = intents;
         this.attempts = attempts;
         this.transactions = transactions;
@@ -52,29 +53,32 @@ public class PaymentQueryService implements PaymentDirectory {
     }
 
     @Override
-    public List<UnfiscalizedCashOrder> unfiscalizedCashOrders(UUID tenantId, Instant from,
-            Instant to, int limit) {
-        return documents.listNotApplicable(tenantId,
-                        FiscalReason.CASH_TENDER_NO_PROVIDER_FISCALIZATION, from, to, limit)
+    public List<UnfiscalizedCashOrder> unfiscalizedCashOrders(UUID tenantId, Instant from, Instant to, int limit) {
+        return documents
+                .listNotApplicable(tenantId, FiscalReason.CASH_TENDER_NO_PROVIDER_FISCALIZATION, from, to, limit)
                 .stream()
-                .map(document -> new UnfiscalizedCashOrder(document.orderId(), document.id(),
-                        document.reasonCode(), document.reasonNote(), document.createdAt()))
+                .map(document -> new UnfiscalizedCashOrder(
+                        document.orderId(),
+                        document.id(),
+                        document.reasonCode(),
+                        document.reasonNote(),
+                        document.createdAt()))
                 .toList();
     }
 
     private PaymentSummary toSummary(UUID tenantId, PaymentIntent intent) {
         List<PaymentAttempt> intentAttempts = attempts.listForIntent(tenantId, intent.id());
-        boolean uncertain = intentAttempts.stream()
-                .anyMatch(attempt -> attempt.status() == PaymentAttemptStatus.UNCERTAIN);
+        boolean uncertain =
+                intentAttempts.stream().anyMatch(attempt -> attempt.status() == PaymentAttemptStatus.UNCERTAIN);
 
         // The fiscal answer is the most recent document for the order, whatever kind
         // it is. There may legitimately be several — a sale and its cancel — and the
         // summary reports the current position rather than pretending there is one.
         List<FiscalDocument> fiscalDocuments = documents.listForOrder(tenantId, intent.orderId());
-        FiscalStatus fiscalStatus = fiscalDocuments.isEmpty()
-                ? null : fiscalDocuments.getLast().status();
-        String fiscalReason = fiscalDocuments.isEmpty()
-                ? null : fiscalDocuments.getLast().reasonCode();
+        FiscalStatus fiscalStatus =
+                fiscalDocuments.isEmpty() ? null : fiscalDocuments.getLast().status();
+        String fiscalReason =
+                fiscalDocuments.isEmpty() ? null : fiscalDocuments.getLast().reasonCode();
 
         return new PaymentSummary(
                 intent.id(),

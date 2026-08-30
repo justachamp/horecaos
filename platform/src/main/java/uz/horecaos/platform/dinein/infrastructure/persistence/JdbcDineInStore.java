@@ -12,10 +12,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.dinein.domain.QrMode;
 import uz.horecaos.platform.dinein.domain.ReservationStatus;
 import uz.horecaos.platform.dinein.domain.SessionStatus;
@@ -70,7 +68,8 @@ public class JdbcDineInStore {
                 FROM dinein.location_settings
                 WHERE tenant_id = :tenantId AND location_id = :locationId
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
                 .query(JdbcDineInStore::mapSettings)
                 .optional();
     }
@@ -99,7 +98,8 @@ public class JdbcDineInStore {
                     version = dinein.location_settings.version + 1,
                     updated_at = EXCLUDED.updated_at
                 """)
-                .param("tenantId", settings.tenantId()).param("brandId", settings.brandId())
+                .param("tenantId", settings.tenantId())
+                .param("brandId", settings.brandId())
                 .param("locationId", settings.locationId())
                 .param("qrMode", settings.qrMode().name())
                 .param("turnaround", settings.turnaroundMinutes())
@@ -128,7 +128,8 @@ public class JdbcDineInStore {
                 SELECT timezone FROM tenant.locations
                 WHERE tenant_id = :tenantId AND id = :locationId
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
                 .query((row, number) -> row.getString("timezone"))
                 .optional();
     }
@@ -143,10 +144,14 @@ public class JdbcDineInStore {
                 VALUES (:id, :tenantId, :brandId, :locationId, :code, :displayName,
                     :sortOrder, :status, 1, :now, :now)
                 """)
-                .param("id", section.id()).param("tenantId", section.tenantId())
-                .param("brandId", section.brandId()).param("locationId", section.locationId())
-                .param("code", section.code()).param("displayName", section.displayName())
-                .param("sortOrder", section.sortOrder()).param("status", section.status())
+                .param("id", section.id())
+                .param("tenantId", section.tenantId())
+                .param("brandId", section.brandId())
+                .param("locationId", section.locationId())
+                .param("code", section.code())
+                .param("displayName", section.displayName())
+                .param("sortOrder", section.sortOrder())
+                .param("status", section.status())
                 .param("now", utc(now))
                 .update();
     }
@@ -159,7 +164,8 @@ public class JdbcDineInStore {
                 WHERE tenant_id = :tenantId AND location_id = :locationId
                 ORDER BY sort_order, code
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
                 .query(JdbcDineInStore::mapSection)
                 .list();
     }
@@ -188,14 +194,13 @@ public class JdbcDineInStore {
                     seats, joinable, layout_x, layout_y, status, version, created_at, updated_at)
                 VALUES (:id, :tenantId, :brandId, :locationId, :sectionId, :code, :displayName,
                     :seats, :joinable, :layoutX, :layoutY, :status, 1, :now, :now)
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     public Optional<TableRow> findTable(UUID tenantId, UUID tableId) {
         return jdbc.sql(SELECT_TABLE + " WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", tableId)
+                .param("tenantId", tenantId)
+                .param("id", tableId)
                 .query(JdbcDineInStore::mapTable)
                 .optional();
     }
@@ -205,7 +210,8 @@ public class JdbcDineInStore {
                  WHERE tenant_id = :tenantId AND location_id = :locationId
                  ORDER BY section_id, code
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
                 .query(JdbcDineInStore::mapTable)
                 .list();
     }
@@ -238,8 +244,7 @@ public class JdbcDineInStore {
      *
      * @return whether the row moved
      */
-    public boolean rotateQrToken(UUID tenantId, UUID tableId, int expectedVersion,
-            String tokenHash, Instant now) {
+    public boolean rotateQrToken(UUID tenantId, UUID tableId, int expectedVersion, String tokenHash, Instant now) {
 
         return jdbc.sql("""
                 UPDATE dinein.tables
@@ -250,24 +255,29 @@ public class JdbcDineInStore {
                  WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
                    AND status <> 'ARCHIVED'
                 """)
-                .param("hash", tokenHash).param("now", utc(now))
-                .param("tenantId", tenantId).param("id", tableId)
-                .param("expectedVersion", expectedVersion)
-                .update() == 1;
+                        .param("hash", tokenHash)
+                        .param("now", utc(now))
+                        .param("tenantId", tenantId)
+                        .param("id", tableId)
+                        .param("expectedVersion", expectedVersion)
+                        .update()
+                == 1;
     }
 
-    public boolean updateTableStatus(UUID tenantId, UUID tableId, int expectedVersion,
-            String status, Instant now) {
+    public boolean updateTableStatus(UUID tenantId, UUID tableId, int expectedVersion, String status, Instant now) {
 
         return jdbc.sql("""
                 UPDATE dinein.tables
                    SET status = :status, version = version + 1, updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
                 """)
-                .param("status", status).param("now", utc(now))
-                .param("tenantId", tenantId).param("id", tableId)
-                .param("expectedVersion", expectedVersion)
-                .update() == 1;
+                        .param("status", status)
+                        .param("now", utc(now))
+                        .param("tenantId", tenantId)
+                        .param("id", tableId)
+                        .param("expectedVersion", expectedVersion)
+                        .update()
+                == 1;
     }
 
     // -------------------------------------------------------- guest sessions
@@ -280,9 +290,12 @@ public class JdbcDineInStore {
                 VALUES (:id, :tenantId, :brandId, :locationId, :tableId, :hash,
                     :mode, :issuedAt, :expiresAt)
                 """)
-                .param("id", guest.id()).param("tenantId", guest.tenantId())
-                .param("brandId", guest.brandId()).param("locationId", guest.locationId())
-                .param("tableId", guest.tableId()).param("hash", guest.tokenHash())
+                .param("id", guest.id())
+                .param("tenantId", guest.tenantId())
+                .param("brandId", guest.brandId())
+                .param("locationId", guest.locationId())
+                .param("tableId", guest.tableId())
+                .param("hash", guest.tokenHash())
                 .param("mode", guest.qrMode().name())
                 .param("issuedAt", utc(guest.issuedAt()))
                 .param("expiresAt", utc(guest.expiresAt()))
@@ -305,7 +318,8 @@ public class JdbcDineInStore {
                 FROM dinein.qr_guest_sessions
                 WHERE token_hash = :hash AND revoked_at IS NULL AND expires_at > :now
                 """)
-                .param("hash", tokenHash).param("now", utc(now))
+                .param("hash", tokenHash)
+                .param("now", utc(now))
                 .query(JdbcDineInStore::mapGuestSession)
                 .optional();
     }
@@ -324,8 +338,10 @@ public class JdbcDineInStore {
                    SET revoked_at = :now, revoked_reason = :reason
                  WHERE tenant_id = :tenantId AND table_id = :tableId AND revoked_at IS NULL
                 """)
-                .param("now", utc(now)).param("reason", reason)
-                .param("tenantId", tenantId).param("tableId", tableId)
+                .param("now", utc(now))
+                .param("reason", reason)
+                .param("tenantId", tenantId)
+                .param("tableId", tableId)
                 .update();
     }
 
@@ -362,9 +378,7 @@ public class JdbcDineInStore {
                 VALUES (:id, :tenantId, :brandId, :locationId, :customerAccountId,
                     :name, :phone, :phoneHash, :secondary, :note, :partySize,
                     :from, :to, :turnaround, :status, :channelId, :createdBy, 1, :now, :now)
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     /**
@@ -374,8 +388,8 @@ public class JdbcDineInStore {
      * the parent booking, so no caller can write a hold whose status disagrees
      * with the booking it belongs to.
      */
-    public void insertReservationTable(UUID reservationId, UUID tableId, UUID tenantId,
-            UUID locationId, Instant heldFrom, Instant heldTo) {
+    public void insertReservationTable(
+            UUID reservationId, UUID tableId, UUID tenantId, UUID locationId, Instant heldFrom, Instant heldTo) {
 
         jdbc.sql("""
                 INSERT INTO dinein.reservation_tables (
@@ -383,9 +397,12 @@ public class JdbcDineInStore {
                 VALUES (:reservationId, :tableId, :tenantId, :locationId,
                     tstzrange(:heldFrom::timestamptz, :heldTo::timestamptz, '[)'), 'REQUESTED')
                 """)
-                .param("reservationId", reservationId).param("tableId", tableId)
-                .param("tenantId", tenantId).param("locationId", locationId)
-                .param("heldFrom", utc(heldFrom)).param("heldTo", utc(heldTo))
+                .param("reservationId", reservationId)
+                .param("tableId", tableId)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("heldFrom", utc(heldFrom))
+                .param("heldTo", utc(heldTo))
                 .update();
     }
 
@@ -403,14 +420,17 @@ public class JdbcDineInStore {
                    SET held_during = tstzrange(:heldFrom::timestamptz, :heldTo::timestamptz, '[)')
                  WHERE tenant_id = :tenantId AND reservation_id = :reservationId
                 """)
-                .param("heldFrom", utc(heldFrom)).param("heldTo", utc(heldTo))
-                .param("tenantId", tenantId).param("reservationId", reservationId)
+                .param("heldFrom", utc(heldFrom))
+                .param("heldTo", utc(heldTo))
+                .param("tenantId", tenantId)
+                .param("reservationId", reservationId)
                 .update();
     }
 
     public Optional<ReservationRow> findReservation(UUID tenantId, UUID reservationId) {
         return jdbc.sql(SELECT_RESERVATION + " WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", reservationId)
+                .param("tenantId", tenantId)
+                .param("id", reservationId)
                 .query(JdbcDineInStore::mapReservation)
                 .optional();
     }
@@ -421,7 +441,8 @@ public class JdbcDineInStore {
                 WHERE tenant_id = :tenantId AND reservation_id = :reservationId
                 ORDER BY table_id
                 """)
-                .param("tenantId", tenantId).param("reservationId", reservationId)
+                .param("tenantId", tenantId)
+                .param("reservationId", reservationId)
                 .query((row, number) -> row.getObject("table_id", UUID.class))
                 .list();
     }
@@ -436,8 +457,13 @@ public class JdbcDineInStore {
      *
      * @return whether the row moved
      */
-    public boolean moveReservation(UUID tenantId, UUID reservationId, ReservationStatus from,
-            ReservationStatus to, int expectedVersion, Instant now) {
+    public boolean moveReservation(
+            UUID tenantId,
+            UUID reservationId,
+            ReservationStatus from,
+            ReservationStatus to,
+            int expectedVersion,
+            Instant now) {
 
         return jdbc.sql("""
                 UPDATE dinein.reservations
@@ -445,10 +471,14 @@ public class JdbcDineInStore {
                  WHERE tenant_id = :tenantId AND id = :id
                    AND status = :from AND version = :expectedVersion
                 """)
-                .param("to", to.name()).param("from", from.name())
-                .param("now", utc(now)).param("tenantId", tenantId).param("id", reservationId)
-                .param("expectedVersion", expectedVersion)
-                .update() == 1;
+                        .param("to", to.name())
+                        .param("from", from.name())
+                        .param("now", utc(now))
+                        .param("tenantId", tenantId)
+                        .param("id", reservationId)
+                        .param("expectedVersion", expectedVersion)
+                        .update()
+                == 1;
     }
 
     /**
@@ -460,8 +490,7 @@ public class JdbcDineInStore {
      * reading this in the same second both see a free table, and the constraint is
      * what decides between them.
      */
-    public List<AvailabilityRow> tableAvailability(UUID tenantId, UUID locationId,
-            Instant from, Instant to) {
+    public List<AvailabilityRow> tableAvailability(UUID tenantId, UUID locationId, Instant from, Instant to) {
 
         return jdbc.sql("""
                 SELECT t.id AS table_id, t.code, t.seats, t.section_id, t.status,
@@ -480,8 +509,10 @@ public class JdbcDineInStore {
                   AND t.status = 'ACTIVE'
                 ORDER BY t.code
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
-                .param("from", utc(from)).param("to", utc(to))
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("from", utc(from))
+                .param("to", utc(to))
                 .query((row, number) -> new AvailabilityRow(
                         row.getObject("table_id", UUID.class),
                         row.getString("code"),
@@ -519,28 +550,28 @@ public class JdbcDineInStore {
                 VALUES (:id, :tenantId, :brandId, :locationId, :reservationId, :partySize,
                     :businessDate, :openedBy, :openedAt, :status,
                     :serviceCharge, :currency, 1, :now, :now)
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
-    public void occupyTable(UUID sessionId, UUID tableId, UUID tenantId, UUID locationId,
-            Instant joinedAt) {
+    public void occupyTable(UUID sessionId, UUID tableId, UUID tenantId, UUID locationId, Instant joinedAt) {
 
         jdbc.sql("""
                 INSERT INTO dinein.session_tables (
                     session_id, table_id, tenant_id, location_id, joined_at)
                 VALUES (:sessionId, :tableId, :tenantId, :locationId, :joinedAt)
                 """)
-                .param("sessionId", sessionId).param("tableId", tableId)
-                .param("tenantId", tenantId).param("locationId", locationId)
+                .param("sessionId", sessionId)
+                .param("tableId", tableId)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
                 .param("joinedAt", utc(joinedAt))
                 .update();
     }
 
     public Optional<SessionRow> findSession(UUID tenantId, UUID sessionId) {
         return jdbc.sql(SELECT_SESSION + " WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", sessionId)
+                .param("tenantId", tenantId)
+                .param("id", sessionId)
                 .query(JdbcDineInStore::mapSession)
                 .optional();
     }
@@ -553,7 +584,8 @@ public class JdbcDineInStore {
                    AND id IN (SELECT session_id FROM dinein.session_tables
                               WHERE table_id = :tableId AND left_at IS NULL)
                 """)
-                .param("tenantId", tenantId).param("tableId", tableId)
+                .param("tenantId", tenantId)
+                .param("tableId", tableId)
                 .query(JdbcDineInStore::mapSession)
                 .optional();
     }
@@ -564,7 +596,8 @@ public class JdbcDineInStore {
                    AND status IN ('OPEN', 'BILL_REQUESTED', 'SETTLING')
                  ORDER BY opened_at
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
                 .query(JdbcDineInStore::mapSession)
                 .list();
     }
@@ -579,9 +612,16 @@ public class JdbcDineInStore {
      *
      * @return whether the row moved
      */
-    public boolean moveSession(UUID tenantId, UUID sessionId, SessionStatus from,
-            SessionStatus to, int expectedVersion, Instant closedAt, Long settledTotalMinor,
-            String closeReasonCode, Instant now) {
+    public boolean moveSession(
+            UUID tenantId,
+            UUID sessionId,
+            SessionStatus from,
+            SessionStatus to,
+            int expectedVersion,
+            Instant closedAt,
+            Long settledTotalMinor,
+            String closeReasonCode,
+            Instant now) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
@@ -604,9 +644,7 @@ public class JdbcDineInStore {
                        updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id
                    AND status = :from AND version = :expectedVersion
-                """)
-                .params(params)
-                .update() == 1;
+                """).params(params).update() == 1;
     }
 
     /** Every table this session has sat at, including any it has already left. */
@@ -616,7 +654,8 @@ public class JdbcDineInStore {
                 WHERE tenant_id = :tenantId AND session_id = :sessionId
                 ORDER BY joined_at
                 """)
-                .param("tenantId", tenantId).param("sessionId", sessionId)
+                .param("tenantId", tenantId)
+                .param("sessionId", sessionId)
                 .query((row, number) -> row.getObject("table_id", UUID.class))
                 .list();
     }
@@ -639,8 +678,10 @@ public class JdbcDineInStore {
                 WHERE so.session_id = :sessionId
                 RETURNING sequence
                 """)
-                .param("sessionId", sessionId).param("orderId", orderId)
-                .param("tenantId", tenantId).param("now", utc(now))
+                .param("sessionId", sessionId)
+                .param("orderId", orderId)
+                .param("tenantId", tenantId)
+                .param("now", utc(now))
                 .query((row, number) -> row.getInt("sequence"))
                 .single();
     }
@@ -651,54 +692,109 @@ public class JdbcDineInStore {
                 WHERE tenant_id = :tenantId AND session_id = :sessionId
                 ORDER BY sequence
                 """)
-                .param("tenantId", tenantId).param("sessionId", sessionId)
+                .param("tenantId", tenantId)
+                .param("sessionId", sessionId)
                 .query((row, number) -> row.getObject("order_id", UUID.class))
                 .list();
     }
 
     // ------------------------------------------------------------- row types
 
-    public record SettingsRow(UUID tenantId, UUID brandId, UUID locationId, QrMode qrMode,
-            int turnaroundMinutes, int guestSessionTtlMinutes, int serviceChargeRateBp,
-            int version) {
-    }
+    public record SettingsRow(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            QrMode qrMode,
+            int turnaroundMinutes,
+            int guestSessionTtlMinutes,
+            int serviceChargeRateBp,
+            int version) {}
 
-    public record SectionRow(UUID id, UUID tenantId, UUID brandId, UUID locationId, String code,
-            String displayName, int sortOrder, String status, int version) {
-    }
+    public record SectionRow(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            String code,
+            String displayName,
+            int sortOrder,
+            String status,
+            int version) {}
 
-    public record TableRow(UUID id, UUID tenantId, UUID brandId, UUID locationId, UUID sectionId,
-            String code, String displayName, int seats, boolean joinable, BigDecimal layoutX,
-            BigDecimal layoutY, String status, String qrTokenHash, Instant qrTokenRotatedAt,
-            int version) {
-    }
+    public record TableRow(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID sectionId,
+            String code,
+            String displayName,
+            int seats,
+            boolean joinable,
+            BigDecimal layoutX,
+            BigDecimal layoutY,
+            String status,
+            String qrTokenHash,
+            Instant qrTokenRotatedAt,
+            int version) {}
 
-    public record GuestSessionRow(UUID id, UUID tenantId, UUID brandId, UUID locationId,
-            UUID tableId, String tokenHash, QrMode qrMode, Instant issuedAt, Instant expiresAt,
-            Instant revokedAt, String revokedReason) {
-    }
+    public record GuestSessionRow(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID tableId,
+            String tokenHash,
+            QrMode qrMode,
+            Instant issuedAt,
+            Instant expiresAt,
+            Instant revokedAt,
+            String revokedReason) {}
 
-    public record ReservationRow(UUID id, UUID tenantId, UUID brandId, UUID locationId,
-            UUID customerAccountId, String guestNameEncrypted, String guestPhoneEncrypted,
-            String guestPhoneLookupHash, String secondaryPhoneEncrypted, String noteEncrypted,
-            int partySize, Instant requestedFrom, Instant requestedTo, int turnaroundMinutes,
-            ReservationStatus status, UUID sourceChannelId, String createdBy, int version) {
-    }
+    public record ReservationRow(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID customerAccountId,
+            String guestNameEncrypted,
+            String guestPhoneEncrypted,
+            String guestPhoneLookupHash,
+            String secondaryPhoneEncrypted,
+            String noteEncrypted,
+            int partySize,
+            Instant requestedFrom,
+            Instant requestedTo,
+            int turnaroundMinutes,
+            ReservationStatus status,
+            UUID sourceChannelId,
+            String createdBy,
+            int version) {}
 
-    public record SessionRow(UUID id, UUID tenantId, UUID brandId, UUID locationId,
-            UUID reservationId, Integer partySize, LocalDate businessDate, String openedBy,
-            Instant openedAt, SessionStatus status, Integer serviceChargeRateBpSnapshot,
-            String currency, Long settledTotalMinor, Instant closedAt, String closeReasonCode,
-            int version) {
-    }
+    public record SessionRow(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID reservationId,
+            Integer partySize,
+            LocalDate businessDate,
+            String openedBy,
+            Instant openedAt,
+            SessionStatus status,
+            Integer serviceChargeRateBpSnapshot,
+            String currency,
+            Long settledTotalMinor,
+            Instant closedAt,
+            String closeReasonCode,
+            int version) {}
 
     /**
      * @param booked   a confirmed or seated booking overlaps the asked-for window
      * @param occupied somebody is sitting there now, which is a different fact
      */
-    public record AvailabilityRow(UUID tableId, String code, int seats, UUID sectionId,
-            String status, boolean booked, boolean occupied) {
-    }
+    public record AvailabilityRow(
+            UUID tableId, String code, int seats, UUID sectionId, String status, boolean booked, boolean occupied) {}
 
     // --------------------------------------------------------------- mapping
 

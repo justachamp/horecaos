@@ -1,5 +1,6 @@
 package uz.horecaos.platform.payments.web.payme;
 
+import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -7,9 +8,6 @@ import java.time.Clock;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.UUID;
-
-import jakarta.servlet.http.HttpServletRequest;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -19,11 +17,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.payments.application.PaymentBindingResolver;
 import uz.horecaos.platform.payments.domain.CallbackKind;
 import uz.horecaos.platform.payments.domain.PaymentProviderType;
@@ -122,9 +118,13 @@ public class PaymeMerchantApiController {
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
-    public PaymeMerchantApiController(PaymentBindingResolver bindings, PaymeCredentials credentials,
-            PaymeMerchantApi merchantApi, JdbcProviderCallbackStore callbacks,
-            ObjectMapper objectMapper, Clock clock) {
+    public PaymeMerchantApiController(
+            PaymentBindingResolver bindings,
+            PaymeCredentials credentials,
+            PaymeMerchantApi merchantApi,
+            JdbcProviderCallbackStore callbacks,
+            ObjectMapper objectMapper,
+            Clock clock) {
         this.bindings = bindings;
         this.credentials = credentials;
         this.merchantApi = merchantApi;
@@ -141,8 +141,8 @@ public class PaymeMerchantApiController {
      * a non-POST arrival, and returning it needs a mapping that receives one.
      */
     @RequestMapping(PATH)
-    public ResponseEntity<Map<String, Object>> handle(@PathVariable("binding") String segment,
-            HttpServletRequest request) {
+    public ResponseEntity<Map<String, Object>> handle(
+            @PathVariable("binding") String segment, HttpServletRequest request) {
 
         Arrival arrival = new Arrival();
         Map<String, Object> envelope;
@@ -181,8 +181,7 @@ public class PaymeMerchantApiController {
      * Everything that may fail, so that the caller above has exactly one place to
      * turn a failure into a body.
      */
-    private Map<String, Object> run(String segment, HttpServletRequest request, Arrival arrival)
-            throws IOException {
+    private Map<String, Object> run(String segment, HttpServletRequest request, Arrival arrival) throws IOException {
 
         arrival.binding = bindings.byCallbackSegment(segment)
                 .filter(candidate -> candidate.providerType() == PaymentProviderType.PAYME)
@@ -224,7 +223,8 @@ public class PaymeMerchantApiController {
 
         if (root != null && root.isObject()) {
             arrival.requestId = requestIdOf(root);
-            arrival.method = root.path("method").isString() ? root.path("method").asString() : null;
+            arrival.method =
+                    root.path("method").isString() ? root.path("method").asString() : null;
             arrival.providerReference = providerReferenceOf(root, arrival.requestId);
         }
 
@@ -287,16 +287,28 @@ public class PaymeMerchantApiController {
                     ? CallbackKind.PAYME_SET_FISCAL_DATA
                     : CallbackKind.PAYME_RPC;
 
-            callbacks.record(UUID.randomUUID(), arrival.binding.tenantId(),
-                    PaymentProviderType.PAYME, arrival.binding.bindingId(), kind,
-                    truncate(arrival.reference(), REFERENCE_LIMIT), sha256(arrival.body),
+            callbacks.record(
+                    UUID.randomUUID(),
+                    arrival.binding.tenantId(),
+                    PaymentProviderType.PAYME,
+                    arrival.binding.bindingId(),
+                    kind,
+                    truncate(arrival.reference(), REFERENCE_LIMIT),
+                    sha256(arrival.body),
                     // Payme's Basic credential is the analogue of Click's signature:
                     // it is the whole of the authentication, and a run of failures
                     // on one binding is a missed rotation or somebody probing.
-                    arrival.authenticated, null, arrival.responseCode, clock.instant(), null, null);
+                    arrival.authenticated,
+                    null,
+                    arrival.responseCode,
+                    clock.instant(),
+                    null,
+                    null);
         } catch (RuntimeException failure) {
-            log.warn("A Payme arrival on {} could not be recorded; the response is unaffected.",
-                    arrival.binding, failure);
+            log.warn(
+                    "A Payme arrival on {} could not be recorded; the response is unaffected.",
+                    arrival.binding,
+                    failure);
         }
     }
 

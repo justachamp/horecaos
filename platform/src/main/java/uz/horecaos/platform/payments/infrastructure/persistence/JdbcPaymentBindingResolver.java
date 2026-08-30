@@ -5,10 +5,8 @@ import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.payments.application.PaymentBindingResolver;
 import uz.horecaos.platform.payments.domain.PaymentProviderType;
@@ -45,8 +43,8 @@ public class JdbcPaymentBindingResolver implements PaymentBindingResolver {
     }
 
     @Override
-    public Optional<ProviderBinding> resolve(UUID tenantId, UUID legalEntityId,
-            PaymentProviderType providerType, LocalDate businessDate) {
+    public Optional<ProviderBinding> resolve(
+            UUID tenantId, UUID legalEntityId, PaymentProviderType providerType, LocalDate businessDate) {
         return jdbc.sql(SELECT + """
                  WHERE tenant_id = :tenantId
                    AND legal_entity_id = :legalEntityId
@@ -55,8 +53,10 @@ public class JdbcPaymentBindingResolver implements PaymentBindingResolver {
                    AND effective_from <= :businessDate
                    AND (effective_until IS NULL OR effective_until > :businessDate)
                 """)
-                .param("tenantId", tenantId).param("legalEntityId", legalEntityId)
-                .param("providerType", providerType.name()).param("businessDate", businessDate)
+                .param("tenantId", tenantId)
+                .param("legalEntityId", legalEntityId)
+                .param("providerType", providerType.name())
+                .param("businessDate", businessDate)
                 .query(JdbcPaymentBindingResolver::map)
                 .optional();
     }

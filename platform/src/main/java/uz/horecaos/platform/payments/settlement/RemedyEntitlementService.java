@@ -4,10 +4,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.payments.api.EntitlementBenefit;
 import uz.horecaos.platform.payments.api.EntitlementScope;
 import uz.horecaos.platform.payments.api.RemedyEntitlementPort;
@@ -45,8 +43,7 @@ public class RemedyEntitlementService implements RemedyEntitlementPort {
 
     @Override
     @Transactional(readOnly = true)
-    public List<GrantedEntitlement> available(UUID tenantId, UUID brandId,
-            UUID customerAccountId, Instant at) {
+    public List<GrantedEntitlement> available(UUID tenantId, UUID brandId, UUID customerAccountId, Instant at) {
         return store.spendableEntitlements(tenantId, brandId, customerAccountId, at).stream()
                 .map(RemedyEntitlementService::toGranted)
                 .toList();
@@ -56,8 +53,8 @@ public class RemedyEntitlementService implements RemedyEntitlementPort {
     @Transactional
     public RedemptionOutcome redeem(RedeemCommand command) {
         Instant now = clock.instant();
-        JdbcRemedyStore.EntitlementRow entitlement =
-                store.findEntitlement(command.tenantId(), command.entitlementId()).orElse(null);
+        JdbcRemedyStore.EntitlementRow entitlement = store.findEntitlement(command.tenantId(), command.entitlementId())
+                .orElse(null);
         if (entitlement == null) {
             return RedemptionOutcome.refused("NOT_FOUND");
         }
@@ -83,8 +80,8 @@ public class RemedyEntitlementService implements RemedyEntitlementPort {
         long subtotal = command.subtotalDiscountMinor();
         long delivery = command.deliveryDiscountMinor();
         if (subtotal < 0 || delivery < 0) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A redemption takes a non-negative amount off each component");
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "A redemption takes a non-negative amount off each component");
         }
         // The refusals from here down are about the amount rather than about the
         // grant, so they report the uses that are still there: pricing that read
@@ -108,8 +105,14 @@ public class RemedyEntitlementService implements RemedyEntitlementPort {
         // retried order placement a retry instead of a second use. Consuming
         // first would spend a use that the conflicting insert then abandons.
         boolean inserted = store.insertRedemption(new JdbcRemedyStore.RedemptionRow(
-                UUID.randomUUID(), command.tenantId(), command.entitlementId(), command.orderId(),
-                subtotal, delivery, command.currency(), now));
+                UUID.randomUUID(),
+                command.tenantId(),
+                command.entitlementId(),
+                command.orderId(),
+                subtotal,
+                delivery,
+                command.currency(),
+                now));
         if (!inserted) {
             return RedemptionOutcome.took(entitlement.usesRemaining());
         }
@@ -118,8 +121,8 @@ public class RemedyEntitlementService implements RemedyEntitlementPort {
             // Read as available a moment ago and gone now: another order took the
             // last use between the two statements. Thrown rather than refused so
             // this transaction rolls back and takes its redemption row with it.
-            throw new ApiException(ErrorCode.STALE_VERSION,
-                    "This entitlement was redeemed concurrently. Re-read it and re-quote.");
+            throw new ApiException(
+                    ErrorCode.STALE_VERSION, "This entitlement was redeemed concurrently. Re-read it and re-quote.");
         }
         return RedemptionOutcome.took(entitlement.usesRemaining() - 1);
     }
@@ -143,8 +146,16 @@ public class RemedyEntitlementService implements RemedyEntitlementPort {
     }
 
     private static GrantedEntitlement toGranted(JdbcRemedyStore.EntitlementRow row) {
-        return new GrantedEntitlement(row.id(), row.brandId(), row.appliesTo(), row.benefit(),
-                row.percentBasisPoints(), row.amountMinor(), row.maximumMinor(), row.currency(),
-                row.usesRemaining(), row.expiresAt());
+        return new GrantedEntitlement(
+                row.id(),
+                row.brandId(),
+                row.appliesTo(),
+                row.benefit(),
+                row.percentBasisPoints(),
+                row.amountMinor(),
+                row.maximumMinor(),
+                row.currency(),
+                row.usesRemaining(),
+                row.expiresAt());
     }
 }

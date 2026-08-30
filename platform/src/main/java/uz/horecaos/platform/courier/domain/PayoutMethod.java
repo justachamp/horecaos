@@ -9,7 +9,6 @@ package uz.horecaos.platform.courier.domain;
  * of what would otherwise be an off-books arrangement.
  */
 public enum PayoutMethod {
-
     CASH_AT_BRANCH,
     BANK_TRANSFER,
     CARD_TRANSFER

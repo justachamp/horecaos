@@ -7,10 +7,8 @@ import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.marketing.domain.AudiencePredicate;
 import uz.horecaos.platform.marketing.domain.CampaignStatus;
 import uz.horecaos.platform.marketing.domain.EngagementPolicy;
@@ -61,8 +59,7 @@ class EngagementPolicyTests {
         EngagementPolicy platform = EngagementPolicy.platformDefault();
 
         EngagementPolicy tighter = platform.tightenedBy(new EngagementOverride(
-                LocalTime.of(20, 0), LocalTime.of(11, 0), ZoneId.of("Asia/Tashkent"),
-                1, 4, 200L, "UZS"));
+                LocalTime.of(20, 0), LocalTime.of(11, 0), ZoneId.of("Asia/Tashkent"), 1, 4, 200L, "UZS"));
 
         assertThat(tighter.messagesPer7Days()).isEqualTo(1);
         assertThat(tighter.messagesPer30Days()).isEqualTo(4);
@@ -72,13 +69,12 @@ class EngagementPolicyTests {
         // one tenant's aggressive sending degrades delivery for every other tenant
         // on the same sender. That externality is what makes this refusal the
         // platform's decision rather than the tenant's.
-        assertThatThrownBy(() -> platform.tightenedBy(new EngagementOverride(
-                null, null, null, 10, null, null, null)))
+        assertThatThrownBy(() -> platform.tightenedBy(new EngagementOverride(null, null, null, 10, null, null, null)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("7-day cap");
 
-        assertThatThrownBy(() -> platform.tightenedBy(new EngagementOverride(
-                LocalTime.of(23, 0), null, null, null, null, null, null)))
+        assertThatThrownBy(() -> platform.tightenedBy(
+                        new EngagementOverride(LocalTime.of(23, 0), null, null, null, null, null, null)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Quiet hours");
     }
@@ -87,8 +83,10 @@ class EngagementPolicyTests {
     @DisplayName("nothing reaches SENDING except through an approval")
     void theCampaignStateMachineRefusesAnUnapprovedSend() {
         assertThat(CampaignStatus.DRAFT.canTransitionTo(CampaignStatus.SENDING)).isFalse();
-        assertThat(CampaignStatus.IN_REVIEW.canTransitionTo(CampaignStatus.SENDING)).isFalse();
-        assertThat(CampaignStatus.APPROVED.canTransitionTo(CampaignStatus.SENDING)).isTrue();
+        assertThat(CampaignStatus.IN_REVIEW.canTransitionTo(CampaignStatus.SENDING))
+                .isFalse();
+        assertThat(CampaignStatus.APPROVED.canTransitionTo(CampaignStatus.SENDING))
+                .isTrue();
 
         // A campaign that stopped at its ceiling and can be restarted is a ceiling
         // that only delays the overspend.
@@ -104,44 +102,44 @@ class EngagementPolicyTests {
         // An operator the type does not accept. Refused when the audience is saved
         // and a marketer is present to read the message, rather than at snapshot
         // build with an approval already granted.
-        assertThatThrownBy(() -> AudiencePredicate.textSet(PredicateType.RECENCY_DAYS,
-                PredicateOperator.IN, List.of("30")))
+        assertThatThrownBy(() ->
+                        AudiencePredicate.textSet(PredicateType.RECENCY_DAYS, PredicateOperator.IN, List.of("30")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("does not accept");
 
-        assertThatThrownBy(() -> AudiencePredicate.numeric(PredicateType.NET_SPEND_MINOR,
-                PredicateOperator.BETWEEN, 500_000L, 100L))
+        assertThatThrownBy(() -> AudiencePredicate.numeric(
+                        PredicateType.NET_SPEND_MINOR, PredicateOperator.BETWEEN, 500_000L, 100L))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("inverted range");
 
         // A locale outside the three HorecaOS sends in would produce an audience that
         // silently matches nobody, which is the failure mode that looks like a
         // working feature.
-        assertThatThrownBy(() -> AudiencePredicate.textSet(PredicateType.PREFERRED_LOCALE,
-                PredicateOperator.IN, List.of("fr")))
+        assertThatThrownBy(() ->
+                        AudiencePredicate.textSet(PredicateType.PREFERRED_LOCALE, PredicateOperator.IN, List.of("fr")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Locales must be among");
 
-        assertThat(AudiencePredicate.numeric(PredicateType.RECENCY_DAYS,
-                PredicateOperator.AT_LEAST, 90L, null).type())
+        assertThat(AudiencePredicate.numeric(PredicateType.RECENCY_DAYS, PredicateOperator.AT_LEAST, 90L, null)
+                        .type())
                 .isEqualTo(PredicateType.RECENCY_DAYS);
     }
 
     @Test
     @DisplayName("the catalogue has no predicate over free text or a raw date of birth")
     void theCatalogueIsNotABehaviouralProfile() {
-        List<String> names = java.util.Arrays.stream(PredicateType.values())
-                .map(Enum::name)
-                .toList();
+        List<String> names =
+                java.util.Arrays.stream(PredicateType.values()).map(Enum::name).toList();
 
         // A predicate over what somebody searched for, or over what they wrote in a
         // review, is a behavioural profile. ADR 0044 says this catalogue is
         // deliberately not one, and the assertion is here so adding such a
         // predicate is a deliberate act with a failing test in front of it.
-        assertThat(names).noneMatch(name -> name.contains("SEARCH")
-                || name.contains("REVIEW")
-                || name.contains("TEXT")
-                || name.contains("NOTE")
-                || name.equals("DATE_OF_BIRTH"));
+        assertThat(names)
+                .noneMatch(name -> name.contains("SEARCH")
+                        || name.contains("REVIEW")
+                        || name.contains("TEXT")
+                        || name.contains("NOTE")
+                        || name.equals("DATE_OF_BIRTH"));
     }
 }

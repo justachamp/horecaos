@@ -9,7 +9,6 @@ package uz.horecaos.platform.tenancy.api;
  * different channels.
  */
 public enum FulfillmentMode {
-
     DELIVERY,
     PICKUP,
     DINE_IN

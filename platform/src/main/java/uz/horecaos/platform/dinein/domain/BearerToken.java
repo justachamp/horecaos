@@ -1,9 +1,9 @@
 package uz.horecaos.platform.dinein.domain;
 
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HexFormat;
 
@@ -42,12 +42,10 @@ public final class BearerToken {
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
-    private BearerToken() {
-    }
+    private BearerToken() {}
 
     /** A freshly minted token and the digest to store for it. */
-    public record Issued(String plaintext, String hash) {
-    }
+    public record Issued(String plaintext, String hash) {}
 
     public static Issued issue() {
         byte[] material = new byte[TOKEN_BYTES];
@@ -64,8 +62,8 @@ public final class BearerToken {
      */
     public static String hash(String plaintext) {
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(plaintext.getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256").digest(plaintext.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException impossible) {
             // SHA-256 is mandatory in every JRE. If it is genuinely absent, the
             // platform cannot authenticate a scan at all and must not continue as

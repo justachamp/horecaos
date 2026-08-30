@@ -8,19 +8,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-
 import uz.horecaos.platform.audit.api.ActorRef;
-import uz.horecaos.platform.audit.api.AuditClass;
-import uz.horecaos.platform.audit.api.AuditFact;
-import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.ApprovalAction;
+import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.ApprovalRequestCommand;
 import uz.horecaos.platform.audit.api.ApprovalService;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.web.api.ApiException;
@@ -63,8 +61,11 @@ public class FailureOperationsService {
     private final Clock clock;
 
     public FailureOperationsService(
-            JdbcClient jdbc, AuditRecorder audit, ApprovalService approvals,
-            TransactionTemplate unitOfWork, Clock clock) {
+            JdbcClient jdbc,
+            AuditRecorder audit,
+            ApprovalService approvals,
+            TransactionTemplate unitOfWork,
+            Clock clock) {
         this.jdbc = jdbc;
         this.audit = audit;
         this.approvals = approvals;
@@ -84,8 +85,7 @@ public class FailureOperationsService {
      *                       shape and must not produce the same hash
      */
     private ApprovalOutcome approvalFor(
-            FailureCategory category, UUID tenantId, String parametersHash,
-            ActorRef actor, String reason) {
+            FailureCategory category, UUID tenantId, String parametersHash, ActorRef actor, String reason) {
 
         if (!category.requiresSecondApprover()) {
             return new ApprovalOutcome.NotRequired();
@@ -125,8 +125,7 @@ public class FailureOperationsService {
      * maker could spend that signature on whichever row they liked. Single use
      * bounds the count at one; only the hash binds it to the row that was read.
      */
-    private static String inboxParametersHash(
-            String consumerName, UUID eventId, FailureCategory category) {
+    private static String inboxParametersHash(String consumerName, UUID eventId, FailureCategory category) {
 
         return parametersHash("inbox", consumerName, eventId.toString(), category.name());
     }
@@ -146,8 +145,7 @@ public class FailureOperationsService {
         }
         try {
             java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
-            byte[] hashed = digest.digest(
-                    canonical.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            byte[] hashed = digest.digest(canonical.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
             return java.util.HexFormat.of().formatHex(hashed);
         } catch (java.security.NoSuchAlgorithmException unreachable) {
             throw new IllegalStateException("SHA-256 is required", unreachable);
@@ -381,7 +379,13 @@ public class FailureOperationsService {
                 .update();
 
         if (updated == 1) {
-            record("integration.inbox.retried", tenantId.get(), "InboxMessage", eventId, actor, reason,
+            record(
+                    "integration.inbox.retried",
+                    tenantId.get(),
+                    "InboxMessage",
+                    eventId,
+                    actor,
+                    reason,
                     Map.of("consumer", consumerName));
         }
         return updated == 1;
@@ -399,8 +403,8 @@ public class FailureOperationsService {
             UUID eventId, FailureCategory category, ActorRef actor, String reason, String evidenceReference) {
 
         requireResolutionInputs(category, reason, evidenceReference);
-        return report(unitOfWork.execute(status ->
-                resolveOutboxWithin(eventId, category, actor, reason, evidenceReference)));
+        return report(
+                unitOfWork.execute(status -> resolveOutboxWithin(eventId, category, actor, reason, evidenceReference)));
     }
 
     private Resolution resolveOutboxWithin(
@@ -411,8 +415,8 @@ public class FailureOperationsService {
             return Resolution.unchanged();
         }
 
-        ApprovalOutcome approval = approvalFor(
-                category, tenantId.get(), outboxParametersHash(eventId, category), actor, reason);
+        ApprovalOutcome approval =
+                approvalFor(category, tenantId.get(), outboxParametersHash(eventId, category), actor, reason);
         if (!approval.mayProceed()) {
             // Returned, not thrown: this transaction has to commit the PENDING
             // row it just wrote. The refusal is raised by report(), outside.
@@ -444,24 +448,38 @@ public class FailureOperationsService {
                 .update();
 
         if (updated == 1) {
-            record("integration.outbox.resolved", tenantId.get(), "OutboxEvent", eventId, actor, reason,
+            record(
+                    "integration.outbox.resolved",
+                    tenantId.get(),
+                    "OutboxEvent",
+                    eventId,
+                    actor,
+                    reason,
                     Map.of("category", category.name(), "evidence", String.valueOf(evidenceReference)));
         }
         return Resolution.applied(updated == 1);
     }
 
     public boolean resolveInboxMessage(
-            String consumerName, UUID eventId, FailureCategory category,
-            ActorRef actor, String reason, String evidenceReference) {
+            String consumerName,
+            UUID eventId,
+            FailureCategory category,
+            ActorRef actor,
+            String reason,
+            String evidenceReference) {
 
         requireResolutionInputs(category, reason, evidenceReference);
-        return report(unitOfWork.execute(status -> resolveInboxWithin(
-                consumerName, eventId, category, actor, reason, evidenceReference)));
+        return report(unitOfWork.execute(
+                status -> resolveInboxWithin(consumerName, eventId, category, actor, reason, evidenceReference)));
     }
 
     private Resolution resolveInboxWithin(
-            String consumerName, UUID eventId, FailureCategory category,
-            ActorRef actor, String reason, String evidenceReference) {
+            String consumerName,
+            UUID eventId,
+            FailureCategory category,
+            ActorRef actor,
+            String reason,
+            String evidenceReference) {
 
         Optional<UUID> tenantId = inboxTenant(consumerName, eventId);
         if (tenantId.isEmpty()) {
@@ -469,8 +487,7 @@ public class FailureOperationsService {
         }
 
         ApprovalOutcome approval = approvalFor(
-                category, tenantId.get(),
-                inboxParametersHash(consumerName, eventId, category), actor, reason);
+                category, tenantId.get(), inboxParametersHash(consumerName, eventId, category), actor, reason);
         if (!approval.mayProceed()) {
             return Resolution.awaitingApproval(approval);
         }
@@ -501,7 +518,13 @@ public class FailureOperationsService {
                 .update();
 
         if (updated == 1) {
-            record("integration.inbox.resolved", tenantId.get(), "InboxMessage", eventId, actor, reason,
+            record(
+                    "integration.inbox.resolved",
+                    tenantId.get(),
+                    "InboxMessage",
+                    eventId,
+                    actor,
+                    reason,
                     Map.of("consumer", consumerName, "category", category.name()));
         }
         return Resolution.applied(updated == 1);
@@ -541,8 +564,7 @@ public class FailureOperationsService {
         }
     }
 
-    private static void requireResolutionInputs(
-            FailureCategory category, String reason, String evidenceReference) {
+    private static void requireResolutionInputs(FailureCategory category, String reason, String evidenceReference) {
 
         if (reason == null || reason.isBlank()) {
             throw new IllegalArgumentException("Resolving a failure requires a reason");
@@ -556,7 +578,9 @@ public class FailureOperationsService {
 
     private Optional<UUID> outboxTenant(UUID eventId) {
         return jdbc.sql("SELECT tenant_id FROM integration.outbox_events WHERE event_id = :id")
-                .param("id", eventId).query(UUID.class).optional();
+                .param("id", eventId)
+                .query(UUID.class)
+                .optional();
     }
 
     private Optional<UUID> inboxTenant(String consumerName, UUID eventId) {
@@ -564,13 +588,20 @@ public class FailureOperationsService {
                 SELECT tenant_id FROM integration.inbox_messages
                  WHERE consumer_name = :consumerName AND event_id = :id
                 """)
-                .param("consumerName", consumerName).param("id", eventId)
-                .query(UUID.class).optional();
+                .param("consumerName", consumerName)
+                .param("id", eventId)
+                .query(UUID.class)
+                .optional();
     }
 
     private void record(
-            String actionCode, UUID tenantId, String targetType, UUID targetId,
-            ActorRef actor, String reason, Map<String, Object> changes) {
+            String actionCode,
+            UUID tenantId,
+            String targetType,
+            UUID targetId,
+            ActorRef actor,
+            String reason,
+            Map<String, Object> changes) {
 
         audit.record(AuditFact.of(actionCode, AuditClass.BUSINESS)
                 .by(actor)
@@ -628,12 +659,12 @@ public class FailureOperationsService {
         private static String message(ApprovalOutcome outcome) {
             return switch (outcome) {
                 case ApprovalOutcome.Pending pending ->
-                        ("Resolving this failure requires a second approver. Approval request %s is "
-                                + "pending; a checker has to decide it before this can be resolved.")
-                                .formatted(pending.requestId());
+                    ("Resolving this failure requires a second approver. Approval request %s is "
+                                    + "pending; a checker has to decide it before this can be resolved.")
+                            .formatted(pending.requestId());
                 case ApprovalOutcome.Declined declined ->
-                        "Approval request %s was declined, so this failure cannot be resolved"
-                                .formatted(declined.requestId());
+                    "Approval request %s was declined, so this failure cannot be resolved"
+                            .formatted(declined.requestId());
                 default -> "Resolving this failure requires a second approver";
             };
         }
@@ -641,11 +672,9 @@ public class FailureOperationsService {
         private static Map<String, Object> properties(ApprovalOutcome outcome) {
             return switch (outcome) {
                 case ApprovalOutcome.Pending pending ->
-                        Map.of("approvalRequestId", pending.requestId().toString(),
-                                "approvalStatus", "PENDING");
+                    Map.of("approvalRequestId", pending.requestId().toString(), "approvalStatus", "PENDING");
                 case ApprovalOutcome.Declined declined ->
-                        Map.of("approvalRequestId", declined.requestId().toString(),
-                                "approvalStatus", "DECLINED");
+                    Map.of("approvalRequestId", declined.requestId().toString(), "approvalStatus", "DECLINED");
                 default -> Map.of();
             };
         }
@@ -653,8 +682,13 @@ public class FailureOperationsService {
 
     /** A redacted view of failed work, safe to return to operations. */
     public record FailureSummary(
-            UUID id, UUID tenantId, String eventType, String status,
-            int attemptCount, String errorCode, String lastError) { }
+            UUID id,
+            UUID tenantId,
+            String eventType,
+            String status,
+            int attemptCount,
+            String errorCode,
+            String lastError) {}
 
     /**
      * One outbox event, in the detail a decision needs — and not the payload.
@@ -747,7 +781,7 @@ public class FailureOperationsService {
             String resolutionReason,
             String resolutionEvidence,
             Instant createdAt,
-            Instant updatedAt) { }
+            Instant updatedAt) {}
 
     /**
      * One consumer's copy of one event. The payload is absent for the reasons
@@ -794,5 +828,5 @@ public class FailureOperationsService {
             String resolvedBy,
             String resolutionReason,
             String resolutionEvidence,
-            Instant updatedAt) { }
+            Instant updatedAt) {}
 }

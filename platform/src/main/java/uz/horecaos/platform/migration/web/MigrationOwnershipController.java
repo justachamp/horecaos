@@ -1,15 +1,12 @@
 package uz.horecaos.platform.migration.web;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
-
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.migration.api.MigrationCapability;
@@ -50,7 +47,8 @@ public class MigrationOwnershipController {
      */
     @GetMapping
     @RequiresCapability(value = Capability.MIGRATION_READ, scope = ScopeType.PLATFORM)
-    @Operation(summary = "Resolve capability ownership at a tenant, brand, or branch",
+    @Operation(
+            summary = "Resolve capability ownership at a tenant, brand, or branch",
             description = "Most specific scope wins: location, then brand, then tenant. A "
                     + "capability no scope covers resolves to legacy ownership, never to unowned, "
                     + "because a capability the migration has not reached is not thereby unowned.")

@@ -89,8 +89,7 @@ public record ExtractionSpec(
 
     private static void requireIdentifier(String value, String what) {
         if (value == null || !IDENTIFIER.matcher(value).matches()) {
-            throw new IllegalArgumentException(
-                    "A %s is a lower-case SQL identifier: %s".formatted(what, value));
+            throw new IllegalArgumentException("A %s is a lower-case SQL identifier: %s".formatted(what, value));
         }
     }
 }

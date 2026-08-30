@@ -1,13 +1,14 @@
 package uz.horecaos.platform.customers;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
+
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
-
 import javax.sql.DataSource;
-
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
@@ -16,12 +17,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.json.JsonMapper;
-
-import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.customers.api.CustomerIdentityPolicy;
 import uz.horecaos.platform.customers.application.ConsentService;
 import uz.horecaos.platform.customers.application.CustomerIdentityService;
@@ -35,9 +32,7 @@ import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.infrastructure.protection.DataEncryptionKeyProvider;
 import uz.horecaos.platform.iam.infrastructure.protection.EnvelopeFieldProtection;
 import uz.horecaos.platform.iam.infrastructure.secrets.EnvironmentSecretResolver;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
+import uz.horecaos.platform.support.TestDatabase;
 
 /**
  * Customer identity, personal data, and consent (ADR 0015, ADR 0029).
@@ -69,8 +64,8 @@ class CustomerIdentityTests {
 
     @BeforeAll
     static void startDatabase() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
-                "Docker is required for customer identity tests");
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(), "Docker is required for customer identity tests");
         db = TestDatabase.migrated();
         jdbcUrl = db.jdbcUrl();
         username = db.username();
@@ -89,8 +84,9 @@ class CustomerIdentityTests {
         DataSource dataSource = db.dataSource();
         jdbc = JdbcClient.create(dataSource);
         jdbc.sql("TRUNCATE TABLE customer.consent_decisions, customer.addresses, "
-                + "customer.contact_points, customer.brand_profiles, customer.principal_links, "
-                + "customer.customer_accounts CASCADE").update();
+                        + "customer.contact_points, customer.brand_profiles, customer.principal_links, "
+                        + "customer.customer_accounts CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         insertTenant(TENANT, "tenant-shared", CustomerIdentityPolicy.TENANT_SHARED);
         insertTenant(OTHER_TENANT, "tenant-isolated", CustomerIdentityPolicy.BRAND_ISOLATED);
@@ -104,11 +100,12 @@ class CustomerIdentityTests {
         // rather than stubbed into agreeing.
         FieldProtection protection = new EnvelopeFieldProtection(new DataEncryptionKeyProvider(
                 new EnvironmentSecretResolver(
-                        java.util.Map.of("horecaos.secrets.data_encryption.platform.kek",
-                                "a-test-key-encryption-key")::get,
+                        java.util.Map.of("horecaos.secrets.data_encryption.platform.kek", "a-test-key-encryption-key")
+                                ::get,
                         clock),
                 "local"));
-        profiles = new CustomerProfileService(store, protection, JsonMapper.builder().build(), clock);
+        profiles = new CustomerProfileService(
+                store, protection, JsonMapper.builder().build(), clock);
         consent = new ConsentService(store, clock);
     }
 
@@ -143,7 +140,8 @@ class CustomerIdentityTests {
         var atBrandA = identity.resolve(OTHER_TENANT, BRAND_A, ISSUER, "subject-3");
         var atBrandB = identity.resolve(OTHER_TENANT, BRAND_B, ISSUER, "subject-3");
 
-        assertThat(atBrandB.account().accountId()).isNotEqualTo(atBrandA.account().accountId());
+        assertThat(atBrandB.account().accountId())
+                .isNotEqualTo(atBrandA.account().accountId());
         assertThat(atBrandB.created()).isTrue();
         assertThat(atBrandB.policy()).isEqualTo(CustomerIdentityPolicy.BRAND_ISOLATED);
         // The partition is on the row, so the boundary survives a later read that
@@ -210,10 +208,9 @@ class CustomerIdentityTests {
         // only ever be 1 or 2, so it says the same thing about an account created
         // under the tenant's first decision and its third, and the migration that
         // needs a starting point has none.
-        supersedeIdentityPolicy(TENANT, 1, CustomerIdentityPolicy.BRAND_ISOLATED,
-                Instant.parse("2026-08-20T06:00:00Z"));
-        supersedeIdentityPolicy(TENANT, 2, CustomerIdentityPolicy.TENANT_SHARED,
-                Instant.parse("2026-08-20T12:00:00Z"));
+        supersedeIdentityPolicy(
+                TENANT, 1, CustomerIdentityPolicy.BRAND_ISOLATED, Instant.parse("2026-08-20T06:00:00Z"));
+        supersedeIdentityPolicy(TENANT, 2, CustomerIdentityPolicy.TENANT_SHARED, Instant.parse("2026-08-20T12:00:00Z"));
 
         var resolved = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-version-three");
 
@@ -244,14 +241,15 @@ class CustomerIdentityTests {
         // governed. Here that would merge two brands' customers into one account
         // ten days early — the silent re-partitioning V0060 refused to let a
         // deployment do, arriving through a scheduled row instead.
-        supersedeIdentityPolicy(OTHER_TENANT, 1, CustomerIdentityPolicy.TENANT_SHARED,
-                Instant.parse("2026-09-01T00:00:00Z"));
+        supersedeIdentityPolicy(
+                OTHER_TENANT, 1, CustomerIdentityPolicy.TENANT_SHARED, Instant.parse("2026-09-01T00:00:00Z"));
 
         var atBrandA = identity.resolve(OTHER_TENANT, BRAND_A, ISSUER, "subject-future-cutover");
         var atBrandB = identity.resolve(OTHER_TENANT, BRAND_B, ISSUER, "subject-future-cutover");
 
         assertThat(atBrandA.policy()).isEqualTo(CustomerIdentityPolicy.BRAND_ISOLATED);
-        assertThat(atBrandB.account().accountId()).isNotEqualTo(atBrandA.account().accountId());
+        assertThat(atBrandB.account().accountId())
+                .isNotEqualTo(atBrandA.account().accountId());
         // Stamped with the version that actually governed them, not the one
         // waiting to.
         assertThat(policyVersionOf(atBrandA.account().accountId())).isEqualTo("1");
@@ -282,7 +280,8 @@ class CustomerIdentityTests {
         // the same two brands, one account after the cutover instead of two.
         var beforeAtA = identity.resolve(OTHER_TENANT, BRAND_A, ISSUER, "subject-window");
         var beforeAtB = identity.resolve(OTHER_TENANT, BRAND_B, ISSUER, "subject-window");
-        assertThat(beforeAtB.account().accountId()).isNotEqualTo(beforeAtA.account().accountId());
+        assertThat(beforeAtB.account().accountId())
+                .isNotEqualTo(beforeAtA.account().accountId());
 
         CustomerIdentityService afterCutover = new CustomerIdentityService(
                 store, new ConfiguredCustomerPolicyLookup(jdbc), Clock.fixed(cutover, ZoneOffset.UTC));
@@ -298,9 +297,9 @@ class CustomerIdentityTests {
         var inTenant = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-4");
         var inOther = identity.resolve(OTHER_TENANT, BRAND_A, ISSUER, "subject-4");
 
-        assertThat(inOther.account().accountId()).isNotEqualTo(inTenant.account().accountId());
-        assertThat(identity.find(TENANT, BRAND_A, ISSUER, "subject-4"))
-                .contains(inTenant.account());
+        assertThat(inOther.account().accountId())
+                .isNotEqualTo(inTenant.account().accountId());
+        assertThat(identity.find(TENANT, BRAND_A, ISSUER, "subject-4")).contains(inTenant.account());
     }
 
     @Test
@@ -313,8 +312,14 @@ class CustomerIdentityTests {
         // The partial unique index is what stops one person quietly owning two
         // accounts; without it the null partition would compare unequal to
         // itself and every TENANT_SHARED subject could be linked repeatedly.
-        assertThat(catchThrowable(() -> store.insertPrincipalLink(UUID.randomUUID(), TENANT, null,
-                strayAccount, ISSUER, "subject-5", Instant.parse("2026-08-21T12:00:00Z"))))
+        assertThat(catchThrowable(() -> store.insertPrincipalLink(
+                        UUID.randomUUID(),
+                        TENANT,
+                        null,
+                        strayAccount,
+                        ISSUER,
+                        "subject-5",
+                        Instant.parse("2026-08-21T12:00:00Z"))))
                 .isInstanceOf(org.springframework.dao.DuplicateKeyException.class);
         assertThat(resolved.account().accountId()).isNotNull();
     }
@@ -327,12 +332,15 @@ class CustomerIdentityTests {
         store.insertAccount(target, TENANT, null, 1, Instant.parse("2026-08-21T12:00:00Z"));
         jdbc.sql("UPDATE customer.customer_accounts SET status = 'MERGED', "
                         + "merged_into_account_id = :target WHERE id = :source")
-                .param("target", target).param("source", source.account().accountId())
+                .param("target", target)
+                .param("source", source.account().accountId())
                 .update();
 
         // The source row stays because immutable order snapshots point at it;
         // sign-in follows the redirect rather than resurrecting the tombstone.
-        assertThat(identity.resolve(TENANT, BRAND_A, ISSUER, "subject-6").account().accountId())
+        assertThat(identity.resolve(TENANT, BRAND_A, ISSUER, "subject-6")
+                        .account()
+                        .accountId())
                 .isEqualTo(target);
     }
 
@@ -344,9 +352,13 @@ class CustomerIdentityTests {
         store.insertAccount(second, TENANT, null, 1, Instant.parse("2026-08-21T12:00:00Z"));
 
         jdbc.sql("UPDATE customer.customer_accounts SET merged_into_account_id = :b WHERE id = :a")
-                .param("b", second).param("a", first.account().accountId()).update();
+                .param("b", second)
+                .param("a", first.account().accountId())
+                .update();
         jdbc.sql("UPDATE customer.customer_accounts SET merged_into_account_id = :a WHERE id = :b")
-                .param("a", first.account().accountId()).param("b", second).update();
+                .param("a", first.account().accountId())
+                .param("b", second)
+                .update();
 
         // Bad merge data must surface, not hang a customer's sign-in.
         assertThat(catchThrowable(() -> identity.resolve(TENANT, BRAND_A, ISSUER, "subject-7")))
@@ -360,24 +372,22 @@ class CustomerIdentityTests {
         var husband = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-8");
         var wife = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-9");
 
-        profiles.addContactPoint(TENANT, husband.account().accountId(),
-                ContactType.PHONE, "+998 90 111-22-33", true);
-        profiles.addContactPoint(TENANT, wife.account().accountId(),
-                ContactType.PHONE, "+998901112233", true);
+        profiles.addContactPoint(TENANT, husband.account().accountId(), ContactType.PHONE, "+998 90 111-22-33", true);
+        profiles.addContactPoint(TENANT, wife.account().accountId(), ContactType.PHONE, "+998901112233", true);
 
         // A household shares a phone and a recycled number changes owner, so a
         // unique constraint here would silently fuse two customers. The lookup
         // returns both and lets a human decide.
         assertThat(profiles.findAccountsByContact(TENANT, ContactType.PHONE, "+998901112233"))
-                .containsExactlyInAnyOrder(husband.account().accountId(), wife.account().accountId());
+                .containsExactlyInAnyOrder(
+                        husband.account().accountId(), wife.account().accountId());
     }
 
     @Test
     @DisplayName("differently formatted phone numbers find the same customer")
     void phoneNumbersAreNormalisedBeforeHashing() {
         var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-10");
-        profiles.addContactPoint(TENANT, account.account().accountId(),
-                ContactType.PHONE, "+998 (90) 111-22-33", true);
+        profiles.addContactPoint(TENANT, account.account().accountId(), ContactType.PHONE, "+998 (90) 111-22-33", true);
 
         // Uzbek numbers get written with spaces, dashes, and brackets in about
         // equal measure; without normalisation a support agent finds nobody.
@@ -389,11 +399,11 @@ class CustomerIdentityTests {
     @DisplayName("a phone number is never stored in clear and is not readable cross-tenant")
     void contactValuesAreEncryptedAndTenantBound() {
         var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-11");
-        profiles.addContactPoint(TENANT, account.account().accountId(),
-                ContactType.PHONE, "+998901112233", true);
+        profiles.addContactPoint(TENANT, account.account().accountId(), ContactType.PHONE, "+998901112233", true);
 
         String stored = jdbc.sql("SELECT encrypted_value FROM customer.contact_points")
-                .query(String.class).single();
+                .query(String.class)
+                .single();
         assertThat(stored).doesNotContain("998901112233");
 
         assertThat(profiles.revealContactPoints(TENANT, account.account().accountId(), "support-view"))
@@ -411,10 +421,10 @@ class CustomerIdentityTests {
     @DisplayName("a ciphertext moved to another row refuses to decrypt")
     void ciphertextIsBoundToItsRow() {
         var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-12");
-        UUID first = profiles.addContactPoint(TENANT, account.account().accountId(),
-                ContactType.PHONE, "+998901112233", true);
-        UUID second = profiles.addContactPoint(TENANT, account.account().accountId(),
-                ContactType.EMAIL, "someone@example.uz", false);
+        UUID first = profiles.addContactPoint(
+                TENANT, account.account().accountId(), ContactType.PHONE, "+998901112233", true);
+        UUID second = profiles.addContactPoint(
+                TENANT, account.account().accountId(), ContactType.EMAIL, "someone@example.uz", false);
 
         // Simulate an attacker with write access copying one row's ciphertext
         // onto another. The row id is bound into the AEAD associated data, so
@@ -422,10 +432,12 @@ class CustomerIdentityTests {
         jdbc.sql("UPDATE customer.contact_points SET encrypted_value = "
                         + "(SELECT encrypted_value FROM customer.contact_points WHERE id = :first) "
                         + "WHERE id = :second")
-                .param("first", first).param("second", second).update();
+                .param("first", first)
+                .param("second", second)
+                .update();
 
         assertThat(catchThrowable(() ->
-                profiles.revealContactPoints(TENANT, account.account().accountId(), "probe")))
+                        profiles.revealContactPoints(TENANT, account.account().accountId(), "probe")))
                 .isInstanceOf(FieldProtection.ProtectionIntegrityException.class);
     }
 
@@ -433,13 +445,29 @@ class CustomerIdentityTests {
     @DisplayName("an address is encrypted but its coordinates stay routable")
     void addressesEncryptTextButKeepCoordinates() {
         var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-13");
-        UUID addressId = profiles.addAddress(TENANT, account.account().accountId(), "Home",
-                new AddressFields("Amir Temur ko'chasi 12", null, "Toshkent", "Yunusobod",
-                        "100084", "2", "4", "12", "Do'kon ro'parasida"),
-                "Call on arrival", 41.3111, 69.2797, CoordinateSource.CUSTOMER_PIN);
+        UUID addressId = profiles.addAddress(
+                TENANT,
+                account.account().accountId(),
+                "Home",
+                new AddressFields(
+                        "Amir Temur ko'chasi 12",
+                        null,
+                        "Toshkent",
+                        "Yunusobod",
+                        "100084",
+                        "2",
+                        "4",
+                        "12",
+                        "Do'kon ro'parasida"),
+                "Call on arrival",
+                41.3111,
+                69.2797,
+                CoordinateSource.CUSTOMER_PIN);
 
         String stored = jdbc.sql("SELECT encrypted_fields FROM customer.addresses WHERE id = :id")
-                .param("id", addressId).query(String.class).single();
+                .param("id", addressId)
+                .query(String.class)
+                .single();
         assertThat(stored).doesNotContain("Amir Temur");
 
         assertThat(profiles.revealAddresses(TENANT, account.account().accountId(), "dispatch"))
@@ -457,14 +485,29 @@ class CustomerIdentityTests {
     @DisplayName("подъезд, этаж and ориентир survive the round trip and stay encrypted")
     void structuredAddressPartsAreStoredInsideTheEncryptedDocument() {
         var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-16");
-        profiles.addAddress(TENANT, account.account().accountId(), "Home",
-                new AddressFields("Chilonzor 9-kvartal, 4-uy", null, "Toshkent", "Chilonzor",
-                        null, "3", "7", "45", "Ko'k darvoza, dorixona ro'parasida"),
-                null, null, null, CoordinateSource.LANDMARK_ONLY);
+        profiles.addAddress(
+                TENANT,
+                account.account().accountId(),
+                "Home",
+                new AddressFields(
+                        "Chilonzor 9-kvartal, 4-uy",
+                        null,
+                        "Toshkent",
+                        "Chilonzor",
+                        null,
+                        "3",
+                        "7",
+                        "45",
+                        "Ko'k darvoza, dorixona ro'parasida"),
+                null,
+                null,
+                null,
+                CoordinateSource.LANDMARK_ONLY);
 
-        String stored = jdbc.sql("SELECT encrypted_fields FROM customer.addresses "
-                        + "WHERE customer_account_id = :id")
-                .param("id", account.account().accountId()).query(String.class).single();
+        String stored = jdbc.sql("SELECT encrypted_fields FROM customer.addresses " + "WHERE customer_account_id = :id")
+                .param("id", account.account().accountId())
+                .query(String.class)
+                .single();
 
         // The premise: these are inside the ciphertext, not beside it. A landmark
         // and a floor say where one identified person lives, so a clear column
@@ -481,8 +524,7 @@ class CustomerIdentityTests {
                     assertThat(address.fields().entrance()).isEqualTo("3");
                     assertThat(address.fields().floor()).isEqualTo("7");
                     assertThat(address.fields().apartment()).isEqualTo("45");
-                    assertThat(address.fields().landmark())
-                            .isEqualTo("Ko'k darvoza, dorixona ro'parasida");
+                    assertThat(address.fields().landmark()).isEqualTo("Ko'k darvoza, dorixona ro'parasida");
                 });
     }
 
@@ -493,17 +535,36 @@ class CustomerIdentityTests {
         UUID accountId = account.account().accountId();
 
         // Taken over the phone; nobody has geocoded it yet.
-        UUID pending = profiles.addAddress(TENANT, accountId, "Office",
-                new AddressFields("Amir Temur 108", null, "Toshkent", "Yunusobod",
-                        null, null, null, null, null),
-                null, null, null, CoordinateSource.NOT_GEOCODED);
+        UUID pending = profiles.addAddress(
+                TENANT,
+                accountId,
+                "Office",
+                new AddressFields("Amir Temur 108", null, "Toshkent", "Yunusobod", null, null, null, null, null),
+                null,
+                null,
+                null,
+                CoordinateSource.NOT_GEOCODED);
 
         // A mahalla house described by its landmark. This is a complete address
         // in this market, not a failed one.
-        UUID landmarkOnly = profiles.addAddress(TENANT, accountId, "Uy",
-                new AddressFields("Yangiobod mahallasi", null, "Toshkent", "Sergeli",
-                        null, null, null, null, "Katta chinor yonida"),
-                null, null, null, CoordinateSource.LANDMARK_ONLY);
+        UUID landmarkOnly = profiles.addAddress(
+                TENANT,
+                accountId,
+                "Uy",
+                new AddressFields(
+                        "Yangiobod mahallasi",
+                        null,
+                        "Toshkent",
+                        "Sergeli",
+                        null,
+                        null,
+                        null,
+                        null,
+                        "Katta chinor yonida"),
+                null,
+                null,
+                null,
+                CoordinateSource.LANDMARK_ONLY);
 
         // Both have a null coordinate pair. Without the source, a backfill
         // selecting on "latitude IS NULL" would re-query the landmark address on
@@ -521,32 +582,32 @@ class CustomerIdentityTests {
     void coordinateSourceAndCoordinatesMustAgree() {
         var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-18");
         UUID accountId = account.account().accountId();
-        AddressFields fields = new AddressFields("Navoiy 1", null, "Toshkent", "Shayxontohur",
-                null, null, null, null, null);
+        AddressFields fields =
+                new AddressFields("Navoiy 1", null, "Toshkent", "Shayxontohur", null, null, null, null, null);
 
         // Claiming a geocoder result with no point would leave dispatch believing
         // it has a routable address when it does not.
-        assertThat(catchThrowable(() -> profiles.addAddress(TENANT, accountId, "A", fields,
-                null, null, null, CoordinateSource.GEOCODER)))
+        assertThat(catchThrowable(() -> profiles.addAddress(
+                        TENANT, accountId, "A", fields, null, null, null, CoordinateSource.GEOCODER)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("claims a point");
 
         // And the reverse: a landmark-only address carrying a point would be
         // treated as unresolved by a backfill that trusts the source.
-        assertThat(catchThrowable(() -> profiles.addAddress(TENANT, accountId, "B", fields,
-                null, 41.3, 69.2, CoordinateSource.LANDMARK_ONLY)))
+        assertThat(catchThrowable(() -> profiles.addAddress(
+                        TENANT, accountId, "B", fields, null, 41.3, 69.2, CoordinateSource.LANDMARK_ONLY)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("no point");
 
         // Half a coordinate points at the prime meridian.
-        assertThat(catchThrowable(() -> profiles.addAddress(TENANT, accountId, "C", fields,
-                null, 41.3, null, CoordinateSource.CUSTOMER_PIN)))
+        assertThat(catchThrowable(() -> profiles.addAddress(
+                        TENANT, accountId, "C", fields, null, 41.3, null, CoordinateSource.CUSTOMER_PIN)))
                 .isInstanceOf(IllegalArgumentException.class);
 
         // A new row may not claim the migration-only origin, or the column would
         // stop meaning anything.
-        assertThat(catchThrowable(() -> profiles.addAddress(TENANT, accountId, "D", fields,
-                null, 41.3, 69.2, CoordinateSource.LEGACY_UNSOURCED)))
+        assertThat(catchThrowable(() -> profiles.addAddress(
+                        TENANT, accountId, "D", fields, null, 41.3, 69.2, CoordinateSource.LEGACY_UNSOURCED)))
                 .isInstanceOf(IllegalArgumentException.class);
 
         assertThat(profiles.revealAddresses(TENANT, accountId, "dispatch")).isEmpty();
@@ -556,17 +617,23 @@ class CustomerIdentityTests {
     @DisplayName("the database refuses a disagreeing coordinate source even without the service")
     void theDatabaseEnforcesTheCoordinateSourceRuleToo() {
         var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-19");
-        UUID addressId = profiles.addAddress(TENANT, account.account().accountId(), "Home",
-                new AddressFields("Bunyodkor 12", null, "Toshkent", "Chilonzor",
-                        null, null, null, null, null),
-                null, 41.2856, 69.2034, CoordinateSource.OPERATOR_PIN);
+        UUID addressId = profiles.addAddress(
+                TENANT,
+                account.account().accountId(),
+                "Home",
+                new AddressFields("Bunyodkor 12", null, "Toshkent", "Chilonzor", null, null, null, null, null),
+                null,
+                41.2856,
+                69.2034,
+                CoordinateSource.OPERATOR_PIN);
 
         // The service check exists for the message. This is the protection: a
         // migration or a stray UPDATE cannot strip the point while leaving the
         // row claiming an operator placed one.
-        assertThat(catchThrowable(() -> jdbc.sql(
-                "UPDATE customer.addresses SET latitude = NULL, longitude = NULL WHERE id = :id")
-                .param("id", addressId).update()))
+        assertThat(catchThrowable(
+                        () -> jdbc.sql("UPDATE customer.addresses SET latitude = NULL, longitude = NULL WHERE id = :id")
+                                .param("id", addressId)
+                                .update()))
                 .hasMessageContaining("ck_address_coordinate_source_agrees");
     }
 
@@ -574,17 +641,22 @@ class CustomerIdentityTests {
     @DisplayName("half a coordinate is refused by the database")
     void aLatitudeWithoutALongitudeIsRefused() {
         var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-20");
-        UUID addressId = profiles.addAddress(TENANT, account.account().accountId(), "Home",
-                new AddressFields("Bunyodkor 12", null, "Toshkent", "Chilonzor",
-                        null, null, null, null, null),
-                null, 41.2856, 69.2034, CoordinateSource.OPERATOR_PIN);
+        UUID addressId = profiles.addAddress(
+                TENANT,
+                account.account().accountId(),
+                "Home",
+                new AddressFields("Bunyodkor 12", null, "Toshkent", "Chilonzor", null, null, null, null, null),
+                null,
+                41.2856,
+                69.2034,
+                CoordinateSource.OPERATOR_PIN);
 
         // The original range check passed on a null longitude, because the AND
         // evaluated to NULL and a CHECK accepts NULL. A latitude alone routes a
         // courier to the prime meridian.
-        assertThat(catchThrowable(() -> jdbc.sql(
-                "UPDATE customer.addresses SET longitude = NULL WHERE id = :id")
-                .param("id", addressId).update()))
+        assertThat(catchThrowable(() -> jdbc.sql("UPDATE customer.addresses SET longitude = NULL WHERE id = :id")
+                        .param("id", addressId)
+                        .update()))
                 .hasMessageContaining("ck_address_coordinates");
     }
 
@@ -593,12 +665,22 @@ class CustomerIdentityTests {
     @Test
     @DisplayName("the account predicate is inside the address UPDATE, not only in the read")
     void anAddressUpdateNamesTheAccountItBelongsTo() {
-        UUID mine = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-owner").account().accountId();
-        UUID theirs = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-other").account().accountId();
-        UUID addressId = profiles.addAddress(TENANT, theirs, "Uy",
-                new AddressFields("Yangiobod 4", null, "Toshkent", "Sergeli",
-                        null, null, null, null, "qarshisida dorixona"),
-                null, null, null, CoordinateSource.LANDMARK_ONLY);
+        UUID mine = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-owner")
+                .account()
+                .accountId();
+        UUID theirs = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-other")
+                .account()
+                .accountId();
+        UUID addressId = profiles.addAddress(
+                TENANT,
+                theirs,
+                "Uy",
+                new AddressFields(
+                        "Yangiobod 4", null, "Toshkent", "Sergeli", null, null, null, null, "qarshisida dorixona"),
+                null,
+                null,
+                null,
+                CoordinateSource.LANDMARK_ONLY);
         String before = ciphertextOf(addressId);
 
         // The store is called directly, with the right address id, the right
@@ -607,9 +689,18 @@ class CustomerIdentityTests {
         // account predicate that existed only in the SELECT would pass every
         // endpoint assertion while leaving a statement that overwrites a
         // stranger's home for anyone who ever reaches it.
-        int written = store.updateAddress(TENANT, mine, addressId, 1, "Ish",
-                "not-even-real-ciphertext", null, null, null,
-                CoordinateSource.LANDMARK_ONLY.name(), NOW);
+        int written = store.updateAddress(
+                TENANT,
+                mine,
+                addressId,
+                1,
+                "Ish",
+                "not-even-real-ciphertext",
+                null,
+                null,
+                null,
+                CoordinateSource.LANDMARK_ONLY.name(),
+                NOW);
 
         assertThat(written).isZero();
         assertThat(ciphertextOf(addressId)).isEqualTo(before);
@@ -618,8 +709,18 @@ class CustomerIdentityTests {
 
         // The same statements, with the account they belong to, do write — or the
         // assertions above would hold for a method that writes nothing at all.
-        assertThat(store.updateAddress(TENANT, theirs, addressId, 1, "Ish",
-                before, null, null, null, CoordinateSource.LANDMARK_ONLY.name(), NOW))
+        assertThat(store.updateAddress(
+                        TENANT,
+                        theirs,
+                        addressId,
+                        1,
+                        "Ish",
+                        before,
+                        null,
+                        null,
+                        null,
+                        CoordinateSource.LANDMARK_ONLY.name(),
+                        NOW))
                 .isOne();
         assertThat(store.archiveAddress(TENANT, theirs, addressId, 2, NOW)).isOne();
         assertThat(statusOf(addressId)).isEqualTo("ARCHIVED");
@@ -629,16 +730,23 @@ class CustomerIdentityTests {
     @DisplayName("an archived address is gone from every read a customer has")
     void archivingRemovesAnAddressFromTheReads() {
         UUID accountId = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-archiver")
-                .account().accountId();
-        UUID addressId = profiles.addAddress(TENANT, accountId, "Uy",
-                new AddressFields("Yangiobod 4", null, "Toshkent", "Sergeli",
-                        null, null, null, null, null),
-                null, null, null, CoordinateSource.LANDMARK_ONLY);
+                .account()
+                .accountId();
+        UUID addressId = profiles.addAddress(
+                TENANT,
+                accountId,
+                "Uy",
+                new AddressFields("Yangiobod 4", null, "Toshkent", "Sergeli", null, null, null, null, null),
+                null,
+                null,
+                null,
+                CoordinateSource.LANDMARK_ONLY);
 
         profiles.archiveAddress(TENANT, accountId, addressId, 1);
 
         assertThat(profiles.revealAddresses(TENANT, accountId, "self-service")).isEmpty();
-        assertThat(profiles.revealAddress(TENANT, accountId, addressId, "self-service")).isEmpty();
+        assertThat(profiles.revealAddress(TENANT, accountId, addressId, "self-service"))
+                .isEmpty();
         assertThat(store.addressesAwaitingGeocoding(TENANT, 100)).doesNotContain(addressId);
         // And the row is still there, which is the whole difference between an
         // archive and a delete: a dispute about where an order went is answered
@@ -650,16 +758,18 @@ class CustomerIdentityTests {
     @DisplayName("a profile write is scoped to the tenant and cannot reach a deciding column")
     void aProfileWriteIsScopedAndNarrow() {
         UUID accountId = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-profile")
-                .account().accountId();
+                .account()
+                .accountId();
         jdbc.sql("UPDATE customer.customer_accounts SET status = 'SUSPENDED' WHERE id = :id")
-                .param("id", accountId).update();
+                .param("id", accountId)
+                .update();
 
         assertThat(store.updateAccountProfile(OTHER_TENANT, accountId, 1, "Nobody", "ru", null, NOW))
                 .as("an account id alone is not evidence of anything; the tenant is a predicate")
                 .isZero();
 
-        assertThat(store.updateAccountProfile(TENANT, accountId, 1, "Ozod", "uz",
-                "Asia/Tashkent", NOW)).isOne();
+        assertThat(store.updateAccountProfile(TENANT, accountId, 1, "Ozod", "uz", "Asia/Tashkent", NOW))
+                .isOne();
         assertThat(store.account(TENANT, accountId)).hasValueSatisfying(account -> {
             assertThat(account.displayName()).isEqualTo("Ozod");
             assertThat(account.preferredLocale()).isEqualTo("uz");
@@ -678,29 +788,42 @@ class CustomerIdentityTests {
     @Test
     @DisplayName("reading one address is scoped to its own account")
     void readingOneAddressIsScopedToItsAccount() {
-        UUID mine = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-reader").account().accountId();
+        UUID mine = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-reader")
+                .account()
+                .accountId();
         UUID theirs = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-read-other")
-                .account().accountId();
-        UUID addressId = profiles.addAddress(TENANT, theirs, "Uy",
-                new AddressFields("Yangiobod 4", null, "Toshkent", "Sergeli",
-                        null, null, null, null, null),
-                null, null, null, CoordinateSource.LANDMARK_ONLY);
+                .account()
+                .accountId();
+        UUID addressId = profiles.addAddress(
+                TENANT,
+                theirs,
+                "Uy",
+                new AddressFields("Yangiobod 4", null, "Toshkent", "Sergeli", null, null, null, null, null),
+                null,
+                null,
+                null,
+                CoordinateSource.LANDMARK_ONLY);
 
         assertThat(profiles.revealAddress(TENANT, mine, addressId, "self-service"))
                 .as("empty before anything is decrypted, so no purpose is recorded against a row "
                         + "the caller had no business reading")
                 .isEmpty();
-        assertThat(profiles.revealAddress(TENANT, theirs, addressId, "self-service")).isPresent();
+        assertThat(profiles.revealAddress(TENANT, theirs, addressId, "self-service"))
+                .isPresent();
     }
 
     private String ciphertextOf(UUID addressId) {
         return jdbc.sql("SELECT encrypted_fields FROM customer.addresses WHERE id = :id")
-                .param("id", addressId).query(String.class).single();
+                .param("id", addressId)
+                .query(String.class)
+                .single();
     }
 
     private String statusOf(UUID addressId) {
         return jdbc.sql("SELECT status FROM customer.addresses WHERE id = :id")
-                .param("id", addressId).query(String.class).single();
+                .param("id", addressId)
+                .query(String.class)
+                .single();
     }
 
     @Test
@@ -710,8 +833,8 @@ class CustomerIdentityTests {
 
         // "We never asked" and "they said yes" are different, and a default-true
         // would merge them into a marketing message nobody agreed to.
-        assertThat(consent.hasConsent(TENANT, account.account().accountId(), BRAND_A,
-                "MARKETING", "SMS")).isFalse();
+        assertThat(consent.hasConsent(TENANT, account.account().accountId(), BRAND_A, "MARKETING", "SMS"))
+                .isFalse();
     }
 
     @Test
@@ -720,16 +843,34 @@ class CustomerIdentityTests {
         var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-15");
         UUID accountId = account.account().accountId();
 
-        consent.record(TENANT, accountId, BRAND_A, "MARKETING", "SMS",
-                ConsentService.Decision.GRANTED, "2026-01", ConsentService.Source.STOREFRONT,
-                "signup-form", Instant.parse("2026-03-01T10:00:00Z"));
-        assertThat(consent.hasConsent(TENANT, accountId, BRAND_A, "MARKETING", "SMS")).isTrue();
+        consent.record(
+                TENANT,
+                accountId,
+                BRAND_A,
+                "MARKETING",
+                "SMS",
+                ConsentService.Decision.GRANTED,
+                "2026-01",
+                ConsentService.Source.STOREFRONT,
+                "signup-form",
+                Instant.parse("2026-03-01T10:00:00Z"));
+        assertThat(consent.hasConsent(TENANT, accountId, BRAND_A, "MARKETING", "SMS"))
+                .isTrue();
 
-        consent.record(TENANT, accountId, BRAND_A, "MARKETING", "SMS",
-                ConsentService.Decision.WITHDRAWN, "2026-01", ConsentService.Source.STOREFRONT,
-                "preferences-page", Instant.parse("2026-06-01T10:00:00Z"));
+        consent.record(
+                TENANT,
+                accountId,
+                BRAND_A,
+                "MARKETING",
+                "SMS",
+                ConsentService.Decision.WITHDRAWN,
+                "2026-01",
+                ConsentService.Source.STOREFRONT,
+                "preferences-page",
+                Instant.parse("2026-06-01T10:00:00Z"));
 
-        assertThat(consent.hasConsent(TENANT, accountId, BRAND_A, "MARKETING", "SMS")).isFalse();
+        assertThat(consent.hasConsent(TENANT, accountId, BRAND_A, "MARKETING", "SMS"))
+                .isFalse();
         // Both decisions survive: proving what someone agreed to and when is the
         // whole obligation, and an update would have destroyed the earlier one.
         assertThat(consent.history(TENANT, accountId)).hasSize(2);
@@ -755,13 +896,24 @@ class CustomerIdentityTests {
         var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-16");
         UUID accountId = account.account().accountId();
 
-        consent.record(TENANT, accountId, BRAND_A, "MARKETING", "SMS",
-                ConsentService.Decision.GRANTED, "2026-01", ConsentService.Source.STOREFRONT,
-                null, Instant.parse("2026-03-01T10:00:00Z"));
+        consent.record(
+                TENANT,
+                accountId,
+                BRAND_A,
+                "MARKETING",
+                "SMS",
+                ConsentService.Decision.GRANTED,
+                "2026-01",
+                ConsentService.Source.STOREFRONT,
+                null,
+                Instant.parse("2026-03-01T10:00:00Z"));
 
-        assertThat(consent.hasConsent(TENANT, accountId, BRAND_A, "MARKETING", "SMS")).isTrue();
-        assertThat(consent.hasConsent(TENANT, accountId, BRAND_B, "MARKETING", "SMS")).isFalse();
-        assertThat(consent.hasConsent(TENANT, accountId, BRAND_A, "MARKETING", "EMAIL")).isFalse();
+        assertThat(consent.hasConsent(TENANT, accountId, BRAND_A, "MARKETING", "SMS"))
+                .isTrue();
+        assertThat(consent.hasConsent(TENANT, accountId, BRAND_B, "MARKETING", "SMS"))
+                .isFalse();
+        assertThat(consent.hasConsent(TENANT, accountId, BRAND_A, "MARKETING", "EMAIL"))
+                .isFalse();
     }
 
     @Test
@@ -769,8 +921,8 @@ class CustomerIdentityTests {
     void contactsCannotCrossTenants() {
         var account = identity.resolve(TENANT, BRAND_A, ISSUER, "subject-17");
 
-        assertThat(catchThrowable(() -> profiles.addContactPoint(OTHER_TENANT,
-                account.account().accountId(), ContactType.PHONE, "+998901112233", true)))
+        assertThat(catchThrowable(() -> profiles.addContactPoint(
+                        OTHER_TENANT, account.account().accountId(), ContactType.PHONE, "+998901112233", true)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -805,10 +957,14 @@ class CustomerIdentityTests {
                     """).param("id", tenantId).update();
 
             UUID accountId = UUID.randomUUID();
-            legacyJdbc.sql("""
+            legacyJdbc
+                    .sql("""
                     INSERT INTO customer.customer_accounts (id, tenant_id, status)
                     VALUES (:id, :tenantId, 'ACTIVE')
-                    """).param("id", accountId).param("tenantId", tenantId).update();
+                    """)
+                    .param("id", accountId)
+                    .param("tenantId", tenantId)
+                    .update();
 
             UUID withPoint = UUID.randomUUID();
             UUID withoutPoint = UUID.randomUUID();
@@ -829,28 +985,36 @@ class CustomerIdentityTests {
             // The half coordinate is discarded rather than carried forward, so it
             // cannot be mistaken for a location on the prime meridian.
             assertThat(coordinateSource(legacyJdbc, halfPoint)).isEqualTo("NOT_GEOCODED");
-            assertThat(legacyJdbc.sql("SELECT latitude FROM customer.addresses WHERE id = :id")
-                    .param("id", halfPoint).query(Double.class).optional())
+            assertThat(legacyJdbc
+                            .sql("SELECT latitude FROM customer.addresses WHERE id = :id")
+                            .param("id", halfPoint)
+                            .query(Double.class)
+                            .optional())
                     .isEmpty();
         }
     }
 
-    private static void insertLegacyAddress(JdbcClient client, UUID id, UUID tenantId,
-            UUID accountId, Double latitude, Double longitude) {
+    private static void insertLegacyAddress(
+            JdbcClient client, UUID id, UUID tenantId, UUID accountId, Double latitude, Double longitude) {
         client.sql("""
                 INSERT INTO customer.addresses (
                     id, tenant_id, customer_account_id, label, encrypted_fields,
                     latitude, longitude)
                 VALUES (:id, :tenantId, :accountId, 'Home', 'ciphertext', :latitude, :longitude)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("accountId", accountId)
-                .param("latitude", latitude).param("longitude", longitude)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("latitude", latitude)
+                .param("longitude", longitude)
                 .update();
     }
 
     private static String coordinateSource(JdbcClient client, UUID addressId) {
         return client.sql("SELECT coordinate_source FROM customer.addresses WHERE id = :id")
-                .param("id", addressId).query(String.class).single();
+                .param("id", addressId)
+                .query(String.class)
+                .single();
     }
 
     /**
@@ -874,9 +1038,7 @@ class CustomerIdentityTests {
                     id, slug, legal_name, display_name, default_currency, default_timezone,
                     status, version)
                 VALUES (:id, :slug, 'Legal', 'Display', 'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
-                """)
-                .param("id", id).param("slug", slug)
-                .update();
+                """).param("id", id).param("slug", slug).update();
     }
 
     /** What {@code TenantControlPlaneService.createTenant} writes. */
@@ -892,8 +1054,8 @@ class CustomerIdentityTests {
      * because that path lives in the tenancy module and what is under test here is
      * what customer identity resolution does with the result.
      */
-    private void supersedeIdentityPolicy(UUID tenantId, int fromVersion,
-            CustomerIdentityPolicy nextMode, Instant changedAt) {
+    private void supersedeIdentityPolicy(
+            UUID tenantId, int fromVersion, CustomerIdentityPolicy nextMode, Instant changedAt) {
         jdbc.sql("""
                 UPDATE tenant.customer_identity_policies
                 SET superseded_at = :changedAt
@@ -906,8 +1068,8 @@ class CustomerIdentityTests {
         insertIdentityPolicy(tenantId, fromVersion + 1, nextMode, changedAt, null);
     }
 
-    private void insertIdentityPolicy(UUID tenantId, int version, CustomerIdentityPolicy mode,
-            Instant effectiveFrom, Instant supersededAt) {
+    private void insertIdentityPolicy(
+            UUID tenantId, int version, CustomerIdentityPolicy mode, Instant effectiveFrom, Instant supersededAt) {
         jdbc.sql("""
                 INSERT INTO tenant.customer_identity_policies (
                     id, tenant_id, version, identity_mode, effective_from, superseded_at)
@@ -919,12 +1081,10 @@ class CustomerIdentityTests {
                 .param("mode", mode.name())
                 // The fixture's clock is the test's clock: a policy that took
                 // effect before the fixed instant the service reads.
-                .param("effectiveFrom",
-                        java.time.OffsetDateTime.ofInstant(effectiveFrom, ZoneOffset.UTC))
-                .param("supersededAt",
-                        supersededAt == null
-                                ? null
-                                : java.time.OffsetDateTime.ofInstant(supersededAt, ZoneOffset.UTC),
+                .param("effectiveFrom", java.time.OffsetDateTime.ofInstant(effectiveFrom, ZoneOffset.UTC))
+                .param(
+                        "supersededAt",
+                        supersededAt == null ? null : java.time.OffsetDateTime.ofInstant(supersededAt, ZoneOffset.UTC),
                         java.sql.Types.TIMESTAMP_WITH_TIMEZONE)
                 .update();
     }
@@ -937,8 +1097,7 @@ class CustomerIdentityTests {
         return jdbc.sql("""
                 SELECT coalesce(identity_policy_version::text, 'UNCONFIGURED')
                 FROM customer.customer_accounts WHERE id = :id
-                """)
-                .param("id", accountId).query(String.class).single();
+                """).param("id", accountId).query(String.class).single();
     }
 
     /**
@@ -949,8 +1108,7 @@ class CustomerIdentityTests {
         return jdbc.sql("""
                 SELECT coalesce(identity_partition_brand_id::text, 'SHARED')
                 FROM customer.customer_accounts WHERE id = :id
-                """)
-                .param("id", accountId).query(String.class).single();
+                """).param("id", accountId).query(String.class).single();
     }
 
     /**
@@ -973,8 +1131,7 @@ class CustomerIdentityTests {
         return jdbc.sql("""
                 SELECT column_name FROM information_schema.columns
                 WHERE table_schema = 'tenant' AND table_name = 'tenants'
-                """)
-                .query(String.class).list();
+                """).query(String.class).list();
     }
 
     private List<String> triggerNames(String schema, String table) {
@@ -985,17 +1142,22 @@ class CustomerIdentityTests {
                 JOIN pg_namespace n ON n.oid = c.relnamespace
                 WHERE n.nspname = :schema AND c.relname = :table AND NOT t.tgisinternal
                 """)
-                .param("schema", schema).param("table", table)
-                .query(String.class).list();
+                .param("schema", schema)
+                .param("table", table)
+                .query(String.class)
+                .list();
     }
 
     private long accountCount() {
-        return jdbc.sql("SELECT count(*) FROM customer.customer_accounts").query(Long.class).single();
+        return jdbc.sql("SELECT count(*) FROM customer.customer_accounts")
+                .query(Long.class)
+                .single();
     }
 
     private long brandProfileCount(UUID accountId) {
         return jdbc.sql("SELECT count(*) FROM customer.brand_profiles WHERE customer_account_id = :id")
-                .param("id", accountId).query(Long.class).single();
+                .param("id", accountId)
+                .query(Long.class)
+                .single();
     }
-
 }

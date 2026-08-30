@@ -1,16 +1,16 @@
 package uz.horecaos.platform.media.web;
 
-import java.net.URI;
-import java.time.Instant;
-import java.util.Map;
-import java.util.UUID;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
-
+import java.net.URI;
+import java.time.Instant;
+import java.util.Map;
+import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,10 +18,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.media.api.MediaAssetId;
@@ -56,7 +52,8 @@ public class MediaController {
 
     @PostMapping("/upload-requests")
     @RequiresCapability(value = Capability.MEDIA_UPLOAD, mutating = true)
-    @Operation(summary = "Allocate an asset and return a constrained upload URL",
+    @Operation(
+            summary = "Allocate an asset and return a constrained upload URL",
             description = "The returned URL is signed for exactly this key, content type, and size, "
                     + "and expires shortly. Upload to it directly, then call finalize.")
     public ResponseEntity<UploadTicketResponse> requestUpload(
@@ -65,8 +62,13 @@ public class MediaController {
 
         MediaAssetService.UploadTicket ticket;
         try {
-            ticket = media.requestUpload(tenantId, owner, request.visibility(),
-                    request.contentType(), request.sizeBytes(), request.filename(),
+            ticket = media.requestUpload(
+                    tenantId,
+                    owner,
+                    request.visibility(),
+                    request.contentType(),
+                    request.sizeBytes(),
+                    request.filename(),
                     actorId());
         } catch (IllegalArgumentException rejected) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, rejected.getMessage());
@@ -79,11 +81,11 @@ public class MediaController {
 
     @PostMapping("/{assetId}/finalize")
     @RequiresCapability(value = Capability.MEDIA_UPLOAD, mutating = true)
-    @Operation(summary = "Verify the uploaded object and make it displayable",
+    @Operation(
+            summary = "Verify the uploaded object and make it displayable",
             description = "Reads the object store's own metadata. The request body carries no claims "
                     + "about the upload, because a client's claim is not evidence.")
-    public ResponseEntity<AssetResponse> finalizeUpload(
-            @PathVariable UUID tenantId, @PathVariable UUID assetId) {
+    public ResponseEntity<AssetResponse> finalizeUpload(@PathVariable UUID tenantId, @PathVariable UUID assetId) {
         MediaAssetStatus status;
         try {
             status = media.finalizeUpload(tenantId, new MediaAssetId(assetId));
@@ -96,8 +98,7 @@ public class MediaController {
     @GetMapping("/{assetId}")
     @RequiresCapability(Capability.MEDIA_READ)
     @Operation(summary = "Read an asset's status")
-    public ResponseEntity<AssetResponse> get(
-            @PathVariable UUID tenantId, @PathVariable UUID assetId) {
+    public ResponseEntity<AssetResponse> get(@PathVariable UUID tenantId, @PathVariable UUID assetId) {
         return media.find(tenantId, new MediaAssetId(assetId))
                 .map(asset -> ResponseEntity.ok(new AssetResponse(assetId.toString(), asset.status())))
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such media asset"));
@@ -105,14 +106,14 @@ public class MediaController {
 
     @GetMapping("/{assetId}/download-url")
     @RequiresCapability(Capability.MEDIA_READ)
-    @Operation(summary = "Return a short-lived signed URL for a private asset",
+    @Operation(
+            summary = "Return a short-lived signed URL for a private asset",
             description = "Only an AVAILABLE asset yields a URL; an unverified object is never served.")
-    public ResponseEntity<DownloadResponse> downloadUrl(
-            @PathVariable UUID tenantId, @PathVariable UUID assetId) {
+    public ResponseEntity<DownloadResponse> downloadUrl(@PathVariable UUID tenantId, @PathVariable UUID assetId) {
         return media.downloadUrl(tenantId, new MediaAssetId(assetId))
                 .map(url -> ResponseEntity.ok(new DownloadResponse(url)))
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No such media asset, or it is not available"));
+                .orElseThrow(() ->
+                        new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such media asset, or it is not available"));
     }
 
     /**
@@ -138,12 +139,12 @@ public class MediaController {
             @NotNull MediaVisibility visibility,
             @NotBlank String contentType,
             @Positive @Max(10 * 1024 * 1024) long sizeBytes,
-            String filename) { }
+            String filename) {}
 
-    public record UploadTicketResponse(String assetId, URI uploadUrl,
-            Map<String, String> requiredHeaders, Instant expiresAt) { }
+    public record UploadTicketResponse(
+            String assetId, URI uploadUrl, Map<String, String> requiredHeaders, Instant expiresAt) {}
 
-    public record AssetResponse(String assetId, MediaAssetStatus status) { }
+    public record AssetResponse(String assetId, MediaAssetStatus status) {}
 
-    public record DownloadResponse(URI url) { }
+    public record DownloadResponse(URI url) {}
 }

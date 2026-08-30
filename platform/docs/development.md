@@ -38,6 +38,30 @@ client for a future frontend at `http://localhost:5173`.
 The build enforces JDK 25. The first invocation downloads the pinned Maven
 distribution and project dependencies.
 
+## Quality gates
+
+ADR 0054 puts four gates inside `./mvnw verify` itself, alongside the
+Python-based repository rules `make lint` already runs:
+
+- **Coverage.** JaCoCo measures line coverage on every `verify` and
+  `jacoco:check` fails the build below `horecaos.coverage.floor` in
+  `pom.xml`. The floor may only rise — raise it when coverage rises, never
+  lower it to admit a change.
+- **Formatting.** Spotless (`palantir-java-format`) formats
+  `src/main/java` and `src/test/java`; `spotless:check` fails `verify` on
+  any unformatted file. Run `make format` (`spotless:apply`) before
+  committing rather than hand-formatting.
+- **Static analysis.** Error Prone and NullAway run on every compile.
+  Every finding — including NullAway's own — is demoted to a warning
+  (`-XepAllErrorsAsWarnings`) and printed in the compile log; nothing fails
+  the build at this stage. Promoting a check family to build-failing is a
+  follow-up change made once that family's warning count is zero.
+- **Dependency scanning.** Maven Enforcer bans duplicate managed dependency
+  versions on every build. OWASP `dependency-check` is heavier — it pulls
+  live NVD data — so it lives in the `security-audit` Maven profile and
+  runs from `.github/workflows/security-audit.yml` on a weekly schedule
+  and on demand, not on every commit.
+
 ## Run the API
 
 ```bash

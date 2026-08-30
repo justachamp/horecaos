@@ -22,23 +22,27 @@ public class RemediationRequiredException extends RuntimeException {
     private final String entityType;
     private final int declaredVersion;
 
-    public RemediationRequiredException(String entityType, int declaredVersion,
-            String registeredDigest, String actualDigest) {
+    public RemediationRequiredException(
+            String entityType, int declaredVersion, String registeredDigest, String actualDigest) {
         super(("The %s transformation still calls itself version %d, but its declared rules now "
-                + "hash to %s where version %d was registered as %s. A changed mapping is a new "
-                + "version and a remediation run over the rows the old one wrote (ADR 0024); it is "
-                + "not a quiet re-import under the same number.")
-                .formatted(entityType, declaredVersion, abbreviate(actualDigest),
-                        declaredVersion, abbreviate(registeredDigest)));
+                        + "hash to %s where version %d was registered as %s. A changed mapping is a new "
+                        + "version and a remediation run over the rows the old one wrote (ADR 0024); it is "
+                        + "not a quiet re-import under the same number.")
+                .formatted(
+                        entityType,
+                        declaredVersion,
+                        abbreviate(actualDigest),
+                        declaredVersion,
+                        abbreviate(registeredDigest)));
         this.entityType = entityType;
         this.declaredVersion = declaredVersion;
     }
 
     public RemediationRequiredException(String entityType, int declaredVersion) {
         super(("The %s transformation declares version %d and no such version is registered for "
-                + "this program. Declare the mapping before running it: a crosswalk row stamped "
-                + "with a version nothing defines cannot be remediated, because nobody can say "
-                + "what it was written under.")
+                        + "this program. Declare the mapping before running it: a crosswalk row stamped "
+                        + "with a version nothing defines cannot be remediated, because nobody can say "
+                        + "what it was written under.")
                 .formatted(entityType, declaredVersion));
         this.entityType = entityType;
         this.declaredVersion = declaredVersion;

@@ -1,5 +1,9 @@
 package uz.horecaos.platform.integration.camel.common;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
+
+import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -9,21 +13,13 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-
-import com.sun.net.httpserver.HttpServer;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.ProviderCall;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 /**
  * What happens after a provider has answered (ADR 0007).
@@ -74,9 +70,10 @@ class ProviderHttpClientTests {
         });
         server.start();
 
-        ProviderOutcome outcome = assertTimeoutPreemptively(Duration.ofSeconds(10),
-                () -> client.get(call(Duration.ofSeconds(1)), "/stall", Map.of(),
-                        body -> ProviderOutcome.success(body, null)));
+        ProviderOutcome outcome = assertTimeoutPreemptively(
+                Duration.ofSeconds(10),
+                () -> client.get(
+                        call(Duration.ofSeconds(1)), "/stall", Map.of(), body -> ProviderOutcome.success(body, null)));
 
         // Uncertain rather than retryable: the request was on the wire and the
         // provider answered, so it may well have acted on it.
@@ -88,8 +85,7 @@ class ProviderHttpClientTests {
     void anEndlessBodyIsCappedRatherThanParsed() {
         String padding = "x".repeat(256 * 1024);
         server.createContext("/flood", exchange -> {
-            byte[] bytes = ("{\"status\":\"ACCEPTED\",\"note\":\"" + padding + "\"}")
-                    .getBytes(StandardCharsets.UTF_8);
+            byte[] bytes = ("{\"status\":\"ACCEPTED\",\"note\":\"" + padding + "\"}").getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, bytes.length);
             try (OutputStream out = exchange.getResponseBody()) {
@@ -98,8 +94,8 @@ class ProviderHttpClientTests {
         });
         server.start();
 
-        ProviderOutcome outcome = client.get(call(Duration.ofSeconds(5)), "/flood", Map.of(),
-                body -> ProviderOutcome.success(body, null));
+        ProviderOutcome outcome = client.get(
+                call(Duration.ofSeconds(5)), "/flood", Map.of(), body -> ProviderOutcome.success(body, null));
 
         // Well-formed JSON, and still refused. A quarter of a megabyte is not a
         // provider reporting an invoice, and parsing whatever fitted under the
@@ -121,7 +117,10 @@ class ProviderHttpClientTests {
         });
         server.start();
 
-        ProviderOutcome outcome = client.get(call(Duration.ofSeconds(5)), "/ok", Map.of(),
+        ProviderOutcome outcome = client.get(
+                call(Duration.ofSeconds(5)),
+                "/ok",
+                Map.of(),
                 body -> ProviderOutcome.success(body, String.valueOf(body.get("externalReference"))));
 
         assertThat(outcome.status()).isEqualTo(ProviderOutcome.Status.SUCCESS);
@@ -141,8 +140,8 @@ class ProviderHttpClientTests {
                 """;
         answer("/rejected", 422, body);
 
-        ProviderOutcome outcome = client.get(call(Duration.ofSeconds(5)), "/rejected", Map.of(),
-                success -> ProviderOutcome.success(success, null));
+        ProviderOutcome outcome = client.get(
+                call(Duration.ofSeconds(5)), "/rejected", Map.of(), success -> ProviderOutcome.success(success, null));
 
         assertThat(outcome.status()).isEqualTo(ProviderOutcome.Status.REJECTED);
         assertThat(outcome.detail())
@@ -158,8 +157,8 @@ class ProviderHttpClientTests {
     void aRecognisedErrorFieldIsKept() {
         answer("/auth", 401, "{\"success\":false,\"error\":\"Client is disabled\"}");
 
-        ProviderOutcome outcome = client.get(call(Duration.ofSeconds(5)), "/auth", Map.of(),
-                success -> ProviderOutcome.success(success, null));
+        ProviderOutcome outcome = client.get(
+                call(Duration.ofSeconds(5)), "/auth", Map.of(), success -> ProviderOutcome.success(success, null));
 
         assertThat(outcome.detail())
                 .as("CloposEnvelope reads exactly this string to tell a restaurant's own switch "
@@ -172,8 +171,8 @@ class ProviderHttpClientTests {
     void anUnknownShapeReportsItsSchema() {
         answer("/odd", 500, "{\"fault\":\"upstream\",\"customer_phone\":\"+998901231076\"}");
 
-        ProviderOutcome outcome = client.get(call(Duration.ofSeconds(5)), "/odd", Map.of(),
-                success -> ProviderOutcome.success(success, null));
+        ProviderOutcome outcome = client.get(
+                call(Duration.ofSeconds(5)), "/odd", Map.of(), success -> ProviderOutcome.success(success, null));
 
         assertThat(outcome.detail())
                 .as("field names are the provider's schema and tell an operator what to add to "
@@ -187,13 +186,11 @@ class ProviderHttpClientTests {
     void anHtmlErrorPageIsNotCarriedAround() {
         answer("/gateway", 502, "<html><body>Bad gateway for order QO-1 at Amir Temur 12</body></html>");
 
-        ProviderOutcome outcome = client.get(call(Duration.ofSeconds(5)), "/gateway", Map.of(),
-                success -> ProviderOutcome.success(success, null));
+        ProviderOutcome outcome = client.get(
+                call(Duration.ofSeconds(5)), "/gateway", Map.of(), success -> ProviderOutcome.success(success, null));
 
         assertThat(outcome.status()).isEqualTo(ProviderOutcome.Status.RETRYABLE);
-        assertThat(outcome.detail())
-                .doesNotContain("Amir Temur")
-                .contains("not a JSON object");
+        assertThat(outcome.detail()).doesNotContain("Amir Temur").contains("not a JSON object");
     }
 
     private void answer(String path, int status, String body) {
@@ -209,8 +206,8 @@ class ProviderHttpClientTests {
     }
 
     private ProviderCall call(Duration timeout) {
-        return new ProviderCall("http://127.0.0.1:" + server.getAddress().getPort(),
-                "test-credential-placeholder", "key-1", timeout);
+        return new ProviderCall(
+                "http://127.0.0.1:" + server.getAddress().getPort(), "test-credential-placeholder", "key-1", timeout);
     }
 
     private static void await(CountDownLatch latch) {

@@ -5,7 +5,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -55,7 +54,6 @@ public class PartnerTokenReader {
     }
 
     private static ApiException unauthenticated() {
-        return new ApiException(ErrorCode.UNAUTHENTICATED,
-                "A partner client credential is required");
+        return new ApiException(ErrorCode.UNAUTHENTICATED, "A partner client credential is required");
     }
 }

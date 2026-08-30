@@ -10,14 +10,11 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.UUID;
-
 import javax.crypto.KDF;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.HKDFParameterSpec;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.infrastructure.secrets.EnvironmentSecretResolver;
 
@@ -67,10 +64,15 @@ class DataEncryptionKeyProviderTests {
     void currentKeysUseHkdf() throws Exception {
         DataEncryptionKeyProvider.VersionedKey current = keys.currentKey(TENANT, DataClass.PERSONAL);
 
-        SecretKey expected = KDF.getInstance("HKDF-SHA256").deriveKey("AES", HKDFParameterSpec.ofExtract()
-                .addIKM(KEK.getBytes(StandardCharsets.UTF_8))
-                .addSalt("horecaos:dek:local".getBytes(StandardCharsets.UTF_8))
-                .thenExpand(("horecaos:dek|" + TENANT + "|personal|g2").getBytes(StandardCharsets.UTF_8), 32));
+        SecretKey expected = KDF.getInstance("HKDF-SHA256")
+                .deriveKey(
+                        "AES",
+                        HKDFParameterSpec.ofExtract()
+                                .addIKM(KEK.getBytes(StandardCharsets.UTF_8))
+                                .addSalt("horecaos:dek:local".getBytes(StandardCharsets.UTF_8))
+                                .thenExpand(
+                                        ("horecaos:dek|" + TENANT + "|personal|g2").getBytes(StandardCharsets.UTF_8),
+                                        32));
 
         assertThat(current.keyId()).isEqualTo(TENANT + ":personal:g2");
         assertThat(current.key().getEncoded()).isEqualTo(expected.getEncoded());
@@ -125,8 +127,7 @@ class DataEncryptionKeyProviderTests {
     @Test
     @DisplayName("a malformed identifier is refused")
     void aMalformedIdentifierIsRefused() {
-        assertThatThrownBy(() -> keys.keyById(TENANT, "not-a-key-id"))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> keys.keyById(TENANT, "not-a-key-id")).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> keys.keyById(TENANT, "not-a-uuid:personal:g2"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
@@ -142,15 +143,18 @@ class DataEncryptionKeyProviderTests {
     @DisplayName("each tenant gets its own key")
     void tenantsDoNotShareAKey() {
         assertThat(keys.currentKey(TENANT, DataClass.PERSONAL).key().getEncoded())
-                .isNotEqualTo(keys.currentKey(OTHER_TENANT, DataClass.PERSONAL).key().getEncoded());
+                .isNotEqualTo(
+                        keys.currentKey(OTHER_TENANT, DataClass.PERSONAL).key().getEncoded());
     }
 
     @Test
     @DisplayName("the environment is bound into the derivation")
     void aRestoredKekFromAnotherEnvironmentDerivesDifferentKeys() {
         assertThat(keys.currentKey(TENANT, DataClass.PERSONAL).key().getEncoded())
-                .isNotEqualTo(providerFor("production").currentKey(TENANT, DataClass.PERSONAL)
-                        .key().getEncoded());
+                .isNotEqualTo(providerFor("production")
+                        .currentKey(TENANT, DataClass.PERSONAL)
+                        .key()
+                        .getEncoded());
     }
 
     private static DataEncryptionKeyProvider provider() {
@@ -159,9 +163,7 @@ class DataEncryptionKeyProviderTests {
 
     private static DataEncryptionKeyProvider providerFor(String environment) {
         Clock clock = Clock.fixed(Instant.parse("2026-08-20T10:00:00Z"), ZoneOffset.UTC);
-        Map<String, String> secrets = Map.of(
-                "horecaos.secrets.data_encryption.platform.kek", KEK);
-        return new DataEncryptionKeyProvider(
-                new EnvironmentSecretResolver(secrets::get, clock), environment);
+        Map<String, String> secrets = Map.of("horecaos.secrets.data_encryption.platform.kek", KEK);
+        return new DataEncryptionKeyProvider(new EnvironmentSecretResolver(secrets::get, clock), environment);
     }
 }

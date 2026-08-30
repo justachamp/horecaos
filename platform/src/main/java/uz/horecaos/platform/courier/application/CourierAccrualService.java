@@ -6,10 +6,8 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.courier.application.port.LegalEntityResolver;
 import uz.horecaos.platform.courier.domain.AccrualCalculator;
 import uz.horecaos.platform.courier.domain.AdjustmentOrigin;
@@ -64,11 +62,17 @@ public class CourierAccrualService {
     private final FieldProtection protection;
     private final Clock clock;
 
-    public CourierAccrualService(JdbcCourierLedgerStore ledgerStore,
-            JdbcCourierRateCardStore rateCards, JdbcCourierShiftStore shifts,
-            JdbcCourierStore couriers, JdbcDeliveryCostStore costLines, CourierLedgerService ledger,
-            CourierPolicyResolver policies, LegalEntityResolver legalEntities,
-            FieldProtection protection, Clock clock) {
+    public CourierAccrualService(
+            JdbcCourierLedgerStore ledgerStore,
+            JdbcCourierRateCardStore rateCards,
+            JdbcCourierShiftStore shifts,
+            JdbcCourierStore couriers,
+            JdbcDeliveryCostStore costLines,
+            CourierLedgerService ledger,
+            CourierPolicyResolver policies,
+            LegalEntityResolver legalEntities,
+            FieldProtection protection,
+            Clock clock) {
         this.ledgerStore = ledgerStore;
         this.rateCards = rateCards;
         this.shifts = shifts;
@@ -92,26 +96,34 @@ public class CourierAccrualService {
      */
     @Transactional
     public EarningRow recordDelivery(DeliveredAssignment command) {
-        Optional<EarningRow> already = ledgerStore.findEarningByAttempt(
-                command.tenantId(), command.assignmentAttemptId());
+        Optional<EarningRow> already =
+                ledgerStore.findEarningByAttempt(command.tenantId(), command.assignmentAttemptId());
         if (already.isPresent()) {
             return already.get();
         }
 
-        RateCard card = rateCards.resolve(command.tenantId(), command.brandId(),
-                        command.locationId(), courierTypeOf(command), command.acceptedAt())
-                .orElseThrow(() -> new ApiException(ErrorCode.UNPROCESSABLE_STATE,
+        RateCard card = rateCards
+                .resolve(
+                        command.tenantId(),
+                        command.brandId(),
+                        command.locationId(),
+                        courierTypeOf(command),
+                        command.acceptedAt())
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.UNPROCESSABLE_STATE,
                         "No active courier rate card covers this branch and courier type; "
                                 + "a delivery cannot be accrued against nothing"));
 
-        CourierCompensationPolicy policy = policies.resolve(ResourceScope.location(
-                command.tenantId(), command.brandId(), command.locationId()));
-        int graceSeconds = command.graceSeconds() == null
-                ? policy.graceSeconds() : command.graceSeconds();
+        CourierCompensationPolicy policy =
+                policies.resolve(ResourceScope.location(command.tenantId(), command.brandId(), command.locationId()));
+        int graceSeconds = command.graceSeconds() == null ? policy.graceSeconds() : command.graceSeconds();
 
         CourierAccrual accrual = AccrualCalculator.forDelivery(card, command.distanceMeters());
-        OnTimeOutcome outcome = OnTimeEvaluator.evaluate(command.deliveredAt(),
-                command.promisedDeliveryEnd(), graceSeconds, command.kitchenHandoverAt(),
+        OnTimeOutcome outcome = OnTimeEvaluator.evaluate(
+                command.deliveredAt(),
+                command.promisedDeliveryEnd(),
+                graceSeconds,
+                command.kitchenHandoverAt(),
                 command.pickupWindowEnd());
 
         LocalDate businessDate = LocalDate.ofInstant(command.deliveredAt(), ZoneOffset.UTC);
@@ -119,78 +131,133 @@ public class CourierAccrualService {
                 .resolve(command.tenantId(), command.locationId(), businessDate)
                 .orElse(null);
         UUID earningId = UUID.randomUUID();
-        UUID periodId = ledger.currentPeriod(command.tenantId(), command.courierId(),
-                card.currency(), businessDate).id();
+        UUID periodId = ledger.currentPeriod(command.tenantId(), command.courierId(), card.currency(), businessDate)
+                .id();
 
-        boolean inserted = ledgerStore.insertEarning(new EarningRow(earningId, command.tenantId(),
-                command.courierId(), command.shiftId(), command.shipmentId(),
-                command.assignmentAttemptId(), legalEntityId, command.locationId(), businessDate,
-                card.id(), card.version(), courierTypeOf(command), command.distanceMeters(),
-                command.distanceSource(), outcome, command.promisedDeliveryEnd(), graceSeconds,
-                command.onTimePolicyVersion(), command.deliveredAt(), command.kitchenHandoverAt(),
-                command.pickupWindowEnd(), accrual.fixedMinor(), accrual.perOrderMinor(),
-                accrual.perKmMinor(), accrual.minimumTopUpMinor(), accrual.totalMinor(),
-                card.currency(), command.geoUnverified(),
-                protectPoint(command.tenantId(), earningId, "protected_pickup_point",
-                        command.pickupPoint()),
-                protectPoint(command.tenantId(), earningId, "protected_delivery_point",
-                        command.deliveryPoint()),
-                null, periodId));
+        boolean inserted = ledgerStore.insertEarning(new EarningRow(
+                earningId,
+                command.tenantId(),
+                command.courierId(),
+                command.shiftId(),
+                command.shipmentId(),
+                command.assignmentAttemptId(),
+                legalEntityId,
+                command.locationId(),
+                businessDate,
+                card.id(),
+                card.version(),
+                courierTypeOf(command),
+                command.distanceMeters(),
+                command.distanceSource(),
+                outcome,
+                command.promisedDeliveryEnd(),
+                graceSeconds,
+                command.onTimePolicyVersion(),
+                command.deliveredAt(),
+                command.kitchenHandoverAt(),
+                command.pickupWindowEnd(),
+                accrual.fixedMinor(),
+                accrual.perOrderMinor(),
+                accrual.perKmMinor(),
+                accrual.minimumTopUpMinor(),
+                accrual.totalMinor(),
+                card.currency(),
+                command.geoUnverified(),
+                protectPoint(command.tenantId(), earningId, "protected_pickup_point", command.pickupPoint()),
+                protectPoint(command.tenantId(), earningId, "protected_delivery_point", command.deliveryPoint()),
+                null,
+                periodId));
 
         if (!inserted) {
             // Somebody else won the race on the attempt's unique constraint.
-            return ledgerStore.findEarningByAttempt(command.tenantId(),
-                    command.assignmentAttemptId()).orElseThrow();
+            return ledgerStore
+                    .findEarningByAttempt(command.tenantId(), command.assignmentAttemptId())
+                    .orElseThrow();
         }
 
-        ledger.append(new CourierLedgerService.NewEntry(command.tenantId(), command.courierId(),
-                command.locationId(), LedgerEntryType.DELIVERY_EARNING, accrual.totalMinor(),
-                card.currency(), "courier_assignment_earning", earningId, AdjustmentOrigin.SYSTEM,
-                null, command.deliveredAt(), "delivery-earning:" + command.assignmentAttemptId(),
-                null, null, "courier-accrual-service"));
+        ledger.append(new CourierLedgerService.NewEntry(
+                command.tenantId(),
+                command.courierId(),
+                command.locationId(),
+                LedgerEntryType.DELIVERY_EARNING,
+                accrual.totalMinor(),
+                card.currency(),
+                "courier_assignment_earning",
+                earningId,
+                AdjustmentOrigin.SYSTEM,
+                null,
+                command.deliveredAt(),
+                "delivery-earning:" + command.assignmentAttemptId(),
+                null,
+                null,
+                "courier-accrual-service"));
 
         // The internal half of ADR 0042's two cost paths. Recognised now, at
         // ACCRUED, and it becomes SETTLED when the period closes — never
         // INVOICED, because there is no invoice from HorecaOS to itself.
-        costLines.insertLine(new CostLineRow(UUID.randomUUID(), command.tenantId(),
-                command.shipmentId(), legalEntityId, businessDate, CostPath.INTERNAL,
-                CostBasis.ACCRUED, accrual.totalMinor(), card.currency(),
-                "courier_assignment_earning", earningId, command.courierId(), null,
-                command.deliveredAt(), null, "courier-accrual-service"));
+        costLines.insertLine(new CostLineRow(
+                UUID.randomUUID(),
+                command.tenantId(),
+                command.shipmentId(),
+                legalEntityId,
+                businessDate,
+                CostPath.INTERNAL,
+                CostBasis.ACCRUED,
+                accrual.totalMinor(),
+                card.currency(),
+                "courier_assignment_earning",
+                earningId,
+                command.courierId(),
+                null,
+                command.deliveredAt(),
+                null,
+                "courier-accrual-service"));
 
         if (command.cashToCollectMinor() > 0) {
-            ledger.append(new CourierLedgerService.NewEntry(command.tenantId(), command.courierId(),
-                    command.locationId(), LedgerEntryType.CASH_COLLECTED,
-                    -command.cashToCollectMinor(), card.currency(), "shipment",
-                    command.shipmentId(), AdjustmentOrigin.SYSTEM, null, command.deliveredAt(),
-                    "cash-collected:" + command.assignmentAttemptId(), null, null,
+            ledger.append(new CourierLedgerService.NewEntry(
+                    command.tenantId(),
+                    command.courierId(),
+                    command.locationId(),
+                    LedgerEntryType.CASH_COLLECTED,
+                    -command.cashToCollectMinor(),
+                    card.currency(),
+                    "shipment",
+                    command.shipmentId(),
+                    AdjustmentOrigin.SYSTEM,
+                    null,
+                    command.deliveredAt(),
+                    "cash-collected:" + command.assignmentAttemptId(),
+                    null,
+                    null,
                     "courier-accrual-service"));
         }
 
         if (command.shiftId() != null) {
             shifts.findShift(command.tenantId(), command.shiftId())
-                    .ifPresent(shift -> ledgerStore.assignShiftToPeriod(command.tenantId(),
-                            shift.id(), periodId));
+                    .ifPresent(shift -> ledgerStore.assignShiftToPeriod(command.tenantId(), shift.id(), periodId));
         }
 
-        return ledgerStore.findEarningByAttempt(command.tenantId(), command.assignmentAttemptId())
+        return ledgerStore
+                .findEarningByAttempt(command.tenantId(), command.assignmentAttemptId())
                 .orElseThrow();
     }
 
     private UUID courierTypeOf(DeliveredAssignment command) {
         return couriers.findCourier(command.tenantId(), command.courierId())
                 .map(JdbcCourierStore.CourierRow::courierTypeId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No such courier: " + command.courierId()));
+                .orElseThrow(() ->
+                        new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such courier: " + command.courierId()));
     }
 
     private String protectPoint(UUID tenantId, UUID earningId, String column, String point) {
         if (point == null) {
             return null;
         }
-        return protection.protect(tenantId, DataClass.PERSONAL_SENSITIVE,
-                        new FieldProtection.RecordRef("fulfillment.courier_assignment_earnings",
-                                column, earningId),
+        return protection
+                .protect(
+                        tenantId,
+                        DataClass.PERSONAL_SENSITIVE,
+                        new FieldProtection.RecordRef("fulfillment.courier_assignment_earnings", column, earningId),
                         point)
                 .serialize();
     }
@@ -210,10 +277,25 @@ public class CourierAccrualService {
      *                            street, which yields worse data and a worse
      *                            delivery
      */
-    public record DeliveredAssignment(UUID tenantId, UUID brandId, UUID locationId, UUID courierId,
-            UUID shiftId, UUID shipmentId, UUID assignmentAttemptId, int distanceMeters,
-            DistanceSource distanceSource, Instant acceptedAt, Instant deliveredAt,
-            Instant promisedDeliveryEnd, Integer graceSeconds, int onTimePolicyVersion,
-            Instant kitchenHandoverAt, Instant pickupWindowEnd, long cashToCollectMinor,
-            boolean geoUnverified, String pickupPoint, String deliveryPoint) { }
+    public record DeliveredAssignment(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID courierId,
+            UUID shiftId,
+            UUID shipmentId,
+            UUID assignmentAttemptId,
+            int distanceMeters,
+            DistanceSource distanceSource,
+            Instant acceptedAt,
+            Instant deliveredAt,
+            Instant promisedDeliveryEnd,
+            Integer graceSeconds,
+            int onTimePolicyVersion,
+            Instant kitchenHandoverAt,
+            Instant pickupWindowEnd,
+            long cashToCollectMinor,
+            boolean geoUnverified,
+            String pickupPoint,
+            String deliveryPoint) {}
 }

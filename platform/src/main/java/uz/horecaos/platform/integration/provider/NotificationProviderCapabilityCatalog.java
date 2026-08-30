@@ -6,9 +6,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.integration.api.provider.ProviderCapabilityCatalog;
 import uz.horecaos.platform.integration.api.provider.ProviderCategory;
 import uz.horecaos.platform.integration.camel.notification.NotificationChannelAdapter;
@@ -20,9 +18,11 @@ public class NotificationProviderCapabilityCatalog implements ProviderCapability
     private final Map<String, Set<String>> capabilitiesByProvider;
 
     public NotificationProviderCapabilityCatalog(List<NotificationChannelAdapter> adapters) {
-        capabilitiesByProvider = adapters.stream().collect(Collectors.groupingBy(
-                NotificationChannelAdapter::providerType,
-                Collectors.mapping(adapter -> capabilityFor(adapter.channel()), Collectors.toUnmodifiableSet())));
+        capabilitiesByProvider = adapters.stream()
+                .collect(Collectors.groupingBy(
+                        NotificationChannelAdapter::providerType,
+                        Collectors.mapping(
+                                adapter -> capabilityFor(adapter.channel()), Collectors.toUnmodifiableSet())));
     }
 
     @Override
@@ -32,8 +32,8 @@ public class NotificationProviderCapabilityCatalog implements ProviderCapability
 
     @Override
     public Optional<Declaration> declarationFor(String providerType) {
-        return Optional.ofNullable(capabilitiesByProvider.get(providerType)).map(capabilities ->
-                new Declaration(capabilities, "notification/%s/v1".formatted(providerType)));
+        return Optional.ofNullable(capabilitiesByProvider.get(providerType))
+                .map(capabilities -> new Declaration(capabilities, "notification/%s/v1".formatted(providerType)));
     }
 
     private static String capabilityFor(String channel) {

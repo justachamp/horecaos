@@ -8,10 +8,8 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.payments.domain.PaymentAttemptStatus;
 import uz.horecaos.platform.payments.domain.SomAmount;
 
@@ -82,8 +80,7 @@ public class JdbcPaymeTransactionView {
      * cashbox, so a transaction id belonging to another cashbox must read as "not
      * found" rather than be answered across the account boundary.
      */
-    public Optional<PaymeTransactionView> find(UUID tenantId, UUID bindingId,
-            String paymeTransactionId) {
+    public Optional<PaymeTransactionView> find(UUID tenantId, UUID bindingId, String paymeTransactionId) {
         return jdbc.sql(SELECT + " AND a.external_payment_id = :paymeTransactionId")
                 .param("tenantId", tenantId)
                 .param("bindingId", bindingId)
@@ -101,8 +98,7 @@ public class JdbcPaymeTransactionView {
      * however long the create took, which is enough to move a transaction across a
      * day boundary in a reconciliation.
      */
-    public List<PaymeTransactionView> between(UUID tenantId, UUID bindingId, Instant from,
-            Instant to) {
+    public List<PaymeTransactionView> between(UUID tenantId, UUID bindingId, Instant from, Instant to) {
         return jdbc.sql(SELECT + """
                   AND a.provider_created_at >= :from
                   AND a.provider_created_at <= :to

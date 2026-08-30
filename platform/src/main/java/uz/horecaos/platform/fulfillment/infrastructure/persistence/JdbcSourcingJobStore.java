@@ -1,17 +1,16 @@
 package uz.horecaos.platform.fulfillment.infrastructure.persistence;
 
+import static uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore.instant;
+import static uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore.utc;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-
-import static uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore.instant;
-import static uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore.utc;
 
 /**
  * {@code fulfillment.delivery_sourcing_jobs} (ADR 0014, V0054).
@@ -57,9 +56,12 @@ public class JdbcSourcingJobStore {
                 ON CONFLICT (tenant_id, delivery_plan_id) WHERE status IN ('PENDING', 'LEASED')
                 DO NOTHING
                 """)
-                .param("id", jobId).param("tenantId", tenantId).param("planId", planId)
-                .param("dueAt", utc(dueAt))
-                .update() == 1;
+                        .param("id", jobId)
+                        .param("tenantId", tenantId)
+                        .param("planId", planId)
+                        .param("dueAt", utc(dueAt))
+                        .update()
+                == 1;
     }
 
     /**
@@ -133,8 +135,11 @@ public class JdbcSourcingJobStore {
                     leased_by = NULL, updated_at = :now
                 WHERE id = :jobId AND lease_token = :leaseToken
                 """)
-                .param("jobId", jobId).param("leaseToken", leaseToken).param("now", utc(now))
-                .update() == 1;
+                        .param("jobId", jobId)
+                        .param("leaseToken", leaseToken)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -144,8 +149,8 @@ public class JdbcSourcingJobStore {
      *                  wording is the one place a customer's address has been seen
      *                  to arrive in a column nobody was watching
      */
-    public boolean reschedule(UUID jobId, UUID leaseToken, Instant dueAt, String checkpointJson,
-            String errorCode, Instant now) {
+    public boolean reschedule(
+            UUID jobId, UUID leaseToken, Instant dueAt, String checkpointJson, String errorCode, Instant now) {
         return jdbc.sql("""
                 UPDATE fulfillment.delivery_sourcing_jobs
                 SET status = 'PENDING', due_at = :dueAt,
@@ -157,10 +162,14 @@ public class JdbcSourcingJobStore {
                     updated_at = :now
                 WHERE id = :jobId AND lease_token = :leaseToken
                 """)
-                .param("jobId", jobId).param("leaseToken", leaseToken)
-                .param("dueAt", utc(dueAt)).param("checkpoint", checkpointJson)
-                .param("errorCode", errorCode).param("now", utc(now))
-                .update() == 1;
+                        .param("jobId", jobId)
+                        .param("leaseToken", leaseToken)
+                        .param("dueAt", utc(dueAt))
+                        .param("checkpoint", checkpointJson)
+                        .param("errorCode", errorCode)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -181,9 +190,12 @@ public class JdbcSourcingJobStore {
                     updated_at = :now
                 WHERE id = :jobId AND lease_token = :leaseToken
                 """)
-                .param("jobId", jobId).param("leaseToken", leaseToken)
-                .param("errorCode", errorCode).param("now", utc(now))
-                .update() == 1;
+                        .param("jobId", jobId)
+                        .param("leaseToken", leaseToken)
+                        .param("errorCode", errorCode)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -199,9 +211,12 @@ public class JdbcSourcingJobStore {
                 SET due_at = :dueAt, updated_at = :now
                 WHERE tenant_id = :tenantId AND delivery_plan_id = :planId AND status = 'PENDING'
                 """)
-                .param("tenantId", tenantId).param("planId", planId)
-                .param("dueAt", utc(dueAt)).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("planId", planId)
+                        .param("dueAt", utc(dueAt))
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -214,10 +229,5 @@ public class JdbcSourcingJobStore {
      *                       extra time
      */
     public record ClaimedJob(
-            UUID jobId,
-            UUID tenantId,
-            UUID planId,
-            int claimedAttempt,
-            UUID leaseToken,
-            Instant createdAt) { }
+            UUID jobId, UUID tenantId, UUID planId, int claimedAttempt, UUID leaseToken, Instant createdAt) {}
 }

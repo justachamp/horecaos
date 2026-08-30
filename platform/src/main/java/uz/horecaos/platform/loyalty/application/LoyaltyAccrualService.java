@@ -5,10 +5,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.loyalty.domain.EntryType;
 import uz.horecaos.platform.loyalty.domain.LotStatus;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore;
@@ -43,8 +41,7 @@ public class LoyaltyAccrualService {
     private final LoyaltyPolicyService policies;
     private final Clock clock;
 
-    public LoyaltyAccrualService(JdbcLoyaltyStore store, LoyaltyPolicyService policies,
-            Clock clock) {
+    public LoyaltyAccrualService(JdbcLoyaltyStore store, LoyaltyPolicyService policies, Clock clock) {
         this.store = store;
         this.policies = policies;
         this.clock = clock;
@@ -59,10 +56,17 @@ public class LoyaltyAccrualService {
      * @param deliveryFeeMinor  excluded from the base. A tenant does not want to
      *                          pay loyalty on a courier's fee
      */
-    public record CompletedOrder(UUID tenantId, UUID brandId, UUID locationId, UUID channelId,
-            UUID customerAccountId, UUID orderId, String currency, long moneySettledMinor,
-            long deliveryFeeMinor, Instant completedAt) {
-    }
+    public record CompletedOrder(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID channelId,
+            UUID customerAccountId,
+            UUID orderId,
+            String currency,
+            long moneySettledMinor,
+            long deliveryFeeMinor,
+            Instant completedAt) {}
 
     /** @return the lot that was granted, or empty when the order earns nothing */
     @Transactional
@@ -75,8 +79,8 @@ public class LoyaltyAccrualService {
         }
 
         Instant now = clock.instant();
-        Optional<AccrualRuleRow> resolved = policies.accrualRule(order.tenantId(), order.brandId(),
-                order.locationId(), order.channelId(), order.completedAt());
+        Optional<AccrualRuleRow> resolved = policies.accrualRule(
+                order.tenantId(), order.brandId(), order.locationId(), order.channelId(), order.completedAt());
         if (resolved.isEmpty()) {
             return Optional.empty();
         }
@@ -91,15 +95,29 @@ public class LoyaltyAccrualService {
             return Optional.empty();
         }
 
-        AccountRow account = store.openAccount(UUID.randomUUID(), order.tenantId(),
-                order.brandId(), order.customerAccountId(), order.currency(), now);
+        AccountRow account = store.openAccount(
+                UUID.randomUUID(), order.tenantId(), order.brandId(), order.customerAccountId(), order.currency(), now);
 
         UUID entryId = UUID.randomUUID();
-        boolean recorded = store.appendEntry(new JdbcLoyaltyStore.NewEntry(entryId,
-                order.tenantId(), account.id(), EntryType.ACCRUAL, earned,
-                account.balanceMinor() + earned, null, order.orderId(), null, rule.id(),
-                rule.version(), "ORDER_ACCRUAL", "loyalty-accrual", null,
-                "ACCRUAL:" + order.orderId(), order.completedAt()), now);
+        boolean recorded = store.appendEntry(
+                new JdbcLoyaltyStore.NewEntry(
+                        entryId,
+                        order.tenantId(),
+                        account.id(),
+                        EntryType.ACCRUAL,
+                        earned,
+                        account.balanceMinor() + earned,
+                        null,
+                        order.orderId(),
+                        null,
+                        rule.id(),
+                        rule.version(),
+                        "ORDER_ACCRUAL",
+                        "loyalty-accrual",
+                        null,
+                        "ACCRUAL:" + order.orderId(),
+                        order.completedAt()),
+                now);
         if (!recorded) {
             // The order has already been accrued for. A second delivery of the
             // completion event must not grant a second lot.
@@ -110,8 +128,16 @@ public class LoyaltyAccrualService {
         Instant expiresAt = earnsAt.plus(Duration.ofDays(rule.lotLifetimeDays()));
 
         UUID lotId = UUID.randomUUID();
-        store.insertLot(lotId, order.tenantId(), account.id(), entryId, earned, earnsAt, expiresAt,
-                earnsAt.isAfter(now) ? LotStatus.PENDING : LotStatus.ACTIVE, now);
+        store.insertLot(
+                lotId,
+                order.tenantId(),
+                account.id(),
+                entryId,
+                earned,
+                earnsAt,
+                expiresAt,
+                earnsAt.isAfter(now) ? LotStatus.PENDING : LotStatus.ACTIVE,
+                now);
 
         // The balance rises now and the lot is not spendable until earns_at. The
         // two are deliberately different: a customer should see what they earned

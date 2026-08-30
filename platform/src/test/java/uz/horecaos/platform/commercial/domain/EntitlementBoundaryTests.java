@@ -4,11 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
 import java.time.ZoneId;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.commercial.api.Boundary;
 import uz.horecaos.platform.commercial.api.EnforcementMode;
 import uz.horecaos.platform.commercial.api.EntitlementKey;
@@ -104,9 +102,17 @@ class EntitlementBoundaryTests {
 
     @Test
     void aWarningFiresBeforeTheLimitAndNotAtIt() {
-        EntitlementValue value = new EntitlementValue(ORDERS, 100L, null,
-                EnforcementMode.SOFT, EnforcementMode.SOFT, ResetPeriod.BILLING_PERIOD,
-                8_000, null, null, EntitlementSource.PLAN_VERSION);
+        EntitlementValue value = new EntitlementValue(
+                ORDERS,
+                100L,
+                null,
+                EnforcementMode.SOFT,
+                EnforcementMode.SOFT,
+                ResetPeriod.BILLING_PERIOD,
+                8_000,
+                null,
+                null,
+                EntitlementSource.PLAN_VERSION);
 
         assertThat(BoundaryPolicy.decideCounted(value, 79, 1, EnforcementMode.SOFT))
                 .isEqualTo(Boundary.APPROACHING);
@@ -120,12 +126,26 @@ class EntitlementBoundaryTests {
         // including 20 locations, 41 locations in use, 250 000 per extra one.
         // 9 000 000 + 21 x 250 000 = 14 250 000, which is the figure an account
         // manager reads to an owner on the phone.
-        EntitlementValue value = new EntitlementValue(LOCATIONS, 20L, null,
-                EnforcementMode.SOFT, EnforcementMode.SOFT, ResetPeriod.NONE,
-                null, 250_000L, "UZS", EntitlementSource.PLAN_VERSION);
+        EntitlementValue value = new EntitlementValue(
+                LOCATIONS,
+                20L,
+                null,
+                EnforcementMode.SOFT,
+                EnforcementMode.SOFT,
+                ResetPeriod.NONE,
+                null,
+                250_000L,
+                "UZS",
+                EntitlementSource.PLAN_VERSION);
 
-        LimitCheck check = new LimitCheck(LOCATIONS.code(), java.util.UUID.randomUUID(), 20L,
-                41, 0, lifetime(), value,
+        LimitCheck check = new LimitCheck(
+                LOCATIONS.code(),
+                java.util.UUID.randomUUID(),
+                20L,
+                41,
+                0,
+                lifetime(),
+                value,
                 BoundaryPolicy.decideCounted(value, 41, 0, EnforcementMode.SOFT),
                 BoundaryPolicy.decideCounted(value, 41, 0, EnforcementMode.SOFT),
                 BoundaryPolicy.overageQuantity(value, 41, 0));
@@ -140,12 +160,29 @@ class EntitlementBoundaryTests {
 
     @Test
     void overageIsNotChargedWhenTheCeilingSuppressedEnforcement() {
-        EntitlementValue value = new EntitlementValue(LOCATIONS, 20L, null,
-                EnforcementMode.SOFT, EnforcementMode.METER_ONLY, ResetPeriod.NONE,
-                null, 250_000L, "UZS", EntitlementSource.PLAN_VERSION);
+        EntitlementValue value = new EntitlementValue(
+                LOCATIONS,
+                20L,
+                null,
+                EnforcementMode.SOFT,
+                EnforcementMode.METER_ONLY,
+                ResetPeriod.NONE,
+                null,
+                250_000L,
+                "UZS",
+                EntitlementSource.PLAN_VERSION);
 
-        LimitCheck check = new LimitCheck(LOCATIONS.code(), java.util.UUID.randomUUID(), 20L,
-                41, 0, lifetime(), value, Boundary.OVER_UNBILLED, Boundary.OVER_BILLABLE, 21);
+        LimitCheck check = new LimitCheck(
+                LOCATIONS.code(),
+                java.util.UUID.randomUUID(),
+                20L,
+                41,
+                0,
+                lifetime(),
+                value,
+                Boundary.OVER_UNBILLED,
+                Boundary.OVER_BILLABLE,
+                21);
 
         assertThat(check.overageChargeMinor())
                 .as("a meter-only tenant is measured, not invoiced; billing overage the "
@@ -170,9 +207,10 @@ class EntitlementBoundaryTests {
 
         @Test
         void theCatalogueDefaultCanNeverRefuse() {
-            EntitlementKeys.all().forEach(key -> assertThat(key.defaultMode().canRefuse())
-                    .as("%s must not be able to refuse a tenant that has no subscription", key.code())
-                    .isFalse());
+            EntitlementKeys.all()
+                    .forEach(key -> assertThat(key.defaultMode().canRefuse())
+                            .as("%s must not be able to refuse a tenant that has no subscription", key.code())
+                            .isFalse());
         }
     }
 
@@ -182,13 +220,13 @@ class EntitlementBoundaryTests {
 
         @Test
         void anOverrideBeatsThePlanAndKeepsThePlansShape() {
-            PlanEntitlement plan = PlanEntitlement.counted(ORDERS.code(), 100,
-                    EnforcementMode.SOFT, ResetPeriod.BILLING_PERIOD, 8_000, 500L);
-            EntitlementOverride override = new EntitlementOverride(ORDERS.code(), 5_000L, null,
-                    null, NOW.minusSeconds(60), NOW.plusSeconds(3_600));
+            PlanEntitlement plan = PlanEntitlement.counted(
+                    ORDERS.code(), 100, EnforcementMode.SOFT, ResetPeriod.BILLING_PERIOD, 8_000, 500L);
+            EntitlementOverride override = new EntitlementOverride(
+                    ORDERS.code(), 5_000L, null, null, NOW.minusSeconds(60), NOW.plusSeconds(3_600));
 
-            EntitlementValue value = EntitlementResolution.resolve(ORDERS, plan, override,
-                    SubscriptionStatus.ACTIVE, "UZS", EnforcementMode.HARD, NOW);
+            EntitlementValue value = EntitlementResolution.resolve(
+                    ORDERS, plan, override, SubscriptionStatus.ACTIVE, "UZS", EnforcementMode.HARD, NOW);
 
             assertThat(value.limit()).isEqualTo(5_000L);
             assertThat(value.source()).isEqualTo(EntitlementSource.TENANT_OVERRIDE);
@@ -201,13 +239,13 @@ class EntitlementBoundaryTests {
 
         @Test
         void anExpiredOverrideFallsBackToThePlanOnTheInstantItEnds() {
-            PlanEntitlement plan = PlanEntitlement.counted(ORDERS.code(), 100,
-                    EnforcementMode.SOFT, ResetPeriod.BILLING_PERIOD, null, null);
-            EntitlementOverride override = new EntitlementOverride(ORDERS.code(), 5_000L, null,
-                    null, NOW.minusSeconds(3_600), NOW);
+            PlanEntitlement plan = PlanEntitlement.counted(
+                    ORDERS.code(), 100, EnforcementMode.SOFT, ResetPeriod.BILLING_PERIOD, null, null);
+            EntitlementOverride override =
+                    new EntitlementOverride(ORDERS.code(), 5_000L, null, null, NOW.minusSeconds(3_600), NOW);
 
-            EntitlementValue value = EntitlementResolution.resolve(ORDERS, plan, override,
-                    SubscriptionStatus.ACTIVE, "UZS", EnforcementMode.HARD, NOW);
+            EntitlementValue value = EntitlementResolution.resolve(
+                    ORDERS, plan, override, SubscriptionStatus.ACTIVE, "UZS", EnforcementMode.HARD, NOW);
 
             assertThat(value.limit())
                     .as("validUntil is exclusive, so expiry is deterministic rather than "
@@ -218,8 +256,8 @@ class EntitlementBoundaryTests {
 
         @Test
         void noSubscriptionResolvesToACatalogueDefaultThatRefusesNothing() {
-            EntitlementValue value = EntitlementResolution.resolve(ORDERS, null, null, null,
-                    null, EnforcementMode.HARD, NOW);
+            EntitlementValue value =
+                    EntitlementResolution.resolve(ORDERS, null, null, null, null, EnforcementMode.HARD, NOW);
 
             assertThat(value.source()).isEqualTo(EntitlementSource.CATALOGUE_DEFAULT);
             assertThat(value.limit()).isNull();
@@ -230,11 +268,11 @@ class EntitlementBoundaryTests {
 
         @Test
         void aSuspendedSubscriptionBlocksAdditionsAndRemovesNothing() {
-            PlanEntitlement plan = PlanEntitlement.counted(LOCATIONS.code(), 20,
-                    EnforcementMode.SOFT, ResetPeriod.NONE, null, 250_000L);
+            PlanEntitlement plan = PlanEntitlement.counted(
+                    LOCATIONS.code(), 20, EnforcementMode.SOFT, ResetPeriod.NONE, null, 250_000L);
 
-            EntitlementValue value = EntitlementResolution.resolve(LOCATIONS, plan, null,
-                    SubscriptionStatus.SUSPENDED, "UZS", EnforcementMode.HARD, NOW);
+            EntitlementValue value = EntitlementResolution.resolve(
+                    LOCATIONS, plan, null, SubscriptionStatus.SUSPENDED, "UZS", EnforcementMode.HARD, NOW);
 
             assertThat(value.limit()).isZero();
             assertThat(value.source()).isEqualTo(EntitlementSource.SUSPENSION_POLICY);
@@ -249,11 +287,11 @@ class EntitlementBoundaryTests {
 
         @Test
         void aSuspendedTenantUnderTheDefaultCeilingIsStillNotRefused() {
-            PlanEntitlement plan = PlanEntitlement.counted(LOCATIONS.code(), 20,
-                    EnforcementMode.SOFT, ResetPeriod.NONE, null, null);
+            PlanEntitlement plan =
+                    PlanEntitlement.counted(LOCATIONS.code(), 20, EnforcementMode.SOFT, ResetPeriod.NONE, null, null);
 
-            EntitlementValue value = EntitlementResolution.resolve(LOCATIONS, plan, null,
-                    SubscriptionStatus.SUSPENDED, "UZS", EnforcementMode.METER_ONLY, NOW);
+            EntitlementValue value = EntitlementResolution.resolve(
+                    LOCATIONS, plan, null, SubscriptionStatus.SUSPENDED, "UZS", EnforcementMode.METER_ONLY, NOW);
 
             assertThat(value.declaredMode()).isEqualTo(EnforcementMode.HARD);
             assertThat(BoundaryPolicy.decideCounted(value, 41, 1, value.effectiveMode()))
@@ -267,16 +305,15 @@ class EntitlementBoundaryTests {
             EntitlementKey<Boolean> pos = EntitlementKeys.POS_INTEGRATIONS_ENABLED;
             PlanEntitlement plan = PlanEntitlement.feature(pos.code(), false, EnforcementMode.DISABLED);
 
-            EntitlementValue disabled = EntitlementResolution.resolve(pos, plan, null,
-                    SubscriptionStatus.ACTIVE, "UZS", EnforcementMode.DISABLED, NOW);
-            EntitlementValue metered = EntitlementResolution.resolve(pos, plan, null,
-                    SubscriptionStatus.ACTIVE, "UZS", EnforcementMode.METER_ONLY, NOW);
+            EntitlementValue disabled = EntitlementResolution.resolve(
+                    pos, plan, null, SubscriptionStatus.ACTIVE, "UZS", EnforcementMode.DISABLED, NOW);
+            EntitlementValue metered = EntitlementResolution.resolve(
+                    pos, plan, null, SubscriptionStatus.ACTIVE, "UZS", EnforcementMode.METER_ONLY, NOW);
 
             assertThat(BoundaryPolicy.decideFeature(disabled, disabled.effectiveMode()))
                     .isEqualTo(Boundary.REFUSED);
             assertThat(BoundaryPolicy.decideFeature(metered, metered.effectiveMode()))
-                    .as("used outside the plan, allowed, and counted — which is what a "
-                            + "meter-only rollout is for")
+                    .as("used outside the plan, allowed, and counted — which is what a " + "meter-only rollout is for")
                     .isEqualTo(Boundary.OVER_UNBILLED);
         }
     }
@@ -290,18 +327,18 @@ class EntitlementBoundaryTests {
             // 2026-08-31T20:00Z is already 01:00 on 1 September in Tashkent. A
             // period computed in UTC would put these orders in August's invoice
             // and the tenant's own order list would disagree with it.
-            UsagePeriod period = UsagePeriods.of(ResetPeriod.MONTHLY,
-                    Instant.parse("2026-08-31T20:00:00Z"), TASHKENT, null, null);
+            UsagePeriod period =
+                    UsagePeriods.of(ResetPeriod.MONTHLY, Instant.parse("2026-08-31T20:00:00Z"), TASHKENT, null, null);
 
             assertThat(period.key()).isEqualTo("2026-09");
         }
 
         @Test
         void aStandingLimitHasOnePeriodThatNeverCloses() {
-            UsagePeriod first = UsagePeriods.of(ResetPeriod.NONE,
-                    Instant.parse("2024-01-01T00:00:00Z"), TASHKENT, null, null);
-            UsagePeriod later = UsagePeriods.of(ResetPeriod.NONE,
-                    Instant.parse("2029-06-30T00:00:00Z"), TASHKENT, null, null);
+            UsagePeriod first =
+                    UsagePeriods.of(ResetPeriod.NONE, Instant.parse("2024-01-01T00:00:00Z"), TASHKENT, null, null);
+            UsagePeriod later =
+                    UsagePeriods.of(ResetPeriod.NONE, Instant.parse("2029-06-30T00:00:00Z"), TASHKENT, null, null);
 
             assertThat(first).isEqualTo(later);
             assertThat(first.isLifetime()).isTrue();
@@ -312,20 +349,19 @@ class EntitlementBoundaryTests {
             Instant start = Instant.parse("2026-08-14T00:00:00Z");
             Instant end = Instant.parse("2026-09-14T00:00:00Z");
 
-            UsagePeriod period = UsagePeriods.of(ResetPeriod.BILLING_PERIOD,
-                    Instant.parse("2026-09-01T10:00:00Z"), TASHKENT, start, end);
+            UsagePeriod period = UsagePeriods.of(
+                    ResetPeriod.BILLING_PERIOD, Instant.parse("2026-09-01T10:00:00Z"), TASHKENT, start, end);
 
             assertThat(period.key())
-                    .as("a tenant that started on the fourteenth does not get its allowance "
-                            + "back on the first")
+                    .as("a tenant that started on the fourteenth does not get its allowance " + "back on the first")
                     .isEqualTo("2026-08-14");
             assertThat(period.contains(Instant.parse("2026-09-13T23:59:59Z"))).isTrue();
         }
 
         @Test
         void usageBeforeAnySubscriptionFallsBackToTheCalendarMonth() {
-            UsagePeriod period = UsagePeriods.of(ResetPeriod.BILLING_PERIOD,
-                    Instant.parse("2026-08-23T10:00:00Z"), TASHKENT, null, null);
+            UsagePeriod period = UsagePeriods.of(
+                    ResetPeriod.BILLING_PERIOD, Instant.parse("2026-08-23T10:00:00Z"), TASHKENT, null, null);
 
             assertThat(period.key()).isEqualTo("2026-08");
         }
@@ -348,11 +384,19 @@ class EntitlementBoundaryTests {
 
     // ------------------------------------------------------------- fixtures
 
-    private static EntitlementValue counted(Long limit, EnforcementMode declared,
-            EnforcementMode effective, Long overagePrice) {
-        return new EntitlementValue(ORDERS, limit, null, declared, effective,
-                ResetPeriod.BILLING_PERIOD, null, overagePrice,
-                overagePrice == null ? null : "UZS", EntitlementSource.PLAN_VERSION);
+    private static EntitlementValue counted(
+            Long limit, EnforcementMode declared, EnforcementMode effective, Long overagePrice) {
+        return new EntitlementValue(
+                ORDERS,
+                limit,
+                null,
+                declared,
+                effective,
+                ResetPeriod.BILLING_PERIOD,
+                null,
+                overagePrice,
+                overagePrice == null ? null : "UZS",
+                EntitlementSource.PLAN_VERSION);
     }
 
     private static UsagePeriod lifetime() {

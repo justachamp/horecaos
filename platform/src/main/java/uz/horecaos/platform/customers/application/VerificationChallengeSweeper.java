@@ -2,7 +2,6 @@ package uz.horecaos.platform.customers.application;
 
 import java.time.Clock;
 import java.time.Duration;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,8 +29,10 @@ import org.springframework.stereotype.Component;
  * appear at random.
  */
 @Component
-@ConditionalOnProperty(name = "horecaos.customers.verification.sweep.enabled",
-        havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(
+        name = "horecaos.customers.verification.sweep.enabled",
+        havingValue = "true",
+        matchIfMissing = true)
 public class VerificationChallengeSweeper {
 
     private static final Logger log = LoggerFactory.getLogger(VerificationChallengeSweeper.class);

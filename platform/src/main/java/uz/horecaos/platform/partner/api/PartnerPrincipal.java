@@ -24,11 +24,7 @@ import java.util.UUID;
  * away from another restaurant's order book.
  */
 public record PartnerPrincipal(
-        UUID clientRegistrationId,
-        String clientId,
-        UUID tenantId,
-        UUID installationId,
-        Set<UUID> bindingIds) {
+        UUID clientRegistrationId, String clientId, UUID tenantId, UUID installationId, Set<UUID> bindingIds) {
 
     public PartnerPrincipal {
         Objects.requireNonNull(clientRegistrationId, "A client registration id is required");

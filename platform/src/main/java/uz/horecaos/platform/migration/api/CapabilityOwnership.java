@@ -4,8 +4,6 @@ import java.util.EnumSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-
-import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.domain.ReadMode;
 import uz.horecaos.platform.migration.domain.ScopeState;
 import uz.horecaos.platform.migration.domain.WriteMode;
@@ -30,11 +28,7 @@ import uz.horecaos.platform.migration.domain.WriteMode;
  *                   compared or trusted
  */
 public record CapabilityOwnership(
-        UUID scopeId,
-        MigrationCapability capability,
-        ScopeState state,
-        WriteMode writeMode,
-        ReadMode readMode) {
+        UUID scopeId, MigrationCapability capability, ScopeState state, WriteMode writeMode, ReadMode readMode) {
 
     /**
      * The states that suspend a scope without rewriting the modes stored on it.
@@ -50,10 +44,8 @@ public record CapabilityOwnership(
      * proven, so during the rollback the honest answer is that neither side may
      * write.
      */
-    private static final Set<ScopeState> WRITES_SUSPENDED = EnumSet.of(
-            ScopeState.PAUSED,
-            ScopeState.BLOCKED_RECONCILIATION,
-            ScopeState.ROLLING_BACK);
+    private static final Set<ScopeState> WRITES_SUSPENDED =
+            EnumSet.of(ScopeState.PAUSED, ScopeState.BLOCKED_RECONCILIATION, ScopeState.ROLLING_BACK);
 
     public CapabilityOwnership {
         Objects.requireNonNull(capability, "A capability is required");
@@ -73,8 +65,7 @@ public record CapabilityOwnership(
      * has not started and no scope at all.
      */
     public static CapabilityOwnership unmanaged(MigrationCapability capability) {
-        return new CapabilityOwnership(null, capability, ScopeState.DISCOVERY,
-                WriteMode.LEGACY_ONLY, ReadMode.LEGACY);
+        return new CapabilityOwnership(null, capability, ScopeState.DISCOVERY, WriteMode.LEGACY_ONLY, ReadMode.LEGACY);
     }
 
     /**

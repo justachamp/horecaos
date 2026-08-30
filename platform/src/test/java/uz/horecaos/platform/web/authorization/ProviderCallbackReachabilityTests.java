@@ -8,7 +8,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -25,7 +24,6 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -154,10 +152,10 @@ class ProviderCallbackReachabilityTests {
     @Test
     void anApiEndpointIsRefusedWithoutAGrant() throws Exception {
         MvcResult refused = mvc.perform(get("/api/v1/control-plane/tenants/" + UUID.randomUUID())
-                        .with(jwt().jwt(builder -> builder
-                                .subject("operator-without-a-grant")
-                                .claim("resource_access", Map.of(
-                                        "horecaos-api", Map.of("roles", List.of("tenant-admin")))))))
+                        .with(jwt().jwt(builder -> builder.subject("operator-without-a-grant")
+                                .claim(
+                                        "resource_access",
+                                        Map.of("horecaos-api", Map.of("roles", List.of("tenant-admin")))))))
                 .andReturn();
 
         assertThat(refused.getResponse().getStatus())
@@ -171,7 +169,10 @@ class ProviderCallbackReachabilityTests {
 
         @Bean
         JwtDecoder jwtDecoder() {
-            return token -> Jwt.withTokenValue(token).header("alg", "none").claim("sub", "unused").build();
+            return token -> Jwt.withTokenValue(token)
+                    .header("alg", "none")
+                    .claim("sub", "unused")
+                    .build();
         }
     }
 }

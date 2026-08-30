@@ -1,5 +1,8 @@
 package uz.horecaos.platform.payments;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -12,7 +15,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
-
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -24,7 +26,6 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.integration.api.payment.MerchantApiCall;
 import uz.horecaos.platform.integration.api.payment.MerchantApiTransport;
 import uz.horecaos.platform.integration.api.provider.BindingRef;
@@ -56,9 +57,6 @@ import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentBusin
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentIntentStore;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentTransactionStore;
 import uz.horecaos.platform.support.TestDatabase;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Opening an attempt and presenting a checkout surface (ADR 0013).
@@ -113,8 +111,8 @@ class PaymentCheckoutSurfaceTests {
      * calendar that answered UTC would still agree here, which is why the
      * cross-midnight case is asserted separately.
      */
-    private static final Clock CLOCK =
-            Clock.fixed(Instant.parse("2026-08-22T04:03:11Z"), ZoneOffset.UTC);
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-08-22T04:03:11Z"), ZoneOffset.UTC);
+
     private static final LocalDate BUSINESS_DATE = LocalDate.of(2026, 8, 22);
 
     private static TestDatabase.Handle db;
@@ -130,12 +128,11 @@ class PaymentCheckoutSurfaceTests {
 
     @BeforeAll
     static void startDatabase() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
-                "Docker is required for the payments schema");
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(), "Docker is required for the payments schema");
         db = TestDatabase.migrated();
 
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                db.jdbcUrl(), db.username(), db.password());
+        DriverManagerDataSource dataSource = new DriverManagerDataSource(db.jdbcUrl(), db.username(), db.password());
         jdbc = JdbcClient.create(dataSource);
         unitOfWork = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
 
@@ -162,17 +159,27 @@ class PaymentCheckoutSurfaceTests {
         JdbcPaymentBindingResolver bindings = new JdbcPaymentBindingResolver(jdbc);
 
         transport = new RecordingTransport();
-        ClickPaymentAdapter click =
-                new ClickPaymentAdapter(new ClickMerchantApi(transport, CLOCK), CLOCK);
-        PaymeProviderAdapter payme = new PaymeProviderAdapter(
-                new FixedInstallations(), attempts, true);
+        ClickPaymentAdapter click = new ClickPaymentAdapter(new ClickMerchantApi(transport, CLOCK), CLOCK);
+        PaymeProviderAdapter payme = new PaymeProviderAdapter(new FixedInstallations(), attempts, true);
 
-        attemptService = new PaymentAttemptService(intents, attempts,
-                transactions, bindings, List.of(click, payme), CapturedMoneyPort.NONE,
-                unitOfWork, CLOCK);
+        attemptService = new PaymentAttemptService(
+                intents,
+                attempts,
+                transactions,
+                bindings,
+                List.of(click, payme),
+                CapturedMoneyPort.NONE,
+                unitOfWork,
+                CLOCK);
 
-        checkout = new PaymentCheckoutService(intents, attempts, attemptService, bindings,
-                new JdbcPaymentBusinessCalendar(jdbc), new SeededOrders(), CLOCK);
+        checkout = new PaymentCheckoutService(
+                intents,
+                attempts,
+                attemptService,
+                bindings,
+                new JdbcPaymentBusinessCalendar(jdbc),
+                new SeededOrders(),
+                CLOCK);
         endedOrders = new uz.horecaos.platform.payments.application.TerminalOrderPaymentVoid(
                 intents, attempts, attemptService, bindings, List.of(click, payme), CLOCK);
     }
@@ -203,8 +210,7 @@ class PaymentCheckoutSurfaceTests {
             + "uncertain rather than guessed")
     void anEndedOrderVoidsWhatItCanAndGuessesNothing() {
         givenIntent(CLICK_ORDER, PaymentProviderType.CLICK, CLICK_ENTITY);
-        var session = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT,
-                PresentationRequest.link());
+        var session = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT, PresentationRequest.link());
         transport.answer(uz.horecaos.platform.integration.api.provider.ProviderOutcome.uncertain(
                 "TIMEOUT", "Click did not answer status_by_mti"));
 
@@ -212,8 +218,7 @@ class PaymentCheckoutSurfaceTests {
 
         PaymentAttempt attempt = attempts.find(TENANT, session.attemptId()).orElseThrow();
         assertThat(attempt.status())
-                .as("the void may or may not have happened, and that is a question rather than "
-                        + "a failure")
+                .as("the void may or may not have happened, and that is a question rather than " + "a failure")
                 .isEqualTo(PaymentAttemptStatus.UNCERTAIN);
         assertThat(transport.paths())
                 .as("one lookup and no DELETE: a reversal sent at an identifier this platform "
@@ -241,12 +246,11 @@ class PaymentCheckoutSurfaceTests {
      * would land on an attempt the console had stopped showing.
      */
     @Test
-    @DisplayName("a provider with no void leaves the attempt open, so the capture that lands "
-            + "anyway is still recorded")
+    @DisplayName(
+            "a provider with no void leaves the attempt open, so the capture that lands " + "anyway is still recorded")
     void aPaymentThatCannotBeVoidedIsLeftPayableRatherThanQuietlyFailed() {
         givenIntent(PAYME_ORDER, PaymentProviderType.PAYME, PAYME_ENTITY);
-        var session = checkout.openOrRePresent(TENANT, PAYME_ORDER, ACCOUNT,
-                PresentationRequest.link());
+        var session = checkout.openOrRePresent(TENANT, PAYME_ORDER, ACCOUNT, PresentationRequest.link());
 
         endedOrders.voidAnyLivePayment(TENANT, PAYME_ORDER, "ORDER_EXPIRED");
 
@@ -254,25 +258,22 @@ class PaymentCheckoutSurfaceTests {
                 .as("Payme has no outbound refund and no outbound cancel; marking this FAILED "
                         + "would be HorecaOS asserting something about Payme that Payme never said")
                 .isEqualTo(PaymentAttemptStatus.PRESENTED);
-        assertThat(attempts.findOpenForIntent(TENANT,
-                attempts.find(TENANT, session.attemptId()).orElseThrow().intentId()))
-                .as("still open, which is what lets the twelve-hour redirect be recorded when "
-                        + "it completes")
+        assertThat(attempts.findOpenForIntent(
+                        TENANT,
+                        attempts.find(TENANT, session.attemptId()).orElseThrow().intentId()))
+                .as("still open, which is what lets the twelve-hour redirect be recorded when " + "it completes")
                 .isPresent();
     }
 
     @Test
-    @DisplayName("an attempt that was already uncertain when the order ended is left to its "
-            + "resolver, untouched")
+    @DisplayName("an attempt that was already uncertain when the order ended is left to its " + "resolver, untouched")
     void anEndedOrderNeverVoidsOnTopOfAnUncertainAttempt() {
         givenIntent(CLICK_ORDER, PaymentProviderType.CLICK, CLICK_ENTITY);
-        var session = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT,
-                PresentationRequest.link());
+        var session = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT, PresentationRequest.link());
         // Through the real path, because UNCERTAIN carries an obligation — a named
         // resolver and a deadline — that ck_payment_attempt_uncertain_has_obligation
         // refuses a row without.
-        attemptService.markUncertain(attempts.find(TENANT, session.attemptId()).orElseThrow(),
-                "CLICK_TIMEOUT");
+        attemptService.markUncertain(attempts.find(TENANT, session.attemptId()).orElseThrow(), "CLICK_TIMEOUT");
         int callsBefore = transport.calls().size();
 
         endedOrders.voidAnyLivePayment(TENANT, CLICK_ORDER, "CUSTOMER_UNREACHABLE");
@@ -294,23 +295,23 @@ class PaymentCheckoutSurfaceTests {
     void openingCommitsTheResolverKeyFirst() {
         UUID intentId = givenIntent(CLICK_ORDER, PaymentProviderType.CLICK, CLICK_ENTITY);
 
-        var session = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT,
-                PresentationRequest.link());
+        var session = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT, PresentationRequest.link());
 
         PaymentAttempt attempt = attempts.find(TENANT, session.attemptId()).orElseThrow();
         assertThat(attempt.intentId()).isEqualTo(intentId);
         // The two fields an uncertain outcome is resolved with. Both are written by
         // the insert, before any provider could have been called, because a charge
         // nobody can ask about is a charge found in a settlement file a day later.
-        assertThat(attempt.merchantTransId()).isEqualTo(session.merchantTransId()).isNotBlank();
+        assertThat(attempt.merchantTransId())
+                .isEqualTo(session.merchantTransId())
+                .isNotBlank();
         assertThat(attempt.businessDate()).isEqualTo(BUSINESS_DATE);
         assertThat(attempt.status()).isEqualTo(PaymentAttemptStatus.PRESENTED);
         assertThat(attempt.amount()).isEqualTo(new SomAmount(AMOUNT_SOM, UZS));
 
         // The intent follows the attempt into AUTHORIZING, which is what the order's
         // PAYMENT_AUTHORIZING wait is actually waiting on.
-        assertThat(intents.find(TENANT, intentId).orElseThrow().status())
-                .isEqualTo(PaymentIntentStatus.AUTHORIZING);
+        assertThat(intents.find(TENANT, intentId).orElseThrow().status()).isEqualTo(PaymentIntentStatus.AUTHORIZING);
     }
 
     @Test
@@ -318,8 +319,7 @@ class PaymentCheckoutSurfaceTests {
     void theResolverKeyRevealsNothing() {
         givenIntent(CLICK_ORDER, PaymentProviderType.CLICK, CLICK_ENTITY);
 
-        var session = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT,
-                PresentationRequest.link());
+        var session = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT, PresentationRequest.link());
 
         // It becomes Payme's account.order_id in an unsigned link, and
         // CheckPerformTransaction is unauthenticated from the customer's side, so a
@@ -340,8 +340,7 @@ class PaymentCheckoutSurfaceTests {
     void clickPaymentLink() {
         givenIntent(CLICK_ORDER, PaymentProviderType.CLICK, CLICK_ENTITY);
 
-        var session = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT,
-                PresentationRequest.link());
+        var session = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT, PresentationRequest.link());
 
         Map<String, String> parameters = queryOf(session.checkoutUrl());
         assertThat(session.checkoutUrl()).startsWith("https://my.click.uz/services/pay/?");
@@ -369,10 +368,10 @@ class PaymentCheckoutSurfaceTests {
         // rejected at my.click.uz or resolved against whichever merchant Click
         // infers, which would be another restaurant's account — so it is refused
         // rather than emitted.
-        assertThatThrownBy(() -> checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT,
-                PresentationRequest.link()))
-                .isInstanceOfSatisfying(PresentationFailure.Refused.class, refused ->
-                        assertThat(refused.failureCode()).isEqualTo("CLICK_MERCHANT_ID_MISSING"));
+        assertThatThrownBy(() -> checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT, PresentationRequest.link()))
+                .isInstanceOfSatisfying(
+                        PresentationFailure.Refused.class,
+                        refused -> assertThat(refused.failureCode()).isEqualTo("CLICK_MERCHANT_ID_MISSING"));
     }
 
     @Test
@@ -380,10 +379,12 @@ class PaymentCheckoutSurfaceTests {
     void clickInvoicePush() {
         givenIntent(CLICK_ORDER, PaymentProviderType.CLICK, CLICK_ENTITY);
         transport.answer(uz.horecaos.platform.integration.api.provider.ProviderOutcome.success(
-                Map.of("error_code", 0, "error_note", "Success", "invoice_id", 4_444_555_666L),
-                null));
+                Map.of("error_code", 0, "error_note", "Success", "invoice_id", 4_444_555_666L), null));
 
-        var session = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT,
+        var session = checkout.openOrRePresent(
+                TENANT,
+                CLICK_ORDER,
+                ACCOUNT,
                 new PresentationRequest(PresentationKind.INVOICE_PUSH, null, null, "998901234567"));
 
         assertThat(session.presentationKind()).isEqualTo(PresentationKind.INVOICE_PUSH);
@@ -405,13 +406,17 @@ class PaymentCheckoutSurfaceTests {
     @DisplayName("a lost answer to the push is uncertain, is not retried, and keeps its key")
     void clickInvoicePushUncertainty() {
         givenIntent(CLICK_ORDER, PaymentProviderType.CLICK, CLICK_ENTITY);
-        transport.answer(uz.horecaos.platform.integration.api.provider.ProviderOutcome
-                .uncertain("TIMEOUT", "no answer in 30s"));
+        transport.answer(
+                uz.horecaos.platform.integration.api.provider.ProviderOutcome.uncertain("TIMEOUT", "no answer in 30s"));
 
-        assertThatThrownBy(() -> checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT,
-                new PresentationRequest(PresentationKind.INVOICE_PUSH, null, null, "998901234567")))
-                .isInstanceOfSatisfying(PresentationFailure.Uncertain.class, lost ->
-                        assertThat(lost.failureCode()).isEqualTo("CLICK_INVOICE_UNCERTAIN"));
+        assertThatThrownBy(() -> checkout.openOrRePresent(
+                        TENANT,
+                        CLICK_ORDER,
+                        ACCOUNT,
+                        new PresentationRequest(PresentationKind.INVOICE_PUSH, null, null, "998901234567")))
+                .isInstanceOfSatisfying(
+                        PresentationFailure.Uncertain.class,
+                        lost -> assertThat(lost.failureCode()).isEqualTo("CLICK_INVOICE_UNCERTAIN"));
 
         // Exactly one call. invoice/create carries no idempotency key, so a retry is
         // a second invoice on somebody's phone against the same order.
@@ -419,8 +424,7 @@ class PaymentCheckoutSurfaceTests {
 
         PaymentAttempt attempt = onlyAttempt();
         assertThat(attempt.status()).isEqualTo(PaymentAttemptStatus.UNCERTAIN);
-        assertThat(attempt.uncertain().orElseThrow().resolver())
-                .isEqualTo(UncertaintyResolver.CLICK_STATUS_BY_MTI);
+        assertThat(attempt.uncertain().orElseThrow().resolver()).isEqualTo(UncertaintyResolver.CLICK_STATUS_BY_MTI);
         // The resolver's two arguments survived, which is the entire reason the row
         // is committed before the call.
         assertThat(attempt.merchantTransId()).isNotBlank();
@@ -436,8 +440,7 @@ class PaymentCheckoutSurfaceTests {
     void paymeCheckoutLink() {
         givenIntent(PAYME_ORDER, PaymentProviderType.PAYME, PAYME_ENTITY);
 
-        var session = checkout.openOrRePresent(TENANT, PAYME_ORDER, ACCOUNT,
-                PresentationRequest.link());
+        var session = checkout.openOrRePresent(TENANT, PAYME_ORDER, ACCOUNT, PresentationRequest.link());
 
         assertThat(session.checkoutUrl()).startsWith(PAYME_CHECKOUT_HOST + "/");
         String encoded = session.checkoutUrl()
@@ -447,8 +450,8 @@ class PaymentCheckoutSurfaceTests {
 
         // The same fixture that produced 12000 on Click's som surface produces
         // 1200000 here, and the multiplication happens in exactly one place.
-        assertThat(payload).isEqualTo(
-                "m=" + PAYME_CASHBOX + ";ac.order_id=" + session.merchantTransId() + ";a=1200000");
+        assertThat(payload)
+                .isEqualTo("m=" + PAYME_CASHBOX + ";ac.order_id=" + session.merchantTransId() + ";a=1200000");
         // The QR encodes the same string; there is no documented payme:// scheme.
         assertThat(session.qrPayload()).isEqualTo(session.checkoutUrl());
         assertThat(session.amountMinor()).isEqualTo(AMOUNT_SOM);
@@ -460,10 +463,14 @@ class PaymentCheckoutSurfaceTests {
         givenIntent(PAYME_ORDER, PaymentProviderType.PAYME, PAYME_ENTITY);
 
         // Downgrading silently would leave a caller believing a phone rang.
-        assertThatThrownBy(() -> checkout.openOrRePresent(TENANT, PAYME_ORDER, ACCOUNT,
-                new PresentationRequest(PresentationKind.INVOICE_PUSH, null, null, "998901234567")))
-                .isInstanceOfSatisfying(PresentationFailure.Refused.class, refused ->
-                        assertThat(refused.failureCode()).isEqualTo("PAYME_PUSH_UNSUPPORTED"));
+        assertThatThrownBy(() -> checkout.openOrRePresent(
+                        TENANT,
+                        PAYME_ORDER,
+                        ACCOUNT,
+                        new PresentationRequest(PresentationKind.INVOICE_PUSH, null, null, "998901234567")))
+                .isInstanceOfSatisfying(
+                        PresentationFailure.Refused.class,
+                        refused -> assertThat(refused.failureCode()).isEqualTo("PAYME_PUSH_UNSUPPORTED"));
     }
 
     // -----------------------------------------------------------------------
@@ -475,10 +482,8 @@ class PaymentCheckoutSurfaceTests {
     void abandonedCheckoutIsRePresented() {
         givenIntent(CLICK_ORDER, PaymentProviderType.CLICK, CLICK_ENTITY);
 
-        var first = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT,
-                PresentationRequest.link());
-        var second = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT,
-                PresentationRequest.link());
+        var first = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT, PresentationRequest.link());
+        var second = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT, PresentationRequest.link());
 
         assertThat(second.attemptId()).isEqualTo(first.attemptId());
         assertThat(second.merchantTransId()).isEqualTo(first.merchantTransId());
@@ -497,19 +502,19 @@ class PaymentCheckoutSurfaceTests {
     @DisplayName("a reserved attempt is re-presented; a captured one is not")
     void rePresentationStopsWhereMoneyStarts() {
         givenIntent(CLICK_ORDER, PaymentProviderType.CLICK, CLICK_ENTITY);
-        var first = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT,
-                PresentationRequest.link());
+        var first = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT, PresentationRequest.link());
 
         // The customer is on Click's page and Prepare has landed. Sending them back
         // to the same link is safe: Click's prepare id is a function of the order.
         moveTo(first.attemptId(), PaymentAttemptStatus.PRESENTED, PaymentAttemptStatus.RESERVED);
-        assertThat(checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT,
-                PresentationRequest.link()).attemptId()).isEqualTo(first.attemptId());
+        assertThat(checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT, PresentationRequest.link())
+                        .attemptId())
+                .isEqualTo(first.attemptId());
 
         moveTo(first.attemptId(), PaymentAttemptStatus.RESERVED, PaymentAttemptStatus.CAPTURED);
-        assertThatThrownBy(() -> checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT,
-                PresentationRequest.link()))
-                .isInstanceOfSatisfying(PaymentCheckoutService.CheckoutRefusedException.class,
+        assertThatThrownBy(() -> checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT, PresentationRequest.link()))
+                .isInstanceOfSatisfying(
+                        PaymentCheckoutService.CheckoutRefusedException.class,
                         refused -> assertThat(refused.code()).isEqualTo("ALREADY_PAID"));
     }
 
@@ -517,17 +522,20 @@ class PaymentCheckoutSurfaceTests {
     @DisplayName("an uncertain attempt is never presented again")
     void uncertaintyBlocksTheSurface() {
         givenIntent(CLICK_ORDER, PaymentProviderType.CLICK, CLICK_ENTITY);
-        transport.answer(uz.horecaos.platform.integration.api.provider.ProviderOutcome
-                .uncertain("TIMEOUT", "no answer in 30s"));
-        assertThatThrownBy(() -> checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT,
-                new PresentationRequest(PresentationKind.INVOICE_PUSH, null, null, "998901234567")))
+        transport.answer(
+                uz.horecaos.platform.integration.api.provider.ProviderOutcome.uncertain("TIMEOUT", "no answer in 30s"));
+        assertThatThrownBy(() -> checkout.openOrRePresent(
+                        TENANT,
+                        CLICK_ORDER,
+                        ACCOUNT,
+                        new PresentationRequest(PresentationKind.INVOICE_PUSH, null, null, "998901234567")))
                 .isInstanceOf(PresentationFailure.Uncertain.class);
 
         // A charge that may already have happened. Showing another surface for it is
         // the retry the whole module exists to prevent.
-        assertThatThrownBy(() -> checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT,
-                PresentationRequest.link()))
-                .isInstanceOfSatisfying(PaymentCheckoutService.CheckoutRefusedException.class,
+        assertThatThrownBy(() -> checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT, PresentationRequest.link()))
+                .isInstanceOfSatisfying(
+                        PaymentCheckoutService.CheckoutRefusedException.class,
                         refused -> assertThat(refused.code()).isEqualTo("PAYMENT_IN_DOUBT"));
     }
 
@@ -537,14 +545,20 @@ class PaymentCheckoutSurfaceTests {
         givenIntent(CLICK_ORDER, PaymentProviderType.CLICK, CLICK_ENTITY);
         transport.answer(uz.horecaos.platform.integration.api.provider.ProviderOutcome.success(
                 Map.of("error_code", 0, "invoice_id", 1L), null));
-        checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT,
+        checkout.openOrRePresent(
+                TENANT,
+                CLICK_ORDER,
+                ACCOUNT,
                 new PresentationRequest(PresentationKind.INVOICE_PUSH, null, null, "998901234567"));
 
-        assertThatThrownBy(() -> checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT,
-                new PresentationRequest(PresentationKind.INVOICE_PUSH, null, null, "998901234567")))
-                .isInstanceOfSatisfying(PaymentCheckoutService.CheckoutRefusedException.class,
-                        refused -> assertThat(refused.code())
-                                .isEqualTo("PRESENTATION_NOT_REPEATABLE"));
+        assertThatThrownBy(() -> checkout.openOrRePresent(
+                        TENANT,
+                        CLICK_ORDER,
+                        ACCOUNT,
+                        new PresentationRequest(PresentationKind.INVOICE_PUSH, null, null, "998901234567")))
+                .isInstanceOfSatisfying(
+                        PaymentCheckoutService.CheckoutRefusedException.class,
+                        refused -> assertThat(refused.code()).isEqualTo("PRESENTATION_NOT_REPEATABLE"));
         assertThat(transport.calls()).hasSize(1);
     }
 
@@ -552,22 +566,21 @@ class PaymentCheckoutSurfaceTests {
     @DisplayName("a merchant account that has moved under a live attempt refuses a second surface")
     void aRepointedBindingIsNotSilentlyUsed() {
         givenIntent(CLICK_ORDER, PaymentProviderType.CLICK, CLICK_ENTITY);
-        var first = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT,
-                PresentationRequest.link());
+        var first = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT, PresentationRequest.link());
 
         // The state a retired-and-replaced binding leaves behind: the attempt names
         // the account it was opened against, and resolution now answers a different
         // one. A surface built from the new account would send the callback to an
         // endpoint whose binding cannot match the id it carries, and the customer
         // would pay into an "unknown order".
-        jdbc.sql("UPDATE payments.payment_attempts SET merchant_binding_id = :other "
-                + "WHERE id = :id")
-                .param("other", CLICK_LINKLESS_BINDING).param("id", first.attemptId())
+        jdbc.sql("UPDATE payments.payment_attempts SET merchant_binding_id = :other " + "WHERE id = :id")
+                .param("other", CLICK_LINKLESS_BINDING)
+                .param("id", first.attemptId())
                 .update();
 
-        assertThatThrownBy(() -> checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT,
-                PresentationRequest.link()))
-                .isInstanceOfSatisfying(PaymentCheckoutService.CheckoutRefusedException.class,
+        assertThatThrownBy(() -> checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT, PresentationRequest.link()))
+                .isInstanceOfSatisfying(
+                        PaymentCheckoutService.CheckoutRefusedException.class,
                         refused -> assertThat(refused.code()).isEqualTo("BINDING_CHANGED"));
     }
 
@@ -575,12 +588,10 @@ class PaymentCheckoutSurfaceTests {
     @DisplayName("a terminal attempt lets the customer try again")
     void aFailedAttemptIsNotABlock() {
         givenIntent(CLICK_ORDER, PaymentProviderType.CLICK, CLICK_ENTITY);
-        var first = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT,
-                PresentationRequest.link());
+        var first = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT, PresentationRequest.link());
         moveTo(first.attemptId(), PaymentAttemptStatus.PRESENTED, PaymentAttemptStatus.FAILED);
 
-        var second = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT,
-                PresentationRequest.link());
+        var second = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT, PresentationRequest.link());
 
         assertThat(second.attemptId()).isNotEqualTo(first.attemptId());
         assertThat(second.merchantTransId()).isNotEqualTo(first.merchantTransId());
@@ -602,11 +613,14 @@ class PaymentCheckoutSurfaceTests {
                 VALUES (:id, :tenantId, :intentId, 'CLICK', :bindingId, :mti, :businessDate,
                     :amount, 'UZS', 'INITIATED')
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", TENANT)
-                .param("intentId", intentId).param("bindingId", CLICK_BINDING)
-                .param("mti", UUID.randomUUID().toString().replace("-", ""))
-                .param("businessDate", BUSINESS_DATE).param("amount", AMOUNT_SOM)
-                .update())
+                        .param("id", UUID.randomUUID())
+                        .param("tenantId", TENANT)
+                        .param("intentId", intentId)
+                        .param("bindingId", CLICK_BINDING)
+                        .param("mti", UUID.randomUUID().toString().replace("-", ""))
+                        .param("businessDate", BUSINESS_DATE)
+                        .param("amount", AMOUNT_SOM)
+                        .update())
                 .hasMessageContaining("ux_payment_attempt_open_per_intent");
     }
 
@@ -621,25 +635,44 @@ class PaymentCheckoutSurfaceTests {
 
         // Not "forbidden": an endpoint that distinguishes the two lets anyone probe
         // which order ids exist.
-        assertThatThrownBy(() -> checkout.openOrRePresent(TENANT, CLICK_ORDER, UUID.randomUUID(),
-                PresentationRequest.link()))
-                .isInstanceOfSatisfying(PaymentCheckoutService.CheckoutRefusedException.class,
+        assertThatThrownBy(() ->
+                        checkout.openOrRePresent(TENANT, CLICK_ORDER, UUID.randomUUID(), PresentationRequest.link()))
+                .isInstanceOfSatisfying(
+                        PaymentCheckoutService.CheckoutRefusedException.class,
                         refused -> assertThat(refused.code()).isEqualTo("ORDER_NOT_FOUND"));
-        assertThat(attempts.listForIntent(TENANT,
-                intents.findLiveForOrder(TENANT, CLICK_ORDER).orElseThrow().id())).isEmpty();
+        assertThat(attempts.listForIntent(
+                        TENANT,
+                        intents.findLiveForOrder(TENANT, CLICK_ORDER)
+                                .orElseThrow()
+                                .id()))
+                .isEmpty();
     }
 
     @Test
     @DisplayName("a cash order has no surface and says so")
     void cashHasNothingToPresent() {
-        intents.insert(new PaymentIntent(UUID.randomUUID(), TENANT, CLICK_ORDER, BRAND, LOCATION,
-                null, CLICK_ENTITY, PaymentTender.CASH, PaymentMethod.CASH, null,
-                new SomAmount(AMOUNT_SOM, UZS), PaymentIntentStatus.PENDING,
-                CaptureTiming.ON_HANDOVER, UUID.randomUUID().toString(), 1, CLOCK.instant(), null));
+        intents.insert(new PaymentIntent(
+                UUID.randomUUID(),
+                TENANT,
+                CLICK_ORDER,
+                BRAND,
+                LOCATION,
+                null,
+                CLICK_ENTITY,
+                PaymentTender.CASH,
+                PaymentMethod.CASH,
+                null,
+                new SomAmount(AMOUNT_SOM, UZS),
+                PaymentIntentStatus.PENDING,
+                CaptureTiming.ON_HANDOVER,
+                UUID.randomUUID().toString(),
+                1,
+                CLOCK.instant(),
+                null));
 
-        assertThatThrownBy(() -> checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT,
-                PresentationRequest.link()))
-                .isInstanceOfSatisfying(PaymentCheckoutService.CheckoutRefusedException.class,
+        assertThatThrownBy(() -> checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT, PresentationRequest.link()))
+                .isInstanceOfSatisfying(
+                        PaymentCheckoutService.CheckoutRefusedException.class,
                         refused -> assertThat(refused.code()).isEqualTo("NOT_PAYABLE_ONLINE"));
     }
 
@@ -649,30 +682,46 @@ class PaymentCheckoutSurfaceTests {
 
     private UUID givenIntent(UUID orderId, PaymentProviderType provider, UUID legalEntityId) {
         UUID intentId = UUID.randomUUID();
-        intents.insert(new PaymentIntent(intentId, TENANT, orderId, BRAND, LOCATION, null,
-                legalEntityId, PaymentTender.PROVIDER,
+        intents.insert(new PaymentIntent(
+                intentId,
+                TENANT,
+                orderId,
+                BRAND,
+                LOCATION,
+                null,
+                legalEntityId,
+                PaymentTender.PROVIDER,
                 provider == PaymentProviderType.CLICK ? PaymentMethod.CLICK : PaymentMethod.PAYME,
-                provider, new SomAmount(AMOUNT_SOM, UZS), PaymentIntentStatus.PENDING,
-                CaptureTiming.BEFORE_CONFIRMATION, UUID.randomUUID().toString(), 1,
-                CLOCK.instant(), null));
+                provider,
+                new SomAmount(AMOUNT_SOM, UZS),
+                PaymentIntentStatus.PENDING,
+                CaptureTiming.BEFORE_CONFIRMATION,
+                UUID.randomUUID().toString(),
+                1,
+                CLOCK.instant(),
+                null));
         return intentId;
     }
 
     private PaymentAttempt onlyAttempt() {
         List<UUID> ids = jdbc.sql("SELECT id FROM payments.payment_attempts")
-                .query(UUID.class).list();
+                .query(UUID.class)
+                .list();
         assertThat(ids).hasSize(1);
         return attempts.find(TENANT, ids.getFirst()).orElseThrow();
     }
 
     private String invoiceIdOf(UUID attemptId) {
         return jdbc.sql("SELECT external_invoice_id FROM payments.payment_attempts WHERE id = :id")
-                .param("id", attemptId).query(String.class).optional().orElse(null);
+                .param("id", attemptId)
+                .query(String.class)
+                .optional()
+                .orElse(null);
     }
 
     private void moveTo(UUID attemptId, PaymentAttemptStatus from, PaymentAttemptStatus to) {
-        assertThat(attempts.transition(TENANT, attemptId, from, to, null, null, null, null,
-                CLOCK.instant())).isPresent();
+        assertThat(attempts.transition(TENANT, attemptId, from, to, null, null, null, null, CLOCK.instant()))
+                .isPresent();
     }
 
     private static Map<String, String> queryOf(String url) {
@@ -680,8 +729,7 @@ class PaymentCheckoutSurfaceTests {
         return java.util.Arrays.stream(query.split("&"))
                 .map(pair -> pair.split("=", 2))
                 .collect(java.util.stream.Collectors.toMap(
-                        pair -> pair[0],
-                        pair -> URLDecoder.decode(pair[1], StandardCharsets.UTF_8)));
+                        pair -> pair[0], pair -> URLDecoder.decode(pair[1], StandardCharsets.UTF_8)));
     }
 
     private static void seedTenantAndMerchantAccounts() {
@@ -717,32 +765,56 @@ class PaymentCheckoutSurfaceTests {
                 INSERT INTO integration.bindings (id, tenant_id, installation_id, brand_id, status)
                 VALUES (:id, :tenantId, :installationId, :brandId, 'ACTIVE')
                 """)
-                .param("id", INTEGRATION_BINDING).param("tenantId", TENANT)
-                .param("installationId", CLICK_INSTALLATION).param("brandId", BRAND)
+                .param("id", INTEGRATION_BINDING)
+                .param("tenantId", TENANT)
+                .param("installationId", CLICK_INSTALLATION)
+                .param("brandId", BRAND)
                 .update();
 
-        merchantBinding(CLICK_BINDING, CLICK_ENTITY, "CLICK", CLICK_INSTALLATION,
-                CLICK_SERVICE_ID, CLICK_MERCHANT_USER_ID, CLICK_MERCHANT_ID, "click-brandone");
+        merchantBinding(
+                CLICK_BINDING,
+                CLICK_ENTITY,
+                "CLICK",
+                CLICK_INSTALLATION,
+                CLICK_SERVICE_ID,
+                CLICK_MERCHANT_USER_ID,
+                CLICK_MERCHANT_ID,
+                "click-brandone");
         // The same provider for a second legal entity, registered before the
         // merchant_id column existed. Its link cannot be built and its push can.
-        merchantBinding(CLICK_LINKLESS_BINDING, UNBOUND_ENTITY, "CLICK", CLICK_INSTALLATION,
-                "54321", "4444", null, "click-brandtwo");
-        merchantBinding(PAYME_BINDING, PAYME_ENTITY, "PAYME", PAYME_INSTALLATION,
-                PAYME_CASHBOX, null, null, "payme-cashbox-one");
+        merchantBinding(
+                CLICK_LINKLESS_BINDING,
+                UNBOUND_ENTITY,
+                "CLICK",
+                CLICK_INSTALLATION,
+                "54321",
+                "4444",
+                null,
+                "click-brandtwo");
+        merchantBinding(
+                PAYME_BINDING,
+                PAYME_ENTITY,
+                "PAYME",
+                PAYME_INSTALLATION,
+                PAYME_CASHBOX,
+                null,
+                null,
+                "payme-cashbox-one");
     }
 
-    private static void installation(UUID id, String providerType, String environment,
-            String displayName) {
+    private static void installation(UUID id, String providerType, String environment, String displayName) {
         jdbc.sql("""
                 INSERT INTO integration.installations (id, tenant_id, provider_category,
                     provider_type, environment_code, display_name, status, secret_reference)
                 VALUES (:id, :tenantId, 'PAYMENT', :providerType, :environment, :displayName,
                     'ACTIVE', :secretReference)
                 """)
-                .param("id", id).param("tenantId", TENANT).param("providerType", providerType)
-                .param("environment", environment).param("displayName", displayName)
-                .param("secretReference",
-                        "horecaos:test:provider_payment:tenant:" + providerType.toLowerCase())
+                .param("id", id)
+                .param("tenantId", TENANT)
+                .param("providerType", providerType)
+                .param("environment", environment)
+                .param("displayName", displayName)
+                .param("secretReference", "horecaos:test:provider_payment:tenant:" + providerType.toLowerCase())
                 .update();
     }
 
@@ -762,17 +834,28 @@ class PaymentCheckoutSurfaceTests {
                 VALUES (:id, :tenantId, :code, :legalName, :tin, 'ACTIVE')
                 ON CONFLICT DO NOTHING
                 """)
-                .param("id", id).param("tenantId", TENANT).param("code", code)
-                .param("legalName", code + " MCHJ").param("tin", tin)
+                .param("id", id)
+                .param("tenantId", TENANT)
+                .param("code", code)
+                .param("legalName", code + " MCHJ")
+                .param("tin", tin)
                 .update();
     }
 
-    private static void merchantBinding(UUID id, UUID legalEntityId, String providerType,
-            UUID installationId, String account, String user, String merchantId, String segment) {
+    private static void merchantBinding(
+            UUID id,
+            UUID legalEntityId,
+            String providerType,
+            UUID installationId,
+            String account,
+            String user,
+            String merchantId,
+            String segment) {
         Map<String, Object> parameters = new java.util.HashMap<>();
         parameters.put("id", id);
         parameters.put("tenantId", TENANT);
-        seedLegalEntity(legalEntityId,
+        seedLegalEntity(
+                legalEntityId,
                 "LE-" + Integer.toHexString(legalEntityId.hashCode()).toUpperCase(java.util.Locale.ROOT),
                 String.format("%09d", Math.floorMod(legalEntityId.hashCode(), 1_000_000_000)));
         parameters.put("legalEntityId", legalEntityId);
@@ -783,8 +866,7 @@ class PaymentCheckoutSurfaceTests {
         parameters.put("user", user);
         parameters.put("merchantId", merchantId);
         parameters.put("segment", segment);
-        parameters.put("secretReference",
-                "horecaos:test:provider_payment:tenant:" + providerType.toLowerCase());
+        parameters.put("secretReference", "horecaos:test:provider_payment:tenant:" + providerType.toLowerCase());
         parameters.put("effectiveFrom", LocalDate.of(2026, 1, 1));
 
         jdbc.sql("""
@@ -796,9 +878,7 @@ class PaymentCheckoutSurfaceTests {
                 VALUES (:id, :tenantId, :legalEntityId, :providerType, :installationId, :bindingId,
                     :account, :user, :merchantId, :secretReference, :segment, true, true, 'ACTIVE',
                     :effectiveFrom)
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
     }
 
     private static void seedOrders() {
@@ -812,28 +892,36 @@ class PaymentCheckoutSurfaceTests {
                 VALUES (:id, :tenantId, :brandId, 'LOC1', 'location-one', 'Location One',
                     'Asia/Tashkent', 'ACTIVE')
                 """)
-                .param("id", LOCATION).param("tenantId", TENANT).param("brandId", BRAND).update();
+                .param("id", LOCATION)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name,
                     status)
                 VALUES (:id, :tenantId, 'WEB', 'WEB', 'Web', 'ACTIVE')
-                """)
-                .param("id", channel).param("tenantId", TENANT).update();
+                """).param("id", channel).param("tenantId", TENANT).update();
 
         jdbc.sql("""
                 INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
                 VALUES (:id, :tenantId, :brandId, 'MENU', 'Menu', 'ACTIVE')
                 """)
-                .param("id", catalog).param("tenantId", TENANT).param("brandId", BRAND).update();
+                .param("id", catalog)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel,
                     status, content_hash, activated_at)
                 VALUES (:id, :tenantId, :brandId, :catalogId, 'WEB', 'PUBLISHED', 'hash', now())
                 """)
-                .param("id", publication).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("catalogId", catalog).update();
+                .param("id", publication)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("catalogId", catalog)
+                .update();
 
         order(CLICK_ORDER, "31", channel, publication);
         order(PAYME_ORDER, "32", channel, publication);
@@ -850,8 +938,12 @@ class PaymentCheckoutSurfaceTests {
                 VALUES (:id, :tenantId, :brandId, :locationId, 'UZS', 'ACTIVE', :publicationId,
                     1, 'hash', 12000, 0, 12000, now() + interval '1 day')
                 """)
-                .param("id", quote).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("locationId", LOCATION).param("publicationId", publication).update();
+                .param("id", quote)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", LOCATION)
+                .param("publicationId", publication)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO ordering.carts (id, tenant_id, brand_id, location_id, channel_id,
@@ -861,9 +953,14 @@ class PaymentCheckoutSurfaceTests {
                     'DELIVERY', 'UZS', 'CHECKOUT_IN_PROGRESS', :quoteId, 'hash', :publicationId,
                     now() + interval '1 day')
                 """)
-                .param("id", cart).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("locationId", LOCATION).param("channelId", channel).param("quoteId", quote)
-                .param("publicationId", publication).update();
+                .param("id", cart)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", LOCATION)
+                .param("channelId", channel)
+                .param("quoteId", quote)
+                .param("publicationId", publication)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO ordering.orders (
@@ -877,9 +974,15 @@ class PaymentCheckoutSurfaceTests {
                     'guest-hash', 'DELIVERY', 'AUTO_CONFIRM', 'NONE', 'PAYMENT_AUTHORIZING', 'UZS',
                     12000, 0, 12000, :quoteId, 'hash', :publicationId, :cartId, :idempotencyKey)
                 """)
-                .param("id", orderId).param("number", number).param("tenantId", TENANT)
-                .param("brandId", BRAND).param("locationId", LOCATION).param("channelId", channel)
-                .param("quoteId", quote).param("publicationId", publication).param("cartId", cart)
+                .param("id", orderId)
+                .param("number", number)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", LOCATION)
+                .param("channelId", channel)
+                .param("quoteId", quote)
+                .param("publicationId", publication)
+                .param("cartId", cart)
                 .param("idempotencyKey", UUID.randomUUID().toString())
                 .update();
     }
@@ -889,12 +992,21 @@ class PaymentCheckoutSurfaceTests {
 
         @Override
         public Optional<OrderSummary> summary(UUID tenantId, UUID orderId) {
-            if (!TENANT.equals(tenantId) || (!CLICK_ORDER.equals(orderId)
-                    && !PAYME_ORDER.equals(orderId))) {
+            if (!TENANT.equals(tenantId) || (!CLICK_ORDER.equals(orderId) && !PAYME_ORDER.equals(orderId))) {
                 return Optional.empty();
             }
-            return Optional.of(new OrderSummary(orderId, tenantId, BRAND, LOCATION, "31",
-                    ACCOUNT, "guest-hash", "PAYMENT_AUTHORIZING", UZS, AMOUNT_SOM, 1));
+            return Optional.of(new OrderSummary(
+                    orderId,
+                    tenantId,
+                    BRAND,
+                    LOCATION,
+                    "31",
+                    ACCOUNT,
+                    "guest-hash",
+                    "PAYMENT_AUTHORIZING",
+                    UZS,
+                    AMOUNT_SOM,
+                    1));
         }
     }
 
@@ -902,22 +1014,27 @@ class PaymentCheckoutSurfaceTests {
     private static final class FixedInstallations implements ProviderInstallationLookup {
 
         @Override
-        public Optional<BindingRef> primaryBinding(UUID tenantId, UUID brandId, UUID locationId,
-                String capabilityCode) {
+        public Optional<BindingRef> primaryBinding(
+                UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
             return Optional.empty();
         }
 
         @Override
-        public List<BindingRef> candidateBindings(UUID tenantId, UUID brandId, UUID locationId,
-                String capabilityCode) {
+        public List<BindingRef> candidateBindings(UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
             return List.of();
         }
 
         @Override
         public Optional<InstallationSnapshot> installation(UUID tenantId, UUID installationId) {
-            return Optional.of(new InstallationSnapshot(installationId, ProviderCategory.PAYMENT,
-                    "PAYME", "payme-sandbox", PAYME_CHECKOUT_HOST, "ACTIVE",
-                    "horecaos:test:provider_payment:tenant:payme", "1"));
+            return Optional.of(new InstallationSnapshot(
+                    installationId,
+                    ProviderCategory.PAYMENT,
+                    "PAYME",
+                    "payme-sandbox",
+                    PAYME_CHECKOUT_HOST,
+                    "ACTIVE",
+                    "horecaos:test:provider_payment:tenant:payme",
+                    "1"));
         }
     }
 
@@ -941,13 +1058,13 @@ class PaymentCheckoutSurfaceTests {
         }
 
         @Override
-        public uz.horecaos.platform.integration.api.provider.ProviderOutcome exchange(
-                MerchantApiCall call) {
+        public uz.horecaos.platform.integration.api.provider.ProviderOutcome exchange(MerchantApiCall call) {
             calls.add(call);
             int index = calls.size() - 1;
-            return index < answers.size() ? answers.get(index)
-                    : uz.horecaos.platform.integration.api.provider.ProviderOutcome
-                            .uncertain("NO_ANSWER_QUEUED", "the test queued no answer");
+            return index < answers.size()
+                    ? answers.get(index)
+                    : uz.horecaos.platform.integration.api.provider.ProviderOutcome.uncertain(
+                            "NO_ANSWER_QUEUED", "the test queued no answer");
         }
     }
 }

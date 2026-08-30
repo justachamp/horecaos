@@ -4,12 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
-import uz.horecaos.platform.tenancy.api.ConfigurationKey;
-import uz.horecaos.platform.tenancy.domain.configuration.ConfigurationKeys;
 import uz.horecaos.platform.telemetry.api.TelemetryConfigurationKeys;
 import uz.horecaos.platform.telemetry.domain.CollectionGate;
 import uz.horecaos.platform.telemetry.domain.TrackRetentionFloor;
+import uz.horecaos.platform.tenancy.api.ConfigurationKey;
+import uz.horecaos.platform.tenancy.domain.configuration.ConfigurationKeys;
 
 /**
  * The two ADR 0030 keys ADR 0045 owns, declared twice and kept identical.

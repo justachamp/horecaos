@@ -7,7 +7,6 @@ import java.time.Duration;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.random.RandomGenerator;
-
 import org.junit.jupiter.api.Test;
 
 /**
@@ -39,9 +38,7 @@ class RetryBackoffTests {
         RetryBackoff almost = RetryBackoff.randomisedBy(INITIAL, MAXIMUM, fixed(0.999_999d));
 
         assertThat(never.delayAfter(4)).isEqualTo(Duration.ofSeconds(4));
-        assertThat(almost.delayAfter(4))
-                .isGreaterThan(Duration.ofSeconds(7))
-                .isLessThan(Duration.ofSeconds(8));
+        assertThat(almost.delayAfter(4)).isGreaterThan(Duration.ofSeconds(7)).isLessThan(Duration.ofSeconds(8));
     }
 
     @Test
@@ -54,8 +51,7 @@ class RetryBackoffTests {
 
     @Test
     void tenCallersAtTheSameAttemptCountDoNotAllWakeAtTheSameInstant() {
-        RetryBackoff backoff = RetryBackoff.randomisedBy(
-                INITIAL, MAXIMUM, new java.util.Random(20260825L));
+        RetryBackoff backoff = RetryBackoff.randomisedBy(INITIAL, MAXIMUM, new java.util.Random(20260825L));
 
         Set<Duration> distinct = new LinkedHashSet<>();
         for (int replica = 0; replica < 10; replica++) {
@@ -72,8 +68,7 @@ class RetryBackoffTests {
     void aMaximumShorterThanTheInitialDelayIsRefused() {
         assertThatThrownBy(() -> RetryBackoff.of(Duration.ofSeconds(10), Duration.ofSeconds(1)))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> RetryBackoff.of(Duration.ZERO, MAXIMUM))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> RetryBackoff.of(Duration.ZERO, MAXIMUM)).isInstanceOf(IllegalArgumentException.class);
     }
 
     private static java.util.List<Duration> seededSequence(long seed) {

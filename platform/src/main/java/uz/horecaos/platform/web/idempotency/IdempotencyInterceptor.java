@@ -1,5 +1,7 @@
 package uz.horecaos.platform.web.idempotency;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -7,12 +9,8 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import java.util.UUID;
-
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -22,7 +20,6 @@ import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.HandlerMapping;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 import org.springframework.web.util.WebUtils;
-
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.web.api.ApiException;
@@ -54,8 +51,8 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
     private final CurrentActor currentActor;
     private final ResponseBodyProtection responseProtection;
 
-    public IdempotencyInterceptor(IdempotencyService idempotency, CurrentActor currentActor,
-            ResponseBodyProtection responseProtection) {
+    public IdempotencyInterceptor(
+            IdempotencyService idempotency, CurrentActor currentActor, ResponseBodyProtection responseProtection) {
         this.idempotency = idempotency;
         this.currentActor = currentActor;
         this.responseProtection = responseProtection;
@@ -93,12 +90,14 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
                 writeReplay(response, replay, (HandlerMethod) handler, tenantIdOf(request));
                 yield false;
             }
-            case IdempotencyOutcome.InProgress ignored -> throw new ApiException(
-                    ErrorCode.IDEMPOTENCY_KEY_IN_PROGRESS,
-                    "A request with this idempotency key is still in progress");
-            case IdempotencyOutcome.Conflict ignored -> throw new ApiException(
-                    ErrorCode.IDEMPOTENCY_KEY_REUSED,
-                    "This idempotency key was already used for a different request");
+            case IdempotencyOutcome.InProgress ignored ->
+                throw new ApiException(
+                        ErrorCode.IDEMPOTENCY_KEY_IN_PROGRESS,
+                        "A request with this idempotency key is still in progress");
+            case IdempotencyOutcome.Conflict ignored ->
+                throw new ApiException(
+                        ErrorCode.IDEMPOTENCY_KEY_REUSED,
+                        "This idempotency key was already used for a different request");
         };
     }
 
@@ -120,8 +119,7 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
                 idempotency.release(recordId);
                 return;
             }
-            storeResponse(recordId, status, responseBodyOf(response),
-                    (HandlerMethod) handler, tenantIdOf(request));
+            storeResponse(recordId, status, responseBodyOf(response), (HandlerMethod) handler, tenantIdOf(request));
         } catch (RuntimeException bookkeepingFailure) {
             log.error("Failed to finalise idempotency record {}", recordId, bookkeepingFailure);
         }
@@ -135,8 +133,7 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
      * comes from the response type, so an endpoint that starts answering with an
      * address is protected by the change that makes it do so.
      */
-    private void storeResponse(UUID recordId, int status, String body,
-            HandlerMethod handler, UUID tenantId) {
+    private void storeResponse(UUID recordId, int status, String body, HandlerMethod handler, UUID tenantId) {
 
         Optional<DataClass> classification = responseProtection.classificationOf(handler);
         if (classification.isEmpty()) {
@@ -149,13 +146,15 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
             // is what the key is for, and the body is simply not kept. A static
             // check refuses such an endpoint at build time, so reaching this is a
             // bug -- and the bug must not be a readable address.
-            log.error("Refusing to store a classified response body with no tenant for {}#{}",
-                    handler.getBeanType().getSimpleName(), handler.getMethod().getName());
+            log.error(
+                    "Refusing to store a classified response body with no tenant for {}#{}",
+                    handler.getBeanType().getSimpleName(),
+                    handler.getMethod().getName());
             idempotency.complete(recordId, status, null, false);
             return;
         }
-        idempotency.complete(recordId, status,
-                responseProtection.protect(tenantId, classification.get(), recordId, body), true);
+        idempotency.complete(
+                recordId, status, responseProtection.protect(tenantId, classification.get(), recordId, body), true);
     }
 
     /**
@@ -200,8 +199,8 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
     @SuppressWarnings("unchecked")
     private String scopeKeyFor(Object handler, HttpServletRequest request) {
         HandlerMethod method = (HandlerMethod) handler;
-        Map<String, String> variables = (Map<String, String>)
-                request.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
+        Map<String, String> variables =
+                (Map<String, String>) request.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
 
         String resource = variables == null || variables.isEmpty()
                 ? ""
@@ -210,11 +209,12 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
                         .map(entry -> entry.getKey() + '=' + entry.getValue())
                         .collect(Collectors.joining(",", " ", ""));
 
-        return withinColumn("%s %s#%s%s".formatted(
-                request.getMethod(),
-                method.getBeanType().getSimpleName(),
-                method.getMethod().getName(),
-                resource));
+        return withinColumn("%s %s#%s%s"
+                .formatted(
+                        request.getMethod(),
+                        method.getBeanType().getSimpleName(),
+                        method.getMethod().getName(),
+                        resource));
     }
 
     /**
@@ -250,8 +250,8 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
 
     private static String sha256(String value) {
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(value.getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException unavailable) {
             throw new IllegalStateException("SHA-256 is required", unavailable);
         }
@@ -259,8 +259,8 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
 
     @SuppressWarnings("unchecked")
     private UUID tenantIdOf(HttpServletRequest request) {
-        Map<String, String> variables = (Map<String, String>)
-                request.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
+        Map<String, String> variables =
+                (Map<String, String>) request.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
         if (variables == null) {
             return null;
         }
@@ -289,16 +289,20 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
      * replaying a body that failed its integrity check is how one caller is
      * handed another's address.
      */
-    private void writeReplay(HttpServletResponse response, IdempotencyOutcome.Replay replay,
-            HandlerMethod handler, UUID tenantId) throws IOException {
+    private void writeReplay(
+            HttpServletResponse response, IdempotencyOutcome.Replay replay, HandlerMethod handler, UUID tenantId)
+            throws IOException {
 
         String body = replay.responseBody() == null ? "" : replay.responseBody();
         if (replay.responseBodyProtected()) {
             try {
                 body = responseProtection.reveal(tenantId, replay.recordId(), replay.responseBody());
             } catch (RuntimeException failure) {
-                log.error("A stored response body failed to decrypt for {}#{}",
-                        handler.getBeanType().getSimpleName(), handler.getMethod().getName(), failure);
+                log.error(
+                        "A stored response body failed to decrypt for {}#{}",
+                        handler.getBeanType().getSimpleName(),
+                        handler.getMethod().getName(),
+                        failure);
                 throw new ApiException(
                         ErrorCode.IDEMPOTENCY_KEY_IN_PROGRESS,
                         "The recorded response for this idempotency key could not be replayed");

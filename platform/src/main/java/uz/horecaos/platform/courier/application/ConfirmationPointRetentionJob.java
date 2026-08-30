@@ -3,10 +3,8 @@ package uz.horecaos.platform.courier.application;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.courier.domain.CourierCompensationPolicy;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierLedgerStore;
 
@@ -43,8 +41,7 @@ public class ConfirmationPointRetentionJob {
      */
     @Transactional
     public int purge(CourierCompensationPolicy policy) {
-        Instant cutoff = clock.instant()
-                .minus(policy.confirmationPointRetentionDays(), ChronoUnit.DAYS);
+        Instant cutoff = clock.instant().minus(policy.confirmationPointRetentionDays(), ChronoUnit.DAYS);
         return ledger.purgeConfirmationPoints(cutoff);
     }
 }

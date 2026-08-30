@@ -3,7 +3,6 @@ package uz.horecaos.platform.fulfillment.api;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
-
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 
 /**
@@ -52,8 +51,7 @@ public record DeliveryFeeQuery(
         Objects.requireNonNull(pricingAuthority, "A pricing authority is required");
         Objects.requireNonNull(at, "An instant is required");
         if (goodsSubtotalMinor < 0) {
-            throw new IllegalArgumentException(
-                    "A goods subtotal cannot be negative, was " + goodsSubtotalMinor);
+            throw new IllegalArgumentException("A goods subtotal cannot be negative, was " + goodsSubtotalMinor);
         }
     }
 }

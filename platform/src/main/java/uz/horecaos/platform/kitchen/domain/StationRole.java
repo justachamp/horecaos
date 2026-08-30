@@ -18,7 +18,6 @@ import java.util.Optional;
  * the new role has to create a station carrying it before any rule can reach it.
  */
 public enum StationRole {
-
     HOT,
     COLD,
     GRILL,
@@ -34,14 +33,16 @@ public enum StationRole {
     EXPO;
 
     public static Optional<StationRole> find(String name) {
-        return name == null ? Optional.empty()
+        return name == null
+                ? Optional.empty()
                 : Arrays.stream(values())
                         .filter(role -> role.name().equals(name.toUpperCase(Locale.ROOT)))
                         .findFirst();
     }
 
     public static StationRole require(String name) {
-        return find(name).orElseThrow(() -> new IllegalArgumentException(
-                "Unknown station role \"%s\". The set is closed (ADR 0041).".formatted(name)));
+        return find(name)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Unknown station role \"%s\". The set is closed (ADR 0041).".formatted(name)));
     }
 }

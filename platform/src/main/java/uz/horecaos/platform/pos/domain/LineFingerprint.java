@@ -26,8 +26,7 @@ import java.util.List;
  */
 public final class LineFingerprint {
 
-    private LineFingerprint() {
-    }
+    private LineFingerprint() {}
 
     /**
      * @param lines the exported lines. May be empty only in a test; an order with
@@ -41,9 +40,12 @@ public final class LineFingerprint {
                         .thenComparingInt(Line::quantity)
                         .thenComparingLong(Line::unitAmountMinor))
                 .forEach(line -> canonical
-                        .append(line.externalProductId()).append(':')
-                        .append(line.quantity()).append(':')
-                        .append(line.unitAmountMinor()).append('|'));
+                        .append(line.externalProductId())
+                        .append(':')
+                        .append(line.quantity())
+                        .append(':')
+                        .append(line.unitAmountMinor())
+                        .append('|'));
         return sha256(canonical.toString());
     }
 
@@ -73,5 +75,5 @@ public final class LineFingerprint {
      *                        a fingerprint computed through floating point would
      *                        differ between two runs over the same order
      */
-    public record Line(String externalProductId, int quantity, long unitAmountMinor) { }
+    public record Line(String externalProductId, int quantity, long unitAmountMinor) {}
 }

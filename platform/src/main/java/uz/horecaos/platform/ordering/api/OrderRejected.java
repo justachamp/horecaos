@@ -3,7 +3,6 @@ package uz.horecaos.platform.ordering.api;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
-
 import uz.horecaos.platform.tenancy.api.TenantId;
 
 /**
@@ -23,7 +22,8 @@ public record OrderRejected(
         String decisionChannel,
         String reasonCode,
         String status,
-        int orderVersion) implements OrderingEvent {
+        int orderVersion)
+        implements OrderingEvent {
 
     public OrderRejected {
         Objects.requireNonNull(eventId, "Event ID is required");
@@ -44,8 +44,7 @@ public record OrderRejected(
 
     @Override
     public Object payload() {
-        return new Payload(orderId, brandId, locationId, decisionChannel, reasonCode,
-                status, orderVersion);
+        return new Payload(orderId, brandId, locationId, decisionChannel, reasonCode, status, orderVersion);
     }
 
     public record Payload(
@@ -55,5 +54,5 @@ public record OrderRejected(
             String decisionChannel,
             String reasonCode,
             String status,
-            int orderVersion) { }
+            int orderVersion) {}
 }

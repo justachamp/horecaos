@@ -1,10 +1,7 @@
 package uz.horecaos.platform.fulfillment.web;
 
-import java.time.LocalTime;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -14,17 +11,16 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
-
+import java.time.LocalTime;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.fulfillment.application.DeliveryTariffService;
 import uz.horecaos.platform.fulfillment.application.ServiceZoneService;
 import uz.horecaos.platform.fulfillment.domain.VersionStatus;
@@ -61,75 +57,92 @@ public class DeliveryTariffController {
     }
 
     @PostMapping
-    @RequiresCapability(value = Capability.DELIVERY_TARIFF_MANAGE, scope = ScopeType.BRAND,
-            mutating = true)
-    @Operation(summary = "Register a rate table",
+    @RequiresCapability(value = Capability.DELIVERY_TARIFF_MANAGE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Register a rate table",
             description = "The lineage only; the numbers live on versions. At most one tariff per "
                     + "brand may be the default, which is the last rung of fee resolution — and "
                     + "there is no rung after it, because a missing rate table and free delivery "
                     + "must never look alike.")
-    public ResponseEntity<TariffView> create(@PathVariable UUID tenantId,
-            @PathVariable UUID brandId, @Valid @RequestBody CreateTariffRequest body) {
+    public ResponseEntity<TariffView> create(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody CreateTariffRequest body) {
 
-        UUID id = tariffs.createTariff(tenantId, brandId, body.code(), body.name(),
-                body.brandDefault());
+        UUID id = tariffs.createTariff(tenantId, brandId, body.code(), body.name(), body.brandDefault());
         return ResponseEntity.ok(new TariffView(id, body.code(), body.brandDefault()));
     }
 
     @PostMapping("/{tariffId}/versions")
-    @RequiresCapability(value = Capability.DELIVERY_TARIFF_MANAGE, scope = ScopeType.BRAND,
-            mutating = true)
-    @Operation(summary = "Draft a new version of a rate table",
+    @RequiresCapability(value = Capability.DELIVERY_TARIFF_MANAGE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Draft a new version of a rate table",
             description = "Bands must tile [0, maxDistanceMeters) with no gap and no overlap. "
                     + "Overlap is refused by the database on insert; the gap check runs at "
                     + "activation, because it is a property of the whole set. A gap makes 4,700 m "
                     + "unpriceable while 4,600 m and 4,800 m both price fine.")
-    public ResponseEntity<VersionView> draftVersion(@PathVariable UUID tenantId,
-            @PathVariable UUID brandId, @PathVariable UUID tariffId,
+    public ResponseEntity<VersionView> draftVersion(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID tariffId,
             @Valid @RequestBody DraftTariffVersionRequest body) {
 
-        DeliveryTariff draft = new DeliveryTariff(tariffId, 0, VersionStatus.DRAFT,
-                body.currency(), body.feeSource(), body.distanceMode(),
-                body.roadFactorBasisPoints(), body.routingProviderInstallationId(),
-                body.maxDistanceMeters(), body.minFeeMinor(), body.maxFeeMinor(),
-                body.distanceAccrual() == null
-                        ? DistanceAccrual.STARTED_KILOMETRE : body.distanceAccrual(),
-                body.feeRoundingStepMinor(), body.feeRoundingRule(),
-                bands(body.bands()), timeRules(body.timeRules()), discounts(body.discounts()));
+        DeliveryTariff draft = new DeliveryTariff(
+                tariffId,
+                0,
+                VersionStatus.DRAFT,
+                body.currency(),
+                body.feeSource(),
+                body.distanceMode(),
+                body.roadFactorBasisPoints(),
+                body.routingProviderInstallationId(),
+                body.maxDistanceMeters(),
+                body.minFeeMinor(),
+                body.maxFeeMinor(),
+                body.distanceAccrual() == null ? DistanceAccrual.STARTED_KILOMETRE : body.distanceAccrual(),
+                body.feeRoundingStepMinor(),
+                body.feeRoundingRule(),
+                bands(body.bands()),
+                timeRules(body.timeRules()),
+                discounts(body.discounts()));
 
         var drafted = tariffs.draftVersion(tenantId, brandId, draft, body.actorId());
         return ResponseEntity.ok(new VersionView(drafted.tariffId(), drafted.version(), "DRAFT"));
     }
 
     @PostMapping("/{tariffId}/versions/{version}/activate")
-    @RequiresCapability(value = Capability.DELIVERY_TARIFF_ACTIVATE, scope = ScopeType.BRAND,
-            mutating = true)
-    @Operation(summary = "Make a rate table version live",
+    @RequiresCapability(value = Capability.DELIVERY_TARIFF_ACTIVATE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Make a rate table version live",
             description = "Refuses a band gap, an inverted fee bound, and ROAD distance with no "
                     + "routing binding installed. Every problem is returned at once.")
-    public ResponseEntity<VersionView> activate(@PathVariable UUID tenantId,
-            @PathVariable UUID brandId, @PathVariable UUID tariffId, @PathVariable int version,
+    public ResponseEntity<VersionView> activate(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID tariffId,
+            @PathVariable int version,
             @Valid @RequestBody ActorRequest body) {
 
         try {
             tariffs.activate(tenantId, brandId, tariffId, version, body.actorId());
             return ResponseEntity.ok(new VersionView(tariffId, version, "ACTIVE"));
         } catch (DeliveryTariffService.TariffActivationRefusedException refused) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, refused.getMessage(),
-                    Map.of("problems", refused.problems()));
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, refused.getMessage(), Map.of("problems", refused.problems()));
         } catch (ServiceZoneService.DeliveryResourceNotFoundException missing) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
         }
     }
 
     @PostMapping("/{tariffId}/locations")
-    @RequiresCapability(value = Capability.DELIVERY_TARIFF_MANAGE, scope = ScopeType.BRAND,
-            mutating = true)
-    @Operation(summary = "Bind the rate table to a branch",
+    @RequiresCapability(value = Capability.DELIVERY_TARIFF_MANAGE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Bind the rate table to a branch",
             description = "The middle rung of fee resolution: outranked by a zone's own tariff, "
                     + "and outranking the brand default.")
-    public ResponseEntity<Void> bind(@PathVariable UUID tenantId, @PathVariable UUID brandId,
-            @PathVariable UUID tariffId, @Valid @RequestBody BindLocationRequest body) {
+    public ResponseEntity<Void> bind(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID tariffId,
+            @Valid @RequestBody BindLocationRequest body) {
 
         tariffs.bindLocation(tenantId, brandId, body.locationId(), tariffId);
         return ResponseEntity.noContent().build();
@@ -139,9 +152,13 @@ public class DeliveryTariffController {
         List<TariffBand> bands = new java.util.ArrayList<>();
         int sequence = 0;
         for (BandRequest band : requested) {
-            bands.add(new TariffBand(sequence++,
+            bands.add(new TariffBand(
+                    sequence++,
                     band.bandSet() == null ? TariffBand.BASE_SET : band.bandSet(),
-                    band.fromMeters(), band.toMeters(), band.baseMinor(), band.perKmMinor()));
+                    band.fromMeters(),
+                    band.toMeters(),
+                    band.baseMinor(),
+                    band.perKmMinor()));
         }
         return bands;
     }
@@ -153,9 +170,15 @@ public class DeliveryTariffController {
         List<TariffTimeRule> rules = new java.util.ArrayList<>();
         int sequence = 0;
         for (TimeRuleRequest rule : requested) {
-            rules.add(new TariffTimeRule(sequence++, rule.priority(), rule.dayMask(),
-                    rule.fromTime(), rule.toTime(), rule.bandSet(),
-                    rule.multiplierBasisPoints(), rule.surchargeMinor()));
+            rules.add(new TariffTimeRule(
+                    sequence++,
+                    rule.priority(),
+                    rule.dayMask(),
+                    rule.fromTime(),
+                    rule.toTime(),
+                    rule.bandSet(),
+                    rule.multiplierBasisPoints(),
+                    rule.surchargeMinor()));
         }
         return rules;
     }
@@ -167,9 +190,15 @@ public class DeliveryTariffController {
         List<TariffDiscount> discounts = new java.util.ArrayList<>();
         int sequence = 0;
         for (DiscountRequest discount : requested) {
-            discounts.add(new TariffDiscount(sequence++, discount.priority(), discount.kind(),
-                    discount.amountMinor(), discount.allowanceMeters(), discount.dayMask(),
-                    discount.fromTime(), discount.toTime()));
+            discounts.add(new TariffDiscount(
+                    sequence++,
+                    discount.priority(),
+                    discount.kind(),
+                    discount.amountMinor(),
+                    discount.allowanceMeters(),
+                    discount.dayMask(),
+                    discount.fromTime(),
+                    discount.toTime()));
         }
         return discounts;
     }
@@ -177,7 +206,7 @@ public class DeliveryTariffController {
     public record CreateTariffRequest(
             @NotBlank @Size(max = 32) String code,
             @NotBlank @Size(max = 200) String name,
-            boolean brandDefault) { }
+            boolean brandDefault) {}
 
     /**
      * @param roadFactorBasisPoints what a straight line is multiplied by when
@@ -200,7 +229,7 @@ public class DeliveryTariffController {
             @NotEmpty List<BandRequest> bands,
             List<TimeRuleRequest> timeRules,
             List<DiscountRequest> discounts,
-            @NotNull UUID actorId) { }
+            @NotNull UUID actorId) {}
 
     /**
      * @param bandSet null for the base table. A named set is put in force by a time
@@ -213,7 +242,7 @@ public class DeliveryTariffController {
             @PositiveOrZero int fromMeters,
             @Positive int toMeters,
             @PositiveOrZero long baseMinor,
-            @PositiveOrZero long perKmMinor) { }
+            @PositiveOrZero long perKmMinor) {}
 
     /**
      * @param dayMask bit 0 is Monday, so "weekdays" is 31 and "the whole week" is 127
@@ -227,7 +256,7 @@ public class DeliveryTariffController {
             @NotNull LocalTime toTime,
             @Size(max = 32) String bandSet,
             @Positive int multiplierBasisPoints,
-            @PositiveOrZero long surchargeMinor) { }
+            @PositiveOrZero long surchargeMinor) {}
 
     /**
      * The rate table's own standing discount, capped at the fee when it resolves.
@@ -244,13 +273,13 @@ public class DeliveryTariffController {
             @PositiveOrZero Integer allowanceMeters,
             @Min(1) @Max(127) int dayMask,
             @NotNull LocalTime fromTime,
-            @NotNull LocalTime toTime) { }
+            @NotNull LocalTime toTime) {}
 
-    public record ActorRequest(@NotNull UUID actorId) { }
+    public record ActorRequest(@NotNull UUID actorId) {}
 
-    public record BindLocationRequest(@NotNull UUID locationId) { }
+    public record BindLocationRequest(@NotNull UUID locationId) {}
 
-    public record TariffView(UUID tariffId, String code, boolean brandDefault) { }
+    public record TariffView(UUID tariffId, String code, boolean brandDefault) {}
 
-    public record VersionView(UUID tariffId, int version, String status) { }
+    public record VersionView(UUID tariffId, int version, String status) {}
 }

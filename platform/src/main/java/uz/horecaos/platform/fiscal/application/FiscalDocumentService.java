@@ -9,13 +9,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -61,9 +59,12 @@ public class FiscalDocumentService {
     private final ZoneId fallbackZone;
     private final Duration minimumAge;
 
-    public FiscalDocumentService(JdbcFiscalLifecycleStore documents,
-            FiscalReportingPolicyService policies, PartnerFiscalizationPort partner,
-            AuditRecorder audit, Clock clock,
+    public FiscalDocumentService(
+            JdbcFiscalLifecycleStore documents,
+            FiscalReportingPolicyService policies,
+            PartnerFiscalizationPort partner,
+            AuditRecorder audit,
+            Clock clock,
             @Value("${horecaos.fiscal.business-timezone:Asia/Tashkent}") String fallbackZone,
             @Value("${horecaos.fiscal.sweeper.minimum-age:PT1M}") Duration minimumAge) {
         this.documents = documents;
@@ -102,15 +103,14 @@ public class FiscalDocumentService {
     @Transactional
     public int sweepOverdueReports(int batchSize) {
         Instant now = clock.instant();
-        List<ReportingCandidate> candidates = documents.claimReportingCandidates(
-                now.minus(minimumAge), fallbackZone.getId(), batchSize);
+        List<ReportingCandidate> candidates =
+                documents.claimReportingCandidates(now.minus(minimumAge), fallbackZone.getId(), batchSize);
 
         Map<UUID, FiscalReportingPolicy> byTenant = new HashMap<>();
         int blocked = 0;
 
         for (ReportingCandidate candidate : candidates) {
-            FiscalReportingPolicy policy = byTenant.computeIfAbsent(
-                    candidate.tenantId(), policies::forTenant);
+            FiscalReportingPolicy policy = byTenant.computeIfAbsent(candidate.tenantId(), policies::forTenant);
 
             ReportingDeadline deadline = ReportingDeadline.of(
                     candidate.submittedAt(),
@@ -123,15 +123,22 @@ public class FiscalDocumentService {
             }
 
             String note = reasonNote(candidate, deadline);
-            if (documents.block(candidate.tenantId(), candidate.id(),
-                    FiscalReasonCode.PROVIDER_REPORT_OVERDUE, note, deadline.effective(), now)) {
+            if (documents.block(
+                    candidate.tenantId(),
+                    candidate.id(),
+                    FiscalReasonCode.PROVIDER_REPORT_OVERDUE,
+                    note,
+                    deadline.effective(),
+                    now)) {
                 blocked++;
                 // At WARN with the identifiers on it, because this is the log line
                 // that has to be greppable during a tax inspection. No fiscal sign,
                 // no receipt URL and no marking code: ADR 0029 keeps evidence out of
                 // logs, and a status is not evidence.
-                log.warn("Fiscal document {} for order {} is BLOCKED: {} did not report by {}.",
-                        candidate.id(), candidate.orderId(),
+                log.warn(
+                        "Fiscal document {} for order {} is BLOCKED: {} did not report by {}.",
+                        candidate.id(),
+                        candidate.orderId(),
                         candidate.providerType() == null ? "the provider" : candidate.providerType(),
                         deadline.effective());
             }
@@ -166,9 +173,17 @@ public class FiscalDocumentService {
      */
     public FiscalCoverage coverage(UUID tenantId, Instant from, Instant to) {
         CoverageCounts counts = documents.coverage(tenantId, from, to);
-        return new FiscalCoverage(from, to, counts.total(), counts.issued(),
-                counts.notApplicable(), counts.cash(), counts.blocked(), counts.failed(),
-                counts.awaiting(), partner.isWired());
+        return new FiscalCoverage(
+                from,
+                to,
+                counts.total(),
+                counts.issued(),
+                counts.notApplicable(),
+                counts.cash(),
+                counts.blocked(),
+                counts.failed(),
+                counts.awaiting(),
+                partner.isWired());
     }
 
     /**
@@ -182,11 +197,17 @@ public class FiscalDocumentService {
      * around it.
      */
     @Transactional
-    public RetryResult retry(UUID tenantId, UUID documentId, int expectedVersion,
-            String idempotencyKey, ActorRef actor, String reason, String correlationId) {
+    public RetryResult retry(
+            UUID tenantId,
+            UUID documentId,
+            int expectedVersion,
+            String idempotencyKey,
+            ActorRef actor,
+            String reason,
+            String correlationId) {
 
-        FiscalDocumentRow document = documents.find(tenantId, documentId)
-                .orElseThrow(() -> new UnknownDocumentException(documentId));
+        FiscalDocumentRow document =
+                documents.find(tenantId, documentId).orElseThrow(() -> new UnknownDocumentException(documentId));
 
         if (document.state().resolved()) {
             // Issued, or recorded as having no provider path. Refused rather than
@@ -213,25 +234,25 @@ public class FiscalDocumentService {
         // and counting afterwards would let both reach Click, which is how one
         // payment acquires two sale receipts — a discrepancy with the tax authority
         // that can only be corrected, never withdrawn.
-        boolean counted = documents.recordRetryAttempt(
-                tenantId, documentId, expectedVersion, clock.instant());
+        boolean counted = documents.recordRetryAttempt(tenantId, documentId, expectedVersion, clock.instant());
         if (!counted) {
             throw new StaleDocumentException(expectedVersion, document.version());
         }
 
-        PartnerFiscalizationPort.Outcome outcome =
-                partner.retry(tenantId, documentId, idempotencyKey);
+        PartnerFiscalizationPort.Outcome outcome = partner.retry(tenantId, documentId, idempotencyKey);
 
         audit.record(AuditFact.of("fiscal.document.retry", AuditClass.BUSINESS)
                 .by(actor)
                 .at(ResourceScope.tenant(tenantId))
                 .target("fiscal_document", documentId)
                 .targetVersion((long) expectedVersion)
-                .outcome(outcome == PartnerFiscalizationPort.Outcome.NOT_WIRED
-                        ? AuditFact.Outcome.FAILED
-                        : AuditFact.Outcome.SUCCEEDED)
+                .outcome(
+                        outcome == PartnerFiscalizationPort.Outcome.NOT_WIRED
+                                ? AuditFact.Outcome.FAILED
+                                : AuditFact.Outcome.SUCCEEDED)
                 .because(reason)
-                .changed(Map.of("outcome", outcome.name(), "orderId", document.orderId().toString()))
+                .changed(Map.of(
+                        "outcome", outcome.name(), "orderId", document.orderId().toString()))
                 .correlatedBy(correlationId == null ? documentId.toString() : correlationId)
                 .occurredAt(clock.instant())
                 .build());
@@ -251,20 +272,24 @@ public class FiscalDocumentService {
      * already in the past.
      */
     @Transactional
-    public boolean reopen(UUID tenantId, UUID documentId, int expectedVersion, ActorRef actor,
-            String reason, String correlationId) {
+    public boolean reopen(
+            UUID tenantId, UUID documentId, int expectedVersion, ActorRef actor, String reason, String correlationId) {
 
-        FiscalDocumentRow document = documents.find(tenantId, documentId)
-                .orElseThrow(() -> new UnknownDocumentException(documentId));
+        FiscalDocumentRow document =
+                documents.find(tenantId, documentId).orElseThrow(() -> new UnknownDocumentException(documentId));
 
         if (document.state() != FiscalDocumentState.BLOCKED) {
             throw new NotRetryableException(document.state(), document.reasonCode());
         }
 
         Instant now = clock.instant();
-        boolean reopened = documents.reopen(tenantId, documentId, expectedVersion,
+        boolean reopened = documents.reopen(
+                tenantId,
+                documentId,
+                expectedVersion,
                 FiscalReasonCode.AWAITING_PROVIDER,
-                "unblocked by an operator: " + reason, now);
+                "unblocked by an operator: " + reason,
+                now);
         if (!reopened) {
             throw new StaleDocumentException(expectedVersion, document.version());
         }
@@ -275,8 +300,11 @@ public class FiscalDocumentService {
                 .target("fiscal_document", documentId)
                 .targetVersion((long) expectedVersion)
                 .because(reason)
-                .changed(Map.of("fromReasonCode", document.reasonCode(),
-                        "orderId", document.orderId().toString()))
+                .changed(Map.of(
+                        "fromReasonCode",
+                        document.reasonCode(),
+                        "orderId",
+                        document.orderId().toString()))
                 .correlatedBy(correlationId == null ? documentId.toString() : correlationId)
                 .occurredAt(now)
                 .build());
@@ -285,9 +313,7 @@ public class FiscalDocumentService {
     }
 
     /** What one operator retry produced. */
-    public record RetryResult(UUID documentId, PartnerFiscalizationPort.Outcome outcome,
-            int version) {
-    }
+    public record RetryResult(UUID documentId, PartnerFiscalizationPort.Outcome outcome, int version) {}
 
     /** The document named does not exist for this tenant. */
     public static class UnknownDocumentException extends RuntimeException {
@@ -301,8 +327,7 @@ public class FiscalDocumentService {
         private final transient FiscalDocumentState state;
 
         public NotRetryableException(FiscalDocumentState state, String reasonCode) {
-            super("A document that is %s (%s) is not available for this command"
-                    .formatted(state, reasonCode));
+            super("A document that is %s (%s) is not available for this command".formatted(state, reasonCode));
             this.state = state;
         }
 
@@ -318,8 +343,9 @@ public class FiscalDocumentService {
     public static class NoSellerException extends RuntimeException {
         public NoSellerException(UUID documentId) {
             super(("Fiscal document %s names no legal entity. A receipt is issued under the "
-                    + "selling company's own merchant account, so this needs an ADR 0038 fiscal "
-                    + "assignment for the branch before it can be sent.").formatted(documentId));
+                            + "selling company's own merchant account, so this needs an ADR 0038 fiscal "
+                            + "assignment for the branch before it can be sent.")
+                    .formatted(documentId));
         }
     }
 
@@ -344,8 +370,7 @@ public class FiscalDocumentService {
     }
 
     private ZoneId zoneOf(ReportingCandidate candidate) {
-        return BusinessZone.resolve(candidate.businessZone(), fallbackZone,
-                "Document " + candidate.id());
+        return BusinessZone.resolve(candidate.businessZone(), fallbackZone, "Document " + candidate.id());
     }
 
     private static String reasonNote(ReportingCandidate candidate, ReportingDeadline deadline) {

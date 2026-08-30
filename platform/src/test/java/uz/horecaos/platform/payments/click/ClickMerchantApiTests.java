@@ -1,5 +1,7 @@
 package uz.horecaos.platform.payments.click;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -8,10 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.integration.api.payment.MerchantApiCall;
@@ -25,8 +25,6 @@ import uz.horecaos.platform.payments.domain.SomAmount;
 import uz.horecaos.platform.payments.infrastructure.click.ClickMerchantApi;
 import uz.horecaos.platform.payments.infrastructure.click.ClickPaymentAdapter;
 import uz.horecaos.platform.payments.infrastructure.click.ClickSignature;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The outbound half: what goes on the wire, and what an unknown answer means
@@ -47,10 +45,10 @@ class ClickMerchantApiTests {
 
     /** Click's third account identifier, which only the payment link uses. */
     private static final String MERCHANT_ID = "9999";
+
     private static final String SECRET = "SECRET123";
 
-    private static final Clock CLOCK =
-            Clock.fixed(Instant.ofEpochSecond(1712345678L), ZoneOffset.UTC);
+    private static final Clock CLOCK = Clock.fixed(Instant.ofEpochSecond(1712345678L), ZoneOffset.UTC);
 
     private final RecordingTransport transport = new RecordingTransport();
     private final ClickMerchantApi click = new ClickMerchantApi(transport, CLOCK);
@@ -67,8 +65,7 @@ class ClickMerchantApiTests {
         // The credential is never on the call: it is applied to a function the
         // gateway invokes with a freshly resolved value, for the length of one call.
         assertThat(call.authorization().apply(SECRET))
-                .containsEntry("Auth", ClickSignature.authHeader(MERCHANT_USER_ID, SECRET,
-                        1712345678L));
+                .containsEntry("Auth", ClickSignature.authHeader(MERCHANT_USER_ID, SECRET, 1712345678L));
         assertThat(call.toString()).doesNotContain("998901234567").doesNotContain(SECRET);
     }
 
@@ -83,7 +80,8 @@ class ClickMerchantApiTests {
         assertThat(call.method()).isEqualTo("POST");
         assertThat(call.path()).isEqualTo("/invoice/create");
         // Som, not tiyin. The same payment is tiyin in submit_items.
-        assertThat(call.body()).containsEntry("amount", 1000L)
+        assertThat(call.body())
+                .containsEntry("amount", 1000L)
                 .containsEntry("service_id", SERVICE_ID)
                 .containsEntry("merchant_trans_id", "order-1");
         assertThat(call.mutating()).isTrue();
@@ -92,8 +90,7 @@ class ClickMerchantApiTests {
     @Test
     @DisplayName("status_by_mti is a GET carrying the business date, and mutates nothing")
     void statusByMerchantTransIdKeepsTheDateSegment() {
-        transport.answer(ProviderOutcome.success(
-                Map.of("error_code", 0, "payment_id", 777L), null));
+        transport.answer(ProviderOutcome.success(Map.of("error_code", 0, "payment_id", 777L), null));
 
         click.statusByMerchantTransId(binding(true), "order-1", LocalDate.of(2026, 8, 22));
 
@@ -109,20 +106,16 @@ class ClickMerchantApiTests {
     @Test
     @DisplayName("a captured payment resolves through status_by_mti then payment/status")
     void resolutionTakesTwoReads() {
-        transport.answer(ProviderOutcome.success(
-                Map.of("error_code", 0, "payment_id", 777L), null));
-        transport.answer(ProviderOutcome.success(
-                Map.of("error_code", 0, "payment_status", 2), null));
+        transport.answer(ProviderOutcome.success(Map.of("error_code", 0, "payment_id", 777L), null));
+        transport.answer(ProviderOutcome.success(Map.of("error_code", 0, "payment_status", 2), null));
 
         uz.horecaos.platform.payments.domain.ProviderOutcome outcome =
                 adapter.queryOutcome(attempt(null), binding(true));
 
         assertThat(transport.paths())
-                .containsExactly("/payment/status_by_mti/12345/order-1/2026-08-22",
-                        "/payment/status/12345/777");
+                .containsExactly("/payment/status_by_mti/12345/order-1/2026-08-22", "/payment/status/12345/777");
         assertThat(outcome.classification())
-                .isEqualTo(uz.horecaos.platform.payments.domain.ProviderOutcome
-                        .Classification.SUCCESS);
+                .isEqualTo(uz.horecaos.platform.payments.domain.ProviderOutcome.Classification.SUCCESS);
         assertThat(outcome.observedStatus()).isEqualTo(PaymentAttemptStatus.CAPTURED);
         assertThat(outcome.externalPaymentId()).isEqualTo("777");
     }
@@ -130,20 +123,18 @@ class ClickMerchantApiTests {
     @Test
     @DisplayName("payment_status 1 beside error_note Success is not money")
     void inProcessingStaysUncertain() {
-        transport.answer(ProviderOutcome.success(
-                Map.of("error_code", 0, "payment_id", 777L), null));
+        transport.answer(ProviderOutcome.success(Map.of("error_code", 0, "payment_id", 777L), null));
         // Click's own examples pair payment_status 1 with error_note "Success":
         // error_code 0 means the API call worked, and only payment_status 2 means
         // the money moved.
-        transport.answer(ProviderOutcome.success(
-                Map.of("error_code", 0, "error_note", "Success", "payment_status", 1), null));
+        transport.answer(
+                ProviderOutcome.success(Map.of("error_code", 0, "error_note", "Success", "payment_status", 1), null));
 
         uz.horecaos.platform.payments.domain.ProviderOutcome outcome =
                 adapter.queryOutcome(attempt(null), binding(true));
 
         assertThat(outcome.classification())
-                .isEqualTo(uz.horecaos.platform.payments.domain.ProviderOutcome
-                        .Classification.UNCERTAIN);
+                .isEqualTo(uz.horecaos.platform.payments.domain.ProviderOutcome.Classification.UNCERTAIN);
     }
 
     @Test
@@ -159,8 +150,7 @@ class ClickMerchantApiTests {
                 adapter.queryOutcome(attempt(null), binding(true));
 
         assertThat(outcome.classification())
-                .isEqualTo(uz.horecaos.platform.payments.domain.ProviderOutcome
-                        .Classification.UNCERTAIN);
+                .isEqualTo(uz.horecaos.platform.payments.domain.ProviderOutcome.Classification.UNCERTAIN);
         assertThat(outcome.failureCode()).isEqualTo("CLICK_PAYMENT_NOT_FOUND");
         assertThat(transport.calls()).hasSize(1);
     }
@@ -170,8 +160,8 @@ class ClickMerchantApiTests {
     void reversalIsADelete() {
         transport.answer(ProviderOutcome.success(Map.of("error_code", 0), null));
 
-        uz.horecaos.platform.payments.domain.ProviderOutcome outcome = adapter.reverse(
-                attempt("777"), binding(true), "order cancelled");
+        uz.horecaos.platform.payments.domain.ProviderOutcome outcome =
+                adapter.reverse(attempt("777"), binding(true), "order cancelled");
 
         MerchantApiCall call = transport.last();
         assertThat(call.method()).isEqualTo("DELETE");
@@ -187,12 +177,11 @@ class ClickMerchantApiTests {
     void anUncertainMutatingCallIsNotRetried() {
         transport.answer(ProviderOutcome.uncertain("READ_TIMEOUT", "no response"));
 
-        uz.horecaos.platform.payments.domain.ProviderOutcome outcome = adapter.reverse(
-                attempt("777"), binding(true), "order cancelled");
+        uz.horecaos.platform.payments.domain.ProviderOutcome outcome =
+                adapter.reverse(attempt("777"), binding(true), "order cancelled");
 
         assertThat(outcome.classification())
-                .isEqualTo(uz.horecaos.platform.payments.domain.ProviderOutcome
-                        .Classification.UNCERTAIN);
+                .isEqualTo(uz.horecaos.platform.payments.domain.ProviderOutcome.Classification.UNCERTAIN);
         // One attempt, and only one. Click's merchant API has no idempotency key on
         // any call, so a second DELETE after a lost response is a second reversal.
         assertThat(transport.calls()).hasSize(1);
@@ -209,13 +198,12 @@ class ClickMerchantApiTests {
         // asserting money reached a cardholder that Click may never have moved.
         transport.answer(ProviderOutcome.success(Map.of(), null));
 
-        uz.horecaos.platform.payments.domain.ProviderOutcome outcome = adapter.reverse(
-                attempt("777"), binding(true), "order cancelled");
+        uz.horecaos.platform.payments.domain.ProviderOutcome outcome =
+                adapter.reverse(attempt("777"), binding(true), "order cancelled");
 
         assertThat(outcome.classification())
                 .as("an unstated outcome on a mutating call is a question, not an answer")
-                .isEqualTo(uz.horecaos.platform.payments.domain.ProviderOutcome
-                        .Classification.UNCERTAIN);
+                .isEqualTo(uz.horecaos.platform.payments.domain.ProviderOutcome.Classification.UNCERTAIN);
         assertThat(outcome.observedStatus())
                 .as("nothing may claim the money went back")
                 .isNotEqualTo(PaymentAttemptStatus.REVERSED);
@@ -233,8 +221,8 @@ class ClickMerchantApiTests {
         // read-back into a reconciliation job.
         transport.answer(ProviderOutcome.success(Map.of("payment_status", 2), null));
 
-        ClickMerchantApi.ClickResponse read = click.statusByMerchantTransId(
-                binding(true), "777", java.time.LocalDate.of(2026, 8, 24));
+        ClickMerchantApi.ClickResponse read =
+                click.statusByMerchantTransId(binding(true), "777", java.time.LocalDate.of(2026, 8, 24));
 
         assertThat(read.successful())
                 .as("absence of error_code still means success on a read")
@@ -244,8 +232,8 @@ class ClickMerchantApiTests {
     @Test
     @DisplayName("a binding that cannot reverse says so before anything is sent")
     void reversalIsACapabilityNotAnException() {
-        uz.horecaos.platform.payments.domain.ProviderOutcome outcome = adapter.reverse(
-                attempt("777"), binding(false), "order cancelled");
+        uz.horecaos.platform.payments.domain.ProviderOutcome outcome =
+                adapter.reverse(attempt("777"), binding(false), "order cancelled");
 
         assertThat(outcome.failureCode()).isEqualTo("REVERSAL_UNSUPPORTED");
         assertThat(transport.calls()).isEmpty();
@@ -262,12 +250,11 @@ class ClickMerchantApiTests {
         transport.answer(ProviderOutcome.success(
                 Map.of("error_code", -5017, "error_note", "Something Click knows about"), null));
 
-        uz.horecaos.platform.payments.domain.ProviderOutcome outcome = adapter.reverse(
-                attempt("777"), binding(true), "order cancelled");
+        uz.horecaos.platform.payments.domain.ProviderOutcome outcome =
+                adapter.reverse(attempt("777"), binding(true), "order cancelled");
 
         assertThat(outcome.classification())
-                .isEqualTo(uz.horecaos.platform.payments.domain.ProviderOutcome
-                        .Classification.REJECTED);
+                .isEqualTo(uz.horecaos.platform.payments.domain.ProviderOutcome.Classification.REJECTED);
         assertThat(outcome.failureCode()).isEqualTo("CLICK_REVERSAL_REFUSED");
         assertThat(outcome.detail()).contains("-5017");
     }
@@ -275,21 +262,44 @@ class ClickMerchantApiTests {
     @Test
     @DisplayName("a binding with no merchant_user_id is refused rather than sent unauthenticated")
     void missingMerchantUserIsAConfigurationFailure() {
-        ProviderBinding withoutUser = new ProviderBinding(UUID.randomUUID(), TENANT,
-                UUID.randomUUID(), PaymentProviderType.CLICK, UUID.randomUUID(), UUID.randomUUID(),
-                SERVICE_ID, null, null, secretReference(), "click-segment", true, true,
-                LocalDate.of(2026, 1, 1), null);
+        ProviderBinding withoutUser = new ProviderBinding(
+                UUID.randomUUID(),
+                TENANT,
+                UUID.randomUUID(),
+                PaymentProviderType.CLICK,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                SERVICE_ID,
+                null,
+                null,
+                secretReference(),
+                "click-segment",
+                true,
+                true,
+                LocalDate.of(2026, 1, 1),
+                null);
 
         assertThat(click.paymentStatus(withoutUser, "777").successful()).isFalse();
         assertThat(transport.calls()).isEmpty();
     }
 
     private static ProviderBinding binding(boolean supportsReversal) {
-        return new ProviderBinding(UUID.randomUUID(), TENANT, UUID.randomUUID(),
-                PaymentProviderType.CLICK, UUID.randomUUID(), UUID.randomUUID(), SERVICE_ID,
-                MERCHANT_USER_ID, MERCHANT_ID, secretReference(), "click-segment",
-                supportsReversal, true,
-                LocalDate.of(2026, 1, 1), null);
+        return new ProviderBinding(
+                UUID.randomUUID(),
+                TENANT,
+                UUID.randomUUID(),
+                PaymentProviderType.CLICK,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                SERVICE_ID,
+                MERCHANT_USER_ID,
+                MERCHANT_ID,
+                secretReference(),
+                "click-segment",
+                supportsReversal,
+                true,
+                LocalDate.of(2026, 1, 1),
+                null);
     }
 
     private static SecretReference secretReference() {
@@ -304,10 +314,27 @@ class ClickMerchantApiTests {
      * an attempt is the attempt service's job and not the adapter's.
      */
     private static PaymentAttempt attempt(String externalPaymentId) {
-        return new PaymentAttempt(UUID.randomUUID(), TENANT, INTENT, PaymentProviderType.CLICK,
-                UUID.randomUUID(), "order-1", LocalDate.of(2026, 8, 22), externalPaymentId, null,
-                new SomAmount(1000, "UZS"), PaymentAttemptStatus.CAPTURED,
-                null, null, null, null, null, null, 1, CLOCK.instant(), null);
+        return new PaymentAttempt(
+                UUID.randomUUID(),
+                TENANT,
+                INTENT,
+                PaymentProviderType.CLICK,
+                UUID.randomUUID(),
+                "order-1",
+                LocalDate.of(2026, 8, 22),
+                externalPaymentId,
+                null,
+                new SomAmount(1000, "UZS"),
+                PaymentAttemptStatus.CAPTURED,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                1,
+                CLOCK.instant(),
+                null);
     }
 
     /** Answers a queued outcome per call, and remembers what it was asked. */
@@ -336,7 +363,8 @@ class ClickMerchantApiTests {
         public ProviderOutcome exchange(MerchantApiCall call) {
             calls.add(call);
             int index = calls.size() - 1;
-            return index < answers.size() ? answers.get(index)
+            return index < answers.size()
+                    ? answers.get(index)
                     : ProviderOutcome.uncertain("NO_ANSWER_QUEUED", "the test queued no answer");
         }
     }

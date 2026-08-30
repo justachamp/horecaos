@@ -1,22 +1,20 @@
 package uz.horecaos.platform.payments.infrastructure.persistence;
 
+import static uz.horecaos.platform.payments.infrastructure.persistence.PaymentTimestamps.instant;
+import static uz.horecaos.platform.payments.infrastructure.persistence.PaymentTimestamps.utc;
+
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.payments.domain.PaymentTransaction;
 import uz.horecaos.platform.payments.domain.PaymentTransactionType;
 import uz.horecaos.platform.payments.domain.ProviderEvidence;
 import uz.horecaos.platform.payments.domain.SomAmount;
-
-import static uz.horecaos.platform.payments.infrastructure.persistence.PaymentTimestamps.instant;
-import static uz.horecaos.platform.payments.infrastructure.persistence.PaymentTimestamps.utc;
 
 /**
  * The append-only record of what providers said happened (ADR 0013).
@@ -58,9 +56,11 @@ public class JdbcPaymentTransactionStore {
         parameters.put("amount", transaction.amount().value());
         parameters.put("currency", transaction.amount().currency());
         parameters.put("providerReference", transaction.providerReference());
-        parameters.put("providerState",
+        parameters.put(
+                "providerState",
                 transaction.evidence() == null ? null : transaction.evidence().state());
-        parameters.put("providerReason",
+        parameters.put(
+                "providerReason",
                 transaction.evidence() == null ? null : transaction.evidence().reason());
         parameters.put("occurredAt", utc(transaction.occurredAt()));
         parameters.put("recordedAt", utc(transaction.recordedAt()));
@@ -79,9 +79,7 @@ public class JdbcPaymentTransactionStore {
                     :occurredAt, :recordedAt,
                     :protectedRequest, :protectedResponse)
                 ON CONFLICT ON CONSTRAINT uq_payment_transaction_occurrence DO NOTHING
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
 
         return inserted == 1;
     }
@@ -96,7 +94,8 @@ public class JdbcPaymentTransactionStore {
                 WHERE tenant_id = :tenantId AND attempt_id = :attemptId
                 ORDER BY occurred_at, recorded_at
                 """)
-                .param("tenantId", tenantId).param("attemptId", attemptId)
+                .param("tenantId", tenantId)
+                .param("attemptId", attemptId)
                 .query(JdbcPaymentTransactionStore::map)
                 .list();
     }
@@ -116,7 +115,8 @@ public class JdbcPaymentTransactionStore {
                 WHERE tenant_id = :tenantId AND intent_id = :intentId
                   AND transaction_type = 'CAPTURE'
                 """)
-                .param("tenantId", tenantId).param("intentId", intentId)
+                .param("tenantId", tenantId)
+                .param("intentId", intentId)
                 .query(Long.class)
                 .single();
         return captured == null ? 0L : captured;
@@ -130,7 +130,8 @@ public class JdbcPaymentTransactionStore {
                 WHERE tenant_id = :tenantId AND intent_id = :intentId
                   AND transaction_type IN ('REVERSE', 'REFUND')
                 """)
-                .param("tenantId", tenantId).param("intentId", intentId)
+                .param("tenantId", tenantId)
+                .param("intentId", intentId)
                 .query(Long.class)
                 .single();
         return returned == null ? 0L : returned;
@@ -146,9 +147,10 @@ public class JdbcPaymentTransactionStore {
                 PaymentTransactionType.valueOf(row.getString("transaction_type")),
                 new SomAmount(row.getLong("amount_minor"), row.getString("currency")),
                 row.getString("provider_reference"),
-                providerState == null ? null : new ProviderEvidence(
-                        providerState, row.getString("provider_reason"),
-                        instant(row, "recorded_at")),
+                providerState == null
+                        ? null
+                        : new ProviderEvidence(
+                                providerState, row.getString("provider_reason"), instant(row, "recorded_at")),
                 instant(row, "occurred_at"),
                 instant(row, "recorded_at"),
                 row.getString("protected_request_reference"),

@@ -6,10 +6,8 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.payments.application.PaymentBusinessCalendar;
 
 /**
@@ -37,12 +35,13 @@ public class JdbcPaymentBusinessCalendar implements PaymentBusinessCalendar {
                 FROM tenant.locations
                 WHERE tenant_id = :tenantId AND id = :locationId
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
                 .query(String.class)
                 .optional();
 
-        return LocalDate.ofInstant(at, zone.map(JdbcPaymentBusinessCalendar::zoneOrUtc)
-                .orElse(ZoneOffset.UTC));
+        return LocalDate.ofInstant(
+                at, zone.map(JdbcPaymentBusinessCalendar::zoneOrUtc).orElse(ZoneOffset.UTC));
     }
 
     private static ZoneId zoneOrUtc(String timezone) {

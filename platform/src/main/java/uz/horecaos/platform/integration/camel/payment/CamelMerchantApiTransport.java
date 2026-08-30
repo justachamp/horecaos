@@ -3,7 +3,6 @@ package uz.horecaos.platform.integration.camel.payment;
 import org.apache.camel.Exchange;
 import org.apache.camel.ProducerTemplate;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.integration.api.payment.MerchantApiCall;
 import uz.horecaos.platform.integration.api.payment.MerchantApiTransport;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
@@ -32,18 +31,18 @@ public class CamelMerchantApiTransport implements MerchantApiTransport {
 
     @Override
     public ProviderOutcome exchange(MerchantApiCall call) {
-        Exchange result = producer.request(PaymentRouteBuilder.MERCHANT_API_ENDPOINT,
+        Exchange result = producer.request(
+                PaymentRouteBuilder.MERCHANT_API_ENDPOINT,
                 exchange -> exchange.getIn().setBody(call));
 
-        ProviderOutcome outcome = result.getIn()
-                .getHeader(PaymentRouteBuilder.OUTCOME_HEADER, ProviderOutcome.class);
+        ProviderOutcome outcome = result.getIn().getHeader(PaymentRouteBuilder.OUTCOME_HEADER, ProviderOutcome.class);
         if (outcome != null) {
             return outcome;
         }
         // The route produced no outcome at all, which means it failed before the
         // dead-letter handler could classify. Uncertain rather than retryable:
         // there is no evidence the request did not reach the provider.
-        return ProviderOutcome.uncertain("ROUTE_PRODUCED_NO_OUTCOME",
-                "The payment route returned without classifying the call");
+        return ProviderOutcome.uncertain(
+                "ROUTE_PRODUCED_NO_OUTCOME", "The payment route returned without classifying the call");
     }
 }

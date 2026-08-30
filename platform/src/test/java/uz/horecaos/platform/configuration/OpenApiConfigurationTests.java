@@ -2,10 +2,9 @@ package uz.horecaos.platform.configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import org.junit.jupiter.api.Test;
-
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.security.SecurityScheme;
+import org.junit.jupiter.api.Test;
 
 class OpenApiConfigurationTests {
 
@@ -19,12 +18,11 @@ class OpenApiConfigurationTests {
         assertThat(openApi.getInfo().getVersion()).isEqualTo("v1");
         assertThat(openApi.getSecurity())
                 .singleElement()
-                .satisfies(requirement -> assertThat(requirement)
-                        .containsKey(OpenApiConfiguration.BEARER_SECURITY_SCHEME));
+                .satisfies(requirement ->
+                        assertThat(requirement).containsKey(OpenApiConfiguration.BEARER_SECURITY_SCHEME));
 
-        SecurityScheme bearerScheme = openApi.getComponents()
-                .getSecuritySchemes()
-                .get(OpenApiConfiguration.BEARER_SECURITY_SCHEME);
+        SecurityScheme bearerScheme =
+                openApi.getComponents().getSecuritySchemes().get(OpenApiConfiguration.BEARER_SECURITY_SCHEME);
         assertThat(bearerScheme.getType()).isEqualTo(SecurityScheme.Type.HTTP);
         assertThat(bearerScheme.getScheme()).isEqualTo("bearer");
         assertThat(bearerScheme.getBearerFormat()).isEqualTo("JWT");

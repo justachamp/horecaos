@@ -3,10 +3,8 @@ package uz.horecaos.platform.fulfillment.application;
 import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.fulfillment.application.ServiceZoneService.DeliveryResourceNotFoundException;
 import uz.horecaos.platform.fulfillment.domain.VersionStatus;
 import uz.horecaos.platform.fulfillment.domain.tariff.DeliveryTariff;
@@ -37,8 +35,7 @@ public class DeliveryTariffService {
     }
 
     @Transactional
-    public UUID createTariff(UUID tenantId, UUID brandId, String code, String name,
-            boolean brandDefault) {
+    public UUID createTariff(UUID tenantId, UUID brandId, String code, String name, boolean brandDefault) {
         UUID id = UUID.randomUUID();
         store.insertTariff(id, tenantId, brandId, code, name, brandDefault, clock.instant());
         return id;
@@ -55,17 +52,27 @@ public class DeliveryTariffService {
      * ones about the set as a whole.
      */
     @Transactional
-    public DraftedVersion draftVersion(UUID tenantId, UUID brandId, DeliveryTariff draft,
-            UUID createdBy) {
+    public DraftedVersion draftVersion(UUID tenantId, UUID brandId, DeliveryTariff draft, UUID createdBy) {
         requireOwned(tenantId, brandId, draft.tariffId());
         int version = store.nextVersion(tenantId, draft.tariffId());
         DeliveryTariff versioned = new DeliveryTariff(
-                draft.tariffId(), version, VersionStatus.DRAFT, draft.currency(),
-                draft.feeSource(), draft.distanceMode(), draft.roadFactorBasisPoints(),
-                draft.routingProviderInstallationId(), draft.maxDistanceMeters(),
-                draft.minFeeMinor(), draft.maxFeeMinor(),
-                draft.distanceAccrual(), draft.feeRoundingStepMinor(), draft.feeRoundingRule(),
-                draft.bands(), draft.timeRules(), draft.discounts());
+                draft.tariffId(),
+                version,
+                VersionStatus.DRAFT,
+                draft.currency(),
+                draft.feeSource(),
+                draft.distanceMode(),
+                draft.roadFactorBasisPoints(),
+                draft.routingProviderInstallationId(),
+                draft.maxDistanceMeters(),
+                draft.minFeeMinor(),
+                draft.maxFeeMinor(),
+                draft.distanceAccrual(),
+                draft.feeRoundingStepMinor(),
+                draft.feeRoundingRule(),
+                draft.bands(),
+                draft.timeRules(),
+                draft.discounts());
 
         UUID id = UUID.randomUUID();
         store.insertVersion(id, tenantId, versioned, createdBy, clock.instant());
@@ -101,7 +108,7 @@ public class DeliveryTariffService {
         store.bindLocation(tenantId, brandId, locationId, tariffId, clock.instant());
     }
 
-    public record DraftedVersion(UUID id, UUID tariffId, int version) { }
+    public record DraftedVersion(UUID id, UUID tariffId, int version) {}
 
     public static final class TariffActivationRefusedException extends RuntimeException {
 
@@ -127,8 +134,7 @@ public class DeliveryTariffService {
      */
     private void requireOwned(UUID tenantId, UUID brandId, UUID tariffId) {
         if (!store.tariffBelongsToBrand(tenantId, brandId, tariffId)) {
-            throw new DeliveryResourceNotFoundException(
-                    "Tariff %s does not belong to this brand".formatted(tariffId));
+            throw new DeliveryResourceNotFoundException("Tariff %s does not belong to this brand".formatted(tariffId));
         }
     }
 }

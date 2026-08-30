@@ -9,7 +9,6 @@ package uz.horecaos.platform.courier.domain;
  * trigger a review, and it never pays.
  */
 public enum DistanceSource {
-
     ROUTING,
     HAVERSINE_FACTORED,
     MANUAL

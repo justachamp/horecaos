@@ -3,10 +3,8 @@ package uz.horecaos.platform.ordering.infrastructure.tenancy;
 import java.time.ZoneId;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.ordering.application.OrderingTenantContext;
 
 /**
@@ -39,7 +37,8 @@ public class JdbcOrderingTenantContext implements OrderingTenantContext {
                 SELECT timezone FROM tenant.locations
                 WHERE tenant_id = :tenantId AND id = :locationId
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
                 .query(String.class)
                 .optional()
                 .map(ZoneId::of);

@@ -1,5 +1,7 @@
 package uz.horecaos.platform.telemetry.web;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
@@ -9,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -20,10 +21,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
@@ -91,8 +88,12 @@ public class OperationsStreamController {
     private final RateLimiter rateLimiter;
     private final Clock clock;
 
-    public OperationsStreamController(SseStreamRegistry registry, AuthorizationService authorization,
-            CurrentActor currentActor, RateLimiter rateLimiter, Clock clock) {
+    public OperationsStreamController(
+            SseStreamRegistry registry,
+            AuthorizationService authorization,
+            CurrentActor currentActor,
+            RateLimiter rateLimiter,
+            Clock clock) {
         this.registry = registry;
         this.authorization = authorization;
         this.currentActor = currentActor;
@@ -102,7 +103,8 @@ public class OperationsStreamController {
 
     @GetMapping(value = "/streams", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @RequiresCapability(value = Capability.LOCATION_READ, scope = ScopeType.LOCATION)
-    @Operation(summary = "Open a stream of operational signals",
+    @Operation(
+            summary = "Open a stream of operational signals",
             description = "A frame carries a signal, not state: the client is told that something "
                     + "in its subscribed scope changed and re-reads it through the ordinary "
                     + "authorized API. Two channels are registered exceptions and carry a bounded "
@@ -111,7 +113,9 @@ public class OperationsStreamController {
                     + "surface here also has a polling path that must work; this is an "
                     + "accelerator on top of it, and turning it off changes no other code.")
     public SseEmitter open(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId,
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
             @RequestParam(name = "scope", required = false) String scope,
             @RequestParam(name = "channels") List<String> channels,
             @RequestHeader(name = "Last-Event-Id", required = false) String lastEventId,
@@ -126,20 +130,20 @@ public class OperationsStreamController {
                 new RateLimiter.Key("realtime.stream.connect", tenantId.toString(), subject),
                 RateLimiter.Policy.perMinute(30));
         if (!decision.allowed()) {
-            throw new ApiException(ErrorCode.RATE_LIMIT_EXCEEDED,
+            throw new ApiException(
+                    ErrorCode.RATE_LIMIT_EXCEEDED,
                     "Too many stream connects; reconnect after a jittered delay",
                     Map.of("retryAfterSeconds", decision.retryAfter().toSeconds()));
         }
 
         ScopeKey requested = parseScope(scope, locationId);
-        Set<Subscription> subscriptions = authorize(
-                tenantId, brandId, locationId, subject, requested, channels);
+        Set<Subscription> subscriptions = authorize(tenantId, brandId, locationId, subject, requested, channels);
 
         SseEmitter emitter = new SseEmitter(ASYNC_TIMEOUT.toMillis());
         Connection connection;
         try {
-            connection = registry.open(tenantId, subject, subscriptions, sinkFor(emitter),
-                    tokenExpiry(token), lastEventId);
+            connection =
+                    registry.open(tenantId, subject, subscriptions, sinkFor(emitter), tokenExpiry(token), lastEventId);
         } catch (StreamCapReachedException capped) {
             throw new ApiException(ErrorCode.RATE_LIMIT_EXCEEDED, capped.getMessage());
         }
@@ -162,12 +166,11 @@ public class OperationsStreamController {
      * string: a client that misspells {@code stop_list} and receives an open
      * stream with nothing on it has a bug that looks like an empty kitchen.
      */
-    private Set<Subscription> authorize(UUID tenantId, UUID brandId, UUID locationId,
-            String subject, ScopeKey requested, List<String> channels) {
+    private Set<Subscription> authorize(
+            UUID tenantId, UUID brandId, UUID locationId, String subject, ScopeKey requested, List<String> channels) {
 
         if (channels.isEmpty()) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A stream subscribes to at least one channel");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A stream subscribes to at least one channel");
         }
         Set<Subscription> subscriptions = new LinkedHashSet<>();
 
@@ -176,8 +179,7 @@ public class OperationsStreamController {
             try {
                 channel = StreamChannel.require(name);
             } catch (StreamChannel.UnknownChannelException unknown) {
-                throw new ApiException(ErrorCode.VALIDATION_FAILED, unknown.getMessage(),
-                        Map.of("channel", name));
+                throw new ApiException(ErrorCode.VALIDATION_FAILED, unknown.getMessage(), Map.of("channel", name));
             }
 
             ScopeKey scopeKey = requested;
@@ -189,8 +191,8 @@ public class OperationsStreamController {
                     case TENANT -> ScopeKey.tenant(tenantId);
                     case BRAND -> ScopeKey.brand(brandId);
                     case LOCATION -> ScopeKey.location(locationId);
-                    case PLATFORM -> throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                            "No channel is carried at platform scope");
+                    case PLATFORM ->
+                        throw new ApiException(ErrorCode.VALIDATION_FAILED, "No channel is carried at platform scope");
                 };
             }
 
@@ -208,8 +210,7 @@ public class OperationsStreamController {
         try {
             return ScopeKey.parse(scope);
         } catch (IllegalArgumentException malformed) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, malformed.getMessage(),
-                    Map.of("parameter", "scope"));
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, malformed.getMessage(), Map.of("parameter", "scope"));
         }
     }
 

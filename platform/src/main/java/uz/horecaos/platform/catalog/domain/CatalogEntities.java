@@ -17,13 +17,21 @@ import java.util.UUID;
  */
 public final class CatalogEntities {
 
-    private CatalogEntities() {
+    private CatalogEntities() {}
+
+    public enum Status {
+        DRAFT,
+        ACTIVE,
+        ARCHIVED
     }
 
-    public enum Status { DRAFT, ACTIVE, ARCHIVED }
-
     public enum EntityType {
-        CATALOG, CATEGORY, PRODUCT, VARIANT, MODIFIER_GROUP, MODIFIER_OPTION,
+        CATALOG,
+        CATEGORY,
+        PRODUCT,
+        VARIANT,
+        MODIFIER_GROUP,
+        MODIFIER_OPTION,
         /**
          * A charge that reaches a receipt as an ordinary line without being a
          * catalog item — today only the delivery fee (ADR 0038).
@@ -43,7 +51,11 @@ public final class CatalogEntities {
      * delivery fee is classified by the same mechanism as a dish rather than by
      * a second one that will be forgotten.
      */
-    public enum PriceableType { VARIANT, MODIFIER_OPTION, FEE }
+    public enum PriceableType {
+        VARIANT,
+        MODIFIER_OPTION,
+        FEE
+    }
 
     /** One thing that can be priced, and therefore one thing that can be classified. */
     public record PriceableNode(PriceableType type, UUID id) {
@@ -69,8 +81,7 @@ public final class CatalogEntities {
      * order from a tariff, and a second place for a fee to have a price would be
      * a second answer to what the customer pays.
      */
-    public record Fee(UUID id, UUID tenantId, UUID brandId, String code,
-            Status status, int version) {
+    public record Fee(UUID id, UUID tenantId, UUID brandId, String code, Status status, int version) {
 
         /** The only fee any brand has today. */
         public static final String DELIVERY = "DELIVERY";
@@ -85,8 +96,7 @@ public final class CatalogEntities {
         HIDDEN
     }
 
-    public record Catalog(UUID id, UUID tenantId, UUID brandId, String code, String name,
-            Status status, int version) { }
+    public record Catalog(UUID id, UUID tenantId, UUID brandId, String code, String name, Status status, int version) {}
 
     /**
      * A dish, as opposed to a thing that can be ordered.
@@ -97,41 +107,79 @@ public final class CatalogEntities {
      * parent means the resolver needs a row the published snapshot does not
      * contain. Classification attaches to the priceable node instead.
      */
-    public record Product(UUID id, UUID tenantId, UUID brandId, String code,
-            Status status, int version) { }
+    public record Product(UUID id, UUID tenantId, UUID brandId, String code, Status status, int version) {}
 
     /** @param unitCode the measurement unit a menu is authored in — not the numeric fiscal unit */
-    public record Variant(UUID id, UUID tenantId, UUID brandId, UUID productId, String sku,
-            String unitCode, boolean isDefault, int sortOrder,
-            Status status, int version) { }
+    public record Variant(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID productId,
+            String sku,
+            String unitCode,
+            boolean isDefault,
+            int sortOrder,
+            Status status,
+            int version) {}
 
-    public record Category(UUID id, UUID tenantId, UUID brandId, UUID catalogId,
-            UUID parentCategoryId, String code, int sortOrder, Status status, int version) { }
+    public record Category(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID catalogId,
+            UUID parentCategoryId,
+            String code,
+            int sortOrder,
+            Status status,
+            int version) {}
 
     /**
      * @param minimumSelections how many the customer must choose
      * @param maximumSelections how many they may choose
      */
-    public record ModifierGroup(UUID id, UUID tenantId, UUID brandId, String code,
-            boolean required, int minimumSelections, int maximumSelections,
-            boolean allowSameOptionMultipleTimes, int sortOrder, Status status, int version) { }
+    public record ModifierGroup(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            String code,
+            boolean required,
+            int minimumSelections,
+            int maximumSelections,
+            boolean allowSameOptionMultipleTimes,
+            int sortOrder,
+            Status status,
+            int version) {}
 
     /**
      * @param linkedVariantId set when the modifier is itself something sellable,
      *                        in which case its classification falls back to that
      *                        variant's rather than being entered twice
      */
-    public record ModifierOption(UUID id, UUID tenantId, UUID brandId, UUID modifierGroupId,
-            String code, UUID linkedVariantId, int maximumQuantity,
-            int sortOrder, Status status, int version) { }
+    public record ModifierOption(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID modifierGroupId,
+            String code,
+            UUID linkedVariantId,
+            int maximumQuantity,
+            int sortOrder,
+            Status status,
+            int version) {}
 
-    public record Translation(EntityType entityType, UUID entityId, String locale,
-            String name, String description) { }
+    public record Translation(EntityType entityType, UUID entityId, String locale, String name, String description) {}
 
-    public record LocationOffering(UUID id, UUID tenantId, UUID brandId, UUID locationId,
-            UUID variantId, OfferingStatus status, List<String> fulfillmentModes, int version) { }
+    public record LocationOffering(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID variantId,
+            OfferingStatus status,
+            List<String> fulfillmentModes,
+            int version) {}
 
     /** One entity as it was at publication time. Never a reference to a live row. */
-    public record PublicationItem(EntityType entityType, UUID entityId, int entityVersion,
-            Map<String, Object> content) { }
+    public record PublicationItem(
+            EntityType entityType, UUID entityId, int entityVersion, Map<String, Object> content) {}
 }

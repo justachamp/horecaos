@@ -4,9 +4,7 @@ import java.time.Clock;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.catalog.api.MenuPriceLookup;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
@@ -38,8 +36,13 @@ public class PricingMenuPriceLookup implements MenuPriceLookup {
     }
 
     @Override
-    public Optional<MenuPrices> pricesFor(UUID tenantId, UUID brandId, UUID locationId,
-            String channelCode, Set<UUID> variantIds, Set<UUID> modifierOptionIds) {
+    public Optional<MenuPrices> pricesFor(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            String channelCode,
+            Set<UUID> variantIds,
+            Set<UUID> modifierOptionIds) {
 
         var now = clock.instant();
 

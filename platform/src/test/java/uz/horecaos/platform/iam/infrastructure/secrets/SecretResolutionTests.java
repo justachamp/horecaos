@@ -9,10 +9,8 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.Map;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
-
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
@@ -21,8 +19,8 @@ import uz.horecaos.platform.iam.api.secrets.SecretValue;
 /** ADR 0028: rotation without a restart, no leaks, and a provider-neutral reference. */
 class SecretResolutionTests {
 
-    private static final SecretReference PAYMENT = new SecretReference(
-            "local", SecretCategory.PROVIDER_PAYMENT, "installation-1", "api-key");
+    private static final SecretReference PAYMENT =
+            new SecretReference("local", SecretCategory.PROVIDER_PAYMENT, "installation-1", "api-key");
 
     @Test
     void resolvesAConfiguredSecret() {
@@ -89,7 +87,9 @@ class SecretResolutionTests {
         assertThat(SecretReference.parse(rendered)).isEqualTo(PAYMENT);
         assertThat(rendered)
                 .as("ADR 0034 moves provider in phase two; a reference must survive it unchanged")
-                .doesNotContain("arn:").doesNotContain("vault").doesNotContain("secretsmanager");
+                .doesNotContain("arn:")
+                .doesNotContain("vault")
+                .doesNotContain("secretsmanager");
     }
 
     @Test
@@ -127,7 +127,7 @@ class SecretResolutionTests {
         return new Fixture(new EnvironmentSecretResolver(values::get, clock), clock);
     }
 
-    private record Fixture(EnvironmentSecretResolver resolver, MutableClock clock) { }
+    private record Fixture(EnvironmentSecretResolver resolver, MutableClock clock) {}
 
     private static final class MutableClock extends Clock {
         private Instant now;

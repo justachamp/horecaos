@@ -6,15 +6,12 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.customers.api.ConsentDirectory;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory.ContactEndpoint;
@@ -62,7 +59,7 @@ public class NotificationEligibilityService {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationEligibilityService.class);
 
-    private static final TypeReference<Map<String, String>> VARIABLES_TYPE = new TypeReference<>() { };
+    private static final TypeReference<Map<String, String>> VARIABLES_TYPE = new TypeReference<>() {};
 
     private final JdbcNotificationStore notifications;
     private final NotificationTemplateService templates;
@@ -73,10 +70,15 @@ public class NotificationEligibilityService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
-    public NotificationEligibilityService(JdbcNotificationStore notifications,
-            NotificationTemplateService templates, ConsentDirectory consent,
-            RecipientContactDirectory contacts, OrderDirectory orders,
-            NotificationTransport transport, ObjectMapper objectMapper, Clock clock) {
+    public NotificationEligibilityService(
+            JdbcNotificationStore notifications,
+            NotificationTemplateService templates,
+            ConsentDirectory consent,
+            RecipientContactDirectory contacts,
+            OrderDirectory orders,
+            NotificationTransport transport,
+            ObjectMapper objectMapper,
+            Clock clock) {
         this.notifications = notifications;
         this.templates = templates;
         this.consent = consent;
@@ -130,14 +132,14 @@ public class NotificationEligibilityService {
                 .flatMap(MessageLocale::parse)
                 .orElse(MessageLocale.FALLBACK);
 
-        var resolution = templates.resolve(row.tenantId(), row.brandId(), row.templateKey(),
-                channel, locale);
+        var resolution = templates.resolve(row.tenantId(), row.brandId(), row.templateKey(), channel, locale);
         if (!resolution.isFound()) {
-            SuppressionReason reason = switch (resolution.outcome()) {
-                case NO_ACTIVE_TEMPLATE -> SuppressionReason.NO_ACTIVE_TEMPLATE;
-                case NO_TEMPLATE_FOR_LOCALE -> SuppressionReason.NO_TEMPLATE_FOR_LOCALE;
-                case FOUND -> throw new IllegalStateException("unreachable");
-            };
+            SuppressionReason reason =
+                    switch (resolution.outcome()) {
+                        case NO_ACTIVE_TEMPLATE -> SuppressionReason.NO_ACTIVE_TEMPLATE;
+                        case NO_TEMPLATE_FOR_LOCALE -> SuppressionReason.NO_TEMPLATE_FOR_LOCALE;
+                        case FOUND -> throw new IllegalStateException("unreachable");
+                    };
             return suppress(row, reason, now);
         }
 
@@ -147,9 +149,8 @@ public class NotificationEligibilityService {
         // absence of a decision is withheld rather than permitted — "we never
         // asked" and "they said yes" are the two states a default-true would merge.
         if (notificationClass.requiresConsent()) {
-            boolean granted = consent
-                    .consentFor(row.tenantId(), accountId, row.brandId(),
-                            template.consentPurpose(), channel.name())
+            boolean granted = consent.consentFor(
+                            row.tenantId(), accountId, row.brandId(), template.consentPurpose(), channel.name())
                     .map(ConsentDirectory.ConsentState::granted)
                     .orElse(false);
             if (!granted) {
@@ -159,8 +160,8 @@ public class NotificationEligibilityService {
 
         if (notificationClass.respectsPreference()) {
             boolean disabled = notifications
-                    .effectivePreference(row.tenantId(), accountId, row.brandId(),
-                            notificationClass.name(), channel.name())
+                    .effectivePreference(
+                            row.tenantId(), accountId, row.brandId(), notificationClass.name(), channel.name())
                     .map(preference -> !preference.enabled())
                     .orElse(false);
             if (disabled) {
@@ -168,21 +169,33 @@ public class NotificationEligibilityService {
             }
         }
 
-        Optional<ContactEndpoint> contact =
-                contacts.primaryContact(row.tenantId(), accountId, channel.contactMethod());
+        Optional<ContactEndpoint> contact = contacts.primaryContact(row.tenantId(), accountId, channel.contactMethod());
         if (contact.isEmpty()) {
             return suppress(row, SuppressionReason.NO_RECIPIENT_ENDPOINT, now);
         }
 
-        UUID endpointId = notifications.ensureEndpoint(row.tenantId(), accountId,
-                contact.get().method().name(), contact.get().contactPointId(),
-                contact.get().normalizedHash(), contact.get().verificationStatus(), now);
+        UUID endpointId = notifications.ensureEndpoint(
+                row.tenantId(),
+                accountId,
+                contact.get().method().name(),
+                contact.get().contactPointId(),
+                contact.get().normalizedHash(),
+                contact.get().verificationStatus(),
+                now);
 
         Map<String, String> variables = variablesFor(row, summary);
-        boolean ready = notifications.markReady(row.tenantId(), row.id(), row.claimToken(),
-                template.id(), template.activeVersion(), locale.tag(), accountId, endpointId,
+        boolean ready = notifications.markReady(
+                row.tenantId(),
+                row.id(),
+                row.claimToken(),
+                template.id(),
+                template.activeVersion(),
+                locale.tag(),
+                accountId,
+                endpointId,
                 objectMapper.writeValueAsString(variables),
-                ContentHashes.ofVariables(variables), now);
+                ContentHashes.ofVariables(variables),
+                now);
 
         if (!ready) {
             // The claim was lost, which means another worker settled this row.
@@ -207,8 +220,7 @@ public class NotificationEligibilityService {
         if (row.variablesJson() != null && !row.variablesJson().isBlank()) {
             variables.putAll(objectMapper.readValue(row.variablesJson(), VARIABLES_TYPE));
         }
-        variables.put("orderNumber", order.publicOrderNumber() == null
-                ? "" : order.publicOrderNumber());
+        variables.put("orderNumber", order.publicOrderNumber() == null ? "" : order.publicOrderNumber());
         variables.put("amount", MoneyText.format(order.totalMinor(), order.currency()));
         variables.put("currency", order.currency() == null ? "" : order.currency());
         return variables;

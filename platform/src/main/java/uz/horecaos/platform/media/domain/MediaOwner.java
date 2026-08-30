@@ -17,7 +17,11 @@ public record MediaOwner(Scope scope, UUID id) {
         Objects.requireNonNull(id, "A media owner id is required");
     }
 
-    public enum Scope { TENANT, BRAND, LOCATION }
+    public enum Scope {
+        TENANT,
+        BRAND,
+        LOCATION
+    }
 
     public static MediaOwner brand(UUID brandId) {
         return new MediaOwner(Scope.BRAND, brandId);

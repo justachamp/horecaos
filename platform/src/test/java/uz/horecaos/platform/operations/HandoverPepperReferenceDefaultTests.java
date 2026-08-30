@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
@@ -31,8 +30,8 @@ class HandoverPepperReferenceDefaultTests {
 
     private static final String KEY = "horecaos.partner.handover-pepper-reference";
 
-    private final ApplicationContextRunner runner = new ApplicationContextRunner()
-            .withInitializer(new ConfigDataApplicationContextInitializer());
+    private final ApplicationContextRunner runner =
+            new ApplicationContextRunner().withInitializer(new ConfigDataApplicationContextInitializer());
 
     @Test
     @DisplayName("a laptop and the test suite get the local reference")
@@ -46,7 +45,8 @@ class HandoverPepperReferenceDefaultTests {
     @DisplayName("the local reference does not follow the application to a deployment")
     void aDeploymentProfileHasNoFallback() {
         runner.withPropertyValues("spring.profiles.active=production")
-                .run(context -> assertThatThrownBy(() -> context.getEnvironment().getProperty(KEY))
+                .run(context -> assertThatThrownBy(
+                                () -> context.getEnvironment().getProperty(KEY))
                         .as("a deployment supplies HORECAOS_HANDOVER_PEPPER_REF or does not start")
                         .isInstanceOf(PlaceholderResolutionException.class)
                         // The message an operator reads at 3am. It names the variable
@@ -65,7 +65,8 @@ class HandoverPepperReferenceDefaultTests {
         // nobody has thought of yet fails closed rather than open.
         for (String profile : List.of("staging", "pilot", "production,observability")) {
             runner.withPropertyValues("spring.profiles.active=" + profile)
-                    .run(context -> assertThatThrownBy(() -> context.getEnvironment().getProperty(KEY))
+                    .run(context -> assertThatThrownBy(
+                                    () -> context.getEnvironment().getProperty(KEY))
                             .isInstanceOf(PlaceholderResolutionException.class));
         }
     }

@@ -13,7 +13,6 @@ package uz.horecaos.platform.fulfillment.domain.sourcing;
  * database rather than stored and later unreadable.
  */
 public enum PlanStatus {
-
     PLANNED,
     WAITING_TO_SOURCE,
     SOURCING,
@@ -28,7 +27,10 @@ public enum PlanStatus {
 
     /** Whether automated sourcing has finished with this plan, one way or another. */
     public boolean settled() {
-        return this == ASSIGNED || this == IN_PROGRESS || this == COMPLETED
-                || this == MANUAL_ACTION_REQUIRED || this == CANCELLED;
+        return this == ASSIGNED
+                || this == IN_PROGRESS
+                || this == COMPLETED
+                || this == MANUAL_ACTION_REQUIRED
+                || this == CANCELLED;
     }
 }

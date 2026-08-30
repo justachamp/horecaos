@@ -5,10 +5,8 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -37,6 +35,7 @@ public class MarketingSuppressionService {
 
     /** How the customer's own unsubscribe link identifies itself. */
     public static final String ACTOR_CUSTOMER = "CUSTOMER";
+
     public static final String ACTOR_OPERATOR = "OPERATOR";
     public static final String ACTOR_PROVIDER = "PROVIDER";
     public static final String ACTOR_CONTROL_PLANE = "CONTROL_PLANE";
@@ -45,8 +44,7 @@ public class MarketingSuppressionService {
     private final AuditRecorder audit;
     private final Clock clock;
 
-    public MarketingSuppressionService(JdbcEngagementStore engagement, AuditRecorder audit,
-            Clock clock) {
+    public MarketingSuppressionService(JdbcEngagementStore engagement, AuditRecorder audit, Clock clock) {
         this.engagement = engagement;
         this.audit = audit;
         this.clock = clock;
@@ -62,22 +60,36 @@ public class MarketingSuppressionService {
      *                transport; a complaint is all of them
      */
     @Transactional
-    public UUID suppress(UUID tenantId, UUID brandId, UUID accountId, MarketingChannel channel,
-            SuppressionReason reason, String actorType, UUID actorId, ActorRef actor,
-            String statedReason, String correlationId) {
+    public UUID suppress(
+            UUID tenantId,
+            UUID brandId,
+            UUID accountId,
+            MarketingChannel channel,
+            SuppressionReason reason,
+            String actorType,
+            UUID actorId,
+            ActorRef actor,
+            String statedReason,
+            String correlationId) {
 
         if (reason.isControlPlaneOnly() && !ACTOR_CONTROL_PLANE.equals(actorType)) {
-            throw new IllegalArgumentException(
-                    "%s is settable only by the control plane".formatted(reason));
+            throw new IllegalArgumentException("%s is settable only by the control plane".formatted(reason));
         }
 
         Instant now = clock.instant();
         Instant expiresAt = reason.lifetime().map(now::plus).orElse(null);
 
-        UUID id = engagement.recordSuppression(tenantId, brandId, accountId,
-                channel == null ? null : channel.name(), reason.name(),
+        UUID id = engagement.recordSuppression(
+                tenantId,
+                brandId,
+                accountId,
+                channel == null ? null : channel.name(),
+                reason.name(),
                 ACTOR_OPERATOR.equals(actorType) ? actorId : null,
-                actorType, statedReason, now, expiresAt);
+                actorType,
+                statedReason,
+                now,
+                expiresAt);
 
         // The change document names the reason, the scope, and whether it expires,
         // and deliberately not the customer's contact value. The account id is a
@@ -92,11 +104,9 @@ public class MarketingSuppressionService {
 
         audit.record(AuditFact.of("MARKETING_SUPPRESSION_RECORDED", AuditClass.SECURITY)
                 .by(actor)
-                .at(brandId == null
-                        ? ResourceScope.tenant(tenantId) : ResourceScope.brand(tenantId, brandId))
+                .at(brandId == null ? ResourceScope.tenant(tenantId) : ResourceScope.brand(tenantId, brandId))
                 .target("MarketingSuppression", id)
-                .because(statedReason == null ? "Suppression recorded by " + actorType
-                        : statedReason)
+                .because(statedReason == null ? "Suppression recorded by " + actorType : statedReason)
                 .changed(changed)
                 .usingCapability("suppression.manage")
                 .correlatedBy(correlationId)
@@ -115,10 +125,18 @@ public class MarketingSuppressionService {
      * preference.
      */
     @Transactional
-    public UUID unsubscribe(UUID tenantId, UUID brandId, UUID accountId, ActorRef actor,
-            String correlationId) {
-        return suppress(tenantId, brandId, accountId, null, SuppressionReason.UNSUBSCRIBE,
-                ACTOR_CUSTOMER, null, actor, "The customer unsubscribed", correlationId);
+    public UUID unsubscribe(UUID tenantId, UUID brandId, UUID accountId, ActorRef actor, String correlationId) {
+        return suppress(
+                tenantId,
+                brandId,
+                accountId,
+                null,
+                SuppressionReason.UNSUBSCRIBE,
+                ACTOR_CUSTOMER,
+                null,
+                actor,
+                "The customer unsubscribed",
+                correlationId);
     }
 
     /**
@@ -127,10 +145,11 @@ public class MarketingSuppressionService {
      * @return true when a suppression was open and is now closed
      */
     @Transactional
-    public boolean lift(UUID tenantId, UUID suppressionId, UUID liftedBy, ActorRef actor,
-            String reason, String correlationId) {
+    public boolean lift(
+            UUID tenantId, UUID suppressionId, UUID liftedBy, ActorRef actor, String reason, String correlationId) {
 
-        var suppression = engagement.findSuppression(tenantId, suppressionId)
+        var suppression = engagement
+                .findSuppression(tenantId, suppressionId)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "No suppression %s belongs to this tenant".formatted(suppressionId)));
 
@@ -144,9 +163,10 @@ public class MarketingSuppressionService {
 
         audit.record(AuditFact.of("MARKETING_SUPPRESSION_LIFTED", AuditClass.SECURITY)
                 .by(actor)
-                .at(suppression.brandId() == null
-                        ? ResourceScope.tenant(tenantId)
-                        : ResourceScope.brand(tenantId, suppression.brandId()))
+                .at(
+                        suppression.brandId() == null
+                                ? ResourceScope.tenant(tenantId)
+                                : ResourceScope.brand(tenantId, suppression.brandId()))
                 .target("MarketingSuppression", suppressionId)
                 .outcome(lifted ? AuditFact.Outcome.SUCCEEDED : AuditFact.Outcome.REJECTED)
                 .because(reason)

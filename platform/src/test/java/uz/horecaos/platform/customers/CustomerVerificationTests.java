@@ -1,5 +1,17 @@
 package uz.horecaos.platform.customers;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -10,13 +22,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.ObjectProvider;
-
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.customers.api.CustomerAccountRef;
@@ -45,18 +55,6 @@ import uz.horecaos.platform.iam.infrastructure.secrets.EnvironmentSecretResolver
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.cache.InProcessRateLimiter;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
 
 /**
  * Customer identity: getting a code, proving a number, and becoming an account
@@ -110,12 +108,29 @@ class CustomerVerificationTests {
 
     private CustomerVerificationService service(VerificationCodeTransport wired) {
         VerificationChallengeIssuer issuer = new VerificationChallengeIssuer(
-                challenges, codes, protection, clock,
-                Duration.ofMinutes(5), 5, Duration.ofMinutes(1), Duration.ofHours(1), 5);
+                challenges,
+                codes,
+                protection,
+                clock,
+                Duration.ofMinutes(5),
+                5,
+                Duration.ofMinutes(1),
+                Duration.ofHours(1),
+                5);
 
-        return new CustomerVerificationService(issuer, challenges, codes, customers, identity,
-                protection, new InProcessRateLimiter(clock), new RandomVerificationCodeSource(),
-                provider(wired), audit, clock, Duration.ofMinutes(10));
+        return new CustomerVerificationService(
+                issuer,
+                challenges,
+                codes,
+                customers,
+                identity,
+                protection,
+                new InProcessRateLimiter(clock),
+                new RandomVerificationCodeSource(),
+                provider(wired),
+                audit,
+                clock,
+                Duration.ofMinutes(10));
     }
 
     // ------------------------------------------------------------ storing a code
@@ -144,8 +159,7 @@ class CustomerVerificationTests {
         Challenge challenge = verification.issue(TENANT, BRAND, PHONE, CALLER);
         String code = transport.lastCode();
 
-        CodeProtection withoutTheKey =
-                new CodeProtection(fieldProtection("a-different-key-encryption-key"));
+        CodeProtection withoutTheKey = new CodeProtection(fieldProtection("a-different-key-encryption-key"));
 
         assertThat(withoutTheKey.hash(TENANT, challenge.challengeId(), code))
                 .isNotEqualTo(codes.hash(TENANT, challenge.challengeId(), code));
@@ -157,8 +171,7 @@ class CustomerVerificationTests {
         UUID first = UUID.randomUUID();
         UUID second = UUID.randomUUID();
 
-        assertThat(codes.hash(TENANT, first, "123456"))
-                .isNotEqualTo(codes.hash(TENANT, second, "123456"));
+        assertThat(codes.hash(TENANT, first, "123456")).isNotEqualTo(codes.hash(TENANT, second, "123456"));
 
         // And a right code under the wrong challenge is still wrong, which is what
         // stops a code observed on one challenge being replayed against another.
@@ -188,8 +201,7 @@ class CustomerVerificationTests {
         Grant grant = verification.verify(TENANT, challenge.challengeId(), code, CALLER);
         assertThat(grant.secret()).isNotBlank();
 
-        Throwable second = catchThrowable(
-                () -> verification.verify(TENANT, challenge.challengeId(), code, CALLER));
+        Throwable second = catchThrowable(() -> verification.verify(TENANT, challenge.challengeId(), code, CALLER));
 
         assertThat(second).isInstanceOf(ApiException.class);
         assertThat(((ApiException) second).errorCode()).isEqualTo(ErrorCode.UNPROCESSABLE_STATE);
@@ -202,16 +214,16 @@ class CustomerVerificationTests {
         String code = transport.lastCode();
 
         for (int attempt = 1; attempt <= 4; attempt++) {
-            Throwable refusal = catchThrowable(() -> verification.verify(
-                    TENANT, challenge.challengeId(), wrong(code), CALLER));
+            Throwable refusal =
+                    catchThrowable(() -> verification.verify(TENANT, challenge.challengeId(), wrong(code), CALLER));
             assertThat(((ApiException) refusal).errorCode()).isEqualTo(ErrorCode.UNAUTHENTICATED);
             assertThat(((ApiException) refusal).properties()).containsKey("attemptsRemaining");
         }
 
         // The fifth wrong answer settles it, and says so the same way an unknown
         // challenge does.
-        Throwable last = catchThrowable(() -> verification.verify(
-                TENANT, challenge.challengeId(), wrong(code), CALLER));
+        Throwable last =
+                catchThrowable(() -> verification.verify(TENANT, challenge.challengeId(), wrong(code), CALLER));
         assertThat(((ApiException) last).errorCode()).isEqualTo(ErrorCode.UNPROCESSABLE_STATE);
 
         assertThat(challenges.row(challenge.challengeId()).orElseThrow().status())
@@ -219,10 +231,8 @@ class CustomerVerificationTests {
 
         // And the correct code no longer works, which is the property that matters:
         // exhaustion is not a pause.
-        Throwable afterwards = catchThrowable(
-                () -> verification.verify(TENANT, challenge.challengeId(), code, CALLER));
-        assertThat(((ApiException) afterwards).errorCode())
-                .isEqualTo(ErrorCode.UNPROCESSABLE_STATE);
+        Throwable afterwards = catchThrowable(() -> verification.verify(TENANT, challenge.challengeId(), code, CALLER));
+        assertThat(((ApiException) afterwards).errorCode()).isEqualTo(ErrorCode.UNPROCESSABLE_STATE);
     }
 
     @Test
@@ -230,11 +240,12 @@ class CustomerVerificationTests {
     void aMalformedCodeCostsNothing() {
         Challenge challenge = verification.issue(TENANT, BRAND, PHONE, CALLER);
 
-        Throwable refusal = catchThrowable(
-                () -> verification.verify(TENANT, challenge.challengeId(), "not-a-code", CALLER));
+        Throwable refusal =
+                catchThrowable(() -> verification.verify(TENANT, challenge.challengeId(), "not-a-code", CALLER));
 
         assertThat(((ApiException) refusal).errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED);
-        assertThat(challenges.row(challenge.challengeId()).orElseThrow().attemptsUsed()).isZero();
+        assertThat(challenges.row(challenge.challengeId()).orElseThrow().attemptsUsed())
+                .isZero();
     }
 
     @Test
@@ -245,8 +256,7 @@ class CustomerVerificationTests {
 
         clock.advance(Duration.ofMinutes(5).plusSeconds(1));
 
-        Throwable refusal = catchThrowable(
-                () -> verification.verify(TENANT, challenge.challengeId(), code, CALLER));
+        Throwable refusal = catchThrowable(() -> verification.verify(TENANT, challenge.challengeId(), code, CALLER));
 
         assertThat(((ApiException) refusal).errorCode()).isEqualTo(ErrorCode.UNPROCESSABLE_STATE);
     }
@@ -257,8 +267,8 @@ class CustomerVerificationTests {
         Challenge challenge = verification.issue(TENANT, BRAND, PHONE, CALLER);
         String code = transport.lastCode();
 
-        Throwable refusal = catchThrowable(() -> verification.verify(
-                UUID.randomUUID(), challenge.challengeId(), code, CALLER));
+        Throwable refusal =
+                catchThrowable(() -> verification.verify(UUID.randomUUID(), challenge.challengeId(), code, CALLER));
 
         assertThat(((ApiException) refusal).errorCode()).isEqualTo(ErrorCode.UNPROCESSABLE_STATE);
         assertThat(challenges.row(challenge.challengeId()).orElseThrow().attemptsUsed())
@@ -277,15 +287,12 @@ class CustomerVerificationTests {
         clock.advance(Duration.ofMinutes(2));
         Challenge second = verification.issue(TENANT, BRAND, PHONE, CALLER);
 
-        assertThat(challenges.row(first.challengeId()).orElseThrow().status())
-                .isEqualTo(ChallengeStatus.SUPERSEDED);
-        assertThat(challenges.row(second.challengeId()).orElseThrow().status())
-                .isEqualTo(ChallengeStatus.PENDING);
+        assertThat(challenges.row(first.challengeId()).orElseThrow().status()).isEqualTo(ChallengeStatus.SUPERSEDED);
+        assertThat(challenges.row(second.challengeId()).orElseThrow().status()).isEqualTo(ChallengeStatus.PENDING);
 
         // Without this, three requests would leave three live challenges with five
         // attempts each and the limit would be whatever an attacker will pay for.
-        Throwable refusal = catchThrowable(
-                () -> verification.verify(TENANT, first.challengeId(), firstCode, CALLER));
+        Throwable refusal = catchThrowable(() -> verification.verify(TENANT, first.challengeId(), firstCode, CALLER));
         assertThat(((ApiException) refusal).errorCode()).isEqualTo(ErrorCode.UNPROCESSABLE_STATE);
     }
 
@@ -295,8 +302,7 @@ class CustomerVerificationTests {
         verification.issue(TENANT, BRAND, PHONE, CALLER);
 
         clock.advance(Duration.ofSeconds(30));
-        Throwable refusal = catchThrowable(
-                () -> verification.issue(TENANT, BRAND, PHONE, "another-caller"));
+        Throwable refusal = catchThrowable(() -> verification.issue(TENANT, BRAND, PHONE, "another-caller"));
 
         assertThat(((ApiException) refusal).errorCode()).isEqualTo(ErrorCode.RATE_LIMIT_EXCEEDED);
         assertThat(((ApiException) refusal).properties()).containsKey("retryAfterSeconds");
@@ -315,8 +321,7 @@ class CustomerVerificationTests {
             clock.advance(Duration.ofMinutes(2));
         }
 
-        Throwable refusal = catchThrowable(
-                () -> verification.issue(TENANT, BRAND, PHONE, "caller-last"));
+        Throwable refusal = catchThrowable(() -> verification.issue(TENANT, BRAND, PHONE, "caller-last"));
 
         assertThat(((ApiException) refusal).errorCode()).isEqualTo(ErrorCode.RATE_LIMIT_EXCEEDED);
         assertThat(transport.sent()).hasSize(5);
@@ -375,16 +380,15 @@ class CustomerVerificationTests {
 
         assertThat(row.destinationValue()).doesNotContain(PHONE).doesNotContain("901112233");
 
-        RecordRef itsOwn = new RecordRef(
-                "customer.verification_challenges", "destination_encrypted", challenge.challengeId());
-        assertThat(protection.reveal(TENANT,
-                ProtectedValue.deserialize(row.destinationValue()), itsOwn, "TEST"))
+        RecordRef itsOwn =
+                new RecordRef("customer.verification_challenges", "destination_encrypted", challenge.challengeId());
+        assertThat(protection.reveal(TENANT, ProtectedValue.deserialize(row.destinationValue()), itsOwn, "TEST"))
                 .isEqualTo(PHONE);
 
-        RecordRef somebodyElses = new RecordRef(
-                "customer.verification_challenges", "destination_encrypted", UUID.randomUUID());
-        assertThat(catchThrowable(() -> protection.reveal(TENANT,
-                ProtectedValue.deserialize(row.destinationValue()), somebodyElses, "TEST")))
+        RecordRef somebodyElses =
+                new RecordRef("customer.verification_challenges", "destination_encrypted", UUID.randomUUID());
+        assertThat(catchThrowable(() -> protection.reveal(
+                        TENANT, ProtectedValue.deserialize(row.destinationValue()), somebodyElses, "TEST")))
                 .isInstanceOf(ProtectionIntegrityException.class);
     }
 
@@ -409,16 +413,15 @@ class CustomerVerificationTests {
         String code = transport.lastCode();
         Grant grant = verification.verify(TENANT, challenge.challengeId(), code, CALLER);
 
-        when(identity.resolve(TENANT, BRAND, ISSUER, SUBJECT)).thenReturn(
-                new CustomerIdentityService.Resolution(new CustomerAccountRef(ACCOUNT, TENANT),
-                        true, CustomerIdentityPolicy.TENANT_SHARED));
+        when(identity.resolve(TENANT, BRAND, ISSUER, SUBJECT))
+                .thenReturn(new CustomerIdentityService.Resolution(
+                        new CustomerAccountRef(ACCOUNT, TENANT), true, CustomerIdentityPolicy.TENANT_SHARED));
         verification.redeem(TENANT, BRAND, grant.secret(), ISSUER, SUBJECT);
 
         assertThat(audit.facts()).isNotEmpty();
         for (AuditFact fact : audit.facts()) {
             String rendered = String.valueOf(fact.changeDocument());
-            assertThat(rendered).doesNotContain(PHONE).doesNotContain(code)
-                    .doesNotContain(grant.secret());
+            assertThat(rendered).doesNotContain(PHONE).doesNotContain(code).doesNotContain(grant.secret());
         }
     }
 
@@ -426,16 +429,14 @@ class CustomerVerificationTests {
     @DisplayName("a number that is not an Uzbek mobile is refused, and the message does not echo it")
     void unroutableNumbersAreRefused() {
         for (String rejected : List.of("+12025550143", "+9989011122", "not a number", "+998")) {
-            Throwable refusal = catchThrowable(
-                    () -> verification.issue(TENANT, BRAND, rejected, CALLER));
+            Throwable refusal = catchThrowable(() -> verification.issue(TENANT, BRAND, rejected, CALLER));
 
             assertThat(((ApiException) refusal).errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED);
             // Compared to a constant rather than merely searched for the input.
             // A message assembled from what arrived would eventually put a phone
             // number into an ADR 0031 problem document, which is a response body,
             // an access log and a browser console at once; a constant cannot.
-            assertThat(refusal.getMessage())
-                    .isEqualTo("That is not an Uzbek mobile number. Expected the +998 form.");
+            assertThat(refusal.getMessage()).isEqualTo("That is not an Uzbek mobile number. Expected the +998 form.");
         }
         assertThat(transport.sent()).isEmpty();
     }
@@ -456,7 +457,8 @@ class CustomerVerificationTests {
             verification.issue(TENANT, BRAND, "(90) 111 22 33", CALLER);
         });
 
-        assertThat(second).as("five spellings is five challenges; the sixth is over budget")
+        assertThat(second)
+                .as("five spellings is five challenges; the sixth is over budget")
                 .isNull();
         assertThat(catchThrowable(() -> verification.issue(TENANT, BRAND, PHONE, CALLER)))
                 .isInstanceOf(ApiException.class);
@@ -481,8 +483,7 @@ class CustomerVerificationTests {
     @Test
     @DisplayName("a gateway failure withdraws the challenge so the customer can try again at once")
     void aFailedSendCostsTheCustomerNothing() {
-        CustomerVerificationService failing =
-                service(message -> Outcome.unavailable("GATEWAY_TIMEOUT"));
+        CustomerVerificationService failing = service(message -> Outcome.unavailable("GATEWAY_TIMEOUT"));
 
         assertThat(catchThrowable(() -> failing.issue(TENANT, BRAND, PHONE, CALLER)))
                 .isInstanceOf(ApiException.class);
@@ -490,7 +491,8 @@ class CustomerVerificationTests {
 
         // And the retry works immediately: the resend interval is measured from a
         // challenge that exists, and the withdrawn one does not.
-        assertThat(verification.issue(TENANT, BRAND, PHONE, CALLER).challengeId()).isNotNull();
+        assertThat(verification.issue(TENANT, BRAND, PHONE, CALLER).challengeId())
+                .isNotNull();
     }
 
     // ---------------------------------------------------------------- redeeming
@@ -500,9 +502,9 @@ class CustomerVerificationTests {
     void redeemingCreatesTheAccountAndTheVerifiedContact() {
         Grant grant = provenNumber();
 
-        when(identity.resolve(TENANT, BRAND, ISSUER, SUBJECT)).thenReturn(
-                new CustomerIdentityService.Resolution(new CustomerAccountRef(ACCOUNT, TENANT),
-                        true, CustomerIdentityPolicy.TENANT_SHARED));
+        when(identity.resolve(TENANT, BRAND, ISSUER, SUBJECT))
+                .thenReturn(new CustomerIdentityService.Resolution(
+                        new CustomerAccountRef(ACCOUNT, TENANT), true, CustomerIdentityPolicy.TENANT_SHARED));
         when(customers.markContactVerified(any(), any(), anyString(), anyString(), any()))
                 .thenReturn(0);
         when(customers.hasPrimaryContact(any(), any(), anyString())).thenReturn(false);
@@ -515,14 +517,20 @@ class CustomerVerificationTests {
 
         // Resolution is on issuer and subject, never on the number.
         verify(identity).resolve(TENANT, BRAND, ISSUER, SUBJECT);
-        verify(customers).insertVerifiedContactPoint(any(), eq(TENANT), eq(ACCOUNT),
-                eq(ContactType.PHONE.name()),
-                // The domain is spelled out rather than read off the enum, so this
-                // pins the value a contact-point lookup will later hash under: if
-                // the two ever drift, a number proved by OTP stops matching the
-                // contact point stored for it.
-                eq(protection.lookupHash(TENANT, "customer.contact.phone", PHONE)),
-                anyString(), anyBoolean(), any());
+        verify(customers)
+                .insertVerifiedContactPoint(
+                        any(),
+                        eq(TENANT),
+                        eq(ACCOUNT),
+                        eq(ContactType.PHONE.name()),
+                        // The domain is spelled out rather than read off the enum, so this
+                        // pins the value a contact-point lookup will later hash under: if
+                        // the two ever drift, a number proved by OTP stops matching the
+                        // contact point stored for it.
+                        eq(protection.lookupHash(TENANT, "customer.contact.phone", PHONE)),
+                        anyString(),
+                        anyBoolean(),
+                        any());
     }
 
     @Test
@@ -530,30 +538,30 @@ class CustomerVerificationTests {
     void anExistingContactIsPromoted() {
         Grant grant = provenNumber();
 
-        when(identity.resolve(TENANT, BRAND, ISSUER, SUBJECT)).thenReturn(
-                new CustomerIdentityService.Resolution(new CustomerAccountRef(ACCOUNT, TENANT),
-                        false, CustomerIdentityPolicy.TENANT_SHARED));
+        when(identity.resolve(TENANT, BRAND, ISSUER, SUBJECT))
+                .thenReturn(new CustomerIdentityService.Resolution(
+                        new CustomerAccountRef(ACCOUNT, TENANT), false, CustomerIdentityPolicy.TENANT_SHARED));
         when(customers.markContactVerified(any(), any(), anyString(), anyString(), any()))
                 .thenReturn(1);
 
         verification.redeem(TENANT, BRAND, grant.secret(), ISSUER, SUBJECT);
 
-        verify(customers, never()).insertVerifiedContactPoint(any(), any(), any(), anyString(),
-                anyString(), anyString(), anyBoolean(), any());
+        verify(customers, never())
+                .insertVerifiedContactPoint(
+                        any(), any(), any(), anyString(), anyString(), anyString(), anyBoolean(), any());
     }
 
     @Test
     @DisplayName("a grant is single-use")
     void aGrantRedeemsOnce() {
         Grant grant = provenNumber();
-        when(identity.resolve(TENANT, BRAND, ISSUER, SUBJECT)).thenReturn(
-                new CustomerIdentityService.Resolution(new CustomerAccountRef(ACCOUNT, TENANT),
-                        true, CustomerIdentityPolicy.TENANT_SHARED));
+        when(identity.resolve(TENANT, BRAND, ISSUER, SUBJECT))
+                .thenReturn(new CustomerIdentityService.Resolution(
+                        new CustomerAccountRef(ACCOUNT, TENANT), true, CustomerIdentityPolicy.TENANT_SHARED));
 
         verification.redeem(TENANT, BRAND, grant.secret(), ISSUER, SUBJECT);
 
-        Throwable second = catchThrowable(
-                () -> verification.redeem(TENANT, BRAND, grant.secret(), ISSUER, SUBJECT));
+        Throwable second = catchThrowable(() -> verification.redeem(TENANT, BRAND, grant.secret(), ISSUER, SUBJECT));
 
         assertThat(((ApiException) second).errorCode()).isEqualTo(ErrorCode.UNAUTHENTICATED);
     }
@@ -563,8 +571,8 @@ class CustomerVerificationTests {
     void aGrantIsBoundToItsBrand() {
         Grant grant = provenNumber();
 
-        Throwable refusal = catchThrowable(
-                () -> verification.redeem(TENANT, OTHER_BRAND, grant.secret(), ISSUER, SUBJECT));
+        Throwable refusal =
+                catchThrowable(() -> verification.redeem(TENANT, OTHER_BRAND, grant.secret(), ISSUER, SUBJECT));
 
         // Under BRAND_ISOLATED the account created at another brand is a different
         // person's account in every sense that matters.
@@ -578,8 +586,7 @@ class CustomerVerificationTests {
         Grant grant = provenNumber();
         clock.advance(Duration.ofMinutes(10).plusSeconds(1));
 
-        assertThat(catchThrowable(
-                () -> verification.redeem(TENANT, BRAND, grant.secret(), ISSUER, SUBJECT)))
+        assertThat(catchThrowable(() -> verification.redeem(TENANT, BRAND, grant.secret(), ISSUER, SUBJECT)))
                 .isInstanceOf(ApiException.class);
         verifyNoInteractions(identity);
     }
@@ -589,8 +596,7 @@ class CustomerVerificationTests {
     void anUnknownGrantIsRefused() {
         provenNumber();
 
-        assertThat(catchThrowable(
-                () -> verification.redeem(TENANT, BRAND, "not-a-real-grant", ISSUER, SUBJECT)))
+        assertThat(catchThrowable(() -> verification.redeem(TENANT, BRAND, "not-a-real-grant", ISSUER, SUBJECT)))
                 .isInstanceOf(ApiException.class);
         verifyNoInteractions(identity);
     }
@@ -611,13 +617,11 @@ class CustomerVerificationTests {
     private static FieldProtection fieldProtection(String kek) {
         return new EnvelopeFieldProtection(new DataEncryptionKeyProvider(
                 new EnvironmentSecretResolver(
-                        Map.of("horecaos.secrets.data_encryption.platform.kek", kek)::get,
-                        Clock.systemUTC()),
+                        Map.of("horecaos.secrets.data_encryption.platform.kek", kek)::get, Clock.systemUTC()),
                 "local"));
     }
 
-    private static ObjectProvider<VerificationCodeTransport> provider(
-            VerificationCodeTransport transport) {
+    private static ObjectProvider<VerificationCodeTransport> provider(VerificationCodeTransport transport) {
 
         return new ObjectProvider<>() {
             @Override

@@ -1,32 +1,27 @@
 package uz.horecaos.platform.audit.application;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.UUID;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.json.JsonMapper;
-
-import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.infrastructure.persistence.AuditPartitionManager;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.support.TestDatabase;
 
 /** ADR 0027 querying and partition upkeep. */
 class AuditQueryAndPartitionTests {
@@ -83,8 +78,8 @@ class AuditQueryAndPartitionTests {
         record("tenant.suspended", TENANT, "operator-1");
         record("tenant.suspended", OTHER_TENANT, "operator-2");
 
-        var results = queries.search(new AuditQueryService.AuditQuery(
-                TENANT, null, null, null, null, null, null, null));
+        var results =
+                queries.search(new AuditQueryService.AuditQuery(TENANT, null, null, null, null, null, null, null));
 
         assertThat(results).hasSize(1);
         assertThat(results.getFirst().actorSubject()).isEqualTo("operator-1");
@@ -94,8 +89,7 @@ class AuditQueryAndPartitionTests {
     void anotherTenantsEvidenceIsNeverReturned() {
         record("tenant.suspended", OTHER_TENANT, "operator-2");
 
-        assertThat(queries.search(new AuditQueryService.AuditQuery(
-                TENANT, null, null, null, null, null, null, null)))
+        assertThat(queries.search(new AuditQueryService.AuditQuery(TENANT, null, null, null, null, null, null, null)))
                 .as("an audit trail readable across tenants is a second copy of the data it protects")
                 .isEmpty();
     }
@@ -107,7 +101,7 @@ class AuditQueryAndPartitionTests {
         record("brand.created", TENANT, "operator-2");
 
         assertThat(queries.search(new AuditQueryService.AuditQuery(
-                TENANT, "operator-1", "brand.created", null, null, null, null, null)))
+                        TENANT, "operator-1", "brand.created", null, null, null, null, null)))
                 .hasSize(1);
     }
 
@@ -117,8 +111,7 @@ class AuditQueryAndPartitionTests {
             record("brand.created", TENANT, "operator-1");
         }
 
-        assertThat(queries.search(new AuditQueryService.AuditQuery(
-                TENANT, null, null, null, null, null, null, 10_000)))
+        assertThat(queries.search(new AuditQueryService.AuditQuery(TENANT, null, null, null, null, null, null, 10_000)))
                 .hasSizeLessThanOrEqualTo(AuditQueryService.MAXIMUM_PAGE);
     }
 
@@ -126,8 +119,8 @@ class AuditQueryAndPartitionTests {
     void theChangeDocumentIsNotReturnedInAList() {
         record("tenant.suspended", TENANT, "operator-1");
 
-        var view = queries.search(new AuditQueryService.AuditQuery(
-                TENANT, null, null, null, null, null, null, null)).getFirst();
+        var view = queries.search(new AuditQueryService.AuditQuery(TENANT, null, null, null, null, null, null, null))
+                .getFirst();
 
         assertThat(view.getClass().getRecordComponents())
                 .as("redacted structure is still revealing in bulk, so it is a separate audited read")

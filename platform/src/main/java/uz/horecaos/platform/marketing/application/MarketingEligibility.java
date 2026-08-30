@@ -4,9 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
-
 import uz.horecaos.platform.customers.api.ConsentDirectory;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory.ContactMethod;
@@ -52,8 +50,8 @@ public class MarketingEligibility {
     private final RecipientContactDirectory contacts;
     private final JdbcEngagementStore engagement;
 
-    public MarketingEligibility(ConsentDirectory consent, RecipientContactDirectory contacts,
-            JdbcEngagementStore engagement) {
+    public MarketingEligibility(
+            ConsentDirectory consent, RecipientContactDirectory contacts, JdbcEngagementStore engagement) {
         this.consent = consent;
         this.contacts = contacts;
         this.engagement = engagement;
@@ -69,16 +67,21 @@ public class MarketingEligibility {
      *                         customer for a fact already in hand
      * @return empty when the message may go, or the reason it may not
      */
-    public Optional<RefusalReason> refusalFor(UUID tenantId, UUID brandId, UUID accountId,
-            MarketingChannel channel, String consentPurpose, EngagementPolicy policy,
-            boolean accountReachable, Instant now) {
+    public Optional<RefusalReason> refusalFor(
+            UUID tenantId,
+            UUID brandId,
+            UUID accountId,
+            MarketingChannel channel,
+            String consentPurpose,
+            EngagementPolicy policy,
+            boolean accountReachable,
+            Instant now) {
 
         if (!accountReachable) {
             return Optional.of(RefusalReason.ACCOUNT_NOT_ACTIVE);
         }
 
-        boolean granted = consent
-                .consentFor(tenantId, accountId, brandId, consentPurpose, channel.name())
+        boolean granted = consent.consentFor(tenantId, accountId, brandId, consentPurpose, channel.name())
                 .map(ConsentDirectory.ConsentState::granted)
                 .orElse(false);
         if (!granted) {
@@ -93,10 +96,9 @@ public class MarketingEligibility {
             return Optional.of(RefusalReason.SUPPRESSED);
         }
 
-        if (engagement.sendsWithin(tenantId, brandId, accountId, now.minus(WEEK))
-                >= policy.messagesPer7Days()
+        if (engagement.sendsWithin(tenantId, brandId, accountId, now.minus(WEEK)) >= policy.messagesPer7Days()
                 || engagement.sendsWithin(tenantId, brandId, accountId, now.minus(MONTH))
-                >= policy.messagesPer30Days()) {
+                        >= policy.messagesPer30Days()) {
             return Optional.of(RefusalReason.FREQUENCY_CAP_REACHED);
         }
 

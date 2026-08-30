@@ -2,7 +2,6 @@ package uz.horecaos.platform.catalog.domain;
 
 import java.util.List;
 import java.util.UUID;
-
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 
 /**
@@ -15,12 +14,7 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
  * which product; it is null only for findings about the catalog as a whole.
  */
 public record ValidationFinding(
-        Severity severity,
-        String code,
-        EntityType entityType,
-        UUID entityId,
-        String entityCode,
-        String detail) {
+        Severity severity, String code, EntityType entityType, UUID entityId, String entityCode, String detail) {
 
     public enum Severity {
         /** Publication is refused. */
@@ -29,13 +23,11 @@ public record ValidationFinding(
         WARNING
     }
 
-    public static ValidationFinding blocker(String code, EntityType type, UUID id,
-            String entityCode, String detail) {
+    public static ValidationFinding blocker(String code, EntityType type, UUID id, String entityCode, String detail) {
         return new ValidationFinding(Severity.BLOCKER, code, type, id, entityCode, detail);
     }
 
-    public static ValidationFinding warning(String code, EntityType type, UUID id,
-            String entityCode, String detail) {
+    public static ValidationFinding warning(String code, EntityType type, UUID id, String entityCode, String detail) {
         return new ValidationFinding(Severity.WARNING, code, type, id, entityCode, detail);
     }
 
@@ -43,7 +35,9 @@ public record ValidationFinding(
     public record Report(List<ValidationFinding> findings) {
 
         public List<ValidationFinding> blockers() {
-            return findings.stream().filter(f -> f.severity() == Severity.BLOCKER).toList();
+            return findings.stream()
+                    .filter(f -> f.severity() == Severity.BLOCKER)
+                    .toList();
         }
 
         public boolean publishable() {

@@ -1,5 +1,10 @@
 package uz.horecaos.platform.migration.infrastructure.persistence;
 
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.documentJson;
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.documentOrEmpty;
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.instantOrNull;
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.utc;
+
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -8,23 +13,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.application.MigrationScopeStore;
 import uz.horecaos.platform.migration.domain.OwnershipModes;
 import uz.horecaos.platform.migration.domain.ReadMode;
 import uz.horecaos.platform.migration.domain.ScopeState;
 import uz.horecaos.platform.migration.domain.WriteMode;
-
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.documentJson;
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.documentOrEmpty;
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.instantOrNull;
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.utc;
 
 /**
  * Migration scope persistence (ADR 0024).
@@ -58,7 +55,8 @@ public class JdbcMigrationScopeStore implements MigrationScopeStore {
     @Override
     public Optional<ScopeRow> findById(UUID tenantId, UUID scopeId) {
         return jdbc.sql(SELECT_SCOPE + " WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", scopeId)
+                .param("tenantId", tenantId)
+                .param("id", scopeId)
                 .query(this::mapScope)
                 .optional();
     }
@@ -96,14 +94,14 @@ public class JdbcMigrationScopeStore implements MigrationScopeStore {
     @Override
     public Optional<ScopeRow> lockClaim(UUID tenantId, UUID scopeId) {
         return jdbc.sql(SELECT_SCOPE + " WHERE tenant_id = :tenantId AND id = :id FOR SHARE")
-                .param("tenantId", tenantId).param("id", scopeId)
+                .param("tenantId", tenantId)
+                .param("id", scopeId)
                 .query(this::mapScope)
                 .optional();
     }
 
     @Override
-    public Optional<ScopeRow> findClaim(UUID tenantId, MigrationCapability capability,
-            UUID brandId, UUID locationId) {
+    public Optional<ScopeRow> findClaim(UUID tenantId, MigrationCapability capability, UUID brandId, UUID locationId) {
 
         String narrowing = locationId != null
                 ? " AND location_id = :locationId"
@@ -119,8 +117,7 @@ public class JdbcMigrationScopeStore implements MigrationScopeStore {
         params.put("brandId", brandId);
         params.put("locationId", locationId);
 
-        return jdbc.sql(SELECT_SCOPE
-                        + " WHERE tenant_id = :tenantId AND capability = :capability" + narrowing)
+        return jdbc.sql(SELECT_SCOPE + " WHERE tenant_id = :tenantId AND capability = :capability" + narrowing)
                 .params(params)
                 .query(this::mapScope)
                 .optional();
@@ -142,7 +139,8 @@ public class JdbcMigrationScopeStore implements MigrationScopeStore {
                     :sourceOwner, :targetOwner, :writeMode, :readMode, :state, :now,
                     CAST(:checkpoint AS jsonb), :version, :now, :now)
                 """)
-                .param("id", scope.id()).param("programId", scope.programId())
+                .param("id", scope.id())
+                .param("programId", scope.programId())
                 .param("tenantId", scope.tenantId())
                 .params(params)
                 .param("capability", scope.capability().name())
@@ -181,8 +179,15 @@ public class JdbcMigrationScopeStore implements MigrationScopeStore {
      * read the first one's answer.
      */
     @Override
-    public Optional<Integer> transition(UUID tenantId, UUID scopeId, ScopeState from, ScopeState to,
-            OwnershipModes modes, Map<String, Object> checkpoint, int expectedVersion, Instant now) {
+    public Optional<Integer> transition(
+            UUID tenantId,
+            UUID scopeId,
+            ScopeState from,
+            ScopeState to,
+            OwnershipModes modes,
+            Map<String, Object> checkpoint,
+            int expectedVersion,
+            Instant now) {
 
         return jdbc.sql("""
                 UPDATE migration.scopes
@@ -197,8 +202,10 @@ public class JdbcMigrationScopeStore implements MigrationScopeStore {
                   AND state = :from AND version = :expectedVersion
                 RETURNING version
                 """)
-                .param("tenantId", tenantId).param("id", scopeId)
-                .param("from", from.name()).param("to", to.name())
+                .param("tenantId", tenantId)
+                .param("id", scopeId)
+                .param("from", from.name())
+                .param("to", to.name())
                 .param("writeMode", modes.writeMode().name())
                 .param("readMode", modes.readMode().name())
                 .param("checkpoint", documentJson(objectMapper, checkpoint))
@@ -216,8 +223,8 @@ public class JdbcMigrationScopeStore implements MigrationScopeStore {
      * window and the soak period are both measured from that column.
      */
     @Override
-    public Optional<Integer> updateCheckpoint(UUID tenantId, UUID scopeId,
-            Map<String, Object> checkpoint, int expectedVersion, Instant now) {
+    public Optional<Integer> updateCheckpoint(
+            UUID tenantId, UUID scopeId, Map<String, Object> checkpoint, int expectedVersion, Instant now) {
 
         return jdbc.sql("""
                 UPDATE migration.scopes
@@ -227,7 +234,8 @@ public class JdbcMigrationScopeStore implements MigrationScopeStore {
                 WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
                 RETURNING version
                 """)
-                .param("tenantId", tenantId).param("id", scopeId)
+                .param("tenantId", tenantId)
+                .param("id", scopeId)
                 .param("checkpoint", documentJson(objectMapper, checkpoint))
                 .param("expectedVersion", expectedVersion)
                 .param("now", utc(now))
@@ -260,10 +268,7 @@ public class JdbcMigrationScopeStore implements MigrationScopeStore {
                    AND (CAST(:afterScopeId AS uuid) IS NULL OR id > CAST(:afterScopeId AS uuid))
                  ORDER BY id
                  LIMIT :limit
-                """)
-                .params(params)
-                .query(this::mapScope)
-                .list();
+                """).params(params).query(this::mapScope).list();
     }
 
     @Override
@@ -271,10 +276,7 @@ public class JdbcMigrationScopeStore implements MigrationScopeStore {
         return jdbc.sql("""
                 SELECT count(*) FROM migration.scopes
                 WHERE program_id = :programId AND state <> 'RETIRED'
-                """)
-                .param("programId", programId)
-                .query(Integer.class)
-                .single();
+                """).param("programId", programId).query(Integer.class).single();
     }
 
     /**

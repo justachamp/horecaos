@@ -23,13 +23,17 @@ public interface SessionOrderSource {
      * @param status the order's own status, so a session can refuse to attach a
      *               round that was cancelled
      */
-    record OrderForSession(UUID orderId, UUID tenantId, UUID locationId, String fulfillmentMode,
-            String status, String currency, long totalMinor) {
-    }
+    record OrderForSession(
+            UUID orderId,
+            UUID tenantId,
+            UUID locationId,
+            String fulfillmentMode,
+            String status,
+            String currency,
+            long totalMinor) {}
 
     /** The running bill: currency and the sum over the session's rounds. */
-    record SessionBill(String currency, long totalMinor, int roundCount, int openRoundCount) {
-    }
+    record SessionBill(String currency, long totalMinor, int roundCount, int openRoundCount) {}
 
     Optional<OrderForSession> find(UUID tenantId, UUID orderId);
 

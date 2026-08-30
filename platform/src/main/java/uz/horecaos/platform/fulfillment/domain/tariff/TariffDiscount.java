@@ -62,8 +62,7 @@ public record TariffDiscount(
         // happens to select. Either field set for the wrong kind is a value nothing
         // would ever read, which is how a discount silently becomes zero.
         if ((kind == Kind.AMOUNT) != (amountMinor != null)) {
-            throw new IllegalArgumentException(
-                    "An AMOUNT discount carries an amount and nothing else does");
+            throw new IllegalArgumentException("An AMOUNT discount carries an amount and nothing else does");
         }
         if ((kind == Kind.DISTANCE_ALLOWANCE) != (allowanceMeters != null)) {
             throw new IllegalArgumentException(
@@ -76,13 +75,11 @@ public record TariffDiscount(
             throw new IllegalArgumentException("A distance allowance cannot be negative");
         }
         if (dayMask < 1 || dayMask > 127) {
-            throw new IllegalArgumentException(
-                    "A day mask must select at least one day, was " + dayMask);
+            throw new IllegalArgumentException("A day mask must select at least one day, was " + dayMask);
         }
         if (!toTime.isAfter(fromTime)) {
             throw new IllegalArgumentException(
-                    "A discount window must not wrap midnight; author two instead of "
-                            + fromTime + " to " + toTime);
+                    "A discount window must not wrap midnight; author two instead of " + fromTime + " to " + toTime);
         }
     }
 

@@ -6,10 +6,8 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.ordering.domain.CartStatus;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 
@@ -43,8 +41,10 @@ public class JdbcCartStore {
                 VALUES (:id, :tenantId, :brandId, :locationId, :channelId, :customerId,
                     :guestHash, :mode, :currency, :status, 1, :expiresAt, :now, :now)
                 """)
-                .param("id", cart.cartId()).param("tenantId", cart.tenantId())
-                .param("brandId", cart.brandId()).param("locationId", cart.locationId())
+                .param("id", cart.cartId())
+                .param("tenantId", cart.tenantId())
+                .param("brandId", cart.brandId())
+                .param("locationId", cart.locationId())
                 .param("channelId", cart.channelId())
                 .param("customerId", cart.customerAccountId())
                 .param("guestHash", cart.guestReferenceHash())
@@ -72,7 +72,9 @@ public class JdbcCartStore {
                 FROM ordering.carts
                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId).param("id", cartId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("id", cartId)
                 .query(JdbcCartStore::mapCart)
                 .optional();
     }
@@ -95,7 +97,9 @@ public class JdbcCartStore {
                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :id
                 FOR UPDATE
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId).param("id", cartId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("id", cartId)
                 .query(JdbcCartStore::mapCart)
                 .optional();
     }
@@ -108,7 +112,8 @@ public class JdbcCartStore {
                 WHERE tenant_id = :tenantId AND cart_id = :cartId
                 ORDER BY line_key
                 """)
-                .param("tenantId", tenantId).param("cartId", cartId)
+                .param("tenantId", tenantId)
+                .param("cartId", cartId)
                 .query((row, number) -> new CartLineRow(
                         row.getObject("id", UUID.class),
                         row.getString("line_key"),
@@ -126,8 +131,16 @@ public class JdbcCartStore {
      * identity across an edit and a concurrent read never observes a cart with the
      * line briefly missing.
      */
-    public void upsertLine(UUID lineId, UUID tenantId, UUID cartId, String lineKey, UUID variantId,
-            int quantity, String modifiersJson, String noteEncrypted, Instant now) {
+    public void upsertLine(
+            UUID lineId,
+            UUID tenantId,
+            UUID cartId,
+            String lineKey,
+            UUID variantId,
+            int quantity,
+            String modifiersJson,
+            String noteEncrypted,
+            Instant now) {
         jdbc.sql("""
                 INSERT INTO ordering.cart_lines (
                     id, tenant_id, cart_id, line_key, variant_id, quantity,
@@ -143,10 +156,15 @@ public class JdbcCartStore {
                     version = ordering.cart_lines.version + 1,
                     updated_at = EXCLUDED.updated_at
                 """)
-                .param("id", lineId).param("tenantId", tenantId).param("cartId", cartId)
-                .param("lineKey", lineKey).param("variantId", variantId)
-                .param("quantity", quantity).param("modifiers", modifiersJson)
-                .param("note", noteEncrypted).param("now", utc(now))
+                .param("id", lineId)
+                .param("tenantId", tenantId)
+                .param("cartId", cartId)
+                .param("lineKey", lineKey)
+                .param("variantId", variantId)
+                .param("quantity", quantity)
+                .param("modifiers", modifiersJson)
+                .param("note", noteEncrypted)
+                .param("now", utc(now))
                 .update();
     }
 
@@ -155,8 +173,11 @@ public class JdbcCartStore {
                 DELETE FROM ordering.cart_lines
                 WHERE tenant_id = :tenantId AND cart_id = :cartId AND line_key = :lineKey
                 """)
-                .param("tenantId", tenantId).param("cartId", cartId).param("lineKey", lineKey)
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("cartId", cartId)
+                        .param("lineKey", lineKey)
+                        .update()
+                == 1;
     }
 
     /**
@@ -169,8 +190,7 @@ public class JdbcCartStore {
      *
      * @return false when the expected version has moved on
      */
-    public boolean touchAndInvalidatePricing(UUID tenantId, UUID cartId, int expectedVersion,
-            Instant now) {
+    public boolean touchAndInvalidatePricing(UUID tenantId, UUID cartId, int expectedVersion, Instant now) {
         return jdbc.sql("""
                 UPDATE ordering.carts
                 SET version = version + 1,
@@ -181,9 +201,12 @@ public class JdbcCartStore {
                 WHERE tenant_id = :tenantId AND id = :id
                   AND version = :expectedVersion AND status = 'ACTIVE'
                 """)
-                .param("tenantId", tenantId).param("id", cartId)
-                .param("expectedVersion", expectedVersion).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", cartId)
+                        .param("expectedVersion", expectedVersion)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -195,8 +218,14 @@ public class JdbcCartStore {
      * reservation. The expected version is still in the predicate, so a quote
      * computed from contents that changed underneath cannot be attached.
      */
-    public boolean attachQuote(UUID tenantId, UUID cartId, int expectedVersion, UUID quoteId,
-            String contextHash, UUID publicationId, Instant now) {
+    public boolean attachQuote(
+            UUID tenantId,
+            UUID cartId,
+            int expectedVersion,
+            UUID quoteId,
+            String contextHash,
+            UUID publicationId,
+            Instant now) {
         return jdbc.sql("""
                 UPDATE ordering.carts
                 SET pricing_quote_id = :quoteId,
@@ -206,11 +235,15 @@ public class JdbcCartStore {
                 WHERE tenant_id = :tenantId AND id = :id
                   AND version = :expectedVersion AND status = 'ACTIVE'
                 """)
-                .param("tenantId", tenantId).param("id", cartId)
-                .param("expectedVersion", expectedVersion).param("quoteId", quoteId)
-                .param("contextHash", contextHash).param("publicationId", publicationId)
-                .param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", cartId)
+                        .param("expectedVersion", expectedVersion)
+                        .param("quoteId", quoteId)
+                        .param("contextHash", contextHash)
+                        .param("publicationId", publicationId)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -220,8 +253,8 @@ public class JdbcCartStore {
      * checkout that won cannot be converted again, and a released
      * {@code CHECKOUT_IN_PROGRESS} cannot be released twice.
      */
-    public boolean transition(UUID tenantId, UUID cartId, CartStatus from, CartStatus to,
-            UUID convertedOrderId, Instant now) {
+    public boolean transition(
+            UUID tenantId, UUID cartId, CartStatus from, CartStatus to, UUID convertedOrderId, Instant now) {
         return jdbc.sql("""
                 UPDATE ordering.carts
                 SET status = :to,
@@ -233,10 +266,14 @@ public class JdbcCartStore {
                     updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :id AND status = :from
                 """)
-                .param("tenantId", tenantId).param("id", cartId)
-                .param("from", from.name()).param("to", to.name())
-                .param("orderId", convertedOrderId).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", cartId)
+                        .param("from", from.name())
+                        .param("to", to.name())
+                        .param("orderId", convertedOrderId)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     // ----------------------------------------------------------- destination
@@ -255,9 +292,17 @@ public class JdbcCartStore {
      * <p>Every value but the coordinate is ciphertext bound to this cart id by the
      * ADR 0029 associated data. Nothing here may be logged.
      */
-    public void upsertFulfillment(UUID tenantId, UUID cartId, UUID customerAddressId,
-            String addressEncrypted, String instructionsEncrypted, String recipientNameEncrypted,
-            String recipientPhoneEncrypted, double latitude, double longitude, Instant now) {
+    public void upsertFulfillment(
+            UUID tenantId,
+            UUID cartId,
+            UUID customerAddressId,
+            String addressEncrypted,
+            String instructionsEncrypted,
+            String recipientNameEncrypted,
+            String recipientPhoneEncrypted,
+            double latitude,
+            double longitude,
+            Instant now) {
         jdbc.sql("""
                 INSERT INTO ordering.cart_fulfillment (
                     cart_id, tenant_id, fulfillment_mode, customer_address_id, address_encrypted,
@@ -275,11 +320,15 @@ public class JdbcCartStore {
                     longitude = EXCLUDED.longitude,
                     updated_at = EXCLUDED.updated_at
                 """)
-                .param("cartId", cartId).param("tenantId", tenantId)
-                .param("addressId", customerAddressId).param("address", addressEncrypted)
+                .param("cartId", cartId)
+                .param("tenantId", tenantId)
+                .param("addressId", customerAddressId)
+                .param("address", addressEncrypted)
                 .param("instructions", instructionsEncrypted)
-                .param("name", recipientNameEncrypted).param("phone", recipientPhoneEncrypted)
-                .param("latitude", latitude).param("longitude", longitude)
+                .param("name", recipientNameEncrypted)
+                .param("phone", recipientPhoneEncrypted)
+                .param("latitude", latitude)
+                .param("longitude", longitude)
                 .param("now", utc(now))
                 .update();
     }
@@ -299,7 +348,8 @@ public class JdbcCartStore {
                 FROM ordering.cart_fulfillment
                 WHERE tenant_id = :tenantId AND cart_id = :cartId
                 """)
-                .param("tenantId", tenantId).param("cartId", cartId)
+                .param("tenantId", tenantId)
+                .param("cartId", cartId)
                 .query((row, number) -> new CartFulfillmentRow(
                         row.getObject("cart_id", UUID.class),
                         row.getObject("customer_address_id", UUID.class),
@@ -318,9 +368,7 @@ public class JdbcCartStore {
                 UPDATE ordering.carts
                 SET status = 'EXPIRED', version = version + 1, updated_at = :now
                 WHERE status = 'ACTIVE' AND expires_at <= :now
-                """)
-                .param("now", utc(now))
-                .update();
+                """).param("now", utc(now)).update();
     }
 
     private static CartRow mapCart(java.sql.ResultSet row, int number) throws java.sql.SQLException {
@@ -348,14 +396,31 @@ public class JdbcCartStore {
     }
 
     public record CartRow(
-            UUID cartId, UUID tenantId, UUID brandId, UUID locationId, UUID channelId,
-            UUID customerAccountId, String guestReferenceHash, FulfillmentMode fulfillmentMode,
-            String currency, CartStatus status, UUID pricingQuoteId, String pricingContextHash,
-            UUID catalogPublicationId, int version, Instant expiresAt, UUID convertedOrderId) { }
+            UUID cartId,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID channelId,
+            UUID customerAccountId,
+            String guestReferenceHash,
+            FulfillmentMode fulfillmentMode,
+            String currency,
+            CartStatus status,
+            UUID pricingQuoteId,
+            String pricingContextHash,
+            UUID catalogPublicationId,
+            int version,
+            Instant expiresAt,
+            UUID convertedOrderId) {}
 
     /** @param selectedModifiersJson the chosen options, stored whole and read whole */
-    public record CartLineRow(UUID lineId, String lineKey, UUID variantId, int quantity,
-            String selectedModifiersJson, String customerNoteEncrypted) { }
+    public record CartLineRow(
+            UUID lineId,
+            String lineKey,
+            UUID variantId,
+            int quantity,
+            String selectedModifiersJson,
+            String customerNoteEncrypted) {}
 
     /**
      * A cart's destination as it is stored: four ciphertexts and a point.
@@ -366,9 +431,15 @@ public class JdbcCartStore {
      *                          address later leaves this cart deliverable and this
      *                          id pointing at a row that is no longer offered
      */
-    public record CartFulfillmentRow(UUID cartId, UUID customerAddressId, String addressEncrypted,
-            String instructionsEncrypted, String recipientNameEncrypted,
-            String recipientPhoneEncrypted, double latitude, double longitude) {
+    public record CartFulfillmentRow(
+            UUID cartId,
+            UUID customerAddressId,
+            String addressEncrypted,
+            String instructionsEncrypted,
+            String recipientNameEncrypted,
+            String recipientPhoneEncrypted,
+            double latitude,
+            double longitude) {
 
         /** Prints nothing: every component is a person's home or a key to it. */
         @Override

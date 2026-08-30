@@ -6,7 +6,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
 import uz.horecaos.platform.pos.domain.CatalogSnapshot;
 import uz.horecaos.platform.pos.domain.SourceKind;
 
@@ -65,10 +64,13 @@ public final class CloposCatalogNormalizer {
      *                   through to the snapshot because it decides how much a
      *                   single run's absence is worth as evidence of a removal
      */
-    public CatalogSnapshot normalize(List<Map<String, Object>> rawProducts,
+    public CatalogSnapshot normalize(
+            List<Map<String, Object>> rawProducts,
             List<Map<String, Object>> rawCategories,
             List<Map<String, Object>> rawStopList,
-            Instant readAt, boolean walkStable, int pageCount) {
+            Instant readAt,
+            boolean walkStable,
+            int pageCount) {
 
         List<CatalogSnapshot.Category> categories = new ArrayList<>();
         for (Map<String, Object> raw : rawCategories) {
@@ -149,14 +151,11 @@ public final class CloposCatalogNormalizer {
         List<CatalogSnapshot.Availability> availability = new ArrayList<>();
         for (Map<String, Object> raw : rawStopList) {
             availability.add(new CatalogSnapshot.Availability(
-                    id(raw, "id"),
-                    CloposEnvelope.decimal(raw, "limit"),
-                    stopListTime(raw),
-                    raw));
+                    id(raw, "id"), CloposEnvelope.decimal(raw, "limit"), stopListTime(raw), raw));
         }
 
-        return new CatalogSnapshot(readAt, walkStable, pageCount,
-                categories, products, variants, groups, modifiers, availability);
+        return new CatalogSnapshot(
+                readAt, walkStable, pageCount, categories, products, variants, groups, modifiers, availability);
     }
 
     private CatalogSnapshot.Variant variant(Map<String, Object> raw, String parentId) {

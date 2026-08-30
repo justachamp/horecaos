@@ -3,10 +3,8 @@ package uz.horecaos.platform.ordering.application;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore.CartRow;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
@@ -50,8 +48,7 @@ public class CartPaymentOptions {
     private final SalesChannelLookup channels;
     private final PaymentIntentPort payments;
 
-    public CartPaymentOptions(CartService carts, SalesChannelLookup channels,
-            PaymentIntentPort payments) {
+    public CartPaymentOptions(CartService carts, SalesChannelLookup channels, PaymentIntentPort payments) {
         this.carts = carts;
         this.channels = channels;
         this.payments = payments;
@@ -89,19 +86,23 @@ public class CartPaymentOptions {
      *         cart id becomes probeable
      */
     @Transactional(readOnly = true)
-    public Optional<PaymentOptions> forCart(UUID tenantId, UUID brandId, UUID callerAccountId,
-            UUID cartId) {
+    public Optional<PaymentOptions> forCart(UUID tenantId, UUID brandId, UUID callerAccountId, UUID cartId) {
 
         return carts.view(tenantId, brandId, callerAccountId, cartId).map(view -> {
             CartRow cart = view.cart();
-            List<String> offerable = channels.enabledPaymentMethodCodes(tenantId, cart.channelId())
-                    .stream()
+            List<String> offerable = channels.enabledPaymentMethodCodes(tenantId, cart.channelId()).stream()
                     .filter(code -> payments.canAcceptPayment(tenantId, cart.locationId(), code))
                     .sorted()
                     .toList();
 
-            return new PaymentOptions(cart.cartId(), cart.locationId(), cart.channelId(),
-                    cart.fulfillmentMode(), cart.currency(), offerable, warnings());
+            return new PaymentOptions(
+                    cart.cartId(),
+                    cart.locationId(),
+                    cart.channelId(),
+                    cart.fulfillmentMode(),
+                    cart.currency(),
+                    offerable,
+                    warnings());
         });
     }
 
@@ -128,7 +129,12 @@ public class CartPaymentOptions {
      * @param currency    the cart's currency, so a client renders one price in one
      *                    unit — whole som for UZS (ADR 0018)
      */
-    public record PaymentOptions(UUID cartId, UUID locationId, UUID channelId,
-            FulfillmentMode fulfillmentMode, String currency, List<String> methodCodes,
-            List<String> warnings) { }
+    public record PaymentOptions(
+            UUID cartId,
+            UUID locationId,
+            UUID channelId,
+            FulfillmentMode fulfillmentMode,
+            String currency,
+            List<String> methodCodes,
+            List<String> warnings) {}
 }

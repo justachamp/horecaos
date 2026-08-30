@@ -10,7 +10,6 @@ package uz.horecaos.platform.partner.domain;
  * carrying. Neither error is discoverable from the order.
  */
 public enum DiscountFunding {
-
     PARTNER,
     MERCHANT,
     SPLIT,

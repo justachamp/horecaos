@@ -1,15 +1,14 @@
 package uz.horecaos.platform.migration.domain;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
+
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * The scope state machine as the pure function it is (ADR 0024).
@@ -27,16 +26,15 @@ class MigrationScopeStateMachineTests {
      * The five coherent mode pairs, spelled out independently of {@link
      * ScopeState} so the two cannot agree with each other by construction.
      */
-    private static final OwnershipModes UNTOUCHED =
-            new OwnershipModes(WriteMode.LEGACY_ONLY, ReadMode.LEGACY);
+    private static final OwnershipModes UNTOUCHED = new OwnershipModes(WriteMode.LEGACY_ONLY, ReadMode.LEGACY);
+
     private static final OwnershipModes FOLLOWING =
             new OwnershipModes(WriteMode.LEGACY_WITH_TARGET_SHADOW, ReadMode.LEGACY);
     private static final OwnershipModes COMPARING =
             new OwnershipModes(WriteMode.LEGACY_WITH_TARGET_SHADOW, ReadMode.SHADOW_COMPARE);
     private static final OwnershipModes CANARYING =
             new OwnershipModes(WriteMode.LEGACY_WITH_TARGET_SHADOW, ReadMode.CANARY_TARGET);
-    private static final OwnershipModes OWNED =
-            new OwnershipModes(WriteMode.TARGET_ONLY, ReadMode.TARGET);
+    private static final OwnershipModes OWNED = new OwnershipModes(WriteMode.TARGET_ONLY, ReadMode.TARGET);
 
     // ------------------------------------------------------- the terminal set
 
@@ -87,8 +85,7 @@ class MigrationScopeStateMachineTests {
                         .isTrue();
                 continue;
             }
-            boolean advances = ScopeStateMachine.nextFrom(state).stream()
-                    .anyMatch(next -> !next.holding());
+            boolean advances = ScopeStateMachine.nextFrom(state).stream().anyMatch(next -> !next.holding());
             if (!advances) {
                 stranded.add(state);
             }
@@ -105,8 +102,10 @@ class MigrationScopeStateMachineTests {
     void everyStatePermitsAtLeastOneCoherentModePair() {
         for (ScopeState state : ScopeState.values()) {
             assertThat(state.permittedModes())
-                    .as("a scope entering %s with no permitted modes cannot be represented, "
-                            + "and MigrationOwnershipService would answer it as drifted", state)
+                    .as(
+                            "a scope entering %s with no permitted modes cannot be represented, "
+                                    + "and MigrationOwnershipService would answer it as drifted",
+                            state)
                     .isNotEmpty();
         }
     }
@@ -121,12 +120,13 @@ class MigrationScopeStateMachineTests {
     @DisplayName("a held scope cannot be transitioned anywhere; it is resumed")
     void pausedHasNoOutgoingEdges() {
         assertThat(ScopeStateMachine.nextFrom(ScopeState.PAUSED)).isEmpty();
-        assertThat(ScopeStateMachine.nextFrom(ScopeState.BLOCKED_RECONCILIATION)).isEmpty();
+        assertThat(ScopeStateMachine.nextFrom(ScopeState.BLOCKED_RECONCILIATION))
+                .isEmpty();
 
         // The move an operator would reach for: pause a canary, resume it owned.
-        assertThat(ScopeStateMachine.permits(ScopeState.PAUSED, ScopeState.TARGET_OWNED)).isFalse();
-        assertThat(catchThrowable(() ->
-                ScopeStateMachine.require(ScopeState.PAUSED, ScopeState.TARGET_OWNED)))
+        assertThat(ScopeStateMachine.permits(ScopeState.PAUSED, ScopeState.TARGET_OWNED))
+                .isFalse();
+        assertThat(catchThrowable(() -> ScopeStateMachine.require(ScopeState.PAUSED, ScopeState.TARGET_OWNED)))
                 .isInstanceOf(ScopeStateMachine.IllegalTransitionException.class);
     }
 
@@ -188,7 +188,8 @@ class MigrationScopeStateMachineTests {
         // Suspension is available from here as it is from everywhere still moving,
         // so the landing is the one edge that advances the scope.
         assertThat(ScopeStateMachine.nextFrom(ScopeState.ROLLING_BACK).stream()
-                .filter(next -> !next.holding()).toList())
+                        .filter(next -> !next.holding())
+                        .toList())
                 .containsExactly(ScopeState.CATCHING_UP);
 
         Set<ScopeState> entries = EnumSet.noneOf(ScopeState.class);
@@ -197,8 +198,7 @@ class MigrationScopeStateMachineTests {
                 entries.add(state);
             }
         }
-        assertThat(entries)
-                .containsExactlyInAnyOrder(ScopeState.CANARY, ScopeState.TARGET_OWNED);
+        assertThat(entries).containsExactlyInAnyOrder(ScopeState.CANARY, ScopeState.TARGET_OWNED);
     }
 
     @Test
@@ -214,8 +214,7 @@ class MigrationScopeStateMachineTests {
         // ROLLBACK_WINDOW -> TARGET_OWNED is how a soaking scope reopens its
         // cutover so it can then be reversed; it does not take ownership, which
         // the scope already had.
-        assertThat(entries).containsExactlyInAnyOrder(
-                ScopeState.CUTOVER_READY, ScopeState.ROLLBACK_WINDOW);
+        assertThat(entries).containsExactlyInAnyOrder(ScopeState.CUTOVER_READY, ScopeState.ROLLBACK_WINDOW);
     }
 
     // ------------------------------------------------------ the mode pairs (3)
@@ -239,9 +238,10 @@ class MigrationScopeStateMachineTests {
             }
         }
 
-        assertThat(constructible)
-                .containsExactlyInAnyOrder(UNTOUCHED, FOLLOWING, COMPARING, CANARYING, OWNED);
-        assertThat(constructible.stream().filter(modes -> modes.writeMode().targetMayWrite()).toList())
+        assertThat(constructible).containsExactlyInAnyOrder(UNTOUCHED, FOLLOWING, COMPARING, CANARYING, OWNED);
+        assertThat(constructible.stream()
+                        .filter(modes -> modes.writeMode().targetMayWrite())
+                        .toList())
                 .as("exactly one coherent pair makes the target the writer, and a shadow is not it")
                 .containsExactly(OWNED);
     }
@@ -267,24 +267,24 @@ class MigrationScopeStateMachineTests {
     void targetOnlyIsPermittedOnlyWhereOwnershipHasTransferred() {
         Set<ScopeState> owning = EnumSet.noneOf(ScopeState.class);
         for (ScopeState state : ScopeState.values()) {
-            if (state.permittedModes().stream()
-                    .anyMatch(modes -> modes.writeMode() == WriteMode.TARGET_ONLY)) {
+            if (state.permittedModes().stream().anyMatch(modes -> modes.writeMode() == WriteMode.TARGET_ONLY)) {
                 owning.add(state);
             }
         }
 
-        assertThat(owning).containsExactlyInAnyOrder(
-                ScopeState.TARGET_OWNED,
-                ScopeState.ROLLBACK_WINDOW,
-                ScopeState.LEGACY_READ_ONLY,
-                ScopeState.RETIRED,
-                // A rollback cannot move both axes at once, so it carries the
-                // pair it is leaving as well as the one it is heading for.
-                ScopeState.ROLLING_BACK,
-                // The holding states keep whatever routing the scope had; pausing
-                // a target-owned scope must not hand the capability back.
-                ScopeState.PAUSED,
-                ScopeState.BLOCKED_RECONCILIATION);
+        assertThat(owning)
+                .containsExactlyInAnyOrder(
+                        ScopeState.TARGET_OWNED,
+                        ScopeState.ROLLBACK_WINDOW,
+                        ScopeState.LEGACY_READ_ONLY,
+                        ScopeState.RETIRED,
+                        // A rollback cannot move both axes at once, so it carries the
+                        // pair it is leaving as well as the one it is heading for.
+                        ScopeState.ROLLING_BACK,
+                        // The holding states keep whatever routing the scope had; pausing
+                        // a target-owned scope must not hand the capability back.
+                        ScopeState.PAUSED,
+                        ScopeState.BLOCKED_RECONCILIATION);
 
         assertThat(ScopeState.CANARY.permittedModes())
                 .as("a canary reads a share of traffic from the target; legacy still writes it")

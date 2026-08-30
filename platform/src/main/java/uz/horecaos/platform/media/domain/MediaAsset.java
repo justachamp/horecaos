@@ -2,7 +2,6 @@ package uz.horecaos.platform.media.domain;
 
 import java.time.Instant;
 import java.util.UUID;
-
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.MediaAssetStatus;
 
@@ -34,5 +33,4 @@ public record MediaAsset(
         Integer widthPx,
         Integer heightPx,
         UUID createdBy,
-        Instant createdAt) {
-}
+        Instant createdAt) {}

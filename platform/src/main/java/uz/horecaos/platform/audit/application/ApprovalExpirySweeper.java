@@ -5,7 +5,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.audit.api.ApprovalService;
 
 /**
@@ -34,8 +33,7 @@ import uz.horecaos.platform.audit.api.ApprovalService;
  * requests inside a refund would make one caller pay for a bulk update at random.
  */
 @Component
-@ConditionalOnProperty(name = "horecaos.audit.approval.expiry.enabled",
-        havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = "horecaos.audit.approval.expiry.enabled", havingValue = "true", matchIfMissing = true)
 public class ApprovalExpirySweeper {
 
     private static final Logger log = LoggerFactory.getLogger(ApprovalExpirySweeper.class);

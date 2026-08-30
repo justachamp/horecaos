@@ -3,10 +3,8 @@ package uz.horecaos.platform.customers.application;
 import java.time.Clock;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-
 import uz.horecaos.platform.customers.api.CurrentCustomer;
 import uz.horecaos.platform.customers.api.CustomerAccountRef;
 import uz.horecaos.platform.iam.api.CurrentActor;
@@ -53,7 +51,8 @@ public class PrincipalCustomer implements CurrentCustomer {
     private final Clock clock;
     private final String trustedIssuer;
 
-    public PrincipalCustomer(CustomerIdentityService identity,
+    public PrincipalCustomer(
+            CustomerIdentityService identity,
             CurrentCustomerSession currentSession,
             CustomerPolicyLookup policies,
             CurrentActor currentActor,
@@ -77,12 +76,14 @@ public class PrincipalCustomer implements CurrentCustomer {
             // honest answer to "which account is this, here" is that there is not
             // one, and every caller already handles that — it is the same answer a
             // customer who has never visited this brand gets.
-            return session
-                    .filter(live -> live.covers(tenantId, brandId,
+            return session.filter(live -> live.covers(
+                            tenantId,
+                            brandId,
                             policies.policyFor(tenantId, clock.instant()).mode()))
                     .map(live -> new CustomerAccountRef(live.accountId(), tenantId));
         }
-        return identity.find(tenantId, brandId, trustedIssuer, currentActor.get().subject());
+        return identity.find(
+                tenantId, brandId, trustedIssuer, currentActor.get().subject());
     }
 
     @Override
@@ -98,8 +99,7 @@ public class PrincipalCustomer implements CurrentCustomer {
             // person's account at a sibling brand is not the caller's here. It
             // becomes theirs when they sign in there, which is what
             // BRAND_ISOLATED means.
-            return live.tenantId().equals(tenantId)
-                    && identity.sameAccount(tenantId, live.accountId(), accountId);
+            return live.tenantId().equals(tenantId) && identity.sameAccount(tenantId, live.accountId(), accountId);
         }
         return identity.owns(tenantId, trustedIssuer, currentActor.get().subject(), accountId);
     }

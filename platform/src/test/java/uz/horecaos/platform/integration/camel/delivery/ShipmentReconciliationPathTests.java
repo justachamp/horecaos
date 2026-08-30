@@ -1,9 +1,8 @@
 package uz.horecaos.platform.integration.camel.delivery;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -13,11 +12,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
+import javax.sql.DataSource;
 import org.apache.camel.CamelContext;
-import org.apache.camel.ProducerTemplate;
 import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -28,13 +24,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
@@ -127,10 +120,12 @@ class ShipmentReconciliationPathTests {
         camel.start();
 
         handler = new ShipmentReconciliationHandler(
-                camel.createProducerTemplate(), lookup(),
-                new ShipmentReconciliationOutbox(new JdbcOutboxStore(jdbc),
-                        JsonMapper.builder().build(), fixedClock()),
-                new SimpleMeterRegistry(), fixedClock());
+                camel.createProducerTemplate(),
+                lookup(),
+                new ShipmentReconciliationOutbox(
+                        new JdbcOutboxStore(jdbc), JsonMapper.builder().build(), fixedClock()),
+                new SimpleMeterRegistry(),
+                fixedClock());
     }
 
     @AfterEach
@@ -260,10 +255,15 @@ class ShipmentReconciliationPathTests {
         UUID operation = UUID.randomUUID();
         partner.onQuery(ProviderOutcome.success(Map.of(), "ext-1"));
 
-        assertThat(executorAt(NOW, 10).execute(
-                ShipmentReconciliationHandler.CONSUMER_NAME, operation.toString(),
-                body(TENANT, operation).replace("CREATE_ON_DEMAND_SHIPMENT", "RM -RF"),
-                Map.of(), TOPIC, 0, 0))
+        assertThat(executorAt(NOW, 10)
+                        .execute(
+                                ShipmentReconciliationHandler.CONSUMER_NAME,
+                                operation.toString(),
+                                body(TENANT, operation).replace("CREATE_ON_DEMAND_SHIPMENT", "RM -RF"),
+                                Map.of(),
+                                TOPIC,
+                                0,
+                                0))
                 .isEqualTo(InboxResult.PROCESSED);
 
         // A topic is not a trusted caller. The capability is echoed into the
@@ -279,8 +279,7 @@ class ShipmentReconciliationPathTests {
         UUID operation = UUID.randomUUID();
         AtomicBoolean insideTransaction = new AtomicBoolean(true);
         partner.onQuery(ProviderOutcome.success(Map.of(), "ext-1"));
-        partner.observe(() -> insideTransaction.set(
-                TransactionSynchronizationManager.isActualTransactionActive()));
+        partner.observe(() -> insideTransaction.set(TransactionSynchronizationManager.isActualTransactionActive()));
 
         assertThat(offer(operation, 0)).isEqualTo(InboxResult.PROCESSED);
 
@@ -300,12 +299,15 @@ class ShipmentReconciliationPathTests {
     }
 
     private InboxResult offerFor(UUID tenantId, UUID operation, long offset, int maximumAttempts) {
-        return executorAt(NOW, maximumAttempts).execute(
-                ShipmentReconciliationHandler.CONSUMER_NAME,
-                operation.toString(),
-                body(tenantId, operation),
-                Map.of(),
-                TOPIC, 0, offset);
+        return executorAt(NOW, maximumAttempts)
+                .execute(
+                        ShipmentReconciliationHandler.CONSUMER_NAME,
+                        operation.toString(),
+                        body(tenantId, operation),
+                        Map.of(),
+                        TOPIC,
+                        0,
+                        offset);
     }
 
     private InboxExecutor executorAt(Instant at, int maximumAttempts) {
@@ -337,8 +339,7 @@ class ShipmentReconciliationPathTests {
                  "payload":{"operationCommandId":"%s","bindingId":"%s","brandId":"%s",
                             "locationId":null,"providerType":"scripted",
                             "capability":"CREATE_ON_DEMAND_SHIPMENT","externalReference":"ext-1",
-                            "uncertainErrorCode":"READ_TIMEOUT"}}"""
-                .formatted(operation, tenantId, operation, operation, BINDING, BRAND);
+                            "uncertainErrorCode":"READ_TIMEOUT"}}""".formatted(operation, tenantId, operation, operation, BINDING, BRAND);
     }
 
     private DeliveryProcessor processor() {
@@ -351,7 +352,9 @@ class ShipmentReconciliationPathTests {
     }
 
     private long outboxRows() {
-        return jdbc.sql("SELECT count(*) FROM integration.outbox_events").query(Long.class).single();
+        return jdbc.sql("SELECT count(*) FROM integration.outbox_events")
+                .query(Long.class)
+                .single();
     }
 
     private String resolution(UUID operation) {
@@ -366,7 +369,11 @@ class ShipmentReconciliationPathTests {
         return jdbc.sql("""
                 SELECT payload ->> :field FROM integration.outbox_events
                  WHERE aggregate_id = :id AND event_type = 'ShipmentOutcomeReconciled'
-                """).param("field", field).param("id", operation).query(String.class).single();
+                """)
+                .param("field", field)
+                .param("id", operation)
+                .query(String.class)
+                .single();
     }
 
     private String outboxTopic(UUID operation) {
@@ -395,8 +402,8 @@ class ShipmentReconciliationPathTests {
     private static ProviderInstallationLookup lookup() {
         SecretReference reference =
                 new SecretReference("local", SecretCategory.PROVIDER_DELIVERY, "tenant", "scripted");
-        BindingRef binding = new BindingRef(BINDING, INSTALLATION, TENANT,
-                ProviderCategory.DELIVERY, "scripted", BRAND, null);
+        BindingRef binding =
+                new BindingRef(BINDING, INSTALLATION, TENANT, ProviderCategory.DELIVERY, "scripted", BRAND, null);
 
         return new ProviderInstallationLookup() {
             @Override
@@ -411,8 +418,15 @@ class ShipmentReconciliationPathTests {
 
             @Override
             public Optional<InstallationSnapshot> installation(UUID tenantId, UUID installationId) {
-                return Optional.of(new InstallationSnapshot(INSTALLATION, ProviderCategory.DELIVERY,
-                        "scripted", "local", "http://127.0.0.1:1", "ACTIVE", reference.toString(), "v1"));
+                return Optional.of(new InstallationSnapshot(
+                        INSTALLATION,
+                        ProviderCategory.DELIVERY,
+                        "scripted",
+                        "local",
+                        "http://127.0.0.1:1",
+                        "ACTIVE",
+                        reference.toString(),
+                        "v1"));
             }
         };
     }
@@ -438,7 +452,7 @@ class ShipmentReconciliationPathTests {
 
         private final List<String> idempotencyKeys = new java.util.ArrayList<>();
         private ProviderOutcome standing = ProviderOutcome.success(Map.of(), "ext-1");
-        private Runnable observer = () -> { };
+        private Runnable observer = () -> {};
         private int queries;
 
         void onQuery(ProviderOutcome outcome) {
@@ -456,8 +470,7 @@ class ShipmentReconciliationPathTests {
 
         @Override
         public Set<DeliveryCapability> capabilities() {
-            return Set.of(DeliveryCapability.CREATE_ON_DEMAND_SHIPMENT,
-                    DeliveryCapability.QUERY_SHIPMENT);
+            return Set.of(DeliveryCapability.CREATE_ON_DEMAND_SHIPMENT, DeliveryCapability.QUERY_SHIPMENT);
         }
 
         @Override

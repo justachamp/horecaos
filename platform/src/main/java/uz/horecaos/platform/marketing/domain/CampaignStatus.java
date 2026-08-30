@@ -18,7 +18,6 @@ import java.util.Set;
  * restarted is a ceiling that only delays the overspend.
  */
 public enum CampaignStatus {
-
     DRAFT,
     IN_REVIEW,
     APPROVED,

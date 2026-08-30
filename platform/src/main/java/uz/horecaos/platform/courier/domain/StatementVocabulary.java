@@ -23,13 +23,24 @@ import java.util.Set;
 public final class StatementVocabulary {
 
     private static final Set<String> FORBIDDEN = Set.of(
-            "net", "netof", "netpay", "netpayable", "netamount",
-            "withhold", "withholding", "withheld",
-            "tax", "taxable", "taxdeducted", "ndfl", "payslip", "payroll",
-            "pensioncontribution", "socialcontribution");
+            "net",
+            "netof",
+            "netpay",
+            "netpayable",
+            "netamount",
+            "withhold",
+            "withholding",
+            "withheld",
+            "tax",
+            "taxable",
+            "taxdeducted",
+            "ndfl",
+            "payslip",
+            "payroll",
+            "pensioncontribution",
+            "socialcontribution");
 
-    private StatementVocabulary() {
-    }
+    private StatementVocabulary() {}
 
     /** Thrown when a statement document would carry tax language. */
     public static final class TaxLanguageException extends IllegalStateException {
@@ -59,21 +70,21 @@ public final class StatementVocabulary {
         walk(document, "statement", offences);
         if (!offences.isEmpty()) {
             throw new TaxLanguageException(
-                    "A courier settlement statement carries gross only (ADR 0042): "
-                            + String.join(", ", offences));
+                    "A courier settlement statement carries gross only (ADR 0042): " + String.join(", ", offences));
         }
     }
 
     private static void walk(Object node, String path, List<String> offences) {
         switch (node) {
-            case null -> { }
-            case Map<?, ?> map -> map.forEach((key, value) -> {
-                String childPath = path + "." + key;
-                check(String.valueOf(key), childPath, offences);
-                if (!DECLARATION_KEY.equals(String.valueOf(key))) {
-                    walk(value, childPath, offences);
-                }
-            });
+            case null -> {}
+            case Map<?, ?> map ->
+                map.forEach((key, value) -> {
+                    String childPath = path + "." + key;
+                    check(String.valueOf(key), childPath, offences);
+                    if (!DECLARATION_KEY.equals(String.valueOf(key))) {
+                        walk(value, childPath, offences);
+                    }
+                });
             case Iterable<?> items -> {
                 int index = 0;
                 for (Object item : items) {
@@ -81,7 +92,7 @@ public final class StatementVocabulary {
                 }
             }
             case String text -> check(text, path, offences);
-            default -> { }
+            default -> {}
         }
     }
 

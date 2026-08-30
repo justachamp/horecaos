@@ -13,10 +13,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayAggregate;
 import uz.horecaos.platform.reporting.application.ReportingFacts.SlaBucketAggregate;
 import uz.horecaos.platform.reporting.domain.BusinessDayBoundary;
@@ -45,8 +43,7 @@ public class ReportQueryService {
     private final BusinessDayService businessDays;
     private final Clock clock;
 
-    public ReportQueryService(JdbcReportingStore store, BusinessDayService businessDays,
-            Clock clock) {
+    public ReportQueryService(JdbcReportingStore store, BusinessDayService businessDays, Clock clock) {
         this.store = store;
         this.businessDays = businessDays;
         this.clock = clock;
@@ -54,30 +51,30 @@ public class ReportQueryService {
 
     @Transactional(readOnly = true)
     public ReportResult run(ReportQuery query) {
-        List<MetricDefinition> metrics = query.metricCodes().stream()
-                .map(MetricRegistry::require)
-                .toList();
+        List<MetricDefinition> metrics =
+                query.metricCodes().stream().map(MetricRegistry::require).toList();
 
         for (MetricDefinition metric : metrics) {
             if (!metric.sourceAvailable()) {
-                throw new ReportingRefusals.MetricNotBuiltException(metric.id().code(),
-                        metric.openQuestion() == null ? "its source fact does not exist"
-                                : metric.openQuestion());
+                throw new ReportingRefusals.MetricNotBuiltException(
+                        metric.id().code(),
+                        metric.openQuestion() == null ? "its source fact does not exist" : metric.openQuestion());
             }
             switch (metric.aggregation()) {
-                case MEDIAN -> throw new ReportingRefusals.NonScalarMetricException(
-                        metric.id().code(), "GET .../reporting/preparation-time");
-                case DISTRIBUTION -> throw new ReportingRefusals.NonScalarMetricException(
-                        metric.id().code(), "GET .../reporting/sla-buckets");
-                default -> { }
+                case MEDIAN ->
+                    throw new ReportingRefusals.NonScalarMetricException(
+                            metric.id().code(), "GET .../reporting/preparation-time");
+                case DISTRIBUTION ->
+                    throw new ReportingRefusals.NonScalarMetricException(
+                            metric.id().code(), "GET .../reporting/sla-buckets");
+                default -> {}
             }
         }
 
         BusinessDayBoundary boundary = businessDays.boundaryFor(query.tenantId());
         refuseMixedBoundaryRegime(query);
 
-        List<BranchDayAggregate> rows = store
-                .readAggregates(query.tenantId(), query.from(), query.to()).stream()
+        List<BranchDayAggregate> rows = store.readAggregates(query.tenantId(), query.from(), query.to()).stream()
                 .filter(row -> query.locationIds().isEmpty()
                         || query.locationIds().contains(row.key().locationId()))
                 .filter(row -> query.channelCodes().isEmpty()
@@ -88,7 +85,8 @@ public class ReportQueryService {
 
         Map<Slice, Bucket> byslice = new LinkedHashMap<>();
         for (BranchDayAggregate row : rows) {
-            byslice.computeIfAbsent(sliceOf(query, row), ignored -> new Bucket()).add(row);
+            byslice.computeIfAbsent(sliceOf(query, row), ignored -> new Bucket())
+                    .add(row);
         }
 
         List<ReportRow> resultRows = new ArrayList<>(byslice.size());
@@ -106,14 +104,16 @@ public class ReportQueryService {
 
     /** The fixed SLA distribution, which is several rows per slice rather than one value. */
     @Transactional(readOnly = true)
-    public SlaResult slaBuckets(UUID tenantId, LocalDate from, LocalDate to,
-            List<UUID> locationIds) {
+    public SlaResult slaBuckets(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
         List<SlaBucketAggregate> rows = store.readSlaBuckets(tenantId, from, to).stream()
                 .filter(row -> locationIds.isEmpty() || locationIds.contains(row.scopeId()))
                 .toList();
-        return new SlaResult(rows, provenance(tenantId,
-                List.of(MetricRegistry.require("sla_bucket_set.v1")),
-                businessDays.boundaryFor(tenantId)));
+        return new SlaResult(
+                rows,
+                provenance(
+                        tenantId,
+                        List.of(MetricRegistry.require("sla_bucket_set.v1")),
+                        businessDays.boundaryFor(tenantId)));
     }
 
     /**
@@ -123,12 +123,14 @@ public class ReportQueryService {
      *         range, which is not a zero-second kitchen
      */
     @Transactional(readOnly = true)
-    public MedianResult preparationTime(UUID tenantId, LocalDate from, LocalDate to,
-            List<UUID> locationIds) {
+    public MedianResult preparationTime(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
         Integer median = store.medianSecondsToReady(tenantId, from, to, locationIds);
-        return new MedianResult(median, provenance(tenantId,
-                List.of(MetricRegistry.require("prep_time.median.v1")),
-                businessDays.boundaryFor(tenantId)));
+        return new MedianResult(
+                median,
+                provenance(
+                        tenantId,
+                        List.of(MetricRegistry.require("prep_time.median.v1")),
+                        businessDays.boundaryFor(tenantId)));
     }
 
     /** Every definition, with whether finance has signed it. */
@@ -136,8 +138,10 @@ public class ReportQueryService {
     public List<MetricView> catalogue() {
         List<MetricView> views = new ArrayList<>();
         for (MetricDefinition definition : MetricRegistry.all()) {
-            var stored = store.findStoredMetric(definition.id().name(), definition.id().version());
-            views.add(new MetricView(definition,
+            var stored = store.findStoredMetric(
+                    definition.id().name(), definition.id().version());
+            views.add(new MetricView(
+                    definition,
                     stored.map(JdbcReportingStore.StoredMetric::signedBy).orElse(null),
                     stored.map(JdbcReportingStore.StoredMetric::signedAt).orElse(null)));
         }
@@ -159,8 +163,8 @@ public class ReportQueryService {
         }
     }
 
-    private static void refuseCombinedEntityTotal(ReportQuery query,
-            List<MetricDefinition> metrics, List<BranchDayAggregate> rows) {
+    private static void refuseCombinedEntityTotal(
+            ReportQuery query, List<MetricDefinition> metrics, List<BranchDayAggregate> rows) {
 
         List<String> money = metrics.stream()
                 .filter(MetricDefinition::isMoney)
@@ -188,19 +192,20 @@ public class ReportQueryService {
                 query.groupBy().contains(Grain.Dimension.LOCATION) ? row.key().locationId() : null,
                 query.groupBy().contains(Grain.Dimension.CHANNEL) ? row.key().channelCode() : null,
                 query.groupBy().contains(Grain.Dimension.FULFILMENT_TYPE)
-                        ? row.key().fulfilmentType() : null,
+                        ? row.key().fulfilmentType()
+                        : null,
                 query.groupsByLegalEntity() ? row.key().legalEntityId() : null);
     }
 
-    private Provenance provenance(UUID tenantId, List<MetricDefinition> metrics,
-            BusinessDayBoundary boundary) {
+    private Provenance provenance(UUID tenantId, List<MetricDefinition> metrics, BusinessDayBoundary boundary) {
 
         Set<String> versions = new LinkedHashSet<>();
         List<String> provisional = new ArrayList<>();
         for (MetricDefinition metric : metrics) {
             versions.add(metric.id().code());
             if (store.findStoredMetric(metric.id().name(), metric.id().version())
-                    .map(JdbcReportingStore.StoredMetric::signedBy).isEmpty()) {
+                    .map(JdbcReportingStore.StoredMetric::signedBy)
+                    .isEmpty()) {
                 provisional.add(metric.id().code());
             }
         }
@@ -218,12 +223,11 @@ public class ReportQueryService {
     }
 
     /** One row's dimension values. Any of them null means "not grouped by". */
-    public record Slice(LocalDate businessDate, UUID locationId, String channelCode,
-            String fulfilmentType, UUID legalEntityId) {
+    public record Slice(
+            LocalDate businessDate, UUID locationId, String channelCode, String fulfilmentType, UUID legalEntityId) {
 
         String sortKey() {
-            return "%s|%s|%s|%s|%s".formatted(businessDate, locationId, channelCode,
-                    fulfilmentType, legalEntityId);
+            return "%s|%s|%s|%s|%s".formatted(businessDate, locationId, channelCode, fulfilmentType, legalEntityId);
         }
     }
 
@@ -232,8 +236,7 @@ public class ReportQueryService {
      *               nothing to compute the metric from — an average check with no
      *               orders — and is never rendered as zero
      */
-    public record ReportRow(Slice slice, Map<String, Long> values) {
-    }
+    public record ReportRow(Slice slice, Map<String, Long> values) {}
 
     /**
      * What ADR 0023 requires every retained report output to declare.
@@ -245,20 +248,22 @@ public class ReportQueryService {
      *                               were left alone. A report with an open
      *                               divergence says so on its face
      */
-    public record Provenance(Instant asOf, LocalDate closedThrough, Instant lastCloseCompletedAt,
-            String businessDayStart, String timezone, int boundaryVersion,
-            List<String> metricVersions, List<String> provisionalMetricCodes,
-            int openDivergences) {
-    }
+    public record Provenance(
+            Instant asOf,
+            LocalDate closedThrough,
+            Instant lastCloseCompletedAt,
+            String businessDayStart,
+            String timezone,
+            int boundaryVersion,
+            List<String> metricVersions,
+            List<String> provisionalMetricCodes,
+            int openDivergences) {}
 
-    public record ReportResult(List<ReportRow> rows, Provenance provenance) {
-    }
+    public record ReportResult(List<ReportRow> rows, Provenance provenance) {}
 
-    public record SlaResult(List<SlaBucketAggregate> buckets, Provenance provenance) {
-    }
+    public record SlaResult(List<SlaBucketAggregate> buckets, Provenance provenance) {}
 
-    public record MedianResult(Integer medianSeconds, Provenance provenance) {
-    }
+    public record MedianResult(Integer medianSeconds, Provenance provenance) {}
 
     /** A definition plus its signature state, which is what the metric dictionary shows. */
     public record MetricView(MetricDefinition definition, String signedBy, Instant signedAt) {
@@ -297,9 +302,9 @@ public class ReportQueryService {
                 case "orders.count.v1", "channel_mix.count.v1" -> (long) completed;
                 case "orders.cancelled.v1" -> (long) cancelled;
                 case "orders.late.v1" -> (long) late;
-                default -> throw new IllegalStateException(
-                        "The registry declares %s but this build cannot compute it"
-                                .formatted(metric.id().code()));
+                default ->
+                    throw new IllegalStateException("The registry declares %s but this build cannot compute it"
+                            .formatted(metric.id().code()));
             };
         }
     }

@@ -5,10 +5,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.customers.api.ConsentDirectory;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore.ConsentHistoryRow;
@@ -46,13 +44,30 @@ public class ConsentService implements ConsentDirectory {
      *                  the import time instead would misstate the record
      */
     @Transactional
-    public UUID record(UUID tenantId, UUID accountId, UUID brandId, String purpose,
-            String channel, Decision decision, String policyVersion, Source source,
-            String evidenceReference, Instant decidedAt) {
+    public UUID record(
+            UUID tenantId,
+            UUID accountId,
+            UUID brandId,
+            String purpose,
+            String channel,
+            Decision decision,
+            String policyVersion,
+            Source source,
+            String evidenceReference,
+            Instant decidedAt) {
 
         UUID id = UUID.randomUUID();
-        store.insertConsentDecision(id, tenantId, accountId, brandId, purpose, channel,
-                decision.name(), policyVersion, source.name(), evidenceReference,
+        store.insertConsentDecision(
+                id,
+                tenantId,
+                accountId,
+                brandId,
+                purpose,
+                channel,
+                decision.name(),
+                policyVersion,
+                source.name(),
+                evidenceReference,
                 decidedAt == null ? clock.instant() : decidedAt);
         return id;
     }
@@ -65,8 +80,7 @@ public class ConsentService implements ConsentDirectory {
      * are the two states a default-true would merge.
      */
     @Transactional(readOnly = true)
-    public boolean hasConsent(UUID tenantId, UUID accountId, UUID brandId,
-            String purpose, String channel) {
+    public boolean hasConsent(UUID tenantId, UUID accountId, UUID brandId, String purpose, String channel) {
         return store.currentConsent(tenantId, accountId, brandId, purpose, channel)
                 .map(row -> "GRANTED".equals(row.decision()))
                 .orElse(false);
@@ -74,12 +88,16 @@ public class ConsentService implements ConsentDirectory {
 
     /** The current decision with its evidence, for showing a customer or an auditor. */
     @Transactional(readOnly = true)
-    public Optional<CurrentConsent> current(UUID tenantId, UUID accountId, UUID brandId,
-            String purpose, String channel) {
+    public Optional<CurrentConsent> current(
+            UUID tenantId, UUID accountId, UUID brandId, String purpose, String channel) {
         return store.currentConsent(tenantId, accountId, brandId, purpose, channel)
-                .map(row -> new CurrentConsent(purpose, channel,
-                        Decision.valueOf(row.decision()), row.policyVersion(),
-                        row.decidedAt(), Source.valueOf(row.source())));
+                .map(row -> new CurrentConsent(
+                        purpose,
+                        channel,
+                        Decision.valueOf(row.decision()),
+                        row.policyVersion(),
+                        row.decidedAt(),
+                        Source.valueOf(row.source())));
     }
 
     /**
@@ -92,11 +110,10 @@ public class ConsentService implements ConsentDirectory {
      */
     @Override
     @Transactional(readOnly = true)
-    public Optional<ConsentState> consentFor(UUID tenantId, UUID accountId, UUID brandId,
-            String purpose, String channel) {
+    public Optional<ConsentState> consentFor(
+            UUID tenantId, UUID accountId, UUID brandId, String purpose, String channel) {
         return store.currentConsent(tenantId, accountId, brandId, purpose, channel)
-                .map(row -> new ConsentState("GRANTED".equals(row.decision()),
-                        row.policyVersion(), row.decidedAt()));
+                .map(row -> new ConsentState("GRANTED".equals(row.decision()), row.policyVersion(), row.decidedAt()));
     }
 
     /** The full decision history. This is what a subject-access request produces. */
@@ -105,10 +122,24 @@ public class ConsentService implements ConsentDirectory {
         return store.consentHistory(tenantId, accountId);
     }
 
-    public enum Decision { GRANTED, WITHDRAWN }
+    public enum Decision {
+        GRANTED,
+        WITHDRAWN
+    }
 
-    public enum Source { STOREFRONT, SUPPORT_AGENT, IMPORT, MIGRATION, API }
+    public enum Source {
+        STOREFRONT,
+        SUPPORT_AGENT,
+        IMPORT,
+        MIGRATION,
+        API
+    }
 
-    public record CurrentConsent(String purpose, String channel, Decision decision,
-            String policyVersion, Instant decidedAt, Source source) { }
+    public record CurrentConsent(
+            String purpose,
+            String channel,
+            Decision decision,
+            String policyVersion,
+            Instant decidedAt,
+            Source source) {}
 }

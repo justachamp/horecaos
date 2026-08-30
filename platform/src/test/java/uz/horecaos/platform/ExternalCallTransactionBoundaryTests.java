@@ -1,5 +1,8 @@
 package uz.horecaos.platform;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -8,9 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import javax.sql.DataSource;
-
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
@@ -18,8 +19,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -30,19 +31,14 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
-
+import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
-import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
-import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.ObjectStorage;
 import uz.horecaos.platform.media.application.MediaAssetService;
 import uz.horecaos.platform.media.domain.MediaOwner;
@@ -68,8 +64,6 @@ import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStep;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
 import uz.horecaos.platform.tenancy.application.onboarding.OnboardingService;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * No pooled database connection is held across a call to something we do not
@@ -107,8 +101,7 @@ class ExternalCallTransactionBoundaryTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        dataSource = new DriverManagerDataSource(
-                db.jdbcUrl(), db.username(), db.password());
+        dataSource = new DriverManagerDataSource(db.jdbcUrl(), db.username(), db.password());
     }
 
     @AfterAll
@@ -144,8 +137,8 @@ class ExternalCallTransactionBoundaryTests {
         WatchfulStorage storage = context.getBean(WatchfulStorage.class);
         MediaAssetService media = context.getBean(MediaAssetService.class);
 
-        var ticket = media.requestUpload(TENANT, MediaOwner.brand(BRAND), MediaVisibility.PUBLIC,
-                "image/jpeg", 1024, "burger.jpg", null);
+        var ticket = media.requestUpload(
+                TENANT, MediaOwner.brand(BRAND), MediaVisibility.PUBLIC, "image/jpeg", 1024, "burger.jpg", null);
         media.finalizeUpload(TENANT, ticket.assetId());
 
         assertThat(storage.headCalls).isEqualTo(1);
@@ -161,8 +154,7 @@ class ExternalCallTransactionBoundaryTests {
         WatchfulHandler handler = context.getBean(WatchfulHandler.class);
         OnboardingService onboarding = context.getBean(OnboardingService.class);
 
-        UUID runId = onboarding.startRun(TENANT, TEMPLATE, 1, Map.of("ownerEmail", "owner@acme.example"),
-                ADMIN);
+        UUID runId = onboarding.startRun(TENANT, TEMPLATE, 1, Map.of("ownerEmail", "owner@acme.example"), ADMIN);
         onboarding.runNextStep(runId);
 
         assertThat(handler.calls).isEqualTo(1);
@@ -196,20 +188,45 @@ class ExternalCallTransactionBoundaryTests {
         // conditional UPDATE that matches nothing, and what is under test is
         // where the transaction starts, not what it wrote.
         return new PaymentAttempt(
-                UUID.randomUUID(), TENANT, UUID.randomUUID(),
-                PaymentProviderType.CLICK, UUID.randomUUID(),
-                "0123456789abcdef0123456789abcdef", LocalDate.parse("2026-08-24"),
-                null, null, SomAmount.of(45_000, "UZS"), PaymentAttemptStatus.INITIATED,
-                null, null, null, null, null, null, 1, NOW, null);
+                UUID.randomUUID(),
+                TENANT,
+                UUID.randomUUID(),
+                PaymentProviderType.CLICK,
+                UUID.randomUUID(),
+                "0123456789abcdef0123456789abcdef",
+                LocalDate.parse("2026-08-24"),
+                null,
+                null,
+                SomAmount.of(45_000, "UZS"),
+                PaymentAttemptStatus.INITIATED,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                1,
+                NOW,
+                null);
     }
 
     private static ProviderBinding aBinding() {
         return new ProviderBinding(
-                UUID.randomUUID(), TENANT, UUID.randomUUID(), PaymentProviderType.CLICK,
-                UUID.randomUUID(), UUID.randomUUID(), "service-1", "user-1", "merchant-1",
+                UUID.randomUUID(),
+                TENANT,
+                UUID.randomUUID(),
+                PaymentProviderType.CLICK,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "service-1",
+                "user-1",
+                "merchant-1",
                 SecretReference.parse("horecaos:test:provider_payment:tenant:click-binding"),
-                "test-binding", true, false,
-                LocalDate.parse("2026-01-01"), null);
+                "test-binding",
+                true,
+                false,
+                LocalDate.parse("2026-01-01"),
+                null);
     }
 
     private void seedTenantAndTemplate() {
@@ -275,10 +292,19 @@ class ExternalCallTransactionBoundaryTests {
         }
 
         @Bean
-        MediaAssetService mediaAssetService(JdbcClient client, WatchfulStorage storage,
-                TransactionTemplate transactions, ApplicationEventPublisher events, Clock clock) {
-            return new MediaAssetService(new JdbcMediaAssetStore(client),
-                    new JdbcDerivativeJobStore(client), storage, transactions, events, clock,
+        MediaAssetService mediaAssetService(
+                JdbcClient client,
+                WatchfulStorage storage,
+                TransactionTemplate transactions,
+                ApplicationEventPublisher events,
+                Clock clock) {
+            return new MediaAssetService(
+                    new JdbcMediaAssetStore(client),
+                    new JdbcDerivativeJobStore(client),
+                    storage,
+                    transactions,
+                    events,
+                    clock,
                     "test-bucket");
         }
 
@@ -298,11 +324,17 @@ class ExternalCallTransactionBoundaryTests {
         }
 
         @Bean
-        OnboardingService onboardingService(JdbcClient client, TransactionTemplate transactions,
-                WatchfulHandler handler, AuditRecorder recorder, ApprovalService approvals,
-                ApplicationEventPublisher events, ObjectMapper mapper, Clock clock) {
-            return new OnboardingService(client, transactions, List.of(handler), recorder, approvals,
-                    events, mapper, clock);
+        OnboardingService onboardingService(
+                JdbcClient client,
+                TransactionTemplate transactions,
+                WatchfulHandler handler,
+                AuditRecorder recorder,
+                ApprovalService approvals,
+                ApplicationEventPublisher events,
+                ObjectMapper mapper,
+                Clock clock) {
+            return new OnboardingService(
+                    client, transactions, List.of(handler), recorder, approvals, events, mapper, clock);
         }
 
         @Bean
@@ -311,8 +343,8 @@ class ExternalCallTransactionBoundaryTests {
         }
 
         @Bean
-        PaymentAttemptService paymentAttemptService(JdbcClient client, TransactionTemplate transactions,
-                WatchfulProvider provider, Clock clock) {
+        PaymentAttemptService paymentAttemptService(
+                JdbcClient client, TransactionTemplate transactions, WatchfulProvider provider, Clock clock) {
             return new PaymentAttemptService(
                     new JdbcPaymentIntentStore(client),
                     new JdbcPaymentAttemptStore(client),
@@ -332,10 +364,12 @@ class ExternalCallTransactionBoundaryTests {
         private boolean insideTransaction;
 
         @Override
-        public PresignedUpload presignUpload(String bucket, String key, String contentType,
-                long sizeBytes, java.time.Duration window) {
-            return new PresignedUpload(java.net.URI.create("http://example.invalid/" + key),
-                    Map.of("Content-Type", contentType), NOW.plus(window));
+        public PresignedUpload presignUpload(
+                String bucket, String key, String contentType, long sizeBytes, java.time.Duration window) {
+            return new PresignedUpload(
+                    java.net.URI.create("http://example.invalid/" + key),
+                    Map.of("Content-Type", contentType),
+                    NOW.plus(window));
         }
 
         @Override
@@ -404,8 +438,8 @@ class ExternalCallTransactionBoundaryTests {
         }
 
         @Override
-        public ProviderInvoice createInvoice(PaymentAttempt attempt, ProviderBinding binding,
-                PresentationRequest request) {
+        public ProviderInvoice createInvoice(
+                PaymentAttempt attempt, ProviderBinding binding, PresentationRequest request) {
             calls++;
             insideTransaction = TransactionSynchronizationManager.isActualTransactionActive();
             return ProviderInvoice.link("https://my.click.uz/pay/test", NOW.plusSeconds(900));
@@ -426,8 +460,8 @@ class ExternalCallTransactionBoundaryTests {
     static final class NoBindings implements PaymentBindingResolver {
 
         @Override
-        public Optional<ProviderBinding> resolve(UUID tenantId, UUID legalEntityId,
-                PaymentProviderType providerType, LocalDate businessDate) {
+        public Optional<ProviderBinding> resolve(
+                UUID tenantId, UUID legalEntityId, PaymentProviderType providerType, LocalDate businessDate) {
             return Optional.empty();
         }
 

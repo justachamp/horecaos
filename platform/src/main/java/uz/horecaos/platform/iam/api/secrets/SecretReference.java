@@ -38,8 +38,8 @@ public record SecretReference(String environment, SecretCategory category, Strin
 
     @Override
     public String toString() {
-        return String.join(SEPARATOR,
-                PREFIX, environment, category.name().toLowerCase(Locale.ROOT), ownerScope, opaqueId);
+        return String.join(
+                SEPARATOR, PREFIX, environment, category.name().toLowerCase(Locale.ROOT), ownerScope, opaqueId);
     }
 
     private static String requireSegment(String value, String name) {
@@ -49,8 +49,7 @@ public record SecretReference(String environment, SecretCategory category, Strin
             throw new IllegalArgumentException("A secret reference " + name + " must not be blank");
         }
         if (stripped.contains(SEPARATOR)) {
-            throw new IllegalArgumentException(
-                    "A secret reference " + name + " must not contain the separator");
+            throw new IllegalArgumentException("A secret reference " + name + " must not contain the separator");
         }
         return stripped;
     }

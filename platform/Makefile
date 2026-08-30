@@ -5,7 +5,7 @@ MVN := ./mvnw
 
 .DEFAULT_GOAL := help
 
-.PHONY: help verify test arch build lint run up down logs eval fmt-check hooks-test bands-test doc-links openapi-client-check openapi-baseline ci
+.PHONY: help verify test arch build lint format run up down logs eval fmt-check hooks-test bands-test doc-links openapi-client-check openapi-baseline ci
 
 help: ## List targets
 	@grep -hE '^[a-z][a-zA-Z0-9_-]*:.*?## ' $(MAKEFILE_LIST) \
@@ -22,6 +22,9 @@ arch: ## Spring Modulith boundary and architecture tests
 
 build: ## Compile and package without running tests
 	$(MVN) -DskipTests package
+
+format: ## Reformat Java sources (ADR 0054)
+	$(MVN) spotless:apply
 
 lint: fmt-check doc-links hooks-test bands-test ## Static checks an agent must pass before review
 

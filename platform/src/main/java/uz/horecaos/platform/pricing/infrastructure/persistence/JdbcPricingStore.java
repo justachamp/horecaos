@@ -9,12 +9,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
 import uz.horecaos.platform.pricing.domain.Quote;
 
@@ -59,8 +56,8 @@ public class JdbcPricingStore {
      * silently beat it would make an aggregator's agreed price plane depend on
      * which branch fulfilled the order.
      */
-    public Optional<PriceBookRow> resolvePriceBook(UUID tenantId, UUID brandId, UUID locationId,
-            UUID pricingChannelId, Instant at) {
+    public Optional<PriceBookRow> resolvePriceBook(
+            UUID tenantId, UUID brandId, UUID locationId, UUID pricingChannelId, Instant at) {
         return jdbc.sql("""
                 SELECT pb.id, pb.currency, pb.version, pb.priority
                 FROM pricing.price_books pb
@@ -79,19 +76,17 @@ public class JdbcPricingStore {
                     a.priority DESC, pb.priority DESC, pb.id
                 LIMIT 1
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("locationId", locationId)
                 .param("channelId", pricingChannelId)
                 .param("at", OffsetDateTime.ofInstant(at, ZoneOffset.UTC))
                 .query((row, number) -> new PriceBookRow(
-                        row.getObject("id", UUID.class),
-                        row.getString("currency"),
-                        row.getInt("version")))
+                        row.getObject("id", UUID.class), row.getString("currency"), row.getInt("version")))
                 .optional();
     }
 
-    public Optional<TaxProfileRow> resolveTaxProfile(UUID tenantId, UUID brandId,
-            String jurisdictionCode, Instant at) {
+    public Optional<TaxProfileRow> resolveTaxProfile(UUID tenantId, UUID brandId, String jurisdictionCode, Instant at) {
         return jdbc.sql("""
                 SELECT id, mode, rate_basis_points, version
                 FROM pricing.tax_profiles
@@ -101,7 +96,8 @@ public class JdbcPricingStore {
                 ORDER BY valid_from DESC, id
                 LIMIT 1
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("jurisdiction", jurisdictionCode)
                 .param("at", OffsetDateTime.ofInstant(at, ZoneOffset.UTC))
                 .query((row, number) -> new TaxProfileRow(
@@ -113,8 +109,7 @@ public class JdbcPricingStore {
     }
 
     /** Current amounts for a set of priceables, in one round trip. */
-    public Map<UUID, Long> pricesFor(UUID priceBookId, String priceableType,
-            Set<UUID> priceableIds, Instant at) {
+    public Map<UUID, Long> pricesFor(UUID priceBookId, String priceableType, Set<UUID> priceableIds, Instant at) {
         if (priceableIds.isEmpty()) {
             return Map.of();
         }
@@ -125,11 +120,12 @@ public class JdbcPricingStore {
                   AND priceable_id = ANY(:ids)
                   AND valid_from <= :at AND (valid_until IS NULL OR valid_until > :at)
                 """)
-                .param("priceBookId", priceBookId).param("type", priceableType)
+                .param("priceBookId", priceBookId)
+                .param("type", priceableType)
                 .param("ids", priceableIds.toArray(UUID[]::new))
                 .param("at", OffsetDateTime.ofInstant(at, ZoneOffset.UTC))
-                .query((row, number) -> Map.entry(
-                        row.getObject("priceable_id", UUID.class), row.getLong("amount_minor")))
+                .query((row, number) ->
+                        Map.entry(row.getObject("priceable_id", UUID.class), row.getLong("amount_minor")))
                 .list()
                 .forEach(entry -> prices.put(entry.getKey(), entry.getValue()));
         return prices;
@@ -149,7 +145,8 @@ public class JdbcPricingStore {
                   AND pb.status = 'ACTIVE'
                   AND p.valid_from <= :at AND (p.valid_until IS NULL OR p.valid_until > :at)
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("ids", variantIds.toArray(UUID[]::new))
                 .param("at", OffsetDateTime.ofInstant(at, ZoneOffset.UTC))
                 .query(UUID.class)
@@ -169,15 +166,20 @@ public class JdbcPricingStore {
                     :subtotal, :tax, :fee, :discount, :total,
                     CAST(:document AS jsonb), :expiresAt, :idempotencyKey, :createdAt)
                 """)
-                .param("id", quote.quoteId()).param("tenantId", quote.tenantId())
-                .param("brandId", quote.brandId()).param("locationId", quote.locationId())
+                .param("id", quote.quoteId())
+                .param("tenantId", quote.tenantId())
+                .param("brandId", quote.brandId())
+                .param("locationId", quote.locationId())
                 .param("customerId", quote.customerAccountId())
-                .param("currency", quote.currency()).param("status", quote.status().name())
+                .param("currency", quote.currency())
+                .param("status", quote.status().name())
                 .param("publicationId", quote.catalogPublicationId())
                 .param("calculationVersion", quote.calculationVersion())
                 .param("contextHash", quote.contextHash())
-                .param("subtotal", quote.subtotal().minor()).param("tax", quote.tax().minor())
-                .param("fee", quote.fees().minor()).param("discount", quote.discount().minor())
+                .param("subtotal", quote.subtotal().minor())
+                .param("tax", quote.tax().minor())
+                .param("fee", quote.fees().minor())
+                .param("discount", quote.discount().minor())
                 .param("total", quote.total().minor())
                 .param("document", objectMapper.writeValueAsString(calculationDocument))
                 .param("expiresAt", OffsetDateTime.ofInstant(quote.expiresAt(), ZoneOffset.UTC))
@@ -208,9 +210,7 @@ public class JdbcPricingStore {
                         final_amount_minor, tax_amount_minor)
                     VALUES (:quoteId, :lineId, :tenantId, :lineType, :variantId, :quantity,
                         :description, :unit, :base, :finalAmount, :tax)
-                    """)
-                    .params(lineParams)
-                    .update();
+                    """).params(lineParams).update();
         }
 
         for (Quote.Adjustment adjustment : quote.adjustments()) {
@@ -221,8 +221,10 @@ public class JdbcPricingStore {
                     VALUES (:quoteId, :sequence, :tenantId, :lineId, :type,
                         :sourceType, :sourceId, :sourceVersion, :amount, :code)
                     """)
-                    .param("quoteId", quote.quoteId()).param("sequence", adjustment.sequence())
-                    .param("tenantId", quote.tenantId()).param("lineId", adjustment.lineId())
+                    .param("quoteId", quote.quoteId())
+                    .param("sequence", adjustment.sequence())
+                    .param("tenantId", quote.tenantId())
+                    .param("lineId", adjustment.lineId())
                     .param("type", adjustment.type().name())
                     .param("sourceType", adjustment.sourceType())
                     .param("sourceId", adjustment.sourceId())
@@ -240,7 +242,8 @@ public class JdbcPricingStore {
                 FROM pricing.quotes
                 WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("id", quoteId)
+                .param("tenantId", tenantId)
+                .param("id", quoteId)
                 .query((row, number) -> new QuoteRow(
                         row.getObject("id", UUID.class),
                         Quote.Status.valueOf(row.getString("status")),
@@ -269,7 +272,8 @@ public class JdbcPricingStore {
                 FROM pricing.quotes
                 WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("id", quoteId)
+                .param("tenantId", tenantId)
+                .param("id", quoteId)
                 .query((row, number) -> new QuoteSnapshot(
                         row.getObject("id", UUID.class),
                         row.getObject("tenant_id", UUID.class),
@@ -286,7 +290,8 @@ public class JdbcPricingStore {
                         row.getLong("discount_minor"),
                         row.getLong("total_minor"),
                         row.getObject("expires_at", OffsetDateTime.class).toInstant(),
-                        List.of(), List.of()))
+                        List.of(),
+                        List.of()))
                 .optional();
 
         if (header.isEmpty()) {
@@ -307,7 +312,8 @@ public class JdbcPricingStore {
                 WHERE quote_id = :quoteId AND tenant_id = :tenantId AND line_type = 'ITEM'
                 ORDER BY line_id
                 """)
-                .param("quoteId", quoteId).param("tenantId", tenantId)
+                .param("quoteId", quoteId)
+                .param("tenantId", tenantId)
                 .query((row, number) -> new QuoteSnapshot.Line(
                         row.getString("line_id"),
                         row.getObject("source_variant_id", UUID.class),
@@ -326,7 +332,8 @@ public class JdbcPricingStore {
                 WHERE quote_id = :quoteId AND tenant_id = :tenantId
                 ORDER BY sequence
                 """)
-                .param("quoteId", quoteId).param("tenantId", tenantId)
+                .param("quoteId", quoteId)
+                .param("tenantId", tenantId)
                 .query((row, number) -> {
                     // Read the nullable integer through getObject rather than
                     // getInt plus wasNull: wasNull refers to the most recent
@@ -347,11 +354,23 @@ public class JdbcPricingStore {
 
         QuoteSnapshot found = header.get();
         return Optional.of(new QuoteSnapshot(
-                found.quoteId(), found.tenantId(), found.brandId(), found.locationId(),
-                found.customerAccountId(), found.currency(), found.status(),
-                found.catalogPublicationId(), found.contextHash(), found.subtotalMinor(),
-                found.taxMinor(), found.feeMinor(), found.discountMinor(), found.totalMinor(),
-                found.expiresAt(), lines, adjustments));
+                found.quoteId(),
+                found.tenantId(),
+                found.brandId(),
+                found.locationId(),
+                found.customerAccountId(),
+                found.currency(),
+                found.status(),
+                found.catalogPublicationId(),
+                found.contextHash(),
+                found.subtotalMinor(),
+                found.taxMinor(),
+                found.feeMinor(),
+                found.discountMinor(),
+                found.totalMinor(),
+                found.expiresAt(),
+                lines,
+                adjustments));
     }
 
     public Optional<UUID> findByIdempotencyKey(UUID tenantId, String idempotencyKey) {
@@ -359,7 +378,8 @@ public class JdbcPricingStore {
                 SELECT id FROM pricing.quotes
                 WHERE tenant_id = :tenantId AND idempotency_key = :key
                 """)
-                .param("tenantId", tenantId).param("key", idempotencyKey)
+                .param("tenantId", tenantId)
+                .param("key", idempotencyKey)
                 .query(UUID.class)
                 .optional();
     }
@@ -378,9 +398,11 @@ public class JdbcPricingStore {
                 WHERE tenant_id = :tenantId AND id = :id
                   AND status = 'ACTIVE' AND expires_at > :now
                 """)
-                .param("tenantId", tenantId).param("id", quoteId)
-                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", quoteId)
+                        .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                        .update()
+                == 1;
     }
 
     /** Sweeps quotes past their TTL so a stale one cannot be accepted later. */
@@ -403,8 +425,16 @@ public class JdbcPricingStore {
      * menu, price it wrongly, fix it, and none of it is visible until somebody
      * with {@code pricing.activate} says so.
      */
-    public void insertPriceBook(UUID id, UUID tenantId, UUID brandId, String name, String currency,
-            Instant validFrom, Instant validUntil, int priority, Instant now) {
+    public void insertPriceBook(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            String name,
+            String currency,
+            Instant validFrom,
+            Instant validUntil,
+            int priority,
+            Instant now) {
         jdbc.sql("""
                 INSERT INTO pricing.price_books (
                     id, tenant_id, brand_id, name, currency, status,
@@ -412,24 +442,27 @@ public class JdbcPricingStore {
                 VALUES (:id, :tenantId, :brandId, :name, :currency, 'DRAFT',
                     :validFrom, :validUntil, :priority, 1, :now, :now)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("brandId", brandId)
-                .param("name", name).param("currency", currency)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("name", name)
+                .param("currency", currency)
                 .param("validFrom", OffsetDateTime.ofInstant(validFrom, ZoneOffset.UTC))
-                .param("validUntil", validUntil == null
-                        ? null : OffsetDateTime.ofInstant(validUntil, ZoneOffset.UTC))
+                .param("validUntil", validUntil == null ? null : OffsetDateTime.ofInstant(validUntil, ZoneOffset.UTC))
                 .param("priority", priority)
                 .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
                 .update();
     }
 
-    public Optional<PriceBookHeader> findPriceBookHeader(UUID tenantId, UUID brandId,
-            UUID priceBookId) {
+    public Optional<PriceBookHeader> findPriceBookHeader(UUID tenantId, UUID brandId, UUID priceBookId) {
         return jdbc.sql("""
                 SELECT id, name, currency, status, valid_from, valid_until, priority, version
                 FROM pricing.price_books
                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId).param("id", priceBookId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("id", priceBookId)
                 .query((row, number) -> new PriceBookHeader(
                         row.getObject("id", UUID.class),
                         row.getString("name"),
@@ -438,7 +471,8 @@ public class JdbcPricingStore {
                         row.getObject("valid_from", OffsetDateTime.class).toInstant(),
                         row.getObject("valid_until", OffsetDateTime.class) == null
                                 ? null
-                                : row.getObject("valid_until", OffsetDateTime.class).toInstant(),
+                                : row.getObject("valid_until", OffsetDateTime.class)
+                                        .toInstant(),
                         row.getInt("priority"),
                         row.getInt("version")))
                 .optional();
@@ -453,18 +487,20 @@ public class JdbcPricingStore {
      * a write would let both proceed, and the losing one would bump the version
      * of a book somebody else had already put in front of customers.
      */
-    public boolean activatePriceBook(UUID tenantId, UUID brandId, UUID priceBookId,
-            int expectedVersion, Instant now) {
+    public boolean activatePriceBook(UUID tenantId, UUID brandId, UUID priceBookId, int expectedVersion, Instant now) {
         return jdbc.sql("""
                 UPDATE pricing.price_books
                 SET status = 'ACTIVE', version = version + 1, updated_at = :now
                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :id
                   AND status = 'DRAFT' AND version = :expectedVersion
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId).param("id", priceBookId)
-                .param("expectedVersion", expectedVersion)
-                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("brandId", brandId)
+                        .param("id", priceBookId)
+                        .param("expectedVersion", expectedVersion)
+                        .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                        .update()
+                == 1;
     }
 
     /**
@@ -482,7 +518,9 @@ public class JdbcPricingStore {
                 SET version = version + 1, updated_at = :now
                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId).param("id", priceBookId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("id", priceBookId)
                 .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
                 .update();
     }
@@ -497,8 +535,15 @@ public class JdbcPricingStore {
      * the one live price per priceable, which {@code ux_price_current} does state
      * and which is therefore not re-checked here.
      */
-    public void upsertAssignment(UUID tenantId, UUID brandId, UUID priceBookId, String scopeType,
-            UUID scopeId, int priority, Instant validFrom, Instant validUntil) {
+    public void upsertAssignment(
+            UUID tenantId,
+            UUID brandId,
+            UUID priceBookId,
+            String scopeType,
+            UUID scopeId,
+            int priority,
+            Instant validFrom,
+            Instant validUntil) {
         // IS NOT DISTINCT FROM, because a BRAND assignment's scope_id is null and
         // `scope_id = null` matches nothing — which would silently insert a second
         // brand assignment on every repeat.
@@ -509,12 +554,14 @@ public class JdbcPricingStore {
                   AND price_book_id = :priceBookId AND scope_type = :scopeType
                   AND scope_id IS NOT DISTINCT FROM :scopeId
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
-                .param("priceBookId", priceBookId).param("scopeType", scopeType)
-                .param("scopeId", scopeId).param("priority", priority)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("priceBookId", priceBookId)
+                .param("scopeType", scopeType)
+                .param("scopeId", scopeId)
+                .param("priority", priority)
                 .param("validFrom", OffsetDateTime.ofInstant(validFrom, ZoneOffset.UTC))
-                .param("validUntil", validUntil == null
-                        ? null : OffsetDateTime.ofInstant(validUntil, ZoneOffset.UTC))
+                .param("validUntil", validUntil == null ? null : OffsetDateTime.ofInstant(validUntil, ZoneOffset.UTC))
                 .update();
 
         if (updated > 0) {
@@ -527,12 +574,15 @@ public class JdbcPricingStore {
                 VALUES (:id, :tenantId, :brandId, :priceBookId, :scopeType, :scopeId,
                     :validFrom, :validUntil, :priority)
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", tenantId).param("brandId", brandId)
-                .param("priceBookId", priceBookId).param("scopeType", scopeType)
-                .param("scopeId", scopeId).param("priority", priority)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("priceBookId", priceBookId)
+                .param("scopeType", scopeType)
+                .param("scopeId", scopeId)
+                .param("priority", priority)
                 .param("validFrom", OffsetDateTime.ofInstant(validFrom, ZoneOffset.UTC))
-                .param("validUntil", validUntil == null
-                        ? null : OffsetDateTime.ofInstant(validUntil, ZoneOffset.UTC))
+                .param("validUntil", validUntil == null ? null : OffsetDateTime.ofInstant(validUntil, ZoneOffset.UTC))
                 .update();
     }
 
@@ -549,8 +599,14 @@ public class JdbcPricingStore {
      * violate {@code ck_price_window}, which requires the close to come strictly
      * after the open.
      */
-    public void setPrice(UUID tenantId, UUID brandId, UUID priceBookId, String priceableType,
-            UUID priceableId, long amountMinor, Instant now) {
+    public void setPrice(
+            UUID tenantId,
+            UUID brandId,
+            UUID priceBookId,
+            String priceableType,
+            UUID priceableId,
+            long amountMinor,
+            Instant now) {
         OffsetDateTime at = OffsetDateTime.ofInstant(now, ZoneOffset.UTC);
 
         int amended = jdbc.sql("""
@@ -561,9 +617,12 @@ public class JdbcPricingStore {
                   AND priceable_id = :priceableId
                   AND valid_until IS NULL AND valid_from >= :at
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
-                .param("priceBookId", priceBookId).param("type", priceableType)
-                .param("priceableId", priceableId).param("amount", amountMinor)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("priceBookId", priceBookId)
+                .param("type", priceableType)
+                .param("priceableId", priceableId)
+                .param("amount", amountMinor)
                 .param("at", at)
                 .update();
 
@@ -579,9 +638,12 @@ public class JdbcPricingStore {
                   AND priceable_id = :priceableId
                   AND valid_until IS NULL AND valid_from < :at
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
-                .param("priceBookId", priceBookId).param("type", priceableType)
-                .param("priceableId", priceableId).param("at", at)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("priceBookId", priceBookId)
+                .param("type", priceableType)
+                .param("priceableId", priceableId)
+                .param("at", at)
                 .update();
 
         jdbc.sql("""
@@ -591,9 +653,13 @@ public class JdbcPricingStore {
                 VALUES (:id, :tenantId, :brandId, :priceBookId, :type, :priceableId,
                     :amount, :at, 1)
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", tenantId).param("brandId", brandId)
-                .param("priceBookId", priceBookId).param("type", priceableType)
-                .param("priceableId", priceableId).param("amount", amountMinor)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("priceBookId", priceBookId)
+                .param("type", priceableType)
+                .param("priceableId", priceableId)
+                .param("amount", amountMinor)
                 .param("at", at)
                 .update();
     }
@@ -605,7 +671,8 @@ public class JdbcPricingStore {
                 WHERE tenant_id = :tenantId AND brand_id = :brandId
                   AND price_book_id = :priceBookId AND valid_until IS NULL
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("priceBookId", priceBookId)
                 .query(Long.class)
                 .single();
@@ -647,9 +714,12 @@ public class JdbcPricingStore {
                   AND GREATEST(other.valid_from, oa.valid_from)
                         < COALESCE(LEAST(mine.valid_until, ma.valid_until), 'infinity'::timestamptz)
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId).param("id", priceBookId)
-                .query(Long.class)
-                .single() > 0;
+                        .param("tenantId", tenantId)
+                        .param("brandId", brandId)
+                        .param("id", priceBookId)
+                        .query(Long.class)
+                        .single()
+                > 0;
     }
 
     /**
@@ -664,8 +734,8 @@ public class JdbcPricingStore {
      * nothing rather than leaving two open profiles for the resolver to pick
      * between.
      */
-    public Optional<UUID> supersedeTaxProfile(UUID tenantId, UUID brandId, String jurisdictionCode,
-            String mode, int rateBasisPoints, Instant now) {
+    public Optional<UUID> supersedeTaxProfile(
+            UUID tenantId, UUID brandId, String jurisdictionCode, String mode, int rateBasisPoints, Instant now) {
         OffsetDateTime at = OffsetDateTime.ofInstant(now, ZoneOffset.UTC);
 
         int amended = jdbc.sql("""
@@ -675,9 +745,12 @@ public class JdbcPricingStore {
                   AND jurisdiction_code = :jurisdiction
                   AND valid_until IS NULL AND valid_from >= :at
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
-                .param("jurisdiction", jurisdictionCode).param("mode", mode)
-                .param("rate", rateBasisPoints).param("at", at)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("jurisdiction", jurisdictionCode)
+                .param("mode", mode)
+                .param("rate", rateBasisPoints)
+                .param("at", at)
                 .update();
 
         if (amended > 0) {
@@ -691,8 +764,10 @@ public class JdbcPricingStore {
                   AND jurisdiction_code = :jurisdiction
                   AND valid_until IS NULL AND valid_from < :at
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
-                .param("jurisdiction", jurisdictionCode).param("at", at)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("jurisdiction", jurisdictionCode)
+                .param("at", at)
                 .update();
 
         UUID id = UUID.randomUUID();
@@ -706,16 +781,19 @@ public class JdbcPricingStore {
                     WHERE tenant_id = :tenantId AND brand_id = :brandId
                       AND jurisdiction_code = :jurisdiction AND valid_until IS NULL)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("brandId", brandId)
-                .param("jurisdiction", jurisdictionCode).param("mode", mode)
-                .param("rate", rateBasisPoints).param("at", at)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("jurisdiction", jurisdictionCode)
+                .param("mode", mode)
+                .param("rate", rateBasisPoints)
+                .param("at", at)
                 .update();
 
         return inserted == 1 ? Optional.of(id) : Optional.empty();
     }
 
-    public Optional<TaxProfileHeader> findTaxProfileHeader(UUID tenantId, UUID brandId,
-            String jurisdictionCode) {
+    public Optional<TaxProfileHeader> findTaxProfileHeader(UUID tenantId, UUID brandId, String jurisdictionCode) {
         return jdbc.sql("""
                 SELECT id, jurisdiction_code, mode, rate_basis_points, valid_from, version
                 FROM pricing.tax_profiles
@@ -724,7 +802,8 @@ public class JdbcPricingStore {
                 ORDER BY valid_from DESC, id
                 LIMIT 1
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("jurisdiction", jurisdictionCode)
                 .query((row, number) -> new TaxProfileHeader(
                         row.getObject("id", UUID.class),
@@ -737,20 +816,33 @@ public class JdbcPricingStore {
     }
 
     private Optional<UUID> findTaxProfileId(UUID tenantId, UUID brandId, String jurisdictionCode) {
-        return findTaxProfileHeader(tenantId, brandId, jurisdictionCode)
-                .map(TaxProfileHeader::id);
+        return findTaxProfileHeader(tenantId, brandId, jurisdictionCode).map(TaxProfileHeader::id);
     }
 
-    public record PriceBookRow(UUID id, String currency, int version) { }
+    public record PriceBookRow(UUID id, String currency, int version) {}
 
-    public record TaxProfileRow(UUID id, String mode, int rateBasisPoints, int version) { }
+    public record TaxProfileRow(UUID id, String mode, int rateBasisPoints, int version) {}
 
-    public record PriceBookHeader(UUID id, String name, String currency, String status,
-            Instant validFrom, Instant validUntil, int priority, int version) { }
+    public record PriceBookHeader(
+            UUID id,
+            String name,
+            String currency,
+            String status,
+            Instant validFrom,
+            Instant validUntil,
+            int priority,
+            int version) {}
 
-    public record TaxProfileHeader(UUID id, String jurisdictionCode, String mode,
-            int rateBasisPoints, Instant validFrom, int version) { }
+    public record TaxProfileHeader(
+            UUID id, String jurisdictionCode, String mode, int rateBasisPoints, Instant validFrom, int version) {}
 
-    public record QuoteRow(UUID id, Quote.Status status, String contextHash, long totalMinor,
-            String currency, Instant expiresAt, UUID catalogPublicationId, int calculationVersion) { }
+    public record QuoteRow(
+            UUID id,
+            Quote.Status status,
+            String contextHash,
+            long totalMinor,
+            String currency,
+            Instant expiresAt,
+            UUID catalogPublicationId,
+            int calculationVersion) {}
 }

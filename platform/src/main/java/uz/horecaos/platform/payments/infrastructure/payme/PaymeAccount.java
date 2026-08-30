@@ -2,7 +2,6 @@ package uz.horecaos.platform.payments.infrastructure.payme;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -35,8 +34,7 @@ public final class PaymeAccount {
     /** {@code merchant_trans_id} is a dashless UUID, and nothing else is accepted. */
     private static final int REFERENCE_LENGTH = 32;
 
-    private PaymeAccount() {
-    }
+    private PaymeAccount() {}
 
     /**
      * Reads the order reference out of {@code params.account}.

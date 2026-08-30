@@ -11,12 +11,8 @@ import java.util.UUID;
  * carries the tenant's new status explicitly instead of leaving a consumer to
  * infer it from the event's name.
  */
-public record TenantActivated(
-        UUID eventId,
-        TenantId tenantId,
-        UUID runId,
-        String status,
-        Instant occurredAt) implements TenancyEvent {
+public record TenantActivated(UUID eventId, TenantId tenantId, UUID runId, String status, Instant occurredAt)
+        implements TenancyEvent {
 
     public TenantActivated {
         Objects.requireNonNull(eventId, "Event ID is required");
@@ -51,5 +47,5 @@ public record TenantActivated(
         return new Payload(tenantId.value(), runId, status);
     }
 
-    public record Payload(UUID tenantId, UUID runId, String status) { }
+    public record Payload(UUID tenantId, UUID runId, String status) {}
 }

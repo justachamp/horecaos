@@ -20,8 +20,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  */
 final class PendingCartFulfillmentSchema {
 
-    private PendingCartFulfillmentSchema() {
-    }
+    private PendingCartFulfillmentSchema() {}
 
     static void apply(JdbcClient jdbc) {
         jdbc.sql("""

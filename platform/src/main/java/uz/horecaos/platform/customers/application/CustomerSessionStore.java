@@ -78,8 +78,7 @@ public interface CustomerSessionStore {
             UUID identityPartitionBrandId,
             String tokenHash,
             Instant issuedAt,
-            Instant expiresAt) {
-    }
+            Instant expiresAt) {}
 
     /**
      * A session row as stored, including how it ended if it has.
@@ -95,6 +94,5 @@ public interface CustomerSessionStore {
             UUID identityPartitionBrandId,
             Instant issuedAt,
             Instant expiresAt,
-            Instant revokedAt) {
-    }
+            Instant revokedAt) {}
 }

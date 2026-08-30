@@ -24,8 +24,12 @@ public class PaymeRpcException extends RuntimeException {
     private final String data;
 
     public PaymeRpcException(int code, PaymeMessage localised, String data) {
-        super(Objects.requireNonNull(localised, "A localised message is required").en(),
-                null, false, false);
+        super(
+                Objects.requireNonNull(localised, "A localised message is required")
+                        .en(),
+                null,
+                false,
+                false);
         this.code = code;
         this.localised = localised;
         this.data = data;
@@ -35,8 +39,7 @@ public class PaymeRpcException extends RuntimeException {
             // must name the offending account sub-field. An account error without
             // it is a response Payme's validator is entitled to reject, and the
             // payer sees a blank field name in the checkout.
-            throw new IllegalArgumentException(
-                    "An account error must name the offending account field in data");
+            throw new IllegalArgumentException("An account error must name the offending account field in data");
         }
     }
 

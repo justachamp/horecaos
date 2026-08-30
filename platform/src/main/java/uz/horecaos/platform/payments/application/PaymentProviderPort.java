@@ -71,8 +71,7 @@ public interface PaymentProviderPort {
      *                                       marks the attempt uncertain and the
      *                                       resolver settles it
      */
-    ProviderInvoice createInvoice(PaymentAttempt attempt, ProviderBinding binding,
-            PresentationRequest request);
+    ProviderInvoice createInvoice(PaymentAttempt attempt, ProviderBinding binding, PresentationRequest request);
 
     /**
      * Discovers what actually happened to an attempt whose outcome is unknown.

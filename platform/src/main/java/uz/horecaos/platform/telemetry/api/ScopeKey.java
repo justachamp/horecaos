@@ -2,7 +2,6 @@ package uz.horecaos.platform.telemetry.api;
 
 import java.util.Objects;
 import java.util.UUID;
-
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 
@@ -66,7 +65,8 @@ public record ScopeKey(ScopeType type, UUID id) {
             throw new IllegalArgumentException("Unknown scope type in \"%s\"".formatted(value));
         }
         try {
-            return new ScopeKey(type, UUID.fromString(value.substring(separator + 1).strip()));
+            return new ScopeKey(
+                    type, UUID.fromString(value.substring(separator + 1).strip()));
         } catch (IllegalArgumentException malformed) {
             throw new IllegalArgumentException("Malformed scope identifier in \"%s\"".formatted(value));
         }
@@ -100,8 +100,7 @@ public record ScopeKey(ScopeType type, UUID id) {
 
     private void requireSame(UUID fromPath, String level) {
         if (!id.equals(fromPath)) {
-            throw new IllegalArgumentException(
-                    "Scope key names a %s the stream was not opened at".formatted(level));
+            throw new IllegalArgumentException("Scope key names a %s the stream was not opened at".formatted(level));
         }
     }
 }

@@ -4,13 +4,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.integration.api.provider.BindingRef;
 
 /**
@@ -29,7 +26,7 @@ import uz.horecaos.platform.integration.api.provider.BindingRef;
 @Component
 public class JdbcPosBindingConfiguration {
 
-    private static final TypeReference<Map<String, Object>> JSON_OBJECT = new TypeReference<>() { };
+    private static final TypeReference<Map<String, Object>> JSON_OBJECT = new TypeReference<>() {};
 
     private final JdbcClient jdbc;
     private final ObjectMapper objectMapper;
@@ -50,9 +47,7 @@ public class JdbcPosBindingConfiguration {
                 """)
                 .param("tenantId", binding.tenantId())
                 .param("bindingId", binding.bindingId())
-                .query((row, number) -> merge(
-                        row.getString("installation_config"),
-                        row.getString("binding_config")))
+                .query((row, number) -> merge(row.getString("installation_config"), row.getString("binding_config")))
                 .optional();
     }
 

@@ -1,15 +1,12 @@
 package uz.horecaos.platform.integration.camel.payment;
 
-import java.time.Clock;
-import java.time.Duration;
-
-import org.springframework.stereotype.Component;
-
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.micrometer.core.instrument.MeterRegistry;
-
+import java.time.Clock;
+import java.time.Duration;
+import org.springframework.stereotype.Component;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.integration.camel.common.ProviderCircuitMetrics;
 
@@ -66,8 +63,8 @@ public class PaymentCircuitBreakers {
                 .waitDurationInOpenState(Duration.ofSeconds(30))
                 .permittedNumberOfCallsInHalfOpenState(3)
                 .automaticTransitionFromOpenToHalfOpenEnabled(true)
-                .recordException(failure -> failure instanceof PaymentCallFailed call
-                        && countsAsFailure(call.outcome()))
+                .recordException(
+                        failure -> failure instanceof PaymentCallFailed call && countsAsFailure(call.outcome()))
                 .build());
         // ADR 0023 alerts on a payment circuit that stays open for ten minutes.
         // The breaker is the only thing that knows when it went open, so the

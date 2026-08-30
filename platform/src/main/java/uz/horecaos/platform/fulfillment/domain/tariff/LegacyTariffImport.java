@@ -51,18 +51,17 @@ public final class LegacyTariffImport {
     /** What the legacy rounds every fee and every discount to. */
     private static final long ROUNDING_STEP_SOM = 500L;
 
-    private LegacyTariffImport() {
-    }
+    private LegacyTariffImport() {}
 
     /** One entry of {@code prices_per_km}: a band {@code width} metres wide at {@code perKm}. */
-    public record LegacyStep(int width, long perKm) { }
+    public record LegacyStep(int width, long perKm) {}
 
     /** One {@code peak_hours} entry: a complete alternative rate table plus its window. */
-    public record LegacyPeak(LocalTime start, LocalTime end, int distance, long distancePrice,
-            List<LegacyStep> steps) { }
+    public record LegacyPeak(
+            LocalTime start, LocalTime end, int distance, long distancePrice, List<LegacyStep> steps) {}
 
     /** One {@code discount.times} entry, and {@code working hours} generally. */
-    public record LegacyWindow(LocalTime start, LocalTime end) { }
+    public record LegacyWindow(LocalTime start, LocalTime end) {}
 
     /**
      * {@code VendorDeliveryDiscountSchema}.
@@ -72,8 +71,7 @@ public final class LegacyTariffImport {
      *                       can say out loud that it drops it, rather than the
      *                       parser silently never having had it
      */
-    public record LegacyDiscount(long value, String mode, Long minOrderPrice,
-            List<LegacyWindow> times) { }
+    public record LegacyDiscount(long value, String mode, Long minOrderPrice, List<LegacyWindow> times) {}
 
     /** {@code VendorDeliveryConfig}. Every field, including the inert ones. */
     public record LegacyDeliveryConfig(
@@ -83,7 +81,7 @@ public final class LegacyTariffImport {
             Long minOrderPrice,
             LegacyDiscount discount,
             List<LegacyStep> pricesPerKm,
-            List<LegacyPeak> peakHours) { }
+            List<LegacyPeak> peakHours) {}
 
     /**
      * The rate table that charges what this branch charges.
@@ -95,8 +93,8 @@ public final class LegacyTariffImport {
      *                  factor is left at par, matching the legacy's own offline
      *                  fallback to a raw straight line
      */
-    public static DeliveryTariff toTariff(UUID tariffId, LegacyDeliveryConfig legacy,
-            String currency, UUID routingInstallationId) {
+    public static DeliveryTariff toTariff(
+            UUID tariffId, LegacyDeliveryConfig legacy, String currency, UUID routingInstallationId) {
 
         if (routingInstallationId == null) {
             // Not a default. The legacy measures road distance through its map SDK
@@ -104,9 +102,8 @@ public final class LegacyTariffImport {
             // importing a branch as RADIUS would shorten every journey by the
             // detour factor and drop every fee — quietly, and in the direction
             // nobody audits.
-            throw new IllegalArgumentException(
-                    "A legacy branch measured road distance; import it with the routing "
-                            + "installation that will keep measuring it, not without one");
+            throw new IllegalArgumentException("A legacy branch measured road distance; import it with the routing "
+                    + "installation that will keep measuring it, not without one");
         }
 
         // Inclusive to half-open. The legacy refuses only when max_distance is
@@ -115,8 +112,7 @@ public final class LegacyTariffImport {
         int reach = legacy.maxDistance() + 1;
 
         List<TariffBand> bands = new ArrayList<>(
-                bandsFor(TariffBand.BASE_SET, legacy.distance(), legacy.distancePrice(),
-                        legacy.pricesPerKm(), reach));
+                bandsFor(TariffBand.BASE_SET, legacy.distance(), legacy.distancePrice(), legacy.pricesPerKm(), reach));
 
         List<TariffTimeRule> rules = new ArrayList<>();
         List<LegacyPeak> peaks = legacy.peakHours() == null ? List.of() : legacy.peakHours();
@@ -130,18 +126,31 @@ public final class LegacyTariffImport {
             // is the same rule expressed as list order.
             int priority = peaks.size() - i;
             for (LocalTimeRange range : halfOpen(peak.start(), peak.end())) {
-                rules.add(new TariffTimeRule(rules.size(), priority, EVERY_DAY,
-                        range.from(), range.to(), set, 10_000, 0L));
+                rules.add(new TariffTimeRule(
+                        rules.size(), priority, EVERY_DAY, range.from(), range.to(), set, 10_000, 0L));
             }
         }
 
         List<TariffDiscount> discounts = discountsFor(legacy.discount());
 
-        return new DeliveryTariff(tariffId, 0, uz.horecaos.platform.fulfillment.domain.VersionStatus.DRAFT,
-                currency, FeeSource.TARIFF, DistanceMode.ROAD, 10_000, routingInstallationId,
-                reach, 0L, null,
-                DistanceAccrual.PRORATED_METRE, ROUNDING_STEP_SOM, RoundingRule.HALF_EVEN,
-                bands, rules, discounts);
+        return new DeliveryTariff(
+                tariffId,
+                0,
+                uz.horecaos.platform.fulfillment.domain.VersionStatus.DRAFT,
+                currency,
+                FeeSource.TARIFF,
+                DistanceMode.ROAD,
+                10_000,
+                routingInstallationId,
+                reach,
+                0L,
+                null,
+                DistanceAccrual.PRORATED_METRE,
+                ROUNDING_STEP_SOM,
+                RoundingRule.HALF_EVEN,
+                bands,
+                rules,
+                discounts);
     }
 
     /** Bit 0 to bit 6: the legacy applies a peak window on every day of the week. */
@@ -155,10 +164,10 @@ public final class LegacyTariffImport {
      * {@code distance} from the journey. A configuration with {@code distance = 0}
      * therefore still pays the fare, and a band {@code [0, 0)} is not a thing.
      */
-    private static List<TariffBand> bandsFor(String set, int baseDistance, long basePrice,
-            List<LegacyStep> steps, int reach) {
+    private static List<TariffBand> bandsFor(
+            String set, int baseDistance, long basePrice, List<LegacyStep> steps, int reach) {
 
-        record Segment(int width, long perKm) { }
+        record Segment(int width, long perKm) {}
         List<Segment> segments = new ArrayList<>();
         segments.add(new Segment(baseDistance, 0L));
         if (steps != null) {
@@ -216,17 +225,21 @@ public final class LegacyTariffImport {
             LegacyWindow window = discount.times().get(i);
             int priority = discount.times().size() - i;
             for (LocalTimeRange range : halfOpen(window.start(), window.end())) {
-                discounts.add(new TariffDiscount(discounts.size(), priority, kind,
+                discounts.add(new TariffDiscount(
+                        discounts.size(),
+                        priority,
+                        kind,
                         kind == TariffDiscount.Kind.AMOUNT ? discount.value() : null,
-                        kind == TariffDiscount.Kind.DISTANCE_ALLOWANCE
-                                ? Math.toIntExact(discount.value()) : null,
-                        EVERY_DAY, range.from(), range.to()));
+                        kind == TariffDiscount.Kind.DISTANCE_ALLOWANCE ? Math.toIntExact(discount.value()) : null,
+                        EVERY_DAY,
+                        range.from(),
+                        range.to()));
             }
         }
         return discounts;
     }
 
-    private record LocalTimeRange(LocalTime from, LocalTime to) { }
+    private record LocalTimeRange(LocalTime from, LocalTime to) {}
 
     /**
      * A closed, possibly wrapping legacy window as one or two half-open HorecaOS ones.

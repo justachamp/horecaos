@@ -1,9 +1,7 @@
 package uz.horecaos.platform.ordering.application;
 
 import java.util.UUID;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.fulfillment.api.OrderProgressPort;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
 
@@ -39,22 +37,29 @@ public class OrderProgressAdapter implements OrderProgressPort {
     }
 
     @Override
-    public ProposalOutcome propose(UUID tenantId, UUID orderId, OrderProgress progress,
-            String idempotencyKey, String reasonCode, String actorType, String actorId,
+    public ProposalOutcome propose(
+            UUID tenantId,
+            UUID orderId,
+            OrderProgress progress,
+            String idempotencyKey,
+            String reasonCode,
+            String actorType,
+            String actorId,
             String correlationId) {
 
         // The fulfilment-mode split at READY is not repeated here. A COMPLETED
         // proposal on a delivery order is refused by OrderStateMachine, which is
         // the one place that rule is written, rather than by a second copy of it
         // that could drift from the first.
-        OrderStatus target = switch (progress) {
-            case PREPARING -> OrderStatus.PREPARING;
-            case READY -> OrderStatus.READY;
-            case COMPLETED -> OrderStatus.COMPLETED;
-        };
+        OrderStatus target =
+                switch (progress) {
+                    case PREPARING -> OrderStatus.PREPARING;
+                    case READY -> OrderStatus.READY;
+                    case COMPLETED -> OrderStatus.COMPLETED;
+                };
 
-        return switch (orders.proposeProgress(tenantId, orderId, target, idempotencyKey,
-                reasonCode, actorType, actorId, correlationId)) {
+        return switch (orders.proposeProgress(
+                tenantId, orderId, target, idempotencyKey, reasonCode, actorType, actorId, correlationId)) {
             case APPLIED -> ProposalOutcome.APPLIED;
             case ALREADY_THERE -> ProposalOutcome.ALREADY_THERE;
             case REFUSED -> ProposalOutcome.REFUSED;

@@ -43,8 +43,7 @@ public record ReportingDeadline(Instant intervalDeadline, Instant businessDateBa
      * @param businessZone the branch's timezone, so a service that runs past
      *                     midnight is not cut in half by a UTC date boundary
      */
-    public static ReportingDeadline of(Instant submittedAt, Instant recorded, Duration interval,
-            ZoneId businessZone) {
+    public static ReportingDeadline of(Instant submittedAt, Instant recorded, Duration interval, ZoneId businessZone) {
         Objects.requireNonNull(submittedAt, "A submission instant is required");
         Objects.requireNonNull(interval, "A reporting interval is required");
         Objects.requireNonNull(businessZone, "A business timezone is required");
@@ -69,9 +68,7 @@ public record ReportingDeadline(Instant intervalDeadline, Instant businessDateBa
      * remaining day is respected, and a policy longer than it is not.
      */
     public Instant effective() {
-        return intervalDeadline.isBefore(businessDateBackstop)
-                ? intervalDeadline
-                : businessDateBackstop;
+        return intervalDeadline.isBefore(businessDateBackstop) ? intervalDeadline : businessDateBackstop;
     }
 
     /** Whether a document submitted at this point should now be blocked. */

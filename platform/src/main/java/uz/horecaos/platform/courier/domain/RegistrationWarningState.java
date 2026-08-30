@@ -9,7 +9,6 @@ package uz.horecaos.platform.courier.domain;
  * ignores the message is the tenant's problem and not only their own.
  */
 public enum RegistrationWarningState {
-
     VALID,
     EXPIRING,
     LAPSED

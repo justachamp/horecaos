@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
-
 import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.domain.ReconciliationSeverity;
 
@@ -156,15 +155,18 @@ public final class MoneyTotalsRule implements ReconciliationRule {
                 // slice's total.
                 targetStatus = "UNMAPPED_" + legacyStatus.toUpperCase(java.util.Locale.ROOT);
             }
-            expected.merge(dimension(LEGACY_CURRENCY, targetStatus), minorUnits(row.get("total_minor")),
-                    BigInteger::add);
+            expected.merge(
+                    dimension(LEGACY_CURRENCY, targetStatus), minorUnits(row.get("total_minor")), BigInteger::add);
         }
 
         Map<String, BigInteger> actual = new LinkedHashMap<>();
-        for (Map<String, Object> row : context.target().rows(TARGET_TOTALS, Map.of(
-                "tenantId", context.tenantId(),
-                "scopeId", context.scopeId(),
-                "entityType", entityType()))) {
+        for (Map<String, Object> row : context.target()
+                .rows(
+                        TARGET_TOTALS,
+                        Map.of(
+                                "tenantId", context.tenantId(),
+                                "scopeId", context.scopeId(),
+                                "entityType", entityType()))) {
             actual.merge(
                     dimension(String.valueOf(row.get("currency")), String.valueOf(row.get("target_status"))),
                     minorUnits(row.get("total_minor")),
@@ -180,7 +182,9 @@ public final class MoneyTotalsRule implements ReconciliationRule {
 
         List<Measurement> measurements = new ArrayList<>(dimensions.size());
         for (String dimension : dimensions) {
-            measurements.add(Measurement.amount(dimension, dimension.substring(0, 3),
+            measurements.add(Measurement.amount(
+                    dimension,
+                    dimension.substring(0, 3),
                     expected.getOrDefault(dimension, BigInteger.ZERO),
                     actual.getOrDefault(dimension, BigInteger.ZERO)));
         }
@@ -207,8 +211,9 @@ public final class MoneyTotalsRule implements ReconciliationRule {
             case BigInteger exact -> exact;
             case BigDecimal decimal -> decimal.toBigIntegerExact();
             case Number number -> BigInteger.valueOf(number.longValue());
-            default -> throw new IllegalStateException(
-                    "A money total came back as " + value.getClass() + ", which is not an integer");
+            default ->
+                throw new IllegalStateException(
+                        "A money total came back as " + value.getClass() + ", which is not an integer");
         };
     }
 }

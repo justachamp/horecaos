@@ -9,7 +9,6 @@ package uz.horecaos.platform.ordering.domain;
  * declined an order and one that never looked at it.
  */
 public enum TransitionTrigger {
-
     CHECKOUT,
     APPROVAL_DECISION,
     APPROVAL_TIMEOUT,

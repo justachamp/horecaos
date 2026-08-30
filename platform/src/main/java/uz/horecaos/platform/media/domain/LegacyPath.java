@@ -93,7 +93,6 @@ public record LegacyPath(String normalized) {
         if (dot < 0 || dot < slash || dot == path.length() - 1) {
             return false;
         }
-        return MIGRATABLE_EXTENSIONS.contains(
-                path.substring(dot + 1).toLowerCase(Locale.ROOT));
+        return MIGRATABLE_EXTENSIONS.contains(path.substring(dot + 1).toLowerCase(Locale.ROOT));
     }
 }

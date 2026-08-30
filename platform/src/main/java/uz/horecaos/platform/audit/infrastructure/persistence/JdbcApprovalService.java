@@ -1,5 +1,7 @@
 package uz.horecaos.platform.audit.infrastructure.persistence;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -9,7 +11,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -17,10 +18,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalAction;
 import uz.horecaos.platform.audit.api.ApprovalAction.MissingPolicyMode;
@@ -113,11 +110,12 @@ public class JdbcApprovalService implements ApprovalService {
 
         Optional<PolicyRow> policy = resolvePolicy(command, now);
         if (policy.isEmpty()) {
-            MissingPolicyMode missingPolicyMode = ApprovalAction.require(command.actionCode())
-                    .missingPolicyMode();
+            MissingPolicyMode missingPolicyMode =
+                    ApprovalAction.require(command.actionCode()).missingPolicyMode();
             reportUnresolved(command, missingPolicyMode);
             if (missingPolicyMode == MissingPolicyMode.REQUIRE_CONFIGURED_POLICY) {
-                throw new ApiException(ErrorCode.APPROVAL_POLICY_REQUIRED,
+                throw new ApiException(
+                        ErrorCode.APPROVAL_POLICY_REQUIRED,
                         "A configured approval policy is required for " + command.actionCode(),
                         java.util.Map.of(
                                 "actionCode", command.actionCode(),
@@ -155,8 +153,8 @@ public class JdbcApprovalService implements ApprovalService {
      */
     private ApprovalOutcome outcomeOf(RequestRow request, ApprovalRequestCommand command) {
         return switch (request.status()) {
-            case "APPROVED" -> new ApprovalOutcome.Approved(
-                    request.id(), request.decidedBy(), grantFor(request, command));
+            case "APPROVED" ->
+                new ApprovalOutcome.Approved(request.id(), request.decidedBy(), grantFor(request, command));
             case "DECLINED" -> new ApprovalOutcome.Declined(request.id(), request.decisionReason());
             default -> new ApprovalOutcome.Pending(request.id());
         };
@@ -176,12 +174,10 @@ public class JdbcApprovalService implements ApprovalService {
                 .orElseThrow(() -> new IllegalArgumentException("Unknown approval request: " + requestId));
 
         if (request.requestedBy().equals(approver.subject())) {
-            throw new SelfApprovalException(
-                    "The requester of %s cannot approve it".formatted(request.actionCode()));
+            throw new SelfApprovalException("The requester of %s cannot approve it".formatted(request.actionCode()));
         }
         if (!"PENDING".equals(request.status())) {
-            throw new IllegalStateException(
-                    "Approval request %s is already %s".formatted(requestId, request.status()));
+            throw new IllegalStateException("Approval request %s is already %s".formatted(requestId, request.status()));
         }
         if (!request.expiresAt().isAfter(clock.instant())) {
             throw new IllegalStateException("Approval request %s has expired".formatted(requestId));
@@ -331,9 +327,9 @@ public class JdbcApprovalService implements ApprovalService {
             // people asked for one refund is the console confusion this closes.
             return findRequest(command, now)
                     .map(winner -> outcomeOf(winner, command))
-                    .orElseThrow(() -> new IllegalStateException(
-                            "An approval request for %s was raised concurrently and then "
-                                    .formatted(command.actionCode())
+                    .orElseThrow(() ->
+                            new IllegalStateException("An approval request for %s was raised concurrently and then "
+                                            .formatted(command.actionCode())
                                     + "could not be read back"));
         }
 
@@ -366,8 +362,8 @@ public class JdbcApprovalService implements ApprovalService {
     private void reportUnresolved(ApprovalRequestCommand command, MissingPolicyMode missingPolicyMode) {
         countResolution(command, "unresolved", missingPolicyMode);
 
-        String signature = command.scope().tenantId() + "|" + command.actionCode()
-                + "|" + command.scope().type();
+        String signature = command.scope().tenantId() + "|" + command.actionCode() + "|"
+                + command.scope().type();
         if (alreadyWarned.size() >= WARNED_SIGNATURE_LIMIT) {
             alreadyWarned.clear();
         }
@@ -375,8 +371,12 @@ public class JdbcApprovalService implements ApprovalService {
             String consequence = missingPolicyMode == MissingPolicyMode.REQUIRE_CONFIGURED_POLICY
                     ? "The action was refused until an operator authors one."
                     : "The action proceeded on one signature; author a policy to require a second.";
-            log.warn("ADR 0050: no approval policy governs {} at {} scope (tenant {}). {}",
-                    command.actionCode(), command.scope().type(), command.scope().tenantId(), consequence);
+            log.warn(
+                    "ADR 0050: no approval policy governs {} at {} scope (tenant {}). {}",
+                    command.actionCode(),
+                    command.scope().type(),
+                    command.scope().tenantId(),
+                    consequence);
         }
     }
 
@@ -384,11 +384,10 @@ public class JdbcApprovalService implements ApprovalService {
         countResolution(command, outcome, null);
     }
 
-    private void countResolution(ApprovalRequestCommand command, String outcome,
-            MissingPolicyMode missingPolicyMode) {
+    private void countResolution(ApprovalRequestCommand command, String outcome, MissingPolicyMode missingPolicyMode) {
         Counter.Builder counter = Counter.builder(RESOLUTION_METRIC)
-                .description("ADR 0027 maker-checker policy resolution; unresolved means no policy "
-                        + "governs the action")
+                .description(
+                        "ADR 0027 maker-checker policy resolution; unresolved means no policy " + "governs the action")
                 .tag("action", command.actionCode())
                 .tag("scope", command.scope().type().name())
                 .tag("outcome", outcome);
@@ -500,7 +499,8 @@ public class JdbcApprovalService implements ApprovalService {
             // Either a concurrent execution won the row, or the caller spent the
             // same grant twice. Both mean this transaction must not keep whatever
             // it has written under an approval it does not hold.
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
                     "This approval has already been used; the action needs a new approval");
         }
 
@@ -572,17 +572,14 @@ public class JdbcApprovalService implements ApprovalService {
     private static ResourceScope scopeOf(RequestRow request) {
         return switch (request.scopeType()) {
             case "PLATFORM" -> ResourceScope.platform();
-            case "TENANT" -> new ResourceScope(
-                    ResourceScope.ScopeType.TENANT, request.tenantId(), null, null);
-            case "BRAND" -> new ResourceScope(
-                    ResourceScope.ScopeType.BRAND, request.tenantId(), request.scopeId(), null);
-            default -> new ResourceScope(
-                    ResourceScope.ScopeType.TENANT, request.tenantId(), null, null);
+            case "TENANT" -> new ResourceScope(ResourceScope.ScopeType.TENANT, request.tenantId(), null, null);
+            case "BRAND" ->
+                new ResourceScope(ResourceScope.ScopeType.BRAND, request.tenantId(), request.scopeId(), null);
+            default -> new ResourceScope(ResourceScope.ScopeType.TENANT, request.tenantId(), null, null);
         };
     }
 
-    private static RequestRow mapRequest(java.sql.ResultSet resultSet, int rowNumber)
-            throws java.sql.SQLException {
+    private static RequestRow mapRequest(java.sql.ResultSet resultSet, int rowNumber) throws java.sql.SQLException {
         return new RequestRow(
                 resultSet.getObject("id", UUID.class),
                 resultSet.getString("status"),
@@ -606,11 +603,18 @@ public class JdbcApprovalService implements ApprovalService {
      *                      V0088's {@code fk_approval_request_policy} is keyed on
      *                      the answer
      */
-    private record PolicyRow(UUID id, int version, String thresholdDescription,
-            boolean platformOwned) { }
+    private record PolicyRow(UUID id, int version, String thresholdDescription, boolean platformOwned) {}
 
     private record RequestRow(
-            UUID id, String status, String requestedBy, String decidedBy, String decisionReason,
-            UUID tenantId, String scopeType, UUID scopeId, String actionCode,
-            Instant expiresAt, long version) { }
+            UUID id,
+            String status,
+            String requestedBy,
+            String decidedBy,
+            String decisionReason,
+            UUID tenantId,
+            String scopeType,
+            UUID scopeId,
+            String actionCode,
+            Instant expiresAt,
+            long version) {}
 }

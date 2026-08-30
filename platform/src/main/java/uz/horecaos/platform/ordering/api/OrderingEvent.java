@@ -2,7 +2,6 @@ package uz.horecaos.platform.ordering.api;
 
 import java.time.Instant;
 import java.util.UUID;
-
 import uz.horecaos.platform.tenancy.api.TenantId;
 
 /**
@@ -18,8 +17,7 @@ import uz.horecaos.platform.tenancy.api.TenantId;
  * payload — a consumer needing those calls an authorized API with the order id.
  */
 public sealed interface OrderingEvent
-        permits OrderReceived, OrderAwaitingApproval, OrderConfirmed,
-                OrderRejected, OrderExpired, OrderCancelled {
+        permits OrderReceived, OrderAwaitingApproval, OrderConfirmed, OrderRejected, OrderExpired, OrderCancelled {
 
     UUID eventId();
 

@@ -1,7 +1,5 @@
 package uz.horecaos.platform.integration.provider;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -9,7 +7,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.UUID;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -17,11 +15,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
-import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.integration.api.provider.BindingRef;
+import uz.horecaos.platform.support.TestDatabase;
 
 /**
  * ADR 0026. The scope and uniqueness tests matter most: which provider handles
@@ -108,7 +104,8 @@ class JdbcProviderInstallationLookupTests {
 
     @Test
     void anUnboundCapabilityResolvesToNothing() {
-        assertThat(lookup.primaryBinding(TENANT, BRAND, LOCATION, "CreateShipment")).isEmpty();
+        assertThat(lookup.primaryBinding(TENANT, BRAND, LOCATION, "CreateShipment"))
+                .isEmpty();
     }
 
     @Test
@@ -148,12 +145,12 @@ class JdbcProviderInstallationLookupTests {
                     (id, tenant_id, installation_id, brand_id, location_id, status)
                 VALUES (:id, :tenantId, :installationId, :brandId, :locationId, 'ACTIVE')
                 """)
-                .param("id", UUID.randomUUID())
-                .param("tenantId", OTHER_TENANT)
-                .param("installationId", installation)
-                .param("brandId", BRAND)
-                .param("locationId", LOCATION)
-                .update())
+                        .param("id", UUID.randomUUID())
+                        .param("tenantId", OTHER_TENANT)
+                        .param("installationId", installation)
+                        .param("brandId", BRAND)
+                        .param("locationId", LOCATION)
+                        .update())
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -163,7 +160,8 @@ class JdbcProviderInstallationLookupTests {
         UUID binding = insertBinding(installation, BRAND, LOCATION, 100);
         insertCapability(binding, CAPABILITY, true);
         jdbc.sql("UPDATE integration.bindings SET status = 'SUSPENDED' WHERE id = :id")
-                .param("id", binding).update();
+                .param("id", binding)
+                .update();
 
         assertThat(lookup.primaryBinding(TENANT, BRAND, LOCATION, CAPABILITY))
                 .as("rollback suspends a binding and returns operations to a manual path")
@@ -213,7 +211,10 @@ class JdbcProviderInstallationLookupTests {
                 VALUES (:code, :category, :type, 'https://provider.example', true, 'provider.example')
                 ON CONFLICT DO NOTHING
                 """)
-                .param("code", code).param("category", category).param("type", type).update();
+                .param("code", code)
+                .param("category", category)
+                .param("type", type)
+                .update();
     }
 
     private UUID insertInstallation(String category, String type, String name) {
@@ -231,8 +232,9 @@ class JdbcProviderInstallationLookupTests {
                 .param("type", type)
                 .param("environment", type + "-env")
                 .param("name", name)
-                .param("secret", "horecaos:local:provider_%s:%s:key".formatted(
-                        category.toLowerCase(java.util.Locale.ROOT), id))
+                .param(
+                        "secret",
+                        "horecaos:local:provider_%s:%s:key".formatted(category.toLowerCase(java.util.Locale.ROOT), id))
                 .update();
         return id;
     }
@@ -309,7 +311,9 @@ class JdbcProviderInstallationLookupTests {
                         (id, tenant_id, brand_id, code, slug, display_name, timezone, status, version)
                     VALUES (:id, :tenantId, :brandId, :code, :slug, 'Location', 'Asia/Tashkent', 'ACTIVE', 0)
                     """)
-                    .param("id", location).param("tenantId", TENANT).param("brandId", BRAND)
+                    .param("id", location)
+                    .param("tenantId", TENANT)
+                    .param("brandId", BRAND)
                     .param("code", "L" + location.toString().substring(24).toUpperCase())
                     .param("slug", "l-" + location.toString().substring(24))
                     .update();

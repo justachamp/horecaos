@@ -1,12 +1,13 @@
 package uz.horecaos.platform.migration.web;
 
-import java.util.UUID;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-
+import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -14,11 +15,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.migration.application.MigrationQuarantineStore.QuarantineItemRow;
@@ -80,27 +76,26 @@ public class MigrationQuarantineController {
      * {@code Idempotency-Key} is still required, as it is on every mutation.
      */
     @PostMapping("/quarantine-items/{itemId}/resolution")
-    @RequiresCapability(value = Capability.MIGRATION_QUARANTINE_RESOLVE, scope = ScopeType.PLATFORM,
-            mutating = true)
-    @Operation(summary = "Settle a quarantined legacy row",
+    @RequiresCapability(value = Capability.MIGRATION_QUARANTINE_RESOLVE, scope = ScopeType.PLATFORM, mutating = true)
+    @Operation(
+            summary = "Settle a quarantined legacy row",
             description = "The resolution code says how it was settled — re-imported after a source "
                     + "fix, mapped by hand under review, or accepted as not migratable. The status "
                     + "stays two-valued so the gates keep asking one question.")
     QuarantineItemView resolve(
-            @PathVariable UUID itemId,
-            @RequestParam UUID tenantId,
-            @Valid @RequestBody ResolveQuarantineRequest body) {
+            @PathVariable UUID itemId, @RequestParam UUID tenantId, @Valid @RequestBody ResolveQuarantineRequest body) {
 
-        QuarantineItemRow item = quarantine.resolve(tenantId, itemId,
-                new QuarantineService.ResolveCommand(body.resolutionCode(), body.reason()));
+        QuarantineItemRow item = quarantine.resolve(
+                tenantId, itemId, new QuarantineService.ResolveCommand(body.resolutionCode(), body.reason()));
         return QuarantineItemView.of(item);
     }
 
     /** @param openItems items of this scope that are still unsettled */
-    record QuarantineBacklogView(UUID scopeId, int openItems) { }
+    record QuarantineBacklogView(UUID scopeId, int openItems) {}
 
     record ResolveQuarantineRequest(
-            @NotBlank @Pattern(regexp = "[A-Z][A-Z0-9_]{0,63}")
-            @Schema(example = "REIMPORTED_AFTER_SOURCE_FIX") String resolutionCode,
-            @NotBlank @Size(max = 1000) String reason) { }
+            @NotBlank @Pattern(regexp = "[A-Z][A-Z0-9_]{0,63}") @Schema(example = "REIMPORTED_AFTER_SOURCE_FIX")
+            String resolutionCode,
+
+            @NotBlank @Size(max = 1000) String reason) {}
 }

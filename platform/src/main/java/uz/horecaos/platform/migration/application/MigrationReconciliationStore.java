@@ -3,7 +3,6 @@ package uz.horecaos.platform.migration.application;
 import java.math.BigInteger;
 import java.util.List;
 import java.util.UUID;
-
 import uz.horecaos.platform.migration.domain.ReconciliationSeverity;
 
 /**
@@ -75,8 +74,8 @@ public interface MigrationReconciliationStore {
         /** How the refusal names this difference to the operator who hit it. */
         public String describe() {
             String rule = "%s v%d".formatted(ruleCode, ruleVersion);
-            String slice = dimensionKey == null || dimensionKey.isEmpty()
-                    ? rule : "%s [%s]".formatted(rule, dimensionKey);
+            String slice =
+                    dimensionKey == null || dimensionKey.isEmpty() ? rule : "%s [%s]".formatted(rule, dimensionKey);
             if (differenceValue == null) {
                 return slice + " checksum mismatch";
             }

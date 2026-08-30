@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.pos.api.CapabilitySnapshot;
 import uz.horecaos.platform.pos.api.CapabilitySnapshot.Entry;
@@ -79,26 +78,48 @@ public final class FakePosAdapter implements PosAdapter {
     public CapabilitySnapshot discoverCapabilities(PosContext context) {
         Map<PosCapability, Entry> entries = new EnumMap<>(PosCapability.class);
         for (PosCapability capability : PosCapability.values()) {
-            entries.put(capability, new Entry(
-                    CapabilitySupport.SUPPORTED,
-                    capability == PosCapability.ORDER_EXPORT
-                            ? IdempotencyBehaviour.KEYED
-                            : IdempotencyBehaviour.NATURALLY_IDEMPOTENT,
-                    true, "fake-1", Map.of(), "Fake provider", Instant.EPOCH));
+            entries.put(
+                    capability,
+                    new Entry(
+                            CapabilitySupport.SUPPORTED,
+                            capability == PosCapability.ORDER_EXPORT
+                                    ? IdempotencyBehaviour.KEYED
+                                    : IdempotencyBehaviour.NATURALLY_IDEMPOTENT,
+                            true,
+                            "fake-1",
+                            Map.of(),
+                            "Fake provider",
+                            Instant.EPOCH));
         }
         return new CapabilitySnapshot(entries, Instant.EPOCH, "fake-1");
     }
 
     @Override
     public CatalogRead readCatalog(PosContext context) {
-        CatalogSnapshot snapshot = new CatalogSnapshot(Instant.EPOCH,
+        CatalogSnapshot snapshot = new CatalogSnapshot(
+                Instant.EPOCH,
                 // A keyset walk: this fake pages by identifier, so an absence
                 // from one read really is an absence.
-                true, 1,
+                true,
+                1,
                 List.of(),
-                List.of(new CatalogSnapshot.Product("f-1", "Fake dish", "f-cat",
-                        SourceKind.DISH, true, false, 10_000L, "UZS", true, false, null, Map.of())),
-                List.of(), List.of(), List.of(), List.of());
+                List.of(new CatalogSnapshot.Product(
+                        "f-1",
+                        "Fake dish",
+                        "f-cat",
+                        SourceKind.DISH,
+                        true,
+                        false,
+                        10_000L,
+                        "UZS",
+                        true,
+                        false,
+                        null,
+                        Map.of())),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of());
         return new CatalogRead(ProviderOutcome.success(Map.of(), null), snapshot);
     }
 
@@ -115,8 +136,8 @@ public final class FakePosAdapter implements PosAdapter {
             return new ExportResult(scripted, null, false);
         }
         exportedCorrelations.add(order.correlationReference());
-        String external = ordersByCorrelation.computeIfAbsent(order.correlationReference(),
-                key -> "fake-order-" + sideEffects.incrementAndGet());
+        String external = ordersByCorrelation.computeIfAbsent(
+                order.correlationReference(), key -> "fake-order-" + sideEffects.incrementAndGet());
         return new ExportResult(ProviderOutcome.success(Map.of(), external), external, false);
     }
 
@@ -128,25 +149,23 @@ public final class FakePosAdapter implements PosAdapter {
         }
         // The fake echoes the reference, which is the whole difference: its match
         // is an identity where Clopos's is a resemblance.
-        return new RecoveryRead(ProviderOutcome.success(Map.of(), null), List.of(
-                new ExportCandidate(external, "ACCEPTED", Instant.EPOCH, true, true, true, 0)));
+        return new RecoveryRead(
+                ProviderOutcome.success(Map.of(), null),
+                List.of(new ExportCandidate(external, "ACCEPTED", Instant.EPOCH, true, true, true, 0)));
     }
 
     @Override
-    public ProviderOutcome cancelExportedOrder(PosContext context, String externalOrderId,
-            String reason) {
+    public ProviderOutcome cancelExportedOrder(PosContext context, String externalOrderId, String reason) {
         return ProviderOutcome.success(Map.of(), externalOrderId);
     }
 
     @Override
-    public ProviderOutcome writeFiscalIdentifier(PosContext context, String externalReceiptId,
-            String fiscalId) {
+    public ProviderOutcome writeFiscalIdentifier(PosContext context, String externalReceiptId, String fiscalId) {
         return ProviderOutcome.success(Map.of(), externalReceiptId);
     }
 
     @Override
-    public ProviderOutcome writeFulfillmentStatus(PosContext context, String externalReceiptId,
-            String status) {
+    public ProviderOutcome writeFulfillmentStatus(PosContext context, String externalReceiptId, String status) {
         return ProviderOutcome.success(Map.of(), externalReceiptId);
     }
 }

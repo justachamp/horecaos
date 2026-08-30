@@ -8,10 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.commercial.api.EnforcementMode;
 import uz.horecaos.platform.commercial.api.ResetPeriod;
 import uz.horecaos.platform.commercial.domain.PlanEntitlement;
@@ -39,7 +37,9 @@ public class JdbcPlanStore {
                 INSERT INTO commercial.plans (id, code, name, status, version, created_at, updated_at)
                 VALUES (:id, :code, :name, 'DRAFT', 0, :now, :now)
                 """)
-                .param("id", id).param("code", code).param("name", name)
+                .param("id", id)
+                .param("code", code)
+                .param("name", name)
                 .param("now", utc(now))
                 .update();
     }
@@ -55,14 +55,18 @@ public class JdbcPlanStore {
         return jdbc.sql("""
                 SELECT COALESCE(MAX(version_number), 0) + 1
                   FROM commercial.plan_versions WHERE plan_id = :planId
-                """)
-                .param("planId", planId)
-                .query(Integer.class)
-                .single();
+                """).param("planId", planId).query(Integer.class).single();
     }
 
-    public void insertPlanVersion(UUID id, UUID planId, int versionNumber, String currency,
-            long priceMinor, String billingPeriod, String termsReference, String createdBy,
+    public void insertPlanVersion(
+            UUID id,
+            UUID planId,
+            int versionNumber,
+            String currency,
+            long priceMinor,
+            String billingPeriod,
+            String termsReference,
+            String createdBy,
             Instant now) {
 
         jdbc.sql("""
@@ -73,10 +77,15 @@ public class JdbcPlanStore {
                     :id, :planId, :versionNumber, :currency, :priceMinor, :billingPeriod,
                     'DRAFT', :termsReference, :createdBy, :now, :now)
                 """)
-                .param("id", id).param("planId", planId).param("versionNumber", versionNumber)
-                .param("currency", currency).param("priceMinor", priceMinor)
-                .param("billingPeriod", billingPeriod).param("termsReference", termsReference)
-                .param("createdBy", createdBy).param("now", utc(now))
+                .param("id", id)
+                .param("planId", planId)
+                .param("versionNumber", versionNumber)
+                .param("currency", currency)
+                .param("priceMinor", priceMinor)
+                .param("billingPeriod", billingPeriod)
+                .param("termsReference", termsReference)
+                .param("createdBy", createdBy)
+                .param("now", utc(now))
                 .update();
     }
 
@@ -130,8 +139,10 @@ public class JdbcPlanStore {
                        effective_from = COALESCE(effective_from, :effectiveFrom), updated_at = :now
                  WHERE id = :id AND activated_at IS NULL AND status = 'DRAFT'
                 """)
-                .param("id", planVersionId).param("approvedBy", approvedBy)
-                .param("effectiveFrom", utc(effectiveFrom)).param("now", utc(now))
+                .param("id", planVersionId)
+                .param("approvedBy", approvedBy)
+                .param("effectiveFrom", utc(effectiveFrom))
+                .param("now", utc(now))
                 .update();
 
         if (updated == 1) {
@@ -139,9 +150,7 @@ public class JdbcPlanStore {
                     UPDATE commercial.plans SET status = 'ACTIVE', version = version + 1,
                            updated_at = :now
                      WHERE id = (SELECT plan_id FROM commercial.plan_versions WHERE id = :id)
-                    """)
-                    .param("id", planVersionId).param("now", utc(now))
-                    .update();
+                    """).param("id", planVersionId).param("now", utc(now)).update();
         }
         return updated == 1;
     }
@@ -158,9 +167,7 @@ public class JdbcPlanStore {
         return jdbc.sql(SELECT_VERSION + """
                  WHERE v.status = 'ACTIVE' AND v.activated_at IS NOT NULL
                  ORDER BY p.code, v.version_number DESC
-                """)
-                .query(JdbcPlanStore::mapVersion)
-                .list();
+                """).query(JdbcPlanStore::mapVersion).list();
     }
 
     public Map<String, PlanEntitlement> entitlementsOf(UUID planVersionId) {
@@ -198,8 +205,7 @@ public class JdbcPlanStore {
               JOIN commercial.plans p ON p.id = v.plan_id
             """;
 
-    private static PlanVersion mapVersion(java.sql.ResultSet row, int number)
-            throws java.sql.SQLException {
+    private static PlanVersion mapVersion(java.sql.ResultSet row, int number) throws java.sql.SQLException {
         OffsetDateTime activated = row.getObject("activated_at", OffsetDateTime.class);
         return new PlanVersion(
                 row.getObject("id", UUID.class),

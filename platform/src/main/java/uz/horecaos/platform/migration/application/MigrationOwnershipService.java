@@ -1,17 +1,14 @@
 package uz.horecaos.platform.migration.application;
 
-import java.util.Optional;
-import java.util.UUID;
-
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-
+import java.util.Optional;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.migration.api.CapabilityOwnership;
 import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.api.MigrationOwnershipPort;
@@ -82,8 +79,8 @@ public class MigrationOwnershipService implements MigrationOwnershipPort {
      */
     @Override
     @Transactional(propagation = Propagation.SUPPORTS, readOnly = true)
-    public CapabilityOwnership ownershipOf(UUID tenantId, MigrationCapability capability,
-            UUID brandId, UUID locationId) {
+    public CapabilityOwnership ownershipOf(
+            UUID tenantId, MigrationCapability capability, UUID brandId, UUID locationId) {
 
         return resolve(tenantId, capability, brandId, locationId)
                 .map(MigrationOwnershipService::answerFor)
@@ -114,8 +111,7 @@ public class MigrationOwnershipService implements MigrationOwnershipPort {
      */
     @Override
     @Transactional(propagation = Propagation.SUPPORTS)
-    public void requireTargetMayWrite(UUID tenantId, MigrationCapability capability,
-            UUID brandId, UUID locationId) {
+    public void requireTargetMayWrite(UUID tenantId, MigrationCapability capability, UUID brandId, UUID locationId) {
 
         CapabilityOwnership resolved = ownershipOf(tenantId, capability, brandId, locationId);
 
@@ -168,8 +164,7 @@ public class MigrationOwnershipService implements MigrationOwnershipPort {
      * belongs to one tenant's program and there is no platform-wide owner to fall
      * back to.
      */
-    private Optional<ScopeRow> resolve(UUID tenantId, MigrationCapability capability,
-            UUID brandId, UUID locationId) {
+    private Optional<ScopeRow> resolve(UUID tenantId, MigrationCapability capability, UUID brandId, UUID locationId) {
 
         if (locationId != null) {
             Optional<ScopeRow> branch = scopes.findClaim(tenantId, capability, brandId, locationId);
@@ -198,14 +193,22 @@ public class MigrationOwnershipService implements MigrationOwnershipPort {
      */
     private static CapabilityOwnership answerFor(ScopeRow scope) {
         if (!scope.state().permits(scope.modes())) {
-            log.error("Migration scope {} is {} with write mode {} and read mode {}, which that "
+            log.error(
+                    "Migration scope {} is {} with write mode {} and read mode {}, which that "
                             + "state does not permit; fencing target writes for {} until it is corrected",
-                    scope.id(), scope.state(), scope.modes().writeMode(), scope.modes().readMode(),
+                    scope.id(),
+                    scope.state(),
+                    scope.modes().writeMode(),
+                    scope.modes().readMode(),
                     scope.capability());
-            return new CapabilityOwnership(scope.id(), scope.capability(), scope.state(),
-                    WriteMode.LEGACY_ONLY, ReadMode.LEGACY);
+            return new CapabilityOwnership(
+                    scope.id(), scope.capability(), scope.state(), WriteMode.LEGACY_ONLY, ReadMode.LEGACY);
         }
-        return new CapabilityOwnership(scope.id(), scope.capability(), scope.state(),
-                scope.modes().writeMode(), scope.modes().readMode());
+        return new CapabilityOwnership(
+                scope.id(),
+                scope.capability(),
+                scope.state(),
+                scope.modes().writeMode(),
+                scope.modes().readMode());
     }
 }

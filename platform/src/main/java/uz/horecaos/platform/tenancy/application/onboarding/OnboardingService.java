@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -19,12 +18,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.audit.api.ActorRef;
-import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.ApprovalAction;
+import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.ApprovalRequestCommand;
 import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditClass;
@@ -58,6 +55,7 @@ public class OnboardingService {
 
     /** Bounds a claim so a dead worker cannot hold a step forever. */
     static final Duration STEP_LEASE = Duration.ofMinutes(5);
+
     static final int MAXIMUM_ATTEMPTS = 5;
 
     private final JdbcClient jdbc;
@@ -84,8 +82,8 @@ public class OnboardingService {
             Clock clock) {
         this.jdbc = jdbc;
         this.transactions = transactions;
-        this.handlers = handlers.stream().collect(
-                java.util.stream.Collectors.toUnmodifiableMap(OnboardingStepHandler::step, h -> h));
+        this.handlers = handlers.stream()
+                .collect(java.util.stream.Collectors.toUnmodifiableMap(OnboardingStepHandler::step, h -> h));
         this.audit = audit;
         this.approvals = approvals;
         this.events = events;
@@ -95,8 +93,8 @@ public class OnboardingService {
 
     /** Creates a run with every step materialised, blocked ones included. */
     @Transactional
-    public UUID startRun(UUID tenantId, UUID templateId, int templateVersion,
-            Map<String, Object> input, ActorRef startedBy) {
+    public UUID startRun(
+            UUID tenantId, UUID templateId, int templateVersion, Map<String, Object> input, ActorRef startedBy) {
 
         UUID runId = UUID.randomUUID();
         Instant now = clock.instant();
@@ -148,8 +146,11 @@ public class OnboardingService {
                     .param("required", step.requiredInV1())
                     .param("input", toJson(input))
                     .param("errorCode", step.isBlocked() ? "CAPABILITY_ABSENT" : null)
-                    .param("error", step.blockedUntil()
-                            .map("Blocked until %s ships"::formatted).orElse(null))
+                    .param(
+                            "error",
+                            step.blockedUntil()
+                                    .map("Blocked until %s ships"::formatted)
+                                    .orElse(null))
                     .param("now", at(now))
                     .update();
         }
@@ -202,9 +203,13 @@ public class OnboardingService {
 
         OnboardingStepHandler.StepResult result;
         try {
-            result = claim.handler().execute(new OnboardingStepHandler.StepContext(
-                    runId, claim.step().tenantId(), inputFor(claim.step()),
-                    claim.step().externalReference(), claim.step().attemptCount() + 1));
+            result = claim.handler()
+                    .execute(new OnboardingStepHandler.StepContext(
+                            runId,
+                            claim.step().tenantId(),
+                            inputFor(claim.step()),
+                            claim.step().externalReference(),
+                            claim.step().attemptCount() + 1));
         } catch (RuntimeException failure) {
             log.warn("Onboarding step {} threw", claim.step().step(), failure);
             result = OnboardingStepHandler.StepResult.retry(
@@ -280,16 +285,28 @@ public class OnboardingService {
         // administrator, because ADR 0008 puts the go-live decision with someone
         // who has seen the readiness evidence.
         if (step.step() == OnboardingStep.TENANT_ACTIVATE) {
-            release(step.id(), claimToken, "PENDING", "AWAITING_APPROVAL",
-                    "Activation requires platform approval", now, Duration.ofDays(3650));
+            release(
+                    step.id(),
+                    claimToken,
+                    "PENDING",
+                    "AWAITING_APPROVAL",
+                    "Activation requires platform approval",
+                    now,
+                    Duration.ofDays(3650));
             refreshRunStatus(runId);
             return Claim.none();
         }
 
         OnboardingStepHandler handler = handlers.get(step.step());
         if (handler == null) {
-            release(step.id(), claimToken, "BLOCKED", "CAPABILITY_ABSENT",
-                    "No handler is registered for this step", now, Duration.ZERO);
+            release(
+                    step.id(),
+                    claimToken,
+                    "BLOCKED",
+                    "CAPABILITY_ABSENT",
+                    "No handler is registered for this step",
+                    now,
+                    Duration.ZERO);
             return Claim.handled();
         }
 
@@ -383,10 +400,7 @@ public class OnboardingService {
                 UPDATE tenant.onboarding_runs
                    SET status = 'PROVISIONING', failed_at = NULL, version = version + 1, updated_at = :now
                  WHERE id = :runId AND status = 'FAILED'
-                """)
-                .param("runId", runId)
-                .param("now", at(clock.instant()))
-                .update();
+                """).param("runId", runId).param("now", at(clock.instant())).update();
 
         audit.record(AuditFact.of("tenant.onboarding_resumed", AuditClass.BUSINESS)
                 .by(actor)
@@ -436,15 +450,13 @@ public class OnboardingService {
         approval.consume();
 
         Instant now = clock.instant();
-        int activated = jdbc.sql("""
+        int activated =
+                jdbc.sql("""
                 UPDATE tenant.onboarding_runs
                    SET status = 'ACTIVE', current_phase = 'ACTIVATING', completed_at = :now,
                        version = version + 1, updated_at = :now
                  WHERE id = :runId AND status IN ('READY', 'ACTIVATING')
-                """)
-                .param("runId", runId)
-                .param("now", at(now))
-                .update();
+                """).param("runId", runId).param("now", at(now)).update();
 
         if (activated != 1) {
             return new ActivationOutcome(false, "NOT_READY", outstandingRequiredSteps(runId), null);
@@ -457,7 +469,8 @@ public class OnboardingService {
                 """).param("runId", runId).param("now", at(now)).update();
 
         jdbc.sql("UPDATE tenant.tenants SET status = 'ACTIVE', version = version + 1 WHERE id = :id")
-                .param("id", tenantId).update();
+                .param("id", tenantId)
+                .update();
 
         audit.record(AuditFact.of("tenant.activated", AuditClass.BUSINESS)
                 .by(actor)
@@ -470,8 +483,7 @@ public class OnboardingService {
 
         // Behind the compare-and-set, so two simultaneous activations produce one
         // fact as well as one transition.
-        events.publishEvent(new TenantActivated(
-                UUID.randomUUID(), new TenantId(tenantId), runId, "ACTIVE", now));
+        events.publishEvent(new TenantActivated(UUID.randomUUID(), new TenantId(tenantId), runId, "ACTIVE", now));
 
         return new ActivationOutcome(true, "ACTIVATED", List.of(), null);
     }
@@ -483,15 +495,11 @@ public class OnboardingService {
                  WHERE run_id = :runId AND required AND status <> 'COMPLETED'
                    AND step_key <> 'TENANT_ACTIVATE'
                  ORDER BY sequence_number
-                """)
-                .param("runId", runId)
-                .query(String.class)
-                .list();
+                """).param("runId", runId).query(String.class).list();
     }
 
     private void applyResult(
-            UUID runId, DueStep step, UUID claimToken,
-            OnboardingStepHandler.StepResult result, Instant now) {
+            UUID runId, DueStep step, UUID claimToken, OnboardingStepHandler.StepResult result, Instant now) {
 
         switch (result.outcome()) {
             case COMPLETED -> {
@@ -503,7 +511,8 @@ public class OnboardingService {
                                last_error_code = NULL, last_error = NULL, updated_at = :now
                          WHERE id = :id AND claim_token = :token
                         """)
-                        .param("id", step.id()).param("token", claimToken)
+                        .param("id", step.id())
+                        .param("token", claimToken)
                         .param("result", toJson(result.result()))
                         .param("reference", result.externalReference())
                         .param("now", at(now))
@@ -514,8 +523,10 @@ public class OnboardingService {
                     // the external work happened and its result is being thrown
                     // away, which is only survivable because every handler here
                     // reconciles rather than creates blindly.
-                    log.warn("Onboarding step {} completed after its claim was reclaimed; "
-                            + "the result is discarded and the step will run again", step.step());
+                    log.warn(
+                            "Onboarding step {} completed after its claim was reclaimed; "
+                                    + "the result is discarded and the step will run again",
+                            step.step());
                     return;
                 }
                 propagate(runId, step.step(), result.result());
@@ -525,20 +536,29 @@ public class OnboardingService {
                 // one for work whose result was discarded would tell consumers a
                 // step is done that is about to run again.
                 events.publishEvent(new TenantOnboardingStepCompleted(
-                        UUID.randomUUID(), new TenantId(step.tenantId()), runId,
-                        step.step().name(), stepVersionOf(step.step()),
-                        step.attemptCount() + 1, now));
+                        UUID.randomUUID(),
+                        new TenantId(step.tenantId()),
+                        runId,
+                        step.step().name(),
+                        stepVersionOf(step.step()),
+                        step.attemptCount() + 1,
+                        now));
             }
             case RETRY -> {
                 boolean exhausted = step.attemptCount() + 1 >= MAXIMUM_ATTEMPTS;
-                release(step.id(), claimToken, exhausted ? "FAILED" : "PENDING",
-                        result.errorCode(), result.detail(), now,
+                release(
+                        step.id(),
+                        claimToken,
+                        exhausted ? "FAILED" : "PENDING",
+                        result.errorCode(),
+                        result.detail(),
+                        now,
                         exhausted ? Duration.ZERO : backoff(step.attemptCount() + 1));
             }
-            case FAILED -> release(step.id(), claimToken, "FAILED",
-                    result.errorCode(), result.detail(), now, Duration.ZERO);
-            case BLOCKED -> release(step.id(), claimToken, "BLOCKED",
-                    result.errorCode(), result.detail(), now, Duration.ZERO);
+            case FAILED ->
+                release(step.id(), claimToken, "FAILED", result.errorCode(), result.detail(), now, Duration.ZERO);
+            case BLOCKED ->
+                release(step.id(), claimToken, "BLOCKED", result.errorCode(), result.detail(), now, Duration.ZERO);
         }
     }
 
@@ -565,8 +585,7 @@ public class OnboardingService {
     }
 
     private void release(
-            UUID stepId, UUID claimToken, String status, String errorCode,
-            String detail, Instant now, Duration delay) {
+            UUID stepId, UUID claimToken, String status, String errorCode, String detail, Instant now, Duration delay) {
 
         int released = jdbc.sql("""
                 UPDATE tenant.onboarding_steps
@@ -575,7 +594,8 @@ public class OnboardingService {
                        last_error = :error, updated_at = :now
                  WHERE id = :id AND claim_token = :token
                 """)
-                .param("id", stepId).param("token", claimToken)
+                .param("id", stepId)
+                .param("token", claimToken)
                 .param("status", status)
                 .param("availableAt", at(now.plus(delay)))
                 .param("errorCode", errorCode)
@@ -586,15 +606,15 @@ public class OnboardingService {
         if (released != 1) {
             // Another worker reclaimed the step after its lease ran out. The
             // token is what stops this one writing over the new claim.
-            log.warn("Onboarding step {} was reclaimed before it could be released as {}",
-                    stepId, status);
+            log.warn("Onboarding step {} was reclaimed before it could be released as {}", stepId, status);
         }
     }
 
     /** READY only when every required step has completed. */
     private void refreshRunStatus(UUID runId) {
         List<String> outstanding = outstandingRequiredSteps(runId);
-        boolean anyFailed = jdbc.sql("""
+        boolean anyFailed =
+                jdbc.sql("""
                 SELECT EXISTS (SELECT 1 FROM tenant.onboarding_steps
                                 WHERE run_id = :runId AND required AND status = 'FAILED')
                 """).param("runId", runId).query(Boolean.class).single();
@@ -615,7 +635,9 @@ public class OnboardingService {
                        version = version + 1, updated_at = :now
                  WHERE id = :runId AND status NOT IN ('ACTIVE', 'CANCELLED') AND status <> :status
                 """)
-                .param("runId", runId).param("status", status).param("now", at(now))
+                .param("runId", runId)
+                .param("status", status)
+                .param("now", at(now))
                 .update();
 
         if (transitioned != 1) {
@@ -627,7 +649,9 @@ public class OnboardingService {
         } else if ("FAILED".equals(status)) {
             FailedStep failure = firstFailedRequiredStep(runId);
             events.publishEvent(new TenantOnboardingFailed(
-                    UUID.randomUUID(), tenantId, runId,
+                    UUID.randomUUID(),
+                    tenantId,
+                    runId,
                     failure == null ? null : failure.stepKey(),
                     failure == null ? null : failure.errorCode(),
                     now));
@@ -669,7 +693,9 @@ public class OnboardingService {
 
     private UUID tenantOf(UUID runId) {
         return jdbc.sql("SELECT tenant_id FROM tenant.onboarding_runs WHERE id = :id")
-                .param("id", runId).query(UUID.class).single();
+                .param("id", runId)
+                .query(UUID.class)
+                .single();
     }
 
     private String toJson(Map<String, Object> value) {
@@ -679,8 +705,8 @@ public class OnboardingService {
     private static String parametersHash(UUID runId) {
         try {
             var digest = java.security.MessageDigest.getInstance("SHA-256");
-            return java.util.HexFormat.of().formatHex(
-                    digest.digest(runId.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            return java.util.HexFormat.of()
+                    .formatHex(digest.digest(runId.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
         } catch (java.security.NoSuchAlgorithmException unreachable) {
             throw new IllegalStateException("SHA-256 is required", unreachable);
         }
@@ -699,13 +725,12 @@ public class OnboardingService {
      *                            say why rather than only that it refused
      */
     public record ActivationOutcome(
-            boolean activated, String outcome, List<String> outstandingRequired, UUID approvalRequestId) { }
+            boolean activated, String outcome, List<String> outstandingRequired, UUID approvalRequestId) {}
 
-    private record FailedStep(String stepKey, String errorCode) { }
+    private record FailedStep(String stepKey, String errorCode) {}
 
     private record DueStep(
-            UUID id, UUID tenantId, OnboardingStep step,
-            int attemptCount, String externalReference, String input) { }
+            UUID id, UUID tenantId, OnboardingStep step, int attemptCount, String externalReference, String input) {}
 
     /**
      * What the claim transaction decided.

@@ -47,8 +47,7 @@ public final class ClickErrorCodes {
     /** HorecaOS's own failure code for the gap above. Never one of Click's. */
     public static final String UNCLASSIFIED = "CLICK_ERROR_CODE_UNCLASSIFIED";
 
-    private ClickErrorCodes() {
-    }
+    private ClickErrorCodes() {}
 
     /**
      * The read predicate under its old name.

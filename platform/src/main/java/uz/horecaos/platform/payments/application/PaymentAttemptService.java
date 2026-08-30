@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
@@ -17,7 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-
 import uz.horecaos.platform.migration.api.ExternalEffect;
 import uz.horecaos.platform.migration.api.ImportSuppression;
 import uz.horecaos.platform.payments.domain.PaymentAttempt;
@@ -102,10 +100,15 @@ public class PaymentAttemptService {
     // work has to be one transaction and the provider call has to be outside it,
     // and @Transactional cannot express that from inside a single bean: a method
     // calling its own annotated method skips the proxy entirely.
-    public PaymentAttemptService(JdbcPaymentIntentStore intents, JdbcPaymentAttemptStore attempts,
-            JdbcPaymentTransactionStore transactions, PaymentBindingResolver bindings,
-            List<PaymentProviderPort> providerPorts, CapturedMoneyPort captures,
-            TransactionTemplate unitOfWork, Clock clock) {
+    public PaymentAttemptService(
+            JdbcPaymentIntentStore intents,
+            JdbcPaymentAttemptStore attempts,
+            JdbcPaymentTransactionStore transactions,
+            PaymentBindingResolver bindings,
+            List<PaymentProviderPort> providerPorts,
+            CapturedMoneyPort captures,
+            TransactionTemplate unitOfWork,
+            Clock clock) {
         this.intents = intents;
         this.attempts = attempts;
         this.transactions = transactions;
@@ -119,8 +122,8 @@ public class PaymentAttemptService {
         // with nothing named to resolve it.
         this.independently = new TransactionTemplate(unitOfWork.getTransactionManager());
         this.independently.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        this.providers = providerPorts.stream()
-                .collect(Collectors.toMap(PaymentProviderPort::providerType, port -> port));
+        this.providers =
+                providerPorts.stream().collect(Collectors.toMap(PaymentProviderPort::providerType, port -> port));
         this.clock = clock;
     }
 
@@ -138,8 +141,7 @@ public class PaymentAttemptService {
      *                               Resolve that one; do not start a second
      */
     @Transactional
-    public PaymentAttempt open(PaymentIntent intent, ProviderBinding binding,
-            LocalDate businessDate) {
+    public PaymentAttempt open(PaymentIntent intent, ProviderBinding binding, LocalDate businessDate) {
         // ADR 0024. An attempt is the row that says money is being asked for; the
         // presentation that follows is what the customer sees. Neither has a
         // meaning for an order that was paid and settled years ago.
@@ -153,19 +155,33 @@ public class PaymentAttemptService {
         // re-opened; see PaymentCheckoutService.
         Optional<PaymentAttempt> open = attempts.findOpenForIntent(intent.tenantId(), intent.id());
         if (open.isPresent()) {
-            throw new IllegalStateException(
-                    "Intent " + intent.id() + " already has an attempt in "
-                            + open.get().status() + "; resolve or re-present it rather than "
-                            + "charging again");
+            throw new IllegalStateException("Intent " + intent.id() + " already has an attempt in "
+                    + open.get().status() + "; resolve or re-present it rather than "
+                    + "charging again");
         }
 
         Instant now = clock.instant();
         PaymentAttempt attempt = new PaymentAttempt(
-                UUID.randomUUID(), intent.tenantId(), intent.id(),
-                binding.providerType(), binding.bindingId(),
-                mintMerchantTransId(), businessDate,
-                null, null, intent.amount(), PaymentAttemptStatus.INITIATED,
-                null, null, null, null, null, null, 1, now, null);
+                UUID.randomUUID(),
+                intent.tenantId(),
+                intent.id(),
+                binding.providerType(),
+                binding.bindingId(),
+                mintMerchantTransId(),
+                businessDate,
+                null,
+                null,
+                intent.amount(),
+                PaymentAttemptStatus.INITIATED,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                1,
+                now,
+                null);
 
         try {
             attempts.insert(attempt);
@@ -173,12 +189,16 @@ public class PaymentAttemptService {
             // The index, not this method, is what settles a race. Two concurrent
             // CreateTransaction calls for one order is exactly the case the read
             // above cannot cover on its own.
-            throw new IllegalStateException(
-                    "Another attempt against intent " + intent.id() + " won the race", raced);
+            throw new IllegalStateException("Another attempt against intent " + intent.id() + " won the race", raced);
         }
 
-        intents.transition(intent.tenantId(), intent.id(), intent.status(),
-                PaymentIntentStatus.AUTHORIZING, intent.version(), now);
+        intents.transition(
+                intent.tenantId(),
+                intent.id(),
+                intent.status(),
+                PaymentIntentStatus.AUTHORIZING,
+                intent.version(),
+                now);
 
         return attempt;
     }
@@ -219,8 +239,8 @@ public class PaymentAttemptService {
     // reaching checkout during a Click outage would own every connection the
     // application has. Nothing before the call touches the database, and the two
     // writes after it open their own transaction below.
-    public Optional<ProviderInvoice> present(PaymentAttempt attempt, ProviderBinding binding,
-            PresentationRequest request) {
+    public Optional<ProviderInvoice> present(
+            PaymentAttempt attempt, ProviderBinding binding, PresentationRequest request) {
         // ADR 0024. createInvoice below is an outbound call to Click or Payme. The
         // empty Optional this method already returns means "no provider port", and
         // reusing it for an import would say the provider is unconfigured when it
@@ -229,8 +249,7 @@ public class PaymentAttemptService {
 
         PaymentProviderPort provider = providers.get(binding.providerType());
         if (provider == null) {
-            log.warn("No provider port for {}; attempt {} cannot be presented.",
-                    binding.providerType(), attempt.id());
+            log.warn("No provider port for {}; attempt {} cannot be presented.", binding.providerType(), attempt.id());
             return Optional.empty();
         }
 
@@ -252,11 +271,24 @@ public class PaymentAttemptService {
         // carries no idempotency key.
         unitOfWork.executeWithoutResult(ignored -> {
             Instant now = clock.instant();
-            attempts.recordPresentation(attempt.tenantId(), attempt.id(), invoice.presentationKind(),
-                    invoice.externalInvoiceId(), invoice.expiresAt(), now);
+            attempts.recordPresentation(
+                    attempt.tenantId(),
+                    attempt.id(),
+                    invoice.presentationKind(),
+                    invoice.externalInvoiceId(),
+                    invoice.expiresAt(),
+                    now);
             if (attempt.status() == PaymentAttemptStatus.INITIATED) {
-                attempts.transition(attempt.tenantId(), attempt.id(), PaymentAttemptStatus.INITIATED,
-                        PaymentAttemptStatus.PRESENTED, null, null, null, null, now);
+                attempts.transition(
+                        attempt.tenantId(),
+                        attempt.id(),
+                        PaymentAttemptStatus.INITIATED,
+                        PaymentAttemptStatus.PRESENTED,
+                        null,
+                        null,
+                        null,
+                        null,
+                        now);
             }
         });
         return Optional.of(invoice);
@@ -281,21 +313,35 @@ public class PaymentAttemptService {
      * @return true when this call was the one that recorded the event
      */
     @Transactional
-    public boolean recordProviderEvent(PaymentAttempt attempt, PaymentTransactionType type,
-            PaymentAttemptStatus to, SomAmount amount, String providerReference,
-            ProviderEvidence evidence, String externalPaymentId, String externalDocumentId,
-            Instant occurredAt, String protectedRequestReference,
+    public boolean recordProviderEvent(
+            PaymentAttempt attempt,
+            PaymentTransactionType type,
+            PaymentAttemptStatus to,
+            SomAmount amount,
+            String providerReference,
+            ProviderEvidence evidence,
+            String externalPaymentId,
+            String externalDocumentId,
+            Instant occurredAt,
+            String protectedRequestReference,
             String protectedResponseReference) {
         PaymentAttemptStateMachine.require(attempt.status(), to);
 
         Instant now = clock.instant();
         UUID transactionId = UUID.randomUUID();
         boolean appended = transactions.append(new PaymentTransaction(
-                transactionId, attempt.tenantId(), attempt.intentId(), attempt.id(), type,
-                amount, providerReference == null
-                        ? PaymentTransaction.localReference(transactionId) : providerReference,
-                evidence, occurredAt, now,
-                protectedRequestReference, protectedResponseReference));
+                transactionId,
+                attempt.tenantId(),
+                attempt.intentId(),
+                attempt.id(),
+                type,
+                amount,
+                providerReference == null ? PaymentTransaction.localReference(transactionId) : providerReference,
+                evidence,
+                occurredAt,
+                now,
+                protectedRequestReference,
+                protectedResponseReference));
 
         if (!appended) {
             // A replay. The attempt is already where this event would have put it,
@@ -304,8 +350,16 @@ public class PaymentAttemptService {
             return false;
         }
 
-        attempts.transition(attempt.tenantId(), attempt.id(), attempt.status(), to, evidence,
-                externalPaymentId, externalDocumentId, null, now);
+        attempts.transition(
+                attempt.tenantId(),
+                attempt.id(),
+                attempt.status(),
+                to,
+                evidence,
+                externalPaymentId,
+                externalDocumentId,
+                null,
+                now);
 
         applyToIntent(attempt, to, now);
         return true;
@@ -324,10 +378,20 @@ public class PaymentAttemptService {
     public void markUncertain(PaymentAttempt attempt, String failureCode) {
         Instant now = clock.instant();
         UncertaintyResolver resolver = UncertaintyResolver.forProvider(attempt.providerType());
-        attempts.markUncertain(attempt.tenantId(), attempt.id(), attempt.status(), resolver, now,
-                now.plus(UNCERTAINTY_DEADLINE), failureCode);
-        log.warn("Payment attempt {} on {} is uncertain; resolving through {} by {}.",
-                attempt.id(), attempt.providerType(), resolver, now.plus(UNCERTAINTY_DEADLINE));
+        attempts.markUncertain(
+                attempt.tenantId(),
+                attempt.id(),
+                attempt.status(),
+                resolver,
+                now,
+                now.plus(UNCERTAINTY_DEADLINE),
+                failureCode);
+        log.warn(
+                "Payment attempt {} on {} is uncertain; resolving through {} by {}.",
+                attempt.id(),
+                attempt.providerType(),
+                resolver,
+                now.plus(UNCERTAINTY_DEADLINE));
     }
 
     /**
@@ -357,19 +421,16 @@ public class PaymentAttemptService {
             return attempt.status();
         }
 
-        Optional<ProviderBinding> binding = bindings.resolve(
-                attempt.tenantId(),
-                sellerOf(attempt),
-                attempt.providerType(),
-                attempt.businessDate());
+        Optional<ProviderBinding> binding =
+                bindings.resolve(attempt.tenantId(), sellerOf(attempt), attempt.providerType(), attempt.businessDate());
         PaymentProviderPort provider = providers.get(attempt.providerType());
 
         if (binding.isEmpty() || provider == null) {
             // A binding cannot be retired while an attempt against it is uncertain,
             // so reaching here means configuration has been changed underneath a
             // live question about money. A human, not a retry.
-            attempts.recordResolutionAttempt(attempt.tenantId(), attempt.id(),
-                    UncertaintyResolver.OPERATIONS_EXCEPTION, clock.instant());
+            attempts.recordResolutionAttempt(
+                    attempt.tenantId(), attempt.id(), UncertaintyResolver.OPERATIONS_EXCEPTION, clock.instant());
             return PaymentAttemptStatus.UNCERTAIN;
         }
 
@@ -379,12 +440,18 @@ public class PaymentAttemptService {
             Instant now = clock.instant();
             return switch (outcome.classification()) {
                 case SUCCESS, REJECTED -> {
-                    PaymentAttemptStatus settled = outcome.observedStatus() == null
-                            ? PaymentAttemptStatus.FAILED : outcome.observedStatus();
-                    attempts.transition(attempt.tenantId(), attempt.id(),
-                            PaymentAttemptStatus.UNCERTAIN, settled, outcome.evidence(),
-                            outcome.externalPaymentId(), outcome.externalDocumentId(),
-                            outcome.failureCode(), now);
+                    PaymentAttemptStatus settled =
+                            outcome.observedStatus() == null ? PaymentAttemptStatus.FAILED : outcome.observedStatus();
+                    attempts.transition(
+                            attempt.tenantId(),
+                            attempt.id(),
+                            PaymentAttemptStatus.UNCERTAIN,
+                            settled,
+                            outcome.evidence(),
+                            outcome.externalPaymentId(),
+                            outcome.externalDocumentId(),
+                            outcome.failureCode(),
+                            now);
                     applyToIntent(attempt, settled, now);
                     yield settled;
                 }
@@ -415,13 +482,22 @@ public class PaymentAttemptService {
         List<PaymentAttempt> stale = attempts.listExpiredReservations(now, limit);
         int expired = 0;
         for (PaymentAttempt attempt : stale) {
-            boolean recorded = recordProviderEvent(attempt, PaymentTransactionType.EXPIRE,
-                    PaymentAttemptStatus.EXPIRED, attempt.amount(), null,
+            boolean recorded = recordProviderEvent(
+                    attempt,
+                    PaymentTransactionType.EXPIRE,
+                    PaymentAttemptStatus.EXPIRED,
+                    attempt.amount(),
+                    null,
                     // Payme expresses this as state -1 with reason 4. Click has no
                     // expiry state at all and is never told.
                     attempt.providerType() == uz.horecaos.platform.payments.domain.PaymentProviderType.PAYME
-                            ? new ProviderEvidence("-1", "4", now) : null,
-                    null, null, now, null, null);
+                            ? new ProviderEvidence("-1", "4", now)
+                            : null,
+                    null,
+                    null,
+                    now,
+                    null,
+                    null);
             if (recorded) {
                 expired++;
             }
@@ -451,27 +527,26 @@ public class PaymentAttemptService {
      * purpose. A settlement that closed in a separate transaction could be lost
      * while the capture survived, which is the same gap in a smaller window.
      */
-    private void applyToIntent(PaymentAttempt attempt, PaymentAttemptStatus attemptStatus,
-            Instant now) {
+    private void applyToIntent(PaymentAttempt attempt, PaymentAttemptStatus attemptStatus, Instant now) {
         intents.find(attempt.tenantId(), attempt.intentId()).ifPresent(intent -> {
             if (attemptStatus == PaymentAttemptStatus.CAPTURED) {
                 captures.recordCapture(intent.tenantId(), intent.orderId(), CAPTURE_ACTOR);
             }
-            PaymentIntentStatus target = switch (attemptStatus) {
-                case CAPTURED -> PaymentIntentStatus.PAID;
-                case CANCELLED -> PaymentIntentStatus.CANCELLED;
-                case EXPIRED -> PaymentIntentStatus.EXPIRED;
-                case FAILED -> PaymentIntentStatus.FAILED;
-                // A reversal does not un-pay the order. The order was paid, the
-                // money went back, and both facts are true: adjusting the intent to
-                // say otherwise would destroy the record that a capture happened,
-                // which is the record a settlement reconciliation is argued from.
-                case REVERSED -> PaymentIntentStatus.PAID;
-                default -> intent.status();
-            };
+            PaymentIntentStatus target =
+                    switch (attemptStatus) {
+                        case CAPTURED -> PaymentIntentStatus.PAID;
+                        case CANCELLED -> PaymentIntentStatus.CANCELLED;
+                        case EXPIRED -> PaymentIntentStatus.EXPIRED;
+                        case FAILED -> PaymentIntentStatus.FAILED;
+                        // A reversal does not un-pay the order. The order was paid, the
+                        // money went back, and both facts are true: adjusting the intent to
+                        // say otherwise would destroy the record that a capture happened,
+                        // which is the record a settlement reconciliation is argued from.
+                        case REVERSED -> PaymentIntentStatus.PAID;
+                        default -> intent.status();
+                    };
             if (target != intent.status()) {
-                intents.transition(intent.tenantId(), intent.id(), intent.status(), target,
-                        intent.version(), now);
+                intents.transition(intent.tenantId(), intent.id(), intent.status(), target, intent.version(), now);
             }
         });
     }

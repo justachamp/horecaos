@@ -3,7 +3,6 @@ package uz.horecaos.platform.telemetry.infrastructure.startup;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,7 +11,6 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.telemetry.api.SettlementCalendarPort;
 import uz.horecaos.platform.telemetry.api.TelemetryConfigurationKeys;
 import uz.horecaos.platform.telemetry.domain.TrackRetentionFloor;
@@ -54,7 +52,9 @@ public class TrackRetentionFloorCheck implements ApplicationRunner {
     private final Environment environment;
     private final String mode;
 
-    public TrackRetentionFloorCheck(JdbcClient jdbc, SettlementCalendarPort calendar,
+    public TrackRetentionFloorCheck(
+            JdbcClient jdbc,
+            SettlementCalendarPort calendar,
             Environment environment,
             @Value("${horecaos.telemetry.retention.floor-check:AUTO}") String mode) {
         this.jdbc = jdbc;
@@ -74,14 +74,17 @@ public class TrackRetentionFloorCheck implements ApplicationRunner {
         int dispute = calendar.statementDisputeDays();
 
         if (!calendar.isWired()) {
-            log.warn("ADR 0042 has not supplied a settlement calendar; the courier track retention "
-                    + "floor is being checked against the pilot's {}-day period and {}-day dispute "
-                    + "window", period, dispute);
+            log.warn(
+                    "ADR 0042 has not supplied a settlement calendar; the courier track retention "
+                            + "floor is being checked against the pilot's {}-day period and {}-day dispute "
+                            + "window",
+                    period,
+                    dispute);
         }
 
         List<Verdict> verdicts = new ArrayList<>();
-        verdicts.add(TrackRetentionFloor.check("The code default",
-                TelemetryConfigurationKeys.TRACK_RETENTION_DAYS.defaultValue(), period, dispute));
+        verdicts.add(TrackRetentionFloor.check(
+                "The code default", TelemetryConfigurationKeys.TRACK_RETENTION_DAYS.defaultValue(), period, dispute));
 
         for (StoredRetention stored : storedRetentions()) {
             verdicts.add(TrackRetentionFloor.check(stored.origin(), stored.days(), period, dispute));
@@ -92,7 +95,8 @@ public class TrackRetentionFloorCheck implements ApplicationRunner {
             return verdicts;
         }
 
-        String report = problems.stream().map(Verdict::explanation)
+        String report = problems.stream()
+                .map(Verdict::explanation)
                 .reduce((left, right) -> left + System.lineSeparator() + right)
                 .orElse("");
 
@@ -105,8 +109,7 @@ public class TrackRetentionFloorCheck implements ApplicationRunner {
                     The floor is settlement_period_days + statement_dispute_days (ADR 0042).
                     Raise the retention, shorten the settlement calendar, or set
                     horecaos.telemetry.retention.floor-check=REPORT_ONLY for one deployment while
-                    the configuration is corrected."""
-                    .formatted(report));
+                    the configuration is corrected.""".formatted(report));
         }
 
         log.warn("Courier track retention findings (report-only):{}{}", System.lineSeparator(), report);
@@ -135,7 +138,8 @@ public class TrackRetentionFloorCheck implements ApplicationRunner {
      * resolve at when the application has not served a request yet.
      */
     private List<StoredRetention> storedRetentions() {
-        return jdbc.sql("""
+        return jdbc
+                .sql("""
                 SELECT scope_type, tenant_id, integer_value, is_explicit_null
                   FROM tenant.configuration_values
                  WHERE key_code = :keyCode
@@ -152,8 +156,7 @@ public class TrackRetentionFloorCheck implements ApplicationRunner {
                     String scopeType = resultSet.getString("scope_type");
                     Object tenantId = resultSet.getObject("tenant_id");
                     return new StoredRetention(
-                            tenantId == null ? scopeType : scopeType + " " + tenantId,
-                            Math.toIntExact(days));
+                            tenantId == null ? scopeType : scopeType + " " + tenantId, Math.toIntExact(days));
                 })
                 .list()
                 .stream()
@@ -161,6 +164,5 @@ public class TrackRetentionFloorCheck implements ApplicationRunner {
                 .toList();
     }
 
-    private record StoredRetention(String origin, int days) {
-    }
+    private record StoredRetention(String origin, int days) {}
 }

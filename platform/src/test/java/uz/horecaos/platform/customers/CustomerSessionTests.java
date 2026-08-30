@@ -1,5 +1,12 @@
 package uz.horecaos.platform.customers;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -11,11 +18,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.customers.api.CustomerAccountRef;
@@ -31,13 +36,6 @@ import uz.horecaos.platform.customers.application.CustomerVerificationService.Re
 import uz.horecaos.platform.customers.domain.CustomerSessionToken;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore.AccountRow;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * The session itself: what it is, when it stops being one, and what it reaches
@@ -75,8 +73,8 @@ class CustomerSessionTests {
         identity = mock(CustomerIdentityService.class);
         customers = mock(JdbcCustomerStore.class);
 
-        service = new CustomerSessionService(verification, sessions, identity, customers,
-                new DiscardingAuditRecorder(), clock, TTL);
+        service = new CustomerSessionService(
+                verification, sessions, identity, customers, new DiscardingAuditRecorder(), clock, TTL);
 
         // Resolution follows the merge redirect; by default an account is its own
         // target, which is what an unmerged account is.
@@ -169,8 +167,7 @@ class CustomerSessionTests {
 
         assertThat(service.resolve(established.token()).state()).isEqualTo(Resolution.State.ENDED);
         assertThat(service.resolve(CustomerSessionToken.issue().plaintext()).state())
-                .as("a customer whose session expired mid-basket must not be answered the "
-                        + "way a stranger is")
+                .as("a customer whose session expired mid-basket must not be answered the " + "way a stranger is")
                 .isEqualTo(Resolution.State.UNKNOWN);
     }
 
@@ -199,8 +196,7 @@ class CustomerSessionTests {
     void aMergedAccountFollowsItsRedirect() {
         UUID survivor = UUID.randomUUID();
         Established established = establish(null);
-        when(identity.effective(TENANT, ACCOUNT))
-                .thenReturn(new CustomerAccountRef(survivor, TENANT));
+        when(identity.effective(TENANT, ACCOUNT)).thenReturn(new CustomerAccountRef(survivor, TENANT));
 
         assertThat(service.resolve(established.token()).session().accountId())
                 .as("two accounts can be joined while somebody is holding a session for "
@@ -240,8 +236,7 @@ class CustomerSessionTests {
         assertThat(service.resolve(mine.token()).state()).isEqualTo(Resolution.State.ENDED);
         assertThat(service.resolve(alsoMine.token()).state()).isEqualTo(Resolution.State.ENDED);
         assertThat(service.resolve(theirs.token()).state())
-                .as("revocation is per account, and being in the same tenant is not being "
-                        + "the same person")
+                .as("revocation is per account, and being in the same tenant is not being " + "the same person")
                 .isEqualTo(Resolution.State.ACTIVE);
         assertThat(somebodyElse).isNotEqualTo(ACCOUNT);
     }
@@ -253,7 +248,8 @@ class CustomerSessionTests {
     void aSharedSessionCoversTheTenant() {
         CustomerSession shared = session(null);
 
-        assertThat(shared.covers(TENANT, BRAND, CustomerIdentityPolicy.TENANT_SHARED)).isTrue();
+        assertThat(shared.covers(TENANT, BRAND, CustomerIdentityPolicy.TENANT_SHARED))
+                .isTrue();
         assertThat(shared.covers(TENANT, SIBLING_BRAND, CustomerIdentityPolicy.TENANT_SHARED))
                 .as("one account across the tenant is what the mode means")
                 .isTrue();
@@ -264,7 +260,8 @@ class CustomerSessionTests {
     void anIsolatedSessionCoversOneBrand() {
         CustomerSession isolated = session(BRAND);
 
-        assertThat(isolated.covers(TENANT, BRAND, CustomerIdentityPolicy.BRAND_ISOLATED)).isTrue();
+        assertThat(isolated.covers(TENANT, BRAND, CustomerIdentityPolicy.BRAND_ISOLATED))
+                .isTrue();
         assertThat(isolated.covers(TENANT, SIBLING_BRAND, CustomerIdentityPolicy.BRAND_ISOLATED))
                 .as("separate businesses hold separate accounts for the same person")
                 .isFalse();
@@ -318,15 +315,22 @@ class CustomerSessionTests {
     private Established establish(UUID partition, UUID accountId) {
         when(verification.redeemAsProvenNumber(eq(TENANT), eq(BRAND), anyString()))
                 .thenReturn(new Redemption(new CustomerAccountRef(accountId, TENANT), true));
-        when(customers.account(TENANT, accountId)).thenReturn(Optional.of(new AccountRow(
-                accountId, partition, "ACTIVE", null, null, null, 1, 1, clock.instant())));
+        when(customers.account(TENANT, accountId))
+                .thenReturn(Optional.of(
+                        new AccountRow(accountId, partition, "ACTIVE", null, null, null, 1, 1, clock.instant())));
 
         return service.establish(TENANT, BRAND, "a-grant");
     }
 
     private CustomerSession session(UUID partition) {
-        return new CustomerSession(UUID.randomUUID(), TENANT, BRAND, ACCOUNT, partition,
-                clock.instant(), clock.instant().plus(TTL));
+        return new CustomerSession(
+                UUID.randomUUID(),
+                TENANT,
+                BRAND,
+                ACCOUNT,
+                partition,
+                clock.instant(),
+                clock.instant().plus(TTL));
     }
 
     /**
@@ -345,9 +349,16 @@ class CustomerSessionTests {
 
         @Override
         public void insert(NewSession session) {
-            Row row = new Row(session.sessionId(), session.tenantId(), session.brandId(),
-                    session.accountId(), session.identityPartitionBrandId(), session.tokenHash(),
-                    session.issuedAt(), session.expiresAt(), null);
+            Row row = new Row(
+                    session.sessionId(),
+                    session.tenantId(),
+                    session.brandId(),
+                    session.accountId(),
+                    session.identityPartitionBrandId(),
+                    session.tokenHash(),
+                    session.issuedAt(),
+                    session.expiresAt(),
+                    null);
             rows.add(row);
             byHash.put(session.tokenHash(), row);
         }
@@ -372,8 +383,7 @@ class CustomerSessionTests {
         public int revokeForAccount(UUID tenantId, UUID accountId, Instant now) {
             int ended = 0;
             for (Row row : rows) {
-                if (row.tenantId.equals(tenantId) && row.accountId.equals(accountId)
-                        && row.revokedAt == null) {
+                if (row.tenantId.equals(tenantId) && row.accountId.equals(accountId) && row.revokedAt == null) {
                     row.revokedAt = now;
                     ended++;
                 }
@@ -384,8 +394,8 @@ class CustomerSessionTests {
         @Override
         public int purgeEndedBefore(Instant cutoff, int limit) {
             List<Row> doomed = rows.stream()
-                    .filter(row -> row.expiresAt.isBefore(cutoff)
-                            || (row.revokedAt != null && row.revokedAt.isBefore(cutoff)))
+                    .filter(row ->
+                            row.expiresAt.isBefore(cutoff) || (row.revokedAt != null && row.revokedAt.isBefore(cutoff)))
                     .limit(limit)
                     .toList();
             doomed.forEach(row -> byHash.remove(row.tokenHash));
@@ -405,8 +415,16 @@ class CustomerSessionTests {
             private final Instant expiresAt;
             private Instant revokedAt;
 
-            private Row(UUID id, UUID tenantId, UUID brandId, UUID accountId, UUID partition,
-                    String tokenHash, Instant issuedAt, Instant expiresAt, Instant revokedAt) {
+            private Row(
+                    UUID id,
+                    UUID tenantId,
+                    UUID brandId,
+                    UUID accountId,
+                    UUID partition,
+                    String tokenHash,
+                    Instant issuedAt,
+                    Instant expiresAt,
+                    Instant revokedAt) {
                 this.id = id;
                 this.tenantId = tenantId;
                 this.brandId = brandId;
@@ -419,8 +437,7 @@ class CustomerSessionTests {
             }
 
             private StoredSession stored() {
-                return new StoredSession(id, tenantId, brandId, accountId, partition, issuedAt,
-                        expiresAt, revokedAt);
+                return new StoredSession(id, tenantId, brandId, accountId, partition, issuedAt, expiresAt, revokedAt);
             }
 
             private String tokenHash() {

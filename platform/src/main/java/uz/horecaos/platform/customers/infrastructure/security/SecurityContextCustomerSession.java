@@ -1,11 +1,9 @@
 package uz.horecaos.platform.customers.infrastructure.security;
 
 import java.util.Optional;
-
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.customers.application.CurrentCustomerSession;
 import uz.horecaos.platform.customers.application.CustomerSession;
 

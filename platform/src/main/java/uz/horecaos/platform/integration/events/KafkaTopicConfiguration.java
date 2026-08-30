@@ -1,10 +1,8 @@
 package uz.horecaos.platform.integration.events;
 
 import java.util.Map;
-
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.config.TopicConfig;
-
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.TopicBuilder;
@@ -26,7 +24,8 @@ class KafkaTopicConfiguration {
                         .partitions(topic.partitions())
                         .replicas(topic.replicationFactor())
                         .configs(Map.of(
-                                TopicConfig.CLEANUP_POLICY_CONFIG, topic.cleanupPolicy(),
+                                TopicConfig.CLEANUP_POLICY_CONFIG,
+                                topic.cleanupPolicy(),
                                 TopicConfig.RETENTION_MS_CONFIG,
                                 Long.toString(topic.retention().toMillis())))
                         .build())

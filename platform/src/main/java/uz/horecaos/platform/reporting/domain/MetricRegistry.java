@@ -7,7 +7,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
 import uz.horecaos.platform.reporting.domain.MetricDefinition.Aggregation;
 import uz.horecaos.platform.reporting.domain.MetricDefinition.CurrencyRule;
 import uz.horecaos.platform.reporting.domain.MetricDefinition.MetricUnit;
@@ -46,12 +45,14 @@ public final class MetricRegistry {
     private static final LocalDate PILOT = LocalDate.of(2026, 7, 1);
 
     private static final Map<String, MetricDefinition> BY_CODE = index(List.of(
-
             new MetricDefinition(
                     new MetricId("revenue.gross", 1),
                     Grain.DAY_LOCATION_LEGAL_ENTITY,
-                    "reporting.fact_order.gross_revenue_som", true,
-                    Aggregation.SUM, "COMPLETED_ONLY", CurrencyRule.UZS_SOM,
+                    "reporting.fact_order.gross_revenue_som",
+                    true,
+                    Aggregation.SUM,
+                    "COMPLETED_ONLY",
+                    CurrencyRule.UZS_SOM,
                     "Whole som; no sub-unit exists and nothing divides by a hundred",
                     MetricUnit.MONEY_SOM,
                     "Sum of order value before discount, including the delivery fee and tax, on "
@@ -64,14 +65,16 @@ public final class MetricRegistry {
                     "Cancelled, rejected, expired, and payment-failed orders.",
                     "A refund reduces revenue.net.v1 on the refund's own business date and never "
                             + "this figure, so a closed day does not change after it closed.",
-                    null, PILOT),
-
+                    null,
+                    PILOT),
             new MetricDefinition(
                     new MetricId("revenue.net", 1),
                     Grain.DAY_LOCATION_LEGAL_ENTITY,
-                    "reporting.fact_order.net_revenue_som less reporting.fact_refund on this "
-                            + "date", true,
-                    Aggregation.SUM, "COMPLETED_ONLY", CurrencyRule.UZS_SOM,
+                    "reporting.fact_order.net_revenue_som less reporting.fact_refund on this " + "date",
+                    true,
+                    Aggregation.SUM,
+                    "COMPLETED_ONLY",
+                    CurrencyRule.UZS_SOM,
                     "Whole som; no sub-unit exists and nothing divides by a hundred",
                     MetricUnit.MONEY_SOM,
                     "Gross minus discount minus refunds, with each refund counted on the business "
@@ -87,12 +90,14 @@ public final class MetricRegistry {
                             + "aggregator order. A revenue.net_of_commission.v2 arrives with the "
                             + "commission fact rather than being faked from this one.",
                     PILOT),
-
             new MetricDefinition(
                     new MetricId("average_check", 1),
                     Grain.DAY_LOCATION_LEGAL_ENTITY,
-                    "revenue.gross.v1 over orders.count.v1", true,
-                    Aggregation.RATIO, "COMPLETED_ONLY", CurrencyRule.UZS_SOM,
+                    "revenue.gross.v1 over orders.count.v1",
+                    true,
+                    Aggregation.RATIO,
+                    "COMPLETED_ONLY",
+                    CurrencyRule.UZS_SOM,
                     "Whole som, truncated toward zero",
                     MetricUnit.MONEY_SOM,
                     "Gross revenue divided by the count of completed orders, over the same "
@@ -103,29 +108,36 @@ public final class MetricRegistry {
                     "Cancelled, rejected, and expired orders.",
                     "Refunds reduce revenue.net.v1 and leave the average check alone, because the "
                             + "check is what was ordered.",
-                    null, PILOT),
-
+                    null,
+                    PILOT),
             new MetricDefinition(
                     new MetricId("orders.count", 1),
                     Grain.DAY_LOCATION_CHANNEL,
-                    "reporting.fact_order, terminal_status = COMPLETED", true,
-                    Aggregation.COUNT, "COMPLETED_ONLY", CurrencyRule.NONE,
-                    "Integer", MetricUnit.COUNT,
+                    "reporting.fact_order, terminal_status = COMPLETED",
+                    true,
+                    Aggregation.COUNT,
+                    "COMPLETED_ONLY",
+                    CurrencyRule.NONE,
+                    "Integer",
+                    MetricUnit.COUNT,
                     "Count of orders whose terminal status is COMPLETED.",
                     "COMPLETED orders.",
                     "Every other terminal status. Cancellations are orders.cancelled.v1 and are "
                             + "never a subtraction inside this metric, because a funnel whose "
                             + "stages do not sum to the total is unreadable.",
                     "A refunded order stays in this count. It was cooked and handed over.",
-                    null, PILOT),
-
+                    null,
+                    PILOT),
             new MetricDefinition(
                     new MetricId("orders.cancelled", 1),
                     Grain.DAY_LOCATION,
-                    "reporting.fact_order, terminal_status in CANCELLED, REJECTED, EXPIRED, "
-                            + "PAYMENT_FAILED", true,
-                    Aggregation.COUNT, "NON_COMPLETING_TERMINAL", CurrencyRule.NONE,
-                    "Integer", MetricUnit.COUNT,
+                    "reporting.fact_order, terminal_status in CANCELLED, REJECTED, EXPIRED, " + "PAYMENT_FAILED",
+                    true,
+                    Aggregation.COUNT,
+                    "NON_COMPLETING_TERMINAL",
+                    CurrencyRule.NONE,
+                    "Integer",
+                    MetricUnit.COUNT,
                     "Count of orders ending CANCELLED, REJECTED, EXPIRED, or PAYMENT_FAILED.",
                     "All four non-completing terminal statuses.",
                     "Orders still open at the close of the business day.",
@@ -135,13 +147,14 @@ public final class MetricRegistry {
                             + "released before production counts the same as four cooked dishes "
                             + "binned at the pass.",
                     PILOT),
-
             new MetricDefinition(
                     new MetricId("orders.late", 1),
                     Grain.DAY_LOCATION,
-                    "reporting.fact_order.seconds_late, derived from the ADR 0036 promise stored "
-                            + "at checkout", true,
-                    Aggregation.COUNT, "PROMISED_AND_CLOSED", CurrencyRule.NONE,
+                    "reporting.fact_order.seconds_late, derived from the ADR 0036 promise stored " + "at checkout",
+                    true,
+                    Aggregation.COUNT,
+                    "PROMISED_AND_CLOSED",
+                    CurrencyRule.NONE,
                     "Integer count; minutes rounded down where minutes are shown",
                     MetricUnit.COUNT,
                     "Count of closed orders handed over after the time promised to the customer.",
@@ -156,13 +169,16 @@ public final class MetricRegistry {
                             + "eleven minutes of what the customer was told, and restarting the "
                             + "clock on acceptance would hide exactly that delay.",
                     null),
-
             new MetricDefinition(
                     new MetricId("prep_time.median", 1),
                     Grain.DAY_LOCATION,
-                    "reporting.fact_order.seconds_to_ready", true,
-                    Aggregation.MEDIAN, "REACHED_READY", CurrencyRule.NONE,
-                    "Seconds", MetricUnit.SECONDS,
+                    "reporting.fact_order.seconds_to_ready",
+                    true,
+                    Aggregation.MEDIAN,
+                    "REACHED_READY",
+                    CurrencyRule.NONE,
+                    "Seconds",
+                    MetricUnit.SECONDS,
                     "Median seconds from confirmation to the order being ready.",
                     "Orders that reached READY.",
                     "Orders cancelled before production.",
@@ -171,12 +187,14 @@ public final class MetricRegistry {
                             + "kitchen.tickets.started_at and ready_at and need ADR 0041; a "
                             + "ticket sitting on the pass reads here as cooking time.",
                     PILOT),
-
             new MetricDefinition(
                     new MetricId("sla_bucket_set", 1),
                     Grain.DAY_LOCATION,
-                    "reporting.agg_sla_bucket_day", true,
-                    Aggregation.DISTRIBUTION, "CLOSED_ORDERS", CurrencyRule.NONE,
+                    "reporting.agg_sla_bucket_day",
+                    true,
+                    Aggregation.DISTRIBUTION,
+                    "CLOSED_ORDERS",
+                    CurrencyRule.NONE,
                     "Integer counts; shares in basis points summing to 10000",
                     MetricUnit.BASIS_POINTS,
                     "Six half-open intervals over elapsed order seconds: [0,30) [30,35) [35,40) "
@@ -190,13 +208,16 @@ public final class MetricRegistry {
                             + "tenant-edited bucket rewrites every chart already drawn and "
                             + "nothing records that it happened.",
                     PILOT),
-
             new MetricDefinition(
                     new MetricId("channel_mix.count", 1),
                     Grain.DAY_LOCATION_CHANNEL,
-                    "reporting.fact_order.channel_code", true,
-                    Aggregation.COUNT, "COMPLETED_ONLY", CurrencyRule.NONE,
-                    "Integer", MetricUnit.COUNT,
+                    "reporting.fact_order.channel_code",
+                    true,
+                    Aggregation.COUNT,
+                    "COMPLETED_ONLY",
+                    CurrencyRule.NONE,
+                    "Integer",
+                    MetricUnit.COUNT,
                     "Completed orders by the channel snapshotted on the order.",
                     "COMPLETED orders.",
                     "Cancelled, rejected, and expired orders.",
@@ -204,19 +225,19 @@ public final class MetricRegistry {
                     "The channel code is a snapshot, which is why renaming a channel does not "
                             + "rewrite last month's chart.",
                     PILOT),
-
             new MetricDefinition(
                     new MetricId("delivery_cost_variance", 1),
                     Grain.DAY_LOCATION_LEGAL_ENTITY,
-                    "reporting.fact_delivery", false,
-                    Aggregation.SUM, "EXTERNAL_DELIVERY_BILLED", CurrencyRule.UZS_SOM,
+                    "reporting.fact_delivery",
+                    false,
+                    Aggregation.SUM,
+                    "EXTERNAL_DELIVERY_BILLED",
+                    CurrencyRule.UZS_SOM,
                     "Whole som; no sub-unit exists and nothing divides by a hundred",
                     MetricUnit.MONEY_SOM,
-                    "Provider billed amount minus the fee charged to the customer, on external "
-                            + "deliveries.",
+                    "Provider billed amount minus the fee charged to the customer, on external " + "deliveries.",
                     "External deliveries whose provider invoice has been matched.",
-                    "UNBILLED deliveries, which are counted separately rather than read as a "
-                            + "zero-variance match.",
+                    "UNBILLED deliveries, which are counted separately rather than read as a " + "zero-variance match.",
                     "Not applicable.",
                     "Not built. fact_delivery needs ADR 0042: courier shifts, assignments, and "
                             + "the external-delivery reconciliation do not exist as data. Every "
@@ -224,8 +245,7 @@ public final class MetricRegistry {
                             + "zero.",
                     null)));
 
-    private MetricRegistry() {
-    }
+    private MetricRegistry() {}
 
     public static Optional<MetricDefinition> find(String code) {
         return Optional.ofNullable(BY_CODE.get(code));
@@ -266,8 +286,7 @@ public final class MetricRegistry {
         private final String code;
 
         UnknownMetricException(String code) {
-            super("Unknown metric \"%s\". Every number names a registry id (ADR 0043)."
-                    .formatted(code));
+            super("Unknown metric \"%s\". Every number names a registry id (ADR 0043).".formatted(code));
             this.code = code;
         }
 

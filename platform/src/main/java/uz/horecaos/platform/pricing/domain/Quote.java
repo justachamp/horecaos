@@ -79,11 +79,25 @@ public record Quote(
         }
 
         /** An ordinary basket line. */
-        public static QuoteLine item(String lineId, UUID variantId, int quantity,
-                String descriptionSnapshot, Money unitAmount, Money baseAmount,
-                Money finalAmount, Money taxAmount) {
-            return new QuoteLine(lineId, LineType.ITEM, variantId, quantity, descriptionSnapshot,
-                    unitAmount, baseAmount, finalAmount, taxAmount);
+        public static QuoteLine item(
+                String lineId,
+                UUID variantId,
+                int quantity,
+                String descriptionSnapshot,
+                Money unitAmount,
+                Money baseAmount,
+                Money finalAmount,
+                Money taxAmount) {
+            return new QuoteLine(
+                    lineId,
+                    LineType.ITEM,
+                    variantId,
+                    quantity,
+                    descriptionSnapshot,
+                    unitAmount,
+                    baseAmount,
+                    finalAmount,
+                    taxAmount);
         }
     }
 
@@ -115,7 +129,13 @@ public record Quote(
             String descriptionCode) {
 
         public enum Type {
-            BASE_PRICE, MODIFIER, ITEM_DISCOUNT, ORDER_DISCOUNT, FEE, TAX, ROUNDING,
+            BASE_PRICE,
+            MODIFIER,
+            ITEM_DISCOUNT,
+            ORDER_DISCOUNT,
+            FEE,
+            TAX,
+            ROUNDING,
             /**
              * ADR 0037 stage 8. The zone's own free-delivery threshold, recorded as
              * a negative adjustment rather than by computing the fee as zero,

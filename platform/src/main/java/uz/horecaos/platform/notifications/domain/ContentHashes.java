@@ -23,8 +23,7 @@ import java.util.TreeMap;
  */
 public final class ContentHashes {
 
-    private ContentHashes() {
-    }
+    private ContentHashes() {}
 
     public static String of(String value) {
         return hex(digest().digest(value == null ? new byte[0] : value.getBytes(StandardCharsets.UTF_8)));
@@ -41,8 +40,13 @@ public final class ContentHashes {
         StringBuilder canonical = new StringBuilder();
         for (Map.Entry<String, String> entry : new TreeMap<>(variables).entrySet()) {
             String value = entry.getValue() == null ? "" : entry.getValue();
-            canonical.append(entry.getKey().length()).append(':').append(entry.getKey())
-                    .append(value.length()).append(':').append(value);
+            canonical
+                    .append(entry.getKey().length())
+                    .append(':')
+                    .append(entry.getKey())
+                    .append(value.length())
+                    .append(':')
+                    .append(value);
         }
         return of(canonical.toString());
     }

@@ -10,7 +10,6 @@ package uz.horecaos.platform.courier.domain;
  * phone has been off for an hour.
  */
 public enum DutyState {
-
     AVAILABLE,
     ON_BREAK,
     AT_CAPACITY,

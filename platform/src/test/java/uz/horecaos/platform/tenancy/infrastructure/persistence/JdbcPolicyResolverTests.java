@@ -1,31 +1,23 @@
 package uz.horecaos.platform.tenancy.infrastructure.persistence;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Set;
 import java.util.UUID;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.json.JsonMapper;
-
-import uz.horecaos.platform.support.TestDatabase;
-import uz.horecaos.platform.tenancy.api.BrandId;
-import uz.horecaos.platform.tenancy.api.LocationId;
-import uz.horecaos.platform.tenancy.api.PolicyKey;
-import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
-import uz.horecaos.platform.tenancy.api.TenantId;
+import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.api.PolicyKey;
+import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
 
 /**
  * ADR 0030 exit criterion: a business fact that referenced a policy resolves to
@@ -34,12 +26,15 @@ import uz.horecaos.platform.tenancy.api.TenantId;
 class JdbcPolicyResolverTests {
 
     /** A small stand-in document; the mechanism is what is under test. */
-    public record ApprovalPolicy(int timeoutSeconds, String timeoutAction) { }
+    public record ApprovalPolicy(int timeoutSeconds, String timeoutAction) {}
 
     private static final PolicyKey<ApprovalPolicy> KEY = new PolicyKey<>(
-            "ordering.acceptance", ApprovalPolicy.class,
+            "ordering.acceptance",
+            ApprovalPolicy.class,
             Set.of(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND, ScopeType.LOCATION),
-            "ordering", false, "Order acceptance policy");
+            "ordering",
+            false,
+            "Order acceptance policy");
 
     private static final UUID TENANT = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120501");
     private static final UUID BRAND = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120502");
@@ -89,7 +84,8 @@ class JdbcPolicyResolverTests {
         activate(insertPolicy(ScopeType.TENANT, TENANT, null, null, 1, 600, "AUTO_REJECT", HASH_A));
         activate(insertPolicy(ScopeType.BRAND, TENANT, BRAND, null, 1, 300, "AUTO_CONFIRM", HASH_B));
 
-        ResolvedPolicy<ApprovalPolicy> resolved = resolver.resolve(KEY, locationScope()).orElseThrow();
+        ResolvedPolicy<ApprovalPolicy> resolved =
+                resolver.resolve(KEY, locationScope()).orElseThrow();
 
         assertThat(resolved.winningScope()).isEqualTo(ScopeType.BRAND);
         assertThat(resolved.document().timeoutSeconds()).isEqualTo(300);
@@ -105,23 +101,29 @@ class JdbcPolicyResolverTests {
         UUID versionOne = insertPolicy(ScopeType.TENANT, TENANT, null, null, 1, 600, "AUTO_REJECT", HASH_A);
         activate(versionOne);
 
-        ResolvedPolicy<ApprovalPolicy> atDecisionTime = resolver.resolve(KEY, locationScope()).orElseThrow();
+        ResolvedPolicy<ApprovalPolicy> atDecisionTime =
+                resolver.resolve(KEY, locationScope()).orElseThrow();
         assertThat(atDecisionTime.document().timeoutSeconds()).isEqualTo(600);
 
         // The tenant later changes the policy.
         UUID versionTwo = insertPolicy(ScopeType.TENANT, TENANT, null, null, 2, 90, "AUTO_CONFIRM", HASH_B);
         jdbc.sql("UPDATE tenant.policies SET status = 'RETIRED' WHERE id = :id")
-                .param("id", versionOne).update();
+                .param("id", versionOne)
+                .update();
         jdbc.sql("DELETE FROM tenant.policy_current WHERE policy_id = :id")
-                .param("id", versionOne).update();
+                .param("id", versionOne)
+                .update();
         activate(versionTwo);
 
-        assertThat(resolver.resolve(KEY, locationScope()).orElseThrow().document().timeoutSeconds())
+        assertThat(resolver.resolve(KEY, locationScope())
+                        .orElseThrow()
+                        .document()
+                        .timeoutSeconds())
                 .as("new decisions use the new policy")
                 .isEqualTo(90);
 
-        ResolvedPolicy<ApprovalPolicy> replayed = resolver
-                .pinned(KEY, atDecisionTime.policyId(), atDecisionTime.policyVersion())
+        ResolvedPolicy<ApprovalPolicy> replayed = resolver.pinned(
+                        KEY, atDecisionTime.policyId(), atDecisionTime.policyVersion())
                 .orElseThrow();
 
         assertThat(replayed.document().timeoutSeconds())
@@ -133,7 +135,9 @@ class JdbcPolicyResolverTests {
     @Test
     void aRetiredPolicyRemainsPinnable() {
         UUID policyId = insertPolicy(ScopeType.TENANT, TENANT, null, null, 1, 600, "AUTO_REJECT", HASH_A);
-        jdbc.sql("UPDATE tenant.policies SET status = 'RETIRED' WHERE id = :id").param("id", policyId).update();
+        jdbc.sql("UPDATE tenant.policies SET status = 'RETIRED' WHERE id = :id")
+                .param("id", policyId)
+                .update();
 
         assertThat(resolver.pinned(KEY, policyId, 1))
                 .as("evidence must stay readable after a policy is retired")
@@ -158,8 +162,14 @@ class JdbcPolicyResolverTests {
     }
 
     private UUID insertPolicy(
-            ScopeType scopeType, UUID tenantId, UUID brandId, UUID locationId,
-            int version, int timeoutSeconds, String timeoutAction, String hash) {
+            ScopeType scopeType,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            int version,
+            int timeoutSeconds,
+            String timeoutAction,
+            String hash) {
 
         UUID id = UUID.randomUUID();
         jdbc.sql("""
@@ -207,6 +217,10 @@ class JdbcPolicyResolverTests {
                 INSERT INTO tenant.locations
                     (id, tenant_id, brand_id, code, slug, display_name, timezone, status, version)
                 VALUES (:id, :tenantId, :brandId, 'LOC_P', 'loc-p', 'Location', 'Asia/Tashkent', 'ACTIVE', 0)
-                """).param("id", LOCATION).param("tenantId", TENANT).param("brandId", BRAND).update();
+                """)
+                .param("id", LOCATION)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
     }
 }

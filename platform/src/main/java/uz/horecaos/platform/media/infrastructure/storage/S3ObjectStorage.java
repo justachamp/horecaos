@@ -6,9 +6,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
-
 import org.springframework.stereotype.Component;
-
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
@@ -20,7 +18,6 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
-
 import uz.horecaos.platform.media.api.ObjectStorage;
 
 /**
@@ -43,8 +40,8 @@ public class S3ObjectStorage implements ObjectStorage {
     }
 
     @Override
-    public PresignedUpload presignUpload(String bucket, String key, String contentType,
-            long maxSizeBytes, Duration validFor) {
+    public PresignedUpload presignUpload(
+            String bucket, String key, String contentType, long maxSizeBytes, Duration validFor) {
 
         // Content type and length are part of the signed request, so the client
         // cannot upload a different type or an unbounded body under this URL.
@@ -64,18 +61,21 @@ public class S3ObjectStorage implements ObjectStorage {
         Map<String, String> headers = new LinkedHashMap<>();
         headers.put("Content-Type", contentType);
 
-        return new PresignedUpload(URI.create(presigned.url().toString()), headers,
-                Instant.now().plus(validFor));
+        return new PresignedUpload(
+                URI.create(presigned.url().toString()), headers, Instant.now().plus(validFor));
     }
 
     @Override
     public URI presignDownload(String bucket, String key, Duration validFor) {
-        GetObjectRequest get = GetObjectRequest.builder().bucket(bucket).key(key).build();
-        return URI.create(presigner.presignGetObject(GetObjectPresignRequest.builder()
+        GetObjectRequest get =
+                GetObjectRequest.builder().bucket(bucket).key(key).build();
+        return URI.create(presigner
+                .presignGetObject(GetObjectPresignRequest.builder()
                         .signatureDuration(validFor)
                         .getObjectRequest(get)
                         .build())
-                .url().toString());
+                .url()
+                .toString());
     }
 
     @Override
@@ -114,7 +114,8 @@ public class S3ObjectStorage implements ObjectStorage {
 
     @Override
     public void put(String bucket, String key, String contentType, byte[] content) {
-        client.putObject(PutObjectRequest.builder()
+        client.putObject(
+                PutObjectRequest.builder()
                         .bucket(bucket)
                         .key(key)
                         .contentType(contentType)
@@ -124,6 +125,7 @@ public class S3ObjectStorage implements ObjectStorage {
 
     @Override
     public void delete(String bucket, String key) {
-        client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());
+        client.deleteObject(
+                DeleteObjectRequest.builder().bucket(bucket).key(key).build());
     }
 }

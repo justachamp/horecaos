@@ -4,11 +4,9 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
 import org.springframework.stereotype.Component;
-
-import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.api.ImportPort;
+import uz.horecaos.platform.migration.api.MigrationCapability;
 
 /**
  * Which rules apply to which capability (ADR 0024).
@@ -54,10 +52,11 @@ public class ReconciliationRuleLibrary {
                 // with no evidence behind it.
                 throw new IllegalStateException(
                         ("Entity type %s has an import port and no capability. Every family that "
-                                + "can be imported has to be reconcilable (ADR 0024).")
+                                        + "can be imported has to be reconcilable (ADR 0024).")
                                 .formatted(port.entityType()));
             }
-            assembled.computeIfAbsent(capability, key -> new ArrayList<>())
+            assembled
+                    .computeIfAbsent(capability, key -> new ArrayList<>())
                     .addAll(AuthoritativeIdRules.forEntity(port.extraction(), capability));
         }
 
@@ -66,10 +65,8 @@ public class ReconciliationRuleLibrary {
         // capability rather than to a family — which is why they are added once
         // and not inside the loop above.
         if (assembled.containsKey(MigrationCapability.ORDERS)) {
-            assembled.get(MigrationCapability.ORDERS)
-                    .add(new MoneyTotalsRule(MigrationCapability.ORDERS));
-            assembled.get(MigrationCapability.ORDERS)
-                    .add(new CrossTenantAncestryRule(MigrationCapability.ORDERS));
+            assembled.get(MigrationCapability.ORDERS).add(new MoneyTotalsRule(MigrationCapability.ORDERS));
+            assembled.get(MigrationCapability.ORDERS).add(new CrossTenantAncestryRule(MigrationCapability.ORDERS));
         }
 
         Map<MigrationCapability, List<ReconciliationRule>> frozen = new LinkedHashMap<>();

@@ -3,9 +3,7 @@ package uz.horecaos.platform.integration.camel.common;
 import java.io.IOException;
 import java.net.SocketTimeoutException;
 import java.time.Duration;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 
 /**
@@ -52,8 +50,7 @@ public class ProviderExceptionClassifier {
         }
         if (statusCode == 429) {
             return ProviderOutcome.retryable(
-                    "RATE_LIMITED", detail,
-                    retryAfter == null ? Duration.ofSeconds(30) : retryAfter);
+                    "RATE_LIMITED", detail, retryAfter == null ? Duration.ofSeconds(30) : retryAfter);
         }
         if (statusCode == 401 || statusCode == 403) {
             // Configuration or credential failure. Retrying on a timer would
@@ -68,8 +65,8 @@ public class ProviderExceptionClassifier {
             // is the provider itself answering, and every partner here documents
             // it as a failed request. Treating it as uncertain would send every
             // transient blip to manual reconciliation.
-            return ProviderOutcome.retryable("PROVIDER_UNAVAILABLE", detail,
-                    retryAfter == null ? Duration.ofSeconds(10) : retryAfter);
+            return ProviderOutcome.retryable(
+                    "PROVIDER_UNAVAILABLE", detail, retryAfter == null ? Duration.ofSeconds(10) : retryAfter);
         }
         return ProviderOutcome.retryable("PROVIDER_UNKNOWN", detail, null);
     }
@@ -102,9 +99,11 @@ public class ProviderExceptionClassifier {
         // RETRYABLE unconditionally, as this did, hands the caller a licence to
         // re-send a create the provider has already executed.
         return requestSent
-                ? ProviderOutcome.uncertain("RESPONSE_UNREADABLE",
+                ? ProviderOutcome.uncertain(
+                        "RESPONSE_UNREADABLE",
                         "The provider answered but the response could not be interpreted: "
                                 + failure.getClass().getSimpleName())
-                : ProviderOutcome.retryable("TRANSPORT_FAILURE", failure.getClass().getSimpleName(), null);
+                : ProviderOutcome.retryable(
+                        "TRANSPORT_FAILURE", failure.getClass().getSimpleName(), null);
     }
 }

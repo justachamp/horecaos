@@ -3,7 +3,6 @@ package uz.horecaos.platform.tenancy.domain;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
-
 import uz.horecaos.platform.tenancy.api.TenantId;
 
 public final class CustomerIdentityPolicy {
@@ -16,11 +15,7 @@ public final class CustomerIdentityPolicy {
     private Instant supersededAt;
 
     private CustomerIdentityPolicy(
-            UUID id,
-            TenantId tenantId,
-            int version,
-            CustomerIdentityMode mode,
-            Instant effectiveFrom) {
+            UUID id, TenantId tenantId, int version, CustomerIdentityMode mode, Instant effectiveFrom) {
         this.id = Objects.requireNonNull(id, "Policy ID is required");
         this.tenantId = Objects.requireNonNull(tenantId, "Tenant ID is required");
         if (version < 1) {

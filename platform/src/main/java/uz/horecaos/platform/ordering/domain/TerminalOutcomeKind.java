@@ -12,7 +12,6 @@ import java.util.Optional;
  * them apart afterwards. This enum is what makes them different rows.
  */
 public enum TerminalOutcomeKind {
-
     COMPLETED,
     CANCELLED,
     REJECTED,

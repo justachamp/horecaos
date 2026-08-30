@@ -1,11 +1,11 @@
 package uz.horecaos.platform.notifications.web;
 
-import java.util.List;
-import java.util.UUID;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
-
+import java.util.List;
+import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -13,10 +13,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.customers.api.CurrentCustomer;
 import uz.horecaos.platform.customers.api.CustomerOwned;
 import uz.horecaos.platform.notifications.application.NotificationPreferenceService;
@@ -53,49 +49,59 @@ import uz.horecaos.platform.web.idempotency.Idempotent;
  */
 @RestController
 @RequestMapping("/api/v1/tenants/{tenantId}/customers/{accountId}/notification-preferences")
-@Tag(name = "Notification preferences",
+@Tag(
+        name = "Notification preferences",
         description = "Which optional messages a customer receives, per class and channel")
 public class CustomerNotificationPreferenceController {
 
     private final NotificationPreferenceService preferences;
     private final CurrentCustomer currentCustomer;
 
-    public CustomerNotificationPreferenceController(NotificationPreferenceService preferences,
-            CurrentCustomer currentCustomer) {
+    public CustomerNotificationPreferenceController(
+            NotificationPreferenceService preferences, CurrentCustomer currentCustomer) {
         this.preferences = preferences;
         this.currentCustomer = currentCustomer;
     }
 
     @GetMapping
     @CustomerOwned
-    @Operation(summary = "The customer's current preferences",
+    @Operation(
+            summary = "The customer's current preferences",
             description = "Only what has been set. An absent row means the default for that "
                     + "class, which is on rather than off: a customer who never expressed a "
                     + "preference has not opted out of anything.")
-    public ResponseEntity<List<PreferenceResponse>> list(@PathVariable UUID tenantId,
-            @PathVariable UUID accountId) {
+    public ResponseEntity<List<PreferenceResponse>> list(@PathVariable UUID tenantId, @PathVariable UUID accountId) {
 
         requireOwnAccount(tenantId, accountId);
         return ResponseEntity.ok(preferences.preferences(tenantId, accountId).stream()
-                .map(row -> new PreferenceResponse(row.brandId(), row.notificationClass(),
-                        row.channel(), row.enabled(), row.version()))
+                .map(row -> new PreferenceResponse(
+                        row.brandId(), row.notificationClass(), row.channel(), row.enabled(), row.version()))
                 .toList());
     }
 
     @PutMapping("/{notificationClass}/{channel}")
     @CustomerOwned
     @Idempotent
-    @Operation(summary = "Set one preference",
+    @Operation(
+            summary = "Set one preference",
             description = "Refuses a class the customer cannot switch off. Consent is separate "
                     + "and lives on the customers module; this never writes a consent decision.")
-    public ResponseEntity<Void> set(@PathVariable UUID tenantId, @PathVariable UUID accountId,
-            @PathVariable String notificationClass, @PathVariable String channel,
+    public ResponseEntity<Void> set(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID accountId,
+            @PathVariable String notificationClass,
+            @PathVariable String channel,
             @Valid @RequestBody SetPreferenceRequest request) {
 
         requireOwnAccount(tenantId, accountId);
         try {
-            preferences.set(tenantId, accountId, request.brandId(),
-                    parseClass(notificationClass), parseChannel(channel), request.enabled());
+            preferences.set(
+                    tenantId,
+                    accountId,
+                    request.brandId(),
+                    parseClass(notificationClass),
+                    parseChannel(channel),
+                    request.enabled());
         } catch (IllegalArgumentException refused) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, refused.getMessage());
         }
@@ -120,8 +126,7 @@ public class CustomerNotificationPreferenceController {
         try {
             return NotificationClass.valueOf(value);
         } catch (IllegalArgumentException unknown) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "%s is not a notification class".formatted(value));
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "%s is not a notification class".formatted(value));
         }
     }
 
@@ -129,8 +134,7 @@ public class CustomerNotificationPreferenceController {
         try {
             return NotificationChannel.valueOf(value);
         } catch (IllegalArgumentException unknown) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "%s is not a notification channel".formatted(value));
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "%s is not a notification channel".formatted(value));
         }
     }
 
@@ -139,8 +143,9 @@ public class CustomerNotificationPreferenceController {
      * @param enabled boxed and {@code @NotNull}, so a body that omits it is a
      *                validation failure rather than a silent opt-out
      */
-    public record SetPreferenceRequest(UUID brandId, @NotNull Boolean enabled) { }
+    public record SetPreferenceRequest(
+            UUID brandId, @NotNull Boolean enabled) {}
 
-    public record PreferenceResponse(UUID brandId, String notificationClass, String channel,
-            boolean enabled, int version) { }
+    public record PreferenceResponse(
+            UUID brandId, String notificationClass, String channel, boolean enabled, int version) {}
 }

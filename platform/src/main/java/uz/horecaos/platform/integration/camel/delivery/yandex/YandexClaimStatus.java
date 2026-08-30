@@ -13,28 +13,36 @@ import java.util.Set;
 final class YandexClaimStatus {
 
     /** Created but not accepted: a hold, no courier is coming. */
-    private static final Set<String> RESERVED = Set.of(
-            "new", "estimating", "ready_for_approval");
+    private static final Set<String> RESERVED = Set.of("new", "estimating", "ready_for_approval");
 
     /** Accepted and progressing towards pickup. */
     private static final Set<String> CONFIRMED = Set.of(
-            "accepted", "performer_lookup", "performer_draft", "performer_found",
-            "performer_not_found", "pickup_arrived", "ready_for_pickup_confirmation", "pickuped");
+            "accepted",
+            "performer_lookup",
+            "performer_draft",
+            "performer_found",
+            "performer_not_found",
+            "pickup_arrived",
+            "ready_for_pickup_confirmation",
+            "pickuped");
 
-    private static final Set<String> IN_TRANSIT = Set.of(
-            "delivery_arrived", "ready_for_delivery_confirmation");
+    private static final Set<String> IN_TRANSIT = Set.of("delivery_arrived", "ready_for_delivery_confirmation");
 
     private static final Set<String> DELIVERED = Set.of("delivered", "delivered_finish");
 
-    private static final Set<String> CANCELLED = Set.of(
-            "cancelled", "cancelled_with_payment", "cancelled_by_taxi", "cancelled_with_items_on_hands");
+    private static final Set<String> CANCELLED =
+            Set.of("cancelled", "cancelled_with_payment", "cancelled_by_taxi", "cancelled_with_items_on_hands");
 
     private static final Set<String> FAILED = Set.of(
-            "failed", "estimating_failed", "returning", "return_arrived",
-            "ready_for_return_confirmation", "returned", "returned_finish");
+            "failed",
+            "estimating_failed",
+            "returning",
+            "return_arrived",
+            "ready_for_return_confirmation",
+            "returned",
+            "returned_finish");
 
-    private YandexClaimStatus() {
-    }
+    private YandexClaimStatus() {}
 
     static String toShipmentState(String providerStatus) {
         if (RESERVED.contains(providerStatus)) {

@@ -3,9 +3,7 @@ package uz.horecaos.platform.pricing.infrastructure.catalog;
 import java.time.Clock;
 import java.util.Set;
 import java.util.UUID;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.catalog.api.VariantPricingLookup;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 

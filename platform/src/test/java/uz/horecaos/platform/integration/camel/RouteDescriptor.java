@@ -109,7 +109,9 @@ record RouteDescriptor(Path file, List<String> routeIds, Map<String, String> fie
                 .filter(name -> {
                     String value = fields.get(name);
                     return value == null
-                            || PLACEHOLDERS.contains(value.toLowerCase(Locale.ROOT).replace(".", "").trim());
+                            || PLACEHOLDERS.contains(value.toLowerCase(Locale.ROOT)
+                                    .replace(".", "")
+                                    .trim());
                 })
                 .toList();
     }

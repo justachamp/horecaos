@@ -18,7 +18,6 @@ import java.util.Optional;
  * text with no foreign key, which is exactly the gap ADR 0038 closes.
  */
 public enum PaymentMethod {
-
     CASH("CASH", PaymentTender.CASH, null, CaptureTiming.ON_HANDOVER),
 
     CLICK("CLICK", PaymentTender.PROVIDER, PaymentProviderType.CLICK, CaptureTiming.BEFORE_CONFIRMATION),
@@ -26,8 +25,7 @@ public enum PaymentMethod {
     PAYME("PAYME", PaymentTender.PROVIDER, PaymentProviderType.PAYME, CaptureTiming.BEFORE_CONFIRMATION),
 
     /** Designed for; no channel offers it until a bot exists. */
-    TELEGRAM("TELEGRAM", PaymentTender.PROVIDER, PaymentProviderType.TELEGRAM,
-            CaptureTiming.BEFORE_CONFIRMATION),
+    TELEGRAM("TELEGRAM", PaymentTender.PROVIDER, PaymentProviderType.TELEGRAM, CaptureTiming.BEFORE_CONFIRMATION),
 
     /**
      * The aggregator collected it (ADR 0040).
@@ -47,16 +45,14 @@ public enum PaymentMethod {
      * that means for the fiscal receipt is ADR 0040's open question and is not
      * decided by this enum.
      */
-    MARKETPLACE("MARKETPLACE", PaymentTender.PROVIDER, null,
-            CaptureTiming.BEFORE_CONFIRMATION);
+    MARKETPLACE("MARKETPLACE", PaymentTender.PROVIDER, null, CaptureTiming.BEFORE_CONFIRMATION);
 
     private final String code;
     private final PaymentTender tender;
     private final PaymentProviderType provider;
     private final CaptureTiming captureTiming;
 
-    PaymentMethod(String code, PaymentTender tender, PaymentProviderType provider,
-            CaptureTiming captureTiming) {
+    PaymentMethod(String code, PaymentTender tender, PaymentProviderType provider, CaptureTiming captureTiming) {
         this.code = code;
         this.tender = tender;
         this.provider = provider;

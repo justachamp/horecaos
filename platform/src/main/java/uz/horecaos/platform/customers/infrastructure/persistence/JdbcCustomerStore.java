@@ -7,7 +7,6 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -36,8 +35,7 @@ public class JdbcCustomerStore {
      * nothing — which would make every sign-in look like a first sign-in and
      * create a fresh account each time.
      */
-    public Optional<UUID> findLinkedAccount(UUID tenantId, UUID partitionBrandId,
-            String issuer, String subject) {
+    public Optional<UUID> findLinkedAccount(UUID tenantId, UUID partitionBrandId, String issuer, String subject) {
         return jdbc.sql("""
                 SELECT customer_account_id FROM customer.principal_links
                 WHERE tenant_id = :tenantId
@@ -89,7 +87,8 @@ public class JdbcCustomerStore {
                     SELECT merged_into_account_id FROM customer.customer_accounts
                     WHERE id = :id AND tenant_id = :tenantId AND merged_into_account_id IS NOT NULL
                     """)
-                    .param("id", current).param("tenantId", tenantId)
+                    .param("id", current)
+                    .param("tenantId", tenantId)
                     .query(UUID.class)
                     .optional();
             if (next.isEmpty()) {
@@ -117,15 +116,16 @@ public class JdbcCustomerStore {
      *                      one job the column has, which is to say what a later
      *                      policy migration is migrating from
      */
-    public void insertAccount(UUID accountId, UUID tenantId, UUID partitionBrandId,
-            Integer policyVersion, Instant now) {
+    public void insertAccount(
+            UUID accountId, UUID tenantId, UUID partitionBrandId, Integer policyVersion, Instant now) {
         jdbc.sql("""
                 INSERT INTO customer.customer_accounts (
                     id, tenant_id, identity_partition_brand_id, status,
                     identity_policy_version, created_at, updated_at)
                 VALUES (:id, :tenantId, :partition, 'ACTIVE', :policyVersion, :now, :now)
                 """)
-                .param("id", accountId).param("tenantId", tenantId)
+                .param("id", accountId)
+                .param("tenantId", tenantId)
                 .param("partition", partitionBrandId)
                 // Typed, because a null here is "no governed policy existed" and
                 // an untyped null leaves the driver to infer a type it has no
@@ -135,30 +135,40 @@ public class JdbcCustomerStore {
                 .update();
     }
 
-    public void insertPrincipalLink(UUID linkId, UUID tenantId, UUID partitionBrandId,
-            UUID accountId, String issuer, String subject, Instant now) {
+    public void insertPrincipalLink(
+            UUID linkId,
+            UUID tenantId,
+            UUID partitionBrandId,
+            UUID accountId,
+            String issuer,
+            String subject,
+            Instant now) {
         jdbc.sql("""
                 INSERT INTO customer.principal_links (
                     id, tenant_id, identity_partition_brand_id, customer_account_id,
                     issuer, subject, status, linked_at)
                 VALUES (:id, :tenantId, :partition, :accountId, :issuer, :subject, 'ACTIVE', :now)
                 """)
-                .param("id", linkId).param("tenantId", tenantId)
-                .param("partition", partitionBrandId).param("accountId", accountId)
-                .param("issuer", issuer).param("subject", subject)
+                .param("id", linkId)
+                .param("tenantId", tenantId)
+                .param("partition", partitionBrandId)
+                .param("accountId", accountId)
+                .param("issuer", issuer)
+                .param("subject", subject)
                 .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
                 .update();
     }
 
-    public void upsertBrandProfile(UUID profileId, UUID tenantId, UUID brandId,
-            UUID accountId, Instant now) {
+    public void upsertBrandProfile(UUID profileId, UUID tenantId, UUID brandId, UUID accountId, Instant now) {
         jdbc.sql("""
                 INSERT INTO customer.brand_profiles (
                     id, tenant_id, brand_id, customer_account_id, status, created_at, updated_at)
                 VALUES (:id, :tenantId, :brandId, :accountId, 'ACTIVE', :now, :now)
                 ON CONFLICT (tenant_id, brand_id, customer_account_id) DO NOTHING
                 """)
-                .param("id", profileId).param("tenantId", tenantId).param("brandId", brandId)
+                .param("id", profileId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("accountId", accountId)
                 .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
                 .update();
@@ -166,17 +176,28 @@ public class JdbcCustomerStore {
 
     // ------------------------------------------------------------ contact points
 
-    public void insertContactPoint(UUID id, UUID tenantId, UUID accountId, String type,
-            String normalizedHash, String encryptedValue, boolean isPrimary, Instant now) {
+    public void insertContactPoint(
+            UUID id,
+            UUID tenantId,
+            UUID accountId,
+            String type,
+            String normalizedHash,
+            String encryptedValue,
+            boolean isPrimary,
+            Instant now) {
         jdbc.sql("""
                 INSERT INTO customer.contact_points (
                     id, tenant_id, customer_account_id, type, normalized_hash,
                     encrypted_value, is_primary, created_at, updated_at)
                 VALUES (:id, :tenantId, :accountId, :type, :hash, :encrypted, :isPrimary, :now, :now)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("accountId", accountId)
-                .param("type", type).param("hash", normalizedHash)
-                .param("encrypted", encryptedValue).param("isPrimary", isPrimary)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("type", type)
+                .param("hash", normalizedHash)
+                .param("encrypted", encryptedValue)
+                .param("isPrimary", isPrimary)
                 .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
                 .update();
     }
@@ -190,8 +211,15 @@ public class JdbcCustomerStore {
      * redeemed ADR 0015 verification grant, so the two cannot be confused at a call
      * site.
      */
-    public void insertVerifiedContactPoint(UUID id, UUID tenantId, UUID accountId, String type,
-            String normalizedHash, String encryptedValue, boolean isPrimary, Instant verifiedAt) {
+    public void insertVerifiedContactPoint(
+            UUID id,
+            UUID tenantId,
+            UUID accountId,
+            String type,
+            String normalizedHash,
+            String encryptedValue,
+            boolean isPrimary,
+            Instant verifiedAt) {
         jdbc.sql("""
                 INSERT INTO customer.contact_points (
                     id, tenant_id, customer_account_id, type, normalized_hash,
@@ -200,9 +228,13 @@ public class JdbcCustomerStore {
                 VALUES (:id, :tenantId, :accountId, :type, :hash, :encrypted, 'VERIFIED',
                     :now, :isPrimary, :now, :now)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("accountId", accountId)
-                .param("type", type).param("hash", normalizedHash)
-                .param("encrypted", encryptedValue).param("isPrimary", isPrimary)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("type", type)
+                .param("hash", normalizedHash)
+                .param("encrypted", encryptedValue)
+                .param("isPrimary", isPrimary)
                 .param("now", OffsetDateTime.ofInstant(verifiedAt, ZoneOffset.UTC))
                 .update();
     }
@@ -218,16 +250,18 @@ public class JdbcCustomerStore {
      * @return how many rows were promoted; zero when this account does not hold
      *         the number yet
      */
-    public int markContactVerified(UUID tenantId, UUID accountId, String type,
-            String normalizedHash, Instant verifiedAt) {
+    public int markContactVerified(
+            UUID tenantId, UUID accountId, String type, String normalizedHash, Instant verifiedAt) {
         return jdbc.sql("""
                 UPDATE customer.contact_points
                 SET verification_status = 'VERIFIED', verified_at = :now, updated_at = :now
                 WHERE tenant_id = :tenantId AND customer_account_id = :accountId
                   AND type = :type AND normalized_hash = :hash
                 """)
-                .param("tenantId", tenantId).param("accountId", accountId)
-                .param("type", type).param("hash", normalizedHash)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("type", type)
+                .param("hash", normalizedHash)
                 .param("now", OffsetDateTime.ofInstant(verifiedAt, ZoneOffset.UTC))
                 .update();
     }
@@ -245,8 +279,12 @@ public class JdbcCustomerStore {
                 WHERE tenant_id = :tenantId AND customer_account_id = :accountId
                   AND type = :type AND is_primary
                 """)
-                .param("tenantId", tenantId).param("accountId", accountId).param("type", type)
-                .query(Long.class).single() > 0;
+                        .param("tenantId", tenantId)
+                        .param("accountId", accountId)
+                        .param("type", type)
+                        .query(Long.class)
+                        .single()
+                > 0;
     }
 
     /**
@@ -261,7 +299,9 @@ public class JdbcCustomerStore {
                 SELECT DISTINCT customer_account_id FROM customer.contact_points
                 WHERE tenant_id = :tenantId AND type = :type AND normalized_hash = :hash
                 """)
-                .param("tenantId", tenantId).param("type", type).param("hash", normalizedHash)
+                .param("tenantId", tenantId)
+                .param("type", type)
+                .param("hash", normalizedHash)
                 .query(UUID.class)
                 .list();
     }
@@ -273,7 +313,8 @@ public class JdbcCustomerStore {
                 WHERE tenant_id = :tenantId AND customer_account_id = :accountId
                 ORDER BY is_primary DESC, created_at
                 """)
-                .param("tenantId", tenantId).param("accountId", accountId)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
                 .query(JdbcCustomerStore::contactPointRow)
                 .list();
     }
@@ -291,7 +332,8 @@ public class JdbcCustomerStore {
                 FROM customer.contact_points
                 WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("id", contactPointId)
+                .param("tenantId", tenantId)
+                .param("id", contactPointId)
                 .query(JdbcCustomerStore::contactPointRow)
                 .optional();
     }
@@ -302,7 +344,8 @@ public class JdbcCustomerStore {
                 SELECT preferred_locale FROM customer.customer_accounts
                 WHERE tenant_id = :tenantId AND id = :accountId
                 """)
-                .param("tenantId", tenantId).param("accountId", accountId)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
                 .query(String.class)
                 .optional();
     }
@@ -324,7 +367,8 @@ public class JdbcCustomerStore {
                 FROM customer.customer_accounts
                 WHERE tenant_id = :tenantId AND id = :accountId
                 """)
-                .param("tenantId", tenantId).param("accountId", accountId)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
                 .query((row, number) -> new AccountRow(
                         row.getObject("id", UUID.class),
                         row.getObject("identity_partition_brand_id", UUID.class),
@@ -355,8 +399,14 @@ public class JdbcCustomerStore {
      * @return rows written: 1, or 0 when the account is not this tenant's or has
      *         moved on from {@code expectedVersion}
      */
-    public int updateAccountProfile(UUID tenantId, UUID accountId, int expectedVersion,
-            String displayName, String preferredLocale, String preferredTimezone, Instant now) {
+    public int updateAccountProfile(
+            UUID tenantId,
+            UUID accountId,
+            int expectedVersion,
+            String displayName,
+            String preferredLocale,
+            String preferredTimezone,
+            Instant now) {
         return jdbc.sql("""
                 UPDATE customer.customer_accounts
                 SET display_name = :displayName,
@@ -366,7 +416,8 @@ public class JdbcCustomerStore {
                     updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :accountId AND version = :expectedVersion
                 """)
-                .param("tenantId", tenantId).param("accountId", accountId)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
                 .param("expectedVersion", expectedVersion)
                 .param("displayName", displayName, Types.VARCHAR)
                 .param("preferredLocale", preferredLocale, Types.VARCHAR)
@@ -375,8 +426,7 @@ public class JdbcCustomerStore {
                 .update();
     }
 
-    private static ContactPointRow contactPointRow(java.sql.ResultSet row, int number)
-            throws java.sql.SQLException {
+    private static ContactPointRow contactPointRow(java.sql.ResultSet row, int number) throws java.sql.SQLException {
         return new ContactPointRow(
                 row.getObject("id", UUID.class),
                 row.getString("type"),
@@ -388,9 +438,17 @@ public class JdbcCustomerStore {
 
     // ----------------------------------------------------------------- addresses
 
-    public void insertAddress(UUID id, UUID tenantId, UUID accountId, String label,
-            String encryptedFields, String encryptedInstructions,
-            Double latitude, Double longitude, String coordinateSource, Instant now) {
+    public void insertAddress(
+            UUID id,
+            UUID tenantId,
+            UUID accountId,
+            String label,
+            String encryptedFields,
+            String encryptedInstructions,
+            Double latitude,
+            Double longitude,
+            String coordinateSource,
+            Instant now) {
         jdbc.sql("""
                 INSERT INTO customer.addresses (
                     id, tenant_id, customer_account_id, label, encrypted_fields,
@@ -399,10 +457,14 @@ public class JdbcCustomerStore {
                 VALUES (:id, :tenantId, :accountId, :label, :fields, :instructions,
                     :latitude, :longitude, :coordinateSource, :now, :now)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("accountId", accountId)
-                .param("label", label).param("fields", encryptedFields)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("label", label)
+                .param("fields", encryptedFields)
                 .param("instructions", encryptedInstructions)
-                .param("latitude", latitude).param("longitude", longitude)
+                .param("latitude", latitude)
+                .param("longitude", longitude)
                 .param("coordinateSource", coordinateSource)
                 .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
                 .update();
@@ -414,7 +476,8 @@ public class JdbcCustomerStore {
                    AND status = 'ACTIVE'
                  ORDER BY created_at
                 """)
-                .param("tenantId", tenantId).param("accountId", accountId)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
                 .query(JdbcCustomerStore::addressRow)
                 .list();
     }
@@ -435,7 +498,8 @@ public class JdbcCustomerStore {
                  WHERE tenant_id = :tenantId AND customer_account_id = :accountId
                    AND id = :addressId AND status = 'ACTIVE'
                 """)
-                .param("tenantId", tenantId).param("accountId", accountId)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
                 .param("addressId", addressId)
                 .query(JdbcCustomerStore::addressRow)
                 .optional();
@@ -453,9 +517,18 @@ public class JdbcCustomerStore {
      * @return rows written: 1, or 0 when the address is not this account's active
      *         address or has moved on from {@code expectedVersion}
      */
-    public int updateAddress(UUID tenantId, UUID accountId, UUID addressId, int expectedVersion,
-            String label, String encryptedFields, String encryptedInstructions,
-            Double latitude, Double longitude, String coordinateSource, Instant now) {
+    public int updateAddress(
+            UUID tenantId,
+            UUID accountId,
+            UUID addressId,
+            int expectedVersion,
+            String label,
+            String encryptedFields,
+            String encryptedInstructions,
+            Double latitude,
+            Double longitude,
+            String coordinateSource,
+            Instant now) {
         return jdbc.sql("""
                 UPDATE customer.addresses
                 SET label = :label,
@@ -469,8 +542,10 @@ public class JdbcCustomerStore {
                 WHERE tenant_id = :tenantId AND customer_account_id = :accountId
                   AND id = :addressId AND status = 'ACTIVE' AND version = :expectedVersion
                 """)
-                .param("tenantId", tenantId).param("accountId", accountId)
-                .param("addressId", addressId).param("expectedVersion", expectedVersion)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("addressId", addressId)
+                .param("expectedVersion", expectedVersion)
                 .param("label", label, Types.VARCHAR)
                 .param("fields", encryptedFields)
                 .param("instructions", encryptedInstructions, Types.VARCHAR)
@@ -499,16 +574,17 @@ public class JdbcCustomerStore {
      * @return rows written: 1, or 0 when the address is not this account's active
      *         address or has moved on from {@code expectedVersion}
      */
-    public int archiveAddress(UUID tenantId, UUID accountId, UUID addressId, int expectedVersion,
-            Instant now) {
+    public int archiveAddress(UUID tenantId, UUID accountId, UUID addressId, int expectedVersion, Instant now) {
         return jdbc.sql("""
                 UPDATE customer.addresses
                 SET status = 'ARCHIVED', version = version + 1, updated_at = :now
                 WHERE tenant_id = :tenantId AND customer_account_id = :accountId
                   AND id = :addressId AND status = 'ACTIVE' AND version = :expectedVersion
                 """)
-                .param("tenantId", tenantId).param("accountId", accountId)
-                .param("addressId", addressId).param("expectedVersion", expectedVersion)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("addressId", addressId)
+                .param("expectedVersion", expectedVersion)
                 .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
                 .update();
     }
@@ -524,8 +600,7 @@ public class JdbcCustomerStore {
      * <p>{@code getDouble} answers 0.0 for a SQL NULL, and 0,0 is a real point in
      * the Gulf of Guinea that a courier would be sent to.
      */
-    private static AddressRow addressRow(java.sql.ResultSet row, int number)
-            throws java.sql.SQLException {
+    private static AddressRow addressRow(java.sql.ResultSet row, int number) throws java.sql.SQLException {
         return new AddressRow(
                 row.getObject("id", UUID.class),
                 row.getString("label"),
@@ -553,16 +628,26 @@ public class JdbcCustomerStore {
                 ORDER BY created_at
                 LIMIT :limit
                 """)
-                .param("tenantId", tenantId).param("limit", limit)
+                .param("tenantId", tenantId)
+                .param("limit", limit)
                 .query(UUID.class)
                 .list();
     }
 
     // ------------------------------------------------------------------- consent
 
-    public void insertConsentDecision(UUID id, UUID tenantId, UUID accountId, UUID brandId,
-            String purpose, String channel, String decision, String policyVersion,
-            String source, String evidenceReference, Instant decidedAt) {
+    public void insertConsentDecision(
+            UUID id,
+            UUID tenantId,
+            UUID accountId,
+            UUID brandId,
+            String purpose,
+            String channel,
+            String decision,
+            String policyVersion,
+            String source,
+            String evidenceReference,
+            Instant decidedAt) {
         jdbc.sql("""
                 INSERT INTO customer.consent_decisions (
                     id, tenant_id, customer_account_id, brand_id, purpose, channel,
@@ -570,10 +655,16 @@ public class JdbcCustomerStore {
                 VALUES (:id, :tenantId, :accountId, :brandId, :purpose, :channel,
                     :decision, :policyVersion, :source, :evidence, :decidedAt)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("accountId", accountId)
-                .param("brandId", brandId).param("purpose", purpose).param("channel", channel)
-                .param("decision", decision).param("policyVersion", policyVersion)
-                .param("source", source).param("evidence", evidenceReference)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("brandId", brandId)
+                .param("purpose", purpose)
+                .param("channel", channel)
+                .param("decision", decision)
+                .param("policyVersion", policyVersion)
+                .param("source", source)
+                .param("evidence", evidenceReference)
                 .param("decidedAt", OffsetDateTime.ofInstant(decidedAt, ZoneOffset.UTC))
                 .update();
     }
@@ -585,8 +676,8 @@ public class JdbcCustomerStore {
      * log is the evidence of what someone agreed to and when; a mutable "current
      * consent" column would destroy exactly that.
      */
-    public Optional<ConsentRow> currentConsent(UUID tenantId, UUID accountId, UUID brandId,
-            String purpose, String channel) {
+    public Optional<ConsentRow> currentConsent(
+            UUID tenantId, UUID accountId, UUID brandId, String purpose, String channel) {
         return jdbc.sql("""
                 SELECT decision, policy_version, decided_at, source
                 FROM customer.consent_decisions
@@ -597,8 +688,11 @@ public class JdbcCustomerStore {
                 ORDER BY decided_at DESC, recorded_at DESC
                 LIMIT 1
                 """)
-                .param("tenantId", tenantId).param("accountId", accountId)
-                .param("brandId", brandId).param("purpose", purpose).param("channel", channel)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("brandId", brandId)
+                .param("purpose", purpose)
+                .param("channel", channel)
                 .query((row, number) -> new ConsentRow(
                         row.getString("decision"),
                         row.getString("policy_version"),
@@ -614,7 +708,8 @@ public class JdbcCustomerStore {
                 WHERE tenant_id = :tenantId AND customer_account_id = :accountId
                 ORDER BY decided_at DESC
                 """)
-                .param("tenantId", tenantId).param("accountId", accountId)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
                 .query((row, number) -> new ConsentHistoryRow(
                         row.getString("purpose"),
                         row.getObject("brand_id", UUID.class),
@@ -631,12 +726,20 @@ public class JdbcCustomerStore {
                 SELECT count(*) FROM customer.customer_accounts
                 WHERE id = :id AND tenant_id = :tenantId
                 """)
-                .param("id", accountId).param("tenantId", tenantId)
-                .query(Long.class).single() > 0;
+                        .param("id", accountId)
+                        .param("tenantId", tenantId)
+                        .query(Long.class)
+                        .single()
+                > 0;
     }
 
-    public record ContactPointRow(UUID id, String type, String encryptedValue,
-            String normalizedHash, String verificationStatus, boolean isPrimary) { }
+    public record ContactPointRow(
+            UUID id,
+            String type,
+            String encryptedValue,
+            String normalizedHash,
+            String verificationStatus,
+            boolean isPrimary) {}
 
     /**
      * The account's own row.
@@ -650,9 +753,16 @@ public class JdbcCustomerStore {
      *                         policy, because the two disagree after a governed
      *                         mode change and only the row says where an edit lands
      */
-    public record AccountRow(UUID id, UUID partitionBrandId, String status, String displayName,
-            String preferredLocale, String preferredTimezone, Integer identityPolicyVersion,
-            int version, Instant createdAt) {
+    public record AccountRow(
+            UUID id,
+            UUID partitionBrandId,
+            String status,
+            String displayName,
+            String preferredLocale,
+            String preferredTimezone,
+            Integer identityPolicyVersion,
+            int version,
+            Instant createdAt) {
 
         @Override
         public String toString() {
@@ -661,9 +771,15 @@ public class JdbcCustomerStore {
     }
 
     /** Never printed: two of its columns are ciphertext and two are a doorstep. */
-    public record AddressRow(UUID id, String label, String encryptedFields,
-            String encryptedInstructions, Double latitude, Double longitude,
-            String coordinateSource, int version) {
+    public record AddressRow(
+            UUID id,
+            String label,
+            String encryptedFields,
+            String encryptedInstructions,
+            Double latitude,
+            Double longitude,
+            String coordinateSource,
+            int version) {
 
         @Override
         public String toString() {
@@ -671,8 +787,14 @@ public class JdbcCustomerStore {
         }
     }
 
-    public record ConsentRow(String decision, String policyVersion, Instant decidedAt, String source) { }
+    public record ConsentRow(String decision, String policyVersion, Instant decidedAt, String source) {}
 
-    public record ConsentHistoryRow(String purpose, UUID brandId, String channel, String decision,
-            String policyVersion, String source, Instant decidedAt) { }
+    public record ConsentHistoryRow(
+            String purpose,
+            UUID brandId,
+            String channel,
+            String decision,
+            String policyVersion,
+            String source,
+            Instant decidedAt) {}
 }

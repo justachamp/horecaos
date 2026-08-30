@@ -7,10 +7,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.commercial.api.Boundary;
 import uz.horecaos.platform.commercial.api.EnforcementMode;
 import uz.horecaos.platform.commercial.api.EntitlementKey;
@@ -53,8 +51,12 @@ public class EntitlementQueryService implements EntitlementService {
     private final EnforcementCeiling ceiling;
     private final Clock clock;
 
-    public EntitlementQueryService(JdbcSubscriptionStore subscriptions, JdbcPlanStore plans,
-            JdbcUsageStore usage, EnforcementCeiling ceiling, Clock clock) {
+    public EntitlementQueryService(
+            JdbcSubscriptionStore subscriptions,
+            JdbcPlanStore plans,
+            JdbcUsageStore usage,
+            EnforcementCeiling ceiling,
+            Clock clock) {
         this.subscriptions = subscriptions;
         this.plans = plans;
         this.usage = usage;
@@ -72,9 +74,8 @@ public class EntitlementQueryService implements EntitlementService {
         for (EntitlementKey<?> key : EntitlementKeys.all()) {
             values.put(key.code(), context.resolve(key, now));
         }
-        return new EntitlementSnapshot(tenantId,
-                context.subscription().map(Subscription::id).orElse(null),
-                values, now);
+        return new EntitlementSnapshot(
+                tenantId, context.subscription().map(Subscription::id).orElse(null), values, now);
     }
 
     @Override
@@ -93,8 +94,16 @@ public class EntitlementQueryService implements EntitlementService {
         Boundary effective = BoundaryPolicy.decideCounted(value, consumed, requested, value.effectiveMode());
         Boundary declared = BoundaryPolicy.decideCounted(value, consumed, requested, value.declaredMode());
 
-        return new LimitCheck(key.code(), tenantId, value.limit(), consumed, requested, period,
-                value, effective, declared,
+        return new LimitCheck(
+                key.code(),
+                tenantId,
+                value.limit(),
+                consumed,
+                requested,
+                period,
+                value,
+                effective,
+                declared,
                 BoundaryPolicy.overageQuantity(value, consumed, requested));
     }
 
@@ -122,11 +131,16 @@ public class EntitlementQueryService implements EntitlementService {
         Instant now = clock.instant();
         EntitlementValue value = contextOf(tenantId, now).resolve(key, now);
         if (BoundaryPolicy.decideFeature(value, value.effectiveMode()) == Boundary.REFUSED) {
-            throw new ApiException(ErrorCode.ENTITLEMENT_REQUIRED,
+            throw new ApiException(
+                    ErrorCode.ENTITLEMENT_REQUIRED,
                     "The current plan does not include %s".formatted(key.code()),
-                    Map.of("entitlementKey", key.code(),
-                            "enforcementMode", value.effectiveMode().name(),
-                            "upgradePath", "/api/v1/control-plane/plans"));
+                    Map.of(
+                            "entitlementKey",
+                            key.code(),
+                            "enforcementMode",
+                            value.effectiveMode().name(),
+                            "upgradePath",
+                            "/api/v1/control-plane/plans"));
         }
     }
 
@@ -164,20 +178,22 @@ public class EntitlementQueryService implements EntitlementService {
         // problem document always names where the limit can be raised.
         details.put("upgradePath", "/api/v1/control-plane/plans");
 
-        return new ApiException(ErrorCode.ENTITLEMENT_REQUIRED,
+        return new ApiException(
+                ErrorCode.ENTITLEMENT_REQUIRED,
                 "%s allows %d per %s and %d have been used"
-                        .formatted(check.entitlementKey(), check.limit(),
-                                check.period().key(), check.consumed()),
+                        .formatted(
+                                check.entitlementKey(),
+                                check.limit(),
+                                check.period().key(),
+                                check.consumed()),
                 details);
     }
 
     Context contextOf(UUID tenantId, Instant at) {
         Optional<Subscription> subscription = subscriptions.findLive(tenantId);
-        Optional<PlanVersion> planVersion = subscription
-                .flatMap(live -> plans.findVersion(live.planVersionId()));
-        Map<String, PlanEntitlement> planEntitlements = planVersion
-                .map(version -> plans.entitlementsOf(version.id()))
-                .orElseGet(Map::of);
+        Optional<PlanVersion> planVersion = subscription.flatMap(live -> plans.findVersion(live.planVersionId()));
+        Map<String, PlanEntitlement> planEntitlements =
+                planVersion.map(version -> plans.entitlementsOf(version.id())).orElseGet(Map::of);
 
         return new Context(
                 subscription,
@@ -216,7 +232,10 @@ public class EntitlementQueryService implements EntitlementService {
         }
 
         UsagePeriod periodFor(EntitlementValue value, Instant at) {
-            return UsagePeriods.of(value.resetPeriod(), at, timezone,
+            return UsagePeriods.of(
+                    value.resetPeriod(),
+                    at,
+                    timezone,
                     subscription.map(Subscription::currentPeriodStart).orElse(null),
                     subscription.map(Subscription::currentPeriodEnd).orElse(null));
         }

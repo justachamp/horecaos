@@ -9,10 +9,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.marketing.domain.CampaignStatus;
 import uz.horecaos.platform.marketing.domain.RefusalReason;
 
@@ -67,9 +65,7 @@ public class JdbcCampaignStore {
                     :audienceId, :templateKey, :recipientCap, :ceiling, :currency,
                     :timezone, :benefitOfferId, :accrualRuleId, :createdBy,
                     :now, :now)
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
     }
 
     public Optional<CampaignRow> find(UUID tenantId, UUID campaignId) {
@@ -96,8 +92,7 @@ public class JdbcCampaignStore {
      * Two operators pressing halt and pause on the same second is not exotic, and a
      * read-then-write here would let the later one silently overwrite the earlier.
      */
-    public boolean transition(UUID tenantId, UUID campaignId, CampaignStatus from,
-            CampaignStatus to, Instant now) {
+    public boolean transition(UUID tenantId, UUID campaignId, CampaignStatus from, CampaignStatus to, Instant now) {
         return jdbc.sql("""
                 UPDATE marketing.campaigns
                    SET status = :to, version = version + 1, updated_at = :now,
@@ -107,34 +102,42 @@ public class JdbcCampaignStore {
                                            THEN :now ELSE completed_at END
                  WHERE tenant_id = :tenantId AND id = :id AND status = :from
                 """)
-                .param("tenantId", tenantId)
-                .param("id", campaignId)
-                .param("from", from.name())
-                .param("to", to.name())
-                .param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", campaignId)
+                        .param("from", from.name())
+                        .param("to", to.name())
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /** A halt carries the reason in the same statement that stops the campaign. */
-    public boolean halt(UUID tenantId, UUID campaignId, CampaignStatus from, CampaignStatus to,
-            String reason, Instant now) {
+    public boolean halt(
+            UUID tenantId, UUID campaignId, CampaignStatus from, CampaignStatus to, String reason, Instant now) {
         return jdbc.sql("""
                 UPDATE marketing.campaigns
                    SET status = :to, halted_reason = :reason, completed_at = :now,
                        version = version + 1, updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id AND status = :from
                 """)
-                .param("tenantId", tenantId)
-                .param("id", campaignId)
-                .param("from", from.name())
-                .param("to", to.name())
-                .param("reason", reason)
-                .param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", campaignId)
+                        .param("from", from.name())
+                        .param("to", to.name())
+                        .param("reason", reason)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
-    public void recordEstimate(UUID tenantId, UUID campaignId, UUID snapshotId, int recipients,
-            Long costLowMinor, Long costHighMinor, Instant now) {
+    public void recordEstimate(
+            UUID tenantId,
+            UUID campaignId,
+            UUID snapshotId,
+            int recipients,
+            Long costLowMinor,
+            Long costHighMinor,
+            Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
         parameters.put("id", campaignId);
@@ -153,9 +156,7 @@ public class JdbcCampaignStore {
                        version = version + 1,
                        updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
     }
 
     /**
@@ -166,8 +167,7 @@ public class JdbcCampaignStore {
      * the approver, and enforcing it only in the CHECK would produce a constraint
      * violation where the caller wants a refusal it can explain.
      */
-    public boolean approve(UUID tenantId, UUID campaignId, UUID approvedBy, UUID approvalId,
-            Instant now) {
+    public boolean approve(UUID tenantId, UUID campaignId, UUID approvedBy, UUID approvalId, Instant now) {
         return jdbc.sql("""
                 UPDATE marketing.campaigns
                    SET status = 'APPROVED', approved_by = :approvedBy, approval_id = :approvalId,
@@ -176,12 +176,13 @@ public class JdbcCampaignStore {
                    AND status = 'IN_REVIEW'
                    AND created_by <> :approvedBy
                 """)
-                .param("tenantId", tenantId)
-                .param("id", campaignId)
-                .param("approvedBy", approvedBy)
-                .param("approvalId", approvalId)
-                .param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", campaignId)
+                        .param("approvedBy", approvedBy)
+                        .param("approvalId", approvalId)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -196,8 +197,14 @@ public class JdbcCampaignStore {
      * @return the outcome, so the caller can tell "no budget" from "already done"
      *         from "the campaign was halted while I was working"
      */
-    public BatchClaim claimBatch(UUID tenantId, UUID campaignId, UUID snapshotId,
-            int batchSequence, int recipients, long costMinor, Instant now) {
+    public BatchClaim claimBatch(
+            UUID tenantId,
+            UUID campaignId,
+            UUID snapshotId,
+            int batchSequence,
+            int recipients,
+            long costMinor,
+            Instant now) {
 
         Map<String, Object> insert = new HashMap<>();
         insert.put("campaignId", campaignId);
@@ -215,9 +222,7 @@ public class JdbcCampaignStore {
                 VALUES (:campaignId, :tenantId, :snapshotId, :sequence,
                     :recipients, :cost, :now)
                 ON CONFLICT (campaign_id, snapshot_id, batch_sequence) DO NOTHING
-                """)
-                .params(insert)
-                .update() == 1;
+                """).params(insert).update() == 1;
 
         if (!fresh) {
             return BatchClaim.ALREADY_CLAIMED;
@@ -242,9 +247,7 @@ public class JdbcCampaignStore {
                    AND reserved_recipients + :recipients <= recipient_cap
                    AND (cost_ceiling_minor IS NULL
                         OR reserved_cost_minor + :cost <= cost_ceiling_minor)
-                """)
-                .params(reserve)
-                .update() == 1;
+                """).params(reserve).update() == 1;
 
         return reserved ? BatchClaim.RESERVED : BatchClaim.REFUSED;
     }
@@ -285,9 +288,17 @@ public class JdbcCampaignStore {
      *
      * @return true when this call wrote the row
      */
-    public boolean recordRecipient(UUID tenantId, UUID campaignId, UUID accountId, int sequence,
-            String status, UUID notificationId, RefusalReason refusal, String refusalDetail,
-            Instant deferredUntil, Instant now) {
+    public boolean recordRecipient(
+            UUID tenantId,
+            UUID campaignId,
+            UUID accountId,
+            int sequence,
+            String status,
+            UUID notificationId,
+            RefusalReason refusal,
+            String refusalDetail,
+            Instant deferredUntil,
+            Instant now) {
 
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("campaignId", campaignId);
@@ -310,9 +321,7 @@ public class JdbcCampaignStore {
                     :notificationId, :refusal, :refusalDetail, :deferredUntil,
                     :now, :now)
                 ON CONFLICT (campaign_id, customer_account_id) DO NOTHING
-                """)
-                .params(parameters)
-                .update() == 1;
+                """).params(parameters).update() == 1;
     }
 
     /**
@@ -388,7 +397,8 @@ public class JdbcCampaignStore {
 
     /** How many recipients ended each way. What a campaign report reads. */
     public Map<String, Integer> recipientCounts(UUID tenantId, UUID campaignId) {
-        return jdbc.sql("""
+        return jdbc
+                .sql("""
                 SELECT status, COUNT(*) AS total
                   FROM marketing.campaign_recipients
                  WHERE tenant_id = :tenantId AND campaign_id = :campaignId
@@ -396,9 +406,9 @@ public class JdbcCampaignStore {
                 """)
                 .param("tenantId", tenantId)
                 .param("campaignId", campaignId)
-                .query((ResultSet row, int number) ->
-                        Map.entry(row.getString("status"), row.getInt("total")))
-                .list().stream()
+                .query((ResultSet row, int number) -> Map.entry(row.getString("status"), row.getInt("total")))
+                .list()
+                .stream()
                 .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
@@ -439,20 +449,58 @@ public class JdbcCampaignStore {
         return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
-    public record NewCampaign(UUID id, UUID tenantId, UUID brandId, String name, String channel,
-            String consentPurpose, UUID audienceId, String templateKey, int recipientCap,
-            Long costCeilingMinor, String currency, String timezone, UUID benefitOfferId,
-            UUID loyaltyAccrualRuleId, UUID createdBy, Instant createdAt) { }
+    public record NewCampaign(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            String name,
+            String channel,
+            String consentPurpose,
+            UUID audienceId,
+            String templateKey,
+            int recipientCap,
+            Long costCeilingMinor,
+            String currency,
+            String timezone,
+            UUID benefitOfferId,
+            UUID loyaltyAccrualRuleId,
+            UUID createdBy,
+            Instant createdAt) {}
 
-    public record CampaignRow(UUID id, UUID tenantId, UUID brandId, String name, String channel,
-            String consentPurpose, CampaignStatus status, UUID audienceId, UUID snapshotId,
-            String templateKey, String timezone, int recipientCap, Integer estimatedRecipients,
-            Long estimatedCostLowMinor, Long estimatedCostHighMinor, Long costCeilingMinor,
-            long reservedCostMinor, long spentCostMinor, int reservedRecipients, String currency,
-            UUID benefitOfferId, UUID loyaltyAccrualRuleId, UUID createdBy, UUID approvedBy,
-            int version) { }
+    public record CampaignRow(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            String name,
+            String channel,
+            String consentPurpose,
+            CampaignStatus status,
+            UUID audienceId,
+            UUID snapshotId,
+            String templateKey,
+            String timezone,
+            int recipientCap,
+            Integer estimatedRecipients,
+            Long estimatedCostLowMinor,
+            Long estimatedCostHighMinor,
+            Long costCeilingMinor,
+            long reservedCostMinor,
+            long spentCostMinor,
+            int reservedRecipients,
+            String currency,
+            UUID benefitOfferId,
+            UUID loyaltyAccrualRuleId,
+            UUID createdBy,
+            UUID approvedBy,
+            int version) {}
 
-    public record RecipientRow(UUID customerAccountId, int sequence, String status,
-            UUID notificationId, String refusalReason, String refusalDetail, Instant deferredUntil,
-            String terminalStatus) { }
+    public record RecipientRow(
+            UUID customerAccountId,
+            int sequence,
+            String status,
+            UUID notificationId,
+            String refusalReason,
+            String refusalDetail,
+            Instant deferredUntil,
+            String terminalStatus) {}
 }

@@ -2,7 +2,6 @@ package uz.horecaos.platform.ordering.domain;
 
 import java.util.EnumSet;
 import java.util.Set;
-
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 
 /**

@@ -25,8 +25,7 @@ package uz.horecaos.platform.fulfillment.domain.tariff;
  * @param perKmMinor charged over the stretch of this band the journey actually
  *                   covers, by {@link DistanceAccrual}
  */
-public record TariffBand(int sequence, String bandSet, int fromMeters, int toMeters,
-        long baseMinor, long perKmMinor) {
+public record TariffBand(int sequence, String bandSet, int fromMeters, int toMeters, long baseMinor, long perKmMinor) {
 
     /** The table used when no time rule substitutes another. */
     public static final String BASE_SET = "BASE";

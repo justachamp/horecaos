@@ -9,11 +9,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
-
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.pos.api.CapabilitySnapshot;
 import uz.horecaos.platform.pos.api.CapabilitySupport;
@@ -48,12 +46,19 @@ class PosAdapterContractTests {
     static Stream<PosAdapter> adapters() {
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         RecordingPosTransport transport = new RecordingPosTransport()
-                .answerWith(ProviderOutcome.success(Map.of(
-                        "success", true, "token", "t", "expires_at",
-                        NOW.plusSeconds(3600).getEpochSecond(), "data", List.of()), null));
+                .answerWith(ProviderOutcome.success(
+                        Map.of(
+                                "success",
+                                true,
+                                "token",
+                                "t",
+                                "expires_at",
+                                NOW.plusSeconds(3600).getEpochSecond(),
+                                "data",
+                                List.of()),
+                        null));
         return Stream.of(
-                new FakePosAdapter(),
-                new CloposAdapter(transport, new CloposSession(transport, clock), clock));
+                new FakePosAdapter(), new CloposAdapter(transport, new CloposSession(transport, clock), clock));
     }
 
     @ParameterizedTest
@@ -67,7 +72,8 @@ class PosAdapterContractTests {
                 return;
             }
             assertThat(adapter.declaredCapabilities())
-                    .as("%s reported %s for %s without declaring it",
+                    .as(
+                            "%s reported %s for %s without declaring it",
                             adapter.providerType(), entry.support(), capability)
                     .contains(capability);
         });
@@ -129,7 +135,8 @@ class PosAdapterContractTests {
         FakePosAdapter fake = new FakePosAdapter();
         CapabilitySnapshot fakeSnapshot = fake.discoverCapabilities(context());
 
-        var fakeDecision = UncertainExportResolver.decide(List.of(),
+        var fakeDecision = UncertainExportResolver.decide(
+                List.of(),
                 fakeSnapshot.entry(PosCapability.ORDER_EXPORT).orElseThrow().idempotency());
         assertThat(fakeDecision.outcome())
                 .as("a provider that deduplicates is told to send again")
@@ -137,12 +144,12 @@ class PosAdapterContractTests {
 
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         RecordingPosTransport transport = new RecordingPosTransport()
-                .answerWith(ProviderOutcome.success(Map.of(
-                        "success", true, "token", "t", "data", List.of()), null));
+                .answerWith(ProviderOutcome.success(Map.of("success", true, "token", "t", "data", List.of()), null));
         CloposAdapter clopos = new CloposAdapter(transport, new CloposSession(transport, clock), clock);
         var cloposSnapshot = clopos.discoverCapabilities(context());
 
-        var cloposDecision = UncertainExportResolver.decide(List.of(),
+        var cloposDecision = UncertainExportResolver.decide(
+                List.of(),
                 cloposSnapshot.entry(PosCapability.ORDER_EXPORT).orElseThrow().idempotency());
         assertThat(cloposDecision.outcome())
                 .as("a provider that does not deduplicate sends a person a decision")
@@ -153,10 +160,17 @@ class PosAdapterContractTests {
     @DisplayName("a repeat under one reference produces one order on a provider that has a key")
     void theFakeProvesWhatIdempotencyWouldBuyUs() {
         FakePosAdapter fake = new FakePosAdapter();
-        var order = new PosAdapter.OrderExport(UUID.randomUUID(), "A-1024", "A-1024",
+        var order = new PosAdapter.OrderExport(
+                UUID.randomUUID(),
+                "A-1024",
+                "A-1024",
                 new PosAdapter.OrderExport.Customer("1", "Anvar", "+998901234567", "Amir Temur 1"),
                 List.of(new PosAdapter.OrderExport.Line("f-1", "Fake dish", 1, 10_000L, List.of())),
-                10_000L, "UZS", "DELIVERY", false, NOW);
+                10_000L,
+                "UZS",
+                "DELIVERY",
+                false,
+                NOW);
 
         fake.exportOrder(context(), order);
         fake.exportOrder(context(), order);
@@ -169,10 +183,16 @@ class PosAdapterContractTests {
     }
 
     private static PosContext context() {
-        return new PosContext(TENANT, INSTALLATION, null, "3", Map.of(
-                CloposConfig.BRAND, "openapitest",
-                CloposConfig.CLIENT_ID, "client-1",
-                CloposConfig.INTEGRATOR_ID, "horecaos-test",
-                CloposConfig.CURRENCY, "UZS"), "correlation-1");
+        return new PosContext(
+                TENANT,
+                INSTALLATION,
+                null,
+                "3",
+                Map.of(
+                        CloposConfig.BRAND, "openapitest",
+                        CloposConfig.CLIENT_ID, "client-1",
+                        CloposConfig.INTEGRATOR_ID, "horecaos-test",
+                        CloposConfig.CURRENCY, "UZS"),
+                "correlation-1");
     }
 }

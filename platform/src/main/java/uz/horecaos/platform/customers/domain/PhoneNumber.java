@@ -35,8 +35,7 @@ public final class PhoneNumber {
 
     private static final String UZBEK_DIALING_PREFIX = "+998";
 
-    private PhoneNumber() {
-    }
+    private PhoneNumber() {}
 
     /**
      * Digits only, keeping a leading {@code +}.
@@ -68,19 +67,19 @@ public final class PhoneNumber {
     public static String requireDeliverableMobile(String rawValue) {
         String normalized = normalize(rawValue);
 
-        String candidate = switch (normalized.length()) {
-            // "+901112233" — a national number that picked up a plus from
-            // normalize. Nine digits is unambiguous here: it is the only length a
-            // national Uzbek mobile number has.
-            case 10 -> UZBEK_DIALING_PREFIX + normalized.substring(1);
-            // "+998901112233" already, or "998901112233" before the plus.
-            case 13 -> normalized;
-            default -> normalized;
-        };
+        String candidate =
+                switch (normalized.length()) {
+                    // "+901112233" — a national number that picked up a plus from
+                    // normalize. Nine digits is unambiguous here: it is the only length a
+                    // national Uzbek mobile number has.
+                    case 10 -> UZBEK_DIALING_PREFIX + normalized.substring(1);
+                    // "+998901112233" already, or "998901112233" before the plus.
+                    case 13 -> normalized;
+                    default -> normalized;
+                };
 
         if (!UZBEK_MOBILE.matcher(candidate).matches()) {
-            throw new IllegalArgumentException(
-                    "That is not an Uzbek mobile number. Expected the +998 form.");
+            throw new IllegalArgumentException("That is not an Uzbek mobile number. Expected the +998 form.");
         }
         return candidate;
     }

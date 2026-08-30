@@ -48,8 +48,7 @@ public record DispatchOutcome(
     }
 
     public static DispatchOutcome accepted(String externalMessageId, String providerStatus) {
-        return new DispatchOutcome(Status.ACCEPTED, externalMessageId, providerStatus, null, null,
-                null, null, null);
+        return new DispatchOutcome(Status.ACCEPTED, externalMessageId, providerStatus, null, null, null, null, null);
     }
 
     public static DispatchOutcome rejected(String errorCode, String detail) {
@@ -57,8 +56,7 @@ public record DispatchOutcome(
     }
 
     public static DispatchOutcome retryable(String errorCode, String detail, Duration retryAfter) {
-        return new DispatchOutcome(Status.RETRYABLE, null, null, errorCode, detail, retryAfter,
-                null, null);
+        return new DispatchOutcome(Status.RETRYABLE, null, null, errorCode, detail, retryAfter, null, null);
     }
 
     public static DispatchOutcome uncertain(String errorCode, String detail) {
@@ -67,8 +65,8 @@ public record DispatchOutcome(
 
     /** The same outcome, attributed to the account that produced it. */
     public DispatchOutcome from(UUID bindingId, String providerType) {
-        return new DispatchOutcome(status, externalMessageId, providerStatus, errorCode, detail,
-                retryAfter, bindingId, providerType);
+        return new DispatchOutcome(
+                status, externalMessageId, providerStatus, errorCode, detail, retryAfter, bindingId, providerType);
     }
 
     public Optional<Duration> retryDelay() {

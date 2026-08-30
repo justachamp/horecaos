@@ -20,8 +20,7 @@ public final class FiscalReason {
      * this is the common case and not an edge case, and partner fiscal coverage is
      * the minority of orders at cutover.
      */
-    public static final String CASH_TENDER_NO_PROVIDER_FISCALIZATION =
-            "CASH_TENDER_NO_PROVIDER_FISCALIZATION";
+    public static final String CASH_TENDER_NO_PROVIDER_FISCALIZATION = "CASH_TENDER_NO_PROVIDER_FISCALIZATION";
 
     public static final String CASH_TENDER_NOTE = "cash tender, no provider fiscalization";
 
@@ -37,6 +36,5 @@ public final class FiscalReason {
     /** The provider answered with a non-zero status, which is evidence of no receipt. */
     public static final String PROVIDER_REJECTED = "PROVIDER_REJECTED";
 
-    private FiscalReason() {
-    }
+    private FiscalReason() {}
 }

@@ -6,7 +6,6 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -14,7 +13,6 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -198,22 +196,20 @@ public class CustomerVerificationService {
 
         if (code.requiresDelivery()) {
             RateLimiter.Decision caller = rateLimiter.check(
-                    new RateLimiter.Key(ISSUE_OPERATION, String.valueOf(tenantId), callerKey),
-                    ISSUE_PER_CALLER);
+                    new RateLimiter.Key(ISSUE_OPERATION, String.valueOf(tenantId), callerKey), ISSUE_PER_CALLER);
             if (!caller.allowed()) {
                 throw VerificationChallengeIssuer.tooManyRequests(
                         "Too many verification requests. Try again shortly.", caller.retryAfter());
             }
         }
 
-        String destinationHash = protection.lookupHash(
-                tenantId, ContactType.PHONE.lookupDomain(), destination);
+        String destinationHash = protection.lookupHash(tenantId, ContactType.PHONE.lookupDomain(), destination);
 
         Opened opened = issuer.open(tenantId, brandId, destination, destinationHash, code);
         deliver(tenantId, brandId, destination, opened);
 
-        return new Challenge(opened.challengeId(), opened.expiresAt(), opened.attemptsAllowed(),
-                VerificationCode.LENGTH);
+        return new Challenge(
+                opened.challengeId(), opened.expiresAt(), opened.attemptsAllowed(), VerificationCode.LENGTH);
     }
 
     /**
@@ -251,8 +247,15 @@ public class CustomerVerificationService {
         }
 
         Outcome outcome = transport.send(new VerificationMessage(
-                tenantId, brandId, opened.challengeId(), ContactChannel.SMS, destination,
-                opened.code(), opened.validFor(), null, clock.instant()));
+                tenantId,
+                brandId,
+                opened.challengeId(),
+                ContactChannel.SMS,
+                destination,
+                opened.code(),
+                opened.validFor(),
+                null,
+                clock.instant()));
 
         if (outcome.status() != Outcome.Status.ACCEPTED) {
             withdraw(tenantId, opened, outcome.reasonCode());
@@ -269,8 +272,7 @@ public class CustomerVerificationService {
      */
     private void withdraw(UUID tenantId, Opened opened, String reason) {
         challenges.deleteUnsent(tenantId, opened.challengeId());
-        log.warn("Withdrew verification challenge {}: the transport answered {}",
-                opened.challengeId(), reason);
+        log.warn("Withdrew verification challenge {}: the transport answered {}", opened.challengeId(), reason);
     }
 
     /**
@@ -283,8 +285,7 @@ public class CustomerVerificationService {
     @Transactional
     public Grant verify(UUID tenantId, UUID challengeId, String submittedCode, String callerKey) {
         RateLimiter.Decision caller = rateLimiter.check(
-                new RateLimiter.Key(VERIFY_OPERATION, String.valueOf(tenantId), callerKey),
-                VERIFY_PER_CALLER);
+                new RateLimiter.Key(VERIFY_OPERATION, String.valueOf(tenantId), callerKey), VERIFY_PER_CALLER);
         if (!caller.allowed()) {
             throw VerificationChallengeIssuer.tooManyRequests(
                     "Too many attempts. Try again shortly.", caller.retryAfter());
@@ -295,22 +296,25 @@ public class CustomerVerificationService {
             // an empty field or a pasted paragraph has not guessed anything, and
             // spending the customer's attempts on their own typo is a denial of
             // service we would be inflicting on ourselves.
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
                     "A verification code is %d digits.".formatted(VerificationCode.LENGTH));
         }
 
         Instant now = clock.instant();
-        Attempt attempt = challenges.consumeAttempt(tenantId, challengeId, now)
+        Attempt attempt = challenges
+                .consumeAttempt(tenantId, challengeId, now)
                 .orElseThrow(CustomerVerificationService::challengeOver);
 
         if (!codes.matches(tenantId, challengeId, submittedCode, attempt.codeHash())) {
             if (attempt.attemptsRemaining() <= 0) {
                 challenges.markExhausted(tenantId, challengeId, now);
-                log.info("Verification challenge {} in tenant {} spent its last attempt",
-                        challengeId, tenantId);
+                log.info("Verification challenge {} in tenant {} spent its last attempt", challengeId, tenantId);
                 throw challengeOver();
             }
-            throw new ApiException(ErrorCode.UNAUTHENTICATED, "That code is not correct.",
+            throw new ApiException(
+                    ErrorCode.UNAUTHENTICATED,
+                    "That code is not correct.",
                     Map.of("attemptsRemaining", attempt.attemptsRemaining()));
         }
 
@@ -324,9 +328,12 @@ public class CustomerVerificationService {
             throw challengeOver();
         }
 
-        audit.record(fact("CUSTOMER_CONTACT_VERIFIED", tenantId, null, challengeId,
-                Map.of("contactType", ContactType.PHONE.name(),
-                        "purpose", VerificationChallengeIssuer.SIGN_IN_PURPOSE),
+        audit.record(fact(
+                "CUSTOMER_CONTACT_VERIFIED",
+                tenantId,
+                null,
+                challengeId,
+                Map.of("contactType", ContactType.PHONE.name(), "purpose", VerificationChallengeIssuer.SIGN_IN_PURPOSE),
                 now));
 
         return new Grant(grant.plaintext(), grantExpiresAt);
@@ -356,11 +363,9 @@ public class CustomerVerificationService {
      * person in every sense that matters.
      */
     @Transactional
-    public Redemption redeem(UUID tenantId, UUID brandId, String grantSecret, String issuerUri,
-            String subject) {
+    public Redemption redeem(UUID tenantId, UUID brandId, String grantSecret, String issuerUri, String subject) {
 
-        return redeem(tenantId, brandId, grantSecret,
-                redeemed -> new PrincipalKey(issuerUri, subject));
+        return redeem(tenantId, brandId, grantSecret, redeemed -> new PrincipalKey(issuerUri, subject));
     }
 
     /**
@@ -396,9 +401,11 @@ public class CustomerVerificationService {
      */
     @Transactional
     public Redemption redeemAsProvenNumber(UUID tenantId, UUID brandId, String grantSecret) {
-        return redeem(tenantId, brandId, grantSecret,
-                redeemed -> new PrincipalKey(
-                        CustomerIdentityService.PROVEN_NUMBER_ISSUER, redeemed.destinationHash()));
+        return redeem(
+                tenantId,
+                brandId,
+                grantSecret,
+                redeemed -> new PrincipalKey(CustomerIdentityService.PROVEN_NUMBER_ISSUER, redeemed.destinationHash()));
     }
 
     /**
@@ -407,7 +414,10 @@ public class CustomerVerificationService {
      *                    the proven-number path can only answer once the row has
      *                    been read, and reading it is what makes the grant spent
      */
-    private Redemption redeem(UUID tenantId, UUID brandId, String grantSecret,
+    private Redemption redeem(
+            UUID tenantId,
+            UUID brandId,
+            String grantSecret,
             java.util.function.Function<RedeemedGrant, PrincipalKey> principalOf) {
 
         Instant now = clock.instant();
@@ -426,9 +436,12 @@ public class CustomerVerificationService {
 
         attachVerifiedContact(tenantId, accountId, redeemed, now);
 
-        audit.record(fact("CUSTOMER_PRINCIPAL_VERIFIED", tenantId, brandId, accountId,
-                Map.of("challengeId", redeemed.challengeId().toString(),
-                        "accountCreated", resolution.created()),
+        audit.record(fact(
+                "CUSTOMER_PRINCIPAL_VERIFIED",
+                tenantId,
+                brandId,
+                accountId,
+                Map.of("challengeId", redeemed.challengeId().toString(), "accountCreated", resolution.created()),
                 now));
 
         return new Redemption(new CustomerAccountRef(accountId, tenantId), resolution.created());
@@ -442,8 +455,7 @@ public class CustomerVerificationService {
      * share a handset, and ADR 0015 forbids reading anything about identity out of
      * that coincidence.
      */
-    private void attachVerifiedContact(UUID tenantId, UUID accountId, RedeemedGrant redeemed,
-            Instant now) {
+    private void attachVerifiedContact(UUID tenantId, UUID accountId, RedeemedGrant redeemed, Instant now) {
 
         int promoted = customers.markContactVerified(
                 tenantId, accountId, redeemed.contactType(), redeemed.destinationHash(), now);
@@ -455,10 +467,11 @@ public class CustomerVerificationService {
         // Decrypted here and re-protected under the contact point's own record
         // reference. Associated data binds a ciphertext to one row, so the
         // challenge's ciphertext would not open where it is about to be stored.
-        String destination = protection.reveal(tenantId,
+        String destination = protection.reveal(
+                tenantId,
                 ProtectedValue.deserialize(redeemed.destinationValue()),
-                new RecordRef(VerificationChallengeIssuer.CHALLENGE_TABLE, "destination_encrypted",
-                        redeemed.challengeId()),
+                new RecordRef(
+                        VerificationChallengeIssuer.CHALLENGE_TABLE, "destination_encrypted", redeemed.challengeId()),
                 REVEAL_PURPOSE);
 
         customers.insertVerifiedContactPoint(
@@ -467,9 +480,13 @@ public class CustomerVerificationService {
                 accountId,
                 redeemed.contactType(),
                 redeemed.destinationHash(),
-                protection.protect(tenantId, DataClass.PERSONAL,
-                        new RecordRef(CONTACT_TABLE, "encrypted_value", contactId),
-                        destination).serialize(),
+                protection
+                        .protect(
+                                tenantId,
+                                DataClass.PERSONAL,
+                                new RecordRef(CONTACT_TABLE, "encrypted_value", contactId),
+                                destination)
+                        .serialize(),
                 !customers.hasPrimaryContact(tenantId, accountId, redeemed.contactType()),
                 now);
     }
@@ -492,29 +509,28 @@ public class CustomerVerificationService {
         return grantSecret;
     }
 
-    private AuditFact fact(String action, UUID tenantId, UUID brandId, UUID targetId,
-            Map<String, Object> changes, Instant now) {
+    private AuditFact fact(
+            String action, UUID tenantId, UUID brandId, UUID targetId, Map<String, Object> changes, Instant now) {
 
         // No reason string, because there is no operator to have one: the actor is
         // the storefront acting for somebody who is not yet anybody. AuditFact
         // demands a reason only of a USER actor, for exactly this distinction.
         return AuditFact.of(action, AuditClass.SECURITY)
                 .by(ActorRef.service("storefront-verification"))
-                .at(brandId == null ? ResourceScope.tenant(tenantId)
-                        : ResourceScope.brand(tenantId, brandId))
+                .at(brandId == null ? ResourceScope.tenant(tenantId) : ResourceScope.brand(tenantId, brandId))
                 .target("customer_verification", targetId)
                 // Identifiers and states only. A number, a code, or a grant in a
                 // change document would put personal data and a live credential
                 // into a record designed to be kept for years.
                 .changed(changes)
-                .correlatedBy(Optional.ofNullable(MDC.get("correlationId"))
-                        .orElse("customer-verification"))
+                .correlatedBy(Optional.ofNullable(MDC.get("correlationId")).orElse("customer-verification"))
                 .occurredAt(now)
                 .build();
     }
 
     private static ApiException unsendable(String reason) {
-        return new ApiException(ErrorCode.INTERNAL_ERROR,
+        return new ApiException(
+                ErrorCode.INTERNAL_ERROR,
                 "The code could not be sent. Try again.",
                 Map.of("reason", String.valueOf(reason)));
     }
@@ -529,13 +545,11 @@ public class CustomerVerificationService {
      * to stay stable forever.
      */
     private static ApiException challengeOver() {
-        return new ApiException(ErrorCode.UNPROCESSABLE_STATE,
-                "This verification has ended. Request a new code.");
+        return new ApiException(ErrorCode.UNPROCESSABLE_STATE, "This verification has ended. Request a new code.");
     }
 
     private static ApiException grantRefused() {
-        return new ApiException(ErrorCode.UNAUTHENTICATED,
-                "This verification can no longer be used. Start again.");
+        return new ApiException(ErrorCode.UNAUTHENTICATED, "This verification can no longer be used. Start again.");
     }
 
     /**
@@ -546,13 +560,10 @@ public class CustomerVerificationService {
      * {@code PrincipalCustomer} spends a paragraph on, and a record makes it
      * impossible to make here.
      */
-    private record PrincipalKey(String issuer, String subject) {
-    }
+    private record PrincipalKey(String issuer, String subject) {}
 
     /** Everything the caller may know about a challenge. Never the code. */
-    public record Challenge(UUID challengeId, Instant expiresAt, int attemptsAllowed,
-            int codeLength) {
-    }
+    public record Challenge(UUID challengeId, Instant expiresAt, int attemptsAllowed, int codeLength) {}
 
     /** Returned once. The plaintext exists in that response and nowhere else. */
     public record Grant(String secret, Instant expiresAt) {
@@ -569,6 +580,5 @@ public class CustomerVerificationService {
      *                which is when a storefront should ask for consent rather than
      *                assume it
      */
-    public record Redemption(CustomerAccountRef account, boolean created) {
-    }
+    public record Redemption(CustomerAccountRef account, boolean created) {}
 }

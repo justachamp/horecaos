@@ -1,8 +1,7 @@
 package uz.horecaos.platform.catalog.web;
 
-import java.util.List;
-import java.util.UUID;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
@@ -10,7 +9,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
-
+import java.util.List;
+import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,10 +18,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableNode;
@@ -60,62 +56,100 @@ public class CatalogAuthoringController {
     @PostMapping("/catalogs")
     @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
     @Operation(summary = "Create a draft catalog")
-    public ResponseEntity<IdResponse> createCatalog(@PathVariable UUID tenantId,
-            @PathVariable UUID brandId, @Valid @RequestBody CreateCatalogRequest request) {
-        UUID catalogId = authoring.createCatalog(tenantId, brandId,
-                request.code(), request.name(), request.locale());
+    public ResponseEntity<IdResponse> createCatalog(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody CreateCatalogRequest request) {
+        UUID catalogId = authoring.createCatalog(tenantId, brandId, request.code(), request.name(), request.locale());
         return ResponseEntity.ok(new IdResponse(catalogId));
     }
 
     @PostMapping("/catalogs/{catalogId}/products")
     @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
-    @Operation(summary = "Create a product with its default variant",
+    @Operation(
+            summary = "Create a product with its default variant",
             description = "Both together, because a product with no variant cannot be published "
                     + "and would only ever be a half-finished state to come back to.")
-    public ResponseEntity<ProductResponse> createProduct(@PathVariable UUID tenantId,
-            @PathVariable UUID brandId, @PathVariable UUID catalogId,
+    public ResponseEntity<ProductResponse> createProduct(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID catalogId,
             @Valid @RequestBody CreateProductRequest request) {
 
-        var created = authoring.createProduct(tenantId, brandId, catalogId,
-                request.code(), request.name(), request.description(), request.locale(),
-                request.sku(), request.unitCode(), request.classification(), actorId());
+        var created = authoring.createProduct(
+                tenantId,
+                brandId,
+                catalogId,
+                request.code(),
+                request.name(),
+                request.description(),
+                request.locale(),
+                request.sku(),
+                request.unitCode(),
+                request.classification(),
+                actorId());
         return ResponseEntity.ok(new ProductResponse(created.productId(), created.defaultVariantId()));
     }
 
     @PostMapping("/products/{productId}/variants")
     @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
     @Operation(summary = "Add a further variant to a product")
-    public ResponseEntity<IdResponse> addVariant(@PathVariable UUID tenantId,
-            @PathVariable UUID brandId, @PathVariable UUID productId,
+    public ResponseEntity<IdResponse> addVariant(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID productId,
             @Valid @RequestBody AddVariantRequest request) {
-        UUID variantId = authoring.addVariant(tenantId, brandId, productId,
-                request.sku(), request.unitCode(), request.name(), request.locale(),
-                request.sortOrder(), request.classification(), actorId());
+        UUID variantId = authoring.addVariant(
+                tenantId,
+                brandId,
+                productId,
+                request.sku(),
+                request.unitCode(),
+                request.name(),
+                request.locale(),
+                request.sortOrder(),
+                request.classification(),
+                actorId());
         return ResponseEntity.ok(new IdResponse(variantId));
     }
 
     @PostMapping("/catalogs/{catalogId}/categories")
     @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
     @Operation(summary = "Create a category")
-    public ResponseEntity<IdResponse> createCategory(@PathVariable UUID tenantId,
-            @PathVariable UUID brandId, @PathVariable UUID catalogId,
+    public ResponseEntity<IdResponse> createCategory(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID catalogId,
             @Valid @RequestBody CreateCategoryRequest request) {
-        UUID categoryId = authoring.createCategory(tenantId, brandId, catalogId,
-                request.parentCategoryId(), request.code(), request.name(),
-                request.locale(), request.sortOrder());
+        UUID categoryId = authoring.createCategory(
+                tenantId,
+                brandId,
+                catalogId,
+                request.parentCategoryId(),
+                request.code(),
+                request.name(),
+                request.locale(),
+                request.sortOrder());
         return ResponseEntity.ok(new IdResponse(categoryId));
     }
 
     @PostMapping("/modifier-groups")
     @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
-    @Operation(summary = "Create a modifier group",
+    @Operation(
+            summary = "Create a modifier group",
             description = "A group whose minimum exceeds the number of options it offers is "
                     + "accepted here and rejected at publication, with the entity path.")
-    public ResponseEntity<IdResponse> createModifierGroup(@PathVariable UUID tenantId,
-            @PathVariable UUID brandId, @Valid @RequestBody CreateModifierGroupRequest request) {
-        UUID groupId = authoring.createModifierGroup(tenantId, brandId, request.code(),
-                request.name(), request.locale(), request.required(),
-                request.minimumSelections(), request.maximumSelections(),
+    public ResponseEntity<IdResponse> createModifierGroup(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @Valid @RequestBody CreateModifierGroupRequest request) {
+        UUID groupId = authoring.createModifierGroup(
+                tenantId,
+                brandId,
+                request.code(),
+                request.name(),
+                request.locale(),
+                request.required(),
+                request.minimumSelections(),
+                request.maximumSelections(),
                 request.allowSameOptionMultipleTimes());
         return ResponseEntity.ok(new IdResponse(groupId));
     }
@@ -123,64 +157,84 @@ public class CatalogAuthoringController {
     @PostMapping("/modifier-groups/{groupId}/options")
     @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
     @Operation(summary = "Add an option to a modifier group")
-    public ResponseEntity<IdResponse> addModifierOption(@PathVariable UUID tenantId,
-            @PathVariable UUID brandId, @PathVariable UUID groupId,
+    public ResponseEntity<IdResponse> addModifierOption(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID groupId,
             @Valid @RequestBody AddModifierOptionRequest request) {
-        UUID optionId = authoring.addModifierOption(tenantId, brandId, groupId,
-                request.code(), request.name(), request.locale(),
-                request.linkedVariantId(), request.maximumQuantity(), request.sortOrder(),
-                request.classification(), actorId());
+        UUID optionId = authoring.addModifierOption(
+                tenantId,
+                brandId,
+                groupId,
+                request.code(),
+                request.name(),
+                request.locale(),
+                request.linkedVariantId(),
+                request.maximumQuantity(),
+                request.sortOrder(),
+                request.classification(),
+                actorId());
         return ResponseEntity.ok(new IdResponse(optionId));
     }
 
     @PutMapping("/variants/{variantId}/fiscal-classification")
     @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
-    @Operation(summary = "Classify a variant for fiscal purposes",
+    @Operation(
+            summary = "Classify a variant for fiscal purposes",
             description = "ИКПУ/MXIK, package code, fiscal unit and fiscal name. All four are "
                     + "required by Click and Payme alike; publication reports a gap in any of "
                     + "them rather than refusing the menu, while ADR 0038's coverage tooling "
                     + "is still being built.")
-    public ResponseEntity<Void> classifyVariant(@PathVariable UUID tenantId,
-            @PathVariable UUID brandId, @PathVariable UUID variantId,
+    public ResponseEntity<Void> classifyVariant(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID variantId,
             @Valid @RequestBody FiscalClassificationRequest request) {
-        authoring.classify(tenantId, brandId, PriceableNode.variant(variantId),
-                request.toClassification(), actorId());
+        authoring.classify(tenantId, brandId, PriceableNode.variant(variantId), request.toClassification(), actorId());
         return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/modifier-options/{optionId}/fiscal-classification")
     @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
-    @Operation(summary = "Classify a modifier option for fiscal purposes",
+    @Operation(
+            summary = "Classify a modifier option for fiscal purposes",
             description = "A modifier reaches a receipt as its own line. One linked to a "
                     + "sellable variant inherits that variant's classification instead of "
                     + "carrying a second copy that can drift.")
-    public ResponseEntity<Void> classifyModifierOption(@PathVariable UUID tenantId,
-            @PathVariable UUID brandId, @PathVariable UUID optionId,
+    public ResponseEntity<Void> classifyModifierOption(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID optionId,
             @Valid @RequestBody FiscalClassificationRequest request) {
-        authoring.classify(tenantId, brandId, PriceableNode.modifierOption(optionId),
-                request.toClassification(), actorId());
+        authoring.classify(
+                tenantId, brandId, PriceableNode.modifierOption(optionId), request.toClassification(), actorId());
         return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/fees/{feeCode}/fiscal-classification")
     @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
-    @Operation(summary = "Classify a brand's delivery charge",
+    @Operation(
+            summary = "Classify a brand's delivery charge",
             description = "The delivery fee goes out as an ordinary receipt line, never through "
                     + "Payme's shipping block, which carries no code, no package code and no "
                     + "VAT percent. So it needs the same four fields a dish does.")
-    public ResponseEntity<IdResponse> classifyFee(@PathVariable UUID tenantId,
-            @PathVariable UUID brandId, @PathVariable String feeCode,
+    public ResponseEntity<IdResponse> classifyFee(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable String feeCode,
             @Valid @RequestBody FiscalClassificationRequest request) {
-        UUID feeId = authoring.classifyFee(tenantId, brandId, feeCode,
-                request.toClassification(), actorId());
+        UUID feeId = authoring.classifyFee(tenantId, brandId, feeCode, request.toClassification(), actorId());
         return ResponseEntity.ok(new IdResponse(feeId));
     }
 
     @PutMapping("/products/{productId}/modifier-groups/{groupId}")
     @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
     @Operation(summary = "Attach a modifier group to a product")
-    public ResponseEntity<Void> attachModifierGroup(@PathVariable UUID tenantId,
-            @PathVariable UUID brandId, @PathVariable UUID productId, @PathVariable UUID groupId,
+    public ResponseEntity<Void> attachModifierGroup(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID productId,
+            @PathVariable UUID groupId,
             @Valid @RequestBody SortOrderRequest request) {
         authoring.attachModifierGroup(tenantId, brandId, productId, groupId, request.sortOrder());
         return ResponseEntity.noContent().build();
@@ -189,8 +243,11 @@ public class CatalogAuthoringController {
     @PutMapping("/categories/{categoryId}/products/{productId}")
     @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
     @Operation(summary = "Place a product in a category")
-    public ResponseEntity<Void> placeInCategory(@PathVariable UUID tenantId,
-            @PathVariable UUID brandId, @PathVariable UUID categoryId, @PathVariable UUID productId,
+    public ResponseEntity<Void> placeInCategory(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID categoryId,
+            @PathVariable UUID productId,
             @Valid @RequestBody SortOrderRequest request) {
         authoring.placeProductInCategory(tenantId, brandId, categoryId, productId, request.sortOrder());
         return ResponseEntity.noContent().build();
@@ -198,14 +255,17 @@ public class CatalogAuthoringController {
 
     @PutMapping("/variants/{variantId}/location-offerings/{locationId}")
     @RequiresCapability(value = Capability.OFFERING_MANAGE, scope = ScopeType.LOCATION, mutating = true)
-    @Operation(summary = "Set whether a location sells a variant",
+    @Operation(
+            summary = "Set whether a location sells a variant",
             description = "Takes effect immediately without republishing. Marking a dish sold out "
                     + "must not require re-validating an entire menu.")
-    public ResponseEntity<Void> setOffering(@PathVariable UUID tenantId, @PathVariable UUID brandId,
-            @PathVariable UUID variantId, @PathVariable UUID locationId,
+    public ResponseEntity<Void> setOffering(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID variantId,
+            @PathVariable UUID locationId,
             @Valid @RequestBody SetOfferingRequest request) {
-        authoring.setOffering(tenantId, brandId, locationId, variantId,
-                request.status(), request.fulfillmentModes());
+        authoring.setOffering(tenantId, brandId, locationId, variantId, request.status(), request.fulfillmentModes());
         return ResponseEntity.noContent().build();
     }
 
@@ -224,8 +284,10 @@ public class CatalogAuthoringController {
         }
     }
 
-    public record CreateCatalogRequest(@NotBlank String code, @NotBlank String name,
-            @NotBlank String locale) { }
+    public record CreateCatalogRequest(
+            @NotBlank String code,
+            @NotBlank String name,
+            @NotBlank String locale) {}
 
     /**
      * @param fiscal the default variant's classification (ADR 0038). Optional
@@ -233,13 +295,17 @@ public class CatalogAuthoringController {
      *               refusing the menu, while ADR 0038's stage 2 coverage tooling
      *               is still being built
      */
-    public record CreateProductRequest(@NotBlank String code, @NotBlank String name,
-            String description, @NotBlank String locale, String sku, String unitCode,
+    public record CreateProductRequest(
+            @NotBlank String code,
+            @NotBlank String name,
+            String description,
+            @NotBlank String locale,
+            String sku,
+            String unitCode,
             @Valid FiscalClassificationRequest fiscal) {
 
         FiscalClassification classification() {
-            return fiscal == null
-                    ? FiscalClassification.unclassified() : fiscal.toClassification();
+            return fiscal == null ? FiscalClassification.unclassified() : fiscal.toClassification();
         }
     }
 
@@ -248,13 +314,16 @@ public class CatalogAuthoringController {
      *               a sibling variant: every size of a dish is its own receipt
      *               line with its own unit and its own 63-character fiscal name
      */
-    public record AddVariantRequest(String sku, String unitCode, String name,
-            @NotBlank String locale, @PositiveOrZero int sortOrder,
+    public record AddVariantRequest(
+            String sku,
+            String unitCode,
+            String name,
+            @NotBlank String locale,
+            @PositiveOrZero int sortOrder,
             @Valid FiscalClassificationRequest fiscal) {
 
         FiscalClassification classification() {
-            return fiscal == null
-                    ? FiscalClassification.unclassified() : fiscal.toClassification();
+            return fiscal == null ? FiscalClassification.unclassified() : fiscal.toClassification();
         }
     }
 
@@ -301,40 +370,61 @@ public class CatalogAuthoringController {
                     : (markingRequired
                             ? FiscalClassification.MarkingScheme.DATA_MATRIX
                             : FiscalClassification.MarkingScheme.NONE);
-            return new FiscalClassification(mxikCode, packageCode, fiscalUnitCode, fiscalName,
-                    barcode, markingRequired, scheme, excisable,
-                    alcoholByVolumeBp, ageRestrictionYears);
+            return new FiscalClassification(
+                    mxikCode,
+                    packageCode,
+                    fiscalUnitCode,
+                    fiscalName,
+                    barcode,
+                    markingRequired,
+                    scheme,
+                    excisable,
+                    alcoholByVolumeBp,
+                    ageRestrictionYears);
         }
     }
 
-    public record CreateCategoryRequest(UUID parentCategoryId, @NotBlank String code,
-            @NotBlank String name, @NotBlank String locale, @PositiveOrZero int sortOrder) { }
+    public record CreateCategoryRequest(
+            UUID parentCategoryId,
+            @NotBlank String code,
+            @NotBlank String name,
+            @NotBlank String locale,
+            @PositiveOrZero int sortOrder) {}
 
-    public record CreateModifierGroupRequest(@NotBlank String code, @NotBlank String name,
-            @NotBlank String locale, boolean required, @PositiveOrZero int minimumSelections,
-            @Positive int maximumSelections, boolean allowSameOptionMultipleTimes) { }
+    public record CreateModifierGroupRequest(
+            @NotBlank String code,
+            @NotBlank String name,
+            @NotBlank String locale,
+            boolean required,
+            @PositiveOrZero int minimumSelections,
+            @Positive int maximumSelections,
+            boolean allowSameOptionMultipleTimes) {}
 
     /**
      * @param fiscal a modifier reaches a receipt as its own line and so needs its
      *               own classification; absent, it falls back to the linked
      *               variant's when there is one
      */
-    public record AddModifierOptionRequest(@NotBlank String code, @NotBlank String name,
-            @NotBlank String locale, UUID linkedVariantId, @Positive int maximumQuantity,
-            @PositiveOrZero int sortOrder, @Valid FiscalClassificationRequest fiscal) {
+    public record AddModifierOptionRequest(
+            @NotBlank String code,
+            @NotBlank String name,
+            @NotBlank String locale,
+            UUID linkedVariantId,
+            @Positive int maximumQuantity,
+            @PositiveOrZero int sortOrder,
+            @Valid FiscalClassificationRequest fiscal) {
 
         FiscalClassification classification() {
-            return fiscal == null
-                    ? FiscalClassification.unclassified() : fiscal.toClassification();
+            return fiscal == null ? FiscalClassification.unclassified() : fiscal.toClassification();
         }
     }
 
-    public record SortOrderRequest(@PositiveOrZero int sortOrder) { }
+    public record SortOrderRequest(@PositiveOrZero int sortOrder) {}
 
-    public record SetOfferingRequest(@NotNull OfferingStatus status,
-            @NotNull List<String> fulfillmentModes) { }
+    public record SetOfferingRequest(
+            @NotNull OfferingStatus status, @NotNull List<String> fulfillmentModes) {}
 
-    public record IdResponse(UUID id) { }
+    public record IdResponse(UUID id) {}
 
-    public record ProductResponse(UUID productId, UUID defaultVariantId) { }
+    public record ProductResponse(UUID productId, UUID defaultVariantId) {}
 }

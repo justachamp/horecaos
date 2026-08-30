@@ -2,11 +2,6 @@ package uz.horecaos.platform.integration.events;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.io.InputStream;
-import java.time.Instant;
-import java.util.Set;
-import java.util.UUID;
-
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.networknt.schema.JsonSchema;
@@ -14,11 +9,12 @@ import com.networknt.schema.JsonSchemaFactory;
 import com.networknt.schema.SchemaValidatorsConfig;
 import com.networknt.schema.SpecVersion;
 import com.networknt.schema.ValidationMessage;
-
+import java.io.InputStream;
+import java.time.Instant;
+import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
-
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.integration.outbox.ShipmentReconciliationOutbox.Command;
 import uz.horecaos.platform.integration.outbox.ShipmentReconciliationOutbox.Settlement;
 
@@ -42,17 +38,32 @@ class FulfillmentCommandSchemaTests {
 
     @Test
     void theCommandProducerSatisfiesItsSchema() throws Exception {
-        Command command = new Command(OPERATION, BINDING, BRAND, null, "yandex-delivery",
-                "CREATE_ON_DEMAND_SHIPMENT", "claim-9911", "READ_TIMEOUT");
+        Command command = new Command(
+                OPERATION,
+                BINDING,
+                BRAND,
+                null,
+                "yandex-delivery",
+                "CREATE_ON_DEMAND_SHIPMENT",
+                "claim-9911",
+                "READ_TIMEOUT");
 
         assertThat(errors("ShipmentReconciliationRequested", command)).isEmpty();
     }
 
     @Test
     void theSettlementProducerSatisfiesItsSchema() throws Exception {
-        Settlement settlement = Settlement.at(Instant.parse("2026-08-25T11:00:00Z"),
-                OPERATION, BINDING, "yandex-delivery", "CREATE_ON_DEMAND_SHIPMENT",
-                "claim-9911", "CONFIRMED", "SUCCESS", null, 2);
+        Settlement settlement = Settlement.at(
+                Instant.parse("2026-08-25T11:00:00Z"),
+                OPERATION,
+                BINDING,
+                "yandex-delivery",
+                "CREATE_ON_DEMAND_SHIPMENT",
+                "claim-9911",
+                "CONFIRMED",
+                "SUCCESS",
+                null,
+                2);
 
         assertThat(errors("ShipmentOutcomeReconciled", settlement)).isEmpty();
     }

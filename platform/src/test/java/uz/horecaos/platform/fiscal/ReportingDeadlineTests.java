@@ -5,10 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.fiscal.domain.FiscalReportingPolicy;
 import uz.horecaos.platform.fiscal.domain.ReportingDeadline;
 
@@ -29,8 +27,7 @@ class ReportingDeadlineTests {
     void theIntervalWinsWhenItExpiresFirst() {
         Instant submitted = Instant.parse("2026-08-22T09:00:00Z");
 
-        ReportingDeadline deadline = ReportingDeadline.of(
-                submitted, null, Duration.ofMinutes(60), TASHKENT);
+        ReportingDeadline deadline = ReportingDeadline.of(submitted, null, Duration.ofMinutes(60), TASHKENT);
 
         assertThat(deadline.effective()).isEqualTo(Instant.parse("2026-08-22T10:00:00Z"));
         assertThat(deadline.backstopped()).isFalse();
@@ -46,8 +43,7 @@ class ReportingDeadlineTests {
         // and a tax obligation belongs to a business date.
         Instant submitted = Instant.parse("2026-08-22T18:30:00Z");
 
-        ReportingDeadline deadline = ReportingDeadline.of(
-                submitted, null, Duration.ofHours(12), TASHKENT);
+        ReportingDeadline deadline = ReportingDeadline.of(submitted, null, Duration.ofHours(12), TASHKENT);
 
         // Midnight in Tashkent, which is 19:00 UTC.
         assertThat(deadline.effective()).isEqualTo(Instant.parse("2026-08-22T19:00:00Z"));
@@ -62,10 +58,8 @@ class ReportingDeadlineTests {
         // under way, and a UTC backstop would have expired five hours into it.
         Instant submitted = Instant.parse("2026-08-23T01:00:00Z");
 
-        ReportingDeadline utcBacked = ReportingDeadline.of(
-                submitted, null, Duration.ofHours(24), ZoneId.of("UTC"));
-        ReportingDeadline branchBacked = ReportingDeadline.of(
-                submitted, null, Duration.ofHours(24), TASHKENT);
+        ReportingDeadline utcBacked = ReportingDeadline.of(submitted, null, Duration.ofHours(24), ZoneId.of("UTC"));
+        ReportingDeadline branchBacked = ReportingDeadline.of(submitted, null, Duration.ofHours(24), TASHKENT);
 
         assertThat(branchBacked.effective())
                 .as("the branch's day ends five hours before UTC's, and that is the point")
@@ -79,8 +73,7 @@ class ReportingDeadlineTests {
         Instant submitted = Instant.parse("2026-08-22T09:00:00Z");
         Instant recorded = Instant.parse("2026-08-22T09:15:00Z");
 
-        ReportingDeadline deadline = ReportingDeadline.of(
-                submitted, recorded, Duration.ofMinutes(60), TASHKENT);
+        ReportingDeadline deadline = ReportingDeadline.of(submitted, recorded, Duration.ofMinutes(60), TASHKENT);
 
         assertThat(deadline.effective())
                 .as("a deadline set when the document was submitted must survive a later "
@@ -91,8 +84,7 @@ class ReportingDeadlineTests {
     @Test
     @DisplayName("the two providers can be given different intervals")
     void theProviderOverrideApplies() {
-        FiscalReportingPolicy policy = new FiscalReportingPolicy(60,
-                java.util.Map.of("CLICK", 5));
+        FiscalReportingPolicy policy = new FiscalReportingPolicy(60, java.util.Map.of("CLICK", 5));
 
         assertThat(policy.deadlineFor("CLICK")).isEqualTo(Duration.ofMinutes(5));
         assertThat(policy.deadlineFor("PAYME")).isEqualTo(Duration.ofMinutes(60));

@@ -1,11 +1,10 @@
 package uz.horecaos.platform.audit.application;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -21,7 +20,7 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -29,14 +28,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.ApprovalRequestCommand;
@@ -127,8 +121,11 @@ class ApprovalDecisionServiceTests {
                 clock, new SimpleMeterRegistry());
         authorization = new StubAuthorization();
         decisions = new ApprovalDecisionService(
-                jdbc, approvals, authorization,
-                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()), clock);
+                jdbc,
+                approvals,
+                authorization,
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                clock);
 
         insertTenant(TENANT, "tenant-decide-one");
         insertTenant(OTHER_TENANT, "tenant-decide-two");
@@ -143,8 +140,12 @@ class ApprovalDecisionServiceTests {
                 .as("the maker is blocked until somebody signs")
                 .isInstanceOf(ApprovalOutcome.Pending.class);
 
-        var decided = decisions.decide(TENANT, requestId, ApprovalService.Decision.APPROVE,
-                ActorRef.user(CHECKER, null), "Spoke to the customer; the item was missing");
+        var decided = decisions.decide(
+                TENANT,
+                requestId,
+                ApprovalService.Decision.APPROVE,
+                ActorRef.user(CHECKER, null),
+                "Spoke to the customer; the item was missing");
 
         assertThat(decided.status()).isEqualTo("APPROVED");
         assertThat(decided.decidedBy()).isEqualTo(CHECKER);
@@ -160,8 +161,12 @@ class ApprovalDecisionServiceTests {
     void decliningBlocksTheActionAndCarriesTheReasonBack() {
         UUID requestId = raise();
 
-        decisions.decide(TENANT, requestId, ApprovalService.Decision.DECLINE,
-                ActorRef.user(CHECKER, null), "The delivery photo shows the order complete");
+        decisions.decide(
+                TENANT,
+                requestId,
+                ApprovalService.Decision.DECLINE,
+                ActorRef.user(CHECKER, null),
+                "The delivery photo shows the order complete");
 
         ApprovalOutcome resumed = approvals.requireApproval(command());
         assertThat(resumed).isInstanceOf(ApprovalOutcome.Declined.class);
@@ -185,8 +190,11 @@ class ApprovalDecisionServiceTests {
                 .isTrue();
 
         Throwable refusal = catchThrowable(() -> decisions.decide(
-                TENANT, requestId, ApprovalService.Decision.APPROVE,
-                ActorRef.user(MAKER, null), "I am confident about my own refund"));
+                TENANT,
+                requestId,
+                ApprovalService.Decision.APPROVE,
+                ActorRef.user(MAKER, null),
+                "I am confident about my own refund"));
 
         assertThat(refusal).isInstanceOf(ApiException.class);
         assertThat(((ApiException) refusal).errorCode()).isEqualTo(ErrorCode.INSUFFICIENT_CAPABILITY);
@@ -199,8 +207,8 @@ class ApprovalDecisionServiceTests {
     void aSelfApprovalRefusalIsRecordedEvenThoughItThrows() {
         UUID requestId = raise();
 
-        catchThrowable(() -> decisions.decide(TENANT, requestId, ApprovalService.Decision.APPROVE,
-                ActorRef.user(MAKER, null), "trying anyway"));
+        catchThrowable(() -> decisions.decide(
+                TENANT, requestId, ApprovalService.Decision.APPROVE, ActorRef.user(MAKER, null), "trying anyway"));
 
         assertThat(jdbc.sql("""
                 SELECT count(*) FROM audit.audit_events
@@ -221,8 +229,11 @@ class ApprovalDecisionServiceTests {
         UUID requestId = raise();
 
         Throwable refusal = catchThrowable(() -> decisions.decide(
-                TENANT, requestId, ApprovalService.Decision.APPROVE,
-                ActorRef.user(BYSTANDER, null), "looks fine to me"));
+                TENANT,
+                requestId,
+                ApprovalService.Decision.APPROVE,
+                ActorRef.user(BYSTANDER, null),
+                "looks fine to me"));
 
         assertThat(refusal).isInstanceOf(ApiException.class);
         assertThat(((ApiException) refusal).errorCode()).isEqualTo(ErrorCode.INSUFFICIENT_CAPABILITY);
@@ -247,8 +258,12 @@ class ApprovalDecisionServiceTests {
         endDateOpenPolicies();
         insertPolicy(2, "above 100,000 UZS", Capability.COURIER_PAYOUT_AUTHORISE);
 
-        var decided = decisions.decide(TENANT, requestId, ApprovalService.Decision.APPROVE,
-                ActorRef.user(CHECKER, null), "Verified against the order");
+        var decided = decisions.decide(
+                TENANT,
+                requestId,
+                ApprovalService.Decision.APPROVE,
+                ActorRef.user(CHECKER, null),
+                "Verified against the order");
 
         assertThat(decided.status())
                 .as("the approver saw version 1 and holds what version 1 demanded; a policy "
@@ -263,8 +278,11 @@ class ApprovalDecisionServiceTests {
         clock.advance(ApprovalRequestCommand.DEFAULT_VALIDITY.plusHours(1));
 
         Throwable refusal = catchThrowable(() -> decisions.decide(
-                TENANT, requestId, ApprovalService.Decision.APPROVE,
-                ActorRef.user(CHECKER, null), "getting to it late"));
+                TENANT,
+                requestId,
+                ApprovalService.Decision.APPROVE,
+                ActorRef.user(CHECKER, null),
+                "getting to it late"));
 
         assertThat(refusal).isInstanceOf(ApiException.class);
         assertThat(((ApiException) refusal).errorCode()).isEqualTo(ErrorCode.UNPROCESSABLE_STATE);
@@ -280,8 +298,11 @@ class ApprovalDecisionServiceTests {
         authorization.grant(CHECKER, Capability.REFUND_APPROVE, ResourceScope.tenant(OTHER_TENANT));
 
         Throwable refusal = catchThrowable(() -> decisions.decide(
-                OTHER_TENANT, requestId, ApprovalService.Decision.APPROVE,
-                ActorRef.user(CHECKER, null), "signing from next door"));
+                OTHER_TENANT,
+                requestId,
+                ApprovalService.Decision.APPROVE,
+                ActorRef.user(CHECKER, null),
+                "signing from next door"));
 
         assertThat(refusal).isInstanceOf(ApiException.class);
         assertThat(((ApiException) refusal).errorCode())
@@ -305,15 +326,17 @@ class ApprovalDecisionServiceTests {
             ready.countDown();
             await(go);
             approveFailure.set(catchThrowable(() -> decisions.decide(
-                    TENANT, requestId, ApprovalService.Decision.APPROVE,
-                    ActorRef.user(CHECKER, null), "approving")));
+                    TENANT, requestId, ApprovalService.Decision.APPROVE, ActorRef.user(CHECKER, null), "approving")));
         });
         Thread decline = new Thread(() -> {
             ready.countDown();
             await(go);
             declineFailure.set(catchThrowable(() -> decisions.decide(
-                    TENANT, requestId, ApprovalService.Decision.DECLINE,
-                    ActorRef.user("manager-2", null), "declining")));
+                    TENANT,
+                    requestId,
+                    ApprovalService.Decision.DECLINE,
+                    ActorRef.user("manager-2", null),
+                    "declining")));
         });
 
         approve.start();
@@ -355,7 +378,9 @@ class ApprovalDecisionServiceTests {
 
         new ApprovalExpirySweeper(approvals).sweep();
 
-        assertThat(jdbc.sql("SELECT status FROM audit.approval_requests").query(String.class).single())
+        assertThat(jdbc.sql("SELECT status FROM audit.approval_requests")
+                        .query(String.class)
+                        .single())
                 .as("expireOverdue existed from the day ADR 0027 shipped and nothing called it")
                 .isEqualTo("EXPIRED");
     }
@@ -365,14 +390,13 @@ class ApprovalDecisionServiceTests {
         UUID mine = raise();
         UUID theirs = raiseIn(OTHER_TENANT);
 
-        List<ApprovalDecisionService.PendingApproval> waiting =
-                decisions.pending(TENANT, null, 50, CHECKER);
+        List<ApprovalDecisionService.PendingApproval> waiting = decisions.pending(TENANT, null, 50, CHECKER);
 
-        assertThat(waiting).extracting(ApprovalDecisionService.PendingApproval::id)
+        assertThat(waiting)
+                .extracting(ApprovalDecisionService.PendingApproval::id)
                 .containsExactly(mine)
                 .doesNotContain(theirs);
-        assertThat(waiting.getFirst().requiredApproverCapability())
-                .isEqualTo(Capability.REFUND_APPROVE.code());
+        assertThat(waiting.getFirst().requiredApproverCapability()).isEqualTo(Capability.REFUND_APPROVE.code());
         assertThat(waiting.getFirst().mayDecide())
                 .as("the checker holds what the policy demanded and did not raise it")
                 .isTrue();
@@ -420,8 +444,8 @@ class ApprovalDecisionServiceTests {
     void aDecisionWithoutAReasonIsRefused() {
         UUID requestId = raise();
 
-        assertThatThrownBy(() -> decisions.decide(TENANT, requestId,
-                ApprovalService.Decision.APPROVE, ActorRef.user(CHECKER, null), "  "))
+        assertThatThrownBy(() -> decisions.decide(
+                        TENANT, requestId, ApprovalService.Decision.APPROVE, ActorRef.user(CHECKER, null), "  "))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("reason");
     }
@@ -474,10 +498,11 @@ class ApprovalDecisionServiceTests {
         approve(requestId);
 
         assertThatThrownBy(() -> transactions.executeWithoutResult(status -> {
-            ApprovalOutcome outcome = approvals.requireApproval(command());
-            outcome.consume();
-            throw new IllegalStateException("the refund failed after taking its approval");
-        })).isInstanceOf(IllegalStateException.class);
+                    ApprovalOutcome outcome = approvals.requireApproval(command());
+                    outcome.consume();
+                    throw new IllegalStateException("the refund failed after taking its approval");
+                }))
+                .isInstanceOf(IllegalStateException.class);
 
         assertThat(status(requestId))
                 .as("the spend is an ordinary write in the action's transaction, so it went back "
@@ -534,8 +559,7 @@ class ApprovalDecisionServiceTests {
         assertThat(failures)
                 .as("one signature authorises one execution, whichever thread gets the row first")
                 .hasSize(1);
-        assertThat(((ApiException) failures.getFirst()).errorCode())
-                .isEqualTo(ErrorCode.RESOURCE_CONFLICT);
+        assertThat(((ApiException) failures.getFirst()).errorCode()).isEqualTo(ErrorCode.RESOURCE_CONFLICT);
         assertThat(status(requestId)).isEqualTo("CONSUMED");
         assertThat(jdbc.sql("""
                 SELECT count(*) FROM audit.audit_events WHERE action_code = 'approval.consumed'
@@ -595,7 +619,11 @@ class ApprovalDecisionServiceTests {
                    AND audit_class = 'SECURITY'
                    AND actor_subject = :maker
                    AND approval_request_id = :id
-                """).param("maker", MAKER).param("id", requestId).query(Long.class).single())
+                """)
+                        .param("maker", MAKER)
+                        .param("id", requestId)
+                        .query(Long.class)
+                        .single())
                 .isEqualTo(1L);
         assertThat(jdbc.sql("""
                 SELECT reason FROM audit.audit_events WHERE action_code = 'approval.consumed'
@@ -617,8 +645,12 @@ class ApprovalDecisionServiceTests {
     }
 
     private void approve(UUID requestId) {
-        decisions.decide(TENANT, requestId, ApprovalService.Decision.APPROVE,
-                ActorRef.user(CHECKER, null), "Spoke to the customer; the item was missing");
+        decisions.decide(
+                TENANT,
+                requestId,
+                ApprovalService.Decision.APPROVE,
+                ActorRef.user(CHECKER, null),
+                "Spoke to the customer; the item was missing");
     }
 
     private UUID raise() {
@@ -629,24 +661,36 @@ class ApprovalDecisionServiceTests {
     private UUID raiseIn(UUID tenantId) {
         insertPolicy(tenantId, 1, "above 1,000,000 UZS", Capability.REFUND_APPROVE);
         return ((ApprovalOutcome.Pending) approvals.requireApproval(new ApprovalRequestCommand(
-                ACTION, PARAMETERS, ResourceScope.tenant(tenantId), ActorRef.user(MAKER, null),
-                "Customer says the kebab never arrived", ApprovalRequestCommand.DEFAULT_VALIDITY)))
+                        ACTION,
+                        PARAMETERS,
+                        ResourceScope.tenant(tenantId),
+                        ActorRef.user(MAKER, null),
+                        "Customer says the kebab never arrived",
+                        ApprovalRequestCommand.DEFAULT_VALIDITY)))
                 .requestId();
     }
 
     private ApprovalRequestCommand command() {
         return new ApprovalRequestCommand(
-                ACTION, PARAMETERS, ResourceScope.tenant(TENANT), ActorRef.user(MAKER, null),
-                "Customer says the kebab never arrived", ApprovalRequestCommand.DEFAULT_VALIDITY);
+                ACTION,
+                PARAMETERS,
+                ResourceScope.tenant(TENANT),
+                ActorRef.user(MAKER, null),
+                "Customer says the kebab never arrived",
+                ApprovalRequestCommand.DEFAULT_VALIDITY);
     }
 
     private String status(UUID requestId) {
         return jdbc.sql("SELECT status FROM audit.approval_requests WHERE id = :id")
-                .param("id", requestId).query(String.class).single();
+                .param("id", requestId)
+                .query(String.class)
+                .single();
     }
 
     private UUID only() {
-        return jdbc.sql("SELECT id FROM audit.approval_requests").query(UUID.class).single();
+        return jdbc.sql("SELECT id FROM audit.approval_requests")
+                .query(UUID.class)
+                .single();
     }
 
     private void insertPolicy(int version, String threshold, Capability approver) {
@@ -717,9 +761,7 @@ class ApprovalDecisionServiceTests {
 
         @Override
         public boolean has(String subject, Capability capability, ResourceScope scope) {
-            return grants.getOrDefault(subject, Map.of())
-                    .getOrDefault(capability, List.of())
-                    .stream()
+            return grants.getOrDefault(subject, Map.of()).getOrDefault(capability, List.of()).stream()
                     .anyMatch(held -> held.covers(scope));
         }
 

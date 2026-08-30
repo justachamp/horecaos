@@ -1,7 +1,5 @@
 package uz.horecaos.platform.fiscal;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -11,7 +9,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -20,11 +18,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
@@ -107,9 +102,11 @@ class FiscalDocumentLifecycleTests {
 
         jdbc.sql("DELETE FROM fiscal.fiscal_documents").update();
         jdbc.sql("DELETE FROM tenant.policy_current WHERE key_code = :k")
-                .param("k", FiscalReportingPolicyService.REPORTING_DEADLINE.code()).update();
+                .param("k", FiscalReportingPolicyService.REPORTING_DEADLINE.code())
+                .update();
         jdbc.sql("DELETE FROM tenant.policies WHERE key_code = :k")
-                .param("k", FiscalReportingPolicyService.REPORTING_DEADLINE.code()).update();
+                .param("k", FiscalReportingPolicyService.REPORTING_DEADLINE.code())
+                .update();
         jdbc.sql("TRUNCATE TABLE ordering.orders CASCADE").update();
         jdbc.sql("TRUNCATE TABLE payments.payment_intents CASCADE").update();
         jdbc.sql("TRUNCATE TABLE customer.customer_accounts CASCADE").update();
@@ -126,11 +123,15 @@ class FiscalDocumentLifecycleTests {
     }
 
     private FiscalDocumentService build(Instant now) {
-        return new FiscalDocumentService(store,
+        return new FiscalDocumentService(
+                store,
                 new FiscalReportingPolicyService(
                         new JdbcPolicyResolver(jdbc, JsonMapper.builder().build())),
-                partner, audit, Clock.fixed(now, ZoneOffset.UTC),
-                "Asia/Tashkent", java.time.Duration.ofMinutes(1));
+                partner,
+                audit,
+                Clock.fixed(now, ZoneOffset.UTC),
+                "Asia/Tashkent",
+                java.time.Duration.ofMinutes(1));
     }
 
     // ------------------------------------------------------------- the sweep
@@ -214,8 +215,7 @@ class FiscalDocumentLifecycleTests {
 
         FiscalDocumentRow row = row(document);
         assertThat(row.state()).isEqualTo(FiscalDocumentState.NOT_APPLICABLE);
-        assertThat(row.reasonCode())
-                .isEqualTo(FiscalReasonCode.CASH_TENDER_NO_PROVIDER_FISCALIZATION);
+        assertThat(row.reasonCode()).isEqualTo(FiscalReasonCode.CASH_TENDER_NO_PROVIDER_FISCALIZATION);
         assertThat(row.blockedAt()).isNull();
         assertThat(row.responsibility())
                 .as("a cash leg still owes a receipt, from the restaurant's own equipment")
@@ -233,11 +233,22 @@ class FiscalDocumentLifecycleTests {
         assertThat(row(document).state()).isEqualTo(FiscalDocumentState.BLOCKED);
 
         // Exactly what PaymeMerchantApi does on a SetFiscalData with status_code 0.
-        boolean written = paymentsStore.recordEvidence(TENANT, document, FiscalStatus.ISSUED,
+        boolean written = paymentsStore.recordEvidence(
+                TENANT,
+                document,
+                FiscalStatus.ISSUED,
                 FiscalReason.PARTNER_FISCALIZED,
-                new FiscalDocument.FiscalEvidence("receipt-1", "sign-1", "terminal-1", null,
-                        NOON.plusSeconds(4200), "https://ofd.soliq.uz/epi?t=1", "0", null),
-                null, NOON.plusSeconds(4200));
+                new FiscalDocument.FiscalEvidence(
+                        "receipt-1",
+                        "sign-1",
+                        "terminal-1",
+                        null,
+                        NOON.plusSeconds(4200),
+                        "https://ofd.soliq.uz/epi?t=1",
+                        "0",
+                        null),
+                null,
+                NOON.plusSeconds(4200));
 
         assertThat(written)
                 .as("the sweeper marks a document as needing a human, not as finished")
@@ -259,11 +270,14 @@ class FiscalDocumentLifecycleTests {
         // A SetFiscalData that arrives and reports an OFD registration failure. The
         // defect this guards against passes every test written against the
         // happy-path example in Payme's own documentation.
-        paymentsStore.recordEvidence(TENANT, document, FiscalStatus.FAILED,
+        paymentsStore.recordEvidence(
+                TENANT,
+                document,
+                FiscalStatus.FAILED,
                 FiscalReason.PROVIDER_REJECTED,
-                new FiscalDocument.FiscalEvidence(null, null, null, null, null, null,
-                        "3", "ОФД не принял чек"),
-                null, NOON.plusSeconds(4200));
+                new FiscalDocument.FiscalEvidence(null, null, null, null, null, null, "3", "ОФД не принял чек"),
+                null,
+                NOON.plusSeconds(4200));
 
         FiscalDocumentRow row = row(document);
         assertThat(row.state()).isEqualTo(FiscalDocumentState.FAILED);
@@ -280,11 +294,14 @@ class FiscalDocumentLifecycleTests {
     void aCancellationIsASecondDocumentAndNotAnOverwrite() {
         UUID order = seedOrder("M-1", "PAYME");
         UUID sale = submittedDocument(order, "PAYME", NOON);
-        paymentsStore.recordEvidence(TENANT, sale, FiscalStatus.ISSUED,
+        paymentsStore.recordEvidence(
+                TENANT,
+                sale,
+                FiscalStatus.ISSUED,
                 FiscalReason.PARTNER_FISCALIZED,
-                new FiscalDocument.FiscalEvidence("receipt-1", "sign-1", null, null, NOON, null,
-                        "0", null),
-                null, NOON);
+                new FiscalDocument.FiscalEvidence("receipt-1", "sign-1", null, null, NOON, null, "0", null),
+                null,
+                NOON);
 
         UUID refund = UUID.randomUUID();
         jdbc.sql("""
@@ -294,8 +311,12 @@ class FiscalDocumentLifecycleTests {
                 VALUES (:id, :t, :o, :e, :i, 'PAYME', 'REFUND', :corrects, 'SUBMITTED',
                     'AWAITING_PROVIDER', 'Payme reported a cancellation receipt', :at, :at)
                 """)
-                .param("id", refund).param("t", TENANT).param("o", order).param("e", ENTITY)
-                .param("i", intentId(order)).param("corrects", sale)
+                .param("id", refund)
+                .param("t", TENANT)
+                .param("o", order)
+                .param("e", ENTITY)
+                .param("i", intentId(order))
+                .param("corrects", sale)
                 .param("at", NOON.plusSeconds(600).atOffset(ZoneOffset.UTC))
                 .update();
 
@@ -329,10 +350,14 @@ class FiscalDocumentLifecycleTests {
     void anUnreceiptedMajorityIsNotPresentedAsFine() {
         UUID issuedOrder = seedOrder("C-1", "PAYME");
         UUID issued = submittedDocument(issuedOrder, "PAYME", NOON);
-        paymentsStore.recordEvidence(TENANT, issued, FiscalStatus.ISSUED,
+        paymentsStore.recordEvidence(
+                TENANT,
+                issued,
+                FiscalStatus.ISSUED,
                 FiscalReason.PARTNER_FISCALIZED,
                 new FiscalDocument.FiscalEvidence("r", "s", null, null, NOON, null, "0", null),
-                null, NOON);
+                null,
+                NOON);
 
         cashDocument(seedOrder("C-2", null));
         cashDocument(seedOrder("C-3", null));
@@ -341,8 +366,7 @@ class FiscalDocumentLifecycleTests {
         submittedDocument(blockedOrder, "PAYME", NOON);
         build(NOON.plusSeconds(3601)).sweepOverdueReports(50);
 
-        FiscalCoverage coverage = service.coverage(TENANT,
-                NOON.minusSeconds(3600), NOON.plusSeconds(86_400));
+        FiscalCoverage coverage = service.coverage(TENANT, NOON.minusSeconds(3600), NOON.plusSeconds(86_400));
 
         assertThat(coverage.saleDocuments()).isEqualTo(4);
         assertThat(coverage.issued()).isEqualTo(1);
@@ -372,20 +396,25 @@ class FiscalDocumentLifecycleTests {
         build(NOON.plusSeconds(3601)).sweepOverdueReports(50);
 
         FiscalDocumentRow before = row(document);
-        var result = service.retry(TENANT, document, before.version(), "idem-1",
-                ActorRef.user("finance@example.test", "Finance"), "tax inspection", null);
+        var result = service.retry(
+                TENANT,
+                document,
+                before.version(),
+                "idem-1",
+                ActorRef.user("finance@example.test", "Finance"),
+                "tax inspection",
+                null);
 
         assertThat(result.outcome()).isEqualTo(PartnerFiscalizationPort.Outcome.NOT_WIRED);
         assertThat(row(document).attemptCount()).isEqualTo(1);
         assertThat(row(document).state())
                 .as("a retry that reached nothing must not move the document")
                 .isEqualTo(FiscalDocumentState.BLOCKED);
-        assertThat(audit.facts).singleElement()
-                .satisfies(fact -> {
-                    assertThat(fact.actionCode()).isEqualTo("fiscal.document.retry");
-                    assertThat(fact.outcome()).isEqualTo(AuditFact.Outcome.FAILED);
-                    assertThat(fact.reason()).isEqualTo("tax inspection");
-                });
+        assertThat(audit.facts).singleElement().satisfies(fact -> {
+            assertThat(fact.actionCode()).isEqualTo("fiscal.document.retry");
+            assertThat(fact.outcome()).isEqualTo(AuditFact.Outcome.FAILED);
+            assertThat(fact.reason()).isEqualTo("tax inspection");
+        });
     }
 
     @Test
@@ -400,8 +429,8 @@ class FiscalDocumentLifecycleTests {
 
         service.retry(TENANT, document, version, "idem-a", operator, "first", null);
 
-        assertThatThrownBy(() -> service.retry(TENANT, document, version, "idem-b", operator,
-                "second, from the other screen", null))
+        assertThatThrownBy(() -> service.retry(
+                        TENANT, document, version, "idem-b", operator, "second, from the other screen", null))
                 .as("both operators read the same version; the loser must send nothing, or "
                         + "one payment acquires two sale receipts")
                 .isInstanceOf(FiscalDocumentService.StaleDocumentException.class);
@@ -415,13 +444,23 @@ class FiscalDocumentLifecycleTests {
     void anIssuedDocumentIsNotRetryable() {
         UUID order = seedOrder("R-2", "PAYME");
         UUID document = submittedDocument(order, "PAYME", NOON);
-        paymentsStore.recordEvidence(TENANT, document, FiscalStatus.ISSUED,
+        paymentsStore.recordEvidence(
+                TENANT,
+                document,
+                FiscalStatus.ISSUED,
                 FiscalReason.PARTNER_FISCALIZED,
                 new FiscalDocument.FiscalEvidence("r", "s", null, null, NOON, null, "0", null),
-                null, NOON);
+                null,
+                NOON);
 
-        assertThatThrownBy(() -> service.retry(TENANT, document, row(document).version(), "idem-2",
-                ActorRef.user("finance@example.test", "Finance"), "curiosity", null))
+        assertThatThrownBy(() -> service.retry(
+                        TENANT,
+                        document,
+                        row(document).version(),
+                        "idem-2",
+                        ActorRef.user("finance@example.test", "Finance"),
+                        "curiosity",
+                        null))
                 .isInstanceOf(FiscalDocumentService.NotRetryableException.class);
         assertThat(partner.asks).isEmpty();
     }
@@ -433,19 +472,23 @@ class FiscalDocumentLifecycleTests {
         UUID document = submittedDocument(order, "PAYME", NOON);
         build(NOON.plusSeconds(3601)).sweepOverdueReports(50);
 
-        service.reopen(TENANT, document, row(document).version(),
-                ActorRef.user("finance@example.test", "Finance"), "cashbox reconnected", null);
+        service.reopen(
+                TENANT,
+                document,
+                row(document).version(),
+                ActorRef.user("finance@example.test", "Finance"),
+                "cashbox reconnected",
+                null);
 
         FiscalDocumentRow row = row(document);
         assertThat(row.state()).isEqualTo(FiscalDocumentState.PENDING);
         assertThat(row.reportingDeadlineAt())
-                .as("keeping an expired deadline would block the document again the instant "
-                        + "it is submitted")
+                .as("keeping an expired deadline would block the document again the instant " + "it is submitted")
                 .isNull();
         assertThat(row.blockedAt()).isNotNull();
-        assertThat(audit.facts).singleElement()
-                .satisfies(fact -> assertThat(fact.actionCode())
-                        .isEqualTo("fiscal.document.unblock"));
+        assertThat(audit.facts)
+                .singleElement()
+                .satisfies(fact -> assertThat(fact.actionCode()).isEqualTo("fiscal.document.unblock"));
     }
 
     @Test
@@ -455,8 +498,8 @@ class FiscalDocumentLifecycleTests {
         UUID document = submittedDocument(order, "PAYME", NOON);
         build(NOON.plusSeconds(3601)).sweepOverdueReports(50);
 
-        assertThatThrownBy(() -> service.reopen(TENANT, document, 1,
-                ActorRef.user("finance@example.test", "Finance"), "stale", null))
+        assertThatThrownBy(() -> service.reopen(
+                        TENANT, document, 1, ActorRef.user("finance@example.test", "Finance"), "stale", null))
                 .isInstanceOf(FiscalDocumentService.StaleDocumentException.class);
     }
 
@@ -506,7 +549,8 @@ class FiscalDocumentLifecycleTests {
                 VALUES (:key, 'TENANT', :t, :id, 1, 'test')
                 """)
                 .param("key", FiscalReportingPolicyService.REPORTING_DEADLINE.code())
-                .param("t", TENANT).param("id", policyId)
+                .param("t", TENANT)
+                .param("id", policyId)
                 .update();
     }
 
@@ -520,8 +564,12 @@ class FiscalDocumentLifecycleTests {
                 VALUES (:id, :t, :o, :e, :i, :provider, 'SALE', 'SUBMITTED',
                     'AWAITING_PROVIDER', 'awaiting the provider''s report', :at, :at, :at)
                 """)
-                .param("id", id).param("t", TENANT).param("o", orderId).param("e", ENTITY)
-                .param("i", intentId(orderId)).param("provider", providerType)
+                .param("id", id)
+                .param("t", TENANT)
+                .param("o", orderId)
+                .param("e", ENTITY)
+                .param("i", intentId(orderId))
+                .param("provider", providerType)
                 .param("at", submittedAt.atOffset(ZoneOffset.UTC))
                 .update();
         return id;
@@ -536,10 +584,11 @@ class FiscalDocumentLifecycleTests {
     }
 
     private UUID intentId(UUID orderId) {
-        return jdbc.sql("SELECT id FROM payments.payment_intents WHERE tenant_id = :t "
-                        + "AND order_id = :o")
-                .param("t", TENANT).param("o", orderId)
-                .query(UUID.class).single();
+        return jdbc.sql("SELECT id FROM payments.payment_intents WHERE tenant_id = :t " + "AND order_id = :o")
+                .param("t", TENANT)
+                .param("o", orderId)
+                .query(UUID.class)
+                .single();
     }
 
     private UUID seedOrder(String seed, String providerType) {
@@ -553,9 +602,14 @@ class FiscalDocumentLifecycleTests {
                     converted_order_id)
                 VALUES (:id, :t, :b, :loc, :ch, :cust, 'DELIVERY', 'UZS', 'CONVERTED', :at, :orderId)
                 """)
-                .param("id", cartId).param("t", TENANT).param("b", BRAND).param("loc", LOCATION)
-                .param("ch", channelId).param("cust", CUSTOMER)
-                .param("at", NOON.atOffset(ZoneOffset.UTC)).param("orderId", orderId)
+                .param("id", cartId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", LOCATION)
+                .param("ch", channelId)
+                .param("cust", CUSTOMER)
+                .param("at", NOON.atOffset(ZoneOffset.UTC))
+                .param("orderId", orderId)
                 .update();
 
         jdbc.sql("""
@@ -566,8 +620,13 @@ class FiscalDocumentLifecycleTests {
                 VALUES (:id, :t, :b, :loc, :cust, 'UZS', 'ACCEPTED', :pub, 1, :hash,
                     50000, 0, 0, 0, 50000, :at, :at)
                 """)
-                .param("id", quoteId).param("t", TENANT).param("b", BRAND).param("loc", LOCATION)
-                .param("cust", CUSTOMER).param("pub", publicationId).param("hash", "hash-" + seed)
+                .param("id", quoteId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", LOCATION)
+                .param("cust", CUSTOMER)
+                .param("pub", publicationId)
+                .param("hash", "hash-" + seed)
                 .param("at", NOON.atOffset(ZoneOffset.UTC))
                 .update();
 
@@ -582,10 +641,18 @@ class FiscalDocumentLifecycleTests {
                     'AUTO_CONFIRM', 'NONE', 'CONFIRMED', 'UZS', 50000, 0, 0, 0, 50000,
                     :quote, :hash, :pub, :cart, :key, 'NOT_PROMISED', 1, :at, :at)
                 """)
-                .param("id", orderId).param("number", seed).param("t", TENANT).param("b", BRAND)
-                .param("loc", LOCATION).param("ch", channelId).param("cust", CUSTOMER)
-                .param("quote", quoteId).param("hash", "hash-" + seed).param("pub", publicationId)
-                .param("cart", cartId).param("key", "idem-" + seed)
+                .param("id", orderId)
+                .param("number", seed)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", LOCATION)
+                .param("ch", channelId)
+                .param("cust", CUSTOMER)
+                .param("quote", quoteId)
+                .param("hash", "hash-" + seed)
+                .param("pub", publicationId)
+                .param("cart", cartId)
+                .param("key", "idem-" + seed)
                 .param("at", NOON.atOffset(ZoneOffset.UTC))
                 .update();
 
@@ -598,7 +665,10 @@ class FiscalDocumentLifecycleTests {
                     'PENDING', :timing, :key, 1, :at, :at)
                 """)
                 .param("id", UUID.nameUUIDFromBytes(("intent:" + seed).getBytes()))
-                .param("t", TENANT).param("o", orderId).param("b", BRAND).param("loc", LOCATION)
+                .param("t", TENANT)
+                .param("o", orderId)
+                .param("b", BRAND)
+                .param("loc", LOCATION)
                 .param("e", ENTITY)
                 .param("tender", providerType == null ? "CASH" : "PROVIDER")
                 .param("code", providerType == null ? "CASH" : providerType)
@@ -644,16 +714,24 @@ class FiscalDocumentLifecycleTests {
         jdbc.sql("""
                 INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
                 VALUES (:id, :t, :b, 'MAIN', 'Main menu', 'ACTIVE')
-                """).param("id", catalogId).param("t", TENANT).param("b", BRAND).update();
+                """)
+                .param("id", catalogId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .update();
 
         publicationId = UUID.nameUUIDFromBytes("fiscal-publication".getBytes());
         jdbc.sql("""
                 INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel,
                     status, content_hash, activated_at)
                 VALUES (:id, :t, :b, :cat, 'TELEGRAM', 'PUBLISHED', 'hash', now())
-                """).param("id", publicationId).param("t", TENANT).param("b", BRAND)
-                .param("cat", catalogId).update();
-            // V0053 made fiscal_documents.legal_entity_id a real foreign key. A receipt
+                """)
+                .param("id", publicationId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("cat", catalogId)
+                .update();
+        // V0053 made fiscal_documents.legal_entity_id a real foreign key. A receipt
         // has to name the entity it was issued under, and until that migration the
         // column could name one that did not exist -- which is the same gap that
         // left the platform with no legal identity to fiscalise against at all.

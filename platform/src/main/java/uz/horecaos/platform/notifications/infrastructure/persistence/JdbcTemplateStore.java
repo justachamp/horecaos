@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -45,8 +44,7 @@ public class JdbcTemplateStore {
      * one statement, and a brand id belonging to another tenant still matches
      * nothing because the tenant predicate is applied first.
      */
-    public Optional<TemplateRow> activeTemplate(UUID tenantId, UUID brandId, String templateKey,
-            String channel) {
+    public Optional<TemplateRow> activeTemplate(UUID tenantId, UUID brandId, String templateKey, String channel) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
         parameters.put("brandId", brandId);
@@ -75,7 +73,8 @@ public class JdbcTemplateStore {
                 FROM notifications.templates
                 WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("id", templateId)
+                .param("tenantId", tenantId)
+                .param("id", templateId)
                 .query(JdbcTemplateStore::templateRow)
                 .optional();
     }
@@ -98,8 +97,7 @@ public class JdbcTemplateStore {
     }
 
     /** One locale of one version. The row a message is actually rendered from. */
-    public Optional<VersionRow> version(UUID tenantId, UUID templateId, int versionNumber,
-            String locale) {
+    public Optional<VersionRow> version(UUID tenantId, UUID templateId, int versionNumber, String locale) {
         return jdbc.sql("""
                 SELECT id, tenant_id, template_id, version_number, locale, subject_template,
                        body_template, variables_schema::text AS variables_schema, content_hash,
@@ -108,8 +106,10 @@ public class JdbcTemplateStore {
                 WHERE tenant_id = :tenantId AND template_id = :templateId
                   AND version_number = :versionNumber AND locale = :locale
                 """)
-                .param("tenantId", tenantId).param("templateId", templateId)
-                .param("versionNumber", versionNumber).param("locale", locale)
+                .param("tenantId", tenantId)
+                .param("templateId", templateId)
+                .param("versionNumber", versionNumber)
+                .param("locale", locale)
                 .query(JdbcTemplateStore::versionRow)
                 .optional();
     }
@@ -124,7 +124,8 @@ public class JdbcTemplateStore {
                   AND version_number = :versionNumber
                 ORDER BY locale
                 """)
-                .param("tenantId", tenantId).param("templateId", templateId)
+                .param("tenantId", tenantId)
+                .param("templateId", templateId)
                 .param("versionNumber", versionNumber)
                 .query(JdbcTemplateStore::versionRow)
                 .list();
@@ -143,15 +144,23 @@ public class JdbcTemplateStore {
                 FROM notifications.template_versions
                 WHERE tenant_id = :tenantId AND template_id = :templateId
                 """)
-                .param("tenantId", tenantId).param("templateId", templateId)
+                .param("tenantId", tenantId)
+                .param("templateId", templateId)
                 .query(Integer.class)
                 .single();
     }
 
     // ----------------------------------------------------------------- writes
 
-    public void insertTemplate(UUID id, UUID tenantId, UUID brandId, String templateKey,
-            String notificationClass, String channel, String consentPurpose, Instant now) {
+    public void insertTemplate(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            String templateKey,
+            String notificationClass,
+            String channel,
+            String consentPurpose,
+            Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("id", id);
         parameters.put("tenantId", tenantId);
@@ -168,14 +177,20 @@ public class JdbcTemplateStore {
                     consent_purpose, status, created_at, updated_at)
                 VALUES (:id, :tenantId, :brandId, :key, :class, :channel,
                     :purpose, 'DRAFT', :now, :now)
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
     }
 
-    public void insertVersion(UUID id, UUID tenantId, UUID templateId, int versionNumber,
-            String locale, String subjectTemplate, String bodyTemplate, String variablesSchemaJson,
-            String contentHash, Instant now) {
+    public void insertVersion(
+            UUID id,
+            UUID tenantId,
+            UUID templateId,
+            int versionNumber,
+            String locale,
+            String subjectTemplate,
+            String bodyTemplate,
+            String variablesSchemaJson,
+            String contentHash,
+            Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("id", id);
         parameters.put("tenantId", tenantId);
@@ -194,9 +209,7 @@ public class JdbcTemplateStore {
                     body_template, variables_schema, content_hash, status, created_at, updated_at)
                 VALUES (:id, :tenantId, :templateId, :versionNumber, :locale, :subject,
                     :body, CAST(:schema AS jsonb), :hash, 'DRAFT', :now, :now)
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
     }
 
     /**
@@ -211,16 +224,17 @@ public class JdbcTemplateStore {
      * @return how many locale rows were activated. The caller refuses the whole
      *         activation unless this is the full locale set
      */
-    public int activateVersion(UUID tenantId, UUID templateId, int versionNumber,
-            String approvedBy, Instant now) {
+    public int activateVersion(UUID tenantId, UUID templateId, int versionNumber, String approvedBy, Instant now) {
         jdbc.sql("""
                 UPDATE notifications.template_versions
                 SET status = 'SUPERSEDED', updated_at = :now
                 WHERE tenant_id = :tenantId AND template_id = :templateId
                   AND version_number <> :versionNumber AND status = 'ACTIVE'
                 """)
-                .param("tenantId", tenantId).param("templateId", templateId)
-                .param("versionNumber", versionNumber).param("now", utc(now))
+                .param("tenantId", tenantId)
+                .param("templateId", templateId)
+                .param("versionNumber", versionNumber)
+                .param("now", utc(now))
                 .update();
 
         return jdbc.sql("""
@@ -230,31 +244,35 @@ public class JdbcTemplateStore {
                 WHERE tenant_id = :tenantId AND template_id = :templateId
                   AND version_number = :versionNumber AND status = 'DRAFT'
                 """)
-                .param("tenantId", tenantId).param("templateId", templateId)
-                .param("versionNumber", versionNumber).param("approvedBy", approvedBy)
+                .param("tenantId", tenantId)
+                .param("templateId", templateId)
+                .param("versionNumber", versionNumber)
+                .param("approvedBy", approvedBy)
                 .param("now", utc(now))
                 .update();
     }
 
     /** Points the template at the activated version. Conditional on the version read. */
-    public boolean markTemplateActive(UUID tenantId, UUID templateId, int versionNumber,
-            int expectedVersion, Instant now) {
+    public boolean markTemplateActive(
+            UUID tenantId, UUID templateId, int versionNumber, int expectedVersion, Instant now) {
         return jdbc.sql("""
                 UPDATE notifications.templates
                 SET status = 'ACTIVE', active_version = :versionNumber,
                     version = version + 1, updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
                 """)
-                .param("tenantId", tenantId).param("id", templateId)
-                .param("versionNumber", versionNumber).param("expectedVersion", expectedVersion)
-                .param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", templateId)
+                        .param("versionNumber", versionNumber)
+                        .param("expectedVersion", expectedVersion)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     // ------------------------------------------------------------------- rows
 
-    private static TemplateRow templateRow(java.sql.ResultSet row, int number)
-            throws java.sql.SQLException {
+    private static TemplateRow templateRow(java.sql.ResultSet row, int number) throws java.sql.SQLException {
         return new TemplateRow(
                 row.getObject("id", UUID.class),
                 row.getObject("tenant_id", UUID.class),
@@ -271,8 +289,7 @@ public class JdbcTemplateStore {
                 row.getInt("version"));
     }
 
-    private static VersionRow versionRow(java.sql.ResultSet row, int number)
-            throws java.sql.SQLException {
+    private static VersionRow versionRow(java.sql.ResultSet row, int number) throws java.sql.SQLException {
         OffsetDateTime activatedAt = row.getObject("activated_at", OffsetDateTime.class);
         return new VersionRow(
                 row.getObject("id", UUID.class),
@@ -293,9 +310,17 @@ public class JdbcTemplateStore {
     }
 
     /** @param activeVersion null until a version is activated */
-    public record TemplateRow(UUID id, UUID tenantId, UUID brandId, String templateKey,
-            String notificationClass, String channel, String consentPurpose, String status,
-            Integer activeVersion, int version) {
+    public record TemplateRow(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            String templateKey,
+            String notificationClass,
+            String channel,
+            String consentPurpose,
+            String status,
+            Integer activeVersion,
+            int version) {
 
         /** Whether this row is the tenant's default rather than a brand's override. */
         public boolean isTenantWide() {
@@ -303,7 +328,16 @@ public class JdbcTemplateStore {
         }
     }
 
-    public record VersionRow(UUID id, UUID templateId, int versionNumber, String locale,
-            String subjectTemplate, String bodyTemplate, String variablesSchemaJson,
-            String contentHash, String status, String approvedBy, Instant activatedAt) { }
+    public record VersionRow(
+            UUID id,
+            UUID templateId,
+            int versionNumber,
+            String locale,
+            String subjectTemplate,
+            String bodyTemplate,
+            String variablesSchemaJson,
+            String contentHash,
+            String status,
+            String approvedBy,
+            Instant activatedAt) {}
 }

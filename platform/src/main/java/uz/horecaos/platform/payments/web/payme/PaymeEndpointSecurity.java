@@ -58,15 +58,13 @@ class PaymeEndpointSecurity {
     @Bean
     @Order(10)
     SecurityFilterChain paymeMerchantApiSecurity(HttpSecurity http) throws Exception {
-        return http
-                .securityMatcher(PaymeMerchantApiController.PATH_PATTERN)
+        return http.securityMatcher(PaymeMerchantApiController.PATH_PATTERN)
                 // Payme is a server-to-server caller with no session and no browser,
                 // so there is no cookie for a cross-site request to ride on and
                 // nothing for a CSRF token to protect. A token would simply make
                 // every genuine call fail.
                 .csrf(AbstractHttpConfigurer::disable)
-                .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll())
                 .build();
     }

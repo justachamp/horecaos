@@ -46,7 +46,8 @@ public enum ClickPaymentStatus {
         }
         long value;
         try {
-            value = raw instanceof Number number ? number.longValue()
+            value = raw instanceof Number number
+                    ? number.longValue()
                     : Long.parseLong(raw.toString().strip());
         } catch (NumberFormatException unparseable) {
             return UNKNOWN;

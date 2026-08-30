@@ -9,9 +9,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.fulfillment.api.ResolvedDeliveryCharge;
 import uz.horecaos.platform.pricing.domain.Money;
 import uz.horecaos.platform.pricing.domain.Promotion;
@@ -105,14 +103,23 @@ public class PricingEngine {
             long lineGross = Math.multiplyExact(unitWithModifiers, (long) line.quantity());
             grossTotal = Math.addExact(grossTotal, lineGross);
 
-            adjustments.add(new Adjustment(++sequence, line.lineId(),
-                    Adjustment.Type.BASE_PRICE, "PRICE_BOOK", inputs.priceBookId(),
-                    inputs.priceBookVersion(), Money.of(Math.multiplyExact(unit, (long) line.quantity()),
-                    currency), "BASE_PRICE"));
+            adjustments.add(new Adjustment(
+                    ++sequence,
+                    line.lineId(),
+                    Adjustment.Type.BASE_PRICE,
+                    "PRICE_BOOK",
+                    inputs.priceBookId(),
+                    inputs.priceBookVersion(),
+                    Money.of(Math.multiplyExact(unit, (long) line.quantity()), currency),
+                    "BASE_PRICE"));
 
             if (modifierTotal > 0) {
-                adjustments.add(new Adjustment(++sequence, line.lineId(),
-                        Adjustment.Type.MODIFIER, "PRICE_BOOK", inputs.priceBookId(),
+                adjustments.add(new Adjustment(
+                        ++sequence,
+                        line.lineId(),
+                        Adjustment.Type.MODIFIER,
+                        "PRICE_BOOK",
+                        inputs.priceBookId(),
                         inputs.priceBookVersion(),
                         Money.of(Math.multiplyExact(modifierTotal, (long) line.quantity()), currency),
                         "MODIFIERS"));
@@ -122,7 +129,8 @@ public class PricingEngine {
                     line.lineId(),
                     line.variantId(),
                     line.quantity(),
-                    inputs.descriptions().getOrDefault(line.variantId(), line.variantId().toString()),
+                    inputs.descriptions()
+                            .getOrDefault(line.variantId(), line.variantId().toString()),
                     Money.of(unitWithModifiers, currency),
                     Money.of(lineGross, currency),
                     Money.of(lineGross, currency),
@@ -145,8 +153,12 @@ public class PricingEngine {
                     continue;
                 }
                 lineDiscountTotal = Math.addExact(lineDiscountTotal, off);
-                discounted.add(Quote.QuoteLine.item(line.lineId(), line.variantId(),
-                        line.quantity(), line.descriptionSnapshot(), line.unitAmount(),
+                discounted.add(Quote.QuoteLine.item(
+                        line.lineId(),
+                        line.variantId(),
+                        line.quantity(),
+                        line.descriptionSnapshot(),
+                        line.unitAmount(),
                         line.baseAmount(),
                         Money.of(Math.subtractExact(line.finalAmount().minor(), off), currency),
                         Money.zero(currency)));
@@ -162,16 +174,26 @@ public class PricingEngine {
                     if (entry.getValue() <= 0) {
                         continue;
                     }
-                    adjustments.add(new Adjustment(++sequence, entry.getKey(),
-                            Adjustment.Type.ITEM_DISCOUNT, "PROMOTION", applied.promotionId(),
+                    adjustments.add(new Adjustment(
+                            ++sequence,
+                            entry.getKey(),
+                            Adjustment.Type.ITEM_DISCOUNT,
+                            "PROMOTION",
+                            applied.promotionId(),
                             applied.definitionVersion(),
-                            Money.of(-entry.getValue(), currency), applied.code()));
+                            Money.of(-entry.getValue(), currency),
+                            applied.code()));
                 }
                 if (applied.orderMinor() > 0) {
-                    adjustments.add(new Adjustment(++sequence, null,
-                            Adjustment.Type.ORDER_DISCOUNT, "PROMOTION", applied.promotionId(),
+                    adjustments.add(new Adjustment(
+                            ++sequence,
+                            null,
+                            Adjustment.Type.ORDER_DISCOUNT,
+                            "PROMOTION",
+                            applied.promotionId(),
                             applied.definitionVersion(),
-                            Money.of(-applied.orderMinor(), currency), applied.code()));
+                            Money.of(-applied.orderMinor(), currency),
+                            applied.code()));
                 }
             }
         }
@@ -189,21 +211,33 @@ public class PricingEngine {
         // line bears less of the tax, which is the whole point of extracting VAT
         // from what the customer actually pays. Identical to the old behaviour
         // whenever nothing is discounted, because final equals base there.
-        long[] weights = lines.stream().mapToLong(line -> line.finalAmount().minor()).toArray();
+        long[] weights =
+                lines.stream().mapToLong(line -> line.finalAmount().minor()).toArray();
         long[] lineTaxes = TaxCalculation.apportion(totalTax, weights);
 
         List<Quote.QuoteLine> taxedLines = new ArrayList<>(lines.size());
         for (int i = 0; i < lines.size(); i++) {
             Quote.QuoteLine line = lines.get(i);
             taxedLines.add(Quote.QuoteLine.item(
-                    line.lineId(), line.variantId(), line.quantity(), line.descriptionSnapshot(),
-                    line.unitAmount(), line.baseAmount(), line.finalAmount(),
+                    line.lineId(),
+                    line.variantId(),
+                    line.quantity(),
+                    line.descriptionSnapshot(),
+                    line.unitAmount(),
+                    line.baseAmount(),
+                    line.finalAmount(),
                     Money.of(lineTaxes[i], currency)));
         }
 
-        adjustments.add(new Adjustment(++sequence, null, Adjustment.Type.TAX,
-                "TAX_PROFILE", inputs.taxProfileId(), inputs.taxProfileVersion(),
-                Money.of(totalTax, currency), "VAT_INCLUSIVE"));
+        adjustments.add(new Adjustment(
+                ++sequence,
+                null,
+                Adjustment.Type.TAX,
+                "TAX_PROFILE",
+                inputs.taxProfileId(),
+                inputs.taxProfileVersion(),
+                Money.of(totalTax, currency),
+                "VAT_INCLUSIVE"));
 
         // Stages 5 and 6. Everything from here reads only the resolved charge and
         // the goods subtotal, both of which are values: there is still nothing in
@@ -214,8 +248,15 @@ public class PricingEngine {
         // charge. Comparing against a total that includes the fee makes the fee
         // oscillate: adding it crosses the threshold, which removes it, which
         // uncrosses the threshold, and the storefront shows two prices in turn.
-        Delivery delivery = applyDelivery(inputs.deliveryCharge(), grossTotal, currency,
-                taxedLines, adjustments, sequence, offers.deliveryBenefitMinor(), offers);
+        Delivery delivery = applyDelivery(
+                inputs.deliveryCharge(),
+                grossTotal,
+                currency,
+                taxedLines,
+                adjustments,
+                sequence,
+                offers.deliveryBenefitMinor(),
+                offers);
 
         // Stage 8. The goods total is the gross: tax is inside it, so adding tax
         // again would charge it twice. Subtotal is the net portion, which is what a
@@ -254,9 +295,15 @@ public class PricingEngine {
      * nobody has ratified, and a wrong tax split is materially worse than an absent
      * one: the first is filed, the second is visibly missing.
      */
-    private Delivery applyDelivery(ResolvedDeliveryCharge charge, long goodsSubtotal,
-            String currency, List<Quote.QuoteLine> lines, List<Adjustment> adjustments,
-            int sequence, long promotionBenefitMinor, PromotionEvaluator.Outcome offers) {
+    private Delivery applyDelivery(
+            ResolvedDeliveryCharge charge,
+            long goodsSubtotal,
+            String currency,
+            List<Quote.QuoteLine> lines,
+            List<Adjustment> adjustments,
+            int sequence,
+            long promotionBenefitMinor,
+            PromotionEvaluator.Outcome offers) {
 
         if (charge == null || !charge.isResolved()) {
             return new Delivery(0L, lines, null);
@@ -271,9 +318,15 @@ public class PricingEngine {
         List<Quote.QuoteLine> withDelivery = new ArrayList<>(lines);
         withDelivery.add(deliveryLine(currency, gross, fee));
 
-        adjustments.add(new Adjustment(++sequence, DELIVERY_FEE_LINE_ID, Adjustment.Type.FEE,
-                "DELIVERY_TARIFF", charge.tariffId(), charge.tariffVersion(),
-                Money.of(gross, currency), "DELIVERY_FEE"));
+        adjustments.add(new Adjustment(
+                ++sequence,
+                DELIVERY_FEE_LINE_ID,
+                Adjustment.Type.FEE,
+                "DELIVERY_TARIFF",
+                charge.tariffId(),
+                charge.tariffVersion(),
+                Money.of(gross, currency),
+                "DELIVERY_FEE"));
 
         // Stage 6's tail (ADR 0037, V0032). The rate table's own standing discount,
         // already capped at the fee by the resolver and capped again here: two
@@ -281,10 +334,15 @@ public class PricingEngine {
         // the cap is cheap enough to state twice.
         long tariffDiscount = Math.min(charge.tariffDiscountMinor(), fee);
         if (tariffDiscount > 0) {
-            adjustments.add(new Adjustment(++sequence, DELIVERY_FEE_LINE_ID,
-                    Adjustment.Type.DELIVERY_TARIFF_DISCOUNT, "DELIVERY_TARIFF",
-                    charge.tariffId(), charge.tariffVersion(),
-                    Money.of(-tariffDiscount, currency), "TARIFF_DELIVERY_DISCOUNT"));
+            adjustments.add(new Adjustment(
+                    ++sequence,
+                    DELIVERY_FEE_LINE_ID,
+                    Adjustment.Type.DELIVERY_TARIFF_DISCOUNT,
+                    "DELIVERY_TARIFF",
+                    charge.tariffId(),
+                    charge.tariffVersion(),
+                    Money.of(-tariffDiscount, currency),
+                    "TARIFF_DELIVERY_DISCOUNT"));
             fee -= tariffDiscount;
             withDelivery.set(withDelivery.size() - 1, deliveryLine(currency, gross, fee));
         }
@@ -297,11 +355,16 @@ public class PricingEngine {
         // It waives what the tariff discount left, not the gross. Waiving the gross
         // would post a reduction larger than the charge and make the two adjustments
         // sum the delivery line below zero.
-        if (charge.freeDeliveryFromMinor() != null
-                && goodsSubtotal >= charge.freeDeliveryFromMinor() && fee > 0) {
-            adjustments.add(new Adjustment(++sequence, DELIVERY_FEE_LINE_ID,
-                    Adjustment.Type.DELIVERY_FEE_WAIVER, "SERVICE_ZONE", charge.zoneId(),
-                    charge.zoneVersion(), Money.of(-fee, currency), "FREE_DELIVERY_THRESHOLD"));
+        if (charge.freeDeliveryFromMinor() != null && goodsSubtotal >= charge.freeDeliveryFromMinor() && fee > 0) {
+            adjustments.add(new Adjustment(
+                    ++sequence,
+                    DELIVERY_FEE_LINE_ID,
+                    Adjustment.Type.DELIVERY_FEE_WAIVER,
+                    "SERVICE_ZONE",
+                    charge.zoneId(),
+                    charge.zoneVersion(),
+                    Money.of(-fee, currency),
+                    "FREE_DELIVERY_THRESHOLD"));
 
             fee = 0L;
             withDelivery.set(withDelivery.size() - 1, deliveryLine(currency, gross, fee));
@@ -320,8 +383,12 @@ public class PricingEngine {
                 if (applied.deliveryMinor() <= 0) {
                     continue;
                 }
-                adjustments.add(new Adjustment(++sequence, DELIVERY_FEE_LINE_ID,
-                        Adjustment.Type.DELIVERY_FEE_BENEFIT, "PROMOTION", applied.promotionId(),
+                adjustments.add(new Adjustment(
+                        ++sequence,
+                        DELIVERY_FEE_LINE_ID,
+                        Adjustment.Type.DELIVERY_FEE_BENEFIT,
+                        "PROMOTION",
+                        applied.promotionId(),
                         applied.definitionVersion(),
                         Money.of(-Math.min(applied.deliveryMinor(), granted), currency),
                         applied.code()));
@@ -350,8 +417,12 @@ public class PricingEngine {
      * membership behind each line — so this method resolves nothing and the
      * engine stays a pure function.
      */
-    private PromotionEvaluator.Outcome evaluateOffers(QuoteRequest request, PricingInputs inputs,
-            List<Quote.QuoteLine> lines, long grossTotal, java.time.Instant now) {
+    private PromotionEvaluator.Outcome evaluateOffers(
+            QuoteRequest request,
+            PricingInputs inputs,
+            List<Quote.QuoteLine> lines,
+            long grossTotal,
+            java.time.Instant now) {
 
         PromotionInputs offers = inputs.promotions();
         if (offers == null || offers.promotions().isEmpty()) {
@@ -363,21 +434,27 @@ public class PricingEngine {
             if (line.type() != Quote.LineType.ITEM) {
                 continue;
             }
-            MenuMembershipLookup.Membership membership =
-                    offers.membership().get(line.variantId());
+            MenuMembershipLookup.Membership membership = offers.membership().get(line.variantId());
             basketLines.add(new PromotionEvaluator.BasketLine(
-                    line.lineId(), line.variantId(),
+                    line.lineId(),
+                    line.variantId(),
                     membership == null ? null : membership.productId(),
                     membership == null ? java.util.Set.of() : membership.categoryIds(),
-                    line.quantity(), line.unitAmount().minor(), line.finalAmount().minor()));
+                    line.quantity(),
+                    line.unitAmount().minor(),
+                    line.finalAmount().minor()));
         }
 
-        long deliveryFee = inputs.deliveryCharge() == null || !inputs.deliveryCharge().isResolved()
-                ? 0L : inputs.deliveryCharge().feeMinor();
+        long deliveryFee =
+                inputs.deliveryCharge() == null || !inputs.deliveryCharge().isResolved()
+                        ? 0L
+                        : inputs.deliveryCharge().feeMinor();
 
-        return promotions.evaluate(offers.promotions(),
+        return promotions.evaluate(
+                offers.promotions(),
                 new PromotionEvaluator.Basket(inputs.currency(), basketLines, grossTotal, deliveryFee),
-                offers.context(), now);
+                offers.context(),
+                now);
     }
 
     private static final PromotionEvaluator.Outcome EMPTY_OFFERS =
@@ -386,9 +463,14 @@ public class PricingEngine {
     /** The one delivery line, gross beside net, built the same way at each step. */
     private static Quote.QuoteLine deliveryLine(String currency, long gross, long net) {
         return new Quote.QuoteLine(
-                DELIVERY_FEE_LINE_ID, Quote.LineType.DELIVERY_FEE, null, 1,
+                DELIVERY_FEE_LINE_ID,
+                Quote.LineType.DELIVERY_FEE,
+                null,
+                1,
                 DELIVERY_FEE_DESCRIPTION,
-                Money.of(gross, currency), Money.of(gross, currency), Money.of(net, currency),
+                Money.of(gross, currency),
+                Money.of(gross, currency),
+                Money.of(net, currency),
                 Money.zero(currency));
     }
 
@@ -411,7 +493,7 @@ public class PricingEngine {
      */
     private static final String DELIVERY_FEE_DESCRIPTION = "DELIVERY_FEE";
 
-    private record Delivery(long feeMinor, List<Quote.QuoteLine> lines, Long shortfallMinor) { }
+    private record Delivery(long feeMinor, List<Quote.QuoteLine> lines, Long shortfallMinor) {}
 
     /**
      * Everything the total depends on, hashed.
@@ -434,12 +516,16 @@ public class PricingEngine {
         canonical.append("|channel=").append(request.channel());
         canonical.append("|customer=").append(request.customerAccountId());
         canonical.append("|publication=").append(inputs.catalogPublicationId());
-        canonical.append("|priceBook=").append(inputs.priceBookId())
-                .append(":").append(inputs.priceBookVersion());
-        canonical.append("|tax=").append(inputs.taxProfileId())
-                .append(":").append(inputs.taxProfileVersion())
-                .append(":").append(inputs.taxRateBasisPoints())
-                .append(":").append(inputs.taxMode());
+        canonical.append("|priceBook=").append(inputs.priceBookId()).append(":").append(inputs.priceBookVersion());
+        canonical
+                .append("|tax=")
+                .append(inputs.taxProfileId())
+                .append(":")
+                .append(inputs.taxProfileVersion())
+                .append(":")
+                .append(inputs.taxRateBasisPoints())
+                .append(":")
+                .append(inputs.taxMode());
         canonical.append("|currency=").append(inputs.currency());
 
         // ADR 0037. Zone version, tariff version, band, time rule and distance all
@@ -448,9 +534,12 @@ public class PricingEngine {
         // PRICE_CHANGED — exactly as a price-book edit already does. Without this
         // the fee would be the one number in the total that could change under the
         // customer without anything noticing.
-        canonical.append("|delivery=")
-                .append(inputs.deliveryCharge() == null
-                        ? "none" : inputs.deliveryCharge().canonicalForm());
+        canonical
+                .append("|delivery=")
+                .append(
+                        inputs.deliveryCharge() == null
+                                ? "none"
+                                : inputs.deliveryCharge().canonicalForm());
 
         // ADR 0018 stages 3 and 4. Every promotion that could apply, by id and
         // definition version, sorted so the same offers hash the same however the
@@ -480,9 +569,13 @@ public class PricingEngine {
         request.lines().stream()
                 .sorted(java.util.Comparator.comparing(QuoteRequest.Line::lineId))
                 .forEach(line -> {
-                    canonical.append("|line=").append(line.lineId())
-                            .append(":").append(line.variantId())
-                            .append("x").append(line.quantity());
+                    canonical
+                            .append("|line=")
+                            .append(line.lineId())
+                            .append(":")
+                            .append(line.variantId())
+                            .append("x")
+                            .append(line.quantity());
                     line.modifierOptionIds().stream()
                             .map(UUID::toString)
                             .sorted()
@@ -491,14 +584,16 @@ public class PricingEngine {
 
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(
-                    digest.digest(canonical.toString().getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of().formatHex(digest.digest(canonical.toString().getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException impossible) {
             throw new IllegalStateException("SHA-256 is required", impossible);
         }
     }
 
-    public enum TaxMode { INCLUSIVE, EXCLUSIVE }
+    public enum TaxMode {
+        INCLUSIVE,
+        EXCLUSIVE
+    }
 
     /**
      * The resolved inputs a quote is computed from.
@@ -531,24 +626,62 @@ public class PricingEngine {
             PromotionInputs promotions) {
 
         /** A cart with no promotions in play, and every call site that predates them. */
-        public PricingInputs(String currency, UUID catalogPublicationId, UUID priceBookId,
-                int priceBookVersion, UUID taxProfileId, int taxProfileVersion,
-                int taxRateBasisPoints, TaxMode taxMode, Map<UUID, Long> variantPrices,
-                Map<UUID, Long> modifierPrices, Map<UUID, String> descriptions,
+        public PricingInputs(
+                String currency,
+                UUID catalogPublicationId,
+                UUID priceBookId,
+                int priceBookVersion,
+                UUID taxProfileId,
+                int taxProfileVersion,
+                int taxRateBasisPoints,
+                TaxMode taxMode,
+                Map<UUID, Long> variantPrices,
+                Map<UUID, Long> modifierPrices,
+                Map<UUID, String> descriptions,
                 ResolvedDeliveryCharge deliveryCharge) {
-            this(currency, catalogPublicationId, priceBookId, priceBookVersion, taxProfileId,
-                    taxProfileVersion, taxRateBasisPoints, taxMode, variantPrices,
-                    modifierPrices, descriptions, deliveryCharge, null);
+            this(
+                    currency,
+                    catalogPublicationId,
+                    priceBookId,
+                    priceBookVersion,
+                    taxProfileId,
+                    taxProfileVersion,
+                    taxRateBasisPoints,
+                    taxMode,
+                    variantPrices,
+                    modifierPrices,
+                    descriptions,
+                    deliveryCharge,
+                    null);
         }
 
         /** The pickup case, and every call site that predates ADR 0037. */
-        public PricingInputs(String currency, UUID catalogPublicationId, UUID priceBookId,
-                int priceBookVersion, UUID taxProfileId, int taxProfileVersion,
-                int taxRateBasisPoints, TaxMode taxMode, Map<UUID, Long> variantPrices,
-                Map<UUID, Long> modifierPrices, Map<UUID, String> descriptions) {
-            this(currency, catalogPublicationId, priceBookId, priceBookVersion, taxProfileId,
-                    taxProfileVersion, taxRateBasisPoints, taxMode, variantPrices,
-                    modifierPrices, descriptions, null, null);
+        public PricingInputs(
+                String currency,
+                UUID catalogPublicationId,
+                UUID priceBookId,
+                int priceBookVersion,
+                UUID taxProfileId,
+                int taxProfileVersion,
+                int taxRateBasisPoints,
+                TaxMode taxMode,
+                Map<UUID, Long> variantPrices,
+                Map<UUID, Long> modifierPrices,
+                Map<UUID, String> descriptions) {
+            this(
+                    currency,
+                    catalogPublicationId,
+                    priceBookId,
+                    priceBookVersion,
+                    taxProfileId,
+                    taxProfileVersion,
+                    taxRateBasisPoints,
+                    taxMode,
+                    variantPrices,
+                    modifierPrices,
+                    descriptions,
+                    null,
+                    null);
         }
     }
 
@@ -565,7 +698,8 @@ public class PricingEngine {
      * @param membership variant to product and categories, for the line-matching
      *        conditions.
      */
-    public record PromotionInputs(List<Promotion> promotions,
+    public record PromotionInputs(
+            List<Promotion> promotions,
             PromotionEvaluator.PromotionContext context,
             Map<UUID, MenuMembershipLookup.Membership> membership) {
 
@@ -582,9 +716,15 @@ public class PricingEngine {
      *                               can say how much more is needed
      */
     public record Result(
-            Money subtotal, Money tax, Money fees, Money discount, Money total,
-            List<Quote.QuoteLine> lines, List<Adjustment> adjustments,
-            Long deliveryShortfallMinor, String contextHash) { }
+            Money subtotal,
+            Money tax,
+            Money fees,
+            Money discount,
+            Money total,
+            List<Quote.QuoteLine> lines,
+            List<Adjustment> adjustments,
+            Long deliveryShortfallMinor,
+            String contextHash) {}
 
     /** Thrown when a cart contains something with no active price. */
     public static class UnpricedItemException extends RuntimeException {

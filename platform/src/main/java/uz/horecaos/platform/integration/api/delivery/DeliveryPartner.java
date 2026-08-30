@@ -4,7 +4,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
-
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 
 /**
@@ -89,8 +88,13 @@ public interface DeliveryPartner {
         }
     }
 
-    record Pickup(double latitude, double longitude, String address, String contactName,
-            String contactPhone, String comment) {
+    record Pickup(
+            double latitude,
+            double longitude,
+            String address,
+            String contactName,
+            String contactPhone,
+            String comment) {
 
         /**
          * Every component here is personal data — a precise location is as
@@ -105,8 +109,16 @@ public interface DeliveryPartner {
         }
     }
 
-    record Dropoff(double latitude, double longitude, String address, String contactName,
-            String contactPhone, String comment, String entrance, String floor, String apartment) {
+    record Dropoff(
+            double latitude,
+            double longitude,
+            String address,
+            String contactName,
+            String contactPhone,
+            String comment,
+            String entrance,
+            String floor,
+            String apartment) {
 
         /** As {@link Pickup#toString()}, and this one is the customer's home. */
         @Override

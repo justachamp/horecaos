@@ -8,10 +8,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.migration.api.MigrationCapability;
@@ -54,8 +52,12 @@ public class MigrationProgramService {
     private final MigrationAudit audit;
     private final Clock clock;
 
-    public MigrationProgramService(MigrationProgramStore programs, MigrationScopeStore scopes,
-            MigrationAccessPolicy access, MigrationAudit audit, Clock clock) {
+    public MigrationProgramService(
+            MigrationProgramStore programs,
+            MigrationScopeStore scopes,
+            MigrationAccessPolicy access,
+            MigrationAudit audit,
+            Clock clock) {
         this.programs = programs;
         this.scopes = scopes;
         this.access = access;
@@ -97,19 +99,34 @@ public class MigrationProgramService {
         }
 
         MigrationProgramStore.ProgramRow program = new MigrationProgramStore.ProgramRow(
-                UUID.randomUUID(), name, ProgramStatus.PLANNING,
+                UUID.randomUUID(),
+                name,
+                ProgramStatus.PLANNING,
                 requireText(command.sourceEnvironment(), "A source environment is required"),
                 requireText(command.targetEnvironment(), "A target environment is required"),
-                command.policyVersion(), null, null, 1);
+                command.policyVersion(),
+                null,
+                null,
+                1);
 
         programs.insert(program, clock.instant());
-        audit.record("migration.program.created", ActorRef.user(actor, null),
-                ResourceScope.platform(), "migration.program", program.id(), program.version(),
+        audit.record(
+                "migration.program.created",
+                ActorRef.user(actor, null),
+                ResourceScope.platform(),
+                "migration.program",
+                program.id(),
+                program.version(),
                 command.reason(),
-                Map.of("name", program.name(),
-                        "sourceEnvironment", program.sourceEnvironment(),
-                        "targetEnvironment", program.targetEnvironment(),
-                        "policyVersion", program.policyVersion()),
+                Map.of(
+                        "name",
+                        program.name(),
+                        "sourceEnvironment",
+                        program.sourceEnvironment(),
+                        "targetEnvironment",
+                        program.targetEnvironment(),
+                        "policyVersion",
+                        program.policyVersion()),
                 null);
         return program;
     }
@@ -117,8 +134,13 @@ public class MigrationProgramService {
     /** Opens the program for execution: from here its scopes may run and move. */
     @Transactional
     public MigrationProgramStore.ProgramRow start(UUID programId, int expectedVersion, String reason) {
-        return moveStatus(programId, ProgramStatus.PLANNING, ProgramStatus.ACTIVE, expectedVersion,
-                reason, "migration.program.started");
+        return moveStatus(
+                programId,
+                ProgramStatus.PLANNING,
+                ProgramStatus.ACTIVE,
+                expectedVersion,
+                reason,
+                "migration.program.started");
     }
 
     /**
@@ -137,11 +159,17 @@ public class MigrationProgramService {
             throw new MigrationPreconditionException(
                     MigrationPreconditionException.PROGRAM_HAS_LIVE_SCOPES,
                     ("%d scope(s) of this program have not retired. A program is complete when every "
-                            + "capability it moved has been signed off, not when the last cutover "
-                            + "window closed.").formatted(live));
+                                    + "capability it moved has been signed off, not when the last cutover "
+                                    + "window closed.")
+                            .formatted(live));
         }
-        return moveStatus(programId, ProgramStatus.ACTIVE, ProgramStatus.COMPLETED, expectedVersion,
-                reason, "migration.program.completed");
+        return moveStatus(
+                programId,
+                ProgramStatus.ACTIVE,
+                ProgramStatus.COMPLETED,
+                expectedVersion,
+                reason,
+                "migration.program.completed");
     }
 
     /**
@@ -163,11 +191,16 @@ public class MigrationProgramService {
         // and write a second audit entry for an event that did not occur.
         if (program.status() != ProgramStatus.PLANNING && program.status() != ProgramStatus.ACTIVE) {
             throw new MigrationConflictException(
-                    ("Program %s is %s. Only a program that is still planned or still running can "
-                            + "be called off.").formatted(programId, program.status()));
+                    ("Program %s is %s. Only a program that is still planned or still running can " + "be called off.")
+                            .formatted(programId, program.status()));
         }
-        return moveStatus(programId, program.status(), ProgramStatus.ABANDONED, expectedVersion,
-                reason, "migration.program.abandoned");
+        return moveStatus(
+                programId,
+                program.status(),
+                ProgramStatus.ABANDONED,
+                expectedVersion,
+                reason,
+                "migration.program.abandoned");
     }
 
     /**
@@ -193,21 +226,20 @@ public class MigrationProgramService {
      * under a legacy-owned ancestor stays free, which is the ordinary case: that
      * is how a wave is planned before anything has moved.
      */
-    private void requireNarrowingDoesNotUnseatTheTarget(UUID tenantId,
-            MigrationCapability capability, OpenScopeCommand command) {
+    private void requireNarrowingDoesNotUnseatTheTarget(
+            UUID tenantId, MigrationCapability capability, OpenScopeCommand command) {
 
         if (command.brandId() == null) {
             return;
         }
         if (command.locationId() != null) {
-            refuseIfHeld(scopes.findClaim(tenantId, capability, command.brandId(), null),
-                    capability, "brand");
+            refuseIfHeld(scopes.findClaim(tenantId, capability, command.brandId(), null), capability, "brand");
         }
         refuseIfHeld(scopes.findClaim(tenantId, capability, null, null), capability, "tenant");
     }
 
-    private static void refuseIfHeld(Optional<MigrationScopeStore.ScopeRow> broader,
-            MigrationCapability capability, String level) {
+    private static void refuseIfHeld(
+            Optional<MigrationScopeStore.ScopeRow> broader, MigrationCapability capability, String level) {
 
         if (broader.isEmpty()) {
             return;
@@ -218,11 +250,15 @@ public class MigrationProgramService {
         }
         throw new MigrationConflictException(
                 ("The %s-wide %s scope %s is %s with write mode %s. Opening a narrower scope "
-                        + "underneath it would re-answer ownership for that subtree and leave the "
-                        + "narrowed part with no writer at all, without a cutover decision or an "
-                        + "approver. Roll the broader scope back first if the capability is meant "
-                        + "to return to legacy.")
-                        .formatted(level, capability, scope.id(), scope.state(),
+                                + "underneath it would re-answer ownership for that subtree and leave the "
+                                + "narrowed part with no writer at all, without a cutover decision or an "
+                                + "approver. Roll the broader scope back first if the capability is meant "
+                                + "to return to legacy.")
+                        .formatted(
+                                level,
+                                capability,
+                                scope.id(),
+                                scope.state(),
                                 scope.modes().writeMode()));
     }
 
@@ -251,8 +287,7 @@ public class MigrationProgramService {
         }
 
         UUID tenantId = Objects.requireNonNull(command.tenantId(), "A tenant is required");
-        MigrationCapability capability =
-                Objects.requireNonNull(command.capability(), "A capability is required");
+        MigrationCapability capability = Objects.requireNonNull(command.capability(), "A capability is required");
         if (command.locationId() != null && command.brandId() == null) {
             throw new IllegalArgumentException(
                     "A scope narrowed to a location must name the location's brand, or it would "
@@ -270,8 +305,9 @@ public class MigrationProgramService {
             if (!scope.programId().equals(programId)) {
                 throw new MigrationConflictException(
                         ("Program %s already claims %s for this tenant at this specificity. Two "
-                                + "programs holding one capability is two writers however the "
-                                + "programs are described.").formatted(scope.programId(), capability));
+                                        + "programs holding one capability is two writers however the "
+                                        + "programs are described.")
+                                .formatted(scope.programId(), capability));
             }
             return scope;
         }
@@ -282,26 +318,48 @@ public class MigrationProgramService {
         OwnershipModes modes = new OwnershipModes(WriteMode.LEGACY_ONLY, ReadMode.LEGACY);
         Instant now = clock.instant();
         MigrationScopeStore.ScopeRow scope = new MigrationScopeStore.ScopeRow(
-                UUID.randomUUID(), programId, tenantId, command.brandId(), command.locationId(),
-                capability, command.sourceOwner(), command.targetOwner(), modes,
-                ScopeState.DISCOVERY, now,
+                UUID.randomUUID(),
+                programId,
+                tenantId,
+                command.brandId(),
+                command.locationId(),
+                capability,
+                command.sourceOwner(),
+                command.targetOwner(),
+                modes,
+                ScopeState.DISCOVERY,
+                now,
                 // Empty, and specifically without an undecided-source count. Absent
                 // means unknown, and MigrationScopeService reads unknown as "not
                 // cleared" — a new scope that started life claiming zero undecided
                 // sources would arrive already past the coverage gate.
-                Map.of(), 1);
+                Map.of(),
+                1);
 
         scopes.insert(scope, now);
-        audit.record("migration.scope.opened", ActorRef.user(actor, null),
+        audit.record(
+                "migration.scope.opened",
+                ActorRef.user(actor, null),
                 MigrationAudit.scopeOf(tenantId, command.brandId(), command.locationId()),
-                "migration.scope", scope.id(), scope.version(), command.reason(),
-                Map.of("programId", programId,
-                        "capability", capability.name(),
-                        "state", scope.state().name(),
-                        "writeMode", modes.writeMode().name(),
-                        "readMode", modes.readMode().name(),
-                        "sourceOwner", scope.sourceOwner(),
-                        "targetOwner", scope.targetOwner()),
+                "migration.scope",
+                scope.id(),
+                scope.version(),
+                command.reason(),
+                Map.of(
+                        "programId",
+                        programId,
+                        "capability",
+                        capability.name(),
+                        "state",
+                        scope.state().name(),
+                        "writeMode",
+                        modes.writeMode().name(),
+                        "readMode",
+                        modes.readMode().name(),
+                        "sourceOwner",
+                        scope.sourceOwner(),
+                        "targetOwner",
+                        scope.targetOwner()),
                 null);
         return scope;
     }
@@ -323,8 +381,13 @@ public class MigrationProgramService {
         return scopes.listForProgram(programId, afterScopeId, Math.clamp(limit, 1, MAX_PAGE));
     }
 
-    private MigrationProgramStore.ProgramRow moveStatus(UUID programId, ProgramStatus from,
-            ProgramStatus to, int expectedVersion, String reason, String actionCode) {
+    private MigrationProgramStore.ProgramRow moveStatus(
+            UUID programId,
+            ProgramStatus from,
+            ProgramStatus to,
+            int expectedVersion,
+            String reason,
+            String actionCode) {
 
         String actor = access.requireOperator();
         MigrationProgramStore.ProgramRow program = requireProgram(programId);
@@ -340,31 +403,43 @@ public class MigrationProgramService {
         Instant startedAt = to == ProgramStatus.ACTIVE ? now : program.startedAt();
         Instant completedAt = to == ProgramStatus.COMPLETED ? now : program.completedAt();
 
-        int version = programs.updateStatus(programId, from, to, expectedVersion, startedAt,
-                        completedAt, now)
-                .orElseThrow(() -> MigrationConflictException.staleVersion(
-                        "program", expectedVersion, program.version()));
+        int version = programs.updateStatus(programId, from, to, expectedVersion, startedAt, completedAt, now)
+                .orElseThrow(
+                        () -> MigrationConflictException.staleVersion("program", expectedVersion, program.version()));
 
-        audit.record(actionCode, ActorRef.user(actor, null), ResourceScope.platform(),
-                "migration.program", programId, version, reason,
-                Map.of("fromStatus", from.name(), "toStatus", to.name()), null);
+        audit.record(
+                actionCode,
+                ActorRef.user(actor, null),
+                ResourceScope.platform(),
+                "migration.program",
+                programId,
+                version,
+                reason,
+                Map.of("fromStatus", from.name(), "toStatus", to.name()),
+                null);
 
-        return new MigrationProgramStore.ProgramRow(program.id(), program.name(), to,
-                program.sourceEnvironment(), program.targetEnvironment(), program.policyVersion(),
-                startedAt, completedAt, version);
+        return new MigrationProgramStore.ProgramRow(
+                program.id(),
+                program.name(),
+                to,
+                program.sourceEnvironment(),
+                program.targetEnvironment(),
+                program.policyVersion(),
+                startedAt,
+                completedAt,
+                version);
     }
 
     private MigrationProgramStore.ProgramRow requireProgram(UUID programId) {
         return programs.findById(programId)
-                .orElseThrow(() -> new MigrationResourceNotFoundException(
-                        "No migration program " + programId));
+                .orElseThrow(() -> new MigrationResourceNotFoundException("No migration program " + programId));
     }
 
     private static void requireOwnerCode(String value, String side) {
         if (value == null || !OWNER_CODE.matcher(value).matches()) {
             throw new IllegalArgumentException(
-                    ("The %s owner must be a runbook-recognisable code such as DELEVER or "
-                            + "HORECAOS_ORDERING").formatted(side));
+                    ("The %s owner must be a runbook-recognisable code such as DELEVER or " + "HORECAOS_ORDERING")
+                            .formatted(side));
         }
     }
 
@@ -382,11 +457,7 @@ public class MigrationProgramService {
      *                      already-running migration was approved to do
      */
     public record CreateProgramCommand(
-            String name,
-            String sourceEnvironment,
-            String targetEnvironment,
-            int policyVersion,
-            String reason) { }
+            String name, String sourceEnvironment, String targetEnvironment, int policyVersion, String reason) {}
 
     /**
      * @param brandId     null for a scope covering the whole tenant
@@ -403,5 +474,5 @@ public class MigrationProgramService {
             MigrationCapability capability,
             String sourceOwner,
             String targetOwner,
-            String reason) { }
+            String reason) {}
 }

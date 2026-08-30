@@ -1,7 +1,6 @@
 package uz.horecaos.platform.integration.camel.notification;
 
 import java.time.Duration;
-
 import org.apache.camel.builder.RouteBuilder;
 import org.springframework.stereotype.Component;
 
@@ -66,11 +65,11 @@ public class NotificationRouteBuilder extends RouteBuilder {
                 // Redelivery is safe here and nowhere else in this route: a query
                 // has no side effect, so repeating it cannot send a second message.
                 .onException(Exception.class)
-                    .maximumRedeliveries(3)
-                    .redeliveryDelay(Duration.ofSeconds(2).toMillis())
-                    .backOffMultiplier(2)
-                    .handled(false)
-                    .end()
+                .maximumRedeliveries(3)
+                .redeliveryDelay(Duration.ofSeconds(2).toMillis())
+                .backOffMultiplier(2)
+                .handled(false)
+                .end()
                 .process(processor::restoreContext)
                 .process(processor::invoke)
                 .process(processor::clearContext);

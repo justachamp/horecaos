@@ -5,12 +5,10 @@ import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.migration.application.reconciliation.LegacyQuery;
 
 /**
@@ -24,8 +22,7 @@ import uz.horecaos.platform.migration.application.reconciliation.LegacyQuery;
  * reaches without being remarkable.
  */
 @Repository
-@ConditionalOnProperty(
-        prefix = "horecaos.migration.legacy", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(prefix = "horecaos.migration.legacy", name = "enabled", havingValue = "true")
 public class JdbcLegacyQuery implements LegacyQuery {
 
     private final JdbcClient jdbc;
@@ -36,7 +33,8 @@ public class JdbcLegacyQuery implements LegacyQuery {
 
     @Override
     public Optional<BigInteger> exactInteger(String sql, Map<String, Object> parameters) {
-        return jdbc.sql(sql).params(parameters)
+        return jdbc.sql(sql)
+                .params(parameters)
                 .query((row, number) -> exact(row.getObject(1)))
                 .optional();
     }
@@ -57,8 +55,8 @@ public class JdbcLegacyQuery implements LegacyQuery {
             case BigInteger exact -> exact;
             case BigDecimal decimal -> decimal.toBigIntegerExact();
             case Number number -> BigInteger.valueOf(number.longValue());
-            default -> throw new IllegalStateException(
-                    "A legacy reconciliation measure came back as " + value.getClass());
+            default ->
+                throw new IllegalStateException("A legacy reconciliation measure came back as " + value.getClass());
         };
     }
 }

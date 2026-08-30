@@ -46,8 +46,7 @@ public final class ImportContext {
 
     private static final ScopedValue<Boolean> IMPORTING = ScopedValue.newInstance();
 
-    private ImportContext() {
-    }
+    private ImportContext() {}
 
     /**
      * Whether the current thread is executing a historical import.

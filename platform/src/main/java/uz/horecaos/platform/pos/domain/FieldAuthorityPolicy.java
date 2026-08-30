@@ -1,7 +1,6 @@
 package uz.horecaos.platform.pos.domain;
 
 import java.util.Map;
-
 import uz.horecaos.platform.pos.domain.SyncDifference.FieldAuthority;
 import uz.horecaos.platform.pos.domain.SyncDifference.RecommendedAction;
 
@@ -23,51 +22,53 @@ import uz.horecaos.platform.pos.domain.SyncDifference.RecommendedAction;
 public record FieldAuthorityPolicy(int version, Map<String, FieldAuthority> byField) {
 
     /** ADR 0012's initial ownership, as the platform ships it. */
-    public static final FieldAuthorityPolicy INITIAL = new FieldAuthorityPolicy(1, Map.ofEntries(
-            // Everything the customer reads is HorecaOS's. A restaurant renaming a
-            // dish in their till must not rename it on the storefront, because
-            // the storefront name has been translated, photographed and indexed.
-            Map.entry("product.name", FieldAuthority.HORECAOS),
-            Map.entry("product.description", FieldAuthority.HORECAOS),
-            Map.entry("product.media", FieldAuthority.HORECAOS),
-            Map.entry("variant.name", FieldAuthority.HORECAOS),
-            Map.entry("modifier.name", FieldAuthority.HORECAOS),
-            Map.entry("category.name", FieldAuthority.HORECAOS),
+    public static final FieldAuthorityPolicy INITIAL = new FieldAuthorityPolicy(
+            1,
+            Map.ofEntries(
+                    // Everything the customer reads is HorecaOS's. A restaurant renaming a
+                    // dish in their till must not rename it on the storefront, because
+                    // the storefront name has been translated, photographed and indexed.
+                    Map.entry("product.name", FieldAuthority.HORECAOS),
+                    Map.entry("product.description", FieldAuthority.HORECAOS),
+                    Map.entry("product.media", FieldAuthority.HORECAOS),
+                    Map.entry("variant.name", FieldAuthority.HORECAOS),
+                    Map.entry("modifier.name", FieldAuthority.HORECAOS),
+                    Map.entry("category.name", FieldAuthority.HORECAOS),
 
-            // Price is HorecaOS's, and this is the entry that survives the worst
-            // provider ambiguity. On the first real POS a price list is
-            // documented as applying to venues or channels and no field in any
-            // schema expresses that application, so an imported price cannot even
-            // be attributed to a venue. Importing it as evidence makes that a
-            // reporting nuisance; importing it as authority would make it a
-            // pricing incident.
-            Map.entry("product.price", FieldAuthority.HORECAOS),
-            Map.entry("variant.price", FieldAuthority.HORECAOS),
-            Map.entry("modifier.price", FieldAuthority.HORECAOS),
+                    // Price is HorecaOS's, and this is the entry that survives the worst
+                    // provider ambiguity. On the first real POS a price list is
+                    // documented as applying to venues or channels and no field in any
+                    // schema expresses that application, so an imported price cannot even
+                    // be attributed to a venue. Importing it as evidence makes that a
+                    // reporting nuisance; importing it as authority would make it a
+                    // pricing incident.
+                    Map.entry("product.price", FieldAuthority.HORECAOS),
+                    Map.entry("variant.price", FieldAuthority.HORECAOS),
+                    Map.entry("modifier.price", FieldAuthority.HORECAOS),
 
-            // What the customer can actually buy is HorecaOS's, resolved from
-            // ADR 0016 offerings and ADR 0017 inventory. The provider's stop list
-            // is a strong input to that, not a replacement for it.
-            Map.entry("product.available", FieldAuthority.HORECAOS),
-            Map.entry("availability.limit", FieldAuthority.REVIEWED_IMPORT),
+                    // What the customer can actually buy is HorecaOS's, resolved from
+                    // ADR 0016 offerings and ADR 0017 inventory. The provider's stop list
+                    // is a strong input to that, not a replacement for it.
+                    Map.entry("product.available", FieldAuthority.HORECAOS),
+                    Map.entry("availability.limit", FieldAuthority.REVIEWED_IMPORT),
 
-            // Identity across the two systems. Nobody else may decide it.
-            Map.entry("product.externalId", FieldAuthority.MAPPING),
-            Map.entry("variant.externalId", FieldAuthority.MAPPING),
-            Map.entry("category.externalId", FieldAuthority.MAPPING),
-            Map.entry("modifierGroup.externalId", FieldAuthority.MAPPING),
-            Map.entry("modifier.externalId", FieldAuthority.MAPPING),
+                    // Identity across the two systems. Nobody else may decide it.
+                    Map.entry("product.externalId", FieldAuthority.MAPPING),
+                    Map.entry("variant.externalId", FieldAuthority.MAPPING),
+                    Map.entry("category.externalId", FieldAuthority.MAPPING),
+                    Map.entry("modifierGroup.externalId", FieldAuthority.MAPPING),
+                    Map.entry("modifier.externalId", FieldAuthority.MAPPING),
 
-            // Operational metadata the till genuinely owns: which station cooks
-            // it, what kind of thing the provider thinks it is, its own tax code.
-            // Reviewed rather than automatic, because ADR 0038 would otherwise
-            // accept a classification code from a provider whose market is not
-            // ours and whose format nobody has characterised.
-            Map.entry("product.sourceKind", FieldAuthority.PROVIDER),
-            Map.entry("product.station", FieldAuthority.PROVIDER),
-            Map.entry("product.governmentCode", FieldAuthority.REVIEWED_IMPORT),
-            Map.entry("product.categoryMembership", FieldAuthority.REVIEWED_IMPORT),
-            Map.entry("modifierGroup.selectionRange", FieldAuthority.REVIEWED_IMPORT)));
+                    // Operational metadata the till genuinely owns: which station cooks
+                    // it, what kind of thing the provider thinks it is, its own tax code.
+                    // Reviewed rather than automatic, because ADR 0038 would otherwise
+                    // accept a classification code from a provider whose market is not
+                    // ours and whose format nobody has characterised.
+                    Map.entry("product.sourceKind", FieldAuthority.PROVIDER),
+                    Map.entry("product.station", FieldAuthority.PROVIDER),
+                    Map.entry("product.governmentCode", FieldAuthority.REVIEWED_IMPORT),
+                    Map.entry("product.categoryMembership", FieldAuthority.REVIEWED_IMPORT),
+                    Map.entry("modifierGroup.selectionRange", FieldAuthority.REVIEWED_IMPORT)));
 
     public FieldAuthorityPolicy {
         byField = Map.copyOf(byField);

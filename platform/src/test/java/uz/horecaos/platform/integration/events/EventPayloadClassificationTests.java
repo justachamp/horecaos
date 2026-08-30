@@ -9,9 +9,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.ordering.api.OrderingEvent;
 import uz.horecaos.platform.tenancy.api.TenancyEvent;
 
@@ -29,12 +27,37 @@ import uz.horecaos.platform.tenancy.api.TenancyEvent;
 class EventPayloadClassificationTests {
 
     private static final Set<String> PROTECTED_TERMS = Set.of(
-            "phone", "email", "passport", "birth", "dateofbirth",
-            "firstname", "lastname", "middlename", "fullname", "personname",
-            "address", "latitude", "longitude", "coordinate", "geolocation",
-            "password", "secret", "token", "credential", "apikey",
-            "cardnumber", "pan", "cvv", "iban", "ssn", "jshir", "tin",
-            "note", "comment", "instructions", "devicefingerprint");
+            "phone",
+            "email",
+            "passport",
+            "birth",
+            "dateofbirth",
+            "firstname",
+            "lastname",
+            "middlename",
+            "fullname",
+            "personname",
+            "address",
+            "latitude",
+            "longitude",
+            "coordinate",
+            "geolocation",
+            "password",
+            "secret",
+            "token",
+            "credential",
+            "apikey",
+            "cardnumber",
+            "pan",
+            "cvv",
+            "iban",
+            "ssn",
+            "jshir",
+            "tin",
+            "note",
+            "comment",
+            "instructions",
+            "devicefingerprint");
 
     /** Field names reviewed and accepted as non-protected. Each needs a reason. */
     private static final Set<String> REVIEWED_EXCEPTIONS = Set.of();
@@ -58,12 +81,10 @@ class EventPayloadClassificationTests {
             inspect(payloadType, eventType.getSimpleName() + ".Payload", new LinkedHashSet<>(), violations);
         }
 
-        assertThat(violations)
-                .as("""
+        assertThat(violations).as("""
                         A protected value is reachable from an event payload.
                         Events carry identifiers; a consumer that needs protected detail
-                        calls an authorized API with the identifier (ADR 0032).""")
-                .isEmpty();
+                        calls an authorized API with the identifier (ADR 0032).""").isEmpty();
     }
 
     private static Class<?> payloadTypeOf(Class<?> eventType) {
@@ -115,9 +136,9 @@ class EventPayloadClassificationTests {
         assertThat(violations.getFirst()).contains("recipient.email");
     }
 
-    private record SampleLeakyPayload(java.util.UUID orderId, String customerPhone) { }
+    private record SampleLeakyPayload(java.util.UUID orderId, String customerPhone) {}
 
-    private record SampleContact(String email) { }
+    private record SampleContact(String email) {}
 
-    private record SampleNestedPayload(java.util.UUID orderId, SampleContact recipient) { }
+    private record SampleNestedPayload(java.util.UUID orderId, SampleContact recipient) {}
 }

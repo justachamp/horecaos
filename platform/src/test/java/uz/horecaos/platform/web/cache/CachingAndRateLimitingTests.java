@@ -8,7 +8,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Arrays;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -42,7 +41,9 @@ class CachingAndRateLimitingTests {
 
     @Test
     void cacheNamesAreUnique() {
-        assertThat(Arrays.stream(CacheRegistry.values()).map(CacheRegistry::cacheName).toList())
+        assertThat(Arrays.stream(CacheRegistry.values())
+                        .map(CacheRegistry::cacheName)
+                        .toList())
                 .doesNotHaveDuplicates();
     }
 
@@ -51,7 +52,8 @@ class CachingAndRateLimitingTests {
         MutableClock clock = new MutableClock(Instant.parse("2026-08-20T10:00:00Z"));
         RateLimiter limiter = new InProcessRateLimiter(clock);
 
-        assertThat(limiter.check(key(), RateLimiter.Policy.perMinute(5)).allowed()).isTrue();
+        assertThat(limiter.check(key(), RateLimiter.Policy.perMinute(5)).allowed())
+                .isTrue();
     }
 
     @Test
@@ -110,7 +112,8 @@ class CachingAndRateLimitingTests {
 
         limiter.check(new RateLimiter.Key("onboarding.create", "tenant-a", "user-1"), policy);
 
-        assertThat(limiter.check(new RateLimiter.Key("checkout", "tenant-a", "user-1"), policy).allowed())
+        assertThat(limiter.check(new RateLimiter.Key("checkout", "tenant-a", "user-1"), policy)
+                        .allowed())
                 .isTrue();
     }
 

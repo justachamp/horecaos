@@ -1,24 +1,21 @@
 package uz.horecaos.platform.migration.infrastructure.persistence;
 
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.documentJson;
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.documentOrEmpty;
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.instantOrNull;
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.utc;
+
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.migration.application.MigrationCutoverDecisionStore;
 import uz.horecaos.platform.migration.domain.ScopeState;
-
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.documentJson;
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.documentOrEmpty;
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.instantOrNull;
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.utc;
 
 /**
  * Cutover decision persistence (ADR 0024, ADR 0027).
@@ -55,7 +52,8 @@ public class JdbcCutoverDecisionStore implements MigrationCutoverDecisionStore {
     @Override
     public Optional<DecisionRow> findByIdempotencyKey(UUID tenantId, String idempotencyKey) {
         return jdbc.sql(SELECT_DECISION + " WHERE tenant_id = :tenantId AND idempotency_key = :key")
-                .param("tenantId", tenantId).param("key", idempotencyKey)
+                .param("tenantId", tenantId)
+                .param("key", idempotencyKey)
                 .query(this::mapDecision)
                 .optional();
     }
@@ -74,7 +72,8 @@ public class JdbcCutoverDecisionStore implements MigrationCutoverDecisionStore {
                  WHERE tenant_id = :tenantId AND scope_id = :scopeId
                    AND scope_version = :scopeVersion AND decision = 'APPROVED'
                 """)
-                .param("tenantId", tenantId).param("scopeId", scopeId)
+                .param("tenantId", tenantId)
+                .param("scopeId", scopeId)
                 .param("scopeVersion", scopeVersion)
                 .query(this::mapDecision)
                 .optional();
@@ -122,7 +121,8 @@ public class JdbcCutoverDecisionStore implements MigrationCutoverDecisionStore {
                     :approvalRequestId, :approvalRequestIsPlatform, :idempotencyKey,
                     :requestedAt, :decidedAt)
                 """)
-                .param("id", decision.id()).param("tenantId", decision.tenantId())
+                .param("id", decision.id())
+                .param("tenantId", decision.tenantId())
                 .param("scopeId", decision.scopeId())
                 .param("fromState", decision.fromState().name())
                 .param("toState", decision.toState().name())

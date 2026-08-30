@@ -9,10 +9,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryPlan;
 import uz.horecaos.platform.fulfillment.domain.sourcing.PickupPlan;
 import uz.horecaos.platform.fulfillment.domain.sourcing.PlanStatus;
@@ -97,18 +95,17 @@ public class JdbcDeliveryPlanStore {
                     :sourceAt, :latestAssignmentAt, :branchZone, :calculationVersion,
                     :distanceMeters, :distanceSource, :policyId, :policyVersion)
                 ON CONFLICT (tenant_id, order_id) WHERE status <> 'CANCELLED' DO NOTHING
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
 
-        return findByOrder(plan.tenantId(), plan.orderId()).orElseThrow(() ->
-                new IllegalStateException("The plan for order " + plan.orderId()
-                        + " vanished between its insert and its read"));
+        return findByOrder(plan.tenantId(), plan.orderId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "The plan for order " + plan.orderId() + " vanished between its insert and its read"));
     }
 
     public Optional<DeliveryPlan> find(UUID tenantId, UUID planId) {
         return jdbc.sql(SELECT + " WHERE tenant_id = :tenantId AND id = :planId")
-                .param("tenantId", tenantId).param("planId", planId)
+                .param("tenantId", tenantId)
+                .param("planId", planId)
                 .query(JdbcDeliveryPlanStore::mapPlan)
                 .optional();
     }
@@ -118,7 +115,8 @@ public class JdbcDeliveryPlanStore {
         return jdbc.sql(SELECT + """
                  WHERE tenant_id = :tenantId AND order_id = :orderId AND status <> 'CANCELLED'
                 """)
-                .param("tenantId", tenantId).param("orderId", orderId)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
                 .query(JdbcDeliveryPlanStore::mapPlan)
                 .optional();
     }
@@ -130,16 +128,19 @@ public class JdbcDeliveryPlanStore {
      * from dragging a plan back out of ASSIGNED after somebody else finished
      * sourcing it. A false return is that case and is not an error.
      */
-    public boolean transition(UUID tenantId, UUID planId, PlanStatus from, PlanStatus to,
-            Instant now) {
+    public boolean transition(UUID tenantId, UUID planId, PlanStatus from, PlanStatus to, Instant now) {
         return jdbc.sql("""
                 UPDATE fulfillment.delivery_plans
                 SET status = :to, version = version + 1, updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :planId AND status = :from
                 """)
-                .param("tenantId", tenantId).param("planId", planId)
-                .param("from", from.name()).param("to", to.name()).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("planId", planId)
+                        .param("from", from.name())
+                        .param("to", to.name())
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -158,9 +159,12 @@ public class JdbcDeliveryPlanStore {
                   AND status IN ('PLANNED', 'WAITING_TO_SOURCE', 'SOURCING', 'BOOKING',
                                  'RETRY_PENDING', 'SCHEDULED')
                 """)
-                .param("tenantId", tenantId).param("planId", planId)
-                .param("to", to.name()).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("planId", planId)
+                        .param("to", to.name())
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     private static final String SELECT = """
@@ -174,8 +178,7 @@ public class JdbcDeliveryPlanStore {
             FROM fulfillment.delivery_plans
             """;
 
-    private static DeliveryPlan mapPlan(java.sql.ResultSet row, int number)
-            throws java.sql.SQLException {
+    private static DeliveryPlan mapPlan(java.sql.ResultSet row, int number) throws java.sql.SQLException {
 
         PickupPlan pickup = new PickupPlan(
                 instant(row, "confirmed_at"),

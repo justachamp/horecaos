@@ -10,13 +10,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.pos.api.CapabilitySnapshot;
 import uz.horecaos.platform.pos.api.CapabilitySnapshot.Entry;
 import uz.horecaos.platform.pos.api.CapabilitySnapshot.IdempotencyBehaviour;
@@ -36,8 +33,7 @@ import uz.horecaos.platform.pos.api.PosCapability;
 @Component
 public class JdbcPosCapabilityStore {
 
-    private static final TypeReference<Map<String, Map<String, Object>>> SNAPSHOT_TYPE =
-            new TypeReference<>() { };
+    private static final TypeReference<Map<String, Map<String, Object>>> SNAPSHOT_TYPE = new TypeReference<>() {};
 
     private final JdbcClient jdbc;
     private final ObjectMapper objectMapper;
@@ -56,18 +52,24 @@ public class JdbcPosCapabilityStore {
                  WHERE provider_type = :providerType
                 """)
                 .param("providerType", providerType)
-                .query((row, number) -> Map.entry(
-                        row.getString("capability_code"), row.getString("support_level")))
+                .query((row, number) -> Map.entry(row.getString("capability_code"), row.getString("support_level")))
                 .list()
-                .forEach(entry -> capabilityOf(entry.getKey()).ifPresent(capability ->
-                        ceiling.put(capability, CapabilitySupport.valueOf(entry.getValue()))));
+                .forEach(entry -> capabilityOf(entry.getKey())
+                        .ifPresent(capability -> ceiling.put(capability, CapabilitySupport.valueOf(entry.getValue()))));
         return Map.copyOf(ceiling);
     }
 
     /** Records one probe. Append-only, so "when did this stop working" is answerable. */
-    public void recordProbe(UUID tenantId, UUID installationId, PosCapability capability,
-            String probeStatus, Integer providerStatusCode, String providerErrorCode,
-            String evidence, String adapterVersion, Instant probedAt) {
+    public void recordProbe(
+            UUID tenantId,
+            UUID installationId,
+            PosCapability capability,
+            String probeStatus,
+            Integer providerStatusCode,
+            String providerErrorCode,
+            String evidence,
+            String adapterVersion,
+            Instant probedAt) {
 
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("id", UUID.randomUUID());
@@ -87,9 +89,7 @@ public class JdbcPosCapabilityStore {
                      provider_status_code, provider_error_code, evidence, adapter_version, probed_at)
                 VALUES (:id, :tenantId, :installationId, :capability, :probeStatus,
                         :statusCode, :errorCode, :evidence, :adapterVersion, :probedAt)
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
     }
 
     /**
@@ -117,8 +117,9 @@ public class JdbcPosCapabilityStore {
         parameters.put("installationId", installationId);
         parameters.put("snapshot", objectMapper.writeValueAsString(document));
         parameters.put("adapterVersion", snapshot.adapterVersion());
-        parameters.put("checkedAt", snapshot.verifiedAt() == null ? null
-                : OffsetDateTime.ofInstant(snapshot.verifiedAt(), ZoneOffset.UTC));
+        parameters.put(
+                "checkedAt",
+                snapshot.verifiedAt() == null ? null : OffsetDateTime.ofInstant(snapshot.verifiedAt(), ZoneOffset.UTC));
 
         jdbc.sql("""
                 UPDATE integration.installations
@@ -131,9 +132,7 @@ public class JdbcPosCapabilityStore {
                        version = version + 1,
                        updated_at = now()
                  WHERE tenant_id = :tenantId AND id = :installationId
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
     }
 
     public Optional<CapabilitySnapshot> readSnapshot(UUID tenantId, UUID installationId) {
@@ -173,8 +172,7 @@ public class JdbcPosCapabilityStore {
                 .list();
     }
 
-    private CapabilitySnapshot toSnapshot(String json, String adapterVersion,
-            OffsetDateTime checkedAt) {
+    private CapabilitySnapshot toSnapshot(String json, String adapterVersion, OffsetDateTime checkedAt) {
 
         if (json == null || json.isBlank()) {
             return CapabilitySnapshot.empty();
@@ -182,19 +180,19 @@ public class JdbcPosCapabilityStore {
         Map<String, Map<String, Object>> document = objectMapper.readValue(json, SNAPSHOT_TYPE);
         Map<PosCapability, Entry> entries = new EnumMap<>(PosCapability.class);
 
-        document.forEach((code, value) -> capabilityOf(code).ifPresent(capability -> entries.put(
-                capability,
-                new Entry(
-                        supportOf(value.get("support")),
-                        idempotencyOf(value.get("idempotency")),
-                        Boolean.TRUE.equals(value.get("push")),
-                        value.get("version") == null ? null : String.valueOf(value.get("version")),
-                        limitsOf(value.get("limits")),
-                        value.get("evidence") == null ? null : String.valueOf(value.get("evidence")),
-                        checkedAt == null ? null : checkedAt.toInstant()))));
+        document.forEach((code, value) -> capabilityOf(code)
+                .ifPresent(capability -> entries.put(
+                        capability,
+                        new Entry(
+                                supportOf(value.get("support")),
+                                idempotencyOf(value.get("idempotency")),
+                                Boolean.TRUE.equals(value.get("push")),
+                                value.get("version") == null ? null : String.valueOf(value.get("version")),
+                                limitsOf(value.get("limits")),
+                                value.get("evidence") == null ? null : String.valueOf(value.get("evidence")),
+                                checkedAt == null ? null : checkedAt.toInstant()))));
 
-        return new CapabilitySnapshot(entries, checkedAt == null ? null : checkedAt.toInstant(),
-                adapterVersion);
+        return new CapabilitySnapshot(entries, checkedAt == null ? null : checkedAt.toInstant(), adapterVersion);
     }
 
     /**

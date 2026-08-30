@@ -1,5 +1,8 @@
 package uz.horecaos.platform.payments.infrastructure.persistence;
 
+import static uz.horecaos.platform.payments.infrastructure.persistence.PaymentTimestamps.instant;
+import static uz.horecaos.platform.payments.infrastructure.persistence.PaymentTimestamps.utc;
+
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -8,17 +11,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.payments.domain.FiscalDocument;
 import uz.horecaos.platform.payments.domain.FiscalDocumentType;
 import uz.horecaos.platform.payments.domain.FiscalStatus;
 import uz.horecaos.platform.payments.domain.PaymentProviderType;
-
-import static uz.horecaos.platform.payments.infrastructure.persistence.PaymentTimestamps.instant;
-import static uz.horecaos.platform.payments.infrastructure.persistence.PaymentTimestamps.utc;
 
 /**
  * Fiscal document persistence, on the partner path (ADR 0013, ADR 0038).
@@ -60,7 +58,8 @@ public class JdbcFiscalDocumentStore {
         parameters.put("legalEntityId", document.legalEntityId());
         parameters.put("intentId", document.paymentIntentId());
         parameters.put("transactionId", document.paymentTransactionId());
-        parameters.put("providerType",
+        parameters.put(
+                "providerType",
                 document.providerType() == null ? null : document.providerType().name());
         parameters.put("documentType", document.documentType().name());
         parameters.put("correctsId", document.correctsDocumentId());
@@ -78,14 +77,13 @@ public class JdbcFiscalDocumentStore {
                     :id, :tenantId, :orderId, :legalEntityId, :intentId,
                     :transactionId, :providerType, :documentType, :correctsId,
                     :status, :reasonCode, :reasonNote, 1, :createdAt, :createdAt)
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
     }
 
     public Optional<FiscalDocument> find(UUID tenantId, UUID documentId) {
         return jdbc.sql(SELECT + " WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", documentId)
+                .param("tenantId", tenantId)
+                .param("id", documentId)
                 .query(JdbcFiscalDocumentStore::map)
                 .optional();
     }
@@ -96,7 +94,8 @@ public class JdbcFiscalDocumentStore {
                  WHERE tenant_id = :tenantId AND order_id = :orderId
                  ORDER BY created_at
                 """)
-                .param("tenantId", tenantId).param("orderId", orderId)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
                 .query(JdbcFiscalDocumentStore::map)
                 .list();
     }
@@ -110,8 +109,8 @@ public class JdbcFiscalDocumentStore {
      * exercise. This is the method that finds them, and
      * {@code ix_fiscal_documents_not_applicable} is the index that makes it cheap.
      */
-    public List<FiscalDocument> listNotApplicable(UUID tenantId, String reasonCode,
-            Instant from, Instant to, int limit) {
+    public List<FiscalDocument> listNotApplicable(
+            UUID tenantId, String reasonCode, Instant from, Instant to, int limit) {
         return jdbc.sql(SELECT + """
                  WHERE tenant_id = :tenantId AND status = 'NOT_APPLICABLE'
                    AND reason_code = :reasonCode
@@ -119,8 +118,11 @@ public class JdbcFiscalDocumentStore {
                  ORDER BY created_at
                  LIMIT :limit
                 """)
-                .param("tenantId", tenantId).param("reasonCode", reasonCode)
-                .param("from", utc(from)).param("to", utc(to)).param("limit", limit)
+                .param("tenantId", tenantId)
+                .param("reasonCode", reasonCode)
+                .param("from", utc(from))
+                .param("to", utc(to))
+                .param("limit", limit)
                 .query(JdbcFiscalDocumentStore::map)
                 .list();
     }
@@ -134,8 +136,7 @@ public class JdbcFiscalDocumentStore {
      * Whether a deadline exists after which it will not arrive is an open question
      * to Payme, which is why this is a query someone runs rather than a timer.
      */
-    public List<FiscalDocument> listAwaitingEvidence(UUID tenantId, Instant submittedBefore,
-            int limit) {
+    public List<FiscalDocument> listAwaitingEvidence(UUID tenantId, Instant submittedBefore, int limit) {
         return jdbc.sql(SELECT + """
                  WHERE tenant_id = :tenantId
                    AND status IN ('PENDING', 'SUBMITTED')
@@ -143,14 +144,20 @@ public class JdbcFiscalDocumentStore {
                  ORDER BY created_at
                  LIMIT :limit
                 """)
-                .param("tenantId", tenantId).param("submittedBefore", utc(submittedBefore))
+                .param("tenantId", tenantId)
+                .param("submittedBefore", utc(submittedBefore))
                 .param("limit", limit)
                 .query(JdbcFiscalDocumentStore::map)
                 .list();
     }
 
-    public void recordSubmission(UUID tenantId, UUID documentId, FiscalStatus status,
-            String reasonCode, String protectedRequestReference, Instant submittedAt) {
+    public void recordSubmission(
+            UUID tenantId,
+            UUID documentId,
+            FiscalStatus status,
+            String reasonCode,
+            String protectedRequestReference,
+            Instant submittedAt) {
         jdbc.sql("""
                 UPDATE payments.fiscal_documents
                 SET status = :status,
@@ -162,8 +169,10 @@ public class JdbcFiscalDocumentStore {
                 WHERE tenant_id = :tenantId AND id = :id
                   AND status IN ('PENDING', 'SUBMITTED', 'FAILED')
                 """)
-                .param("tenantId", tenantId).param("id", documentId)
-                .param("status", status.name()).param("reasonCode", reasonCode)
+                .param("tenantId", tenantId)
+                .param("id", documentId)
+                .param("status", status.name())
+                .param("reasonCode", reasonCode)
                 .param("protectedRequest", protectedRequestReference)
                 .param("submittedAt", utc(submittedAt))
                 .update();
@@ -178,9 +187,14 @@ public class JdbcFiscalDocumentStore {
      *
      * @return true when this caller wrote the evidence
      */
-    public boolean recordEvidence(UUID tenantId, UUID documentId, FiscalStatus status,
-            String reasonCode, FiscalDocument.FiscalEvidence evidence,
-            String protectedResponseReference, Instant issuedAt) {
+    public boolean recordEvidence(
+            UUID tenantId,
+            UUID documentId,
+            FiscalStatus status,
+            String reasonCode,
+            FiscalDocument.FiscalEvidence evidence,
+            String protectedResponseReference,
+            Instant issuedAt) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
         parameters.put("id", documentId);
@@ -215,9 +229,7 @@ public class JdbcFiscalDocumentStore {
                     version = version + 1,
                     updated_at = :issuedAt
                 WHERE tenant_id = :tenantId AND id = :id AND status <> 'ISSUED'
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
 
         return updated == 1;
     }

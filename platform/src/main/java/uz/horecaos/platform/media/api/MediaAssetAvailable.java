@@ -28,7 +28,8 @@ public record MediaAssetAvailable(
         String verifiedContentType,
         long verifiedSizeBytes,
         int widthPx,
-        int heightPx) implements MediaEvent {
+        int heightPx)
+        implements MediaEvent {
 
     public MediaAssetAvailable {
         Objects.requireNonNull(eventId, "Event ID is required");
@@ -40,8 +41,7 @@ public record MediaAssetAvailable(
         Objects.requireNonNull(visibility, "Visibility is required");
         Objects.requireNonNull(verifiedContentType, "A verified content type is required");
         if (verifiedSizeBytes <= 0 || widthPx <= 0 || heightPx <= 0) {
-            throw new IllegalArgumentException(
-                    "An available asset has a positive size and positive dimensions");
+            throw new IllegalArgumentException("An available asset has a positive size and positive dimensions");
         }
     }
 
@@ -57,8 +57,15 @@ public record MediaAssetAvailable(
 
     @Override
     public Object payload() {
-        return new Payload(assetId.value(), ownerScope, ownerId, visibility,
-                verifiedContentType, verifiedSizeBytes, widthPx, heightPx);
+        return new Payload(
+                assetId.value(),
+                ownerScope,
+                ownerId,
+                visibility,
+                verifiedContentType,
+                verifiedSizeBytes,
+                widthPx,
+                heightPx);
     }
 
     /**
@@ -74,5 +81,5 @@ public record MediaAssetAvailable(
             String contentType,
             long sizeBytes,
             int widthPx,
-            int heightPx) { }
+            int heightPx) {}
 }

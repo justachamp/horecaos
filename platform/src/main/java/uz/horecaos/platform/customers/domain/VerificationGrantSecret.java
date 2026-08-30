@@ -44,12 +44,10 @@ public final class VerificationGrantSecret {
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
-    private VerificationGrantSecret() {
-    }
+    private VerificationGrantSecret() {}
 
     /** A freshly minted secret and the digest to store for it. */
-    public record Issued(String plaintext, String hash) {
-    }
+    public record Issued(String plaintext, String hash) {}
 
     public static Issued issue() {
         byte[] material = new byte[SECRET_BYTES];
@@ -61,8 +59,8 @@ public final class VerificationGrantSecret {
     /** The stored form of a presented secret: lower-case hex, sixty-four characters. */
     public static String hash(String plaintext) {
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(plaintext.getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256").digest(plaintext.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException impossible) {
             // SHA-256 is mandatory in every JRE. If it is genuinely absent, the
             // platform cannot verify anybody and must not continue as though it

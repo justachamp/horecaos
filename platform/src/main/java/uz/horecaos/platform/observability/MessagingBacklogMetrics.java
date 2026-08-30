@@ -1,17 +1,15 @@
 package uz.horecaos.platform.observability;
 
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.MultiGauge;
+import io.micrometer.core.instrument.Tags;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
-
-import io.micrometer.core.instrument.Gauge;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.MultiGauge;
-import io.micrometer.core.instrument.Tags;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -68,10 +66,7 @@ import org.springframework.stereotype.Component;
  * the alert tiers make.
  */
 @Component
-@ConditionalOnProperty(
-        name = "horecaos.observability.metrics.enabled",
-        havingValue = "true",
-        matchIfMissing = true)
+@ConditionalOnProperty(name = "horecaos.observability.metrics.enabled", havingValue = "true", matchIfMissing = true)
 public class MessagingBacklogMetrics {
 
     private static final Logger log = LoggerFactory.getLogger(MessagingBacklogMetrics.class);
@@ -104,6 +99,7 @@ public class MessagingBacklogMetrics {
      * let a stall start and clear unseen.
      */
     private static final Duration COOLDOWN_INITIAL = Duration.ofMinutes(2);
+
     private static final Duration COOLDOWN_MAX = Duration.ofMinutes(5);
 
     private final JdbcClient jdbc;
@@ -131,28 +127,30 @@ public class MessagingBacklogMetrics {
         Gauge.builder("horecaos.outbox.pending", outboxPending, AtomicLong::doubleValue)
                 .description("Outbox rows awaiting publication, including rows a worker has claimed")
                 .register(meters);
-        Gauge.builder("horecaos.outbox.oldest.pending.age",
-                        outboxOldestPendingAgeSeconds, AtomicLong::doubleValue)
+        Gauge.builder("horecaos.outbox.oldest.pending.age", outboxOldestPendingAgeSeconds, AtomicLong::doubleValue)
                 .description("Age of the oldest outbox row that has not been published")
                 .baseUnit("seconds")
                 .register(meters);
         Gauge.builder("horecaos.inbox.pending", inboxPending, AtomicLong::doubleValue)
                 .description("Inbox rows received or awaiting retry that have not been processed")
                 .register(meters);
-        Gauge.builder("horecaos.inbox.oldest.pending.age",
-                        inboxOldestPendingAgeSeconds, AtomicLong::doubleValue)
+        Gauge.builder("horecaos.inbox.oldest.pending.age", inboxOldestPendingAgeSeconds, AtomicLong::doubleValue)
                 .description("Age of the oldest inbox row that has not been processed")
                 .baseUnit("seconds")
                 .register(meters);
         // Callbacks here, unlike the four above, because these two answer from a
         // clock rather than from the database — the objection to callback-backed
         // gauges is the query they would run, not the callback itself.
-        Gauge.builder("horecaos.inbox.backlog.staleness", this,
+        Gauge.builder(
+                        "horecaos.inbox.backlog.staleness",
+                        this,
                         self -> self.inboxStaleness().toMillis() / 1000.0)
                 .description("Time since the inbox backlog figures above were last recomputed")
                 .baseUnit("seconds")
                 .register(meters);
-        Gauge.builder("horecaos.inbox.backlog.scan.duration", this,
+        Gauge.builder(
+                        "horecaos.inbox.backlog.scan.duration",
+                        this,
                         self -> self.lastInboxScanDuration.toMillis() / 1000.0)
                 .description("How long the last inbox backlog scan took; the signal that "
                         + "integration.inbox_messages has outgrown a sequential scan")
@@ -240,21 +238,22 @@ public class MessagingBacklogMetrics {
         }
         if (took.compareTo(SLOW_SCAN_BUDGET) < 0) {
             if (!inboxCooldown.isZero()) {
-                log.info("Inbox backlog scan is back within {}; resuming the normal cadence",
-                        SLOW_SCAN_BUDGET);
+                log.info("Inbox backlog scan is back within {}; resuming the normal cadence", SLOW_SCAN_BUDGET);
             }
             inboxCooldown = Duration.ZERO;
             inboxScanNotBefore = Instant.MIN;
             return;
         }
 
-        Duration extended = inboxCooldown.isZero()
-                ? COOLDOWN_INITIAL
-                : min(inboxCooldown.multipliedBy(2), COOLDOWN_MAX);
+        Duration extended =
+                inboxCooldown.isZero() ? COOLDOWN_INITIAL : min(inboxCooldown.multipliedBy(2), COOLDOWN_MAX);
         if (!extended.equals(inboxCooldown)) {
-            log.warn("Inbox backlog scan took {} against integration.inbox_messages; backing off "
-                    + "to {} between polls. The table has outgrown a sequential scan and needs "
-                    + "an index on (status, received_at).", took, extended);
+            log.warn(
+                    "Inbox backlog scan took {} against integration.inbox_messages; backing off "
+                            + "to {} between polls. The table has outgrown a sequential scan and needs "
+                            + "an index on (status, received_at).",
+                    took,
+                    extended);
         }
         inboxCooldown = extended;
         inboxScanNotBefore = now.plus(extended);
@@ -276,9 +275,8 @@ public class MessagingBacklogMetrics {
                         FROM integration.outbox_events
                         WHERE status IN ('PENDING', 'PUBLISHING')
                         """)
-                .query((resultSet, rowNumber) -> new Backlog(
-                        resultSet.getLong("pending"),
-                        resultSet.getLong("oldest_age_seconds")))
+                .query((resultSet, rowNumber) ->
+                        new Backlog(resultSet.getLong("pending"), resultSet.getLong("oldest_age_seconds")))
                 .single();
         outboxPending.set(backlog.pending());
         outboxOldestPendingAgeSeconds.set(backlog.oldestAgeSeconds());
@@ -312,9 +310,8 @@ public class MessagingBacklogMetrics {
                         FROM integration.inbox_messages
                         WHERE status IN ('RECEIVED', 'PROCESSING', 'RETRY_PENDING')
                         """)
-                .query((resultSet, rowNumber) -> new Backlog(
-                        resultSet.getLong("pending"),
-                        resultSet.getLong("oldest_age_seconds")))
+                .query((resultSet, rowNumber) ->
+                        new Backlog(resultSet.getLong("pending"), resultSet.getLong("oldest_age_seconds")))
                 .single();
         inboxPending.set(backlog.pending());
         inboxOldestPendingAgeSeconds.set(backlog.oldestAgeSeconds());
@@ -352,7 +349,8 @@ public class MessagingBacklogMetrics {
             }
             kept++;
             published.add(MultiGauge.Row.of(
-                    Tags.of("topic_domain", row.topicDomain(),
+                    Tags.of(
+                            "topic_domain", row.topicDomain(),
                             "failure_category", row.failureCategory(),
                             "monetary", Boolean.toString(MonetaryTopics.isMonetary(row.topicDomain()))),
                     row.total()));
@@ -364,8 +362,7 @@ public class MessagingBacklogMetrics {
             // reads as monetary, which at worst wakes the operator to a
             // notification failure and at best does not lose a payment.
             published.add(MultiGauge.Row.of(
-                    Tags.of("topic_domain", "other", "failure_category", "UNKNOWN", "monetary", "true"),
-                    overflow));
+                    Tags.of("topic_domain", "other", "failure_category", "UNKNOWN", "monetary", "true"), overflow));
         }
         // `true` overwrites the previous set, so a domain whose dead letters were
         // resolved stops being reported rather than being frozen at its last
@@ -373,9 +370,7 @@ public class MessagingBacklogMetrics {
         gauge.register(published, true);
     }
 
-    private record Backlog(long pending, long oldestAgeSeconds) {
-    }
+    private record Backlog(long pending, long oldestAgeSeconds) {}
 
-    private record DeadLetterRow(String topicDomain, String failureCategory, long total) {
-    }
+    private record DeadLetterRow(String topicDomain, String failureCategory, long total) {}
 }

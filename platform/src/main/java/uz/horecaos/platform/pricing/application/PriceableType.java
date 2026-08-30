@@ -10,7 +10,6 @@ package uz.horecaos.platform.pricing.application;
  * does nothing.
  */
 public enum PriceableType {
-
     VARIANT,
     MODIFIER_OPTION
 }

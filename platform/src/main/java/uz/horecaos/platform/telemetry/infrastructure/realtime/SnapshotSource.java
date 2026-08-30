@@ -2,7 +2,6 @@ package uz.horecaos.platform.telemetry.infrastructure.realtime;
 
 import java.util.Optional;
 import java.util.UUID;
-
 import uz.horecaos.platform.telemetry.api.ScopeKey;
 import uz.horecaos.platform.telemetry.api.StreamChannel;
 
@@ -11,7 +10,7 @@ import uz.horecaos.platform.telemetry.api.StreamChannel;
  *
  * <p>Only two channels have one, and both had to argue for it. {@code COUNTERS}
  * carries its integers inline because a signal saying "a number changed" followed
- by a fetch is two round trips for one integer. {@code COURIER_POSITIONS} carries
+ * by a fetch is two round trips for one integer. {@code COURIER_POSITIONS} carries
  * positions inline because a signal per courier per tick would produce N fetches
  * per tick for N couriers.
  *

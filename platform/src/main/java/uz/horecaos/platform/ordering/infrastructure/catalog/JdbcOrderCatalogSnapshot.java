@@ -6,11 +6,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.ordering.application.OrderCatalogSnapshot;
 
 /**
@@ -32,8 +30,8 @@ public class JdbcOrderCatalogSnapshot implements OrderCatalogSnapshot {
     private final JdbcClient jdbc;
     private final String defaultLocale;
 
-    public JdbcOrderCatalogSnapshot(JdbcClient jdbc,
-            @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale) {
+    public JdbcOrderCatalogSnapshot(
+            JdbcClient jdbc, @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale) {
         this.jdbc = jdbc;
         this.defaultLocale = defaultLocale;
     }
@@ -45,7 +43,9 @@ public class JdbcOrderCatalogSnapshot implements OrderCatalogSnapshot {
                 WHERE tenant_id = :tenantId AND brand_id = :brandId
                   AND channel = :channel AND status = 'PUBLISHED'
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId).param("channel", channelCode)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("channel", channelCode)
                 .query(UUID.class)
                 .optional();
     }
@@ -65,8 +65,8 @@ public class JdbcOrderCatalogSnapshot implements OrderCatalogSnapshot {
      * would let another brand's slow dish stretch this order's promise.
      */
     @Override
-    public Optional<Duration> longestPreparationOverride(UUID tenantId, UUID brandId,
-            UUID locationId, Set<UUID> variantIds) {
+    public Optional<Duration> longestPreparationOverride(
+            UUID tenantId, UUID brandId, UUID locationId, Set<UUID> variantIds) {
 
         if (variantIds.isEmpty()) {
             return Optional.empty();
@@ -82,8 +82,10 @@ public class JdbcOrderCatalogSnapshot implements OrderCatalogSnapshot {
                 WHERE tenant_id = :tenantId AND brand_id = :brandId
                   AND location_id = :locationId AND variant_id IN (:variantIds)
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
-                .param("locationId", locationId).param("variantIds", variantIds)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("variantIds", variantIds)
                 .query(Long.class)
                 .optional()
                 .map(Duration::ofSeconds);
@@ -112,7 +114,8 @@ public class JdbcOrderCatalogSnapshot implements OrderCatalogSnapshot {
                 WHERE v.tenant_id = :tenantId AND v.brand_id = :brandId
                   AND v.id = ANY(:ids)
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("locale", defaultLocale)
                 .param("ids", variantIds.toArray(UUID[]::new))
                 .query((row, number) -> new Described(
@@ -132,8 +135,7 @@ public class JdbcOrderCatalogSnapshot implements OrderCatalogSnapshot {
     }
 
     @Override
-    public Map<UUID, ModifierDescriptor> modifierOptions(UUID tenantId, UUID brandId,
-            Set<UUID> optionIds) {
+    public Map<UUID, ModifierDescriptor> modifierOptions(UUID tenantId, UUID brandId, Set<UUID> optionIds) {
         if (optionIds.isEmpty()) {
             return Map.of();
         }
@@ -154,7 +156,8 @@ public class JdbcOrderCatalogSnapshot implements OrderCatalogSnapshot {
                 WHERE o.tenant_id = :tenantId AND o.brand_id = :brandId
                   AND o.id = ANY(:ids)
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("locale", defaultLocale)
                 .param("ids", optionIds.toArray(UUID[]::new))
                 .query((row, number) -> new DescribedOption(
@@ -169,7 +172,7 @@ public class JdbcOrderCatalogSnapshot implements OrderCatalogSnapshot {
     }
 
     /** Carries a nullable descriptor field, which {@code Map.entry} refuses to. */
-    private record Described(UUID id, VariantDescriptor descriptor) { }
+    private record Described(UUID id, VariantDescriptor descriptor) {}
 
-    private record DescribedOption(UUID id, ModifierDescriptor descriptor) { }
+    private record DescribedOption(UUID id, ModifierDescriptor descriptor) {}
 }

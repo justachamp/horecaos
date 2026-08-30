@@ -7,12 +7,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.payments.domain.FiscalDocument;
 import uz.horecaos.platform.payments.domain.FiscalReason;
 import uz.horecaos.platform.payments.domain.FiscalStatus;
@@ -46,8 +44,8 @@ public class PaymentFiscalService {
 
     public PaymentFiscalService(JdbcFiscalDocumentStore documents, List<FiscalReceiptPort> ports) {
         this.documents = documents;
-        this.receiptPorts = ports.stream().collect(java.util.stream.Collectors.toMap(
-                FiscalReceiptPort::providerType, port -> port));
+        this.receiptPorts = ports.stream()
+                .collect(java.util.stream.Collectors.toMap(FiscalReceiptPort::providerType, port -> port));
     }
 
     /**
@@ -72,8 +70,7 @@ public class PaymentFiscalService {
     @Transactional
     public UUID recordCashNotApplicable(PaymentIntent intent, Instant now) {
         FiscalDocument document = FiscalDocument.notApplicableForCash(
-                UUID.randomUUID(), intent.tenantId(), intent.orderId(),
-                intent.legalEntityId(), intent.id(), now);
+                UUID.randomUUID(), intent.tenantId(), intent.orderId(), intent.legalEntityId(), intent.id(), now);
         documents.insert(document);
         return document.id();
     }
@@ -88,11 +85,22 @@ public class PaymentFiscalService {
     @Transactional
     public UUID openPartnerObligation(PaymentIntent intent, Instant now) {
         FiscalDocument document = new FiscalDocument(
-                UUID.randomUUID(), intent.tenantId(), intent.orderId(), intent.legalEntityId(),
-                intent.id(), null, intent.providerType(),
-                uz.horecaos.platform.payments.domain.FiscalDocumentType.SALE, null,
-                FiscalStatus.PENDING, FiscalReason.AWAITING_CAPTURE,
-                "awaiting capture before the provider can be asked", List.of(), null, 1, now);
+                UUID.randomUUID(),
+                intent.tenantId(),
+                intent.orderId(),
+                intent.legalEntityId(),
+                intent.id(),
+                null,
+                intent.providerType(),
+                uz.horecaos.platform.payments.domain.FiscalDocumentType.SALE,
+                null,
+                FiscalStatus.PENDING,
+                FiscalReason.AWAITING_CAPTURE,
+                "awaiting capture before the provider can be asked",
+                List.of(),
+                null,
+                1,
+                now);
         documents.insert(document);
         return document.id();
     }
@@ -111,8 +119,11 @@ public class PaymentFiscalService {
     public FiscalStatus submit(FiscalDocument document, ProviderBinding binding, Instant now) {
         FiscalReceiptPort port = receiptPorts.get(binding.providerType());
         if (port == null || !binding.supportsPartnerFiscalization()) {
-            log.warn("No fiscal receipt port for {}; document {} stays {}.",
-                    binding.providerType(), document.id(), document.status());
+            log.warn(
+                    "No fiscal receipt port for {}; document {} stays {}.",
+                    binding.providerType(),
+                    document.id(),
+                    document.status());
             return document.status();
         }
 
@@ -121,27 +132,53 @@ public class PaymentFiscalService {
         switch (submission.classification()) {
             case SUCCESS -> {
                 if (submission.status() == FiscalStatus.ISSUED) {
-                    documents.recordEvidence(document.tenantId(), document.id(), FiscalStatus.ISSUED,
-                            FiscalReason.PARTNER_FISCALIZED, submission.evidence(), null,
+                    documents.recordEvidence(
+                            document.tenantId(),
+                            document.id(),
+                            FiscalStatus.ISSUED,
+                            FiscalReason.PARTNER_FISCALIZED,
+                            submission.evidence(),
+                            null,
                             submission.submittedAt());
                 } else {
-                    documents.recordSubmission(document.tenantId(), document.id(),
-                            FiscalStatus.SUBMITTED, FiscalReason.AWAITING_PROVIDER, null,
+                    documents.recordSubmission(
+                            document.tenantId(),
+                            document.id(),
+                            FiscalStatus.SUBMITTED,
+                            FiscalReason.AWAITING_PROVIDER,
+                            null,
                             submission.submittedAt());
                 }
             }
-            case REJECTED -> documents.recordEvidence(document.tenantId(), document.id(),
-                    FiscalStatus.FAILED, FiscalReason.PROVIDER_REJECTED,
-                    new FiscalDocument.FiscalEvidence(null, null, null, null, null, null,
-                            submission.providerStatusCode(), submission.providerMessage()),
-                    null, now);
+            case REJECTED ->
+                documents.recordEvidence(
+                        document.tenantId(),
+                        document.id(),
+                        FiscalStatus.FAILED,
+                        FiscalReason.PROVIDER_REJECTED,
+                        new FiscalDocument.FiscalEvidence(
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                submission.providerStatusCode(),
+                                submission.providerMessage()),
+                        null,
+                        now);
             // A non-answer leaves the document exactly where it was, in SUBMITTED,
             // and the read-back is what settles it. Recording it as FAILED would
             // invite a resubmission, which is the one action that could create a
             // second document with a tax authority.
-            case RETRYABLE, UNCERTAIN -> documents.recordSubmission(document.tenantId(),
-                    document.id(), FiscalStatus.SUBMITTED, FiscalReason.AWAITING_PROVIDER, null,
-                    submission.submittedAt());
+            case RETRYABLE, UNCERTAIN ->
+                documents.recordSubmission(
+                        document.tenantId(),
+                        document.id(),
+                        FiscalStatus.SUBMITTED,
+                        FiscalReason.AWAITING_PROVIDER,
+                        null,
+                        submission.submittedAt());
         }
 
         return submission.status();
@@ -155,11 +192,20 @@ public class PaymentFiscalService {
      * with the tax authority is not something a late duplicate may rewrite.
      */
     @Transactional
-    public boolean attachEvidence(UUID tenantId, UUID documentId,
-            FiscalDocument.FiscalEvidence evidence, String protectedResponseReference,
+    public boolean attachEvidence(
+            UUID tenantId,
+            UUID documentId,
+            FiscalDocument.FiscalEvidence evidence,
+            String protectedResponseReference,
             Instant issuedAt) {
-        return documents.recordEvidence(tenantId, documentId, FiscalStatus.ISSUED,
-                FiscalReason.PARTNER_FISCALIZED, evidence, protectedResponseReference, issuedAt);
+        return documents.recordEvidence(
+                tenantId,
+                documentId,
+                FiscalStatus.ISSUED,
+                FiscalReason.PARTNER_FISCALIZED,
+                evidence,
+                protectedResponseReference,
+                issuedAt);
     }
 
     /** Every fiscal document for an order. Plural, deliberately: see the store. */
@@ -172,9 +218,9 @@ public class PaymentFiscalService {
      *
      * <p>The query ADR 0013 requires to exist before the decision is relied on.
      */
-    public List<FiscalDocument> unfiscalizedCashOrders(UUID tenantId, LocalDate from, LocalDate to,
-            int limit) {
-        return documents.listNotApplicable(tenantId,
+    public List<FiscalDocument> unfiscalizedCashOrders(UUID tenantId, LocalDate from, LocalDate to, int limit) {
+        return documents.listNotApplicable(
+                tenantId,
                 FiscalReason.CASH_TENDER_NO_PROVIDER_FISCALIZATION,
                 from.atStartOfDay(ZoneOffset.UTC).toInstant(),
                 to.atStartOfDay(ZoneOffset.UTC).toInstant(),

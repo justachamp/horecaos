@@ -3,7 +3,6 @@ package uz.horecaos.platform.tenancy.api;
 import java.util.EnumSet;
 import java.util.Objects;
 import java.util.Set;
-
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 
 /**
@@ -100,8 +99,14 @@ public record ConfigurationKey<T>(
 
         public ConfigurationKey<T> build() {
             return new ConfigurationKey<>(
-                    code, valueType, defaultValue, settableScopes,
-                    owningModule, tenantVisible, explicitNullTerminates, description);
+                    code,
+                    valueType,
+                    defaultValue,
+                    settableScopes,
+                    owningModule,
+                    tenantVisible,
+                    explicitNullTerminates,
+                    description);
         }
     }
 }

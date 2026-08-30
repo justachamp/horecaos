@@ -28,8 +28,7 @@ public final class Haversine {
      */
     private static final double EARTH_MEAN_RADIUS_METERS = 6_371_008.8;
 
-    private Haversine() {
-    }
+    private Haversine() {}
 
     /** Metres, rounded half up, because a band boundary is stated in whole metres. */
     public static int metersBetween(GeoPoint from, GeoPoint to) {
@@ -39,8 +38,7 @@ public final class Haversine {
         double deltaLongitude = Math.toRadians(to.longitude() - from.longitude());
 
         double a = Math.pow(Math.sin(deltaLatitude / 2), 2)
-                + Math.cos(fromLatitude) * Math.cos(toLatitude)
-                * Math.pow(Math.sin(deltaLongitude / 2), 2);
+                + Math.cos(fromLatitude) * Math.cos(toLatitude) * Math.pow(Math.sin(deltaLongitude / 2), 2);
 
         // atan2 rather than asin. asin loses precision as the argument approaches
         // 1, which is the antipodal case; it never arises for a delivery, but a

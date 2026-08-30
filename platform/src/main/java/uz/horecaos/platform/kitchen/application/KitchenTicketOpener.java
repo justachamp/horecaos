@@ -5,7 +5,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
-
 import uz.horecaos.platform.kitchen.domain.ReleaseMode;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
@@ -43,17 +42,16 @@ public class KitchenTicketOpener {
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onOrderConfirmed(OrderConfirmed event) {
-        if (kitchen.findFallbackStation(event.tenantId().value(), event.locationId()).isEmpty()) {
-            log.debug("Location {} has no kitchen stations; no production ticket was opened",
-                    event.locationId());
+        if (kitchen.findFallbackStation(event.tenantId().value(), event.locationId())
+                .isEmpty()) {
+            log.debug("Location {} has no kitchen stations; no production ticket was opened", event.locationId());
             return;
         }
         // AUTO_ON_CONFIRM is the caller's request, not the outcome: the service
         // downgrades it to SCHEDULED when the promise leaves room to wait, which
         // is what stops a preorder for 20:00 printing on the line at 11:00.
-        var ticket = tickets.open(event.tenantId().value(), event.orderId(),
-                ReleaseMode.AUTO_ON_CONFIRM);
-        log.debug("Opened production ticket {} for order {} in status {}", ticket.id(),
-                event.orderId(), ticket.status());
+        var ticket = tickets.open(event.tenantId().value(), event.orderId(), ReleaseMode.AUTO_ON_CONFIRM);
+        log.debug(
+                "Opened production ticket {} for order {} in status {}", ticket.id(), event.orderId(), ticket.status());
     }
 }

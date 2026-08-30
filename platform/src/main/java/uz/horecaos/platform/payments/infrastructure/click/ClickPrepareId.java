@@ -32,8 +32,7 @@ import java.util.UUID;
  */
 public final class ClickPrepareId {
 
-    private ClickPrepareId() {
-    }
+    private ClickPrepareId() {}
 
     public static int forAttempt(UUID attemptId) {
         byte[] digest = sha256(attemptId.toString());
@@ -60,8 +59,7 @@ public final class ClickPrepareId {
 
     private static byte[] sha256(String input) {
         try {
-            return MessageDigest.getInstance("SHA-256")
-                    .digest(input.getBytes(StandardCharsets.UTF_8));
+            return MessageDigest.getInstance("SHA-256").digest(input.getBytes(StandardCharsets.UTF_8));
         } catch (NoSuchAlgorithmException impossible) {
             throw new IllegalStateException("SHA-256 is unavailable", impossible);
         }

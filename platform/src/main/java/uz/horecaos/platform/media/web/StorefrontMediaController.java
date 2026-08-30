@@ -1,9 +1,10 @@
 package uz.horecaos.platform.media.web;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.net.URI;
 import java.time.Duration;
 import java.util.UUID;
-
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -11,10 +12,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.application.MediaAssetService;
 import uz.horecaos.platform.media.domain.MediaVisibility;
@@ -83,7 +80,8 @@ public class StorefrontMediaController {
     }
 
     @GetMapping("/{assetId}")
-    @Operation(summary = "Redirect to a published image",
+    @Operation(
+            summary = "Redirect to a published image",
             description = "302 to a short-lived signed URL. Only a PUBLIC, displayable asset "
                     + "resolves; anything else is not found, and private, missing and "
                     + "unverified are one answer so an id cannot be probed.")

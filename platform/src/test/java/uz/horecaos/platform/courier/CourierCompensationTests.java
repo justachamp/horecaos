@@ -1,6 +1,7 @@
 package uz.horecaos.platform.courier;
 
-import javax.sql.DataSource;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -16,7 +17,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -24,12 +25,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.ApprovalRequestCommand;
@@ -64,7 +62,6 @@ import uz.horecaos.platform.courier.domain.OnTimeOutcome;
 import uz.horecaos.platform.courier.domain.PartnerChargeType;
 import uz.horecaos.platform.courier.domain.PayoutMethod;
 import uz.horecaos.platform.courier.domain.RateCard;
-import uz.horecaos.platform.courier.domain.RateCardValidator;
 import uz.horecaos.platform.courier.domain.RateComponent;
 import uz.horecaos.platform.courier.domain.RateComponentType;
 import uz.horecaos.platform.courier.domain.SettlementPeriodStatus;
@@ -94,9 +91,6 @@ import uz.horecaos.platform.tenancy.api.PolicyResolver;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * Courier compensation, shifts, and settlement (ADR 0042).
@@ -164,7 +158,8 @@ class CourierCompensationTests {
 
     @BeforeAll
     static void startDatabase() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for courier compensation tests");
         db = TestDatabase.migrated();
         jdbcUrl = db.jdbcUrl();
@@ -234,30 +229,36 @@ class CourierCompensationTests {
         costStore = new JdbcDeliveryCostStore(jdbc);
 
         CourierPolicyResolver policyResolver = new CourierPolicyResolver(policies);
-        ledger = new CourierLedgerService(ledgerStore, courierStore, policyResolver, legalEntities,
-                clock);
+        ledger = new CourierLedgerService(ledgerStore, courierStore, policyResolver, legalEntities, clock);
         // Every engagement seeded here attests with no evidence media, so the
         // availability port is never asked. It answers false rather than true so
         // that a future test which does pass an id fails loudly instead of
         // quietly accepting whatever uuid it invented; the tenant scoping of
         // evidence is proved in CourierEvidenceMediaTenantScopeTests.
-        engagements = new CourierEngagementService(courierStore, protection, audit, policyResolver,
-                (tenantId, assetIds) -> false, clock);
-        shifts = new CourierShiftService(shiftStore, courierStore, ledgerStore, rateCardStore,
-                ledger, policyResolver, protection, audit, clock);
-        accruals = new CourierAccrualService(ledgerStore, rateCardStore, shiftStore, courierStore,
-                costStore, ledger, policyResolver, legalEntities, protection, clock);
-        settlement = new CourierSettlementService(ledgerStore, courierStore, costStore, approvals,
-                audit, objectMapper, clock);
+        engagements = new CourierEngagementService(
+                courierStore, protection, audit, policyResolver, (tenantId, assetIds) -> false, clock);
+        shifts = new CourierShiftService(
+                shiftStore, courierStore, ledgerStore, rateCardStore, ledger, policyResolver, protection, audit, clock);
+        accruals = new CourierAccrualService(
+                ledgerStore,
+                rateCardStore,
+                shiftStore,
+                courierStore,
+                costStore,
+                ledger,
+                policyResolver,
+                legalEntities,
+                protection,
+                clock);
+        settlement = new CourierSettlementService(
+                ledgerStore, courierStore, costStore, approvals, audit, objectMapper, clock);
         cash = new CourierCashService(shiftStore, ledger, audit, clock);
-        adjustments = new CourierAdjustmentService(courierStore, ledger, approvals, audit,
-                policyResolver, clock);
+        adjustments = new CourierAdjustmentService(courierStore, ledger, approvals, audit, policyResolver, clock);
         gate = new CourierDispatchGate(courierStore, shiftStore, policyResolver);
         rateCards = new CourierRateCardService(rateCardStore, audit, clock);
         deliveryCosts = new DeliveryCostQueryService(costStore);
         partnerInvoices = new PartnerInvoiceService(costStore, audit, clock);
-        sweeper = new RegistrationComplianceSweeper(courierStore, notifications, policyResolver,
-                audit, clock);
+        sweeper = new RegistrationComplianceSweeper(courierStore, notifications, policyResolver, audit, clock);
         retention = new ConfirmationPointRetentionJob(ledgerStore, clock);
 
         seedTenancy();
@@ -269,8 +270,7 @@ class CourierCompensationTests {
     // ------------------------------------------------------------ the accrual
 
     @Test
-    @DisplayName("the accrual cannot see the customer's delivery charge, so nothing about the "
-            + "charge can move it")
+    @DisplayName("the accrual cannot see the customer's delivery charge, so nothing about the " + "charge can move it")
     void theAccrualIsIndependentOfWhatTheCustomerPaid() {
         RateCard card = rateCardStore.findCard(TENANT, rateCardId).orElseThrow();
 
@@ -291,16 +291,20 @@ class CourierCompensationTests {
     @Test
     @DisplayName("per-kilometre money is rounded once, so band boundaries do not create drift")
     void perKilometreMoneyIsRoundedOnce() {
-        RateCard oneBand = new RateCard(UUID.randomUUID(), 1, UZS, List.of(
-                new RateComponent(UUID.randomUUID(), RateComponentType.PER_KM_BAND, 0, 1000,
-                        0, null, null)));
-        RateCard threeBands = new RateCard(UUID.randomUUID(), 1, UZS, List.of(
-                new RateComponent(UUID.randomUUID(), RateComponentType.PER_KM_BAND, 0, 1000,
-                        0, 1500, null),
-                new RateComponent(UUID.randomUUID(), RateComponentType.PER_KM_BAND, 1, 1000,
-                        1500, 3300, null),
-                new RateComponent(UUID.randomUUID(), RateComponentType.PER_KM_BAND, 2, 1000,
-                        3300, null, null)));
+        RateCard oneBand = new RateCard(
+                UUID.randomUUID(),
+                1,
+                UZS,
+                List.of(new RateComponent(UUID.randomUUID(), RateComponentType.PER_KM_BAND, 0, 1000, 0, null, null)));
+        RateCard threeBands = new RateCard(
+                UUID.randomUUID(),
+                1,
+                UZS,
+                List.of(
+                        new RateComponent(UUID.randomUUID(), RateComponentType.PER_KM_BAND, 0, 1000, 0, 1500, null),
+                        new RateComponent(UUID.randomUUID(), RateComponentType.PER_KM_BAND, 1, 1000, 1500, 3300, null),
+                        new RateComponent(
+                                UUID.randomUUID(), RateComponentType.PER_KM_BAND, 2, 1000, 3300, null, null)));
 
         assertThat(AccrualCalculator.forDelivery(oneBand, 4750).perKmMinor())
                 .isEqualTo(AccrualCalculator.forDelivery(threeBands, 4750).perKmMinor());
@@ -309,22 +313,26 @@ class CourierCompensationTests {
     @Test
     @DisplayName("a rate card with a gap or an overlap between distance bands fails activation")
     void aRateCardWithAGapOrAnOverlapFailsActivation() {
-        UUID gapped = rateCards.author(new CourierRateCardService.NewRateCard(TENANT, BRAND, null,
-                null, "GAPPED", 1, UZS, List.of(
+        UUID gapped = rateCards.author(new CourierRateCardService.NewRateCard(
+                TENANT,
+                BRAND,
+                null,
+                null,
+                "GAPPED",
+                1,
+                UZS,
+                List.of(
                         band(0, 2000, 1000),
                         // Nothing covers 2000 to 3000: an order at 2500 metres
                         // earns nothing for its distance.
                         band(3000, null, 800))));
 
-        Throwable gapFailure = catchThrowable(() -> rateCards.activate(TENANT, gapped, manager(),
-                "activating"));
+        Throwable gapFailure = catchThrowable(() -> rateCards.activate(TENANT, gapped, manager(), "activating"));
         assertThat(gapFailure).isInstanceOf(ApiException.class);
         assertThat(gapFailure).hasMessageContaining("gap");
 
-        UUID overlapping = rateCards.author(new CourierRateCardService.NewRateCard(TENANT, BRAND,
-                null, null, "OVERLAP", 1, UZS, List.of(
-                        band(0, 3000, 1000),
-                        band(2000, null, 800))));
+        UUID overlapping = rateCards.author(new CourierRateCardService.NewRateCard(
+                TENANT, BRAND, null, null, "OVERLAP", 1, UZS, List.of(band(0, 3000, 1000), band(2000, null, 800))));
 
         assertThat(catchThrowable(() -> rateCards.activate(TENANT, overlapping, manager(), "x")))
                 .isInstanceOf(ApiException.class)
@@ -332,8 +340,8 @@ class CourierCompensationTests {
 
         // And an unbounded top band is required, or the longest delivery of the
         // week is the one that pays nothing.
-        UUID stopsShort = rateCards.author(new CourierRateCardService.NewRateCard(TENANT, BRAND,
-                null, null, "SHORT", 1, UZS, List.of(band(0, 5000, 1000))));
+        UUID stopsShort = rateCards.author(new CourierRateCardService.NewRateCard(
+                TENANT, BRAND, null, null, "SHORT", 1, UZS, List.of(band(0, 5000, 1000))));
         assertThat(catchThrowable(() -> rateCards.activate(TENANT, stopsShort, manager(), "x")))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("unbounded");
@@ -361,29 +369,75 @@ class CourierCompensationTests {
 
         DeliveredShipment afterALateKitchen = deliveredShipment();
         EarningRow lateKitchen = accruals.recordDelivery(new CourierAccrualService.DeliveredAssignment(
-                TENANT, BRAND, branch, courierId, null, afterALateKitchen.shipmentId(),
+                TENANT,
+                BRAND,
+                branch,
+                courierId,
+                null,
+                afterALateKitchen.shipmentId(),
                 afterALateKitchen.attemptId(),
-                4000, DistanceSource.ROUTING, NOON, NOON.plus(Duration.ofMinutes(50)),
-                promised, 300, 1, NOON.plus(Duration.ofMinutes(25)), pickupWindowEnd,
-                0, false, null, null));
+                4000,
+                DistanceSource.ROUTING,
+                NOON,
+                NOON.plus(Duration.ofMinutes(50)),
+                promised,
+                300,
+                1,
+                NOON.plus(Duration.ofMinutes(25)),
+                pickupWindowEnd,
+                0,
+                false,
+                null,
+                null));
         assertThat(lateKitchen.onTimeOutcome()).isEqualTo(OnTimeOutcome.LATE_EXCUSED);
 
         DeliveredShipment afterAPromptKitchen = deliveredShipment();
         EarningRow lateCourier = accruals.recordDelivery(new CourierAccrualService.DeliveredAssignment(
-                TENANT, BRAND, branch, courierId, null, afterAPromptKitchen.shipmentId(),
+                TENANT,
+                BRAND,
+                branch,
+                courierId,
+                null,
+                afterAPromptKitchen.shipmentId(),
                 afterAPromptKitchen.attemptId(),
-                4000, DistanceSource.ROUTING, NOON, NOON.plus(Duration.ofMinutes(50)),
-                promised, 300, 1, NOON.plus(Duration.ofMinutes(5)), pickupWindowEnd,
-                0, false, null, null));
+                4000,
+                DistanceSource.ROUTING,
+                NOON,
+                NOON.plus(Duration.ofMinutes(50)),
+                promised,
+                300,
+                1,
+                NOON.plus(Duration.ofMinutes(5)),
+                pickupWindowEnd,
+                0,
+                false,
+                null,
+                null));
         assertThat(lateCourier.onTimeOutcome()).isEqualTo(OnTimeOutcome.LATE);
 
         // An absent promise is the platform's failure. Neutral pay, not a guess.
         DeliveredShipment unpromised = deliveredShipment();
         EarningRow noPromise = accruals.recordDelivery(new CourierAccrualService.DeliveredAssignment(
-                TENANT, BRAND, branch, courierId, null, unpromised.shipmentId(),
+                TENANT,
+                BRAND,
+                branch,
+                courierId,
+                null,
+                unpromised.shipmentId(),
                 unpromised.attemptId(),
-                4000, DistanceSource.ROUTING, NOON, NOON.plus(Duration.ofMinutes(50)),
-                null, 300, 1, null, null, 0, false, null, null));
+                4000,
+                DistanceSource.ROUTING,
+                NOON,
+                NOON.plus(Duration.ofMinutes(50)),
+                null,
+                300,
+                1,
+                null,
+                null,
+                0,
+                false,
+                null,
+                null));
         assertThat(noPromise.onTimeOutcome()).isEqualTo(OnTimeOutcome.UNKNOWN);
         assertThat(noPromise.totalMinor()).isEqualTo(lateCourier.totalMinor());
     }
@@ -394,8 +448,7 @@ class CourierCompensationTests {
     @DisplayName("a lapsed registration stops new offers and shift opening, and reverses nothing")
     void aLapsedRegistrationStopsOffersAndShiftsAndReversesNothing() {
         // The night before: an assignment accepted and delivered while valid.
-        EarningRow beforeLapse = accruals.recordDelivery(
-                delivery(deliveredShipment(), 5000, 0));
+        EarningRow beforeLapse = accruals.recordDelivery(delivery(deliveredShipment(), 5000, 0));
         long balanceBefore = ledgerStore.balanceMinor(TENANT, courierId);
         assertThat(balanceBefore).isEqualTo(beforeLapse.totalMinor());
 
@@ -406,18 +459,19 @@ class CourierCompensationTests {
 
         assertThat(result.engagementsSuspended()).isEqualTo(1);
         assertThat(notifications.lapses).hasSize(1);
-        assertThat(courierStore.findEngagement(TENANT, engagementId).orElseThrow().status())
+        assertThat(courierStore
+                        .findEngagement(TENANT, engagementId)
+                        .orElseThrow()
+                        .status())
                 .isEqualTo(EngagementStatus.SUSPENDED_COMPLIANCE);
 
         // Afternoon: no offer, and no shift.
-        CourierDispatchGate.Eligibility eligibility =
-                gate.evaluate(TENANT, BRAND, branch, courierId, 4000);
+        CourierDispatchGate.Eligibility eligibility = gate.evaluate(TENANT, BRAND, branch, courierId, 4000);
         assertThat(eligibility.eligible()).isFalse();
         assertThat(eligibility.refusals()).contains("REGISTRATION_LAPSED");
 
         Throwable refused = catchThrowable(() -> shifts.open(new CourierShiftService.OpenShift(
-                TENANT, BRAND, branch, courierId, ShiftActor.COURIER, courier(), "opening",
-                null, UZS)));
+                TENANT, BRAND, branch, courierId, ShiftActor.COURIER, courier(), "opening", null, UZS)));
         assertThat(refused).isInstanceOf(ApiException.class);
         assertThat(((ApiException) refused).errorCode()).isEqualTo(ErrorCode.UNPROCESSABLE_STATE);
 
@@ -434,8 +488,7 @@ class CourierCompensationTests {
 
         // An assignment accepted before the lapse finishes afterwards. Nothing
         // strands an order mid-delivery.
-        EarningRow afterLapse = accruals.recordDelivery(
-                delivery(deliveredShipment(), 5000, 0));
+        EarningRow afterLapse = accruals.recordDelivery(delivery(deliveredShipment(), 5000, 0));
         assertThat(afterLapse.totalMinor()).isPositive();
 
         PeriodRow period = ledgerStore.findOpenPeriod(TENANT, courierId).orElseThrow();
@@ -464,18 +517,18 @@ class CourierCompensationTests {
         settlement.close(TENANT, period.id(), manager(), "closing");
 
         approvals.answer = new ApprovalOutcome.Pending(UUID.randomUUID());
-        CourierSettlementService.PayoutOutcome pending = settlement.authorisePayout(TENANT,
-                period.id(), PayoutMethod.CASH_AT_BRANCH, manager(), "paying");
+        CourierSettlementService.PayoutOutcome pending =
+                settlement.authorisePayout(TENANT, period.id(), PayoutMethod.CASH_AT_BRANCH, manager(), "paying");
 
         assertThat(pending.authorised()).isFalse();
         assertThat(ledgerStore.findPayout(TENANT, period.id())).isEmpty();
         assertThat(ledgerStore.findPeriod(TENANT, period.id()).orElseThrow().status())
                 .isEqualTo(SettlementPeriodStatus.CLOSED);
 
-        approvals.answer = new ApprovalOutcome.Approved(UUID.randomUUID(), "another-manager",
-                approvals.consumed::incrementAndGet);
-        CourierSettlementService.PayoutOutcome authorised = settlement.authorisePayout(TENANT,
-                period.id(), PayoutMethod.CASH_AT_BRANCH, manager(), "paying");
+        approvals.answer =
+                new ApprovalOutcome.Approved(UUID.randomUUID(), "another-manager", approvals.consumed::incrementAndGet);
+        CourierSettlementService.PayoutOutcome authorised =
+                settlement.authorisePayout(TENANT, period.id(), PayoutMethod.CASH_AT_BRANCH, manager(), "paying");
 
         assertThat(authorised.authorised()).isTrue();
         assertThat(ledgerStore.findPayout(TENANT, period.id())).isPresent();
@@ -490,8 +543,7 @@ class CourierCompensationTests {
         sweeper.sweep();
 
         assertThat(notifications.warnings).hasSize(1);
-        assertThat(notifications.warnings.getFirst().audience())
-                .isEqualTo(CourierNotificationPort.Audience.COURIER);
+        assertThat(notifications.warnings.getFirst().audience()).isEqualTo(CourierNotificationPort.Audience.COURIER);
 
         setReverificationDue(LocalDate.ofInstant(NOON, ZoneOffset.UTC).plusDays(10));
         sweeper.sweep();
@@ -506,19 +558,17 @@ class CourierCompensationTests {
     @DisplayName("a manager cannot open a shift and cannot end a break")
     void aManagerCannotOpenAShiftOrEndABreak() {
         Throwable opening = catchThrowable(() -> shifts.open(new CourierShiftService.OpenShift(
-                TENANT, BRAND, branch, courierId, ShiftActor.MANAGER, manager(), "covering",
-                null, UZS)));
+                TENANT, BRAND, branch, courierId, ShiftActor.MANAGER, manager(), "covering", null, UZS)));
         assertThat(opening).isInstanceOf(ApiException.class);
         assertThat(((ApiException) opening).errorCode()).isEqualTo(ErrorCode.INSUFFICIENT_CAPABILITY);
 
         ShiftRow shift = openShift();
         shifts.startBreak(TENANT, shift.id(), ShiftActor.COURIER, courier(), "lunch");
 
-        Throwable endingBreak = catchThrowable(() -> shifts.endBreak(TENANT, shift.id(),
-                ShiftActor.MANAGER, manager(), "get back to work"));
+        Throwable endingBreak = catchThrowable(
+                () -> shifts.endBreak(TENANT, shift.id(), ShiftActor.MANAGER, manager(), "get back to work"));
         assertThat(endingBreak).isInstanceOf(ApiException.class);
-        assertThat(((ApiException) endingBreak).errorCode())
-                .isEqualTo(ErrorCode.INSUFFICIENT_CAPABILITY);
+        assertThat(((ApiException) endingBreak).errorCode()).isEqualTo(ErrorCode.INSUFFICIENT_CAPABILITY);
 
         // And the database refuses it too, so a future refactor cannot lose it.
         Throwable directInsert = catchThrowable(() -> jdbc.sql("""
@@ -528,8 +578,11 @@ class CourierCompensationTests {
                 VALUES (:id, :tenantId, :brandId, :locationId, :courierId, :engagementId, 'OPEN',
                     'AVAILABLE', now(), 'MANAGER', 'ADVISORY', 1)
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("locationId", branch).param("courierId", courierId)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", branch)
+                .param("courierId", courierId)
                 .param("engagementId", engagementId)
                 .update());
         assertThat(directInsert).hasMessageContaining("ck_shift_open_source");
@@ -542,8 +595,14 @@ class CourierCompensationTests {
         clock.set(NOON.plus(Duration.ofHours(4)));
 
         CourierShiftService.CloseOutcome outcome = shifts.close(new CourierShiftService.CloseShift(
-                TENANT, shift.id(), ShiftActor.MANAGER, manager(), "PREMISES_CLOSING",
-                "The branch closed early", null, UZS));
+                TENANT,
+                shift.id(),
+                ShiftActor.MANAGER,
+                manager(),
+                "PREMISES_CLOSING",
+                "The branch closed early",
+                null,
+                UZS));
 
         assertThat(outcome.status()).isEqualTo(ShiftStatus.AWAITING_APPROVAL);
         assertThat(outcome.paidSeconds()).isEqualTo(Duration.ofHours(4).toSeconds());
@@ -582,10 +641,12 @@ class CourierCompensationTests {
         policies.enforcement = ShiftEnforcement.ENFORCED;
         assertThat(gate.evaluate(TENANT, BRAND, branch, courierId, 4000).refusals())
                 .contains("NO_OPEN_SHIFT");
-        assertThat(gate.evaluate(TENANT, BRAND, branch, courierId, 4000).eligible()).isFalse();
+        assertThat(gate.evaluate(TENANT, BRAND, branch, courierId, 4000).eligible())
+                .isFalse();
 
         policies.enforcement = ShiftEnforcement.OFF;
-        assertThat(gate.evaluate(TENANT, BRAND, branch, courierId, 4000).eligible()).isTrue();
+        assertThat(gate.evaluate(TENANT, BRAND, branch, courierId, 4000).eligible())
+                .isTrue();
 
         policies.enforcement = ShiftEnforcement.ADVISORY;
         ShiftRow shift = openShift();
@@ -609,12 +670,15 @@ class CourierCompensationTests {
         CourierShiftService.CloseOutcome outcome = shifts.close(new CourierShiftService.CloseShift(
                 TENANT, shift.id(), ShiftActor.COURIER, courier(), null, "done", null, UZS));
 
-        Throwable refused = catchThrowable(() -> cash.declare(TENANT,
-                outcome.cashHandoverId(), UUID.randomUUID(), 120_000, courier()));
+        Throwable refused = catchThrowable(
+                () -> cash.declare(TENANT, outcome.cashHandoverId(), UUID.randomUUID(), 120_000, courier()));
 
         assertThat(refused).isInstanceOf(ApiException.class);
         assertThat(((ApiException) refused).errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
-        assertThat(shiftStore.findHandover(TENANT, outcome.cashHandoverId()).orElseThrow().status())
+        assertThat(shiftStore
+                        .findHandover(TENANT, outcome.cashHandoverId())
+                        .orElseThrow()
+                        .status())
                 .as("the ownership refusal happens before the handover is mutated")
                 .isEqualTo("PENDING");
     }
@@ -634,24 +698,29 @@ class CourierCompensationTests {
         cash.declare(TENANT, outcome.cashHandoverId(), courierId, 120_000, courier());
         cash.confirm(TENANT, outcome.cashHandoverId(), 120_000, null, cashier(), "counted");
 
-        long cashPosition = ledgerStore.entriesOf(TENANT,
-                        ledgerStore.findOpenPeriod(TENANT, courierId).orElseThrow().id()).stream()
-                .filter(entry -> entry.entryType().isCash())
-                .mapToLong(LedgerEntryRow::amountMinor)
-                .sum();
+        long cashPosition =
+                ledgerStore
+                        .entriesOf(
+                                TENANT,
+                                ledgerStore
+                                        .findOpenPeriod(TENANT, courierId)
+                                        .orElseThrow()
+                                        .id())
+                        .stream()
+                        .filter(entry -> entry.entryType().isCash())
+                        .mapToLong(LedgerEntryRow::amountMinor)
+                        .sum();
         assertThat(cashPosition).isZero();
 
         // Now a shift that comes up short.
         ShiftRow second = openShiftAt(NOON.plus(Duration.ofHours(6)));
         accruals.recordDelivery(deliveryOnShift(second.id(), 4000, 90_000));
         clock.set(NOON.plus(Duration.ofHours(10)));
-        CourierShiftService.CloseOutcome shortfall = shifts.close(
-                new CourierShiftService.CloseShift(TENANT, second.id(), ShiftActor.COURIER,
-                        courier(), null, "done", null, UZS));
+        CourierShiftService.CloseOutcome shortfall = shifts.close(new CourierShiftService.CloseShift(
+                TENANT, second.id(), ShiftActor.COURIER, courier(), null, "done", null, UZS));
 
         cash.declare(TENANT, shortfall.cashHandoverId(), courierId, 85_000, courier());
-        cash.confirm(TENANT, shortfall.cashHandoverId(), 85_000, "SHORT_AT_COUNT", cashier(),
-                "five thousand short");
+        cash.confirm(TENANT, shortfall.cashHandoverId(), 85_000, "SHORT_AT_COUNT", cashier(), "five thousand short");
 
         List<LedgerEntryRow> variances = entriesOfType(LedgerEntryType.CASH_VARIANCE);
         assertThat(variances).hasSize(1);
@@ -669,8 +738,8 @@ class CourierCompensationTests {
                 TENANT, shift.id(), ShiftActor.COURIER, courier(), null, "done", null, UZS));
 
         cash.declare(TENANT, outcome.cashHandoverId(), courierId, 40_000, courier());
-        assertThat(catchThrowable(() -> cash.confirm(TENANT, outcome.cashHandoverId(), 40_000,
-                null, cashier(), "counted")))
+        assertThat(catchThrowable(
+                        () -> cash.confirm(TENANT, outcome.cashHandoverId(), 40_000, null, cashier(), "counted")))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("reason code");
     }
@@ -682,27 +751,55 @@ class CourierCompensationTests {
     void aManualPenaltyWithoutApprovalIsRefused() {
         approvals.answer = new ApprovalOutcome.Pending(UUID.randomUUID());
 
-        CourierAdjustmentService.Outcome outcome = adjustments.request(
-                new CourierAdjustmentService.AdjustmentCommand(TENANT, courierId, branch,
-                        -50_000, UZS, "ORDER_UNDELIVERED", AdjustmentOrigin.MANUAL,
-                        "penalty-1", manager(), "the order never arrived", "corr"));
+        CourierAdjustmentService.Outcome outcome = adjustments.request(new CourierAdjustmentService.AdjustmentCommand(
+                TENANT,
+                courierId,
+                branch,
+                -50_000,
+                UZS,
+                "ORDER_UNDELIVERED",
+                AdjustmentOrigin.MANUAL,
+                "penalty-1",
+                manager(),
+                "the order never arrived",
+                "corr"));
 
         assertThat(outcome.written()).isFalse();
         assertThat(entriesOfType(LedgerEntryType.PENALTY)).isEmpty();
 
         // And a caller going round the service still cannot write one.
         Throwable direct = catchThrowable(() -> ledger.append(new CourierLedgerService.NewEntry(
-                TENANT, courierId, branch, LedgerEntryType.PENALTY, -50_000, UZS,
-                "courier_adjustment", null, AdjustmentOrigin.MANUAL, "ORDER_UNDELIVERED",
-                clock.instant(), "penalty-direct", null, null, "manager")));
+                TENANT,
+                courierId,
+                branch,
+                LedgerEntryType.PENALTY,
+                -50_000,
+                UZS,
+                "courier_adjustment",
+                null,
+                AdjustmentOrigin.MANUAL,
+                "ORDER_UNDELIVERED",
+                clock.instant(),
+                "penalty-direct",
+                null,
+                null,
+                "manager")));
         assertThat(direct).isInstanceOf(ApiException.class);
 
-        approvals.answer = new ApprovalOutcome.Approved(UUID.randomUUID(), "another-manager",
-                approvals.consumed::incrementAndGet);
-        CourierAdjustmentService.Outcome approved = adjustments.request(
-                new CourierAdjustmentService.AdjustmentCommand(TENANT, courierId, branch,
-                        -50_000, UZS, "ORDER_UNDELIVERED", AdjustmentOrigin.MANUAL,
-                        "penalty-2", manager(), "the order never arrived", "corr"));
+        approvals.answer =
+                new ApprovalOutcome.Approved(UUID.randomUUID(), "another-manager", approvals.consumed::incrementAndGet);
+        CourierAdjustmentService.Outcome approved = adjustments.request(new CourierAdjustmentService.AdjustmentCommand(
+                TENANT,
+                courierId,
+                branch,
+                -50_000,
+                UZS,
+                "ORDER_UNDELIVERED",
+                AdjustmentOrigin.MANUAL,
+                "penalty-2",
+                manager(),
+                "the order never arrived",
+                "corr"));
         assertThat(approved.written()).isTrue();
         assertThat(approved.entry().approvalRequestId()).isNotNull();
     }
@@ -711,8 +808,7 @@ class CourierCompensationTests {
     @DisplayName("every adjustment reason names a delivery outcome, and free text cannot be one")
     void everyAdjustmentReasonNamesADeliveryOutcome() {
         Throwable behaviouralReason = catchThrowable(() -> courierStore.insertAdjustmentReason(
-                UUID.randomUUID(), TENANT, "RUDE_TO_CUSTOMER", "PENALTY", "ATTITUDE",
-                "Rude to the customer"));
+                UUID.randomUUID(), TENANT, "RUDE_TO_CUSTOMER", "PENALTY", "ATTITUDE", "Rude to the customer"));
 
         assertThat(behaviouralReason).hasMessageContaining("ck_adjustment_reason_basis");
     }
@@ -720,8 +816,8 @@ class CourierCompensationTests {
     // ------------------------------------------------------------- settlement
 
     @Test
-    @DisplayName("the statement carries gross only, and its transfer amount is gross plus "
-            + "adjustments less cash held")
+    @DisplayName(
+            "the statement carries gross only, and its transfer amount is gross plus " + "adjustments less cash held")
     void theStatementCarriesGrossOnly() {
         ShiftRow shift = openShift();
         accruals.recordDelivery(deliveryOnShift(shift.id(), 6000, 80_000));
@@ -732,8 +828,7 @@ class CourierCompensationTests {
         // The courier keeps the cash: nothing is confirmed, so he is still holding it.
 
         PeriodRow period = ledgerStore.findOpenPeriod(TENANT, courierId).orElseThrow();
-        CourierSettlementService.Statement statement =
-                settlement.close(TENANT, period.id(), manager(), "closing");
+        CourierSettlementService.Statement statement = settlement.close(TENANT, period.id(), manager(), "closing");
 
         Map<String, Object> document = statement.document();
         assertThat(document).containsKey("grossTotalMinor");
@@ -746,14 +841,15 @@ class CourierCompensationTests {
                         || key.toLowerCase(Locale.ROOT).contains("payslip"));
 
         PeriodRow closed = ledgerStore.findPeriod(TENANT, period.id()).orElseThrow();
-        assertThat(closed.amountPayableMinor()).isEqualTo(
-                closed.grossEarningsMinor() + closed.adjustmentsMinor() - closed.cashHeldMinor());
+        assertThat(closed.amountPayableMinor())
+                .isEqualTo(closed.grossEarningsMinor() + closed.adjustmentsMinor() - closed.cashHeldMinor());
         assertThat(closed.cashHeldMinor()).isEqualTo(80_000);
 
         // Every figure is the sum of its ledger lines, with no rounding remainder.
         long ledgerGross = ledgerStore.entriesOf(TENANT, period.id()).stream()
                 .filter(entry -> entry.entryType().isGrossEarning())
-                .mapToLong(LedgerEntryRow::amountMinor).sum();
+                .mapToLong(LedgerEntryRow::amountMinor)
+                .sum();
         assertThat(closed.grossEarningsMinor()).isEqualTo(ledgerGross);
         assertThat(closed.statementHash()).hasSize(64);
     }
@@ -761,11 +857,13 @@ class CourierCompensationTests {
     @Test
     @DisplayName("a statement document that used tax language would be refused before it is hashed")
     void aStatementUsingTaxLanguageIsRefused() {
-        assertThat(catchThrowable(() -> uz.horecaos.platform.courier.domain.StatementVocabulary
-                .assertCarriesNoTaxLanguage(Map.of("netPayableMinor", 1))))
+        assertThat(catchThrowable(
+                        () -> uz.horecaos.platform.courier.domain.StatementVocabulary.assertCarriesNoTaxLanguage(
+                                Map.of("netPayableMinor", 1))))
                 .isInstanceOf(uz.horecaos.platform.courier.domain.StatementVocabulary.TaxLanguageException.class);
-        assertThat(catchThrowable(() -> uz.horecaos.platform.courier.domain.StatementVocabulary
-                .assertCarriesNoTaxLanguage(Map.of("withholdingMinor", 1))))
+        assertThat(catchThrowable(
+                        () -> uz.horecaos.platform.courier.domain.StatementVocabulary.assertCarriesNoTaxLanguage(
+                                Map.of("withholdingMinor", 1))))
                 .isInstanceOf(uz.horecaos.platform.courier.domain.StatementVocabulary.TaxLanguageException.class);
     }
 
@@ -773,20 +871,21 @@ class CourierCompensationTests {
     @DisplayName("a closed period's totals are unchanged by an entry recorded afterwards, which "
             + "lands in the next period as a prior-period adjustment")
     void aClosedPeriodIsNeverRestated() {
-        EarningRow earning = accruals.recordDelivery(
-                delivery(deliveredShipment(), 4000, 0));
+        EarningRow earning = accruals.recordDelivery(delivery(deliveredShipment(), 4000, 0));
         PeriodRow period = ledgerStore.findOpenPeriod(TENANT, courierId).orElseThrow();
         settlement.close(TENANT, period.id(), manager(), "closing");
-        long payableAtClose = ledgerStore.findPeriod(TENANT, period.id()).orElseThrow()
-                .amountPayableMinor();
+        long payableAtClose =
+                ledgerStore.findPeriod(TENANT, period.id()).orElseThrow().amountPayableMinor();
 
         UUID originalEntry = ledgerStore.entriesOf(TENANT, period.id()).stream()
                 .filter(entry -> entry.entryType() == LedgerEntryType.DELIVERY_EARNING)
-                .findFirst().orElseThrow().id();
+                .findFirst()
+                .orElseThrow()
+                .id();
 
         clock.set(NOON.plus(Duration.ofDays(1)));
-        LedgerEntryRow adjustment = ledger.appendPriorPeriodAdjustment(TENANT, originalEntry,
-                2_500, "CORRECTED_DISTANCE", "operations", "ppa-1");
+        LedgerEntryRow adjustment = ledger.appendPriorPeriodAdjustment(
+                TENANT, originalEntry, 2_500, "CORRECTED_DISTANCE", "operations", "ppa-1");
 
         assertThat(adjustment.entryType()).isEqualTo(LedgerEntryType.PRIOR_PERIOD_ADJUSTMENT);
         assertThat(adjustment.settlementPeriodId()).isNotEqualTo(period.id());
@@ -804,19 +903,26 @@ class CourierCompensationTests {
             + "carries two cost lines and its total is their sum")
     void oneShipmentCarriesBothCostPaths() {
         DeliveredShipment carried = deliveredShipment();
-        partnerInvoices.recordPartnerCost(TENANT, carried.shipmentId(), "NOOR", 18_000, UZS,
-                LocalDate.ofInstant(NOON, ZoneOffset.UTC), null, PartnerChargeType.CANCELLATION,
+        partnerInvoices.recordPartnerCost(
+                TENANT,
+                carried.shipmentId(),
+                "NOOR",
+                18_000,
+                UZS,
+                LocalDate.ofInstant(NOON, ZoneOffset.UTC),
+                null,
+                PartnerChargeType.CANCELLATION,
                 "sourcing");
         EarningRow inHouse = accruals.recordDelivery(delivery(carried, 4000, 0));
 
         List<CostLineRow> lines = deliveryCosts.linesOf(TENANT, carried.shipmentId());
         assertThat(lines).hasSize(2);
-        assertThat(lines).extracting(CostLineRow::costPath)
+        assertThat(lines)
+                .extracting(CostLineRow::costPath)
                 .containsExactlyInAnyOrder(
                         uz.horecaos.platform.courier.domain.CostPath.PARTNER,
                         uz.horecaos.platform.courier.domain.CostPath.INTERNAL);
-        assertThat(lines.stream().mapToLong(CostLineRow::amountMinor).sum())
-                .isEqualTo(18_000 + inHouse.totalMinor());
+        assertThat(lines.stream().mapToLong(CostLineRow::amountMinor).sum()).isEqualTo(18_000 + inHouse.totalMinor());
     }
 
     @Test
@@ -827,15 +933,14 @@ class CourierCompensationTests {
         accruals.recordDelivery(delivery(deliveredShipment(), 4000, 0));
 
         UUID partnerShipment = deliveredShipment().shipmentId();
-        partnerInvoices.recordPartnerCost(TENANT, partnerShipment, "NOOR", 22_000, UZS, today,
-                null, PartnerChargeType.DELIVERY, "sourcing");
+        partnerInvoices.recordPartnerCost(
+                TENANT, partnerShipment, "NOOR", 22_000, UZS, today, null, PartnerChargeType.DELIVERY, "sourcing");
 
         assertThat(catchThrowable(() -> deliveryCosts.report(TENANT, null, today, today)))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("single basis");
 
-        DeliveryCostQueryService.CostReport accrued =
-                deliveryCosts.report(TENANT, CostBasis.ACCRUED, today, today);
+        DeliveryCostQueryService.CostReport accrued = deliveryCosts.report(TENANT, CostBasis.ACCRUED, today, today);
         assertThat(accrued.internalMinor()).isPositive();
         assertThat(accrued.partnerMinor()).isEqualTo(22_000);
         assertThat(accrued.totalMinor()).isEqualTo(accrued.internalMinor() + accrued.partnerMinor());
@@ -843,15 +948,20 @@ class CourierCompensationTests {
         // The invoice arrives, so the partner line exists at INVOICED and the
         // internal accrual does not.
         UUID invoiceId = partnerInvoices.importInvoice(new PartnerInvoiceService.ImportInvoice(
-                TENANT, "NOOR", "INV-1", null, today, today, 22_000, UZS,
-                List.of(new PartnerInvoiceService.ImportedLine("NOOR-1", 22_000,
-                        PartnerChargeType.DELIVERY)),
-                manager(), "importing"));
-        partnerInvoices.match(TENANT, invoiceId, Map.of("NOOR-1", partnerShipment), manager(),
-                "matching");
+                TENANT,
+                "NOOR",
+                "INV-1",
+                null,
+                today,
+                today,
+                22_000,
+                UZS,
+                List.of(new PartnerInvoiceService.ImportedLine("NOOR-1", 22_000, PartnerChargeType.DELIVERY)),
+                manager(),
+                "importing"));
+        partnerInvoices.match(TENANT, invoiceId, Map.of("NOOR-1", partnerShipment), manager(), "matching");
 
-        DeliveryCostQueryService.CostReport invoiced =
-                deliveryCosts.report(TENANT, CostBasis.INVOICED, today, today);
+        DeliveryCostQueryService.CostReport invoiced = deliveryCosts.report(TENANT, CostBasis.INVOICED, today, today);
         assertThat(invoiced.internalMinor()).isZero();
         assertThat(invoiced.partnerMinor()).isEqualTo(22_000);
         assertThat(invoiced.shipmentsWithoutThisBasis())
@@ -865,25 +975,31 @@ class CourierCompensationTests {
     void anUnmatchedPartnerLineIsNeverNetted() {
         LocalDate today = LocalDate.ofInstant(NOON, ZoneOffset.UTC);
         UUID known = deliveredShipment().shipmentId();
-        partnerInvoices.recordPartnerCost(TENANT, known, "NOOR", 20_000, UZS, today, null,
-                PartnerChargeType.DELIVERY, "sourcing");
+        partnerInvoices.recordPartnerCost(
+                TENANT, known, "NOOR", 20_000, UZS, today, null, PartnerChargeType.DELIVERY, "sourcing");
 
         UUID invoiceId = partnerInvoices.importInvoice(new PartnerInvoiceService.ImportInvoice(
-                TENANT, "NOOR", "INV-2", null, today, today, 45_000, UZS,
-                List.of(new PartnerInvoiceService.ImportedLine("NOOR-KNOWN", 20_000,
-                                PartnerChargeType.DELIVERY),
-                        new PartnerInvoiceService.ImportedLine("NOOR-PHANTOM", 25_000,
-                                PartnerChargeType.DELIVERY)),
-                manager(), "importing"));
+                TENANT,
+                "NOOR",
+                "INV-2",
+                null,
+                today,
+                today,
+                45_000,
+                UZS,
+                List.of(
+                        new PartnerInvoiceService.ImportedLine("NOOR-KNOWN", 20_000, PartnerChargeType.DELIVERY),
+                        new PartnerInvoiceService.ImportedLine("NOOR-PHANTOM", 25_000, PartnerChargeType.DELIVERY)),
+                manager(),
+                "importing"));
 
-        PartnerInvoiceService.MatchReport report = partnerInvoices.match(TENANT, invoiceId,
-                Map.of("NOOR-KNOWN", known), manager(), "matching");
+        PartnerInvoiceService.MatchReport report =
+                partnerInvoices.match(TENANT, invoiceId, Map.of("NOOR-KNOWN", known), manager(), "matching");
 
         assertThat(report.matchedLines()).isEqualTo(1);
         assertThat(report.unmatchedLineIds()).hasSize(1);
 
-        DeliveryCostQueryService.CostReport invoiced =
-                deliveryCosts.report(TENANT, CostBasis.INVOICED, today, today);
+        DeliveryCostQueryService.CostReport invoiced = deliveryCosts.report(TENANT, CostBasis.INVOICED, today, today);
         assertThat(invoiced.partnerMinor())
                 .as("the phantom line is reported, never added")
                 .isEqualTo(20_000);
@@ -897,10 +1013,26 @@ class CourierCompensationTests {
     void confirmationCoordinatesAreDeletedAfterSettlement() {
         DeliveredShipment carried = deliveredShipment();
         EarningRow earning = accruals.recordDelivery(new CourierAccrualService.DeliveredAssignment(
-                TENANT, BRAND, branch, courierId, null, carried.shipmentId(), carried.attemptId(),
-                4200, DistanceSource.ROUTING, NOON, NOON.plus(Duration.ofMinutes(20)),
-                NOON.plus(Duration.ofMinutes(40)), 300, 1, NOON.plus(Duration.ofMinutes(5)),
-                NOON.plus(Duration.ofMinutes(10)), 0, true, "41.31,69.24", "41.32,69.27"));
+                TENANT,
+                BRAND,
+                branch,
+                courierId,
+                null,
+                carried.shipmentId(),
+                carried.attemptId(),
+                4200,
+                DistanceSource.ROUTING,
+                NOON,
+                NOON.plus(Duration.ofMinutes(20)),
+                NOON.plus(Duration.ofMinutes(40)),
+                300,
+                1,
+                NOON.plus(Duration.ofMinutes(5)),
+                NOON.plus(Duration.ofMinutes(10)),
+                0,
+                true,
+                "41.31,69.24",
+                "41.32,69.27"));
 
         assertThat(earning.protectedDeliveryPoint()).isNotNull();
         long total = earning.totalMinor();
@@ -908,8 +1040,7 @@ class CourierCompensationTests {
         PeriodRow period = ledgerStore.findOpenPeriod(TENANT, courierId).orElseThrow();
         settlement.close(TENANT, period.id(), manager(), "closing");
         approvals.answer = new ApprovalOutcome.NotRequired();
-        settlement.authorisePayout(TENANT, period.id(), PayoutMethod.BANK_TRANSFER, manager(),
-                "paying");
+        settlement.authorisePayout(TENANT, period.id(), PayoutMethod.BANK_TRANSFER, manager(), "paying");
 
         // Twenty-nine days later: still readable, because a dispute may still arrive.
         clock.set(NOON.plus(Duration.ofDays(29)));
@@ -918,8 +1049,9 @@ class CourierCompensationTests {
         clock.set(NOON.plus(Duration.ofDays(31)));
         assertThat(retention.purge(CourierCompensationPolicy.DEFAULTS)).isEqualTo(1);
 
-        EarningRow afterPurge = ledgerStore.findEarningByAttempt(TENANT,
-                earning.assignmentAttemptId()).orElseThrow();
+        EarningRow afterPurge = ledgerStore
+                .findEarningByAttempt(TENANT, earning.assignmentAttemptId())
+                .orElseThrow();
         assertThat(afterPurge.protectedPickupPoint()).isNull();
         assertThat(afterPurge.protectedDeliveryPoint()).isNull();
         assertThat(afterPurge.pointsPurgedAt()).isNotNull();
@@ -933,20 +1065,19 @@ class CourierCompensationTests {
     }
 
     @Test
-    @DisplayName("the registration identifier is never in an ordinary projection and its reveal is "
-            + "audited")
+    @DisplayName("the registration identifier is never in an ordinary projection and its reveal is " + "audited")
     void theRegistrationIdentifierIsOnlyReachableThroughAnAuditedReveal() {
-        EngagementRow engagement = courierStore.findEngagement(TENANT, engagementId).orElseThrow();
+        EngagementRow engagement =
+                courierStore.findEngagement(TENANT, engagementId).orElseThrow();
         assertThat(engagement.protectedRegistrationRef())
                 .as("the ordinary projection does not select the ciphertext at all")
                 .isNull();
 
-        String revealed = engagements.revealRegistrationIdentifier(TENANT, engagementId,
-                "Accountant export for the August settlement", manager(), "corr");
+        String revealed = engagements.revealRegistrationIdentifier(
+                TENANT, engagementId, "Accountant export for the August settlement", manager(), "corr");
 
         assertThat(revealed).isEqualTo("312345678901");
-        assertThat(audit.facts).anyMatch(fact ->
-                fact.actionCode().equals("courier.registration.revealed"));
+        assertThat(audit.facts).anyMatch(fact -> fact.actionCode().equals("courier.registration.revealed"));
         assertThat(audit.facts)
                 .as("no audit change document carries the identifier")
                 .noneMatch(fact -> fact.changeDocument().values().stream()
@@ -957,8 +1088,7 @@ class CourierCompensationTests {
     // ------------------------------------------------------- ledger integrity
 
     @Test
-    @DisplayName("the application role can insert and select ledger entries and fails on update "
-            + "and delete")
+    @DisplayName("the application role can insert and select ledger entries and fails on update " + "and delete")
     void theLedgerIsAppendOnlyForTheApplicationRole() {
         accruals.recordDelivery(delivery(deliveredShipment(), 4000, 0));
 
@@ -979,24 +1109,24 @@ class CourierCompensationTests {
                 statement.execute("SET ROLE horecaos_application");
                 try {
 
-                assertThat(catchThrowable(() -> statement.executeUpdate(
-                        "UPDATE fulfillment.courier_ledger_entries SET amount_minor = 1")))
-                        .as("a history that can be edited is not one")
-                        .hasMessageContaining("permission denied");
-                assertThat(catchThrowable(() -> statement.executeUpdate(
-                        "DELETE FROM fulfillment.courier_ledger_entries")))
-                        .hasMessageContaining("permission denied");
+                    assertThat(catchThrowable(() -> statement.executeUpdate(
+                                    "UPDATE fulfillment.courier_ledger_entries SET amount_minor = 1")))
+                            .as("a history that can be edited is not one")
+                            .hasMessageContaining("permission denied");
+                    assertThat(catchThrowable(
+                                    () -> statement.executeUpdate("DELETE FROM fulfillment.courier_ledger_entries")))
+                            .hasMessageContaining("permission denied");
 
-                try (java.sql.ResultSet counted = statement.executeQuery(
-                        "SELECT count(*) FROM fulfillment.courier_ledger_entries")) {
-                    assertThat(counted.next()).isTrue();
-                    assertThat(counted.getInt(1)).isPositive();
-                }
+                    try (java.sql.ResultSet counted =
+                            statement.executeQuery("SELECT count(*) FROM fulfillment.courier_ledger_entries")) {
+                        assertThat(counted.next()).isTrue();
+                        assertThat(counted.getInt(1)).isPositive();
+                    }
 
-                // And the statement it produced is equally beyond reach.
-                assertThat(catchThrowable(() -> statement.executeUpdate(
-                        "DELETE FROM fulfillment.courier_settlement_statements")))
-                        .hasMessageContaining("permission denied");
+                    // And the statement it produced is equally beyond reach.
+                    assertThat(catchThrowable(() ->
+                                    statement.executeUpdate("DELETE FROM fulfillment.courier_settlement_statements")))
+                            .hasMessageContaining("permission denied");
                 } finally {
                     // The pool hands this connection to whoever asks next, exactly
                     // as it is. SET ROLE is session state and survives being
@@ -1021,24 +1151,25 @@ class CourierCompensationTests {
         accruals.recordDelivery(delivery(deliveredShipment(), 4000, 0));
 
         UUID otherCourier = UUID.randomUUID();
-        courierStore.insertCourier(new JdbcCourierStore.CourierRow(otherCourier, TENANT,
-                courierTypeId, "keycloak-other", "K-002", "protected", "ACTIVE", 1));
+        courierStore.insertCourier(new JdbcCourierStore.CourierRow(
+                otherCourier, TENANT, courierTypeId, "keycloak-other", "K-002", "protected", "ACTIVE", 1));
 
         assertThat(ledgerStore.entriesOfCourier(TENANT, courierId, 100)).isNotEmpty();
         assertThat(ledgerStore.entriesOfCourier(TENANT, otherCourier, 100)).isEmpty();
         assertThat(ledgerStore.balanceMinor(TENANT, otherCourier)).isZero();
 
         // And another tenant asking about this courier gets nothing.
-        assertThat(ledgerStore.entriesOfCourier(UUID.randomUUID(), courierId, 100)).isEmpty();
+        assertThat(ledgerStore.entriesOfCourier(UUID.randomUUID(), courierId, 100))
+                .isEmpty();
     }
 
     @Test
     @DisplayName("the settlement period arithmetic is a database constraint, not a convention")
     void theTransferAmountCannotDisagreeWithItsComponents() {
-        PeriodRow period = ledger.currentPeriod(TENANT, courierId, UZS,
-                LocalDate.ofInstant(NOON, ZoneOffset.UTC));
+        PeriodRow period = ledger.currentPeriod(TENANT, courierId, UZS, LocalDate.ofInstant(NOON, ZoneOffset.UTC));
 
-        Throwable inconsistent = catchThrowable(() -> jdbc.sql("""
+        Throwable inconsistent =
+                catchThrowable(() -> jdbc.sql("""
                 UPDATE fulfillment.courier_settlement_periods
                    SET gross_earnings_minor = 100000, amount_payable_minor = 999999
                  WHERE id = :id
@@ -1067,7 +1198,11 @@ class CourierCompensationTests {
                     timezone, status, version)
                 VALUES (:id, :tenantId, :brandId, 'CENTRE', 'centre', 'Centre', 'Asia/Tashkent',
                         'ACTIVE', 0)
-                """).param("id", branch).param("tenantId", TENANT).param("brandId", BRAND).update();
+                """)
+                .param("id", branch)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
 
         // A channel and a published menu, because a delivery plan hangs off an
         // order and an order hangs off both. Nothing here is asserted on; it is
@@ -1083,7 +1218,10 @@ class CourierCompensationTests {
         jdbc.sql("""
                 INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
                 VALUES (:id, :tenantId, :brandId, 'MAIN', 'Main menu', 'ACTIVE')
-                """).param("id", catalogId).param("tenantId", TENANT).param("brandId", BRAND)
+                """)
+                .param("id", catalogId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
                 .update();
 
         publicationId = UUID.randomUUID();
@@ -1092,55 +1230,87 @@ class CourierCompensationTests {
                     status, content_hash, activated_at)
                 VALUES (:id, :tenantId, :brandId, :catalogId, 'STOREFRONT', 'PUBLISHED', 'hash',
                         now())
-                """).param("id", publicationId).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("catalogId", catalogId).update();
+                """)
+                .param("id", publicationId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("catalogId", catalogId)
+                .update();
     }
 
     private void seedCourier() {
         courierTypeId = UUID.randomUUID();
-        courierStore.insertType(new CourierTypeRow(courierTypeId, TENANT, "SCOOTER", "Scooter",
-                "SCOOTER", 0, 15_000, 2, 60, "ACTIVE"));
+        courierStore.insertType(
+                new CourierTypeRow(courierTypeId, TENANT, "SCOOTER", "Scooter", "SCOOTER", 0, 15_000, 2, 60, "ACTIVE"));
 
-        CourierEngagementService.Registration registration = engagements.register(
-                new CourierEngagementService.NewCourier(TENANT, courierTypeId, "keycloak-courier",
-                        "K-001", "Alisher Karimov", LocalDate.ofInstant(NOON, ZoneOffset.UTC),
-                        manager(), "onboarding a rider", "corr"));
+        CourierEngagementService.Registration registration =
+                engagements.register(new CourierEngagementService.NewCourier(
+                        TENANT,
+                        courierTypeId,
+                        "keycloak-courier",
+                        "K-001",
+                        "Alisher Karimov",
+                        LocalDate.ofInstant(NOON, ZoneOffset.UTC),
+                        manager(),
+                        "onboarding a rider",
+                        "corr"));
         courierId = registration.courierId();
         engagementId = registration.engagementId();
 
-        engagements.verify(new CourierEngagementService.VerifyRegistration(TENANT, engagementId,
-                "312345678901", LocalDate.ofInstant(NOON, ZoneOffset.UTC).plusYears(1),
-                VerificationMethod.MANUAL_ATTESTATION, null, manager(),
-                "sighted the registration certificate", "corr"));
+        engagements.verify(new CourierEngagementService.VerifyRegistration(
+                TENANT,
+                engagementId,
+                "312345678901",
+                LocalDate.ofInstant(NOON, ZoneOffset.UTC).plusYears(1),
+                VerificationMethod.MANUAL_ATTESTATION,
+                null,
+                manager(),
+                "sighted the registration certificate",
+                "corr"));
     }
 
     private void seedRateCard() {
-        rateCardId = rateCards.author(new CourierRateCardService.NewRateCard(TENANT, BRAND, null,
-                null, "STANDARD", 1, UZS, List.of(
-                        new RateComponent(UUID.randomUUID(), RateComponentType.PER_ORDER, 0,
-                                3_000, null, null, null),
+        rateCardId = rateCards.author(new CourierRateCardService.NewRateCard(
+                TENANT,
+                BRAND,
+                null,
+                null,
+                "STANDARD",
+                1,
+                UZS,
+                List.of(
+                        new RateComponent(UUID.randomUUID(), RateComponentType.PER_ORDER, 0, 3_000, null, null, null),
                         band(0, 3000, 2000),
                         band(3000, null, 1500),
-                        new RateComponent(UUID.randomUUID(), RateComponentType.PER_SHIFT_FIXED, 0,
-                                10_000, null, null, 3600))));
+                        new RateComponent(
+                                UUID.randomUUID(), RateComponentType.PER_SHIFT_FIXED, 0, 10_000, null, null, 3600))));
         rateCards.activate(TENANT, rateCardId, manager(), "activating the standard card");
     }
 
     private void seedAdjustmentReasons() {
-        courierStore.insertAdjustmentReason(UUID.randomUUID(), TENANT, "ORDER_UNDELIVERED",
-                "PENALTY", "ORDER_UNDELIVERED", "The order was not delivered");
-        courierStore.insertAdjustmentReason(UUID.randomUUID(), TENANT, "ON_TIME_STREAK", "BONUS",
-                "ON_TIME_RATE", "Ten consecutive on-time deliveries");
+        courierStore.insertAdjustmentReason(
+                UUID.randomUUID(),
+                TENANT,
+                "ORDER_UNDELIVERED",
+                "PENALTY",
+                "ORDER_UNDELIVERED",
+                "The order was not delivered");
+        courierStore.insertAdjustmentReason(
+                UUID.randomUUID(),
+                TENANT,
+                "ON_TIME_STREAK",
+                "BONUS",
+                "ON_TIME_RATE",
+                "Ten consecutive on-time deliveries");
     }
 
     private static RateComponent band(int from, Integer to, long perKmMinor) {
-        return new RateComponent(UUID.randomUUID(), RateComponentType.PER_KM_BAND, from,
-                perKmMinor, from, to, null);
+        return new RateComponent(UUID.randomUUID(), RateComponentType.PER_KM_BAND, from, perKmMinor, from, to, null);
     }
 
     private ShiftRow openShift() {
-        return shifts.open(new CourierShiftService.OpenShift(TENANT, BRAND, branch, courierId,
-                ShiftActor.COURIER, courier(), "opening", null, UZS));
+        return shifts.open(new CourierShiftService.OpenShift(
+                TENANT, BRAND, branch, courierId, ShiftActor.COURIER, courier(), "opening", null, UZS));
     }
 
     private ShiftRow openShiftAt(Instant at) {
@@ -1148,29 +1318,57 @@ class CourierCompensationTests {
         return openShift();
     }
 
-    private CourierAccrualService.DeliveredAssignment delivery(DeliveredShipment carried,
-            int distanceMeters, long cashMinor) {
+    private CourierAccrualService.DeliveredAssignment delivery(
+            DeliveredShipment carried, int distanceMeters, long cashMinor) {
 
-        return new CourierAccrualService.DeliveredAssignment(TENANT, BRAND, branch, courierId, null,
-                carried.shipmentId(), carried.attemptId(), distanceMeters,
-                DistanceSource.ROUTING, clock.instant(),
+        return new CourierAccrualService.DeliveredAssignment(
+                TENANT,
+                BRAND,
+                branch,
+                courierId,
+                null,
+                carried.shipmentId(),
+                carried.attemptId(),
+                distanceMeters,
+                DistanceSource.ROUTING,
+                clock.instant(),
                 clock.instant().plus(Duration.ofMinutes(20)),
-                clock.instant().plus(Duration.ofMinutes(40)), 300, 1,
+                clock.instant().plus(Duration.ofMinutes(40)),
+                300,
+                1,
                 clock.instant().plus(Duration.ofMinutes(5)),
-                clock.instant().plus(Duration.ofMinutes(10)), cashMinor, false, null, null);
+                clock.instant().plus(Duration.ofMinutes(10)),
+                cashMinor,
+                false,
+                null,
+                null);
     }
 
-    private CourierAccrualService.DeliveredAssignment deliveryOnShift(UUID shiftId,
-            int distanceMeters, long cashMinor) {
+    private CourierAccrualService.DeliveredAssignment deliveryOnShift(
+            UUID shiftId, int distanceMeters, long cashMinor) {
 
         DeliveredShipment carried = deliveredShipment();
-        return new CourierAccrualService.DeliveredAssignment(TENANT, BRAND, branch, courierId,
-                shiftId, carried.shipmentId(), carried.attemptId(), distanceMeters,
-                DistanceSource.ROUTING, clock.instant(),
+        return new CourierAccrualService.DeliveredAssignment(
+                TENANT,
+                BRAND,
+                branch,
+                courierId,
+                shiftId,
+                carried.shipmentId(),
+                carried.attemptId(),
+                distanceMeters,
+                DistanceSource.ROUTING,
+                clock.instant(),
                 clock.instant().plus(Duration.ofMinutes(20)),
-                clock.instant().plus(Duration.ofMinutes(40)), 300, 1,
+                clock.instant().plus(Duration.ofMinutes(40)),
+                300,
+                1,
                 clock.instant().plus(Duration.ofMinutes(5)),
-                clock.instant().plus(Duration.ofMinutes(10)), cashMinor, false, null, null);
+                clock.instant().plus(Duration.ofMinutes(10)),
+                cashMinor,
+                false,
+                null,
+                null);
     }
 
     /**
@@ -1214,9 +1412,13 @@ class CourierCompensationTests {
                        'Asia/Tashkent'
                   FROM (SELECT CAST(:anchor AS timestamptz) AS anchor) AS moment
                 """)
-                .param("id", planId).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("locationId", branch).param("orderId", orderId)
-                .param("anchor", confirmedAt).update();
+                .param("id", planId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", branch)
+                .param("orderId", orderId)
+                .param("anchor", confirmedAt)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO fulfillment.shipments (
@@ -1227,9 +1429,15 @@ class CourierCompensationTests {
                        anchor + interval '20 minutes', anchor + interval '40 minutes'
                   FROM (SELECT CAST(:anchor AS timestamptz) AS anchor) AS moment
                 """)
-                .param("id", shipmentId).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("locationId", branch).param("orderId", orderId).param("planId", planId)
-                .param("courierId", courierId).param("anchor", confirmedAt).update();
+                .param("id", shipmentId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", branch)
+                .param("orderId", orderId)
+                .param("planId", planId)
+                .param("courierId", courierId)
+                .param("anchor", confirmedAt)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO fulfillment.assignment_attempts (
@@ -1241,10 +1449,14 @@ class CourierCompensationTests {
                        anchor + interval '1 minute', anchor + interval '5 minutes'
                   FROM (SELECT CAST(:anchor AS timestamptz) AS anchor) AS moment
                 """)
-                .param("id", attemptId).param("tenantId", TENANT).param("planId", planId)
-                .param("shipmentId", shipmentId).param("courierId", courierId)
+                .param("id", attemptId)
+                .param("tenantId", TENANT)
+                .param("planId", planId)
+                .param("shipmentId", shipmentId)
+                .param("courierId", courierId)
                 .param("idempotencyKey", "fleet-offer-" + sequence)
-                .param("anchor", confirmedAt).update();
+                .param("anchor", confirmedAt)
+                .update();
 
         return new DeliveredShipment(shipmentId, attemptId);
     }
@@ -1266,17 +1478,27 @@ class CourierCompensationTests {
                     tax_minor, total_minor, expires_at)
                 VALUES (:id, :tenantId, :brandId, :locationId, 'UZS', :publicationId, 1, 'hash',
                         50000, 0, 50000, now() + interval '1 hour')
-                """).param("id", quoteId).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("locationId", branch).param("publicationId", publicationId).update();
+                """)
+                .param("id", quoteId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", branch)
+                .param("publicationId", publicationId)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO ordering.carts (id, tenant_id, brand_id, location_id, channel_id,
                     fulfillment_mode, currency, status, guest_reference_hash, expires_at)
                 VALUES (:id, :tenantId, :brandId, :locationId, :channelId, 'DELIVERY', 'UZS',
                         'ACTIVE', :reference, now() + interval '1 hour')
-                """).param("id", cartId).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("locationId", branch).param("channelId", channelId)
-                .param("reference", reference).update();
+                """)
+                .param("id", cartId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", branch)
+                .param("channelId", channelId)
+                .param("reference", reference)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO ordering.orders (id, public_order_number, tenant_id, brand_id,
@@ -1289,16 +1511,23 @@ class CourierCompensationTests {
                         :reference, 'DELIVERY', 'AUTO_CONFIRM', 0, 'NONE', 'COMPLETED', 'UZS',
                         50000, 0, 50000, :quoteId, 'hash', :publicationId, :cartId, :reference,
                         1, now())
-                """).param("id", orderId).param("number", "D-" + sequence)
-                .param("tenantId", TENANT).param("brandId", BRAND).param("locationId", branch)
-                .param("channelId", channelId).param("reference", reference)
-                .param("quoteId", quoteId).param("publicationId", publicationId)
-                .param("cartId", cartId).update();
+                """)
+                .param("id", orderId)
+                .param("number", "D-" + sequence)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", branch)
+                .param("channelId", channelId)
+                .param("reference", reference)
+                .param("quoteId", quoteId)
+                .param("publicationId", publicationId)
+                .param("cartId", cartId)
+                .update();
 
         return orderId;
     }
 
-    private record DeliveredShipment(UUID shipmentId, UUID attemptId) { }
+    private record DeliveredShipment(UUID shipmentId, UUID attemptId) {}
 
     private List<LedgerEntryRow> entriesOfType(LedgerEntryType type) {
         return ledgerStore.entriesOfCourier(TENANT, courierId, 500).stream()
@@ -1392,17 +1621,17 @@ class CourierCompensationTests {
     private static final class ReversibleProtection implements FieldProtection {
 
         @Override
-        public ProtectedValue protect(UUID tenantId, DataClass dataClass, RecordRef record,
-                String plaintext) {
-            byte[] reversed = new StringBuilder(plaintext).reverse().toString()
-                    .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        public ProtectedValue protect(UUID tenantId, DataClass dataClass, RecordRef record, String plaintext) {
+            byte[] reversed =
+                    new StringBuilder(plaintext).reverse().toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
             return new ProtectedValue("test-key", "TEST", new byte[] {1}, reversed, 1);
         }
 
         @Override
         public String reveal(UUID tenantId, ProtectedValue value, RecordRef record, String purpose) {
-            return new StringBuilder(new String(value.ciphertext(),
-                    java.nio.charset.StandardCharsets.UTF_8)).reverse().toString();
+            return new StringBuilder(new String(value.ciphertext(), java.nio.charset.StandardCharsets.UTF_8))
+                    .reverse()
+                    .toString();
         }
 
         @Override
@@ -1425,6 +1654,7 @@ class CourierCompensationTests {
 
         /** Counts the call site spending the grant, which is what makes it single-use. */
         private final AtomicInteger consumed = new AtomicInteger();
+
         private ApprovalOutcome answer = new ApprovalOutcome.NotRequired();
 
         @Override
@@ -1461,15 +1691,17 @@ class CourierCompensationTests {
                     CourierCompensationPolicy.DEFAULTS.graceSeconds(),
                     CourierCompensationPolicy.DEFAULTS.confirmationPointRetentionDays());
 
-            return Optional.of((ResolvedPolicy<P>) new ResolvedPolicy<>(key.code(),
-                    UUID.nameUUIDFromBytes("courier-policy".getBytes(
-                            java.nio.charset.StandardCharsets.UTF_8)),
-                    3, scope.type(), "test", document));
+            return Optional.of((ResolvedPolicy<P>) new ResolvedPolicy<>(
+                    key.code(),
+                    UUID.nameUUIDFromBytes("courier-policy".getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                    3,
+                    scope.type(),
+                    "test",
+                    document));
         }
 
         @Override
-        public <P> Optional<ResolvedPolicy<P>> pinned(PolicyKey<P> key, UUID policyId,
-                int policyVersion) {
+        public <P> Optional<ResolvedPolicy<P>> pinned(PolicyKey<P> key, UUID policyId, int policyVersion) {
             return resolve(key, ResourceScope.tenant(TENANT));
         }
     }
@@ -1480,8 +1712,8 @@ class CourierCompensationTests {
         private final List<UUID> lapses = new CopyOnWriteArrayList<>();
 
         @Override
-        public void registrationExpiring(UUID tenantId, UUID courierId, LocalDate validUntil,
-                int daysRemaining, Audience audience) {
+        public void registrationExpiring(
+                UUID tenantId, UUID courierId, LocalDate validUntil, int daysRemaining, Audience audience) {
             warnings.add(new Warning(courierId, daysRemaining, audience));
         }
 
@@ -1490,6 +1722,6 @@ class CourierCompensationTests {
             lapses.add(courierId);
         }
 
-        private record Warning(UUID courierId, int daysRemaining, Audience audience) { }
+        private record Warning(UUID courierId, int daysRemaining, Audience audience) {}
     }
 }

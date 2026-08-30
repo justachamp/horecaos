@@ -1,7 +1,5 @@
 package uz.horecaos.platform.audit.infrastructure.persistence;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Clock;
@@ -14,7 +12,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.stream.IntStream;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
@@ -22,9 +20,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -85,8 +81,8 @@ class AuditPartitionRaceTests {
 
     @Test
     void concurrentReplicasBothSucceedAndCreateOnePartition() throws Exception {
-        AuditPartitionManager manager = new AuditPartitionManager(
-                jdbc, Clock.fixed(Instant.parse("2026-08-20T10:00:00Z"), ZoneOffset.UTC));
+        AuditPartitionManager manager =
+                new AuditPartitionManager(jdbc, Clock.fixed(Instant.parse("2026-08-20T10:00:00Z"), ZoneOffset.UTC));
 
         CyclicBarrier together = new CyclicBarrier(REPLICAS);
         try (ExecutorService replicas = Executors.newFixedThreadPool(REPLICAS)) {
@@ -112,8 +108,8 @@ class AuditPartitionRaceTests {
 
     @Test
     void aSecondRunOverAnExistingPartitionIsSilent() {
-        AuditPartitionManager manager = new AuditPartitionManager(
-                jdbc, Clock.fixed(Instant.parse("2026-08-20T10:00:00Z"), ZoneOffset.UTC));
+        AuditPartitionManager manager =
+                new AuditPartitionManager(jdbc, Clock.fixed(Instant.parse("2026-08-20T10:00:00Z"), ZoneOffset.UTC));
 
         manager.ensurePartition(YEAR);
         manager.ensurePartition(YEAR);

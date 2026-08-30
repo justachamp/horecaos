@@ -1,19 +1,16 @@
 package uz.horecaos.platform.reporting.web;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
@@ -47,9 +44,9 @@ public class MetricSignatureController {
     }
 
     @PostMapping("/{metricCode}")
-    @RequiresCapability(value = Capability.METRIC_MANAGE, scope = ScopeType.PLATFORM,
-            mutating = true)
-    @Operation(summary = "Record that finance has signed this metric version",
+    @RequiresCapability(value = Capability.METRIC_MANAGE, scope = ScopeType.PLATFORM, mutating = true)
+    @Operation(
+            summary = "Record that finance has signed this metric version",
             description = "Refused if the version is already signed. A second signature over the "
                     + "same words says nothing new, and replacing the first would lose who "
                     + "actually decided; a changed definition is a new version instead.")
@@ -59,8 +56,7 @@ public class MetricSignatureController {
         var actor = ActorRef.user(currentActor.get().subject(), null);
         var definition = signing.sign(metricCode, actor, body.reason());
 
-        return ResponseEntity.ok(new SignatureResponse(definition.id().code(),
-                definition.digest(), actor.subject()));
+        return ResponseEntity.ok(new SignatureResponse(definition.id().code(), definition.digest(), actor.subject()));
     }
 
     /**
@@ -69,11 +65,12 @@ public class MetricSignatureController {
      *               no meeting or document named is not an answer anyone can use
      *               a year later
      */
-    public record SignatureRequest(@NotBlank @Size(max = 512) String reason) { }
+    public record SignatureRequest(
+            @NotBlank @Size(max = 512) String reason) {}
 
     /**
      * @param definitionDigest the exact wording that was signed, so the signature
      *                         can be proved to cover the text in that release
      */
-    public record SignatureResponse(String metricCode, String definitionDigest, String signedBy) { }
+    public record SignatureResponse(String metricCode, String definitionDigest, String signedBy) {}
 }

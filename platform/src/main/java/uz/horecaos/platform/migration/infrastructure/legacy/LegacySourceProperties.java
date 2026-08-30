@@ -1,7 +1,6 @@
 package uz.horecaos.platform.migration.infrastructure.legacy;
 
 import java.time.Duration;
-
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -62,8 +61,7 @@ public record LegacySourceProperties(
 
     private static void requirePresent(String value, String property) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(
-                    property + " is required when the legacy source is enabled");
+            throw new IllegalArgumentException(property + " is required when the legacy source is enabled");
         }
     }
 }

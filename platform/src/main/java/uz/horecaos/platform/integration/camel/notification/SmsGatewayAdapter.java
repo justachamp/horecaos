@@ -2,9 +2,7 @@ package uz.horecaos.platform.integration.camel.notification;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.ProviderCall;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.integration.camel.common.ProviderHttpClient;
@@ -65,7 +63,9 @@ public class SmsGatewayAdapter implements NotificationChannelAdapter {
         body.put("to", dispatch.recipientValue());
         body.put("text", dispatch.body());
 
-        return http.post(call, SEND_PATH,
+        return http.post(
+                call,
+                SEND_PATH,
                 Map.of("Idempotency-Key", dispatch.providerIdempotencyKey()),
                 body,
                 response -> ProviderOutcome.success(
@@ -83,11 +83,10 @@ public class SmsGatewayAdapter implements NotificationChannelAdapter {
                 // them, and "the gateway rejected my query" must never be mistaken
                 // for "the gateway never had this message" — the second licenses a
                 // resend and the first does not.
-                return ProviderOutcome.rejected(NO_RECORD,
-                        "The gateway has no record of this request");
+                return ProviderOutcome.rejected(NO_RECORD, "The gateway has no record of this request");
             }
-            return ProviderOutcome.success(Map.of("providerStatus", status),
-                    string(response, "externalReference", null));
+            return ProviderOutcome.success(
+                    Map.of("providerStatus", status), string(response, "externalReference", null));
         });
     }
 

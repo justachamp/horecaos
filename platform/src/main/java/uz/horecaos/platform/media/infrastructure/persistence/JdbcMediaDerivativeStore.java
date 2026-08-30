@@ -7,10 +7,8 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.application.MediaDerivativeStore;
 import uz.horecaos.platform.media.domain.DerivativeVariant;
@@ -49,25 +47,25 @@ public class JdbcMediaDerivativeStore implements MediaDerivativeStore {
                     :processorVersion, :createdAt)
                 ON CONFLICT (asset_id, variant) DO NOTHING
                 """)
-                .param("derivativeId", derivative.derivativeId())
-                .param("tenantId", derivative.tenantId())
-                .param("assetId", derivative.assetId().value())
-                .param("variant", derivative.variant().name())
-                .param("objectKey", derivative.objectKey())
-                .param("bucket", derivative.bucket())
-                .param("contentType", derivative.contentType())
-                .param("sizeBytes", derivative.sizeBytes())
-                .param("checksum", derivative.checksumSha256())
-                .param("widthPx", derivative.widthPx())
-                .param("heightPx", derivative.heightPx())
-                .param("processorVersion", derivative.processorVersion())
-                .param("createdAt", OffsetDateTime.ofInstant(derivative.createdAt(), ZoneOffset.UTC))
-                .update() == 1;
+                        .param("derivativeId", derivative.derivativeId())
+                        .param("tenantId", derivative.tenantId())
+                        .param("assetId", derivative.assetId().value())
+                        .param("variant", derivative.variant().name())
+                        .param("objectKey", derivative.objectKey())
+                        .param("bucket", derivative.bucket())
+                        .param("contentType", derivative.contentType())
+                        .param("sizeBytes", derivative.sizeBytes())
+                        .param("checksum", derivative.checksumSha256())
+                        .param("widthPx", derivative.widthPx())
+                        .param("heightPx", derivative.heightPx())
+                        .param("processorVersion", derivative.processorVersion())
+                        .param("createdAt", OffsetDateTime.ofInstant(derivative.createdAt(), ZoneOffset.UTC))
+                        .update()
+                == 1;
     }
 
     @Override
-    public Optional<MediaDerivative> find(UUID tenantId, MediaAssetId assetId,
-            DerivativeVariant variant) {
+    public Optional<MediaDerivative> find(UUID tenantId, MediaAssetId assetId, DerivativeVariant variant) {
         return jdbc.sql("""
                 SELECT * FROM media.derivatives
                 WHERE tenant_id = :tenantId AND asset_id = :assetId AND variant = :variant

@@ -22,15 +22,39 @@ import java.util.Set;
 public final class ClassificationScanner {
 
     private static final Set<String> PROTECTED_TERMS = Set.of(
-            "phone", "email", "passport", "birth", "dateofbirth",
-            "firstname", "lastname", "middlename", "fullname", "personname",
-            "address", "latitude", "longitude", "coordinate", "geolocation",
-            "password", "secret", "token", "credential", "apikey",
-            "cardnumber", "pan", "cvv", "iban", "ssn", "jshir", "tin",
-            "note", "comment", "instructions", "devicefingerprint");
+            "phone",
+            "email",
+            "passport",
+            "birth",
+            "dateofbirth",
+            "firstname",
+            "lastname",
+            "middlename",
+            "fullname",
+            "personname",
+            "address",
+            "latitude",
+            "longitude",
+            "coordinate",
+            "geolocation",
+            "password",
+            "secret",
+            "token",
+            "credential",
+            "apikey",
+            "cardnumber",
+            "pan",
+            "cvv",
+            "iban",
+            "ssn",
+            "jshir",
+            "tin",
+            "note",
+            "comment",
+            "instructions",
+            "devicefingerprint");
 
-    private ClassificationScanner() {
-    }
+    private ClassificationScanner() {}
 
     /** Every classified path reachable from {@code type}, empty when it is clean. */
     public static List<Finding> scan(Class<?> type, String path) {

@@ -2,7 +2,6 @@ package uz.horecaos.platform.dinein.domain;
 
 import java.util.Arrays;
 import java.util.Locale;
-
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -51,17 +50,17 @@ public enum QrMode {
         QrMode mode = Arrays.stream(values())
                 .filter(candidate -> candidate.name().equalsIgnoreCase(value))
                 .findFirst()
-                .orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_FAILED,
-                        "Unknown QR mode \"%s\"".formatted(value)));
+                .orElseThrow(
+                        () -> new ApiException(ErrorCode.VALIDATION_FAILED, "Unknown QR mode \"%s\"".formatted(value)));
 
         if (!mode.selectable()) {
             // ADR 0011's rule: an unsupported provider capability may never be the
             // sole business path. Failing here, at configuration, is the whole
             // point — the alternative failure is a guest holding a phone at a
             // table with a bill in front of them.
-            throw new ApiException(ErrorCode.INVALID_REQUEST,
-                    "QR mode %s needs a bound POS declaring both an open-ticket read and a "
-                            .formatted(mode)
+            throw new ApiException(
+                    ErrorCode.INVALID_REQUEST,
+                    "QR mode %s needs a bound POS declaring both an open-ticket read and a ".formatted(mode)
                             + "ticket settlement, and no adapter declares either. The mode is "
                             + "documented and disabled (ADR 0047).");
         }

@@ -2,7 +2,6 @@ package uz.horecaos.platform.partner.domain;
 
 /** Where a handover challenge got to (ADR 0040). */
 public enum HandoverChallengeStatus {
-
     PENDING,
 
     /** The correct value was entered. */

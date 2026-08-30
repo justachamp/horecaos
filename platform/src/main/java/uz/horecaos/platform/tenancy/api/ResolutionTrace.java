@@ -2,7 +2,6 @@ package uz.horecaos.platform.tenancy.api;
 
 import java.util.List;
 import java.util.Objects;
-
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 
 /**
@@ -13,11 +12,7 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
  * @param winningScope     the scope level that supplied it, absent for a code default
  * @param inspectedLevels  each level considered, most specific first, and what was found
  */
-public record ResolutionTrace(
-        String keyCode,
-        Source source,
-        ScopeType winningScope,
-        List<Level> inspectedLevels) {
+public record ResolutionTrace(String keyCode, Source source, ScopeType winningScope, List<Level> inspectedLevels) {
 
     public enum Source {
         SCOPED_VALUE,
@@ -35,7 +30,7 @@ public record ResolutionTrace(
         EXPLICIT_NULL_TERMINATED
     }
 
-    public record Level(ScopeType scopeType, Outcome outcome) { }
+    public record Level(ScopeType scopeType, Outcome outcome) {}
 
     public ResolutionTrace {
         Objects.requireNonNull(keyCode, "Key code is required");

@@ -3,7 +3,6 @@ package uz.horecaos.platform.tenancy.domain;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Pattern;
-
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 
 /**
@@ -51,8 +50,7 @@ public record LocationPlace(
         // dispatch it has a routable branch when it does not, and a point without
         // a source would hide an unattributed coordinate from a provenance audit.
         if (coordinateSource.awaitingCoordinates() != (coordinates == null)) {
-            throw new IllegalArgumentException(
-                    "Coordinate source " + coordinateSource + " disagrees with the point");
+            throw new IllegalArgumentException("Coordinate source " + coordinateSource + " disagrees with the point");
         }
 
         addressLine = blankToNull(addressLine);
@@ -62,8 +60,7 @@ public record LocationPlace(
         contactPhone = blankToNull(contactPhone);
 
         if (contactPhone != null && !E164.matcher(contactPhone).matches()) {
-            throw new IllegalArgumentException(
-                    "Branch telephone must be E.164, for example +998712000000");
+            throw new IllegalArgumentException("Branch telephone must be E.164, for example +998712000000");
         }
     }
 
@@ -80,8 +77,7 @@ public record LocationPlace(
 
     /** A branch that exists on paper and nowhere else yet. */
     public static LocationPlace unknown() {
-        return new LocationPlace(null, null, null, null, null, null,
-                CoordinateSource.NOT_GEOCODED);
+        return new LocationPlace(null, null, null, null, null, null, CoordinateSource.NOT_GEOCODED);
     }
 
     public Optional<GeoPoint> point() {

@@ -4,7 +4,6 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -28,15 +27,13 @@ import org.springframework.stereotype.Component;
  * operation that costs nothing.
  */
 @Component
-@ConditionalOnProperty(name = "horecaos.reporting.partitions.enabled", havingValue = "true",
-        matchIfMissing = true)
+@ConditionalOnProperty(name = "horecaos.reporting.partitions.enabled", havingValue = "true", matchIfMissing = true)
 public class ReportingPartitionManager {
 
     private static final Logger log = LoggerFactory.getLogger(ReportingPartitionManager.class);
 
     /** Every table the migration's upkeep function is allowed to partition. */
-    private static final List<String> TABLES =
-            List.of("fact_order", "fact_order_line", "fact_refund");
+    private static final List<String> TABLES = List.of("fact_order", "fact_order_line", "fact_refund");
 
     /** Three months of runway leaves room for a fortnight of missed runs. */
     private static final int MONTHS_AHEAD = 3;

@@ -2,12 +2,6 @@ package uz.horecaos.platform.integration.events;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.io.InputStream;
-import java.time.Instant;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Stream;
-
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.networknt.schema.JsonSchema;
@@ -15,11 +9,14 @@ import com.networknt.schema.JsonSchemaFactory;
 import com.networknt.schema.SchemaValidatorsConfig;
 import com.networknt.schema.SpecVersion;
 import com.networknt.schema.ValidationMessage;
-
+import java.io.InputStream;
+import java.time.Instant;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
-
 import uz.horecaos.platform.ordering.api.OrderAwaitingApproval;
 import uz.horecaos.platform.ordering.api.OrderCancelled;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
@@ -58,22 +55,83 @@ class EventSchemaValidationTests {
      */
     static Stream<Object> orderingSamples() {
         return Stream.of(
-                new OrderReceived(UUID.randomUUID(), new TenantId(TENANT), ORDER, ORDERED_AT,
-                        BRAND, LOCATION, "STOREFRONT", "0822-014", "PICKUP",
-                        "RESTAURANT_APPROVAL", null, 0, "RECEIVED", 1, "UZS", 100_000L, 2),
-                new OrderAwaitingApproval(UUID.randomUUID(), new TenantId(TENANT), ORDER,
-                        ORDERED_AT, BRAND, LOCATION, "HORECAOS_OPERATIONS",
-                        ORDERED_AT.plusSeconds(300), "AUTO_REJECT", "AWAITING_APPROVAL", 2),
-                new OrderConfirmed(UUID.randomUUID(), new TenantId(TENANT), ORDER, ORDERED_AT,
-                        BRAND, LOCATION, "RESTAURANT_APPROVAL", "HORECAOS_OPERATIONS", ORDERED_AT,
-                        "UZS", 100_000L, "CONFIRMED", 3),
-                new OrderRejected(UUID.randomUUID(), new TenantId(TENANT), ORDER, ORDERED_AT,
-                        BRAND, LOCATION, "HORECAOS_OPERATIONS", "KITCHEN_CLOSED", "REJECTED", 3),
-                new OrderExpired(UUID.randomUUID(), new TenantId(TENANT), ORDER, ORDERED_AT,
-                        BRAND, LOCATION, ORDERED_AT.plusSeconds(300), "EXPIRED", 3),
-                new OrderCancelled(UUID.randomUUID(), new TenantId(TENANT), ORDER, ORDERED_AT,
-                        BRAND, LOCATION, "CUSTOMER", "CUSTOMER_CHANGED_MIND", "AWAITING_APPROVAL",
-                        "CANCELLED", 3));
+                new OrderReceived(
+                        UUID.randomUUID(),
+                        new TenantId(TENANT),
+                        ORDER,
+                        ORDERED_AT,
+                        BRAND,
+                        LOCATION,
+                        "STOREFRONT",
+                        "0822-014",
+                        "PICKUP",
+                        "RESTAURANT_APPROVAL",
+                        null,
+                        0,
+                        "RECEIVED",
+                        1,
+                        "UZS",
+                        100_000L,
+                        2),
+                new OrderAwaitingApproval(
+                        UUID.randomUUID(),
+                        new TenantId(TENANT),
+                        ORDER,
+                        ORDERED_AT,
+                        BRAND,
+                        LOCATION,
+                        "HORECAOS_OPERATIONS",
+                        ORDERED_AT.plusSeconds(300),
+                        "AUTO_REJECT",
+                        "AWAITING_APPROVAL",
+                        2),
+                new OrderConfirmed(
+                        UUID.randomUUID(),
+                        new TenantId(TENANT),
+                        ORDER,
+                        ORDERED_AT,
+                        BRAND,
+                        LOCATION,
+                        "RESTAURANT_APPROVAL",
+                        "HORECAOS_OPERATIONS",
+                        ORDERED_AT,
+                        "UZS",
+                        100_000L,
+                        "CONFIRMED",
+                        3),
+                new OrderRejected(
+                        UUID.randomUUID(),
+                        new TenantId(TENANT),
+                        ORDER,
+                        ORDERED_AT,
+                        BRAND,
+                        LOCATION,
+                        "HORECAOS_OPERATIONS",
+                        "KITCHEN_CLOSED",
+                        "REJECTED",
+                        3),
+                new OrderExpired(
+                        UUID.randomUUID(),
+                        new TenantId(TENANT),
+                        ORDER,
+                        ORDERED_AT,
+                        BRAND,
+                        LOCATION,
+                        ORDERED_AT.plusSeconds(300),
+                        "EXPIRED",
+                        3),
+                new OrderCancelled(
+                        UUID.randomUUID(),
+                        new TenantId(TENANT),
+                        ORDER,
+                        ORDERED_AT,
+                        BRAND,
+                        LOCATION,
+                        "CUSTOMER",
+                        "CUSTOMER_CHANGED_MIND",
+                        "AWAITING_APPROVAL",
+                        "CANCELLED",
+                        3));
     }
 
     @ParameterizedTest(name = "{0} ordering payload validates against its schema")
@@ -86,25 +144,43 @@ class EventSchemaValidationTests {
         Set<ValidationMessage> errors = schema(contract).validate(payload);
 
         assertThat(errors)
-                .as("payload of %s does not satisfy %s: %s", contract.key(), contract.schemaPath(),
-                        payload)
+                .as("payload of %s does not satisfy %s: %s", contract.key(), contract.schemaPath(), payload)
                 .isEmpty();
     }
 
     static Stream<TenancyEvent> samples() {
         return Stream.of(
                 new TenantCreated(
-                        UUID.randomUUID(), new TenantId(TENANT), Instant.parse("2026-08-20T10:00:00Z"),
-                        "acme", "Acme Foods LLC", "Acme", "UZS", "Asia/Tashkent",
-                        "PROVISIONING", "TENANT_SHARED"),
+                        UUID.randomUUID(),
+                        new TenantId(TENANT),
+                        Instant.parse("2026-08-20T10:00:00Z"),
+                        "acme",
+                        "Acme Foods LLC",
+                        "Acme",
+                        "UZS",
+                        "Asia/Tashkent",
+                        "PROVISIONING",
+                        "TENANT_SHARED"),
                 new BrandCreated(
-                        UUID.randomUUID(), new TenantId(TENANT), new BrandId(BRAND),
+                        UUID.randomUUID(),
+                        new TenantId(TENANT),
+                        new BrandId(BRAND),
                         Instant.parse("2026-08-20T10:00:01Z"),
-                        "ACME_BURGERS", "acme-burgers", "Acme Burgers", "ACTIVE"),
+                        "ACME_BURGERS",
+                        "acme-burgers",
+                        "Acme Burgers",
+                        "ACTIVE"),
                 new LocationCreated(
-                        UUID.randomUUID(), new TenantId(TENANT), new BrandId(BRAND), new LocationId(LOCATION),
+                        UUID.randomUUID(),
+                        new TenantId(TENANT),
+                        new BrandId(BRAND),
+                        new LocationId(LOCATION),
                         Instant.parse("2026-08-20T10:00:02Z"),
-                        "TASHKENT_01", "tashkent-01", "Chilonzor", "Asia/Tashkent", "ACTIVE"));
+                        "TASHKENT_01",
+                        "tashkent-01",
+                        "Chilonzor",
+                        "Asia/Tashkent",
+                        "ACTIVE"));
     }
 
     @ParameterizedTest(name = "{0} payload validates against its schema")

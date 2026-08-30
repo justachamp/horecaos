@@ -1,10 +1,5 @@
 package uz.horecaos.platform.payments.domain;
 
-import java.util.EnumMap;
-import java.util.EnumSet;
-import java.util.Map;
-import java.util.Set;
-
 import static uz.horecaos.platform.payments.domain.PaymentAttemptStatus.CANCELLED;
 import static uz.horecaos.platform.payments.domain.PaymentAttemptStatus.CAPTURED;
 import static uz.horecaos.platform.payments.domain.PaymentAttemptStatus.EXPIRED;
@@ -14,6 +9,11 @@ import static uz.horecaos.platform.payments.domain.PaymentAttemptStatus.PRESENTE
 import static uz.horecaos.platform.payments.domain.PaymentAttemptStatus.RESERVED;
 import static uz.horecaos.platform.payments.domain.PaymentAttemptStatus.REVERSED;
 import static uz.horecaos.platform.payments.domain.PaymentAttemptStatus.UNCERTAIN;
+
+import java.util.EnumMap;
+import java.util.EnumSet;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * The transitions an attempt may take (ADR 0013).
@@ -47,20 +47,18 @@ public final class PaymentAttemptStateMachine {
         ALLOWED.put(EXPIRED, EnumSet.noneOf(PaymentAttemptStatus.class));
         ALLOWED.put(REVERSED, EnumSet.noneOf(PaymentAttemptStatus.class));
         ALLOWED.put(FAILED, EnumSet.noneOf(PaymentAttemptStatus.class));
-        ALLOWED.put(UNCERTAIN, EnumSet.of(
-                PRESENTED, RESERVED, CAPTURED, CANCELLED, EXPIRED, REVERSED, FAILED));
+        ALLOWED.put(UNCERTAIN, EnumSet.of(PRESENTED, RESERVED, CAPTURED, CANCELLED, EXPIRED, REVERSED, FAILED));
     }
 
-    private PaymentAttemptStateMachine() {
-    }
+    private PaymentAttemptStateMachine() {}
 
     public static boolean permits(PaymentAttemptStatus from, PaymentAttemptStatus to) {
-        return ALLOWED.getOrDefault(from, EnumSet.noneOf(PaymentAttemptStatus.class)).contains(to);
+        return ALLOWED.getOrDefault(from, EnumSet.noneOf(PaymentAttemptStatus.class))
+                .contains(to);
     }
 
     public static Set<PaymentAttemptStatus> from(PaymentAttemptStatus status) {
-        return EnumSet.copyOf(ALLOWED.getOrDefault(
-                status, EnumSet.noneOf(PaymentAttemptStatus.class)));
+        return EnumSet.copyOf(ALLOWED.getOrDefault(status, EnumSet.noneOf(PaymentAttemptStatus.class)));
     }
 
     /**
@@ -70,8 +68,7 @@ public final class PaymentAttemptStateMachine {
      */
     public static void require(PaymentAttemptStatus from, PaymentAttemptStatus to) {
         if (!permits(from, to)) {
-            throw new IllegalStateException(
-                    "A payment attempt cannot move from " + from + " to " + to);
+            throw new IllegalStateException("A payment attempt cannot move from " + from + " to " + to);
         }
     }
 }

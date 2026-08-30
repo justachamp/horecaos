@@ -1,5 +1,8 @@
 package uz.horecaos.platform.migration.infrastructure.persistence;
 
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.exactIntegerOrNull;
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.utc;
+
 import java.math.BigInteger;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -8,16 +11,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.migration.application.reconciliation.Measurement;
 import uz.horecaos.platform.migration.application.reconciliation.ReconciliationRuleStore;
 import uz.horecaos.platform.migration.domain.ReconciliationSeverity;
-
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.exactIntegerOrNull;
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.utc;
 
 /**
  * The rule library and its results (ADR 0024).
@@ -99,9 +97,12 @@ public class JdbcReconciliationRuleStore implements ReconciliationRuleStore {
                 WHERE migration.reconciliation_results.tenant_id = :tenantId
                 RETURNING id
                 """)
-                .param("id", result.id()).param("tenantId", result.tenantId())
-                .param("runId", result.runId()).param("scopeId", result.scopeId())
-                .param("ruleCode", result.ruleCode()).param("ruleVersion", result.ruleVersion())
+                .param("id", result.id())
+                .param("tenantId", result.tenantId())
+                .param("runId", result.runId())
+                .param("scopeId", result.scopeId())
+                .param("ruleCode", result.ruleCode())
+                .param("ruleVersion", result.ruleVersion())
                 .param("dimensionKey", result.dimensionKey())
                 .param("severity", result.severity().name())
                 .param("measureKind", measurement.measureKind().name())

@@ -1,15 +1,12 @@
 package uz.horecaos.platform.integration.camel.pos;
 
-import java.time.Clock;
-import java.time.Duration;
-
-import org.springframework.stereotype.Component;
-
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.micrometer.core.instrument.MeterRegistry;
-
+import java.time.Clock;
+import java.time.Duration;
+import org.springframework.stereotype.Component;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.integration.camel.common.ProviderCircuitMetrics;
 
@@ -48,8 +45,7 @@ public class PosCircuitBreakers {
                 .waitDurationInOpenState(Duration.ofSeconds(30))
                 .permittedNumberOfCallsInHalfOpenState(3)
                 .automaticTransitionFromOpenToHalfOpenEnabled(true)
-                .recordException(failure -> failure instanceof PosCallFailed call
-                        && countsAsFailure(call.outcome()))
+                .recordException(failure -> failure instanceof PosCallFailed call && countsAsFailure(call.outcome()))
                 .build());
         // ADR 0023 pages on a payment or POS breaker that stays open for ten
         // minutes, because the action — tell the restaurant its tickets are not

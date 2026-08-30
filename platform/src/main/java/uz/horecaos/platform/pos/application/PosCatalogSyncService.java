@@ -8,11 +8,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-
 import uz.horecaos.platform.integration.api.provider.BindingRef;
 import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
@@ -66,7 +64,8 @@ public class PosCatalogSyncService {
     private final FieldAuthorityPolicy policy;
     private final Clock clock;
 
-    public PosCatalogSyncService(PosAdapterRegistry adapters,
+    public PosCatalogSyncService(
+            PosAdapterRegistry adapters,
             ProviderInstallationLookup installations,
             JdbcPosBindingConfiguration configuration,
             JdbcPosSyncStore runs,
@@ -96,25 +95,29 @@ public class PosCatalogSyncService {
     public RunResult run(UUID tenantId, UUID bindingId, String triggerType, boolean dryRun) {
         Optional<BindingRef> resolved = binding(tenantId, bindingId);
         if (resolved.isEmpty()) {
-            return RunResult.refused("BINDING_NOT_CATALOG_CAPABLE",
-                    "This binding does not provide catalog read");
+            return RunResult.refused("BINDING_NOT_CATALOG_CAPABLE", "This binding does not provide catalog read");
         }
         BindingRef binding = resolved.get();
 
         Optional<PosAdapter> adapter = adapters.forProvider(binding.providerType());
         if (adapter.isEmpty()) {
-            return RunResult.refused("NO_ADAPTER",
-                    "No POS adapter is registered for " + binding.providerType());
+            return RunResult.refused("NO_ADAPTER", "No POS adapter is registered for " + binding.providerType());
         }
 
         Map<String, String> config = configuration.resolve(binding).orElse(Map.of());
-        UUID runId = runs.openRun(tenantId, bindingId, triggerType, dryRun,
-                adapterVersionOf(adapter.get()), policy.version(), clock.instant());
+        UUID runId = runs.openRun(
+                tenantId,
+                bindingId,
+                triggerType,
+                dryRun,
+                adapterVersionOf(adapter.get()),
+                policy.version(),
+                clock.instant());
 
         runs.markStatus(tenantId, runId, "FETCHING", null, clock.instant());
 
-        PosContext context = new PosContext(tenantId, binding.installationId(), bindingId,
-                config.get("clopos.venueId"), config, runId.toString());
+        PosContext context = new PosContext(
+                tenantId, binding.installationId(), bindingId, config.get("clopos.venueId"), config, runId.toString());
 
         CatalogRead read = adapter.get().readCatalog(context);
         if (read.outcome().status() != ProviderOutcome.Status.SUCCESS || read.snapshot() == null) {
@@ -122,7 +125,8 @@ public class PosCatalogSyncService {
             // compares it would report every unread product as removed, which is
             // the exact failure the whole quorum design exists to prevent — and it
             // would arrive with the authority of a completed run.
-            runs.markFailed(tenantId, runId, read.outcome().errorCode(), read.outcome().detail());
+            runs.markFailed(
+                    tenantId, runId, read.outcome().errorCode(), read.outcome().detail());
             return new RunResult(runId, "FAILED", read.outcome(), 0, 0);
         }
 
@@ -131,24 +135,36 @@ public class PosCatalogSyncService {
         runs.stage(tenantId, runId, snapshot);
         runs.markStatus(tenantId, runId, "COMPARING", "normalized_at", clock.instant());
 
-        TargetCatalog target = targets.read(tenantId, bindingId, binding.brandId(),
-                config.getOrDefault("catalog.defaultLocale", "uz-UZ"));
+        TargetCatalog target = targets.read(
+                tenantId, bindingId, binding.brandId(), config.getOrDefault("catalog.defaultLocale", "uz-UZ"));
 
-        AbsenceHistory absences = runs.recordAbsences(tenantId, bindingId, runId,
-                mappedIds(target), presentIds(snapshot), snapshot.walkStable(), clock.instant());
+        AbsenceHistory absences = runs.recordAbsences(
+                tenantId,
+                bindingId,
+                runId,
+                mappedIds(target),
+                presentIds(snapshot),
+                snapshot.walkStable(),
+                clock.instant());
 
-        DifferenceEngine.Result result = new DifferenceEngine(policy)
-                .compare(snapshot, target, absences);
+        DifferenceEngine.Result result = new DifferenceEngine(policy).compare(snapshot, target, absences);
 
         runs.recordFindings(tenantId, runId, result.differences(), result.conflicts());
         runs.markStatus(tenantId, runId, "REVIEW_REQUIRED", "compared_at", clock.instant());
 
-        log.info("POS catalog run {} staged {} products and produced {} differences and {} conflicts",
-                runId, snapshot.products().size(), result.differences().size(),
+        log.info(
+                "POS catalog run {} staged {} products and produced {} differences and {} conflicts",
+                runId,
+                snapshot.products().size(),
+                result.differences().size(),
                 result.conflicts().size());
 
-        return new RunResult(runId, "REVIEW_REQUIRED", read.outcome(),
-                result.differences().size(), result.conflicts().size());
+        return new RunResult(
+                runId,
+                "REVIEW_REQUIRED",
+                read.outcome(),
+                result.differences().size(),
+                result.conflicts().size());
     }
 
     /**
@@ -167,8 +183,8 @@ public class PosCatalogSyncService {
         }
         BindingRef reference = row.get();
         return installations
-                .candidateBindings(tenantId, reference.brandId(), reference.locationId(),
-                        PosCapability.CATALOG_READ.code())
+                .candidateBindings(
+                        tenantId, reference.brandId(), reference.locationId(), PosCapability.CATALOG_READ.code())
                 .stream()
                 .filter(candidate -> candidate.bindingId().equals(bindingId))
                 .findFirst();
@@ -176,19 +192,27 @@ public class PosCatalogSyncService {
 
     private static Map<EntityType, Set<String>> mappedIds(TargetCatalog target) {
         Map<EntityType, Set<String>> mapped = new EnumMap<>(EntityType.class);
-        mapped.put(EntityType.PRODUCT, Set.copyOf(target.entities(EntityType.PRODUCT).keySet()));
-        mapped.put(EntityType.VARIANT, Set.copyOf(target.entities(EntityType.VARIANT).keySet()));
+        mapped.put(
+                EntityType.PRODUCT,
+                Set.copyOf(target.entities(EntityType.PRODUCT).keySet()));
+        mapped.put(
+                EntityType.VARIANT,
+                Set.copyOf(target.entities(EntityType.VARIANT).keySet()));
         return mapped;
     }
 
     private static Map<EntityType, Set<String>> presentIds(CatalogSnapshot snapshot) {
         Map<EntityType, Set<String>> present = new EnumMap<>(EntityType.class);
-        present.put(EntityType.PRODUCT, snapshot.products().stream()
-                .map(CatalogSnapshot.Product::externalId)
-                .collect(Collectors.toCollection(LinkedHashSet::new)));
-        present.put(EntityType.VARIANT, snapshot.variants().stream()
-                .map(CatalogSnapshot.Variant::externalId)
-                .collect(Collectors.toCollection(LinkedHashSet::new)));
+        present.put(
+                EntityType.PRODUCT,
+                snapshot.products().stream()
+                        .map(CatalogSnapshot.Product::externalId)
+                        .collect(Collectors.toCollection(LinkedHashSet::new)));
+        present.put(
+                EntityType.VARIANT,
+                snapshot.variants().stream()
+                        .map(CatalogSnapshot.Variant::externalId)
+                        .collect(Collectors.toCollection(LinkedHashSet::new)));
         return present;
     }
 
@@ -205,8 +229,8 @@ public class PosCatalogSyncService {
      * @param outcome the provider's answer, kept so a failed run can say what the
      *                till said rather than only that it failed
      */
-    public record RunResult(UUID runId, String status, ProviderOutcome outcome,
-            int differenceCount, int conflictCount) {
+    public record RunResult(
+            UUID runId, String status, ProviderOutcome outcome, int differenceCount, int conflictCount) {
 
         static RunResult refused(String code, String detail) {
             return new RunResult(null, "REFUSED", ProviderOutcome.rejected(code, detail), 0, 0);

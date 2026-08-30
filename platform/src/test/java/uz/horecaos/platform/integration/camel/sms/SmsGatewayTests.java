@@ -1,15 +1,14 @@
 package uz.horecaos.platform.integration.camel.sms;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
@@ -21,8 +20,6 @@ import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.integration.camel.common.ProviderExceptionClassifier;
 import uz.horecaos.platform.integration.camel.common.ProviderHttpClient;
 import uz.horecaos.platform.integration.provider.SmsAccountLookup.SmsAccount;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Binding resolution and credential handling on the way to the gateway
@@ -59,8 +56,8 @@ class SmsGatewayTests {
     @DisplayName("an account with no login or sender is refused before anything is sent")
     void missingAccountConfigurationIsRefusedBeforeTheCall() throws Exception {
         try (RecordingSmsGateway fake = RecordingSmsGateway.start()) {
-            SmsGateway gateway = gateway(fake, VasSmsGatewayAdapter.PROVIDER_TYPE,
-                    new SmsAccount("horecaos", null), "ACTIVE");
+            SmsGateway gateway =
+                    gateway(fake, VasSmsGatewayAdapter.PROVIDER_TYPE, new SmsAccount("horecaos", null), "ACTIVE");
 
             ProviderOutcome outcome = gateway.send(operation());
 
@@ -75,8 +72,7 @@ class SmsGatewayTests {
     @DisplayName("a suspended installation is not called")
     void suspendedInstallationIsNotCalled() throws Exception {
         try (RecordingSmsGateway fake = RecordingSmsGateway.start()) {
-            SmsGateway gateway = gateway(fake, VasSmsGatewayAdapter.PROVIDER_TYPE, account(),
-                    "SUSPENDED");
+            SmsGateway gateway = gateway(fake, VasSmsGatewayAdapter.PROVIDER_TYPE, account(), "SUSPENDED");
 
             assertThat(gateway.send(operation()).errorCode()).isEqualTo("INSTALLATION_INACTIVE");
             assertThat(fake.calls()).isEmpty();
@@ -90,8 +86,7 @@ class SmsGatewayTests {
             fake.reply("/send", """
                     {"status":{"code":13,"description":"wrong key"}}""");
             RecordingResolver secrets = new RecordingResolver();
-            SmsGateway gateway = gateway(fake, VasSmsGatewayAdapter.PROVIDER_TYPE, account(),
-                    "ACTIVE", secrets);
+            SmsGateway gateway = gateway(fake, VasSmsGatewayAdapter.PROVIDER_TYPE, account(), "ACTIVE", secrets);
 
             ProviderOutcome outcome = gateway.send(operation());
 
@@ -112,8 +107,7 @@ class SmsGatewayTests {
             fake.reply("/send", """
                     {"status":{"code":20,"description":"receiver in blacklist"}}""");
             RecordingResolver secrets = new RecordingResolver();
-            SmsGateway gateway = gateway(fake, VasSmsGatewayAdapter.PROVIDER_TYPE, account(),
-                    "ACTIVE", secrets);
+            SmsGateway gateway = gateway(fake, VasSmsGatewayAdapter.PROVIDER_TYPE, account(), "ACTIVE", secrets);
 
             assertThat(gateway.send(operation()).errorCode()).isEqualTo("SMS_RECEIVER_BLACKLISTED");
             assertThat(secrets.fresh).isZero();
@@ -124,8 +118,8 @@ class SmsGatewayTests {
     @Test
     @DisplayName("no binding at all is a refusal, not a retry")
     void noBindingIsARefusal() {
-        SmsGateway gateway = new SmsGateway(new StubLookup(null, "ACTIVE"), binding -> Optional.empty(),
-                new RecordingResolver(), adapter());
+        SmsGateway gateway = new SmsGateway(
+                new StubLookup(null, "ACTIVE"), binding -> Optional.empty(), new RecordingResolver(), adapter());
 
         ProviderOutcome outcome = gateway.send(operation());
 
@@ -140,25 +134,34 @@ class SmsGatewayTests {
     }
 
     private static SmsVerificationOperation operation() {
-        return new SmsVerificationOperation(SmsVerificationOperation.Kind.SEND,
-                TENANT, BRAND, UUID.randomUUID(), "998901112233", "482913",
-                "HorecaOS code 482913", Instant.parse("2026-08-25T09:15:00Z"));
+        return new SmsVerificationOperation(
+                SmsVerificationOperation.Kind.SEND,
+                TENANT,
+                BRAND,
+                UUID.randomUUID(),
+                "998901112233",
+                "482913",
+                "HorecaOS code 482913",
+                Instant.parse("2026-08-25T09:15:00Z"));
     }
 
     private static VasSmsGatewayAdapter adapter() {
-        return new VasSmsGatewayAdapter(new ProviderHttpClient(
-                JsonMapper.builder().build(), new ProviderExceptionClassifier()));
+        return new VasSmsGatewayAdapter(
+                new ProviderHttpClient(JsonMapper.builder().build(), new ProviderExceptionClassifier()));
     }
 
-    private static SmsGateway gateway(RecordingSmsGateway fake, String providerType,
-            SmsAccount account, String status) {
+    private static SmsGateway gateway(
+            RecordingSmsGateway fake, String providerType, SmsAccount account, String status) {
         return gateway(fake, providerType, account, status, new RecordingResolver());
     }
 
-    private static SmsGateway gateway(RecordingSmsGateway fake, String providerType,
-            SmsAccount account, String status, SecretResolver secrets) {
-        return new SmsGateway(new StubLookup(providerType, status, fake.baseUrl()),
-                binding -> Optional.ofNullable(account), secrets, adapter());
+    private static SmsGateway gateway(
+            RecordingSmsGateway fake, String providerType, SmsAccount account, String status, SecretResolver secrets) {
+        return new SmsGateway(
+                new StubLookup(providerType, status, fake.baseUrl()),
+                binding -> Optional.ofNullable(account),
+                secrets,
+                adapter());
     }
 
     /** Answers one binding and one installation, with the shapes each test needs. */
@@ -170,25 +173,31 @@ class SmsGatewayTests {
         }
 
         @Override
-        public Optional<BindingRef> primaryBinding(UUID tenantId, UUID brandId, UUID locationId,
-                String capabilityCode) {
+        public Optional<BindingRef> primaryBinding(
+                UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
             if (providerType == null) {
                 return Optional.empty();
             }
-            return Optional.of(new BindingRef(BINDING, INSTALLATION, tenantId,
-                    ProviderCategory.NOTIFICATION, providerType, brandId, null));
+            return Optional.of(new BindingRef(
+                    BINDING, INSTALLATION, tenantId, ProviderCategory.NOTIFICATION, providerType, brandId, null));
         }
 
         @Override
-        public List<BindingRef> candidateBindings(UUID tenantId, UUID brandId, UUID locationId,
-                String capabilityCode) {
+        public List<BindingRef> candidateBindings(UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
             return List.of();
         }
 
         @Override
         public Optional<InstallationSnapshot> installation(UUID tenantId, UUID installationId) {
-            return Optional.of(new InstallationSnapshot(INSTALLATION, ProviderCategory.NOTIFICATION,
-                    providerType, "local", baseUrl, status, REFERENCE.toString(), "v1"));
+            return Optional.of(new InstallationSnapshot(
+                    INSTALLATION,
+                    ProviderCategory.NOTIFICATION,
+                    providerType,
+                    "local",
+                    baseUrl,
+                    status,
+                    REFERENCE.toString(),
+                    "v1"));
         }
     }
 

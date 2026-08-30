@@ -8,12 +8,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.integration.api.provider.BindingRef;
 import uz.horecaos.platform.integration.api.provider.ProviderEntityMappingLookup;
 import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
@@ -79,6 +77,7 @@ public class PosOrderExportService {
 
     /** The ADR 0026 mapping entity type an order line resolves through. */
     private static final String VARIANT_ENTITY = "VARIANT";
+
     private static final String MODIFIER_ENTITY = "MODIFIER";
 
     /**
@@ -100,7 +99,8 @@ public class PosOrderExportService {
     private final PosOrderSource orders;
     private final Clock clock;
 
-    public PosOrderExportService(PosAdapterRegistry adapters,
+    public PosOrderExportService(
+            PosAdapterRegistry adapters,
             ProviderInstallationLookup installations,
             ProviderEntityMappingLookup mappings,
             JdbcPosBindingConfiguration configuration,
@@ -149,8 +149,7 @@ public class PosOrderExportService {
             // Not an error. A branch with no POS binding takes its orders the way
             // it did before there was one, and saying so is the whole point of
             // capability resolution.
-            log.debug("No POS binding provides {} at location {}",
-                    PosCapability.ORDER_EXPORT, order.locationId());
+            log.debug("No POS binding provides {} at location {}", PosCapability.ORDER_EXPORT, order.locationId());
             return Optional.empty();
         }
 
@@ -158,8 +157,11 @@ public class PosOrderExportService {
         List<LineFingerprint.Line> fingerprintLines = fingerprintLines(binding.get(), order);
 
         UUID exportId = exports.open(new JdbcPosExportStore.NewExport(
-                UUID.randomUUID(), tenantId, orderId,
-                binding.get().bindingId(), binding.get().installationId(),
+                UUID.randomUUID(),
+                tenantId,
+                orderId,
+                binding.get().bindingId(),
+                binding.get().installationId(),
                 // The customer-facing order number, which a clerk can read out
                 // loud. It is unique per location per day, which is exactly the
                 // scope a recovery read searches, so it is also a usable
@@ -195,17 +197,15 @@ public class PosOrderExportService {
         JdbcPosExportStore.ExportRow export = row.get();
 
         if (!ExportStateMachine.permits(export.state(), ExportState.SENT)) {
-            return ProviderOutcome.rejected("EXPORT_NOT_SENDABLE",
-                    "An export in %s is not sent again".formatted(export.state()));
+            return ProviderOutcome.rejected(
+                    "EXPORT_NOT_SENDABLE", "An export in %s is not sent again".formatted(export.state()));
         }
 
-        Optional<Integer> attempt = exports.claimForAttempt(
-                tenantId, exportId, export.state(), clock.instant());
+        Optional<Integer> attempt = exports.claimForAttempt(tenantId, exportId, export.state(), clock.instant());
         if (attempt.isEmpty()) {
             // Somebody else claimed it between the read and the update. Doing
             // nothing is the correct response and the only safe one.
-            return ProviderOutcome.rejected("EXPORT_CLAIMED_ELSEWHERE",
-                    "Another worker is sending this export");
+            return ProviderOutcome.rejected("EXPORT_CLAIMED_ELSEWHERE", "Another worker is sending this export");
         }
         int attemptNumber = attempt.get();
         Instant startedAt = clock.instant();
@@ -214,10 +214,23 @@ public class PosOrderExportService {
         try {
             prepared = prepare(tenantId, export);
         } catch (ExportNotPossible refusal) {
-            exports.recordAttempt(tenantId, exportId, attemptNumber, "REJECTED",
-                    refusal.code(), refusal.getMessage(), startedAt, clock.instant());
-            exports.settle(tenantId, exportId, ExportState.REJECTED, null,
-                    refusal.code(), refusal.getMessage(), clock.instant());
+            exports.recordAttempt(
+                    tenantId,
+                    exportId,
+                    attemptNumber,
+                    "REJECTED",
+                    refusal.code(),
+                    refusal.getMessage(),
+                    startedAt,
+                    clock.instant());
+            exports.settle(
+                    tenantId,
+                    exportId,
+                    ExportState.REJECTED,
+                    null,
+                    refusal.code(),
+                    refusal.getMessage(),
+                    clock.instant());
             return ProviderOutcome.rejected(refusal.code(), refusal.getMessage());
         }
 
@@ -225,34 +238,52 @@ public class PosOrderExportService {
         ProviderOutcome outcome = result.outcome();
         Instant finishedAt = clock.instant();
 
-        exports.recordAttempt(tenantId, exportId, attemptNumber, outcome.status().name(),
-                outcome.errorCode(), outcome.detail(), startedAt, finishedAt);
+        exports.recordAttempt(
+                tenantId,
+                exportId,
+                attemptNumber,
+                outcome.status().name(),
+                outcome.errorCode(),
+                outcome.detail(),
+                startedAt,
+                finishedAt);
 
-        ExportState next = switch (outcome.status()) {
-            case SUCCESS -> ExportState.ACCEPTED;
-            case REJECTED -> ExportState.REJECTED;
-            // Both of the remaining ones become UNCERTAIN, and the RETRYABLE case
-            // is the interesting one. The gateway has already upgraded every
-            // ambiguous retryable on an unkeyed create; what survives as RETRYABLE
-            // here is the circuit breaker refusing before anything was sent. That
-            // is genuinely safe to send again — but it is sent again by a caller
-            // deciding to, not by this method looping.
-            case UNCERTAIN -> ExportState.UNCERTAIN;
-            case RETRYABLE -> "CIRCUIT_OPEN".equals(outcome.errorCode())
-                    ? ExportState.RESOLVED_ABSENT
-                    : ExportState.UNCERTAIN;
-        };
+        ExportState next =
+                switch (outcome.status()) {
+                    case SUCCESS -> ExportState.ACCEPTED;
+                    case REJECTED -> ExportState.REJECTED;
+                    // Both of the remaining ones become UNCERTAIN, and the RETRYABLE case
+                    // is the interesting one. The gateway has already upgraded every
+                    // ambiguous retryable on an unkeyed create; what survives as RETRYABLE
+                    // here is the circuit breaker refusing before anything was sent. That
+                    // is genuinely safe to send again — but it is sent again by a caller
+                    // deciding to, not by this method looping.
+                    case UNCERTAIN -> ExportState.UNCERTAIN;
+                    case RETRYABLE ->
+                        "CIRCUIT_OPEN".equals(outcome.errorCode())
+                                ? ExportState.RESOLVED_ABSENT
+                                : ExportState.UNCERTAIN;
+                };
 
-        exports.settle(tenantId, exportId, next, result.externalOrderId(),
-                outcome.errorCode(), outcome.detail(), clock.instant());
+        exports.settle(
+                tenantId,
+                exportId,
+                next,
+                result.externalOrderId(),
+                outcome.errorCode(),
+                outcome.detail(),
+                clock.instant());
 
         if (next == ExportState.UNCERTAIN) {
             // Logged at warn because somebody has to look at it, and without a
             // customer identifier of any kind: ADR 0029 keeps an order's contact
             // details out of every log line, and the export id is enough to find
             // the row.
-            log.warn("POS export {} is uncertain after attempt {} ({}); it will not be re-sent",
-                    exportId, attemptNumber, outcome.errorCode());
+            log.warn(
+                    "POS export {} is uncertain after attempt {} ({}); it will not be re-sent",
+                    exportId,
+                    attemptNumber,
+                    outcome.errorCode());
         }
         return outcome;
     }
@@ -271,8 +302,8 @@ public class PosOrderExportService {
         }
         JdbcPosExportStore.ExportRow export = row.get();
         if (export.state() != ExportState.UNCERTAIN) {
-            return ProviderOutcome.rejected("EXPORT_NOT_UNCERTAIN",
-                    "An export in %s has nothing to discover".formatted(export.state()));
+            return ProviderOutcome.rejected(
+                    "EXPORT_NOT_UNCERTAIN", "An export in %s has nothing to discover".formatted(export.state()));
         }
 
         Prepared prepared;
@@ -282,19 +313,29 @@ public class PosOrderExportService {
             // The export cannot even be described any more — a mapping was retired
             // between the send and now. That is a person's problem rather than a
             // machine's, and it is exactly where an operator queue belongs.
-            exports.resolve(tenantId, exportId, ExportState.UNCERTAIN, ExportState.AWAITING_OPERATOR,
-                    null, null, refusal.getMessage(), null, clock.instant());
+            exports.resolve(
+                    tenantId,
+                    exportId,
+                    ExportState.UNCERTAIN,
+                    ExportState.AWAITING_OPERATOR,
+                    null,
+                    null,
+                    refusal.getMessage(),
+                    null,
+                    clock.instant());
             return ProviderOutcome.uncertain(refusal.code(), refusal.getMessage());
         }
 
-        RecoveryRead read = prepared.adapter().findExportedOrder(prepared.context(),
-                new ExportProbe(
-                        export.correlationReference(),
-                        prepared.order().customer().phone(),
-                        export.lineFingerprint(),
-                        prepared.fingerprintLines(),
-                        export.requestedAt().minus(RECOVERY_WINDOW),
-                        export.requestedAt().plus(RECOVERY_WINDOW)));
+        RecoveryRead read = prepared.adapter()
+                .findExportedOrder(
+                        prepared.context(),
+                        new ExportProbe(
+                                export.correlationReference(),
+                                prepared.order().customer().phone(),
+                                export.lineFingerprint(),
+                                prepared.fingerprintLines(),
+                                export.requestedAt().minus(RECOVERY_WINDOW),
+                                export.requestedAt().plus(RECOVERY_WINDOW)));
 
         if (read.outcome().status() != ProviderOutcome.Status.SUCCESS) {
             // The provider could not be read. The export stays UNCERTAIN so the
@@ -304,34 +345,54 @@ public class PosOrderExportService {
             return read.outcome();
         }
 
-        exports.replaceCandidates(tenantId, exportId, read.candidates(),
-                Math.max(1, export.attemptCount()), clock.instant());
+        exports.replaceCandidates(
+                tenantId, exportId, read.candidates(), Math.max(1, export.attemptCount()), clock.instant());
 
-        UncertainExportResolver.Decision decision = UncertainExportResolver.decide(
-                read.candidates(), idempotencyOf(tenantId, export.installationId()));
+        UncertainExportResolver.Decision decision =
+                UncertainExportResolver.decide(read.candidates(), idempotencyOf(tenantId, export.installationId()));
 
         return switch (decision.outcome()) {
             case LANDED -> {
-                exports.resolve(tenantId, exportId, ExportState.UNCERTAIN,
-                        ExportState.RESOLVED_LANDED, "CORRELATION_ECHOED",
-                        decision.externalOrderId(), decision.reason(),
+                exports.resolve(
+                        tenantId,
+                        exportId,
+                        ExportState.UNCERTAIN,
+                        ExportState.RESOLVED_LANDED,
+                        "CORRELATION_ECHOED",
+                        decision.externalOrderId(),
+                        decision.reason(),
                         // Attributed to the adapter version rather than to a
                         // person, because the database requires an author and
                         // "the machine, using this rule" is the honest one.
-                        prepared.adapter().providerType(), clock.instant());
-                yield ProviderOutcome.success(Map.of("externalOrderId", decision.externalOrderId()),
-                        decision.externalOrderId());
+                        prepared.adapter().providerType(),
+                        clock.instant());
+                yield ProviderOutcome.success(
+                        Map.of("externalOrderId", decision.externalOrderId()), decision.externalOrderId());
             }
             case RETRY_UNDER_KEY -> {
-                exports.resolve(tenantId, exportId, ExportState.UNCERTAIN,
-                        ExportState.RESOLVED_ABSENT, "CORRELATION_ECHOED", null,
-                        decision.reason(), prepared.adapter().providerType(), clock.instant());
+                exports.resolve(
+                        tenantId,
+                        exportId,
+                        ExportState.UNCERTAIN,
+                        ExportState.RESOLVED_ABSENT,
+                        "CORRELATION_ECHOED",
+                        null,
+                        decision.reason(),
+                        prepared.adapter().providerType(),
+                        clock.instant());
                 yield ProviderOutcome.retryable("EXPORT_SAFE_TO_RESEND", decision.reason(), null);
             }
             case OPERATOR -> {
-                exports.resolve(tenantId, exportId, ExportState.UNCERTAIN,
-                        ExportState.AWAITING_OPERATOR, null, null, decision.reason(),
-                        prepared.adapter().providerType(), clock.instant());
+                exports.resolve(
+                        tenantId,
+                        exportId,
+                        ExportState.UNCERTAIN,
+                        ExportState.AWAITING_OPERATOR,
+                        null,
+                        null,
+                        decision.reason(),
+                        prepared.adapter().providerType(),
+                        clock.instant());
                 yield ProviderOutcome.uncertain("EXPORT_NEEDS_OPERATOR", decision.reason());
             }
         };
@@ -346,27 +407,41 @@ public class PosOrderExportService {
      *                         would have nothing to key on
      */
     @Transactional
-    public boolean settleByOperator(UUID tenantId, UUID exportId, OperatorDecision decision,
-            String landedExternalId, String reason, String operator) {
+    public boolean settleByOperator(
+            UUID tenantId,
+            UUID exportId,
+            OperatorDecision decision,
+            String landedExternalId,
+            String reason,
+            String operator) {
 
-        ExportState to = switch (decision) {
-            case LANDED -> ExportState.RESOLVED_LANDED;
-            case ABSENT -> ExportState.RESOLVED_ABSENT;
-            case ABANDON -> ExportState.ABANDONED;
-        };
-        String kind = switch (decision) {
-            case LANDED -> "OPERATOR_CONFIRMED_LANDED";
-            case ABSENT -> "OPERATOR_CONFIRMED_ABSENT";
-            case ABANDON -> "OPERATOR_ABANDONED";
-        };
-        if (decision == OperatorDecision.LANDED
-                && (landedExternalId == null || landedExternalId.isBlank())) {
+        ExportState to =
+                switch (decision) {
+                    case LANDED -> ExportState.RESOLVED_LANDED;
+                    case ABSENT -> ExportState.RESOLVED_ABSENT;
+                    case ABANDON -> ExportState.ABANDONED;
+                };
+        String kind =
+                switch (decision) {
+                    case LANDED -> "OPERATOR_CONFIRMED_LANDED";
+                    case ABSENT -> "OPERATOR_CONFIRMED_ABSENT";
+                    case ABANDON -> "OPERATOR_ABANDONED";
+                };
+        if (decision == OperatorDecision.LANDED && (landedExternalId == null || landedExternalId.isBlank())) {
             throw new IllegalArgumentException(
                     "Confirming that an export landed requires the provider order it landed as");
         }
 
-        return exports.resolve(tenantId, exportId, ExportState.AWAITING_OPERATOR, to, kind,
-                landedExternalId, reason, operator, clock.instant());
+        return exports.resolve(
+                tenantId,
+                exportId,
+                ExportState.AWAITING_OPERATOR,
+                to,
+                kind,
+                landedExternalId,
+                reason,
+                operator,
+                clock.instant());
     }
 
     public List<ExportCandidate> candidates(UUID tenantId, UUID exportId) {
@@ -380,54 +455,51 @@ public class PosOrderExportService {
     // ------------------------------------------------------------------
 
     private Prepared prepare(UUID tenantId, JdbcPosExportStore.ExportRow export) {
-        PosOrderSource.ExportableOrder order = orders
-                .find(tenantId, export.orderId(), REVEAL_PURPOSE)
-                .orElseThrow(() -> new ExportNotPossible("ORDER_UNKNOWN",
-                        "The order behind this export could not be read"));
+        PosOrderSource.ExportableOrder order = orders.find(tenantId, export.orderId(), REVEAL_PURPOSE)
+                .orElseThrow(
+                        () -> new ExportNotPossible("ORDER_UNKNOWN", "The order behind this export could not be read"));
 
         BindingRef binding = installations
-                .primaryBinding(tenantId, order.brandId(), order.locationId(),
-                        PosCapability.ORDER_EXPORT.code())
+                .primaryBinding(tenantId, order.brandId(), order.locationId(), PosCapability.ORDER_EXPORT.code())
                 .filter(candidate -> candidate.bindingId().equals(export.bindingId()))
-                .orElseThrow(() -> new ExportNotPossible("BINDING_CHANGED",
+                .orElseThrow(() -> new ExportNotPossible(
+                        "BINDING_CHANGED",
                         "The binding this order was exported through no longer provides order export"));
 
         PosAdapter adapter = adapters.forProvider(binding.providerType())
-                .orElseThrow(() -> new ExportNotPossible("NO_ADAPTER",
-                        "No POS adapter is registered for " + binding.providerType()));
+                .orElseThrow(() -> new ExportNotPossible(
+                        "NO_ADAPTER", "No POS adapter is registered for " + binding.providerType()));
 
         Map<String, String> config = configuration.resolve(binding).orElse(Map.of());
 
         List<OrderExport.Line> lines = new ArrayList<>();
         List<LineFingerprint.Line> fingerprintLines = new ArrayList<>();
         for (PosOrderSource.ExportableOrder.Line line : order.lines()) {
-            String externalId = mappings
-                    .externalIdFor(binding.bindingId(), VARIANT_ENTITY, line.sourceVariantId())
-                    .orElseThrow(() -> new ExportNotPossible("LINE_UNMAPPED",
+            String externalId = mappings.externalIdFor(binding.bindingId(), VARIANT_ENTITY, line.sourceVariantId())
+                    .orElseThrow(() -> new ExportNotPossible(
+                            "LINE_UNMAPPED",
                             // Named rather than guessed. ADR 0012's rule is that a
                             // mapping is never inferred from a mutable product
                             // name, and an export is exactly where inferring one
                             // would send the kitchen the wrong dish.
-                            "Order line %s has no provider mapping, and a provider product "
-                                    .formatted(line.lineId())
+                            "Order line %s has no provider mapping, and a provider product ".formatted(line.lineId())
                                     + "must never be guessed from a name"));
 
             List<String> modifiers = line.modifierOptionIds().stream()
-                    .map(optionId -> mappings
-                            .externalIdFor(binding.bindingId(), MODIFIER_ENTITY, optionId)
-                            .orElseThrow(() -> new ExportNotPossible("MODIFIER_UNMAPPED",
-                                    "A modifier on line %s has no provider mapping"
-                                            .formatted(line.lineId()))))
+                    .map(optionId -> mappings.externalIdFor(binding.bindingId(), MODIFIER_ENTITY, optionId)
+                            .orElseThrow(() -> new ExportNotPossible(
+                                    "MODIFIER_UNMAPPED",
+                                    "A modifier on line %s has no provider mapping".formatted(line.lineId()))))
                     .toList();
 
-            lines.add(new OrderExport.Line(externalId,
-                    displayName(line), line.quantity(), line.unitAmountMinor(), modifiers));
-            fingerprintLines.add(new LineFingerprint.Line(
-                    externalId, line.quantity(), line.unitAmountMinor()));
+            lines.add(new OrderExport.Line(
+                    externalId, displayName(line), line.quantity(), line.unitAmountMinor(), modifiers));
+            fingerprintLines.add(new LineFingerprint.Line(externalId, line.quantity(), line.unitAmountMinor()));
         }
 
         if (lines.isEmpty()) {
-            throw new ExportNotPossible("ORDER_EMPTY",
+            throw new ExportNotPossible(
+                    "ORDER_EMPTY",
                     "An order with no lines is a kitchen ticket somebody has to walk over and ask about");
         }
 
@@ -445,8 +517,8 @@ public class PosOrderExportService {
                 order.orderId(),
                 export.correlationReference(),
                 order.publicOrderNumber(),
-                new OrderExport.Customer(externalCustomerId, order.customerName(),
-                        order.customerPhone(), order.customerAddress()),
+                new OrderExport.Customer(
+                        externalCustomerId, order.customerName(), order.customerPhone(), order.customerAddress()),
                 List.copyOf(lines),
                 order.totalMinor(),
                 config.getOrDefault("clopos.currency", order.currency()),
@@ -463,22 +535,24 @@ public class PosOrderExportService {
                 // auto_order_accept=false — so the ticket would sit there unprinted
                 // waiting for a clerk to accept an order the restaurant accepted
                 // a moment ago, on the other screen.
-                "RESTAURANT_APPROVAL".equals(order.acceptanceMode())
-                        && !"CONFIRMED".equals(order.status()),
+                "RESTAURANT_APPROVAL".equals(order.acceptanceMode()) && !"CONFIRMED".equals(order.status()),
                 order.placedAt());
 
-        PosContext context = new PosContext(tenantId, binding.installationId(), binding.bindingId(),
-                export.externalVenueReference(), config, export.id().toString());
+        PosContext context = new PosContext(
+                tenantId,
+                binding.installationId(),
+                binding.bindingId(),
+                export.externalVenueReference(),
+                config,
+                export.id().toString());
 
         return new Prepared(adapter, context, command, List.copyOf(fingerprintLines));
     }
 
-    private List<LineFingerprint.Line> fingerprintLines(BindingRef binding,
-            PosOrderSource.ExportableOrder order) {
+    private List<LineFingerprint.Line> fingerprintLines(BindingRef binding, PosOrderSource.ExportableOrder order) {
         List<LineFingerprint.Line> lines = new ArrayList<>();
         for (PosOrderSource.ExportableOrder.Line line : order.lines()) {
-            String externalId = mappings
-                    .externalIdFor(binding.bindingId(), VARIANT_ENTITY, line.sourceVariantId())
+            String externalId = mappings.externalIdFor(binding.bindingId(), VARIANT_ENTITY, line.sourceVariantId())
                     // The fingerprint is computed at open time as well as at send
                     // time, and at open time an unmapped line is not yet fatal.
                     // The HorecaOS id keeps the value stable and different from any
@@ -504,7 +578,8 @@ public class PosOrderExportService {
      * against is not an installation to assume idempotency about.
      */
     private IdempotencyBehaviour idempotencyOf(UUID tenantId, UUID installationId) {
-        return capabilities.readSnapshot(tenantId, installationId)
+        return capabilities
+                .readSnapshot(tenantId, installationId)
                 .flatMap(snapshot -> snapshot.entry(PosCapability.ORDER_EXPORT))
                 .map(entry -> entry.idempotency())
                 .orElse(IdempotencyBehaviour.NONE);
@@ -557,6 +632,5 @@ public class PosOrderExportService {
     }
 
     private record Prepared(
-            PosAdapter adapter, PosContext context, OrderExport order,
-            List<LineFingerprint.Line> fingerprintLines) { }
+            PosAdapter adapter, PosContext context, OrderExport order, List<LineFingerprint.Line> fingerprintLines) {}
 }

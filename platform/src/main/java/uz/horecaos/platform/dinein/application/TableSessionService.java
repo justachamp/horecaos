@@ -8,12 +8,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -61,8 +59,12 @@ public class TableSessionService {
     private final AuditRecorder audit;
     private final Clock clock;
 
-    public TableSessionService(JdbcDineInStore store, FloorPlanService floorPlan,
-            SessionOrderSource orders, AuditRecorder audit, Clock clock) {
+    public TableSessionService(
+            JdbcDineInStore store,
+            FloorPlanService floorPlan,
+            SessionOrderSource orders,
+            AuditRecorder audit,
+            Clock clock) {
         this.store = store;
         this.floorPlan = floorPlan;
         this.orders = orders;
@@ -75,9 +77,15 @@ public class TableSessionService {
      *                      and an occupancy are different facts, and this is the
      *                      column where they meet
      */
-    public record OpenSession(UUID tenantId, UUID brandId, UUID locationId, UUID reservationId,
-            List<UUID> tableIds, Integer partySize, String currency, String openedBy) {
-    }
+    public record OpenSession(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID reservationId,
+            List<UUID> tableIds,
+            Integer partySize,
+            String currency,
+            String openedBy) {}
 
     /**
      * Seats a party.
@@ -90,37 +98,49 @@ public class TableSessionService {
     @Transactional
     public SessionRow open(OpenSession request, String reason) {
         if (request.tableIds() == null || request.tableIds().isEmpty()) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A session sits at at least one table");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A session sits at at least one table");
         }
 
-        SettingsRow settings = floorPlan.settings(
-                request.tenantId(), request.brandId(), request.locationId());
+        SettingsRow settings = floorPlan.settings(request.tenantId(), request.brandId(), request.locationId());
 
         Instant now = clock.instant();
         UUID sessionId = UUID.randomUUID();
 
-        SessionRow session = new SessionRow(sessionId, request.tenantId(), request.brandId(),
-                request.locationId(), request.reservationId(), request.partySize(),
+        SessionRow session = new SessionRow(
+                sessionId,
+                request.tenantId(),
+                request.brandId(),
+                request.locationId(),
+                request.reservationId(),
+                request.partySize(),
                 businessDate(request.tenantId(), request.locationId(), now),
-                request.openedBy(), now, SessionStatus.OPEN,
-                settings.serviceChargeRateBp(), request.currency(), null, null, null, 1);
+                request.openedBy(),
+                now,
+                SessionStatus.OPEN,
+                settings.serviceChargeRateBp(),
+                request.currency(),
+                null,
+                null,
+                null,
+                1);
 
         if (request.reservationId() != null) {
-            ReservationRow reservation = store.findReservation(
-                            request.tenantId(), request.reservationId())
-                    .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                            "No such booking"));
+            ReservationRow reservation = store.findReservation(request.tenantId(), request.reservationId())
+                    .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such booking"));
             if (reservation.status() != ReservationStatus.CONFIRMED) {
-                throw new ApiException(ErrorCode.INVALID_REQUEST,
-                        "Only a confirmed booking can be seated; this one is "
-                                + reservation.status());
+                throw new ApiException(
+                        ErrorCode.INVALID_REQUEST,
+                        "Only a confirmed booking can be seated; this one is " + reservation.status());
             }
-            if (!store.moveReservation(request.tenantId(), request.reservationId(),
-                    ReservationStatus.CONFIRMED, ReservationStatus.SEATED,
-                    reservation.version(), now)) {
-                throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
-                        "This booking has just been changed by somebody else");
+            if (!store.moveReservation(
+                    request.tenantId(),
+                    request.reservationId(),
+                    ReservationStatus.CONFIRMED,
+                    ReservationStatus.SEATED,
+                    reservation.version(),
+                    now)) {
+                throw new ApiException(
+                        ErrorCode.RESOURCE_CONFLICT, "This booking has just been changed by somebody else");
             }
         }
 
@@ -130,24 +150,22 @@ public class TableSessionService {
             // The partial unique index on (tenant_id, reservation_id). A booking
             // seated twice is two parties charged for one reservation, and the
             // second party is sitting at somebody else's table.
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
-                    "This booking has already been seated");
+            throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "This booking has already been seated");
         }
 
         for (UUID tableId : request.tableIds()) {
             TableRow table = store.findTable(request.tenantId(), tableId)
-                    .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                            "No such table"));
+                    .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such table"));
             if (!table.locationId().equals(request.locationId())) {
-                throw new ApiException(ErrorCode.INVALID_REQUEST,
-                        "Table %s is at another branch".formatted(table.code()));
+                throw new ApiException(
+                        ErrorCode.INVALID_REQUEST, "Table %s is at another branch".formatted(table.code()));
             }
             try {
-                store.occupyTable(sessionId, tableId, request.tenantId(),
-                        request.locationId(), now);
+                store.occupyTable(sessionId, tableId, request.tenantId(), request.locationId(), now);
             } catch (DataIntegrityViolationException occupied) {
                 if (isTableOccupied(occupied)) {
-                    throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
+                    throw new ApiException(
+                            ErrorCode.RESOURCE_CONFLICT,
                             "Table %s already has a party sitting at it".formatted(table.code()),
                             Map.of("conflict", "TABLE_OCCUPIED"));
                 }
@@ -157,8 +175,7 @@ public class TableSessionService {
 
         audit.record(AuditFact.of("dinein.session.opened", AuditClass.BUSINESS)
                 .by(ActorRef.user(request.openedBy(), null))
-                .at(ResourceScope.location(request.tenantId(), request.brandId(),
-                        request.locationId()))
+                .at(ResourceScope.location(request.tenantId(), request.brandId(), request.locationId()))
                 .target("dinein.table_session", sessionId)
                 .targetVersion(1L)
                 .because(reason)
@@ -183,33 +200,32 @@ public class TableSessionService {
      * appearing on two bills.
      */
     @Transactional
-    public int addRound(UUID tenantId, UUID sessionId, UUID orderId, String actorSubject,
-            String reason) {
+    public int addRound(UUID tenantId, UUID sessionId, UUID orderId, String actorSubject, String reason) {
 
         SessionRow session = require(tenantId, sessionId);
         if (!session.status().live()) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST,
-                    "A %s session takes no more rounds".formatted(session.status()));
+            throw new ApiException(
+                    ErrorCode.INVALID_REQUEST, "A %s session takes no more rounds".formatted(session.status()));
         }
 
         OrderForSession order = orders.find(tenantId, orderId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order"));
 
         if (!"DINE_IN".equals(order.fulfillmentMode())) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST,
+            throw new ApiException(
+                    ErrorCode.INVALID_REQUEST,
                     "A %s order is not eaten at a table, so it is not a round of one"
                             .formatted(order.fulfillmentMode()));
         }
         if (!order.locationId().equals(session.locationId())) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST,
-                    "That order was placed at another branch");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "That order was placed at another branch");
         }
         if (session.currency() != null && !session.currency().equals(order.currency())) {
             // Two currencies in one bill has no correct total, and the wrong one
             // would be arrived at silently by whichever sum ran first.
-            throw new ApiException(ErrorCode.INVALID_REQUEST,
-                    "This session bills in %s and that round is in %s".formatted(
-                            session.currency(), order.currency()));
+            throw new ApiException(
+                    ErrorCode.INVALID_REQUEST,
+                    "This session bills in %s and that round is in %s".formatted(session.currency(), order.currency()));
         }
 
         Instant now = clock.instant();
@@ -217,8 +233,10 @@ public class TableSessionService {
         try {
             sequence = store.addOrder(sessionId, orderId, tenantId, now);
         } catch (DuplicateKeyException already) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
-                    "That order is already on a bill", Map.of("conflict", "ORDER_ALREADY_BILLED"));
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "That order is already on a bill",
+                    Map.of("conflict", "ORDER_ALREADY_BILLED"));
         }
 
         audit.record(AuditFact.of("dinein.session.round-added", AuditClass.BUSINESS)
@@ -265,17 +283,23 @@ public class TableSessionService {
      * disappears is how a shift's cash shortfall becomes unattributable.
      */
     @Transactional
-    public SessionRow move(UUID tenantId, UUID sessionId, SessionStatus to, int expectedVersion,
-            String closeReasonCode, String actorSubject, String reason) {
+    public SessionRow move(
+            UUID tenantId,
+            UUID sessionId,
+            SessionStatus to,
+            int expectedVersion,
+            String closeReasonCode,
+            String actorSubject,
+            String reason) {
 
         SessionRow session = require(tenantId, sessionId);
 
         if (!DineInStateMachine.permits(session.status(), to)) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST,
-                    "A %s session cannot become %s. Permitted: %s".formatted(
-                            session.status(), to, DineInStateMachine.nextFor(session.status())),
-                    Map.of("currentStatus", session.status().name(),
-                            "requestedStatus", to.name()));
+            throw new ApiException(
+                    ErrorCode.INVALID_REQUEST,
+                    "A %s session cannot become %s. Permitted: %s"
+                            .formatted(session.status(), to, DineInStateMachine.nextFor(session.status())),
+                    Map.of("currentStatus", session.status().name(), "requestedStatus", to.name()));
         }
 
         SessionBill bill = orders.bill(tenantId, sessionId);
@@ -290,14 +314,21 @@ public class TableSessionService {
             settledTotal = bill.totalMinor();
         } else if (to == SessionStatus.FORCE_CLOSED) {
             if (closeReasonCode == null || closeReasonCode.isBlank()) {
-                throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                        "A force-close names a reason code");
+                throw new ApiException(ErrorCode.VALIDATION_FAILED, "A force-close names a reason code");
             }
             settledTotal = 0L;
         }
 
-        if (!store.moveSession(tenantId, sessionId, session.status(), to, expectedVersion,
-                closedAt, settledTotal, closeReasonCode, now)) {
+        if (!store.moveSession(
+                tenantId,
+                sessionId,
+                session.status(),
+                to,
+                expectedVersion,
+                closedAt,
+                settledTotal,
+                closeReasonCode,
+                now)) {
             throw ApiException.staleVersion(expectedVersion, session.version());
         }
 
@@ -314,16 +345,15 @@ public class TableSessionService {
             changed.put("closeReasonCode", closeReasonCode);
         }
 
-        audit.record(AuditFact.of("dinein.session." + to.name().toLowerCase().replace('_', '-'),
-                        AuditClass.BUSINESS)
+        audit.record(AuditFact.of("dinein.session." + to.name().toLowerCase().replace('_', '-'), AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.location(tenantId, session.brandId(), session.locationId()))
                 .target("dinein.table_session", sessionId)
                 .targetVersion((long) expectedVersion + 1)
                 .because(reason)
                 .changed(changed)
-                .usingCapability(to == SessionStatus.FORCE_CLOSED
-                        ? "dinein.session.force_close" : "dinein.session.manage")
+                .usingCapability(
+                        to == SessionStatus.FORCE_CLOSED ? "dinein.session.force_close" : "dinein.session.manage")
                 .correlatedBy(sessionId.toString())
                 .occurredAt(now)
                 .build());
@@ -343,8 +373,7 @@ public class TableSessionService {
 
     private SessionRow require(UUID tenantId, UUID sessionId) {
         return store.findSession(tenantId, sessionId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No such session"));
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such session"));
     }
 
     /**
@@ -359,7 +388,8 @@ public class TableSessionService {
      */
     private LocalDate businessDate(UUID tenantId, UUID locationId, Instant now) {
         String zone = store.locationTimeZone(tenantId, locationId)
-                .orElseThrow(() -> new ApiException(ErrorCode.INVALID_REQUEST,
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.INVALID_REQUEST,
                         "This branch has no timezone, so its trading day cannot be decided"));
         return LocalDate.ofInstant(now, ZoneId.of(zone));
     }

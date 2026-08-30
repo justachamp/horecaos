@@ -1,18 +1,16 @@
 package uz.horecaos.platform.migration.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.util.EnumSet;
 import java.util.Set;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.migration.domain.OwnershipModes;
 import uz.horecaos.platform.migration.domain.ReadMode;
 import uz.horecaos.platform.migration.domain.ScopeState;
 import uz.horecaos.platform.migration.domain.WriteMode;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The ownership answer itself: the record every other module's write is gated on
@@ -33,10 +31,8 @@ class MigrationCapabilityOwnershipTests {
      * The states that suspend a scope without rewriting its stored modes. Spelled
      * out here rather than read from the record, so the two have to agree.
      */
-    private static final Set<ScopeState> SUSPENDED = EnumSet.of(
-            ScopeState.PAUSED,
-            ScopeState.BLOCKED_RECONCILIATION,
-            ScopeState.ROLLING_BACK);
+    private static final Set<ScopeState> SUSPENDED =
+            EnumSet.of(ScopeState.PAUSED, ScopeState.BLOCKED_RECONCILIATION, ScopeState.ROLLING_BACK);
 
     /**
      * Guarantee 2, in record form: the answer is "the target may write" only for
@@ -47,11 +43,10 @@ class MigrationCapabilityOwnershipTests {
     void targetMayWriteIsTrueForExactlyOneModeInExactlyTheRunningStates() {
         for (ScopeState state : ScopeState.values()) {
             for (OwnershipModes modes : state.permittedModes()) {
-                CapabilityOwnership ownership = new CapabilityOwnership(SCOPE,
-                        MigrationCapability.ORDERS, state, modes.writeMode(), modes.readMode());
+                CapabilityOwnership ownership = new CapabilityOwnership(
+                        SCOPE, MigrationCapability.ORDERS, state, modes.writeMode(), modes.readMode());
 
-                boolean expected = modes.writeMode() == WriteMode.TARGET_ONLY
-                        && !SUSPENDED.contains(state);
+                boolean expected = modes.writeMode() == WriteMode.TARGET_ONLY && !SUSPENDED.contains(state);
 
                 assertThat(ownership.targetMayWrite())
                         .as("%s with write mode %s", state, modes.writeMode())
@@ -74,8 +69,8 @@ class MigrationCapabilityOwnershipTests {
                 if (modes.writeMode() != WriteMode.LEGACY_WITH_TARGET_SHADOW) {
                     continue;
                 }
-                CapabilityOwnership shadow = new CapabilityOwnership(SCOPE,
-                        MigrationCapability.ORDERS, state, modes.writeMode(), modes.readMode());
+                CapabilityOwnership shadow = new CapabilityOwnership(
+                        SCOPE, MigrationCapability.ORDERS, state, modes.writeMode(), modes.readMode());
 
                 assertThat(shadow.targetMayWrite())
                         .as("a shadow in %s reading %s is still a copy", state, modes.readMode())
@@ -89,8 +84,12 @@ class MigrationCapabilityOwnershipTests {
         // The specific pair a canary runs on, named rather than only quantified
         // over, because it is the one that looks most like ownership from the
         // outside: a share of reads is already being served by the target.
-        CapabilityOwnership canary = new CapabilityOwnership(SCOPE, MigrationCapability.ORDERS,
-                ScopeState.CANARY, WriteMode.LEGACY_WITH_TARGET_SHADOW, ReadMode.CANARY_TARGET);
+        CapabilityOwnership canary = new CapabilityOwnership(
+                SCOPE,
+                MigrationCapability.ORDERS,
+                ScopeState.CANARY,
+                WriteMode.LEGACY_WITH_TARGET_SHADOW,
+                ReadMode.CANARY_TARGET);
         assertThat(canary.targetMayWrite()).isFalse();
     }
 
@@ -118,8 +117,8 @@ class MigrationCapabilityOwnershipTests {
     void thereIsNeverMoreThanOneWriter() {
         for (ScopeState state : ScopeState.values()) {
             for (OwnershipModes modes : state.permittedModes()) {
-                CapabilityOwnership ownership = new CapabilityOwnership(SCOPE,
-                        MigrationCapability.ORDERS, state, modes.writeMode(), modes.readMode());
+                CapabilityOwnership ownership = new CapabilityOwnership(
+                        SCOPE, MigrationCapability.ORDERS, state, modes.writeMode(), modes.readMode());
 
                 assertThat(ownership.targetMayWrite() && ownership.legacyMayWrite())
                         .as("%s with %s would be two authorities over one fact", state, modes)
@@ -127,9 +126,8 @@ class MigrationCapabilityOwnershipTests {
             }
         }
 
-        CapabilityOwnership pausedAfterCutover = new CapabilityOwnership(SCOPE,
-                MigrationCapability.ORDERS, ScopeState.PAUSED, WriteMode.TARGET_ONLY,
-                ReadMode.TARGET);
+        CapabilityOwnership pausedAfterCutover = new CapabilityOwnership(
+                SCOPE, MigrationCapability.ORDERS, ScopeState.PAUSED, WriteMode.TARGET_ONLY, ReadMode.TARGET);
         assertThat(pausedAfterCutover.targetMayWrite())
                 .as("a scope is paused precisely when somebody has decided it should not write")
                 .isFalse();
@@ -145,15 +143,18 @@ class MigrationCapabilityOwnershipTests {
     @Test
     @DisplayName("the fencing exception names the scope, the state and the write mode")
     void theRefusalSaysWhichRowNeedsLookingAt() {
-        CapabilityOwnership blocked = new CapabilityOwnership(SCOPE, MigrationCapability.ORDERS,
-                ScopeState.BLOCKED_RECONCILIATION, WriteMode.TARGET_ONLY, ReadMode.TARGET);
+        CapabilityOwnership blocked = new CapabilityOwnership(
+                SCOPE,
+                MigrationCapability.ORDERS,
+                ScopeState.BLOCKED_RECONCILIATION,
+                WriteMode.TARGET_ONLY,
+                ReadMode.TARGET);
 
         TargetWritesFencedException fenced = TargetWritesFencedException.fencedBy(blocked);
 
         assertThat(fenced.scopeId()).isEqualTo(SCOPE);
         assertThat(fenced.state()).isEqualTo(ScopeState.BLOCKED_RECONCILIATION);
         assertThat(fenced.writeMode()).isEqualTo(WriteMode.TARGET_ONLY);
-        assertThat(fenced.getMessage())
-                .contains("ORDERS", SCOPE.toString(), "BLOCKED_RECONCILIATION", "TARGET_ONLY");
+        assertThat(fenced.getMessage()).contains("ORDERS", SCOPE.toString(), "BLOCKED_RECONCILIATION", "TARGET_ONLY");
     }
 }

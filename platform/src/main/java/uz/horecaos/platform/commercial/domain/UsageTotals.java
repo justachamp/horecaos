@@ -1,7 +1,6 @@
 package uz.horecaos.platform.commercial.domain;
 
 import java.time.Instant;
-
 import uz.horecaos.platform.commercial.api.UsagePeriod;
 
 /**

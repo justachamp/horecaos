@@ -54,8 +54,7 @@ public record PaymentIntent(
         // The same pair-completeness the CHECK constraint states, asserted here so
         // an in-memory intent cannot be built in a shape the database would refuse.
         if ((tender == PaymentTender.CASH) != (providerType == null)) {
-            throw new IllegalArgumentException(
-                    "A cash intent has no provider and a provider intent has one");
+            throw new IllegalArgumentException("A cash intent has no provider and a provider intent has one");
         }
     }
 
@@ -83,8 +82,6 @@ public record PaymentIntent(
      * does not — invisible until an inspection.
      */
     public boolean partnerFiscalizationIsPossible() {
-        return tender == PaymentTender.PROVIDER
-                && providerType != null
-                && providerType.canFiscalize();
+        return tender == PaymentTender.PROVIDER && providerType != null && providerType.canFiscalize();
     }
 }

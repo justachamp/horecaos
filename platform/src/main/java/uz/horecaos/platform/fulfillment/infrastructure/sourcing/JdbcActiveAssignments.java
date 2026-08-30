@@ -5,10 +5,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.fulfillment.api.InternalFleetPort;
 
 /**
@@ -61,8 +59,8 @@ public class JdbcActiveAssignments implements InternalFleetPort.ActiveAssignment
                 """)
                 .param("tenantId", tenantId)
                 .param("courierIds", courierIds)
-                .query((row, rowNumber) -> new Carrying(
-                        row.getObject("courier_id", UUID.class), row.getInt("carrying")))
+                .query((row, rowNumber) ->
+                        new Carrying(row.getObject("courier_id", UUID.class), row.getInt("carrying")))
                 .list();
 
         Map<UUID, Integer> carried = new HashMap<>();
@@ -72,5 +70,5 @@ public class JdbcActiveAssignments implements InternalFleetPort.ActiveAssignment
         return Map.copyOf(carried);
     }
 
-    private record Carrying(UUID courierId, int carrying) { }
+    private record Carrying(UUID courierId, int carrying) {}
 }

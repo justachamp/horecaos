@@ -3,7 +3,6 @@ package uz.horecaos.platform.audit.infrastructure.persistence;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -104,6 +103,8 @@ public class AuditPartitionManager {
 
     /** Rows in the default partition mean a range had no partition when they arrived. */
     public long defaultPartitionRowCount() {
-        return jdbc.sql("SELECT count(*) FROM audit.audit_events_default").query(Long.class).single();
+        return jdbc.sql("SELECT count(*) FROM audit.audit_events_default")
+                .query(Long.class)
+                .single();
     }
 }

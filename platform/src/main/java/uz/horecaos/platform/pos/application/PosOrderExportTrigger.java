@@ -4,7 +4,6 @@ import java.util.Objects;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,7 +14,6 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 
@@ -74,8 +72,7 @@ import uz.horecaos.platform.ordering.api.OrderConfirmed;
  * is an order somebody has to notice, which is why the drop is logged loudly.
  */
 @Component
-@ConditionalOnProperty(name = "horecaos.pos.export.auto-dispatch", havingValue = "true",
-        matchIfMissing = true)
+@ConditionalOnProperty(name = "horecaos.pos.export.auto-dispatch", havingValue = "true", matchIfMissing = true)
 public class PosOrderExportTrigger {
 
     private static final Logger log = LoggerFactory.getLogger(PosOrderExportTrigger.class);
@@ -85,7 +82,8 @@ public class PosOrderExportTrigger {
     private final int queueLimit;
     private final int batchSize;
 
-    public PosOrderExportTrigger(PosOrderExportService exports,
+    public PosOrderExportTrigger(
+            PosOrderExportService exports,
             @Value("${horecaos.pos.export.dispatch-queue-limit:10000}") int queueLimit,
             @Value("${horecaos.pos.export.dispatch-batch:50}") int batchSize) {
         this.exports = exports;
@@ -107,12 +105,13 @@ public class PosOrderExportTrigger {
     public void onOrderConfirmed(OrderConfirmed event) {
         UUID tenantId = event.tenantId().value();
 
-        exports.open(tenantId, event.orderId()).ifPresentOrElse(
-                exportId -> afterCommit(() -> hint(new Dispatch(tenantId, exportId))),
-                // Not an error, and the reason it is only debug: a branch with no
-                // POS binding takes its orders exactly as it did before there was
-                // one, and that is most branches during the pilot.
-                () -> log.debug("Order {} opened no POS export", event.orderId()));
+        exports.open(tenantId, event.orderId())
+                .ifPresentOrElse(
+                        exportId -> afterCommit(() -> hint(new Dispatch(tenantId, exportId))),
+                        // Not an error, and the reason it is only debug: a branch with no
+                        // POS binding takes its orders exactly as it did before there was
+                        // one, and that is most branches during the pilot.
+                        () -> log.debug("Order {} opened no POS export", event.orderId()));
     }
 
     /**
@@ -152,21 +151,26 @@ public class PosOrderExportTrigger {
             // state that decides what may happen next. An UNCERTAIN one is the
             // ADR 0011 recovery read's; a REJECTED one is terminal; a claim lost
             // to another worker is that worker's to finish.
-            log.warn("POS export {} did not succeed: {} {}", dispatch.exportId(),
-                    outcome.status(), outcome.errorCode());
+            log.warn(
+                    "POS export {} did not succeed: {} {}", dispatch.exportId(), outcome.status(), outcome.errorCode());
         } catch (RuntimeException failure) {
             // Deliberately not re-queued. The export is in SENT or beyond, and an
             // exception here says nothing about whether the ticket printed — which
             // is precisely the case where sending again prints a second one.
-            log.error("POS export {} could not be sent; it will not be re-sent automatically",
-                    dispatch.exportId(), failure);
+            log.error(
+                    "POS export {} could not be sent; it will not be re-sent automatically",
+                    dispatch.exportId(),
+                    failure);
         }
     }
 
     private void hint(Dispatch dispatch) {
         if (pending.size() >= queueLimit) {
-            log.error("The POS dispatch queue is full at {}; export {} stays PENDING and will not "
-                    + "be sent until somebody resends it", queueLimit, dispatch.exportId());
+            log.error(
+                    "The POS dispatch queue is full at {}; export {} stays PENDING and will not "
+                            + "be sent until somebody resends it",
+                    queueLimit,
+                    dispatch.exportId());
             return;
         }
         pending.add(dispatch);

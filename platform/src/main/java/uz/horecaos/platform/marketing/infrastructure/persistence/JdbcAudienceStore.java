@@ -12,12 +12,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.marketing.domain.AudiencePredicate;
 import uz.horecaos.platform.marketing.domain.PredicateOperator;
 import uz.horecaos.platform.marketing.domain.PredicateType;
@@ -57,8 +54,8 @@ public class JdbcAudienceStore {
 
     // ------------------------------------------------------------- audiences
 
-    public void insertAudience(UUID id, UUID tenantId, UUID brandId, String name,
-            String description, UUID createdBy, Instant now) {
+    public void insertAudience(
+            UUID id, UUID tenantId, UUID brandId, String name, String description, UUID createdBy, Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("id", id);
         parameters.put("tenantId", tenantId);
@@ -74,9 +71,7 @@ public class JdbcAudienceStore {
                     definition_version, created_by, created_at, updated_at)
                 VALUES (:id, :tenantId, :brandId, :name, :description, 'ACTIVE',
                     1, :createdBy, :now, :now)
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
     }
 
     public Optional<AudienceRow> findAudience(UUID tenantId, UUID audienceId) {
@@ -107,8 +102,7 @@ public class JdbcAudienceStore {
      * a past send targeted lives on the snapshot rather than on a predicate row
      * nobody would ever read again.
      */
-    public int replacePredicates(UUID tenantId, UUID audienceId,
-            List<AudiencePredicate> predicates, Instant now) {
+    public int replacePredicates(UUID tenantId, UUID audienceId, List<AudiencePredicate> predicates, Instant now) {
 
         int nextVersion = jdbc.sql("""
                 UPDATE marketing.audiences
@@ -127,10 +121,7 @@ public class JdbcAudienceStore {
         jdbc.sql("""
                 DELETE FROM marketing.audience_predicates
                  WHERE tenant_id = :tenantId AND audience_id = :id
-                """)
-                .param("tenantId", tenantId)
-                .param("id", audienceId)
-                .update();
+                """).param("tenantId", tenantId).param("id", audienceId).update();
 
         int sequence = 0;
         for (AudiencePredicate predicate : predicates) {
@@ -146,8 +137,9 @@ public class JdbcAudienceStore {
             parameters.put("numericHigh", predicate.numericHigh());
             parameters.put("dateLow", predicate.dateLow());
             parameters.put("dateHigh", predicate.dateHigh());
-            parameters.put("textValues", predicate.textValues() == null
-                    ? null : objectMapper.writeValueAsString(predicate.textValues()));
+            parameters.put(
+                    "textValues",
+                    predicate.textValues() == null ? null : objectMapper.writeValueAsString(predicate.textValues()));
             parameters.put("uuidValue", predicate.audienceId());
             parameters.put("now", utc(now));
 
@@ -164,15 +156,12 @@ public class JdbcAudienceStore {
                                      CAST(:textValues AS jsonb)))
                         END,
                         :uuidValue, :now)
-                    """)
-                    .params(parameters)
-                    .update();
+                    """).params(parameters).update();
         }
         return nextVersion;
     }
 
-    public List<AudiencePredicate> loadPredicates(UUID tenantId, UUID audienceId,
-            int definitionVersion) {
+    public List<AudiencePredicate> loadPredicates(UUID tenantId, UUID audienceId, int definitionVersion) {
         return jdbc.sql("""
                 SELECT predicate_type, operator, numeric_low, numeric_high,
                        date_low, date_high, text_values, uuid_value
@@ -200,11 +189,10 @@ public class JdbcAudienceStore {
     // ------------------------------------------------------------ evaluation
 
     /** Every projection row the predicates match, with the lifecycle state beside it. */
-    public List<CandidateRow> candidates(UUID tenantId, UUID brandId,
-            List<AudiencePredicate> predicates, LocalDate brandToday) {
+    public List<CandidateRow> candidates(
+            UUID tenantId, UUID brandId, List<AudiencePredicate> predicates, LocalDate brandToday) {
 
-        AudienceQuery.Compiled compiled =
-                AudienceQuery.candidates(tenantId, brandId, predicates, brandToday);
+        AudienceQuery.Compiled compiled = AudienceQuery.candidates(tenantId, brandId, predicates, brandToday);
 
         return jdbc.sql(compiled.sql())
                 .params(compiled.parameters())
@@ -222,9 +210,18 @@ public class JdbcAudienceStore {
 
     // ------------------------------------------------------------- snapshots
 
-    public void openSnapshot(UUID id, UUID tenantId, UUID brandId, UUID audienceId,
-            int definitionVersion, String channel, String consentPurpose,
-            Instant metricWatermarkAt, int metricDefinitionVersion, UUID builtBy, Instant now) {
+    public void openSnapshot(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID audienceId,
+            int definitionVersion,
+            String channel,
+            String consentPurpose,
+            Instant metricWatermarkAt,
+            int metricDefinitionVersion,
+            UUID builtBy,
+            Instant now) {
 
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("id", id);
@@ -247,9 +244,7 @@ public class JdbcAudienceStore {
                 VALUES (:id, :tenantId, :brandId, :audienceId, :definitionVersion,
                     :channel, :consentPurpose, 'BUILDING', :watermark,
                     :metricVersion, :builtBy, :now)
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
     }
 
     /**
@@ -259,8 +254,8 @@ public class JdbcAudienceStore {
      * becomes a campaign recipient, so without this row "why did this customer not
      * get it" has no answer anywhere for exactly the people who need it answered.
      */
-    public void recordMember(UUID snapshotId, UUID tenantId, UUID accountId,
-            RefusalReason exclusion, CandidateRow metrics) {
+    public void recordMember(
+            UUID snapshotId, UUID tenantId, UUID accountId, RefusalReason exclusion, CandidateRow metrics) {
 
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("snapshotId", snapshotId);
@@ -282,13 +277,10 @@ public class JdbcAudienceStore {
                 VALUES (:snapshotId, :tenantId, :accountId, :status, :reason, :locale,
                     :orders, :spend, :recency)
                 ON CONFLICT (snapshot_id, customer_account_id) DO NOTHING
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
     }
 
-    public void completeSnapshot(UUID tenantId, UUID snapshotId, int candidateCount,
-            int memberCount, Instant now) {
+    public void completeSnapshot(UUID tenantId, UUID snapshotId, int candidateCount, int memberCount, Instant now) {
         jdbc.sql("""
                 UPDATE marketing.audience_snapshots
                    SET status = 'READY', candidate_count = :candidates,
@@ -337,8 +329,8 @@ public class JdbcAudienceStore {
      * over a table another transaction is inserting into skips and repeats rows,
      * and a skipped row here is a customer the campaign silently never reached.
      */
-    public List<SnapshotMemberRow> includedMembersAfter(UUID tenantId, UUID snapshotId,
-            UUID afterAccountId, int limit) {
+    public List<SnapshotMemberRow> includedMembersAfter(
+            UUID tenantId, UUID snapshotId, UUID afterAccountId, int limit) {
 
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
@@ -362,8 +354,7 @@ public class JdbcAudienceStore {
                 """)
                 .params(parameters)
                 .query((ResultSet row, int number) -> new SnapshotMemberRow(
-                        row.getObject("customer_account_id", UUID.class),
-                        row.getString("locale_at_evaluation")))
+                        row.getObject("customer_account_id", UUID.class), row.getString("locale_at_evaluation")))
                 .list();
     }
 
@@ -392,7 +383,8 @@ public class JdbcAudienceStore {
 
     /** The locale mix of one snapshot's members, which is what a cost estimate needs. */
     public Map<String, Integer> memberLocaleCounts(UUID tenantId, UUID snapshotId) {
-        return jdbc.sql("""
+        return jdbc
+                .sql("""
                 SELECT COALESCE(locale_at_evaluation, 'ru') AS locale, COUNT(*) AS members
                   FROM marketing.audience_snapshot_members
                  WHERE tenant_id = :tenantId
@@ -402,9 +394,9 @@ public class JdbcAudienceStore {
                 """)
                 .param("tenantId", tenantId)
                 .param("snapshotId", snapshotId)
-                .query((ResultSet row, int number) -> Map.entry(
-                        row.getString("locale"), row.getInt("members")))
-                .list().stream()
+                .query((ResultSet row, int number) -> Map.entry(row.getString("locale"), row.getInt("members")))
+                .list()
+                .stream()
                 .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
@@ -481,8 +473,8 @@ public class JdbcAudienceStore {
         return List.of((String[]) array.getArray());
     }
 
-    public record AudienceRow(UUID id, UUID tenantId, UUID brandId, String name, String status,
-            int definitionVersion, UUID createdBy) { }
+    public record AudienceRow(
+            UUID id, UUID tenantId, UUID brandId, String name, String status, int definitionVersion, UUID createdBy) {}
 
     /**
      * A projection row with the account's lifecycle state beside it.
@@ -491,22 +483,36 @@ public class JdbcAudienceStore {
      * has no recency at all, and an unboxed zero would read as somebody who
      * ordered today.
      */
-    public record CandidateRow(UUID customerAccountId, String preferredLocale,
-            Integer completedOrderCount, Long netSpendMinor, Integer daysSinceLastOrder,
-            String accountStatus, UUID mergedIntoAccountId, Instant anonymizedAt) {
+    public record CandidateRow(
+            UUID customerAccountId,
+            String preferredLocale,
+            Integer completedOrderCount,
+            Long netSpendMinor,
+            Integer daysSinceLastOrder,
+            String accountStatus,
+            UUID mergedIntoAccountId,
+            Instant anonymizedAt) {
 
         /** ADR 0044's first subtraction: not active, merged away, or anonymised. */
         public boolean isReachableAccount() {
-            return "ACTIVE".equals(accountStatus)
-                    && mergedIntoAccountId == null
-                    && anonymizedAt == null;
+            return "ACTIVE".equals(accountStatus) && mergedIntoAccountId == null && anonymizedAt == null;
         }
     }
 
-    public record SnapshotRow(UUID id, UUID tenantId, UUID brandId, UUID audienceId,
-            int definitionVersion, String channel, String consentPurpose, String status,
-            int candidateCount, int memberCount, Instant metricWatermarkAt,
-            int metricDefinitionVersion, Instant membersPurgedAt) { }
+    public record SnapshotRow(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID audienceId,
+            int definitionVersion,
+            String channel,
+            String consentPurpose,
+            String status,
+            int candidateCount,
+            int memberCount,
+            Instant metricWatermarkAt,
+            int metricDefinitionVersion,
+            Instant membersPurgedAt) {}
 
-    public record SnapshotMemberRow(UUID customerAccountId, String localeAtEvaluation) { }
+    public record SnapshotMemberRow(UUID customerAccountId, String localeAtEvaluation) {}
 }

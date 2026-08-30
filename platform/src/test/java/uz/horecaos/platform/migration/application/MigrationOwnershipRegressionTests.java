@@ -5,10 +5,8 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.util.Map;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.application.MigrationProgramService.OpenScopeCommand;
 import uz.horecaos.platform.migration.application.MigrationScopeService.AdvanceCommand;
@@ -47,10 +45,8 @@ class MigrationOwnershipRegressionTests extends MigrationControlPlaneFixture {
     void aCutOverScopeAdmitsNoFurtherImportRun() {
         UUID scopeId = ownedScope();
 
-        for (RunType writing : new RunType[] { RunType.BACKFILL, RunType.CATCH_UP,
-                RunType.REMEDIATION }) {
-            Throwable refused = catchThrowable(() -> startRun(scopeId, writing,
-                    "after-cutover-" + writing));
+        for (RunType writing : new RunType[] {RunType.BACKFILL, RunType.CATCH_UP, RunType.REMEDIATION}) {
+            Throwable refused = catchThrowable(() -> startRun(scopeId, writing, "after-cutover-" + writing));
             assertThat(refused)
                     .as("%s against a TARGET_OWNED scope", writing)
                     .isInstanceOf(MigrationPreconditionException.class);
@@ -66,7 +62,8 @@ class MigrationOwnershipRegressionTests extends MigrationControlPlaneFixture {
     void reconciliationIsExemptFromTheImportRefusal() {
         UUID scopeId = ownedScope();
 
-        assertThat(startRun(scopeId, RunType.RECONCILIATION, "measure-after-cutover")).isNotNull();
+        assertThat(startRun(scopeId, RunType.RECONCILIATION, "measure-after-cutover"))
+                .isNotNull();
     }
 
     /**
@@ -78,8 +75,8 @@ class MigrationOwnershipRegressionTests extends MigrationControlPlaneFixture {
     @DisplayName("no import run may be started against a scope that is rolling back")
     void aRollingBackScopeAdmitsNoImportRun() {
         UUID scopeId = ownedScope();
-        scopeService.rollBack(TENANT, scopeId,
-                new RollbackCommand(scopeVersion(scopeId), "money did not reconcile", key()));
+        scopeService.rollBack(
+                TENANT, scopeId, new RollbackCommand(scopeVersion(scopeId), "money did not reconcile", key()));
 
         assertThat(scope(scopeId).state()).isEqualTo(ScopeState.ROLLING_BACK);
         assertThat(catchThrowable(() -> startRun(scopeId, RunType.CATCH_UP, "during-rollback")))
@@ -108,11 +105,23 @@ class MigrationOwnershipRegressionTests extends MigrationControlPlaneFixture {
 
         advanceThrough(scopeId, ScopeState.SHADOW_READING, ScopeState.CANARY);
         scopeService.republishCoverage(TENANT, scopeId, 0, scopeVersion(scopeId), "all decided");
-        scopeService.advance(TENANT, scopeId, new AdvanceCommand(ScopeState.CUTOVER_READY,
-                scopeVersion(scopeId), "evidence is in", key()));
-        scopeService.cutOver(TENANT, scopeId, new CutoverCommand(ScopeState.TARGET_OWNED,
-                scopeVersion(scopeId), "the window opened", Map.of("watermark", "legacy:9000"),
-                REQUESTER, APPROVER, null, null, key()));
+        scopeService.advance(
+                TENANT,
+                scopeId,
+                new AdvanceCommand(ScopeState.CUTOVER_READY, scopeVersion(scopeId), "evidence is in", key()));
+        scopeService.cutOver(
+                TENANT,
+                scopeId,
+                new CutoverCommand(
+                        ScopeState.TARGET_OWNED,
+                        scopeVersion(scopeId),
+                        "the window opened",
+                        Map.of("watermark", "legacy:9000"),
+                        REQUESTER,
+                        APPROVER,
+                        null,
+                        null,
+                        key()));
 
         // The run row itself is untouched and still RUNNING — which is exactly why
         // checking it is not sufficient, and the scope has to be re-read.
@@ -141,12 +150,22 @@ class MigrationOwnershipRegressionTests extends MigrationControlPlaneFixture {
         UUID runId = startRun(scopeId, RunType.BACKFILL, "backfill-1");
 
         UUID targetId = UUID.randomUUID();
-        tx(() -> mappingStore.upsert(new EntityMapping(UUID.randomUUID(), TENANT, scopeId,
-                "ORDER", "legacy-4819", targetId, "v1", 1L, 1, MappingStatus.MAPPED, runId,
+        tx(() -> mappingStore.upsert(new EntityMapping(
+                UUID.randomUUID(),
+                TENANT,
+                scopeId,
+                "ORDER",
+                "legacy-4819",
+                targetId,
+                "v1",
+                1L,
+                1,
+                MappingStatus.MAPPED,
+                runId,
                 clock.instant())));
 
-        Throwable refused = catchThrowable(() -> tx(() -> quarantineService.quarantine(TENANT, runId,
-                new QuarantineCommand("ORDER", "legacy-4819", "TENANT_KEY_UNRESOLVED", null))));
+        Throwable refused = catchThrowable(() -> tx(() -> quarantineService.quarantine(
+                TENANT, runId, new QuarantineCommand("ORDER", "legacy-4819", "TENANT_KEY_UNRESOLVED", null))));
 
         assertThat(refused).isInstanceOf(MigrationConflictException.class);
         assertThat(refused).hasMessageContaining("already migrated");
@@ -166,11 +185,14 @@ class MigrationOwnershipRegressionTests extends MigrationControlPlaneFixture {
         advanceThrough(scopeId, ScopeState.MAPPING_APPROVED, ScopeState.BACKFILLING);
         UUID runId = startRun(scopeId, RunType.BACKFILL, "backfill-1");
 
-        var item = tx(() -> quarantineService.quarantine(TENANT, runId,
-                new QuarantineCommand("ORDER", "legacy-9001", "TENANT_KEY_UNRESOLVED", null)));
+        var item = tx(() -> quarantineService.quarantine(
+                TENANT, runId, new QuarantineCommand("ORDER", "legacy-9001", "TENANT_KEY_UNRESOLVED", null)));
 
         assertThat(item.legacyId()).isEqualTo("legacy-9001");
-        assertThat(mappingStore.find(TENANT, scopeId, "ORDER", "legacy-9001").orElseThrow().status())
+        assertThat(mappingStore
+                        .find(TENANT, scopeId, "ORDER", "legacy-9001")
+                        .orElseThrow()
+                        .status())
                 .isEqualTo(MappingStatus.QUARANTINED);
     }
 
@@ -189,9 +211,16 @@ class MigrationOwnershipRegressionTests extends MigrationControlPlaneFixture {
         UUID tenantWide = ownedScope();
         assertThat(scope(tenantWide).state()).isEqualTo(ScopeState.TARGET_OWNED);
 
-        Throwable refused = catchThrowable(() -> programs.openScope(programId,
-                new OpenScopeCommand(TENANT, BRAND, LOCATION, MigrationCapability.ORDERS,
-                        "DELEVER", "HORECAOS_ORDERING", "planning the next wave")));
+        Throwable refused = catchThrowable(() -> programs.openScope(
+                programId,
+                new OpenScopeCommand(
+                        TENANT,
+                        BRAND,
+                        LOCATION,
+                        MigrationCapability.ORDERS,
+                        "DELEVER",
+                        "HORECAOS_ORDERING",
+                        "planning the next wave")));
 
         assertThat(refused).isInstanceOf(MigrationConflictException.class);
         assertThat(refused).hasMessageContaining("no writer at all");
@@ -207,9 +236,16 @@ class MigrationOwnershipRegressionTests extends MigrationControlPlaneFixture {
     void narrowingUnderALegacyOwnedScopeIsAllowed() {
         openTenantWideScope(MigrationCapability.ORDERS);
 
-        ScopeRow narrowed = programs.openScope(programId,
-                new OpenScopeCommand(TENANT, BRAND, LOCATION, MigrationCapability.ORDERS,
-                        "DELEVER", "HORECAOS_ORDERING", "the branch that drains last"));
+        ScopeRow narrowed = programs.openScope(
+                programId,
+                new OpenScopeCommand(
+                        TENANT,
+                        BRAND,
+                        LOCATION,
+                        MigrationCapability.ORDERS,
+                        "DELEVER",
+                        "HORECAOS_ORDERING",
+                        "the branch that drains last"));
 
         assertThat(narrowed.locationId()).isEqualTo(LOCATION);
         assertThat(narrowed.state()).isEqualTo(ScopeState.DISCOVERY);
@@ -228,9 +264,10 @@ class MigrationOwnershipRegressionTests extends MigrationControlPlaneFixture {
     void rollbackIsNotAnOrdinaryTransition() {
         UUID scopeId = ownedScope();
 
-        Throwable refused = catchThrowable(() -> scopeService.advance(TENANT, scopeId,
-                new AdvanceCommand(ScopeState.ROLLING_BACK, scopeVersion(scopeId),
-                        "taking it back", key())));
+        Throwable refused = catchThrowable(() -> scopeService.advance(
+                TENANT,
+                scopeId,
+                new AdvanceCommand(ScopeState.ROLLING_BACK, scopeVersion(scopeId), "taking it back", key())));
 
         assertThat(refused).isInstanceOf(MigrationPreconditionException.class);
         assertThat(refused).hasMessageContaining("rollBack");
@@ -245,8 +282,8 @@ class MigrationOwnershipRegressionTests extends MigrationControlPlaneFixture {
         UUID scopeId = ownedScope();
         var before = scope(scopeId).modes();
 
-        ScopeRow rolling = scopeService.rollBack(TENANT, scopeId,
-                new RollbackCommand(scopeVersion(scopeId), "provider duplication", key()));
+        ScopeRow rolling = scopeService.rollBack(
+                TENANT, scopeId, new RollbackCommand(scopeVersion(scopeId), "provider duplication", key()));
 
         assertThat(rolling.state()).isEqualTo(ScopeState.ROLLING_BACK);
         assertThat(rolling.modes())
@@ -268,15 +305,33 @@ class MigrationOwnershipRegressionTests extends MigrationControlPlaneFixture {
         UUID scopeId = cutoverReadyScope();
         String sharedKey = "orders-window-3";
 
-        scopeService.refuseCutover(TENANT, scopeId, new CutoverCommand(ScopeState.TARGET_OWNED,
-                scopeVersion(scopeId), "the fiscal check had not run",
-                Map.of("watermark", "legacy:8100", "fiscalCheck", "not run"),
-                REQUESTER, APPROVER, null, null, sharedKey));
+        scopeService.refuseCutover(
+                TENANT,
+                scopeId,
+                new CutoverCommand(
+                        ScopeState.TARGET_OWNED,
+                        scopeVersion(scopeId),
+                        "the fiscal check had not run",
+                        Map.of("watermark", "legacy:8100", "fiscalCheck", "not run"),
+                        REQUESTER,
+                        APPROVER,
+                        null,
+                        null,
+                        sharedKey));
 
-        Throwable refused = catchThrowable(() -> scopeService.cutOver(TENANT, scopeId,
-                new CutoverCommand(ScopeState.TARGET_OWNED, scopeVersion(scopeId),
-                        "the window opened", Map.of("watermark", "legacy:9000"),
-                        REQUESTER, APPROVER, null, null, sharedKey)));
+        Throwable refused = catchThrowable(() -> scopeService.cutOver(
+                TENANT,
+                scopeId,
+                new CutoverCommand(
+                        ScopeState.TARGET_OWNED,
+                        scopeVersion(scopeId),
+                        "the window opened",
+                        Map.of("watermark", "legacy:9000"),
+                        REQUESTER,
+                        APPROVER,
+                        null,
+                        null,
+                        sharedKey)));
 
         assertThat(refused).isInstanceOf(MigrationConflictException.class);
         assertThat(refused).hasMessageContaining("REFUSED");
@@ -312,8 +367,7 @@ class MigrationOwnershipRegressionTests extends MigrationControlPlaneFixture {
                 "Called off once", "delever-staging", "horecaos-staging", 1, "seeding"));
         var abandoned = programs.abandon(planned.id(), planned.version(), "the pilot moved");
 
-        assertThat(catchThrowable(() ->
-                programs.abandon(planned.id(), abandoned.version(), "again")))
+        assertThat(catchThrowable(() -> programs.abandon(planned.id(), abandoned.version(), "again")))
                 .isInstanceOf(MigrationConflictException.class);
     }
 
@@ -322,9 +376,19 @@ class MigrationOwnershipRegressionTests extends MigrationControlPlaneFixture {
     /** A tenant-wide ORDERS scope that has cut over, with an approver on record. */
     private UUID ownedScope() {
         UUID scopeId = cutoverReadyScope();
-        scopeService.cutOver(TENANT, scopeId, new CutoverCommand(ScopeState.TARGET_OWNED,
-                scopeVersion(scopeId), "the window opened", Map.of("watermark", "legacy:9000"),
-                REQUESTER, APPROVER, null, null, key()));
+        scopeService.cutOver(
+                TENANT,
+                scopeId,
+                new CutoverCommand(
+                        ScopeState.TARGET_OWNED,
+                        scopeVersion(scopeId),
+                        "the window opened",
+                        Map.of("watermark", "legacy:9000"),
+                        REQUESTER,
+                        APPROVER,
+                        null,
+                        null,
+                        key()));
         return scopeId;
     }
 
@@ -332,11 +396,12 @@ class MigrationOwnershipRegressionTests extends MigrationControlPlaneFixture {
         UUID scopeId = openTenantWideScope(MigrationCapability.ORDERS);
         advanceThrough(scopeId, ScopeState.MAPPING_APPROVED, ScopeState.BACKFILLING);
         startRun(scopeId, RunType.BACKFILL, "backfill-1");
-        advanceThrough(scopeId, ScopeState.CATCHING_UP, ScopeState.SHADOW_READING,
-                ScopeState.CANARY);
+        advanceThrough(scopeId, ScopeState.CATCHING_UP, ScopeState.SHADOW_READING, ScopeState.CANARY);
         scopeService.republishCoverage(TENANT, scopeId, 0, scopeVersion(scopeId), "all decided");
-        scopeService.advance(TENANT, scopeId, new AdvanceCommand(ScopeState.CUTOVER_READY,
-                scopeVersion(scopeId), "evidence is in", key()));
+        scopeService.advance(
+                TENANT,
+                scopeId,
+                new AdvanceCommand(ScopeState.CUTOVER_READY, scopeVersion(scopeId), "evidence is in", key()));
         return scopeId;
     }
 

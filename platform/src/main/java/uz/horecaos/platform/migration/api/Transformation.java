@@ -77,8 +77,10 @@ public interface Transformation<T> {
      */
     default String digest() {
         StringBuilder canonical = new StringBuilder()
-                .append(entityType()).append('\n')
-                .append(version()).append('\n');
+                .append(entityType())
+                .append('\n')
+                .append(version())
+                .append('\n');
         rules().forEach(rule -> canonical.append(rule.strip()).append('\n'));
         try {
             byte[] hash = MessageDigest.getInstance("SHA-256")

@@ -2,13 +2,11 @@ package uz.horecaos.platform.telemetry.infrastructure.fulfillment;
 
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
 import uz.horecaos.platform.telemetry.api.CourierShiftPort;
 import uz.horecaos.platform.telemetry.api.SettlementCalendarPort;
 
@@ -41,6 +39,7 @@ public class CourierComplianceConfiguration {
 
     /** ADR 0045's stated pilot calendar. */
     private static final int PILOT_SETTLEMENT_PERIOD_DAYS = 7;
+
     private static final int PILOT_STATEMENT_DISPUTE_DAYS = 7;
 
     @Bean

@@ -3,7 +3,6 @@ package uz.horecaos.platform.ordering.api;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
-
 import uz.horecaos.platform.tenancy.api.TenantId;
 
 /**
@@ -23,7 +22,8 @@ public record OrderExpired(
         UUID locationId,
         Instant approvalDeadlineAt,
         String status,
-        int orderVersion) implements OrderingEvent {
+        int orderVersion)
+        implements OrderingEvent {
 
     public OrderExpired {
         Objects.requireNonNull(eventId, "Event ID is required");
@@ -44,8 +44,12 @@ public record OrderExpired(
 
     @Override
     public Object payload() {
-        return new Payload(orderId, brandId, locationId,
-                approvalDeadlineAt == null ? null : approvalDeadlineAt.toString(), status,
+        return new Payload(
+                orderId,
+                brandId,
+                locationId,
+                approvalDeadlineAt == null ? null : approvalDeadlineAt.toString(),
+                status,
                 orderVersion);
     }
 
@@ -57,5 +61,5 @@ public record OrderExpired(
             // timestamp is pinned rather than left to the serializer.
             String approvalDeadlineAt,
             String status,
-            int orderVersion) { }
+            int orderVersion) {}
 }

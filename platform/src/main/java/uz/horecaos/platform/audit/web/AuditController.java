@@ -1,18 +1,15 @@
 package uz.horecaos.platform.audit.web;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -36,10 +33,7 @@ public class AuditController {
     private final java.time.Clock clock;
 
     public AuditController(
-            AuditQueryService audits,
-            AuditRecorder recorder,
-            CurrentActor currentActor,
-            java.time.Clock clock) {
+            AuditQueryService audits, AuditRecorder recorder, CurrentActor currentActor, java.time.Clock clock) {
         this.audits = audits;
         this.recorder = recorder;
         this.currentActor = currentActor;
@@ -48,7 +42,8 @@ public class AuditController {
 
     @GetMapping("/control-plane/tenants/{tenantId}/audit-events")
     @RequiresCapability(Capability.AUDIT_READ)
-    @Operation(summary = "Search audit evidence within a tenant",
+    @Operation(
+            summary = "Search audit evidence within a tenant",
             description = "Reading audit is itself audited. The change document is not returned in a "
                     + "list; retrieving it is a separate, individually audited read.")
     Page<AuditQueryService.AuditEventView> search(

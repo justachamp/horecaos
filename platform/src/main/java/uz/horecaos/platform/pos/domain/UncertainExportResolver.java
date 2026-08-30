@@ -1,7 +1,6 @@
 package uz.horecaos.platform.pos.domain;
 
 import java.util.List;
-
 import uz.horecaos.platform.pos.api.CapabilitySnapshot.IdempotencyBehaviour;
 
 /**
@@ -42,8 +41,7 @@ import uz.horecaos.platform.pos.api.CapabilitySnapshot.IdempotencyBehaviour;
  */
 public final class UncertainExportResolver {
 
-    private UncertainExportResolver() {
-    }
+    private UncertainExportResolver() {}
 
     /**
      * @param idempotency what the provider guarantees about a repeated export.
@@ -55,16 +53,17 @@ public final class UncertainExportResolver {
     public static Decision decide(List<ExportCandidate> candidates, IdempotencyBehaviour idempotency) {
         if (idempotency == IdempotencyBehaviour.KEYED) {
             // The provider will collapse the repeat itself. Nothing to resolve.
-            return new Decision(Outcome.RETRY_UNDER_KEY, null,
-                    "The provider deduplicates on the key this export already carries");
+            return new Decision(
+                    Outcome.RETRY_UNDER_KEY, null, "The provider deduplicates on the key this export already carries");
         }
 
-        List<ExportCandidate> echoed = candidates.stream()
-                .filter(ExportCandidate::correlationEchoed)
-                .toList();
+        List<ExportCandidate> echoed =
+                candidates.stream().filter(ExportCandidate::correlationEchoed).toList();
 
         if (echoed.size() == 1) {
-            return new Decision(Outcome.LANDED, echoed.getFirst().externalOrderId(),
+            return new Decision(
+                    Outcome.LANDED,
+                    echoed.getFirst().externalOrderId(),
                     "The provider returned this export's own correlation reference");
         }
 
@@ -72,20 +71,26 @@ public final class UncertainExportResolver {
             // Two provider orders carrying one reference of ours means either the
             // reference is not unique at the provider or we genuinely sent twice.
             // Both are things a person must look at, and neither is a retry.
-            return new Decision(Outcome.OPERATOR, null,
+            return new Decision(
+                    Outcome.OPERATOR,
+                    null,
                     "More than one provider order carries this export's correlation reference, "
                             + "which means the reference is not unique there or the order was sent twice");
         }
 
         if (candidates.isEmpty()) {
-            return new Decision(Outcome.OPERATOR, null,
+            return new Decision(
+                    Outcome.OPERATOR,
+                    null,
                     "No provider order resembles this export. Absence from a paged read taken "
                             + "seconds after a timeout is not evidence the order is absent at the provider");
         }
 
-        return new Decision(Outcome.OPERATOR, null,
+        return new Decision(
+                Outcome.OPERATOR,
+                null,
                 "%d provider order(s) resemble this export on phone, time and line composition, "
-                        .formatted(candidates.size())
+                                .formatted(candidates.size())
                         + "which is also what a customer ordering the same basket twice looks like");
     }
 
@@ -113,5 +118,5 @@ public final class UncertainExportResolver {
      *                        explains what could not be established, not merely
      *                        that something could not be
      */
-    public record Decision(Outcome outcome, String externalOrderId, String reason) { }
+    public record Decision(Outcome outcome, String externalOrderId, String reason) {}
 }

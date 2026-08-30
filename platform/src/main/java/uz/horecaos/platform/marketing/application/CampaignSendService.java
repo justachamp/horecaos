@@ -6,13 +6,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.marketing.api.CampaignMessagePort;
 import uz.horecaos.platform.marketing.api.CampaignMessagePort.MarketingMessage;
 import uz.horecaos.platform.marketing.domain.CampaignStatus;
@@ -64,9 +62,14 @@ public class CampaignSendService {
     private final Clock clock;
     private final int batchSize;
 
-    public CampaignSendService(JdbcCampaignStore campaigns, JdbcAudienceStore audiences,
-            JdbcEngagementStore engagement, MarketingEligibility eligibility,
-            CampaignCostEstimator estimator, CampaignMessagePort messages, Clock clock,
+    public CampaignSendService(
+            JdbcCampaignStore campaigns,
+            JdbcAudienceStore audiences,
+            JdbcEngagementStore engagement,
+            MarketingEligibility eligibility,
+            CampaignCostEstimator estimator,
+            CampaignMessagePort messages,
+            Clock clock,
             @Value("${horecaos.marketing.batch-size:200}") int batchSize) {
         this.campaigns = campaigns;
         this.audiences = audiences;
@@ -87,9 +90,10 @@ public class CampaignSendService {
      */
     @Transactional
     public BatchOutcome expandNextBatch(UUID tenantId, UUID campaignId) {
-        CampaignRow campaign = campaigns.find(tenantId, campaignId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "No campaign %s belongs to this tenant".formatted(campaignId)));
+        CampaignRow campaign = campaigns
+                .find(tenantId, campaignId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("No campaign %s belongs to this tenant".formatted(campaignId)));
 
         if (!campaign.status().isExpanding()) {
             return BatchOutcome.notSending(campaign.status());
@@ -98,8 +102,7 @@ public class CampaignSendService {
             // Read before anything is claimed. A campaign that expands forty
             // thousand recipients against an unwired delivery path has spent an
             // approval and produced nothing.
-            throw new IllegalStateException(
-                    "No ADR 0020 delivery path is wired; a campaign cannot expand into one");
+            throw new IllegalStateException("No ADR 0020 delivery path is wired; a campaign cannot expand into one");
         }
 
         Instant now = clock.instant();
@@ -107,25 +110,25 @@ public class CampaignSendService {
         EngagementPolicy policy = engagement.resolvePolicy(tenantId, campaign.brandId());
 
         UUID cursor = campaigns.lastRecipientAccountId(tenantId, campaignId).orElse(null);
-        List<SnapshotMemberRow> members = audiences.includedMembersAfter(
-                tenantId, campaign.snapshotId(), cursor, batchSize);
+        List<SnapshotMemberRow> members =
+                audiences.includedMembersAfter(tenantId, campaign.snapshotId(), cursor, batchSize);
 
         if (members.isEmpty()) {
             return complete(tenantId, campaign, now);
         }
 
-        Map<String, String> bodies = messages.templateBodies(tenantId, campaign.brandId(),
-                campaign.templateKey(), channel.name());
+        Map<String, String> bodies =
+                messages.templateBodies(tenantId, campaign.brandId(), campaign.templateKey(), channel.name());
 
         long reservation = 0;
         for (SnapshotMemberRow member : members) {
-            reservation += estimator.perRecipientCostMinor(channel,
-                    bodies.get(localeOf(member)), policy.smsPricePerSegmentMinor());
+            reservation += estimator.perRecipientCostMinor(
+                    channel, bodies.get(localeOf(member)), policy.smsPricePerSegmentMinor());
         }
 
         int sequence = campaigns.nextBatchSequence(tenantId, campaignId);
-        BatchClaim claim = campaigns.claimBatch(tenantId, campaignId, campaign.snapshotId(),
-                sequence, members.size(), reservation, now);
+        BatchClaim claim = campaigns.claimBatch(
+                tenantId, campaignId, campaign.snapshotId(), sequence, members.size(), reservation, now);
 
         switch (claim) {
             case ALREADY_CLAIMED -> {
@@ -140,12 +143,19 @@ public class CampaignSendService {
                 // The reservation did not fit. Halted rather than trimmed to fit:
                 // an approver signed off a ceiling, and quietly sending as much as
                 // fits under it is a different campaign from the one approved.
-                campaigns.halt(tenantId, campaignId, CampaignStatus.SENDING,
+                campaigns.halt(
+                        tenantId,
+                        campaignId,
+                        CampaignStatus.SENDING,
                         CampaignStatus.HALTED_BUDGET,
                         "The next batch of %d recipients would exceed the cost ceiling or the "
-                                .formatted(members.size()) + "recipient cap", now);
-                log.warn("Campaign {} halted at its ceiling after {} reserved",
-                        campaignId, campaign.reservedCostMinor());
+                                        .formatted(members.size())
+                                + "recipient cap",
+                        now);
+                log.warn(
+                        "Campaign {} halted at its ceiling after {} reserved",
+                        campaignId,
+                        campaign.reservedCostMinor());
                 return BatchOutcome.haltedAtCeiling(sequence);
             }
             case RESERVED -> {
@@ -168,14 +178,28 @@ public class CampaignSendService {
             SnapshotMemberRow member = members.get(offset);
             UUID accountId = member.customerAccountId();
 
-            Optional<RefusalReason> refusal = eligibility.refusalFor(tenantId, campaign.brandId(),
-                    accountId, channel, campaign.consentPurpose(), policy,
-                    audiences.isReachableAccount(tenantId, accountId), now);
+            Optional<RefusalReason> refusal = eligibility.refusalFor(
+                    tenantId,
+                    campaign.brandId(),
+                    accountId,
+                    channel,
+                    campaign.consentPurpose(),
+                    policy,
+                    audiences.isReachableAccount(tenantId, accountId),
+                    now);
 
             if (refusal.isPresent()) {
-                campaigns.recordRecipient(tenantId, campaignId, accountId, base + offset,
-                        "REFUSED", null, refusal.get(),
-                        "Refused at send after the snapshot was built", null, now);
+                campaigns.recordRecipient(
+                        tenantId,
+                        campaignId,
+                        accountId,
+                        base + offset,
+                        "REFUSED",
+                        null,
+                        refusal.get(),
+                        "Refused at send after the snapshot was built",
+                        null,
+                        now);
                 refused++;
                 continue;
             }
@@ -185,30 +209,52 @@ public class CampaignSendService {
             // it onto the intent that already exists.
             String idempotencyKey = "campaign:%s:%s".formatted(campaignId, accountId);
 
-            UUID notificationId = messages.enqueue(new MarketingMessage(tenantId,
-                    campaign.brandId(), accountId, channel.name(), campaign.templateKey(),
-                    campaign.consentPurpose(), campaignId, idempotencyKey, Map.of(),
-                    deliverAt, null));
+            UUID notificationId = messages.enqueue(new MarketingMessage(
+                    tenantId,
+                    campaign.brandId(),
+                    accountId,
+                    channel.name(),
+                    campaign.templateKey(),
+                    campaign.consentPurpose(),
+                    campaignId,
+                    idempotencyKey,
+                    Map.of(),
+                    deliverAt,
+                    null));
 
-            campaigns.recordRecipient(tenantId, campaignId, accountId, base + offset,
-                    quiet ? "DEFERRED" : "QUEUED", notificationId, null, null,
-                    quiet ? deliverAt : null, now);
+            campaigns.recordRecipient(
+                    tenantId,
+                    campaignId,
+                    accountId,
+                    base + offset,
+                    quiet ? "DEFERRED" : "QUEUED",
+                    notificationId,
+                    null,
+                    null,
+                    quiet ? deliverAt : null,
+                    now);
 
             // The frequency ledger, written against the moment the message will
             // land rather than the moment it was expanded. A message held overnight
             // counts towards tomorrow's window, which is the one the customer will
             // experience it in.
-            engagement.recordSend(tenantId, campaign.brandId(), accountId, channel.name(),
-                    "CAMPAIGN", campaignId, notificationId, deliverAt);
+            engagement.recordSend(
+                    tenantId,
+                    campaign.brandId(),
+                    accountId,
+                    channel.name(),
+                    "CAMPAIGN",
+                    campaignId,
+                    notificationId,
+                    deliverAt);
 
-            spent += estimator.perRecipientCostMinor(channel, bodies.get(localeOf(member)),
-                    policy.smsPricePerSegmentMinor());
+            spent += estimator.perRecipientCostMinor(
+                    channel, bodies.get(localeOf(member)), policy.smsPricePerSegmentMinor());
             queued++;
         }
 
         campaigns.recordSpend(tenantId, campaignId, spent, now);
-        return new BatchOutcome(sequence, members.size(), queued, refused, spent, false, false,
-                quiet, null);
+        return new BatchOutcome(sequence, members.size(), queued, refused, spent, false, false, quiet, null);
     }
 
     private BatchOutcome complete(UUID tenantId, CampaignRow campaign, Instant now) {
@@ -239,8 +285,15 @@ public class CampaignSendService {
      *                 the next open boundary. A campaign released at 20:50 finishes
      *                 the following morning and its report spans two days
      */
-    public record BatchOutcome(int batchSequence, int claimed, int queued, int refused,
-            long spentMinor, boolean finished, boolean haltedAtCeiling, boolean deferred,
+    public record BatchOutcome(
+            int batchSequence,
+            int claimed,
+            int queued,
+            int refused,
+            long spentMinor,
+            boolean finished,
+            boolean haltedAtCeiling,
+            boolean deferred,
             CampaignStatus terminalStatus) {
 
         static BatchOutcome replayed(int sequence) {
@@ -248,8 +301,7 @@ public class CampaignSendService {
         }
 
         static BatchOutcome haltedAtCeiling(int sequence) {
-            return new BatchOutcome(sequence, 0, 0, 0, 0, true, true, false,
-                    CampaignStatus.HALTED_BUDGET);
+            return new BatchOutcome(sequence, 0, 0, 0, 0, true, true, false, CampaignStatus.HALTED_BUDGET);
         }
 
         static BatchOutcome completed(CampaignStatus terminal) {

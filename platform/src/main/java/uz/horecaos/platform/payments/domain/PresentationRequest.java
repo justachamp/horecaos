@@ -26,10 +26,7 @@ import java.util.Set;
  *                 language parameter at all
  */
 public record PresentationRequest(
-        PresentationKind preferredKind,
-        String returnUrl,
-        String language,
-        String pushRecipient) {
+        PresentationKind preferredKind, String returnUrl, String language, String pushRecipient) {
 
     /** The three Payme documents; anything else is silently ignored by Payme. */
     private static final Set<String> LANGUAGES = Set.of("ru", "uz", "en");
@@ -45,23 +42,19 @@ public record PresentationRequest(
     public PresentationRequest {
         Objects.requireNonNull(preferredKind, "A presentation kind is required");
 
-        language = language == null || language.isBlank()
-                ? null : language.strip().toLowerCase(Locale.ROOT);
+        language =
+                language == null || language.isBlank() ? null : language.strip().toLowerCase(Locale.ROOT);
         if (language != null && !LANGUAGES.contains(language)) {
-            throw new IllegalArgumentException(
-                    "A checkout language must be one of ru, uz or en");
+            throw new IllegalArgumentException("A checkout language must be one of ru, uz or en");
         }
 
-        pushRecipient = pushRecipient == null || pushRecipient.isBlank()
-                ? null : pushRecipient.strip();
+        pushRecipient = pushRecipient == null || pushRecipient.isBlank() ? null : pushRecipient.strip();
         if (pushRecipient != null && !pushRecipient.matches(UZ_MSISDN)) {
-            throw new IllegalArgumentException(
-                    "A push recipient must be twelve digits beginning 998");
+            throw new IllegalArgumentException("A push recipient must be twelve digits beginning 998");
         }
 
         if (preferredKind == PresentationKind.INVOICE_PUSH && pushRecipient == null) {
-            throw new IllegalArgumentException(
-                    "An invoice push needs the number to push it to");
+            throw new IllegalArgumentException("An invoice push needs the number to push it to");
         }
     }
 
@@ -92,7 +85,6 @@ public record PresentationRequest(
      */
     @Override
     public String toString() {
-        return "PresentationRequest[" + preferredKind
-                + (pushRecipient == null ? "" : " push=yes") + "]";
+        return "PresentationRequest[" + preferredKind + (pushRecipient == null ? "" : " push=yes") + "]";
     }
 }

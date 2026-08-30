@@ -1,10 +1,9 @@
 package uz.horecaos.platform.integration.outbox;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -12,9 +11,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Currency;
 import java.util.UUID;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -23,12 +20,9 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.TenantCreated;
 import uz.horecaos.platform.tenancy.api.TenantId;
@@ -94,10 +88,13 @@ class JdbcOutboxStoreTests {
             assertThat(saved.eventType()).isEqualTo("TenantCreated");
             assertThat(saved.attemptCount()).isEqualTo(1);
             assertThat(saved.payloadJson()).contains("tenant-a");
-            assertThat(outbox.markPublished(saved.eventId(), UUID.randomUUID(), NOW)).isFalse();
-            assertThat(outbox.markPublished(saved.eventId(), saved.claimToken(), NOW)).isTrue();
+            assertThat(outbox.markPublished(saved.eventId(), UUID.randomUUID(), NOW))
+                    .isFalse();
+            assertThat(outbox.markPublished(saved.eventId(), saved.claimToken(), NOW))
+                    .isTrue();
         });
-        assertThat(outbox.claimBatch(NOW.plusSeconds(1), Duration.ofMinutes(5), 10)).isEmpty();
+        assertThat(outbox.claimBatch(NOW.plusSeconds(1), Duration.ofMinutes(5), 10))
+                .isEmpty();
         assertThat(status(event.eventId())).isEqualTo("PUBLISHED");
     }
 
@@ -123,13 +120,13 @@ class JdbcOutboxStoreTests {
                         SELECT status, attempt_count, last_error, dead_lettered_at IS NOT NULL AS dead
                         FROM integration.outbox_events
                         """)
-                .query((resultSet, rowNumber) -> new Object[] {
-                        resultSet.getString("status"),
-                        resultSet.getInt("attempt_count"),
-                        resultSet.getString("last_error"),
-                        resultSet.getBoolean("dead")
-                })
-                .single())
+                        .query((resultSet, rowNumber) -> new Object[] {
+                            resultSet.getString("status"),
+                            resultSet.getInt("attempt_count"),
+                            resultSet.getString("last_error"),
+                            resultSet.getBoolean("dead")
+                        })
+                        .single())
                 .satisfies(row -> {
                     assertThat(row[0]).isEqualTo("DEAD_LETTER");
                     assertThat(row[1]).isEqualTo(1);
@@ -141,24 +138,24 @@ class JdbcOutboxStoreTests {
     @Test
     void neverClaimsALaterEventForAnAggregateBlockedByAnEarlierDeadLetter() {
         NewOutboxEvent first = event();
-        NewOutboxEvent second = event(
-                UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120302"),
-                NOW.plusSeconds(1));
+        NewOutboxEvent second = event(UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120302"), NOW.plusSeconds(1));
         outbox.append(first);
         outbox.append(second);
 
-        ClaimedOutboxEvent claimed = outbox.claimBatch(NOW.plusSeconds(1), Duration.ofMinutes(5), 10)
-                .getFirst();
+        ClaimedOutboxEvent claimed =
+                outbox.claimBatch(NOW.plusSeconds(1), Duration.ofMinutes(5), 10).getFirst();
         assertThat(claimed.eventId()).isEqualTo(first.eventId());
         assertThat(outbox.markFailed(
-                claimed.eventId(),
-                claimed.claimToken(),
-                NOW.plusSeconds(2),
-                NOW.plusSeconds(2),
-                "retry budget exhausted",
-                true)).isTrue();
+                        claimed.eventId(),
+                        claimed.claimToken(),
+                        NOW.plusSeconds(2),
+                        NOW.plusSeconds(2),
+                        "retry budget exhausted",
+                        true))
+                .isTrue();
 
-        assertThat(outbox.claimBatch(NOW.plus(Duration.ofDays(1)), Duration.ofMinutes(5), 10)).isEmpty();
+        assertThat(outbox.claimBatch(NOW.plus(Duration.ofDays(1)), Duration.ofMinutes(5), 10))
+                .isEmpty();
         assertThat(status(second.eventId())).isEqualTo("PENDING");
     }
 
@@ -168,21 +165,26 @@ class JdbcOutboxStoreTests {
         TransactionTemplate transaction = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
 
         assertThatThrownBy(() -> transaction.executeWithoutResult(status -> {
-            tenancy.insertTenant(tenant);
-            outbox.append(event());
-            throw new ExpectedRollbackException();
-        })).isInstanceOf(ExpectedRollbackException.class);
+                    tenancy.insertTenant(tenant);
+                    outbox.append(event());
+                    throw new ExpectedRollbackException();
+                }))
+                .isInstanceOf(ExpectedRollbackException.class);
 
-        assertThat(jdbc.sql("SELECT count(*) FROM tenant.tenants").query(Long.class).single()).isZero();
-        assertThat(jdbc.sql("SELECT count(*) FROM integration.outbox_events").query(Long.class).single()).isZero();
+        assertThat(jdbc.sql("SELECT count(*) FROM tenant.tenants")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        assertThat(jdbc.sql("SELECT count(*) FROM integration.outbox_events")
+                        .query(Long.class)
+                        .single())
+                .isZero();
     }
 
     @Test
     void mapsATypedTenancyEventIntoTheExternalOutboxContract() {
         TenancyOutboxEventListener listener = new TenancyOutboxEventListener(
-                outbox,
-                JsonMapper.builder().findAndAddModules().build(),
-                "tenancy.events");
+                outbox, JsonMapper.builder().findAndAddModules().build(), "tenancy.events");
         MDC.put("correlationId", "request-42");
         MDC.put("traceId", "trace-42");
         try {
@@ -205,7 +207,8 @@ class JdbcOutboxStoreTests {
                 .singleElement()
                 .satisfies(saved -> {
                     assertThat(saved.topic()).isEqualTo("tenancy.events");
-                    assertThat(saved.partitionKey()).isEqualTo(tenant.id().value().toString());
+                    assertThat(saved.partitionKey())
+                            .isEqualTo(tenant.id().value().toString());
                     assertThat(saved.correlationId()).isEqualTo("request-42");
                     assertThat(saved.traceContextJson()).contains("trace-42");
                     assertThat(saved.payloadJson()).contains("TENANT_SHARED");
@@ -250,5 +253,5 @@ class JdbcOutboxStoreTests {
                 ZoneId.of("Asia/Tashkent"));
     }
 
-    private static final class ExpectedRollbackException extends RuntimeException { }
+    private static final class ExpectedRollbackException extends RuntimeException {}
 }

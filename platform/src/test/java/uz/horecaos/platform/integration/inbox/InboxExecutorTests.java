@@ -1,17 +1,11 @@
 package uz.horecaos.platform.integration.inbox;
 
-import javax.sql.DataSource;
-
-import uz.horecaos.platform.support.TestDatabase;
-import uz.horecaos.platform.integration.api.InboxHandler;
-import uz.horecaos.platform.integration.api.ExternalEventEnvelope;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -19,9 +13,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -29,11 +21,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.integration.api.ExternalEventEnvelope;
+import uz.horecaos.platform.integration.api.InboxHandler;
+import uz.horecaos.platform.support.TestDatabase;
 
 /**
  * ADR 0005 exit criterion: a duplicate Kafka record cannot duplicate a durable
@@ -186,8 +179,7 @@ class InboxExecutorTests {
     void anUnsupportedVersionIsDeadLetteredRatherThanRetriedForever() {
         UUID eventId = UUID.randomUUID();
 
-        assertThat(offer(eventId, "first", 0, "TenantCreated", 99))
-                .isEqualTo(InboxResult.UNSUPPORTED);
+        assertThat(offer(eventId, "first", 0, "TenantCreated", 99)).isEqualTo(InboxResult.UNSUPPORTED);
         assertThat(status(eventId)).isEqualTo("DEAD_LETTER");
         assertThat(handler.handled()).isEmpty();
     }
@@ -196,25 +188,30 @@ class InboxExecutorTests {
     void anUnknownEventTypeIsDeadLettered() {
         UUID eventId = UUID.randomUUID();
 
-        assertThat(offer(eventId, "first", 0, "SomethingElseHappened", 1))
-                .isEqualTo(InboxResult.UNSUPPORTED);
+        assertThat(offer(eventId, "first", 0, "SomethingElseHappened", 1)).isEqualTo(InboxResult.UNSUPPORTED);
     }
 
     @Test
     void aMalformedEnvelopeIsRejectedWithoutAnInboxRow() {
-        InboxResult result = executor.execute(
-                CONSUMER, AGGREGATE.toString(), "{not json", Map.of(), TOPIC, 0, 0);
+        InboxResult result = executor.execute(CONSUMER, AGGREGATE.toString(), "{not json", Map.of(), TOPIC, 0, 0);
 
         assertThat(result).isEqualTo(InboxResult.INVALID_ENVELOPE);
-        assertThat(jdbc.sql("SELECT count(*) FROM integration.inbox_messages").query(Long.class).single())
+        assertThat(jdbc.sql("SELECT count(*) FROM integration.inbox_messages")
+                        .query(Long.class)
+                        .single())
                 .isZero();
     }
 
     @Test
     void aRecordKeyThatDisagreesWithTheAggregateIsRejected() {
         InboxResult result = executor.execute(
-                CONSUMER, UUID.randomUUID().toString(), body(UUID.randomUUID(), "first", "TenantCreated", 1),
-                Map.of(), TOPIC, 0, 0);
+                CONSUMER,
+                UUID.randomUUID().toString(),
+                body(UUID.randomUUID(), "first", "TenantCreated", 1),
+                Map.of(),
+                TOPIC,
+                0,
+                0);
 
         assertThat(result)
                 .as("the key decides partitioning, so a mismatch means ordering guarantees do not hold")
@@ -226,8 +223,13 @@ class InboxExecutorTests {
         UUID eventId = UUID.randomUUID();
 
         InboxResult result = executor.execute(
-                CONSUMER, AGGREGATE.toString(), body(eventId, "first", "TenantCreated", 1),
-                Map.of("horecaos-tenant-id", UUID.randomUUID().toString()), TOPIC, 0, 0);
+                CONSUMER,
+                AGGREGATE.toString(),
+                body(eventId, "first", "TenantCreated", 1),
+                Map.of("horecaos-tenant-id", UUID.randomUUID().toString()),
+                TOPIC,
+                0,
+                0);
 
         assertThat(result)
                 .as("a header claiming a different tenant is what a cross-tenant attempt looks like")
@@ -242,15 +244,20 @@ class InboxExecutorTests {
                 new InboxHandlerRegistry(List.of(second)),
                 new EnvelopeValidator(JsonMapper.builder().build(), 262_144),
                 JsonMapper.builder().build(),
-                new TransactionTemplate(new DataSourceTransactionManager(
-                        db.dataSource())),
-                new SimpleMeterRegistry(), 10);
+                new TransactionTemplate(new DataSourceTransactionManager(db.dataSource())),
+                new SimpleMeterRegistry(),
+                10);
 
         UUID eventId = UUID.randomUUID();
         offer(eventId, "first", 0);
         InboxResult otherResult = other.execute(
-                "other-consumer", AGGREGATE.toString(), body(eventId, "first", "TenantCreated", 1),
-                Map.of(), TOPIC, 0, 0);
+                "other-consumer",
+                AGGREGATE.toString(),
+                body(eventId, "first", "TenantCreated", 1),
+                Map.of(),
+                TOPIC,
+                0,
+                0);
 
         assertThat(otherResult)
                 .as("deduplication is per consumer; a second consumer must still see the event")
@@ -265,8 +272,8 @@ class InboxExecutorTests {
         int attempts = 8;
 
         try (ExecutorService pool = Executors.newFixedThreadPool(attempts)) {
-            List<Callable<InboxResult>> calls = java.util.Collections.nCopies(
-                    attempts, () -> offer(eventId, "first", 0));
+            List<Callable<InboxResult>> calls =
+                    java.util.Collections.nCopies(attempts, () -> offer(eventId, "first", 0));
             List<Future<InboxResult>> results = pool.invokeAll(calls);
             for (Future<InboxResult> result : results) {
                 result.get();
@@ -285,9 +292,13 @@ class InboxExecutorTests {
         assertThat(offer(earlier, "first", 0, "TenantCreated", 99)).isEqualTo(InboxResult.UNSUPPORTED);
 
         InboxResult result = executor.execute(
-                CONSUMER, AGGREGATE.toString(),
+                CONSUMER,
+                AGGREGATE.toString(),
                 body(later, "second", "TenantCreated", 1, AGGREGATE, "2026-08-20T09:30:00Z"),
-                Map.of(), TOPIC, 0, 1);
+                Map.of(),
+                TOPIC,
+                0,
+                1);
 
         assertThat(result)
                 .as("the earlier event's offset was acknowledged when it dead-lettered, so nothing "
@@ -304,9 +315,14 @@ class InboxExecutorTests {
         UUID later = UUID.randomUUID();
         offer(earlier, "first", 0, "TenantCreated", 99);
 
-        executor.execute(CONSUMER, AGGREGATE.toString(),
+        executor.execute(
+                CONSUMER,
+                AGGREGATE.toString(),
                 body(later, "second", "TenantCreated", 1, AGGREGATE, "2026-08-20T09:30:00Z"),
-                Map.of(), TOPIC, 0, 1);
+                Map.of(),
+                TOPIC,
+                0,
+                1);
 
         assertThat(attemptCount(later))
                 .as("arriving second is not a failed attempt, and charging it retry budget would "
@@ -320,9 +336,13 @@ class InboxExecutorTests {
 
         UUID other = UUID.randomUUID();
         InboxResult result = executor.execute(
-                CONSUMER, OTHER_AGGREGATE.toString(),
+                CONSUMER,
+                OTHER_AGGREGATE.toString(),
                 body(other, "elsewhere", "TenantCreated", 1, OTHER_AGGREGATE, "2026-08-20T09:30:00Z"),
-                Map.of(), TOPIC, 0, 1);
+                Map.of(),
+                TOPIC,
+                0,
+                1);
 
         assertThat(result)
                 .as("blocking is per aggregate; one stuck tenant must not stop every other tenant")
@@ -338,9 +358,7 @@ class InboxExecutorTests {
 
         // One failed attempt against a two-second initial delay: undithered,
         // every replica would come back at exactly the same instant.
-        assertThat(availableAt(eventId))
-                .isBefore(TEST_NOW.plusSeconds(2))
-                .isAfterOrEqualTo(TEST_NOW.plusSeconds(1));
+        assertThat(availableAt(eventId)).isBefore(TEST_NOW.plusSeconds(2)).isAfterOrEqualTo(TEST_NOW.plusSeconds(1));
     }
 
     private InboxResult offer(UUID eventId, String value, long offset) {
@@ -349,8 +367,7 @@ class InboxExecutorTests {
 
     private InboxResult offer(UUID eventId, String value, long offset, String eventType, int version) {
         return executor.execute(
-                CONSUMER, AGGREGATE.toString(), body(eventId, value, eventType, version),
-                Map.of(), TOPIC, 0, offset);
+                CONSUMER, AGGREGATE.toString(), body(eventId, value, eventType, version), Map.of(), TOPIC, 0, offset);
     }
 
     private static String body(UUID eventId, String value, String eventType, int version) {
@@ -363,34 +380,43 @@ class InboxExecutorTests {
                 {"eventId":"%s","eventType":"%s","eventVersion":%d,"tenantId":"%s",
                  "aggregateType":"Tenant","aggregateId":"%s","correlationId":"correlation-1",
                  "causationId":null,"occurredAt":"%s",
-                 "payload":{"value":"%s"}}"""
-                .formatted(eventId, eventType, version, TENANT, aggregateId, occurredAt, value);
+                 "payload":{"value":"%s"}}""".formatted(eventId, eventType, version, TENANT, aggregateId, occurredAt, value);
     }
 
     private String status(UUID eventId) {
         return jdbc.sql("SELECT status FROM integration.inbox_messages WHERE event_id = :id")
-                .param("id", eventId).query(String.class).single();
+                .param("id", eventId)
+                .query(String.class)
+                .single();
     }
 
     private String errorCode(UUID eventId) {
         return jdbc.sql("SELECT last_error_code FROM integration.inbox_messages WHERE event_id = :id")
-                .param("id", eventId).query(String.class).single();
+                .param("id", eventId)
+                .query(String.class)
+                .single();
     }
 
     private int attemptCount(UUID eventId) {
         return jdbc.sql("SELECT attempt_count FROM integration.inbox_messages WHERE event_id = :id")
-                .param("id", eventId).query(Integer.class).single();
+                .param("id", eventId)
+                .query(Integer.class)
+                .single();
     }
 
     private Instant availableAt(UUID eventId) {
         return jdbc.sql("SELECT available_at FROM integration.inbox_messages WHERE event_id = :id")
                 .param("id", eventId)
-                .query(java.time.OffsetDateTime.class).single().toInstant();
+                .query(java.time.OffsetDateTime.class)
+                .single()
+                .toInstant();
     }
 
     private long sideEffectCount() {
         return jdbc.sql("SELECT count(*) FROM integration.inbox_test_effects WHERE consumer_name = :consumer")
-                .param("consumer", CONSUMER).query(Long.class).single();
+                .param("consumer", CONSUMER)
+                .query(Long.class)
+                .single();
     }
 
     private void insertTenant() {

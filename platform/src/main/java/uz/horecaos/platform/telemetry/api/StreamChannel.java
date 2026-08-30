@@ -9,7 +9,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 
@@ -49,34 +48,58 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 public enum StreamChannel {
 
     /** New and changed orders on a branch's queue. The highest-value channel. */
-    ORDER_QUEUE(EnumSet.of(ScopeType.LOCATION), Capability.ORDER_READ,
-            FrameClass.SIGNAL, "ordering.events", Duration.ofMillis(250)),
+    ORDER_QUEUE(
+            EnumSet.of(ScopeType.LOCATION),
+            Capability.ORDER_READ,
+            FrameClass.SIGNAL,
+            "ordering.events",
+            Duration.ofMillis(250)),
 
     /**
      * One order's detail. Subscribed with a resource filter, because an operator
      * watching a single order does not want the branch's whole queue.
      */
-    ORDER_DETAIL(EnumSet.of(ScopeType.LOCATION), Capability.ORDER_READ,
-            FrameClass.SIGNAL, "ordering.events", Duration.ofMillis(250)),
+    ORDER_DETAIL(
+            EnumSet.of(ScopeType.LOCATION),
+            Capability.ORDER_READ,
+            FrameClass.SIGNAL,
+            "ordering.events",
+            Duration.ofMillis(250)),
 
     /** The dispatcher board: in-house and partner shipments in one list. */
-    DISPATCH_BOARD(EnumSet.of(ScopeType.LOCATION), Capability.DELIVERY_PLAN_READ,
-            FrameClass.SIGNAL, "ordering + fulfillment", Duration.ofMillis(250)),
+    DISPATCH_BOARD(
+            EnumSet.of(ScopeType.LOCATION),
+            Capability.DELIVERY_PLAN_READ,
+            FrameClass.SIGNAL,
+            "ordering + fulfillment",
+            Duration.ofMillis(250)),
 
     /** An item went on stop in the kitchen and an operator is still selling it. */
-    STOP_LIST(EnumSet.of(ScopeType.LOCATION), Capability.CATALOG_READ,
-            FrameClass.SIGNAL, "catalog.events", Duration.ofMillis(250)),
+    STOP_LIST(
+            EnumSet.of(ScopeType.LOCATION),
+            Capability.CATALOG_READ,
+            FrameClass.SIGNAL,
+            "catalog.events",
+            Duration.ofMillis(250)),
 
     /** Inbox and provider failures, which span a tenant's branches. */
-    INTEGRATION_ALERTS(EnumSet.of(ScopeType.TENANT), Capability.INTEGRATION_FAILURE_READ,
-            FrameClass.SIGNAL, "integration.failures", Duration.ofSeconds(1)),
+    INTEGRATION_ALERTS(
+            EnumSet.of(ScopeType.TENANT),
+            Capability.INTEGRATION_FAILURE_READ,
+            FrameClass.SIGNAL,
+            "integration.failures",
+            Duration.ofSeconds(1)),
 
     /**
      * The wall-board's integers, carried inline. A signal saying "a number
      * changed" followed by a fetch is two round trips for one integer.
      */
-    COUNTERS(EnumSet.of(ScopeType.LOCATION, ScopeType.BRAND), Capability.ORDER_READ,
-            FrameClass.SNAPSHOT, "derived, recomputed", Duration.ofSeconds(2)),
+    COUNTERS(
+            EnumSet.of(ScopeType.LOCATION, ScopeType.BRAND),
+            Capability.ORDER_READ,
+            FrameClass.SNAPSHOT,
+            "derived, recomputed",
+            Duration.ofSeconds(2)),
 
     /**
      * The live positions of a branch's on-duty couriers, carried inline because a
@@ -88,8 +111,12 @@ public enum StreamChannel {
      * forbids on a topic. The {@code realtime.signals} record that triggers it
      * carries a courier id, a time, and a scope key, and nothing else.
      */
-    COURIER_POSITIONS(EnumSet.of(ScopeType.LOCATION), Capability.COURIER_POSITION_READ,
-            FrameClass.SNAPSHOT, "realtime.signals", Duration.ofSeconds(5));
+    COURIER_POSITIONS(
+            EnumSet.of(ScopeType.LOCATION),
+            Capability.COURIER_POSITION_READ,
+            FrameClass.SNAPSHOT,
+            "realtime.signals",
+            Duration.ofSeconds(5));
 
     /** What a frame carries. */
     public enum FrameClass {
@@ -116,8 +143,12 @@ public enum StreamChannel {
     private final String source;
     private final Duration cadenceCap;
 
-    StreamChannel(Set<ScopeType> scopeTypes, Capability capability, FrameClass frameClass,
-            String source, Duration cadenceCap) {
+    StreamChannel(
+            Set<ScopeType> scopeTypes,
+            Capability capability,
+            FrameClass frameClass,
+            String source,
+            Duration cadenceCap) {
 
         // A channel with no capability is an unauthorized broadcast wearing a
         // registry entry, and it must not be possible to ship one. Enum
@@ -125,8 +156,7 @@ public enum StreamChannel {
         // check and its test exist because a reviewer should not have to know
         // that a constructor argument is load-bearing.
         if (capability == null) {
-            throw new IllegalStateException(
-                    "Channel " + name() + " declares no capability (ADR 0045)");
+            throw new IllegalStateException("Channel " + name() + " declares no capability (ADR 0045)");
         }
         if (scopeTypes.isEmpty()) {
             throw new IllegalStateException("Channel " + name() + " declares no scope type");
@@ -184,8 +214,8 @@ public enum StreamChannel {
     }
 
     public static StreamChannel require(String code) {
-        return find(code).orElseThrow(() -> new UnknownChannelException(
-                "Unknown stream channel \"%s\". Declare it in StreamChannel (ADR 0045)."
-                        .formatted(code)));
+        return find(code)
+                .orElseThrow(() -> new UnknownChannelException(
+                        "Unknown stream channel \"%s\". Declare it in StreamChannel (ADR 0045).".formatted(code)));
     }
 }

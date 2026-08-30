@@ -10,7 +10,6 @@ package uz.horecaos.platform.courier.domain;
  * on a statement — a stated cost of refusing to reopen.
  */
 public enum SettlementPeriodStatus {
-
     OPEN,
     CLOSING,
     CLOSED,

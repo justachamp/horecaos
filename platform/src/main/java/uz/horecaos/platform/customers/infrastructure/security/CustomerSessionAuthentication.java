@@ -4,10 +4,8 @@ import java.io.Serial;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
-
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
-
 import uz.horecaos.platform.customers.application.CustomerSession;
 import uz.horecaos.platform.iam.api.NonStaffPrincipal;
 

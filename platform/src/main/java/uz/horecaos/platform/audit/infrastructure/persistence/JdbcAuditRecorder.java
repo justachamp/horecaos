@@ -2,14 +2,11 @@ package uz.horecaos.platform.audit.infrastructure.persistence;
 
 import java.time.ZoneOffset;
 import java.util.Map;
-
 import org.slf4j.MDC;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.domain.ChangeDocuments;

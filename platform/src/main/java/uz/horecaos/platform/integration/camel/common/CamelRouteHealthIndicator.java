@@ -3,7 +3,6 @@ package uz.horecaos.platform.integration.camel.common;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
 import org.apache.camel.CamelContext;
 import org.apache.camel.Route;
 import org.apache.camel.ServiceStatus;
@@ -63,10 +62,15 @@ public class CamelRouteHealthIndicator implements HealthIndicator {
         // deployment of this application has provider routes, so an empty
         // context means the builders never registered.
         if (routes.isEmpty()) {
-            return Health.down().withDetail("reason", "No Camel routes are registered").build();
+            return Health.down()
+                    .withDetail("reason", "No Camel routes are registered")
+                    .build();
         }
         if (!notRunning.isEmpty()) {
-            return Health.down().withDetails(details).withDetail("stopped", notRunning).build();
+            return Health.down()
+                    .withDetails(details)
+                    .withDetail("stopped", notRunning)
+                    .build();
         }
         return Health.up().withDetails(details).build();
     }

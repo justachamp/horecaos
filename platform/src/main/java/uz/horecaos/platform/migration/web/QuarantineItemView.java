@@ -2,7 +2,6 @@ package uz.horecaos.platform.migration.web;
 
 import java.time.Instant;
 import java.util.UUID;
-
 import uz.horecaos.platform.migration.application.MigrationQuarantineStore.QuarantineItemRow;
 
 /**
@@ -37,8 +36,15 @@ public record QuarantineItemView(
 
     static QuarantineItemView of(QuarantineItemRow row) {
         return new QuarantineItemView(
-                row.id(), row.runId(), row.entityType(), row.legacyId(), row.reasonCode(),
-                row.sanitizedEvidenceReference(), row.status(), row.resolutionCode(),
-                row.resolvedBy(), row.resolvedAt());
+                row.id(),
+                row.runId(),
+                row.entityType(),
+                row.legacyId(),
+                row.reasonCode(),
+                row.sanitizedEvidenceReference(),
+                row.status(),
+                row.resolutionCode(),
+                row.resolvedBy(),
+                row.resolvedAt());
     }
 }

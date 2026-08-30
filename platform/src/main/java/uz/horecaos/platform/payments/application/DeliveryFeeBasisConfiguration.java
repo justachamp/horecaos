@@ -2,7 +2,6 @@ package uz.horecaos.platform.payments.application;
 
 import java.util.OptionalLong;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -27,8 +26,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class DeliveryFeeBasisConfiguration {
 
-    private static final Logger log =
-            LoggerFactory.getLogger(DeliveryFeeBasisConfiguration.class);
+    private static final Logger log = LoggerFactory.getLogger(DeliveryFeeBasisConfiguration.class);
 
     @Bean
     @ConditionalOnMissingBean(DeliveryFeeBasisPort.class)

@@ -1,17 +1,15 @@
 package uz.horecaos.platform.fulfillment.domain;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliverySourcingPolicy;
 import uz.horecaos.platform.fulfillment.domain.sourcing.PickupPlan;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * ADR 0014's time model against a fixed clock.
@@ -82,7 +80,8 @@ class PickupPlanTests {
         // 23:40 Tashkent is 18:40 UTC on the same day; the pickup window crosses
         // local midnight. Uzbekistan has no DST, so nothing shifts under the
         // plan, but the zone is what lets an operator find it on the right day.
-        Instant confirmed = ZonedDateTime.of(2026, 8, 24, 23, 40, 0, 0, TASHKENT).toInstant();
+        Instant confirmed =
+                ZonedDateTime.of(2026, 8, 24, 23, 40, 0, 0, TASHKENT).toInstant();
 
         PickupPlan plan = PickupPlan.forOrder(confirmed, Duration.ofMinutes(40), TASHKENT, POLICY);
 
@@ -96,8 +95,8 @@ class PickupPlanTests {
     @Test
     @DisplayName("latest assignment is past the pickup window, not at it")
     void latestAssignmentIsPastTheWindow() {
-        PickupPlan plan = PickupPlan.forOrder(Instant.parse("2026-08-24T12:00:00Z"),
-                Duration.ofHours(1), TASHKENT, POLICY);
+        PickupPlan plan =
+                PickupPlan.forOrder(Instant.parse("2026-08-24T12:00:00Z"), Duration.ofHours(1), TASHKENT, POLICY);
 
         // A courier assigned one minute after the window closed still delivers
         // the order; one assigned fifteen minutes later does not, and that is an

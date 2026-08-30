@@ -29,8 +29,7 @@ import org.springframework.stereotype.Component;
  * single example.
  */
 @Component
-@ConditionalOnProperty(name = "horecaos.kitchen.release-worker.enabled", havingValue = "true",
-        matchIfMissing = true)
+@ConditionalOnProperty(name = "horecaos.kitchen.release-worker.enabled", havingValue = "true", matchIfMissing = true)
 public class KitchenReleaseWorker {
 
     private static final Logger log = LoggerFactory.getLogger(KitchenReleaseWorker.class);
@@ -38,8 +37,8 @@ public class KitchenReleaseWorker {
     private final KitchenTicketService tickets;
     private final int batchSize;
 
-    public KitchenReleaseWorker(KitchenTicketService tickets,
-            @Value("${horecaos.kitchen.release-worker.batch-size:50}") int batchSize) {
+    public KitchenReleaseWorker(
+            KitchenTicketService tickets, @Value("${horecaos.kitchen.release-worker.batch-size:50}") int batchSize) {
         this.tickets = tickets;
         this.batchSize = batchSize;
     }

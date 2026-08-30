@@ -1,5 +1,8 @@
 package uz.horecaos.platform.migration.application;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
+
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -7,10 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.application.reconciliation.CrossTenantAncestryRule;
 import uz.horecaos.platform.migration.application.reconciliation.LegacyQuery;
@@ -20,9 +21,6 @@ import uz.horecaos.platform.migration.application.reconciliation.ReconciliationR
 import uz.horecaos.platform.migration.application.reconciliation.ReconciliationRuleStore;
 import uz.horecaos.platform.migration.application.reconciliation.TargetQuery;
 import uz.horecaos.platform.migration.domain.ReconciliationSeverity;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * The reconciliation rule library (ADR 0024's mandatory gates).
@@ -49,21 +47,17 @@ class MigrationReconciliationRuleTests {
 
         FakeTarget target = new FakeTarget();
         target.rows = List.of(
-                Map.of("target_status", "COMPLETED", "currency", "UZS",
-                        "total_minor", new BigDecimal("499000")),
-                Map.of("target_status", "CANCELLED", "currency", "UZS",
-                        "total_minor", new BigDecimal("121000")));
+                Map.of("target_status", "COMPLETED", "currency", "UZS", "total_minor", new BigDecimal("499000")),
+                Map.of("target_status", "CANCELLED", "currency", "UZS", "total_minor", new BigDecimal("121000")));
 
-        List<Measurement> measured =
-                new MoneyTotalsRule(MigrationCapability.ORDERS).evaluate(context(legacy, target));
+        List<Measurement> measured = new MoneyTotalsRule(MigrationCapability.ORDERS).evaluate(context(legacy, target));
 
         assertThat(measured).hasSize(2);
-        assertThat(measured).allSatisfy(measurement ->
-                assertThat(measurement.agrees())
+        assertThat(measured)
+                .allSatisfy(measurement -> assertThat(measurement.agrees())
                         .as("both slices differ, and a single total would have agreed")
                         .isFalse());
-        assertThat(measured).extracting(Measurement::dimensionKey)
-                .containsExactly("UZS|CANCELLED", "UZS|COMPLETED");
+        assertThat(measured).extracting(Measurement::dimensionKey).containsExactly("UZS|CANCELLED", "UZS|COMPLETED");
         assertThat(measured.get(0).difference()).isEqualTo(BigInteger.valueOf(1_000));
         assertThat(measured.get(1).difference()).isEqualTo(BigInteger.valueOf(-1_000));
     }
@@ -72,14 +66,12 @@ class MigrationReconciliationRuleTests {
     @DisplayName("a status present on one side only is measured, not dropped")
     void theDimensionsAreTheUnionOfBothSides() {
         FakeLegacy legacy = new FakeLegacy();
-        legacy.rows = List.of(
-                Map.of("legacy_status", "delivering", "total_minor", new BigDecimal("75000")));
+        legacy.rows = List.of(Map.of("legacy_status", "delivering", "total_minor", new BigDecimal("75000")));
 
         FakeTarget target = new FakeTarget();
         target.rows = List.of();
 
-        List<Measurement> measured =
-                new MoneyTotalsRule(MigrationCapability.ORDERS).evaluate(context(legacy, target));
+        List<Measurement> measured = new MoneyTotalsRule(MigrationCapability.ORDERS).evaluate(context(legacy, target));
 
         assertThat(measured).hasSize(1);
         assertThat(measured.get(0).dimensionKey()).isEqualTo("UZS|FULFILLING");
@@ -93,14 +85,12 @@ class MigrationReconciliationRuleTests {
     @DisplayName("a legacy status outside the enum gets its own dimension rather than a bucket")
     void anUnmappedStatusIsAFindingAndNotABucket() {
         FakeLegacy legacy = new FakeLegacy();
-        legacy.rows = List.of(
-                Map.of("legacy_status", "refunded", "total_minor", new BigDecimal("9000")));
+        legacy.rows = List.of(Map.of("legacy_status", "refunded", "total_minor", new BigDecimal("9000")));
 
-        List<Measurement> measured = new MoneyTotalsRule(MigrationCapability.ORDERS)
-                .evaluate(context(legacy, new FakeTarget()));
+        List<Measurement> measured =
+                new MoneyTotalsRule(MigrationCapability.ORDERS).evaluate(context(legacy, new FakeTarget()));
 
-        assertThat(measured).extracting(Measurement::dimensionKey)
-                .containsExactly("UZS|UNMAPPED_REFUNDED");
+        assertThat(measured).extracting(Measurement::dimensionKey).containsExactly("UZS|UNMAPPED_REFUNDED");
     }
 
     @Test
@@ -109,13 +99,14 @@ class MigrationReconciliationRuleTests {
         FakeTarget target = new FakeTarget();
         target.integers = List.of(BigInteger.ZERO, BigInteger.ONE, BigInteger.ZERO);
 
-        List<Measurement> measured = new CrossTenantAncestryRule(MigrationCapability.ORDERS)
-                .evaluate(context(new FakeLegacy(), target));
+        List<Measurement> measured =
+                new CrossTenantAncestryRule(MigrationCapability.ORDERS).evaluate(context(new FakeLegacy(), target));
 
-        assertThat(measured).extracting(Measurement::dimensionKey)
+        assertThat(measured)
+                .extracting(Measurement::dimensionKey)
                 .containsExactly("FOREIGN_TENANT", "FOREIGN_BRAND", "FOREIGN_LOCATION");
-        assertThat(measured).allSatisfy(measurement ->
-                assertThat(measurement.expected())
+        assertThat(measured)
+                .allSatisfy(measurement -> assertThat(measurement.expected())
                         .as("no legacy figure excuses a row under the wrong parent")
                         .isEqualTo(BigInteger.ZERO));
         assertThat(measured.get(1).agrees()).isFalse();
@@ -136,8 +127,8 @@ class MigrationReconciliationRuleTests {
                 .as("no arithmetic, so the results table's difference column stays null")
                 .isNull();
 
-        ReconciliationRuleStore.Declaration lenient = declaration(
-                ReconciliationSeverity.WARNING, BigInteger.valueOf(1_000_000));
+        ReconciliationRuleStore.Declaration lenient =
+                declaration(ReconciliationSeverity.WARNING, BigInteger.valueOf(1_000_000));
         assertThat(lenient.tolerates(different.difference()))
                 .as("a tolerance against a digest would be a number nothing consults")
                 .isFalse();
@@ -146,14 +137,14 @@ class MigrationReconciliationRuleTests {
     @Test
     @DisplayName("a measured comparison always has both sides")
     void oneSidedComparisonsAreRejected() {
-        assertThat(catchThrowable(() -> new Measurement("", Measurement.MeasureKind.COUNT,
-                BigInteger.TEN, null, null, null, null, null)))
+        assertThat(catchThrowable(() -> new Measurement(
+                        "", Measurement.MeasureKind.COUNT, BigInteger.TEN, null, null, null, null, null)))
                 .as("a reconciliation that passes because half of it was not measured is worse "
                         + "than one that fails")
                 .isInstanceOf(IllegalArgumentException.class);
 
-        assertThat(catchThrowable(() -> new Measurement("", Measurement.MeasureKind.AMOUNT,
-                BigInteger.TEN, BigInteger.TEN, null, null, null, null)))
+        assertThat(catchThrowable(() -> new Measurement(
+                        "", Measurement.MeasureKind.AMOUNT, BigInteger.TEN, BigInteger.TEN, null, null, null, null)))
                 .as("an amount without a currency is a number nobody can compare")
                 .isInstanceOf(IllegalArgumentException.class);
     }
@@ -164,8 +155,8 @@ class MigrationReconciliationRuleTests {
         // For UZS a minor unit is a whole som. A tolerance of 500 is five hundred
         // som, not five som — a formatter that asked ISO 4217 for a decimal count
         // and divided by 100 would report a hundredth of the discrepancy.
-        ReconciliationRuleStore.Declaration bounded = declaration(
-                ReconciliationSeverity.WARNING, BigInteger.valueOf(500));
+        ReconciliationRuleStore.Declaration bounded =
+                declaration(ReconciliationSeverity.WARNING, BigInteger.valueOf(500));
 
         assertThat(bounded.tolerates(BigInteger.valueOf(500))).isTrue();
         assertThat(bounded.tolerates(BigInteger.valueOf(-500)))
@@ -173,8 +164,7 @@ class MigrationReconciliationRuleTests {
                 .isTrue();
         assertThat(bounded.tolerates(BigInteger.valueOf(501))).isFalse();
 
-        ReconciliationRuleStore.Declaration blocking =
-                declaration(ReconciliationSeverity.CRITICAL, BigInteger.ZERO);
+        ReconciliationRuleStore.Declaration blocking = declaration(ReconciliationSeverity.CRITICAL, BigInteger.ZERO);
         assertThat(blocking.tolerates(BigInteger.ONE))
                 .as("a rule that blocks cutover admits no difference; accepting one is a decision "
                         + "about a result, with a name on it")
@@ -182,15 +172,22 @@ class MigrationReconciliationRuleTests {
     }
 
     private static ReconciliationRule.RuleContext context(LegacyQuery legacy, TargetQuery target) {
-        return new ReconciliationRule.RuleContext(
-                TENANT, SCOPE, null, null, "ORDER", legacy, target);
+        return new ReconciliationRule.RuleContext(TENANT, SCOPE, null, null, "ORDER", legacy, target);
     }
 
     private static ReconciliationRuleStore.Declaration declaration(
             ReconciliationSeverity severity, BigInteger tolerance) {
         return new ReconciliationRuleStore.Declaration(
-                UUID.randomUUID(), "RULE", 1, "ORDERS", "ORDER", severity, "AMOUNT",
-                tolerance.signum() == 0 ? "ZERO" : "ABSOLUTE", tolerance, "because");
+                UUID.randomUUID(),
+                "RULE",
+                1,
+                "ORDERS",
+                "ORDER",
+                severity,
+                "AMOUNT",
+                tolerance.signum() == 0 ? "ZERO" : "ABSOLUTE",
+                tolerance,
+                "because");
     }
 
     private static final class FakeLegacy implements LegacyQuery {

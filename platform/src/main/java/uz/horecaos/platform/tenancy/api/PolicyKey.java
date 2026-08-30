@@ -2,7 +2,6 @@ package uz.horecaos.platform.tenancy.api;
 
 import java.util.Objects;
 import java.util.Set;
-
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 
 /**

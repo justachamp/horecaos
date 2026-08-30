@@ -4,10 +4,8 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.customers.api.CustomerIdentityPolicy;
 import uz.horecaos.platform.customers.application.CustomerPolicyLookup;
 
@@ -84,8 +82,7 @@ public class ConfiguredCustomerPolicyLookup implements CustomerPolicyLookup {
                 .param("tenantId", tenantId)
                 .param("at", OffsetDateTime.ofInstant(at, ZoneOffset.UTC))
                 .query((rs, rowNum) -> new ResolvedIdentityPolicy(
-                        CustomerIdentityPolicy.valueOf(rs.getString("identity_mode")),
-                        rs.getInt("policy_version")))
+                        CustomerIdentityPolicy.valueOf(rs.getString("identity_mode")), rs.getInt("policy_version")))
                 .optional()
                 .orElseGet(ResolvedIdentityPolicy::unconfigured);
     }

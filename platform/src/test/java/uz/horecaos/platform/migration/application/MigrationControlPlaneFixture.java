@@ -1,5 +1,6 @@
 package uz.horecaos.platform.migration.application;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigInteger;
 import java.time.Duration;
 import java.time.Instant;
@@ -8,11 +9,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import javax.sql.DataSource;
-
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -21,10 +18,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalRequestOwnership;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
@@ -71,6 +66,7 @@ abstract class MigrationControlPlaneFixture {
     protected static final UUID SECOND_BRAND = UUID.randomUUID();
     /** A brand belonging to {@link #OTHER_TENANT}, for the ancestry assertions. */
     protected static final UUID FOREIGN_BRAND = UUID.randomUUID();
+
     protected static final UUID LOCATION = UUID.randomUUID();
     protected static final UUID OTHER_LOCATION = UUID.randomUUID();
 
@@ -105,7 +101,8 @@ abstract class MigrationControlPlaneFixture {
 
     @BeforeAll
     static void startDatabase() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for the migration control plane tests");
         db = TestDatabase.migrated();
         jdbcUrl = db.jdbcUrl();
@@ -161,16 +158,23 @@ abstract class MigrationControlPlaneFixture {
         MigrationAccessPolicy access = new MigrationAccessPolicy(actor, grantedAuthorization(), true);
 
         programs = new MigrationProgramService(programStore, scopeStore, access, audit, clock);
-        scopeService = new MigrationScopeService(scopeStore, reconciliationStore, decisionStore,
-                quarantineStore, access, new JdbcApprovalRequestOwnership(jdbc), audit, clock);
+        scopeService = new MigrationScopeService(
+                scopeStore,
+                reconciliationStore,
+                decisionStore,
+                quarantineStore,
+                access,
+                new JdbcApprovalRequestOwnership(jdbc),
+                audit,
+                clock);
         runService = new MigrationRunService(runStore, scopeStore, access, audit, clock);
-        quarantineService = new QuarantineService(quarantineStore, runStore, scopeStore, access,
-                audit, clock);
+        quarantineService = new QuarantineService(quarantineStore, runStore, scopeStore, access, audit, clock);
         ownership = new MigrationOwnershipService(scopeStore, new SimpleMeterRegistry());
 
         seedTenancy();
         programId = programs.create(new MigrationProgramService.CreateProgramCommand(
-                "Delever cutover", "delever-prod", "horecaos-prod", 3, "seeding the suite")).id();
+                        "Delever cutover", "delever-prod", "horecaos-prod", 3, "seeding the suite"))
+                .id();
     }
 
     // ------------------------------------------------------------ the fixture
@@ -197,8 +201,12 @@ abstract class MigrationControlPlaneFixture {
         jdbc.sql("""
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
                 VALUES (:id, :tenantId, :code, :slug, 'Brand', 'ACTIVE', 0)
-                """).param("id", id).param("tenantId", tenantId).param("code", code)
-                .param("slug", slug).update();
+                """)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("code", code)
+                .param("slug", slug)
+                .update();
     }
 
     private void insertLocation(UUID id, String code, String slug) {
@@ -207,15 +215,29 @@ abstract class MigrationControlPlaneFixture {
                     timezone, status, version)
                 VALUES (:id, :tenantId, :brandId, :code, :slug, 'Branch', 'Asia/Tashkent',
                     'ACTIVE', 0)
-                """).param("id", id).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("code", code).param("slug", slug).update();
+                """)
+                .param("id", id)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("code", code)
+                .param("slug", slug)
+                .update();
     }
 
     // ------------------------------------------------------------- shorthands
 
     protected UUID openScope(MigrationCapability capability, UUID brandId, UUID locationId) {
-        return programs.openScope(programId, new OpenScopeCommand(TENANT, brandId, locationId,
-                capability, "DELEVER", "HORECAOS_ORDERING", "opening for the suite")).id();
+        return programs.openScope(
+                        programId,
+                        new OpenScopeCommand(
+                                TENANT,
+                                brandId,
+                                locationId,
+                                capability,
+                                "DELEVER",
+                                "HORECAOS_ORDERING",
+                                "opening for the suite"))
+                .id();
     }
 
     protected UUID openTenantWideScope(MigrationCapability capability) {
@@ -233,43 +255,60 @@ abstract class MigrationControlPlaneFixture {
     /** Walks a scope along its ordinary path, one lawful transition at a time. */
     protected void advanceThrough(UUID scopeId, ScopeState... path) {
         for (ScopeState next : path) {
-            scopeService.advance(TENANT, scopeId, new AdvanceCommand(next, scopeVersion(scopeId),
-                    "walking the path", UUID.randomUUID().toString()));
+            scopeService.advance(
+                    TENANT,
+                    scopeId,
+                    new AdvanceCommand(
+                            next,
+                            scopeVersion(scopeId),
+                            "walking the path",
+                            UUID.randomUUID().toString()));
         }
     }
 
     /** Drives a fresh tenant-wide ORDERS scope up to CANARY with its coverage published. */
     protected UUID scopeReadyForCanary() {
         UUID scopeId = openTenantWideScope(MigrationCapability.ORDERS);
-        advanceThrough(scopeId,
+        advanceThrough(
+                scopeId,
                 ScopeState.MAPPING_APPROVED,
                 ScopeState.BACKFILLING,
                 ScopeState.CATCHING_UP,
                 ScopeState.SHADOW_READING,
                 ScopeState.CANARY);
-        scopeService.republishCoverage(TENANT, scopeId, 0, scopeVersion(scopeId),
-                "every source decided");
+        scopeService.republishCoverage(TENANT, scopeId, 0, scopeVersion(scopeId), "every source decided");
         return scopeId;
     }
 
     protected UUID startRun(UUID scopeId, RunType runType, String key) {
-        return runService.start(TENANT, scopeId, new MigrationRunService.StartRunCommand(
-                runType, 1, OPERATOR, "starting for the suite", key)).id();
+        return runService
+                .start(
+                        TENANT,
+                        scopeId,
+                        new MigrationRunService.StartRunCommand(runType, 1, OPERATOR, "starting for the suite", key))
+                .id();
     }
 
     /**
      * Records a difference against a scope, through the production writer, so the
      * gate reads exactly what a reconciliation run would have left behind.
      */
-    protected UUID recordDifference(UUID scopeId, UUID runId, String ruleCode,
-            ReconciliationSeverity severity) {
+    protected UUID recordDifference(UUID scopeId, UUID runId, String ruleCode, ReconciliationSeverity severity) {
 
-        return reconciliationStore.record(new JdbcReconciliationStore.ReconciliationResult(
-                UUID.randomUUID(), TENANT, runId, scopeId, ruleCode, 3, "",
-                severity,
-                JdbcReconciliationStore.ReconciliationMeasure.count(
-                        BigInteger.valueOf(41_233), BigInteger.valueOf(41_197)),
-                "evidence:recon/2026-08-22/orders", clock.instant()))
+        return reconciliationStore
+                .record(new JdbcReconciliationStore.ReconciliationResult(
+                        UUID.randomUUID(),
+                        TENANT,
+                        runId,
+                        scopeId,
+                        ruleCode,
+                        3,
+                        "",
+                        severity,
+                        JdbcReconciliationStore.ReconciliationMeasure.count(
+                                BigInteger.valueOf(41_233), BigInteger.valueOf(41_197)),
+                        "evidence:recon/2026-08-22/orders",
+                        clock.instant()))
                 .orElseThrow();
     }
 
@@ -281,8 +320,7 @@ abstract class MigrationControlPlaneFixture {
     }
 
     protected <T> T tx(java.util.function.Supplier<T> work) {
-        return new TransactionTemplate(new DataSourceTransactionManager(dataSource))
-                .execute(status -> work.get());
+        return new TransactionTemplate(new DataSourceTransactionManager(dataSource)).execute(status -> work.get());
     }
 
     protected void tx(Runnable work) {

@@ -7,12 +7,10 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
-
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CapabilityView;
@@ -82,8 +80,7 @@ public class JdbcAuthorizationService implements AuthorizationService {
 
     @Override
     public boolean has(String subject, Capability capability, ResourceScope scope) {
-        return (capability == BOOTSTRAP_CAPABILITY && isPlatformAdmin(subject))
-                || hasGrant(subject, capability, scope);
+        return (capability == BOOTSTRAP_CAPABILITY && isPlatformAdmin(subject)) || hasGrant(subject, capability, scope);
     }
 
     /**
@@ -117,9 +114,7 @@ public class JdbcAuthorizationService implements AuthorizationService {
      */
     private boolean isPlatformAdmin(String subject) {
         var actor = currentActor.get();
-        return actor != null
-                && subject.equals(actor.subject())
-                && actor.hasGlobalRole(PLATFORM_ADMIN);
+        return actor != null && subject.equals(actor.subject()) && actor.hasGlobalRole(PLATFORM_ADMIN);
     }
 
     private boolean hasGrant(String subject, Capability capability, ResourceScope scope) {
@@ -146,11 +141,9 @@ public class JdbcAuthorizationService implements AuthorizationService {
         grants.stream()
                 .collect(java.util.stream.Collectors.groupingBy(
                         grant -> java.util.Map.entry(grant.scope(), grant.roleCode()),
-                        java.util.stream.Collectors.mapping(
-                                GrantRow::capability,
-                                java.util.stream.Collectors.toSet())))
-                .forEach((key, capabilities) -> scopes.add(new CapabilityView.ScopeGrant(
-                        key.getKey(), key.getValue(), capabilities)));
+                        java.util.stream.Collectors.mapping(GrantRow::capability, java.util.stream.Collectors.toSet())))
+                .forEach((key, capabilities) ->
+                        scopes.add(new CapabilityView.ScopeGrant(key.getKey(), key.getValue(), capabilities)));
 
         return new CapabilityView(
                 subject,
@@ -223,5 +216,5 @@ public class JdbcAuthorizationService implements AuthorizationService {
     }
 
     /** Visible because Spring caching proxies cannot cache a private method. */
-    public record GrantRow(ResourceScope scope, String roleCode, Capability capability) { }
+    public record GrantRow(ResourceScope scope, String roleCode, Capability capability) {}
 }

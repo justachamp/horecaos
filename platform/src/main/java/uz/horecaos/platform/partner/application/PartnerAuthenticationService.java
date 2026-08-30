@@ -5,9 +5,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
-
 import uz.horecaos.platform.partner.api.PartnerPrincipal;
 import uz.horecaos.platform.partner.domain.PartnerClientStatus;
 import uz.horecaos.platform.partner.infrastructure.persistence.JdbcPartnerStore;
@@ -67,8 +65,8 @@ public class PartnerAuthenticationService {
     public PartnerPrincipal authenticate(String clientId, UUID tenantInPath) {
         Instant now = clock.instant();
 
-        JdbcPartnerStore.PartnerClient client = store.findClientByClientId(clientId)
-                .orElseThrow(PartnerAuthenticationService::denied);
+        JdbcPartnerStore.PartnerClient client =
+                store.findClientByClientId(clientId).orElseThrow(PartnerAuthenticationService::denied);
 
         if (client.status() != PartnerClientStatus.ACTIVE) {
             throw denied();
@@ -90,12 +88,11 @@ public class PartnerAuthenticationService {
         }
 
         store.recordAuthentication(client.id(), now);
-        return new PartnerPrincipal(client.id(), client.clientId(), client.tenantId(),
-                client.installationId(), Set.copyOf(bindings));
+        return new PartnerPrincipal(
+                client.id(), client.clientId(), client.tenantId(), client.installationId(), Set.copyOf(bindings));
     }
 
     private static ApiException denied() {
-        return new ApiException(ErrorCode.UNAUTHENTICATED,
-                "A valid partner client credential is required");
+        return new ApiException(ErrorCode.UNAUTHENTICATED, "A valid partner client credential is required");
     }
 }

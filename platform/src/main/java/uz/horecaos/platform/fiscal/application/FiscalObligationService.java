@@ -11,13 +11,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.fiscal.api.PartnerFiscalizationPort;
 import uz.horecaos.platform.fiscal.domain.BusinessZone;
 import uz.horecaos.platform.fiscal.domain.FiscalDocumentState;
@@ -83,8 +81,11 @@ public class FiscalObligationService {
     private final ZoneId fallbackZone;
     private final Duration lookback;
 
-    public FiscalObligationService(JdbcFiscalLifecycleStore documents,
-            LegalEntityDirectory sellers, FiscalReportingPolicyService policies, Clock clock,
+    public FiscalObligationService(
+            JdbcFiscalLifecycleStore documents,
+            LegalEntityDirectory sellers,
+            FiscalReportingPolicyService policies,
+            Clock clock,
             @Value("${horecaos.fiscal.business-timezone:Asia/Tashkent}") String fallbackZone,
             @Value("${horecaos.fiscal.obligation-opener.lookback:P7D}") Duration lookback) {
         this.documents = documents;
@@ -120,8 +121,8 @@ public class FiscalObligationService {
     @Transactional
     public int openObligations(int batchSize) {
         Instant now = clock.instant();
-        List<OrderOwingADocument> candidates = documents.ordersOwingADocument(
-                now.minus(lookback), fallbackZone.getId(), batchSize);
+        List<OrderOwingADocument> candidates =
+                documents.ordersOwingADocument(now.minus(lookback), fallbackZone.getId(), batchSize);
 
         int opened = 0;
         for (OrderOwingADocument candidate : candidates) {
@@ -146,7 +147,11 @@ public class FiscalObligationService {
         if (order.paymentIntentId() == null) {
             // No payment record at all. Reachable: createIntent answers null for a
             // method this build does not implement, and the order still completed.
-            return blocked(id, order, null, now,
+            return blocked(
+                    id,
+                    order,
+                    null,
+                    now,
                     "the order completed with no payment record, so no provider and no "
                             + "terminal can be identified");
         }
@@ -160,50 +165,75 @@ public class FiscalObligationService {
             // decision record here instead would be this module inventing the
             // 2026-08-22 decision on payments' behalf for a row whose absence is
             // itself the anomaly worth seeing.
-            return blocked(id, order, null, now,
+            return blocked(
+                    id,
+                    order,
+                    null,
+                    now,
                     "a cash leg with no recorded fiscal decision; the receipt is owed by the "
                             + "restaurant's own equipment and no terminal is bound");
         }
 
-        LocalDate businessDate = LocalDate.ofInstant(order.closedAt(),
-                BusinessZone.resolve(order.businessZone(), fallbackZone, "Order " + order.orderId()));
+        LocalDate businessDate = LocalDate.ofInstant(
+                order.closedAt(), BusinessZone.resolve(order.businessZone(), fallbackZone, "Order " + order.orderId()));
 
-        Optional<FiscalSeller> seller = sellers.sellerFor(
-                order.tenantId(), order.locationId(), businessDate);
+        Optional<FiscalSeller> seller = sellers.sellerFor(order.tenantId(), order.locationId(), businessDate);
 
         if (seller.isEmpty()) {
-            return blocked(id, order, null, now, sellers.isWired()
-                    ? "no legal entity is assigned to this location on " + businessDate
-                    : "tenant.legal_entities is not present in this deployment (ADR 0038 "
-                            + "rollout stage 1), so no seller can be resolved");
+            return blocked(
+                    id,
+                    order,
+                    null,
+                    now,
+                    sellers.isWired()
+                            ? "no legal entity is assigned to this location on " + businessDate
+                            : "tenant.legal_entities is not present in this deployment (ADR 0038 "
+                                    + "rollout stage 1), so no seller can be resolved");
         }
         if (!seller.get().active()) {
             // Suspended or archived. Blocked rather than silently falling through to
             // another company: which entity sells at a branch is the tenant's
             // decision and not one the platform may make on its behalf.
-            return blocked(id, order, seller.get().legalEntityId(), now,
+            return blocked(
+                    id,
+                    order,
+                    seller.get().legalEntityId(),
+                    now,
                     "legal entity %s is not active and cannot be named as the seller"
                             .formatted(seller.get().code()));
         }
 
-        return new NewFiscalDocument(id, order.tenantId(), order.orderId(),
-                seller.get().legalEntityId(), order.paymentIntentId(), order.providerType(),
-                FiscalDocumentState.PENDING, FiscalReasonCode.AWAITING_CAPTURE,
+        return new NewFiscalDocument(
+                id,
+                order.tenantId(),
+                order.orderId(),
+                seller.get().legalEntityId(),
+                order.paymentIntentId(),
+                order.providerType(),
+                FiscalDocumentState.PENDING,
+                FiscalReasonCode.AWAITING_CAPTURE,
                 order.captured()
                         ? "captured; awaiting submission to " + order.providerType()
                         : "awaiting capture before " + order.providerType() + " can be asked",
                 now);
     }
 
-    private NewFiscalDocument blocked(UUID id, OrderOwingADocument order, UUID legalEntityId,
-            Instant now, String why) {
+    private NewFiscalDocument blocked(UUID id, OrderOwingADocument order, UUID legalEntityId, Instant now, String why) {
         // At WARN with the identifiers and no evidence on it, because ADR 0029 keeps
         // fiscal signs and receipt URLs out of logs and this line has to be
         // greppable when somebody asks why an order has no receipt.
         log.warn("Order {} completed and cannot be fiscalized: {}", order.orderId(), why);
-        return new NewFiscalDocument(id, order.tenantId(), order.orderId(), legalEntityId,
-                order.paymentIntentId(), order.providerType(), FiscalDocumentState.BLOCKED,
-                FiscalReasonCode.NO_FISCAL_PATH, truncated(why), now);
+        return new NewFiscalDocument(
+                id,
+                order.tenantId(),
+                order.orderId(),
+                legalEntityId,
+                order.paymentIntentId(),
+                order.providerType(),
+                FiscalDocumentState.BLOCKED,
+                FiscalReasonCode.NO_FISCAL_PATH,
+                truncated(why),
+                now);
     }
 
     // ---------------------------------------------------------- submitting it
@@ -226,8 +256,7 @@ public class FiscalObligationService {
     @Transactional
     public List<ClaimedSubmission> claimSubmissions(int batchSize) {
         Instant now = clock.instant();
-        List<SubmissionCandidate> candidates =
-                documents.claimSubmittableDocuments(fallbackZone.getId(), batchSize);
+        List<SubmissionCandidate> candidates = documents.claimSubmittableDocuments(fallbackZone.getId(), batchSize);
 
         Map<UUID, FiscalReportingPolicy> byTenant = new HashMap<>();
         List<ClaimedSubmission> claimed = new ArrayList<>();
@@ -239,37 +268,45 @@ public class FiscalObligationService {
                 // the cashbox are the taxpayer — so submitting without a resolved
                 // entity means the receipt is issued under whichever merchant account
                 // the resolution happens to find. Blocked, visibly, and never sent.
-                documents.blockUnsent(candidate.tenantId(), candidate.id(),
+                documents.blockUnsent(
+                        candidate.tenantId(),
+                        candidate.id(),
                         FiscalReasonCode.NO_FISCAL_PATH,
-                        "no legal entity is recorded on this document, so a receipt could not "
-                                + "name its seller", now);
-                log.warn("Fiscal document {} for order {} is BLOCKED: it names no legal entity.",
-                        candidate.id(), candidate.orderId());
+                        "no legal entity is recorded on this document, so a receipt could not " + "name its seller",
+                        now);
+                log.warn(
+                        "Fiscal document {} for order {} is BLOCKED: it names no legal entity.",
+                        candidate.id(),
+                        candidate.orderId());
                 continue;
             }
 
-            FiscalReportingPolicy policy = byTenant.computeIfAbsent(
-                    candidate.tenantId(), policies::forTenant);
+            FiscalReportingPolicy policy = byTenant.computeIfAbsent(candidate.tenantId(), policies::forTenant);
 
             // The deadline the document will be judged against, written as it is
             // claimed. ADR 0038 asks for exactly this — a blocked document whose
             // deadline was derived after the fact can tell an operator that it is
             // late and not by how much or against what.
-            Instant deadline = ReportingDeadline.of(now, null,
+            Instant deadline = ReportingDeadline.of(
+                            now,
+                            null,
                             policy.deadlineFor(candidate.providerType()),
-                            BusinessZone.resolve(candidate.businessZone(), fallbackZone,
-                                    "Document " + candidate.id()))
+                            BusinessZone.resolve(candidate.businessZone(), fallbackZone, "Document " + candidate.id()))
                     .effective();
 
-            if (!documents.claimForSubmission(candidate.tenantId(), candidate.id(),
-                    candidate.version(), deadline, now)) {
+            if (!documents.claimForSubmission(
+                    candidate.tenantId(), candidate.id(), candidate.version(), deadline, now)) {
                 // Somebody else won the row between the select and the update. They
                 // will send it; this node must not.
                 continue;
             }
 
-            claimed.add(new ClaimedSubmission(candidate.tenantId(), candidate.id(),
-                    candidate.orderId(), candidate.legalEntityId(), candidate.providerType(),
+            claimed.add(new ClaimedSubmission(
+                    candidate.tenantId(),
+                    candidate.id(),
+                    candidate.orderId(),
+                    candidate.legalEntityId(),
+                    candidate.providerType(),
                     candidate.version() + 1));
         }
         return claimed;
@@ -298,20 +335,31 @@ public class FiscalObligationService {
                 // Nothing was sent, so the claim describes a request that does not
                 // exist. Left SUBMITTED it would be blocked an hour later as
                 // "the provider did not report", about a provider nobody asked.
-                documents.releaseUnsentClaim(claim.tenantId(), claim.documentId(),
-                        "no partner fiscalization is wired; nothing was sent", now);
-                log.warn("Fiscal document {} for order {} was not sent: {}.",
-                        claim.documentId(), claim.orderId(),
+                documents.releaseUnsentClaim(
+                        claim.tenantId(),
+                        claim.documentId(),
+                        "no partner fiscalization is wired; nothing was sent",
+                        now);
+                log.warn(
+                        "Fiscal document {} for order {} was not sent: {}.",
+                        claim.documentId(),
+                        claim.orderId(),
                         PartnerFiscalizationPort.NOT_WIRED_WARNING);
             }
             case NO_PROVIDER_PATH -> {
-                documents.blockUnsent(claim.tenantId(), claim.documentId(),
+                documents.blockUnsent(
+                        claim.tenantId(),
+                        claim.documentId(),
                         FiscalReasonCode.NO_FISCAL_PATH,
-                        "legal entity holds no active %s merchant account".formatted(
-                                claim.providerType()), now);
-                log.warn("Fiscal document {} for order {} is BLOCKED: legal entity {} has no "
-                                + "active {} merchant account.", claim.documentId(),
-                        claim.orderId(), claim.legalEntityId(), claim.providerType());
+                        "legal entity holds no active %s merchant account".formatted(claim.providerType()),
+                        now);
+                log.warn(
+                        "Fiscal document {} for order {} is BLOCKED: legal entity {} has no "
+                                + "active {} merchant account.",
+                        claim.documentId(),
+                        claim.orderId(),
+                        claim.legalEntityId(),
+                        claim.providerType());
             }
             case ISSUED, ALREADY_ISSUED, REJECTED, UNCERTAIN -> {
                 // Payments wrote the outcome and its evidence as the provider
@@ -323,12 +371,7 @@ public class FiscalObligationService {
 
     /** A document this node has claimed and is about to send. */
     public record ClaimedSubmission(
-            UUID tenantId,
-            UUID documentId,
-            UUID orderId,
-            UUID legalEntityId,
-            String providerType,
-            int version) {
+            UUID tenantId, UUID documentId, UUID orderId, UUID legalEntityId, String providerType, int version) {
 
         /**
          * Stable for this document and this claim, so a sweep that is somehow run

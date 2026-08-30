@@ -2,13 +2,11 @@ package uz.horecaos.platform.fulfillment.infrastructure.sourcing;
 
 import java.util.List;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
 import uz.horecaos.platform.fulfillment.api.InternalFleetPort;
 
 /**
@@ -51,8 +49,7 @@ public class InternalFleetConfiguration {
         return new InternalFleetPort() {
 
             @Override
-            public List<FleetCandidate> candidates(UUID tenantId, UUID brandId, UUID locationId,
-                    int distanceMeters) {
+            public List<FleetCandidate> candidates(UUID tenantId, UUID brandId, UUID locationId, int distanceMeters) {
                 return List.of();
             }
 

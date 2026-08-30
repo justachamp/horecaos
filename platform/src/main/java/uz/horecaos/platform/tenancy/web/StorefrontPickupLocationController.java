@@ -1,17 +1,14 @@
 package uz.horecaos.platform.tenancy.web;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Duration;
-
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 import uz.horecaos.platform.tenancy.application.StorefrontPickupLocationQuery;
 
@@ -35,13 +32,13 @@ public class StorefrontPickupLocationController {
     }
 
     @GetMapping("/pickup-locations")
-    @Operation(summary = "Find the nearest pickup locations with a published storefront menu",
+    @Operation(
+            summary = "Find the nearest pickup locations with a published storefront menu",
             description = "Returns at most twenty active pickup branches, nearest first. "
                     + "Each result carries the same current serviceability answer the checkout "
                     + "path will later re-resolve authoritatively.")
     public ResponseEntity<StorefrontPickupLocationQuery.PickupLocations> nearbyPickupLocations(
-            @RequestParam double lat, @RequestParam double lon,
-            @RequestParam(defaultValue = "10") int limit) {
+            @RequestParam double lat, @RequestParam double lon, @RequestParam(defaultValue = "10") int limit) {
 
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.maxAge(Duration.ofSeconds(30)).cachePublic())

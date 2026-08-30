@@ -1,7 +1,6 @@
 package uz.horecaos.platform.observability;
 
 import jakarta.servlet.http.HttpServletRequest;
-
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.stereotype.Component;
 

@@ -1,15 +1,14 @@
 package uz.horecaos.platform.migration.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
+
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * The import flag, as the binding it is (ADR 0024).
@@ -58,8 +57,7 @@ class MigrationImportContextTests {
     @Test
     @DisplayName("an import inside an import is still one import")
     void nestingIsHarmless() {
-        boolean inner = ImportContext.runAsImport(() ->
-                ImportContext.runAsImport(ImportContext::isImporting));
+        boolean inner = ImportContext.runAsImport(() -> ImportContext.runAsImport(ImportContext::isImporting));
 
         assertThat(inner).isTrue();
         assertThat(ImportContext.isImporting()).isFalse();

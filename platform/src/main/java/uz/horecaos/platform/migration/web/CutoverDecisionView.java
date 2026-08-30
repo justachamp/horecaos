@@ -2,7 +2,6 @@ package uz.horecaos.platform.migration.web;
 
 import java.time.Instant;
 import java.util.UUID;
-
 import uz.horecaos.platform.migration.application.MigrationCutoverDecisionStore.Decision;
 import uz.horecaos.platform.migration.application.MigrationCutoverDecisionStore.DecisionRow;
 import uz.horecaos.platform.migration.domain.ScopeState;
@@ -42,8 +41,17 @@ public record CutoverDecisionView(
 
     static CutoverDecisionView of(DecisionRow row) {
         return new CutoverDecisionView(
-                row.id(), row.scopeId(), row.fromState(), row.toState(), row.scopeVersion(),
-                row.decision(), row.reason(), row.requestedBy(), row.decidedBy(),
-                row.approvalRequestId(), row.requestedAt(), row.decidedAt());
+                row.id(),
+                row.scopeId(),
+                row.fromState(),
+                row.toState(),
+                row.scopeVersion(),
+                row.decision(),
+                row.reason(),
+                row.requestedBy(),
+                row.decidedBy(),
+                row.approvalRequestId(),
+                row.requestedAt(),
+                row.decidedAt());
     }
 }

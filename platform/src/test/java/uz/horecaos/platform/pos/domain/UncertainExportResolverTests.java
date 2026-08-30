@@ -4,10 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
 import java.util.List;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.pos.api.CapabilitySnapshot.IdempotencyBehaviour;
 import uz.horecaos.platform.pos.domain.UncertainExportResolver.Outcome;
 
@@ -26,8 +24,8 @@ class UncertainExportResolverTests {
     @Test
     @DisplayName("one echoed correlation reference resolves without a person")
     void anEchoedReferenceIsIdentityRatherThanResemblance() {
-        var decision = UncertainExportResolver.decide(
-                List.of(candidate("501", true, true, true)), IdempotencyBehaviour.NONE);
+        var decision =
+                UncertainExportResolver.decide(List.of(candidate("501", true, true, true)), IdempotencyBehaviour.NONE);
 
         assertThat(decision.outcome()).isEqualTo(Outcome.LANDED);
         assertThat(decision.externalOrderId()).isEqualTo("501");
@@ -36,8 +34,8 @@ class UncertainExportResolverTests {
     @Test
     @DisplayName("one heuristic match does not resolve, because a customer can order twice")
     void oneResemblingOrderIsNotProof() {
-        var decision = UncertainExportResolver.decide(
-                List.of(candidate("501", false, true, true)), IdempotencyBehaviour.NONE);
+        var decision =
+                UncertainExportResolver.decide(List.of(candidate("501", false, true, true)), IdempotencyBehaviour.NONE);
 
         assertThat(decision.outcome())
                 .as("phone, time and composition all agreeing is also what a second genuine "
@@ -99,8 +97,7 @@ class UncertainExportResolverTests {
         assertThat(decision.outcome()).isEqualTo(Outcome.RETRY_UNDER_KEY);
     }
 
-    private static ExportCandidate candidate(String id, boolean echoed, boolean phone,
-            boolean fingerprint) {
+    private static ExportCandidate candidate(String id, boolean echoed, boolean phone, boolean fingerprint) {
         return new ExportCandidate(id, "PENDING", NOW, echoed, phone, fingerprint, 12);
     }
 }

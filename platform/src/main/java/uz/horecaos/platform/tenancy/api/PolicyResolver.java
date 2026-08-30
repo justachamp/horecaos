@@ -1,9 +1,8 @@
 package uz.horecaos.platform.tenancy.api;
 
-import uz.horecaos.platform.iam.api.ResourceScope;
-
 import java.util.Optional;
 import java.util.UUID;
+import uz.horecaos.platform.iam.api.ResourceScope;
 
 /** Resolves versioned policy documents by scope (ADR 0030). */
 public interface PolicyResolver {

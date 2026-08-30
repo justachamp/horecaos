@@ -10,8 +10,7 @@ class ApiMoneyTests {
 
     @Test
     void addsWithinOneCurrency() {
-        assertThat(ApiMoney.of(125_000, "UZS").plus(ApiMoney.of(25_000, "UZS")))
-                .isEqualTo(ApiMoney.of(150_000, "UZS"));
+        assertThat(ApiMoney.of(125_000, "UZS").plus(ApiMoney.of(25_000, "UZS"))).isEqualTo(ApiMoney.of(150_000, "UZS"));
     }
 
     @Test

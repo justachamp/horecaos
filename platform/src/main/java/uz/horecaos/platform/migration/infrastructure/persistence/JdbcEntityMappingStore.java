@@ -1,5 +1,8 @@
 package uz.horecaos.platform.migration.infrastructure.persistence;
 
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.instantOrNull;
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.utc;
+
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -8,14 +11,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.migration.domain.MappingStatus;
-
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.instantOrNull;
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.utc;
 
 /**
  * Crosswalk persistence (ADR 0024).
@@ -97,8 +95,10 @@ public class JdbcEntityMappingStore {
                   AND migration.entity_mappings.mapping_status <> 'SUPERSEDED'
                 RETURNING id
                 """)
-                .param("id", mapping.mappingId()).param("tenantId", mapping.tenantId())
-                .param("scopeId", mapping.scopeId()).param("entityType", mapping.entityType())
+                .param("id", mapping.mappingId())
+                .param("tenantId", mapping.tenantId())
+                .param("scopeId", mapping.scopeId())
+                .param("entityType", mapping.entityType())
                 .param("legacyId", mapping.legacyId())
                 .params(optional)
                 .param("transformationVersion", mapping.transformationVersion())
@@ -110,14 +110,15 @@ public class JdbcEntityMappingStore {
     }
 
     /** Resolves a legacy identifier forward, which is the crosswalk's whole purpose. */
-    public Optional<EntityMappingRow> find(UUID tenantId, UUID scopeId, String entityType,
-            String legacyId) {
+    public Optional<EntityMappingRow> find(UUID tenantId, UUID scopeId, String entityType, String legacyId) {
         return jdbc.sql(SELECT_MAPPING + """
                  WHERE tenant_id = :tenantId AND scope_id = :scopeId
                    AND entity_type = :entityType AND legacy_id = :legacyId
                 """)
-                .param("tenantId", tenantId).param("scopeId", scopeId)
-                .param("entityType", entityType).param("legacyId", legacyId)
+                .param("tenantId", tenantId)
+                .param("scopeId", scopeId)
+                .param("entityType", entityType)
+                .param("legacyId", legacyId)
                 .query(JdbcEntityMappingStore::mapEntityMapping)
                 .optional();
     }
@@ -130,15 +131,16 @@ public class JdbcEntityMappingStore {
      * index and not a unique constraint, and a rollback that assumed one answer
      * would silently drop the merged-away identity.
      */
-    public List<EntityMappingRow> findByTarget(UUID tenantId, UUID scopeId, String entityType,
-            UUID targetId) {
+    public List<EntityMappingRow> findByTarget(UUID tenantId, UUID scopeId, String entityType, UUID targetId) {
         return jdbc.sql(SELECT_MAPPING + """
                  WHERE tenant_id = :tenantId AND scope_id = :scopeId
                    AND entity_type = :entityType AND target_id = :targetId
                  ORDER BY created_at, id
                 """)
-                .param("tenantId", tenantId).param("scopeId", scopeId)
-                .param("entityType", entityType).param("targetId", targetId)
+                .param("tenantId", tenantId)
+                .param("scopeId", scopeId)
+                .param("entityType", entityType)
+                .param("targetId", targetId)
                 .query(JdbcEntityMappingStore::mapEntityMapping)
                 .list();
     }
@@ -160,8 +162,7 @@ public class JdbcEntityMappingStore {
      *
      * @return whether this caller performed the supersession
      */
-    public boolean supersede(UUID tenantId, UUID mappingId, UUID survivingMappingId, UUID runId,
-            Instant now) {
+    public boolean supersede(UUID tenantId, UUID mappingId, UUID survivingMappingId, UUID runId, Instant now) {
         return jdbc.sql("""
                 UPDATE migration.entity_mappings AS mapping
                 SET mapping_status = 'SUPERSEDED',
@@ -177,15 +178,18 @@ public class JdbcEntityMappingStore {
                         AND survivor.scope_id = mapping.scope_id
                         AND survivor.mapping_status = 'MAPPED')
                 """)
-                .param("tenantId", tenantId).param("id", mappingId)
-                .param("survivorId", survivingMappingId).param("runId", runId)
-                .param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", mappingId)
+                        .param("survivorId", survivingMappingId)
+                        .param("runId", runId)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /** One scope's crosswalk for one entity type, oldest first. */
-    public List<EntityMappingRow> listForScope(UUID tenantId, UUID scopeId, String entityType,
-            MigrationPageCursor after, int limit) {
+    public List<EntityMappingRow> listForScope(
+            UUID tenantId, UUID scopeId, String entityType, MigrationPageCursor after, int limit) {
         return jdbc.sql(SELECT_MAPPING + """
                  WHERE tenant_id = :tenantId AND scope_id = :scopeId
                    AND entity_type = :entityType
@@ -194,7 +198,8 @@ public class JdbcEntityMappingStore {
                  ORDER BY created_at, id
                  LIMIT :limit
                 """)
-                .param("tenantId", tenantId).param("scopeId", scopeId)
+                .param("tenantId", tenantId)
+                .param("scopeId", scopeId)
                 .param("entityType", entityType)
                 .params(MigrationPageCursor.params(after))
                 .param("limit", limit)
@@ -215,7 +220,8 @@ public class JdbcEntityMappingStore {
                 WHERE tenant_id = :tenantId AND scope_id = :scopeId
                   AND entity_type = :entityType AND mapping_status = 'QUARANTINED'
                 """)
-                .param("tenantId", tenantId).param("scopeId", scopeId)
+                .param("tenantId", tenantId)
+                .param("scopeId", scopeId)
                 .param("entityType", entityType)
                 .query(Long.class)
                 .single();
@@ -250,12 +256,33 @@ public class JdbcEntityMappingStore {
      *                      upsert, so a later human edit on the target side stays
      *                      distinguishable from the migrator's own write
      */
-    public record EntityMapping(UUID mappingId, UUID tenantId, UUID scopeId, String entityType,
-            String legacyId, UUID targetId, String sourceVersion, Long targetVersion,
-            int transformationVersion, MappingStatus status, UUID runId, Instant occurredAt) { }
+    public record EntityMapping(
+            UUID mappingId,
+            UUID tenantId,
+            UUID scopeId,
+            String entityType,
+            String legacyId,
+            UUID targetId,
+            String sourceVersion,
+            Long targetVersion,
+            int transformationVersion,
+            MappingStatus status,
+            UUID runId,
+            Instant occurredAt) {}
 
-    public record EntityMappingRow(UUID mappingId, UUID tenantId, UUID scopeId, String entityType,
-            String legacyId, UUID targetId, String sourceVersion, Long targetVersion,
-            int transformationVersion, MappingStatus status, UUID supersededByMappingId,
-            UUID runId, Instant createdAt, Instant updatedAt) { }
+    public record EntityMappingRow(
+            UUID mappingId,
+            UUID tenantId,
+            UUID scopeId,
+            String entityType,
+            String legacyId,
+            UUID targetId,
+            String sourceVersion,
+            Long targetVersion,
+            int transformationVersion,
+            MappingStatus status,
+            UUID supersededByMappingId,
+            UUID runId,
+            Instant createdAt,
+            Instant updatedAt) {}
 }

@@ -1,15 +1,15 @@
 package uz.horecaos.platform.integration.camel.delivery;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
@@ -20,8 +20,6 @@ import uz.horecaos.platform.integration.api.provider.BindingRef;
 import uz.horecaos.platform.integration.api.provider.ProviderCategory;
 import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * How a route gets a credential, and what happens when the provider rejects it
@@ -38,7 +36,8 @@ class DeliveryGatewayTests {
     @Test
     @DisplayName("the adapter is handed a resolved credential, never a stored reference")
     void resolvesTheCredentialAtCallTime() {
-        RecordingPartner partner = new RecordingPartner("noor-delivery", ProviderOutcome.success(java.util.Map.of(), "x"));
+        RecordingPartner partner =
+                new RecordingPartner("noor-delivery", ProviderOutcome.success(java.util.Map.of(), "x"));
         CountingResolver resolver = new CountingResolver("live-token");
         DeliveryGateway gateway = new DeliveryGateway(List.of(partner), lookup("ACTIVE"), resolver);
 
@@ -54,8 +53,8 @@ class DeliveryGatewayTests {
     @Test
     @DisplayName("a rejected credential is refreshed past the cache exactly once")
     void refreshesOnceOnAuthenticationFailure() {
-        RecordingPartner partner = new RecordingPartner("noor-delivery",
-                ProviderOutcome.rejected("PROVIDER_UNAUTHORIZED", "401"));
+        RecordingPartner partner =
+                new RecordingPartner("noor-delivery", ProviderOutcome.rejected("PROVIDER_UNAUTHORIZED", "401"));
         CountingResolver resolver = new CountingResolver("stale-token");
         DeliveryGateway gateway = new DeliveryGateway(List.of(partner), lookup("ACTIVE"), resolver);
 
@@ -71,8 +70,8 @@ class DeliveryGatewayTests {
     @Test
     @DisplayName("a healthy call never triggers a cache-bypassing read")
     void doesNotRefreshOnSuccess() {
-        RecordingPartner partner = new RecordingPartner("noor-delivery",
-                ProviderOutcome.success(java.util.Map.of(), "ext-1"));
+        RecordingPartner partner =
+                new RecordingPartner("noor-delivery", ProviderOutcome.success(java.util.Map.of(), "ext-1"));
         CountingResolver resolver = new CountingResolver("live-token");
         DeliveryGateway gateway = new DeliveryGateway(List.of(partner), lookup("ACTIVE"), resolver);
 
@@ -84,10 +83,10 @@ class DeliveryGatewayTests {
     @Test
     @DisplayName("a suspended installation is refused without calling the provider")
     void refusesASuspendedInstallation() {
-        RecordingPartner partner = new RecordingPartner("noor-delivery",
-                ProviderOutcome.success(java.util.Map.of(), "ext-1"));
-        DeliveryGateway gateway = new DeliveryGateway(
-                List.of(partner), lookup("SUSPENDED"), new CountingResolver("token"));
+        RecordingPartner partner =
+                new RecordingPartner("noor-delivery", ProviderOutcome.success(java.util.Map.of(), "ext-1"));
+        DeliveryGateway gateway =
+                new DeliveryGateway(List.of(partner), lookup("SUSPENDED"), new CountingResolver("token"));
 
         ProviderOutcome outcome = gateway.queryShipment(binding("noor-delivery"), "ext-1", "cmd-1");
 
@@ -101,8 +100,8 @@ class DeliveryGatewayTests {
     @Test
     @DisplayName("an unsupported capability is refused before any credential is resolved")
     void refusesAnUnsupportedCapability() {
-        RecordingPartner partner = new RecordingPartner("noor-delivery",
-                ProviderOutcome.success(java.util.Map.of(), "ext-1"));
+        RecordingPartner partner =
+                new RecordingPartner("noor-delivery", ProviderOutcome.success(java.util.Map.of(), "ext-1"));
         CountingResolver resolver = new CountingResolver("token");
         DeliveryGateway gateway = new DeliveryGateway(List.of(partner), lookup("ACTIVE"), resolver);
 
@@ -123,8 +122,8 @@ class DeliveryGatewayTests {
     }
 
     private static BindingRef binding(String providerType) {
-        return new BindingRef(UUID.randomUUID(), INSTALLATION, TENANT,
-                ProviderCategory.DELIVERY, providerType, BRAND, null);
+        return new BindingRef(
+                UUID.randomUUID(), INSTALLATION, TENANT, ProviderCategory.DELIVERY, providerType, BRAND, null);
     }
 
     private static ProviderInstallationLookup lookup(String status) {
@@ -142,8 +141,14 @@ class DeliveryGatewayTests {
             @Override
             public Optional<InstallationSnapshot> installation(UUID tenantId, UUID installationId) {
                 return Optional.of(new InstallationSnapshot(
-                        INSTALLATION, ProviderCategory.DELIVERY, "noor-delivery", "local",
-                        "http://127.0.0.1:1", status, REFERENCE.toString(), "v1"));
+                        INSTALLATION,
+                        ProviderCategory.DELIVERY,
+                        "noor-delivery",
+                        "local",
+                        "http://127.0.0.1:1",
+                        status,
+                        REFERENCE.toString(),
+                        "v1"));
             }
         };
     }

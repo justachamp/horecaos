@@ -3,7 +3,6 @@ package uz.horecaos.platform.pricing.domain;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-
 import uz.horecaos.platform.fulfillment.api.PricingAuthority;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 
@@ -36,8 +35,14 @@ public record QuoteRequest(
     }
 
     /** A cart being collected, and every call site that predates ADR 0037. */
-    public QuoteRequest(UUID tenantId, UUID brandId, UUID locationId, UUID customerAccountId,
-            String channel, List<Line> lines, String idempotencyKey) {
+    public QuoteRequest(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID customerAccountId,
+            String channel,
+            List<Line> lines,
+            String idempotencyKey) {
         this(tenantId, brandId, locationId, customerAccountId, channel, lines, idempotencyKey, null);
     }
 

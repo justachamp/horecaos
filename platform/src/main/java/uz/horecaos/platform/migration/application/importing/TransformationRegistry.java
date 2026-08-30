@@ -3,9 +3,7 @@ package uz.horecaos.platform.migration.application.importing;
 import java.time.Clock;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
-
 import uz.horecaos.platform.migration.api.Transformation;
 
 /**
@@ -44,8 +42,7 @@ public class TransformationRegistry {
         String entityType = transformation.entityType();
         int version = transformation.version();
 
-        Optional<TransformationRegistryStore.Declaration> current =
-                store.findCurrent(programId, entityType);
+        Optional<TransformationRegistryStore.Declaration> current = store.findCurrent(programId, entityType);
         if (current.isEmpty()) {
             throw new RemediationRequiredException(entityType, version);
         }
@@ -57,12 +54,10 @@ public class TransformationRegistry {
             // may re-parent rows or resolve a status differently, and running the
             // old one over new rows mixes exactly the semantics the version exists
             // to keep apart.
-            throw new RemediationRequiredException(entityType, version,
-                    declared.ruleDigest(), transformation.digest());
+            throw new RemediationRequiredException(entityType, version, declared.ruleDigest(), transformation.digest());
         }
         if (!declared.ruleDigest().equals(transformation.digest())) {
-            throw new RemediationRequiredException(entityType, version,
-                    declared.ruleDigest(), transformation.digest());
+            throw new RemediationRequiredException(entityType, version, declared.ruleDigest(), transformation.digest());
         }
     }
 
@@ -75,16 +70,17 @@ public class TransformationRegistry {
      *
      * @return false when this exact declaration already exists, which is a replay
      */
-    public boolean declare(UUID programId, Transformation<?> transformation, String summary,
-            String declaredBy) {
-        return store.declare(new TransformationRegistryStore.Declaration(
-                UUID.randomUUID(),
-                programId,
-                transformation.entityType(),
-                transformation.version(),
-                transformation.digest(),
-                summary,
-                declaredBy,
-                null), clock.instant());
+    public boolean declare(UUID programId, Transformation<?> transformation, String summary, String declaredBy) {
+        return store.declare(
+                new TransformationRegistryStore.Declaration(
+                        UUID.randomUUID(),
+                        programId,
+                        transformation.entityType(),
+                        transformation.version(),
+                        transformation.digest(),
+                        summary,
+                        declaredBy,
+                        null),
+                clock.instant());
     }
 }

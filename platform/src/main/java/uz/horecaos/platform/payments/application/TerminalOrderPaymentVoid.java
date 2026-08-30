@@ -6,13 +6,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
-
 import uz.horecaos.platform.ordering.api.OrderCancelled;
 import uz.horecaos.platform.ordering.api.OrderExpired;
 import uz.horecaos.platform.payments.domain.PaymentAttempt;
@@ -97,16 +95,19 @@ public class TerminalOrderPaymentVoid {
     private final Map<PaymentProviderType, PaymentProviderPort> providers;
     private final Clock clock;
 
-    public TerminalOrderPaymentVoid(JdbcPaymentIntentStore intents,
-            JdbcPaymentAttemptStore attempts, PaymentAttemptService attemptService,
-            PaymentBindingResolver bindings, List<PaymentProviderPort> providerPorts,
+    public TerminalOrderPaymentVoid(
+            JdbcPaymentIntentStore intents,
+            JdbcPaymentAttemptStore attempts,
+            PaymentAttemptService attemptService,
+            PaymentBindingResolver bindings,
+            List<PaymentProviderPort> providerPorts,
             Clock clock) {
         this.intents = intents;
         this.attempts = attempts;
         this.attemptService = attemptService;
         this.bindings = bindings;
-        this.providers = providerPorts.stream().collect(Collectors.toMap(
-                PaymentProviderPort::providerType, port -> port));
+        this.providers =
+                providerPorts.stream().collect(Collectors.toMap(PaymentProviderPort::providerType, port -> port));
         this.clock = clock;
     }
 
@@ -134,8 +135,11 @@ public class TerminalOrderPaymentVoid {
             // The money is in and the settlement holds it. Giving it back is a
             // remedy, decided by an operator with a reason, and never a side
             // effect of a status change.
-            log.info("Order {} ended with intent {} already PAID; the money stays on the "
-                    + "settlement and comes back through the remedy path.", orderId, intent.id());
+            log.info(
+                    "Order {} ended with intent {} already PAID; the money stays on the "
+                            + "settlement and comes back through the remedy path.",
+                    orderId,
+                    intent.id());
             return;
         }
 
@@ -149,14 +153,16 @@ public class TerminalOrderPaymentVoid {
         if (attempt.status() == PaymentAttemptStatus.UNCERTAIN) {
             // Already a question about money, already owned by a named resolver.
             // ADR 0007: the resolver is the only thing that may follow uncertainty.
-            log.warn("Order {} ended while attempt {} was UNCERTAIN; leaving it to its resolver "
-                    + "rather than issuing a void on top of a call whose answer was lost.",
-                    orderId, attempt.id());
+            log.warn(
+                    "Order {} ended while attempt {} was UNCERTAIN; leaving it to its resolver "
+                            + "rather than issuing a void on top of a call whose answer was lost.",
+                    orderId,
+                    attempt.id());
             return;
         }
 
-        Optional<ProviderBinding> binding = bindings.resolve(tenantId,
-                intent.legalEntity().orElse(null), attempt.providerType(), attempt.businessDate());
+        Optional<ProviderBinding> binding = bindings.resolve(
+                tenantId, intent.legalEntity().orElse(null), attempt.providerType(), attempt.businessDate());
         PaymentProviderPort provider = providers.get(attempt.providerType());
         if (binding.isEmpty() || provider == null || !binding.get().supportsReversal()) {
             unvoidable(orderId, attempt, "no void surface is configured for this binding");
@@ -170,9 +176,11 @@ public class TerminalOrderPaymentVoid {
                 // The transaction may or may not be void. Never sent again; the
                 // resolver reads, and reading is the only safe thing left.
                 attemptService.markUncertain(attempt, outcome.failureCode());
-                log.warn("The void of attempt {} for ended order {} was not answered; it is "
-                        + "UNCERTAIN and will be resolved by query, never by a second void.",
-                        attempt.id(), orderId);
+                log.warn(
+                        "The void of attempt {} for ended order {} was not answered; it is "
+                                + "UNCERTAIN and will be resolved by query, never by a second void.",
+                        attempt.id(),
+                        orderId);
             }
             case REJECTED, RETRYABLE -> unvoidable(orderId, attempt, outcome.failureCode());
         }
@@ -190,14 +198,25 @@ public class TerminalOrderPaymentVoid {
      */
     private void recordVoided(PaymentAttempt attempt, ProviderOutcome outcome) {
         if (!PaymentAttemptStateMachine.permits(attempt.status(), PaymentAttemptStatus.CANCELLED)) {
-            log.warn("Attempt {} was voided at the provider but cannot move from {} to CANCELLED; "
-                    + "recording nothing rather than forcing a state.",
-                    attempt.id(), attempt.status());
+            log.warn(
+                    "Attempt {} was voided at the provider but cannot move from {} to CANCELLED; "
+                            + "recording nothing rather than forcing a state.",
+                    attempt.id(),
+                    attempt.status());
             return;
         }
-        attemptService.recordProviderEvent(attempt, PaymentTransactionType.CANCEL,
-                PaymentAttemptStatus.CANCELLED, attempt.amount(), outcome.externalPaymentId(),
-                outcome.evidence(), outcome.externalPaymentId(), null, clock.instant(), null, null);
+        attemptService.recordProviderEvent(
+                attempt,
+                PaymentTransactionType.CANCEL,
+                PaymentAttemptStatus.CANCELLED,
+                attempt.amount(),
+                outcome.externalPaymentId(),
+                outcome.evidence(),
+                outcome.externalPaymentId(),
+                null,
+                clock.instant(),
+                null,
+                null);
     }
 
     /**
@@ -210,19 +229,31 @@ public class TerminalOrderPaymentVoid {
      * line tells whoever reads it to go and do.
      */
     private void unvoidable(UUID orderId, PaymentAttempt attempt, String why) {
-        log.warn("Order {} ended with payment attempt {} on {} still live and no way to void it "
-                + "({}). The attempt is left open on purpose: a capture that lands will be "
-                + "recorded against the settlement and is refundable through a remedy.",
-                orderId, attempt.id(), attempt.providerType(), why);
+        log.warn(
+                "Order {} ended with payment attempt {} on {} still live and no way to void it "
+                        + "({}). The attempt is left open on purpose: a capture that lands will be "
+                        + "recorded against the settlement and is refundable through a remedy.",
+                orderId,
+                attempt.id(),
+                attempt.providerType(),
+                why);
     }
 
     private void cancelIntent(PaymentIntent intent) {
         if (!intent.status().open()) {
             return;
         }
-        intents.transition(intent.tenantId(), intent.id(), intent.status(),
-                PaymentIntentStatus.CANCELLED, intent.version(), clock.instant());
-        log.debug("Intent {} for ended order {} had no open attempt and was cancelled by {}.",
-                intent.id(), intent.orderId(), ACTOR);
+        intents.transition(
+                intent.tenantId(),
+                intent.id(),
+                intent.status(),
+                PaymentIntentStatus.CANCELLED,
+                intent.version(),
+                clock.instant());
+        log.debug(
+                "Intent {} for ended order {} had no open attempt and was cancelled by {}.",
+                intent.id(),
+                intent.orderId(),
+                ACTOR);
     }
 }

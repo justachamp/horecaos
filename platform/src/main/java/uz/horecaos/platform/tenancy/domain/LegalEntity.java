@@ -2,7 +2,6 @@ package uz.horecaos.platform.tenancy.domain;
 
 import java.util.Objects;
 import java.util.UUID;
-
 import uz.horecaos.platform.tenancy.api.LegalEntityId;
 import uz.horecaos.platform.tenancy.api.TenantId;
 
@@ -45,10 +44,20 @@ public final class LegalEntity {
     private OperatingUnitStatus status;
     private int version;
 
-    private LegalEntity(LegalEntityId id, TenantId tenantId, String code, String legalName,
-            String shortName, TaxpayerNumber tin, boolean vatRegistered,
-            String vatCertificateReference, UUID taxProfileId, String registeredAddress,
-            String contactPhone, OperatingUnitStatus status, int version) {
+    private LegalEntity(
+            LegalEntityId id,
+            TenantId tenantId,
+            String code,
+            String legalName,
+            String shortName,
+            TaxpayerNumber tin,
+            boolean vatRegistered,
+            String vatCertificateReference,
+            UUID taxProfileId,
+            String registeredAddress,
+            String contactPhone,
+            OperatingUnitStatus status,
+            int version) {
         this.id = Objects.requireNonNull(id, "Legal entity ID is required");
         this.tenantId = Objects.requireNonNull(tenantId, "Tenant ID is required");
         this.code = Brand.normalizedCode(code);
@@ -63,18 +72,39 @@ public final class LegalEntity {
         applyVatRegistration(vatRegistered, vatCertificateReference);
     }
 
-    public static LegalEntity draft(LegalEntityId id, TenantId tenantId, String code,
-            String legalName, TaxpayerNumber tin) {
-        return new LegalEntity(id, tenantId, code, legalName, null, tin, false, null, null, null,
-                null, OperatingUnitStatus.DRAFT, 1);
+    public static LegalEntity draft(
+            LegalEntityId id, TenantId tenantId, String code, String legalName, TaxpayerNumber tin) {
+        return new LegalEntity(
+                id, tenantId, code, legalName, null, tin, false, null, null, null, null, OperatingUnitStatus.DRAFT, 1);
     }
 
-    public static LegalEntity reconstitute(LegalEntityId id, TenantId tenantId, String code,
-            String legalName, String shortName, TaxpayerNumber tin, boolean vatRegistered,
-            String vatCertificateReference, UUID taxProfileId, String registeredAddress,
-            String contactPhone, OperatingUnitStatus status, int version) {
-        return new LegalEntity(id, tenantId, code, legalName, shortName, tin, vatRegistered,
-                vatCertificateReference, taxProfileId, registeredAddress, contactPhone, status,
+    public static LegalEntity reconstitute(
+            LegalEntityId id,
+            TenantId tenantId,
+            String code,
+            String legalName,
+            String shortName,
+            TaxpayerNumber tin,
+            boolean vatRegistered,
+            String vatCertificateReference,
+            UUID taxProfileId,
+            String registeredAddress,
+            String contactPhone,
+            OperatingUnitStatus status,
+            int version) {
+        return new LegalEntity(
+                id,
+                tenantId,
+                code,
+                legalName,
+                shortName,
+                tin,
+                vatRegistered,
+                vatCertificateReference,
+                taxProfileId,
+                registeredAddress,
+                contactPhone,
+                status,
                 version);
     }
 
@@ -89,9 +119,8 @@ public final class LegalEntity {
      * does not owe.
      */
     public void applyVatRegistration(boolean registered, String certificateReference) {
-        String reference = certificateReference == null || certificateReference.isBlank()
-                ? null
-                : certificateReference.strip();
+        String reference =
+                certificateReference == null || certificateReference.isBlank() ? null : certificateReference.strip();
         if (!registered && reference != null) {
             throw new IllegalArgumentException(
                     "An entity that is not VAT-registered cannot hold a VAT certificate reference");

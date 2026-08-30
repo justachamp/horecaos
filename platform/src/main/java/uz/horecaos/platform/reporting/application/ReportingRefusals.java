@@ -11,8 +11,7 @@ import java.util.List;
  */
 public final class ReportingRefusals {
 
-    private ReportingRefusals() {
-    }
+    private ReportingRefusals() {}
 
     /**
      * A money figure was asked for without naming the legal entity.
@@ -30,7 +29,7 @@ public final class ReportingRefusals {
 
         public CombinedEntityTotalException(List<String> metricCodes, int entityCount) {
             super(("%s cannot be totalled across %d legal entities. Group by LEGAL_ENTITY: a "
-                    + "combined total reconciles to neither tax filing (ADR 0038).")
+                            + "combined total reconciles to neither tax filing (ADR 0038).")
                     .formatted(String.join(", ", metricCodes), entityCount));
             this.metricCodes = List.copyOf(metricCodes);
         }
@@ -52,8 +51,9 @@ public final class ReportingRefusals {
 
         public MixedBoundaryRegimeException(LocalDate recutCompletedThrough) {
             super(("The range spans a business-day boundary change. The recut has reached %s; "
-                    + "a range crossing it would mix two definitions of the same day "
-                    + "(ADR 0043).").formatted(recutCompletedThrough));
+                            + "a range crossing it would mix two definitions of the same day "
+                            + "(ADR 0043).")
+                    .formatted(recutCompletedThrough));
             this.recutCompletedThrough = recutCompletedThrough;
         }
 
@@ -96,8 +96,7 @@ public final class ReportingRefusals {
         private final String metricCode;
 
         public NonScalarMetricException(String metricCode, String endpoint) {
-            super("%s is not a single value per slice; read it from %s"
-                    .formatted(metricCode, endpoint));
+            super("%s is not a single value per slice; read it from %s".formatted(metricCode, endpoint));
             this.metricCode = metricCode;
         }
 

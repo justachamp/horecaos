@@ -2,10 +2,8 @@ package uz.horecaos.platform.helpcenter.application;
 
 import java.util.List;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.helpcenter.domain.SupportContent.FaqCategory;
 import uz.horecaos.platform.helpcenter.domain.SupportContent.SocialLink;
 import uz.horecaos.platform.helpcenter.infrastructure.persistence.JdbcSupportStore;

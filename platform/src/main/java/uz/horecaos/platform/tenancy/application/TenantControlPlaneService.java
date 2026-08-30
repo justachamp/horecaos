@@ -9,11 +9,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-
-import org.springframework.stereotype.Service;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -72,8 +70,12 @@ public class TenantControlPlaneService {
      * and is subject to topic retention.
      */
     private void recordAudit(
-            String actionCode, ResourceScope scope, String targetType, UUID targetId,
-            String reason, Map<String, Object> changes) {
+            String actionCode,
+            ResourceScope scope,
+            String targetType,
+            UUID targetId,
+            String reason,
+            Map<String, Object> changes) {
 
         audit.record(AuditFact.of(actionCode, AuditClass.BUSINESS)
                 .by(ActorRef.user(currentActor.get().subject(), null))
@@ -88,7 +90,9 @@ public class TenantControlPlaneService {
 
     private static String correlationId() {
         String correlationId = org.slf4j.MDC.get("correlationId");
-        return correlationId == null || correlationId.isBlank() ? UUID.randomUUID().toString() : correlationId;
+        return correlationId == null || correlationId.isBlank()
+                ? UUID.randomUUID().toString()
+                : correlationId;
     }
 
     @Transactional
@@ -128,7 +132,8 @@ public class TenantControlPlaneService {
         recordAudit(
                 "tenant.created",
                 ResourceScope.tenant(tenant.id().value()),
-                "Tenant", tenant.id().value(),
+                "Tenant",
+                tenant.id().value(),
                 "Control-plane tenant creation",
                 Map.of(
                         "slug", tenant.slug().value(),
@@ -155,7 +160,8 @@ public class TenantControlPlaneService {
         recordAudit(
                 "tenant.keycloak_organization_linked",
                 ResourceScope.tenant(tenantId.value()),
-                "Tenant", tenantId.value(),
+                "Tenant",
+                tenantId.value(),
                 "Keycloak organization reconciliation",
                 Map.of("keycloakOrganizationId", organizationId));
         CustomerIdentityMode identityMode = store.findCurrentCustomerIdentityMode(tenantId, clock.instant())
@@ -191,9 +197,16 @@ public class TenantControlPlaneService {
         recordAudit(
                 "brand.created",
                 ResourceScope.tenant(tenantId.value()),
-                "Brand", brand.id().value(),
+                "Brand",
+                brand.id().value(),
                 "Control-plane brand creation",
-                Map.of("code", brand.code(), "slug", brand.slug().value(), "status", brand.status().name()));
+                Map.of(
+                        "code",
+                        brand.code(),
+                        "slug",
+                        brand.slug().value(),
+                        "status",
+                        brand.status().name()));
         return toView(brand);
     }
 
@@ -201,14 +214,13 @@ public class TenantControlPlaneService {
     public List<BrandView> getBrands(TenantId tenantId) {
         Tenant tenant = requireTenant(tenantId);
         accessPolicy.requireTenantRead(tenant);
-        return store.findBrands(tenantId).stream().map(TenantControlPlaneService::toView).toList();
+        return store.findBrands(tenantId).stream()
+                .map(TenantControlPlaneService::toView)
+                .toList();
     }
 
     @Transactional
-    public LocationView createLocation(
-            TenantId tenantId,
-            BrandId brandId,
-            CreateLocationCommand command) {
+    public LocationView createLocation(TenantId tenantId, BrandId brandId, CreateLocationCommand command) {
         Objects.requireNonNull(command, "Create location command is required");
         Tenant tenant = requireTenant(tenantId);
         accessPolicy.requireTenantManagement(tenant);
@@ -240,7 +252,8 @@ public class TenantControlPlaneService {
         recordAudit(
                 "location.created",
                 ResourceScope.brand(tenantId.value(), brandId.value()),
-                "Location", location.id().value(),
+                "Location",
+                location.id().value(),
                 "Control-plane location creation",
                 Map.of(
                         "code", location.code(),
@@ -265,10 +278,7 @@ public class TenantControlPlaneService {
      */
     @Transactional
     public LocationView describeLocation(
-            TenantId tenantId,
-            BrandId brandId,
-            LocationId locationId,
-            DescribeLocationCommand command) {
+            TenantId tenantId, BrandId brandId, LocationId locationId, DescribeLocationCommand command) {
 
         Objects.requireNonNull(command, "Describe location command is required");
         Tenant tenant = requireTenant(tenantId);
@@ -278,8 +288,7 @@ public class TenantControlPlaneService {
         Location location = store.findLocations(brand).stream()
                 .filter(candidate -> candidate.id().equals(locationId))
                 .findFirst()
-                .orElseThrow(() -> new TenantResourceNotFoundException(
-                        "Location was not found in this brand"));
+                .orElseThrow(() -> new TenantResourceNotFoundException("Location was not found in this brand"));
 
         LocationPlace place = command.toPlace();
         location.describePlace(place);
@@ -299,7 +308,8 @@ public class TenantControlPlaneService {
         recordAudit(
                 "location.described",
                 ResourceScope.brand(tenantId.value(), brandId.value()),
-                "Location", location.id().value(),
+                "Location",
+                location.id().value(),
                 "Control-plane location address and point",
                 audited);
 
@@ -311,7 +321,9 @@ public class TenantControlPlaneService {
         Tenant tenant = requireTenant(tenantId);
         accessPolicy.requireTenantRead(tenant);
         Brand brand = requireBrand(tenantId, brandId);
-        return store.findLocations(brand).stream().map(TenantControlPlaneService::toView).toList();
+        return store.findLocations(brand).stream()
+                .map(TenantControlPlaneService::toView)
+                .toList();
     }
 
     private Tenant requireTenant(TenantId tenantId) {
@@ -380,9 +392,9 @@ public class TenantControlPlaneService {
         }
     }
 
-    public record CreateBrandCommand(String code, String slug, String displayName) { }
+    public record CreateBrandCommand(String code, String slug, String displayName) {}
 
-    public record CreateLocationCommand(String code, String slug, String displayName, String timezone) { }
+    public record CreateLocationCommand(String code, String slug, String displayName, String timezone) {}
 
     public record TenantView(
             UUID id,
@@ -393,15 +405,10 @@ public class TenantControlPlaneService {
             String defaultTimezone,
             String keycloakOrganizationId,
             TenantStatus status,
-            CustomerIdentityMode customerIdentityMode) { }
+            CustomerIdentityMode customerIdentityMode) {}
 
     public record BrandView(
-            UUID id,
-            UUID tenantId,
-            String code,
-            String slug,
-            String displayName,
-            OperatingUnitStatus status) { }
+            UUID id, UUID tenantId, String code, String slug, String displayName, OperatingUnitStatus status) {}
 
     /**
      * Where a branch is, as a caller states it.
@@ -427,15 +434,13 @@ public class TenantControlPlaneService {
             // A latitude alone points at the equator, and V0021 had to go back and
             // discard rows that reached customer.addresses exactly this way.
             if ((latitude == null) != (longitude == null)) {
-                throw new IllegalArgumentException(
-                        "A location needs both a latitude and a longitude, or neither");
+                throw new IllegalArgumentException("A location needs both a latitude and a longitude, or neither");
             }
             GeoPoint point = latitude == null ? null : new GeoPoint(latitude, longitude);
-            CoordinateSource source = coordinateSource != null ? coordinateSource
-                    : (point == null ? CoordinateSource.NOT_GEOCODED
-                            : CoordinateSource.MERCHANT_PIN);
-            return new LocationPlace(addressLine, district, city, landmark, contactPhone,
-                    point, source);
+            CoordinateSource source = coordinateSource != null
+                    ? coordinateSource
+                    : (point == null ? CoordinateSource.NOT_GEOCODED : CoordinateSource.MERCHANT_PIN);
+            return new LocationPlace(addressLine, district, city, landmark, contactPhone, point, source);
         }
     }
 
@@ -455,5 +460,5 @@ public class TenantControlPlaneService {
             String contactPhone,
             Double latitude,
             Double longitude,
-            CoordinateSource coordinateSource) { }
+            CoordinateSource coordinateSource) {}
 }

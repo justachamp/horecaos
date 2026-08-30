@@ -1,22 +1,20 @@
 package uz.horecaos.platform.integration.camel.sms;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.apache.camel.CamelContext;
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.customers.spi.VerificationCodeTransport;
 import uz.horecaos.platform.customers.spi.VerificationCodeTransport.ContactChannel;
 import uz.horecaos.platform.customers.spi.VerificationCodeTransport.Outcome;
@@ -31,8 +29,6 @@ import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
 import uz.horecaos.platform.integration.camel.common.ProviderExceptionClassifier;
 import uz.horecaos.platform.integration.camel.common.ProviderHttpClient;
 import uz.horecaos.platform.integration.provider.SmsAccountLookup.SmsAccount;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The route's policy, end to end, from the port a customer's code leaves through
@@ -168,14 +164,14 @@ class SmsVerificationRouteTests {
         return transport(fake, Duration.ofSeconds(5));
     }
 
-    private VerificationCodeTransport transport(RecordingSmsGateway fake, Duration timeout)
-            throws Exception {
+    private VerificationCodeTransport transport(RecordingSmsGateway fake, Duration timeout) throws Exception {
 
-        SmsGateway gateway = new SmsGateway(new StubLookup(fake.baseUrl()),
+        SmsGateway gateway = new SmsGateway(
+                new StubLookup(fake.baseUrl()),
                 binding -> Optional.of(new SmsAccount("horecaos", "16888")),
                 fixedResolver(),
-                new VasSmsGatewayAdapter(new ProviderHttpClient(
-                        JsonMapper.builder().build(), new ProviderExceptionClassifier())),
+                new VasSmsGatewayAdapter(
+                        new ProviderHttpClient(JsonMapper.builder().build(), new ProviderExceptionClassifier())),
                 timeout);
 
         SmsProcessor processor = new SmsProcessor(gateway, new SimpleMeterRegistry());
@@ -187,8 +183,15 @@ class SmsVerificationRouteTests {
     }
 
     private static VerificationMessage message() {
-        return new VerificationMessage(TENANT, BRAND, UUID.randomUUID(), ContactChannel.SMS,
-                "998901112233", CODE, Duration.ofMinutes(5), "uz",
+        return new VerificationMessage(
+                TENANT,
+                BRAND,
+                UUID.randomUUID(),
+                ContactChannel.SMS,
+                "998901112233",
+                CODE,
+                Duration.ofMinutes(5),
+                "uz",
                 Instant.parse("2026-08-25T09:15:00Z"));
     }
 
@@ -208,28 +211,38 @@ class SmsVerificationRouteTests {
 
     private record StubLookup(String baseUrl) implements ProviderInstallationLookup {
 
-        private static final SecretReference REFERENCE = new SecretReference(
-                "local", SecretCategory.PROVIDER_NOTIFICATION, "tenant", "smsgw");
+        private static final SecretReference REFERENCE =
+                new SecretReference("local", SecretCategory.PROVIDER_NOTIFICATION, "tenant", "smsgw");
 
         @Override
-        public Optional<BindingRef> primaryBinding(UUID tenantId, UUID brandId, UUID locationId,
-                String capabilityCode) {
-            return Optional.of(new BindingRef(UUID.randomUUID(), INSTALLATION, tenantId,
-                    ProviderCategory.NOTIFICATION, VasSmsGatewayAdapter.PROVIDER_TYPE,
-                    brandId, null));
+        public Optional<BindingRef> primaryBinding(
+                UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
+            return Optional.of(new BindingRef(
+                    UUID.randomUUID(),
+                    INSTALLATION,
+                    tenantId,
+                    ProviderCategory.NOTIFICATION,
+                    VasSmsGatewayAdapter.PROVIDER_TYPE,
+                    brandId,
+                    null));
         }
 
         @Override
-        public List<BindingRef> candidateBindings(UUID tenantId, UUID brandId, UUID locationId,
-                String capabilityCode) {
+        public List<BindingRef> candidateBindings(UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
             return List.of();
         }
 
         @Override
         public Optional<InstallationSnapshot> installation(UUID tenantId, UUID installationId) {
-            return Optional.of(new InstallationSnapshot(INSTALLATION,
-                    ProviderCategory.NOTIFICATION, VasSmsGatewayAdapter.PROVIDER_TYPE, "local",
-                    baseUrl, "ACTIVE", REFERENCE.toString(), "v1"));
+            return Optional.of(new InstallationSnapshot(
+                    INSTALLATION,
+                    ProviderCategory.NOTIFICATION,
+                    VasSmsGatewayAdapter.PROVIDER_TYPE,
+                    "local",
+                    baseUrl,
+                    "ACTIVE",
+                    REFERENCE.toString(),
+                    "v1"));
         }
     }
 }

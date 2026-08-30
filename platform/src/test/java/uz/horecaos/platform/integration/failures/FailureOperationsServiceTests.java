@@ -1,11 +1,10 @@
 package uz.horecaos.platform.integration.failures;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -15,7 +14,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -23,18 +22,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import tools.jackson.databind.json.JsonMapper;
-
-import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
+import uz.horecaos.platform.support.TestDatabase;
 
 /**
  * ADR 0006 exit criterion: operations can identify, safely retry, and audit
@@ -93,7 +87,8 @@ class FailureOperationsServiceTests {
         insertTenant();
 
         clock = Clock.fixed(Instant.parse("2026-08-20T10:00:00Z"), ZoneOffset.UTC);
-        JdbcAuditRecorder recorder = new JdbcAuditRecorder(jdbc, JsonMapper.builder().build());
+        JdbcAuditRecorder recorder =
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build());
         approvals = new uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService(
                 jdbc, recorder, clock, new SimpleMeterRegistry());
         // A real transaction manager over the same DataSource, because the two
@@ -102,7 +97,9 @@ class FailureOperationsServiceTests {
         // approved outcome carries a grant that has to be spent in the
         // transaction performing the resolution.
         operations = new FailureOperationsService(
-                jdbc, recorder, approvals,
+                jdbc,
+                recorder,
+                approvals,
                 new TransactionTemplate(new DataSourceTransactionManager(dataSource)),
                 clock);
     }
@@ -141,8 +138,7 @@ class FailureOperationsServiceTests {
         // DEAD_LETTER would go blank exactly when they wanted to confirm the
         // transition they had just made.
         UUID eventId = deadLetteredOutboxEvent();
-        operations.resolveOutboxEvent(
-                eventId, FailureCategory.DOMAIN_REJECTED, OPERATOR, "Tenant was deleted", null);
+        operations.resolveOutboxEvent(eventId, FailureCategory.DOMAIN_REJECTED, OPERATOR, "Tenant was deleted", null);
 
         FailureOperationsService.OutboxFailureDetail detail =
                 operations.findOutboxFailure(eventId, TENANT).orElseThrow();
@@ -172,9 +168,15 @@ class FailureOperationsServiceTests {
         UUID eventId = deadLetteredInboxMessage(CONSUMER);
         deadLetteredInboxMessage("other-consumer", eventId);
 
-        assertThat(operations.findInboxFailure(CONSUMER, eventId, TENANT).orElseThrow().consumerName())
+        assertThat(operations
+                        .findInboxFailure(CONSUMER, eventId, TENANT)
+                        .orElseThrow()
+                        .consumerName())
                 .isEqualTo(CONSUMER);
-        assertThat(operations.findInboxFailure("other-consumer", eventId, TENANT).orElseThrow().consumerName())
+        assertThat(operations
+                        .findInboxFailure("other-consumer", eventId, TENANT)
+                        .orElseThrow()
+                        .consumerName())
                 .as("(consumer, event) is the key; one event reaches several consumers and each "
                         + "carries its own decision")
                 .isEqualTo("other-consumer");
@@ -206,10 +208,13 @@ class FailureOperationsServiceTests {
     void retryingReturnsTheSameImmutableWorkToPending() {
         UUID eventId = deadLetteredOutboxEvent();
 
-        assertThat(operations.retryOutboxEvent(eventId, OPERATOR, "Broker recovered")).isTrue();
+        assertThat(operations.retryOutboxEvent(eventId, OPERATOR, "Broker recovered"))
+                .isTrue();
 
         assertThat(outboxStatus(eventId)).isEqualTo("PENDING");
-        assertThat(jdbc.sql("SELECT event_id FROM integration.outbox_events").query(UUID.class).single())
+        assertThat(jdbc.sql("SELECT event_id FROM integration.outbox_events")
+                        .query(UUID.class)
+                        .single())
                 .as("""
                         The provider idempotency key derives from the event id, so a retry
                         that minted a new id would defeat the deduplication it depends on.""")
@@ -239,13 +244,15 @@ class FailureOperationsServiceTests {
             List<Callable<Boolean>> calls = java.util.Collections.nCopies(
                     operators, () -> operations.retryOutboxEvent(eventId, OPERATOR, "incident response"));
             List<Future<Boolean>> results = pool.invokeAll(calls);
-            succeeded = results.stream().filter(future -> {
-                try {
-                    return future.get();
-                } catch (Exception failure) {
-                    return false;
-                }
-            }).count();
+            succeeded = results.stream()
+                    .filter(future -> {
+                        try {
+                            return future.get();
+                        } catch (Exception failure) {
+                            return false;
+                        }
+                    })
+                    .count();
         }
 
         assertThat(succeeded)
@@ -269,14 +276,16 @@ class FailureOperationsServiceTests {
         UUID eventId = deadLetteredOutboxEvent();
 
         assertThat(operations.resolveOutboxEvent(
-                eventId, FailureCategory.DOMAIN_REJECTED, OPERATOR, "Tenant was deleted before delivery", null))
+                        eventId, FailureCategory.DOMAIN_REJECTED, OPERATOR, "Tenant was deleted before delivery", null))
                 .isTrue();
 
         assertThat(outboxStatus(eventId))
                 .as("RESOLVED must stay visible as an override rather than looking like success")
                 .isEqualTo("RESOLVED");
         assertThat(jdbc.sql("SELECT published_at FROM integration.outbox_events WHERE event_id = :id")
-                .param("id", eventId).query(java.time.OffsetDateTime.class).optional())
+                        .param("id", eventId)
+                        .query(java.time.OffsetDateTime.class)
+                        .optional())
                 .isEmpty();
     }
 
@@ -284,8 +293,8 @@ class FailureOperationsServiceTests {
     void resolvingRequiresAReason() {
         UUID eventId = deadLetteredOutboxEvent();
 
-        assertThatThrownBy(() -> operations.resolveOutboxEvent(
-                eventId, FailureCategory.DOMAIN_REJECTED, OPERATOR, "  ", null))
+        assertThatThrownBy(() ->
+                        operations.resolveOutboxEvent(eventId, FailureCategory.DOMAIN_REJECTED, OPERATOR, "  ", null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("reason");
     }
@@ -295,14 +304,18 @@ class FailureOperationsServiceTests {
         UUID eventId = deadLetteredOutboxEvent();
 
         assertThatThrownBy(() -> operations.resolveOutboxEvent(
-                eventId, FailureCategory.UNCERTAIN_EXTERNAL_OUTCOME, OPERATOR, "looks fine", null))
-                .as("declaring an uncertain provider outcome resolved without evidence is how a duplicate charge is blessed")
+                        eventId, FailureCategory.UNCERTAIN_EXTERNAL_OUTCOME, OPERATOR, "looks fine", null))
+                .as(
+                        "declaring an uncertain provider outcome resolved without evidence is how a duplicate charge is blessed")
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("reconciliation evidence");
 
         assertThat(operations.resolveOutboxEvent(
-                eventId, FailureCategory.UNCERTAIN_EXTERNAL_OUTCOME, OPERATOR,
-                "Provider confirms no charge", "recon-2026-08-20-17"))
+                        eventId,
+                        FailureCategory.UNCERTAIN_EXTERNAL_OUTCOME,
+                        OPERATOR,
+                        "Provider confirms no charge",
+                        "recon-2026-08-20-17"))
                 .isTrue();
     }
 
@@ -311,7 +324,8 @@ class FailureOperationsServiceTests {
         UUID eventId = deadLetteredInboxMessage(CONSUMER);
         deadLetteredInboxMessage("other-consumer", eventId);
 
-        assertThat(operations.retryInboxMessage(CONSUMER, eventId, OPERATOR, "handler fixed")).isTrue();
+        assertThat(operations.retryInboxMessage(CONSUMER, eventId, OPERATOR, "handler fixed"))
+                .isTrue();
 
         assertThat(inboxStatus(CONSUMER, eventId)).isEqualTo("RETRY_PENDING");
         assertThat(inboxStatus("other-consumer", eventId))
@@ -325,8 +339,11 @@ class FailureOperationsServiceTests {
         UUID eventId = deadLetteredOutboxEvent();
 
         assertThatThrownBy(() -> operations.resolveOutboxEvent(
-                eventId, FailureCategory.UNCERTAIN_EXTERNAL_OUTCOME, OPERATOR,
-                "provider says no charge", "recon-2026-08-20-17"))
+                        eventId,
+                        FailureCategory.UNCERTAIN_EXTERNAL_OUTCOME,
+                        OPERATOR,
+                        "provider says no charge",
+                        "recon-2026-08-20-17"))
                 .as("an irreversible decision about money needs a second pair of eyes")
                 .isInstanceOf(FailureOperationsService.SecondApproverRequiredException.class);
 
@@ -358,10 +375,8 @@ class FailureOperationsServiceTests {
         assertThat(pending)
                 .as("the request is the whole point of refusing; a rolled-back one asks nobody")
                 .hasSize(1);
-        assertThat(refusal)
-                .isInstanceOf(FailureOperationsService.SecondApproverRequiredException.class);
-        assertThat(((FailureOperationsService.SecondApproverRequiredException) refusal)
-                .approvalRequestId())
+        assertThat(refusal).isInstanceOf(FailureOperationsService.SecondApproverRequiredException.class);
+        assertThat(((FailureOperationsService.SecondApproverRequiredException) refusal).approvalRequestId())
                 .as("and the operator is told which request to wait on")
                 .isEqualTo(pending.getFirst());
         assertThat(refusal.getMessage()).contains(pending.getFirst().toString());
@@ -414,15 +429,18 @@ class FailureOperationsServiceTests {
         // The maker asks about one consumer's dead letter, and that is the row a
         // checker opens and reconciles.
         catchThrowable(() -> operations.resolveInboxMessage(
-                CONSUMER, eventId, FailureCategory.UNCERTAIN_EXTERNAL_OUTCOME,
-                OPERATOR, RECONCILED, EVIDENCE));
+                CONSUMER, eventId, FailureCategory.UNCERTAIN_EXTERNAL_OUTCOME, OPERATOR, RECONCILED, EVIDENCE));
         UUID requestId = pendingRequestIds().getFirst();
-        approvals.decide(requestId, ApprovalService.Decision.APPROVE, CHECKER,
-                "Reconciled against the provider statement");
+        approvals.decide(
+                requestId, ApprovalService.Decision.APPROVE, CHECKER, "Reconciled against the provider statement");
 
         assertThat(catchThrowable(() -> operations.resolveInboxMessage(
-                OTHER_CONSUMER, eventId, FailureCategory.UNCERTAIN_EXTERNAL_OUTCOME,
-                OPERATOR, RECONCILED, EVIDENCE)))
+                        OTHER_CONSUMER,
+                        eventId,
+                        FailureCategory.UNCERTAIN_EXTERNAL_OUTCOME,
+                        OPERATOR,
+                        RECONCILED,
+                        EVIDENCE)))
                 .as("a different consumer's copy of the same event is a different decision, "
                         + "and this signature was not given for it")
                 .isInstanceOf(FailureOperationsService.SecondApproverRequiredException.class);
@@ -431,22 +449,22 @@ class FailureOperationsServiceTests {
                 .isEqualTo("DEAD_LETTER");
 
         assertThat(catchThrowable(() -> operations.resolveOutboxEvent(
-                eventId, FailureCategory.UNCERTAIN_EXTERNAL_OUTCOME, OPERATOR, RECONCILED, EVIDENCE)))
-                .as("and suppressing the outbound event carrying the same id is a third "
-                        + "decision again")
+                        eventId, FailureCategory.UNCERTAIN_EXTERNAL_OUTCOME, OPERATOR, RECONCILED, EVIDENCE)))
+                .as("and suppressing the outbound event carrying the same id is a third " + "decision again")
                 .isInstanceOf(FailureOperationsService.SecondApproverRequiredException.class);
         assertThat(outboxStatus(eventId))
                 .as("the outbound event is not suppressed by an inbox consumer's signature")
                 .isEqualTo("DEAD_LETTER");
 
         assertThat(operations.resolveInboxMessage(
-                CONSUMER, eventId, FailureCategory.UNCERTAIN_EXTERNAL_OUTCOME,
-                OPERATOR, RECONCILED, EVIDENCE))
+                        CONSUMER, eventId, FailureCategory.UNCERTAIN_EXTERNAL_OUTCOME, OPERATOR, RECONCILED, EVIDENCE))
                 .as("the row the signature was actually given for still resolves")
                 .isTrue();
         assertThat(inboxStatus(CONSUMER, eventId)).isEqualTo("RESOLVED");
         assertThat(jdbc.sql("SELECT status FROM audit.approval_requests WHERE id = :id")
-                .param("id", requestId).query(String.class).single())
+                        .param("id", requestId)
+                        .query(String.class)
+                        .single())
                 .as("spent exactly once, by the action it authorised")
                 .isEqualTo("CONSUMED");
     }
@@ -459,8 +477,7 @@ class FailureOperationsServiceTests {
     }
 
     private static UUID requestIdFrom(Throwable refusal) {
-        assertThat(refusal)
-                .isInstanceOf(FailureOperationsService.SecondApproverRequiredException.class);
+        assertThat(refusal).isInstanceOf(FailureOperationsService.SecondApproverRequiredException.class);
         return ((FailureOperationsService.SecondApproverRequiredException) refusal).approvalRequestId();
     }
 
@@ -470,7 +487,7 @@ class FailureOperationsServiceTests {
         UUID eventId = deadLetteredOutboxEvent();
 
         assertThat(operations.resolveOutboxEvent(
-                eventId, FailureCategory.DOMAIN_REJECTED, OPERATOR, "tenant was deleted", null))
+                        eventId, FailureCategory.DOMAIN_REJECTED, OPERATOR, "tenant was deleted", null))
                 .as("friction belongs where money is, not on every incident action")
                 .isTrue();
     }
@@ -487,10 +504,12 @@ class FailureOperationsServiceTests {
 
     @Test
     void classificationDecidesWhichResolutionsNeedASecondApprover() {
-        assertThat(FailureCategory.UNCERTAIN_EXTERNAL_OUTCOME.requiresSecondApprover()).isTrue();
+        assertThat(FailureCategory.UNCERTAIN_EXTERNAL_OUTCOME.requiresSecondApprover())
+                .isTrue();
         assertThat(FailureCategory.DOMAIN_REJECTED.requiresSecondApprover()).isFalse();
         assertThat(FailureCategory.PAYLOAD_INVALID.requiresSecondApprover()).isFalse();
-        assertThat(FailureCategory.TRANSIENT_INFRASTRUCTURE.requiresSecondApprover()).isFalse();
+        assertThat(FailureCategory.TRANSIENT_INFRASTRUCTURE.requiresSecondApprover())
+                .isFalse();
     }
 
     @Test
@@ -507,12 +526,16 @@ class FailureOperationsServiceTests {
 
     private long auditCount(String actionCode) {
         return jdbc.sql("SELECT count(*) FROM audit.audit_events WHERE action_code = :code")
-                .param("code", actionCode).query(Long.class).single();
+                .param("code", actionCode)
+                .query(Long.class)
+                .single();
     }
 
     private String outboxStatus(UUID eventId) {
         return jdbc.sql("SELECT status FROM integration.outbox_events WHERE event_id = :id")
-                .param("id", eventId).query(String.class).single();
+                .param("id", eventId)
+                .query(String.class)
+                .single();
     }
 
     private String inboxStatus(String consumerName, UUID eventId) {
@@ -520,7 +543,10 @@ class FailureOperationsServiceTests {
                 SELECT status FROM integration.inbox_messages
                  WHERE consumer_name = :consumer AND event_id = :id
                 """)
-                .param("consumer", consumerName).param("id", eventId).query(String.class).single();
+                .param("consumer", consumerName)
+                .param("id", eventId)
+                .query(String.class)
+                .single();
     }
 
     private UUID deadLetteredOutboxEvent() {
@@ -594,8 +620,10 @@ class FailureOperationsServiceTests {
                 // when the wall clock's time of day happened to fall before the
                 // frozen instant, so the test passed in the morning and failed in
                 // the afternoon.
-                .param("validFrom", java.time.OffsetDateTime.ofInstant(
-                        clock.instant().minus(java.time.Duration.ofDays(1)), ZoneOffset.UTC))
+                .param(
+                        "validFrom",
+                        java.time.OffsetDateTime.ofInstant(
+                                clock.instant().minus(java.time.Duration.ofDays(1)), ZoneOffset.UTC))
                 .update();
     }
 

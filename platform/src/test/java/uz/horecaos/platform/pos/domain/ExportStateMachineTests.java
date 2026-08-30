@@ -32,9 +32,9 @@ class ExportStateMachineTests {
         for (ExportState state : ExportState.values()) {
             boolean sendable = ExportStateMachine.permits(state, ExportState.SENT);
             assertThat(sendable)
-                    .as("%s should%s permit a send", state,
-                            state == ExportState.PENDING || state == ExportState.RESOLVED_ABSENT
-                                    ? "" : " not")
+                    .as(
+                            "%s should%s permit a send",
+                            state, state == ExportState.PENDING || state == ExportState.RESOLVED_ABSENT ? "" : " not")
                     .isEqualTo(state == ExportState.PENDING || state == ExportState.RESOLVED_ABSENT);
         }
     }
@@ -57,8 +57,7 @@ class ExportStateMachineTests {
     @Test
     @DisplayName("a refused transition names both states")
     void aRejectionIsDiagnosable() {
-        assertThatThrownBy(() ->
-                ExportStateMachine.require(ExportState.UNCERTAIN, ExportState.SENT))
+        assertThatThrownBy(() -> ExportStateMachine.require(ExportState.UNCERTAIN, ExportState.SENT))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("UNCERTAIN")
                 .hasMessageContaining("SENT");

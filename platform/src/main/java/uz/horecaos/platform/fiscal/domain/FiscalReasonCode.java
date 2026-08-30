@@ -30,8 +30,7 @@ public final class FiscalReasonCode {
      * {@code received_cash} is a tender split <em>inside</em> a Click payment and
      * is not a cash path.
      */
-    public static final String CASH_TENDER_NO_PROVIDER_FISCALIZATION =
-            "CASH_TENDER_NO_PROVIDER_FISCALIZATION";
+    public static final String CASH_TENDER_NO_PROVIDER_FISCALIZATION = "CASH_TENDER_NO_PROVIDER_FISCALIZATION";
 
     /** A provider issued a receipt and its evidence is on the row. */
     public static final String PARTNER_FISCALIZED = "PARTNER_FISCALIZED";
@@ -71,13 +70,8 @@ public final class FiscalReasonCode {
      * The blocking reasons, so a worklist filter and an operator's unblock command
      * are validated against one list rather than two that drift.
      */
-    public static final Set<String> BLOCKING = Set.of(
-            PROVIDER_REPORT_OVERDUE,
-            CLASSIFICATION_MISSING,
-            MARKS_INCOMPLETE,
-            NO_FISCAL_PATH,
-            TERMINAL_OFFLINE);
+    public static final Set<String> BLOCKING =
+            Set.of(PROVIDER_REPORT_OVERDUE, CLASSIFICATION_MISSING, MARKS_INCOMPLETE, NO_FISCAL_PATH, TERMINAL_OFFLINE);
 
-    private FiscalReasonCode() {
-    }
+    private FiscalReasonCode() {}
 }

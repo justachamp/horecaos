@@ -4,9 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
-
 import uz.horecaos.platform.courier.domain.CourierCompensationPolicy;
 import uz.horecaos.platform.courier.domain.DutyState;
 import uz.horecaos.platform.courier.domain.EngagementStatus;
@@ -40,15 +38,14 @@ public class CourierDispatchGate {
     private final JdbcCourierShiftStore shifts;
     private final CourierPolicyResolver policies;
 
-    public CourierDispatchGate(JdbcCourierStore couriers, JdbcCourierShiftStore shifts,
-            CourierPolicyResolver policies) {
+    public CourierDispatchGate(
+            JdbcCourierStore couriers, JdbcCourierShiftStore shifts, CourierPolicyResolver policies) {
         this.couriers = couriers;
         this.shifts = shifts;
         this.policies = policies;
     }
 
-    public Eligibility evaluate(UUID tenantId, UUID brandId, UUID locationId, UUID courierId,
-            int distanceMeters) {
+    public Eligibility evaluate(UUID tenantId, UUID brandId, UUID locationId, UUID courierId, int distanceMeters) {
 
         ResolvedPolicy<CourierCompensationPolicy> policy =
                 policies.resolveWithIdentity(ResourceScope.location(tenantId, brandId, locationId));
@@ -58,8 +55,7 @@ public class CourierDispatchGate {
         Optional<CourierRow> courier = couriers.findCourier(tenantId, courierId);
         if (courier.isEmpty() || !"ACTIVE".equals(courier.get().status())) {
             refusals.add("COURIER_NOT_ACTIVE");
-            return new Eligibility(false, refusals, enforcement, policy.policyId(),
-                    policy.policyVersion());
+            return new Eligibility(false, refusals, enforcement, policy.policyId(), policy.policyVersion());
         }
 
         Optional<EngagementRow> engagement = couriers.findLiveEngagement(tenantId, courierId);
@@ -86,21 +82,19 @@ public class CourierDispatchGate {
             refusals.add("DUTY_STATE_" + shift.get().dutyState().name());
         }
 
-        courier.flatMap(row -> couriers.findType(tenantId, row.courierTypeId()))
-                .ifPresent(type -> {
-                    if (!withinBand(type, distanceMeters)) {
-                        refusals.add("OUTSIDE_DISTANCE_BAND");
-                    }
-                });
+        courier.flatMap(row -> couriers.findType(tenantId, row.courierTypeId())).ifPresent(type -> {
+            if (!withinBand(type, distanceMeters)) {
+                refusals.add("OUTSIDE_DISTANCE_BAND");
+            }
+        });
 
         // ADVISORY computes the same decision and refuses nothing, so the gate's
         // false negatives appear in a report rather than as couriers unable to
         // work during a dinner rush. That is the rollout order ADR 0042 states.
-        boolean eligible = refusals.isEmpty()
-                || (enforcement != ShiftEnforcement.ENFORCED && onlyShiftRefusals(refusals));
+        boolean eligible =
+                refusals.isEmpty() || (enforcement != ShiftEnforcement.ENFORCED && onlyShiftRefusals(refusals));
 
-        return new Eligibility(eligible, List.copyOf(refusals), enforcement, policy.policyId(),
-                policy.policyVersion());
+        return new Eligibility(eligible, List.copyOf(refusals), enforcement, policy.policyId(), policy.policyVersion());
     }
 
     private static boolean onlyShiftRefusals(List<String> refusals) {
@@ -121,6 +115,10 @@ public class CourierDispatchGate {
      * @param refusals          empty when eligible; carries the reasons otherwise,
      *                          including under ADVISORY where they refuse nothing
      */
-    public record Eligibility(boolean eligible, List<String> refusals,
-            ShiftEnforcement enforcementMode, UUID policyId, int policyVersion) { }
+    public record Eligibility(
+            boolean eligible,
+            List<String> refusals,
+            ShiftEnforcement enforcementMode,
+            UUID policyId,
+            int policyVersion) {}
 }

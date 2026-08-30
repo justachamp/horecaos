@@ -19,7 +19,8 @@ public record TenantOnboardingStepCompleted(
         String stepKey,
         int stepVersion,
         int attemptCount,
-        Instant occurredAt) implements TenancyEvent {
+        Instant occurredAt)
+        implements TenancyEvent {
 
     public TenantOnboardingStepCompleted {
         Objects.requireNonNull(eventId, "Event ID is required");
@@ -54,5 +55,5 @@ public record TenantOnboardingStepCompleted(
         return new Payload(tenantId.value(), runId, stepKey, stepVersion, attemptCount);
     }
 
-    public record Payload(UUID tenantId, UUID runId, String stepKey, int stepVersion, int attemptCount) { }
+    public record Payload(UUID tenantId, UUID runId, String stepKey, int stepVersion, int attemptCount) {}
 }

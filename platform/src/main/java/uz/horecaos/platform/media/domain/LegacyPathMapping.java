@@ -36,8 +36,7 @@ public record LegacyPathMapping(UUID tenantId, String prefix, MediaOwner owner) 
      * @return empty when nothing claims this path, which is an item for a human
      *         to map rather than a file to skip quietly
      */
-    public static Optional<LegacyPathMapping> resolve(LegacyPath path,
-            Collection<LegacyPathMapping> mappings) {
+    public static Optional<LegacyPathMapping> resolve(LegacyPath path, Collection<LegacyPathMapping> mappings) {
         return mappings.stream()
                 .filter(mapping -> matches(mapping, path))
                 .max(Comparator.comparingInt(mapping -> mapping.prefix().length()));

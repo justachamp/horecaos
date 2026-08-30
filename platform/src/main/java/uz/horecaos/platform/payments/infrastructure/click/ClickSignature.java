@@ -46,22 +46,32 @@ import java.util.Locale;
  */
 public final class ClickSignature {
 
-    private ClickSignature() {
-    }
+    private ClickSignature() {}
 
     /** {@code action=0}. Signs seven fields; no {@code merchant_prepare_id}. */
-    public static String prepare(String secretKey, String clickTransId, String serviceId,
-            String merchantTransId, String rawAmount, String action, String signTime) {
-        return md5(concat(clickTransId, serviceId, secretKey, merchantTransId,
-                rawAmount, action, signTime));
+    public static String prepare(
+            String secretKey,
+            String clickTransId,
+            String serviceId,
+            String merchantTransId,
+            String rawAmount,
+            String action,
+            String signTime) {
+        return md5(concat(clickTransId, serviceId, secretKey, merchantTransId, rawAmount, action, signTime));
     }
 
     /** {@code action=1}. Signs eight fields; {@code merchant_prepare_id} is the fifth. */
-    public static String complete(String secretKey, String clickTransId, String serviceId,
-            String merchantTransId, String merchantPrepareId, String rawAmount, String action,
+    public static String complete(
+            String secretKey,
+            String clickTransId,
+            String serviceId,
+            String merchantTransId,
+            String merchantPrepareId,
+            String rawAmount,
+            String action,
             String signTime) {
-        return md5(concat(clickTransId, serviceId, secretKey, merchantTransId, merchantPrepareId,
-                rawAmount, action, signTime));
+        return md5(concat(
+                clickTransId, serviceId, secretKey, merchantTransId, merchantPrepareId, rawAmount, action, signTime));
     }
 
     /**
@@ -72,11 +82,22 @@ public final class ClickSignature {
      */
     public static String expected(String secretKey, ClickCallbackRequest request) {
         return request.isComplete()
-                ? complete(secretKey, request.clickTransId(), request.serviceId(),
-                        request.merchantTransId(), request.merchantPrepareId(), request.amount(),
-                        request.action(), request.signTime())
-                : prepare(secretKey, request.clickTransId(), request.serviceId(),
-                        request.merchantTransId(), request.amount(), request.action(),
+                ? complete(
+                        secretKey,
+                        request.clickTransId(),
+                        request.serviceId(),
+                        request.merchantTransId(),
+                        request.merchantPrepareId(),
+                        request.amount(),
+                        request.action(),
+                        request.signTime())
+                : prepare(
+                        secretKey,
+                        request.clickTransId(),
+                        request.serviceId(),
+                        request.merchantTransId(),
+                        request.amount(),
+                        request.action(),
                         request.signTime());
     }
 

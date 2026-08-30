@@ -1,25 +1,21 @@
 package uz.horecaos.platform.fulfillment.web;
 
-import java.util.Map;
-import java.util.UUID;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
-
+import java.util.Map;
+import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.fulfillment.application.ServiceZoneService;
 import uz.horecaos.platform.fulfillment.domain.BranchOrigin;
 import uz.horecaos.platform.fulfillment.domain.zone.ZoneRole;
@@ -53,40 +49,58 @@ public class ServiceZoneController {
     }
 
     @PostMapping
-    @RequiresCapability(value = Capability.DELIVERY_ZONE_MANAGE, scope = ScopeType.BRAND,
-            mutating = true)
-    @Operation(summary = "Register a zone",
+    @RequiresCapability(value = Capability.DELIVERY_ZONE_MANAGE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Register a zone",
             description = "Creates the lineage only. A zone has no geometry until a version is "
                     + "drafted and activated, so registering one changes nothing a customer sees.")
-    public ResponseEntity<ZoneView> create(@PathVariable UUID tenantId, @PathVariable UUID brandId,
-            @Valid @RequestBody CreateZoneRequest body) {
+    public ResponseEntity<ZoneView> create(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody CreateZoneRequest body) {
 
-        UUID zoneId = zones.createZone(tenantId, brandId, body.role(), body.code(),
-                body.displayNameRu(), body.displayNameUz(), body.displayNameEn());
+        UUID zoneId = zones.createZone(
+                tenantId,
+                brandId,
+                body.role(),
+                body.code(),
+                body.displayNameRu(),
+                body.displayNameUz(),
+                body.displayNameEn());
         return ResponseEntity.ok(new ZoneView(zoneId, body.code(), body.role().name()));
     }
 
     @PostMapping("/{zoneId}/versions")
-    @RequiresCapability(value = Capability.DELIVERY_ZONE_MANAGE, scope = ScopeType.BRAND,
-            mutating = true)
-    @Operation(summary = "Draft a new version of a zone",
+    @RequiresCapability(value = Capability.DELIVERY_ZONE_MANAGE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Draft a new version of a zone",
             description = "Every edit to geometry, priority, tariff binding or threshold is a new "
                     + "version; the live one is never mutated. A payout dispute six weeks later "
                     + "asks whether that address was inside that polygon, and today's geometry "
                     + "cannot answer it. Supply either a circle around a branch or a GeoJSON "
                     + "polygon, never both.")
-    public ResponseEntity<VersionView> draftVersion(@PathVariable UUID tenantId,
-            @PathVariable UUID brandId, @PathVariable UUID zoneId,
+    public ResponseEntity<VersionView> draftVersion(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID zoneId,
             @Valid @RequestBody DraftVersionRequest body) {
 
-        var request = new ServiceZoneService.NewVersion(tenantId, brandId, zoneId,
-                resolveRole(tenantId, brandId, zoneId), body.regionId(), body.priority(),
-                body.currency(), body.deliveryTariffId(), body.freeDeliveryFromMinor(),
-                body.minBasketMinor(), body.actorId());
+        var request = new ServiceZoneService.NewVersion(
+                tenantId,
+                brandId,
+                zoneId,
+                resolveRole(tenantId, brandId, zoneId),
+                body.regionId(),
+                body.priority(),
+                body.currency(),
+                body.deliveryTariffId(),
+                body.freeDeliveryFromMinor(),
+                body.minBasketMinor(),
+                body.actorId());
 
         try {
             ServiceZoneService.DraftedVersion drafted = body.circle() != null
-                    ? zones.draftCircleVersion(request, body.circle().originLocationId(),
+                    ? zones.draftCircleVersion(
+                            request,
+                            body.circle().originLocationId(),
                             body.circle().radiusMeters())
                     : zones.draftPolygonVersion(request, body.geoJson());
             return ResponseEntity.ok(new VersionView(drafted.zoneId(), drafted.version(), "DRAFT"));
@@ -95,46 +109,53 @@ public class ServiceZoneController {
             // with an empty zone list instead — which is what a system that merely
             // found no candidates would do — would send an operator to redraw a
             // polygon when the actual fault is a branch nobody has placed on a map.
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, unlocated.getMessage(),
-                    Map.of("locationId", unlocated.locationId().toString(),
-                            "reason", "BRANCH_NOT_LOCATED"));
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    unlocated.getMessage(),
+                    Map.of("locationId", unlocated.locationId().toString(), "reason", "BRANCH_NOT_LOCATED"));
         } catch (ServiceZoneService.DeliveryResourceNotFoundException missing) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
         }
     }
 
     @PostMapping("/{zoneId}/versions/{version}/activate")
-    @RequiresCapability(value = Capability.DELIVERY_ZONE_ACTIVATE, scope = ScopeType.BRAND,
-            mutating = true)
-    @Operation(summary = "Make a zone version live",
+    @RequiresCapability(value = Capability.DELIVERY_ZONE_ACTIVATE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Make a zone version live",
             description = "Refuses self-intersecting rings, geometry outside the region's box, "
                     + "and an area above the platform maximum — which is what stops an operator "
                     + "drawing a polygon around the country by accident. Every reason is returned "
                     + "at once rather than one attempt at a time.")
-    public ResponseEntity<VersionView> activate(@PathVariable UUID tenantId,
-            @PathVariable UUID brandId, @PathVariable UUID zoneId, @PathVariable int version,
+    public ResponseEntity<VersionView> activate(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID zoneId,
+            @PathVariable int version,
             @Valid @RequestBody ActivateRequest body) {
 
         try {
             zones.activate(tenantId, brandId, zoneId, version, body.actorId());
             return ResponseEntity.ok(new VersionView(zoneId, version, "ACTIVE"));
         } catch (ServiceZoneService.ZoneActivationRefusedException refused) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, refused.getMessage(),
-                    Map.of("problems", refused.problems()));
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, refused.getMessage(), Map.of("problems", refused.problems()));
         } catch (ServiceZoneService.DeliveryResourceNotFoundException missing) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
         }
     }
 
     @PostMapping("/{zoneId}/locations")
-    @RequiresCapability(value = Capability.DELIVERY_ZONE_MANAGE, scope = ScopeType.BRAND,
-            mutating = true)
-    @Operation(summary = "Bind the zone to a branch",
+    @RequiresCapability(value = Capability.DELIVERY_ZONE_MANAGE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Bind the zone to a branch",
             description = "A zone with no binding covers nothing. That is the safe direction: a "
                     + "half-configured zone is visibly inert rather than quietly serving the "
                     + "whole brand.")
-    public ResponseEntity<Void> bind(@PathVariable UUID tenantId, @PathVariable UUID brandId,
-            @PathVariable UUID zoneId, @Valid @RequestBody BindLocationRequest body) {
+    public ResponseEntity<Void> bind(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID zoneId,
+            @Valid @RequestBody BindLocationRequest body) {
 
         zones.bindLocation(tenantId, brandId, zoneId, body.locationId());
         return ResponseEntity.noContent().build();
@@ -142,8 +163,8 @@ public class ServiceZoneController {
 
     private ZoneRole resolveRole(UUID tenantId, UUID brandId, UUID zoneId) {
         return zones.roleOf(tenantId, brandId, zoneId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No zone " + zoneId + " for this brand"));
+                .orElseThrow(
+                        () -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No zone " + zoneId + " for this brand"));
     }
 
     public record CreateZoneRequest(
@@ -151,7 +172,7 @@ public class ServiceZoneController {
             @NotBlank @Size(max = 32) String code,
             @NotBlank @Size(max = 200) String displayNameRu,
             @NotBlank @Size(max = 200) String displayNameUz,
-            @NotBlank @Size(max = 200) String displayNameEn) { }
+            @NotBlank @Size(max = 200) String displayNameEn) {}
 
     /**
      * @param circle a circle around a branch, which is the shape the legacy
@@ -174,19 +195,19 @@ public class ServiceZoneController {
 
         public DraftVersionRequest {
             if ((circle == null) == (geoJson == null)) {
-                throw new IllegalArgumentException(
-                        "A version is either a circle or a polygon; supply exactly one");
+                throw new IllegalArgumentException("A version is either a circle or a polygon; supply exactly one");
             }
         }
     }
 
-    public record CircleRequest(@NotNull UUID originLocationId, @Positive int radiusMeters) { }
+    public record CircleRequest(
+            @NotNull UUID originLocationId, @Positive int radiusMeters) {}
 
-    public record ActivateRequest(@NotNull UUID actorId) { }
+    public record ActivateRequest(@NotNull UUID actorId) {}
 
-    public record BindLocationRequest(@NotNull UUID locationId) { }
+    public record BindLocationRequest(@NotNull UUID locationId) {}
 
-    public record ZoneView(UUID zoneId, String code, String role) { }
+    public record ZoneView(UUID zoneId, String code, String role) {}
 
-    public record VersionView(UUID zoneId, int version, String status) { }
+    public record VersionView(UUID zoneId, int version, String status) {}
 }

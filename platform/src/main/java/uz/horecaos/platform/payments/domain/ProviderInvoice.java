@@ -39,8 +39,7 @@ public record ProviderInvoice(
     }
 
     public static ProviderInvoice link(String checkoutUrl, Instant expiresAt) {
-        return new ProviderInvoice(PresentationKind.PAYMENT_LINK, checkoutUrl, null, null,
-                null, null, expiresAt);
+        return new ProviderInvoice(PresentationKind.PAYMENT_LINK, checkoutUrl, null, null, null, null, expiresAt);
     }
 
     public static ProviderInvoice qr(String qrPayload, Instant expiresAt) {

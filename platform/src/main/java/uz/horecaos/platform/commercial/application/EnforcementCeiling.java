@@ -2,11 +2,9 @@ package uz.horecaos.platform.commercial.application;
 
 import java.util.Locale;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.commercial.api.CommercialConfigurationKeys;
 import uz.horecaos.platform.commercial.api.EnforcementMode;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -38,8 +36,8 @@ public class EnforcementCeiling {
     }
 
     public EnforcementMode forTenant(UUID tenantId) {
-        String configured = configuration.value(
-                CommercialConfigurationKeys.ENFORCEMENT_CEILING, ResourceScope.tenant(tenantId));
+        String configured =
+                configuration.value(CommercialConfigurationKeys.ENFORCEMENT_CEILING, ResourceScope.tenant(tenantId));
 
         if (configured == null || configured.isBlank()) {
             return EnforcementMode.METER_ONLY;

@@ -54,12 +54,10 @@ public interface CartPricingPort {
          * @param lineKey stable within the cart, so a re-quote can be compared line
          *                by line rather than by position
          */
-        public record Item(String lineKey, UUID variantId, int quantity,
-                List<UUID> modifierOptionIds) {
+        public record Item(String lineKey, UUID variantId, int quantity, List<UUID> modifierOptionIds) {
 
             public Item {
-                modifierOptionIds = modifierOptionIds == null
-                        ? List.of() : List.copyOf(modifierOptionIds);
+                modifierOptionIds = modifierOptionIds == null ? List.of() : List.copyOf(modifierOptionIds);
             }
         }
     }

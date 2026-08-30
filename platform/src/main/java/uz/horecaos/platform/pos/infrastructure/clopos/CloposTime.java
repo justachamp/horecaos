@@ -27,11 +27,9 @@ import java.time.format.DateTimeParseException;
  */
 public final class CloposTime {
 
-    private static final DateTimeFormatter RESOURCE_TIME =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final DateTimeFormatter RESOURCE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    private CloposTime() {
-    }
+    private CloposTime() {}
 
     /** @return null for anything unparseable, because a wrong instant is worse than none */
     public static Instant parse(String value) {

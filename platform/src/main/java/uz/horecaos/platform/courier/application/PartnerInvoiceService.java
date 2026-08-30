@@ -7,10 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -57,15 +55,32 @@ public class PartnerInvoiceService {
     @Transactional
     public UUID importInvoice(ImportInvoice command) {
         UUID invoiceId = UUID.randomUUID();
-        costs.insertInvoice(new InvoiceRow(invoiceId, command.tenantId(), command.providerCode(),
-                command.providerInvoiceRef(), command.legalEntityId(), command.periodStart(),
-                command.periodEnd(), command.totalMinor(), command.currency(), "IMPORTED",
+        costs.insertInvoice(new InvoiceRow(
+                invoiceId,
+                command.tenantId(),
+                command.providerCode(),
+                command.providerInvoiceRef(),
+                command.legalEntityId(),
+                command.periodStart(),
+                command.periodEnd(),
+                command.totalMinor(),
+                command.currency(),
+                "IMPORTED",
                 command.actor().subject()));
 
         for (ImportedLine line : command.lines()) {
-            costs.insertInvoiceLine(new InvoiceLineRow(UUID.randomUUID(), command.tenantId(),
-                    invoiceId, line.providerShipmentRef(), null, line.amountMinor(),
-                    command.currency(), line.chargeType(), MatchStatus.PENDING, null, null));
+            costs.insertInvoiceLine(new InvoiceLineRow(
+                    UUID.randomUUID(),
+                    command.tenantId(),
+                    invoiceId,
+                    line.providerShipmentRef(),
+                    null,
+                    line.amountMinor(),
+                    command.currency(),
+                    line.chargeType(),
+                    MatchStatus.PENDING,
+                    null,
+                    null));
         }
 
         audit.record(AuditFact.of("partner.invoice.imported", AuditClass.BUSINESS)
@@ -73,10 +88,15 @@ public class PartnerInvoiceService {
                 .at(ResourceScope.tenant(command.tenantId()))
                 .target("partner_delivery_invoice", invoiceId)
                 .because(command.reason())
-                .changed(Map.of("providerCode", command.providerCode(),
-                        "providerInvoiceRef", command.providerInvoiceRef(),
-                        "totalMinor", command.totalMinor(),
-                        "lineCount", command.lines().size()))
+                .changed(Map.of(
+                        "providerCode",
+                        command.providerCode(),
+                        "providerInvoiceRef",
+                        command.providerInvoiceRef(),
+                        "totalMinor",
+                        command.totalMinor(),
+                        "lineCount",
+                        command.lines().size()))
                 .usingCapability("partner.invoice.manage")
                 .correlatedBy("partner-invoice")
                 .occurredAt(clock.instant())
@@ -95,15 +115,35 @@ public class PartnerInvoiceService {
      * single cost column silently discards.
      */
     @Transactional
-    public UUID recordPartnerCost(UUID tenantId, UUID shipmentId, String providerCode,
-            long amountMinor, String currency, LocalDate businessDate, UUID legalEntityId,
-            PartnerChargeType chargeType, String recordedBy) {
+    public UUID recordPartnerCost(
+            UUID tenantId,
+            UUID shipmentId,
+            String providerCode,
+            long amountMinor,
+            String currency,
+            LocalDate businessDate,
+            UUID legalEntityId,
+            PartnerChargeType chargeType,
+            String recordedBy) {
 
         UUID lineId = UUID.randomUUID();
-        costs.insertLine(new CostLineRow(lineId, tenantId, shipmentId, legalEntityId, businessDate,
-                CostPath.PARTNER, CostBasis.ACCRUED, amountMinor, currency,
-                "partner_booking:" + chargeType.name(), null, null, providerCode,
-                clock.instant(), null, recordedBy));
+        costs.insertLine(new CostLineRow(
+                lineId,
+                tenantId,
+                shipmentId,
+                legalEntityId,
+                businessDate,
+                CostPath.PARTNER,
+                CostBasis.ACCRUED,
+                amountMinor,
+                currency,
+                "partner_booking:" + chargeType.name(),
+                null,
+                null,
+                providerCode,
+                clock.instant(),
+                null,
+                recordedBy));
         return lineId;
     }
 
@@ -118,12 +158,12 @@ public class PartnerInvoiceService {
      *                               grow a second copy of it
      */
     @Transactional
-    public MatchReport match(UUID tenantId, UUID invoiceId,
-            Map<String, UUID> shipmentsByProviderRef, ActorRef actor, String reason) {
+    public MatchReport match(
+            UUID tenantId, UUID invoiceId, Map<String, UUID> shipmentsByProviderRef, ActorRef actor, String reason) {
 
         InvoiceRow invoice = costs.findInvoice(tenantId, invoiceId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No such partner invoice: " + invoiceId));
+                .orElseThrow(
+                        () -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such partner invoice: " + invoiceId));
 
         List<UUID> unmatched = new ArrayList<>();
         List<UUID> variances = new ArrayList<>();
@@ -132,7 +172,12 @@ public class PartnerInvoiceService {
         for (InvoiceLineRow line : costs.linesOfInvoice(tenantId, invoiceId)) {
             UUID shipmentId = shipmentsByProviderRef.get(line.providerShipmentRef());
             if (shipmentId == null) {
-                costs.matchLine(tenantId, line.id(), null, MatchStatus.UNMATCHED_LINE, null,
+                costs.matchLine(
+                        tenantId,
+                        line.id(),
+                        null,
+                        MatchStatus.UNMATCHED_LINE,
+                        null,
                         "NO_SHIPMENT_FOR_PROVIDER_REFERENCE");
                 unmatched.add(line.id());
                 // Deliberately no cost line. Recording a cost for a shipment
@@ -143,10 +188,13 @@ public class PartnerInvoiceService {
 
             Optional<Long> accrued = accruedPartnerAmount(tenantId, shipmentId);
             long variance = accrued.map(amount -> line.amountMinor() - amount).orElse(0L);
-            MatchStatus status = accrued.isEmpty() || variance == 0
-                    ? MatchStatus.MATCHED : MatchStatus.VARIANCE;
+            MatchStatus status = accrued.isEmpty() || variance == 0 ? MatchStatus.MATCHED : MatchStatus.VARIANCE;
 
-            costs.matchLine(tenantId, line.id(), shipmentId, status,
+            costs.matchLine(
+                    tenantId,
+                    line.id(),
+                    shipmentId,
+                    status,
                     status == MatchStatus.VARIANCE ? variance : null,
                     status == MatchStatus.VARIANCE ? "AMOUNT_DIFFERS_FROM_BOOKING" : null);
             if (status == MatchStatus.VARIANCE) {
@@ -157,11 +205,23 @@ public class PartnerInvoiceService {
             // The partner half of the two cost paths, now at INVOICED. The
             // ACCRUED estimate recorded at booking stays where it is: a report at
             // ACCRUED must keep showing what was known that day.
-            costs.insertLine(new CostLineRow(UUID.randomUUID(), tenantId, shipmentId,
-                    invoice.legalEntityId(), invoice.periodEnd(), CostPath.PARTNER,
-                    CostBasis.INVOICED, line.amountMinor(), invoice.currency(),
-                    "partner_delivery_invoice_line", line.id(), null, invoice.providerCode(),
-                    clock.instant(), null, actor.subject()));
+            costs.insertLine(new CostLineRow(
+                    UUID.randomUUID(),
+                    tenantId,
+                    shipmentId,
+                    invoice.legalEntityId(),
+                    invoice.periodEnd(),
+                    CostPath.PARTNER,
+                    CostBasis.INVOICED,
+                    line.amountMinor(),
+                    invoice.currency(),
+                    "partner_delivery_invoice_line",
+                    line.id(),
+                    null,
+                    invoice.providerCode(),
+                    clock.instant(),
+                    null,
+                    actor.subject()));
         }
 
         costs.markInvoiceMatched(tenantId, invoiceId);
@@ -171,9 +231,8 @@ public class PartnerInvoiceService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("partner_delivery_invoice", invoiceId)
                 .because(reason)
-                .changed(Map.of("matchedLines", matched,
-                        "varianceLines", variances.size(),
-                        "unmatchedLines", unmatched.size()))
+                .changed(Map.of(
+                        "matchedLines", matched, "varianceLines", variances.size(), "unmatchedLines", unmatched.size()))
                 .usingCapability("partner.invoice.manage")
                 .correlatedBy("partner-invoice")
                 .occurredAt(clock.instant())
@@ -191,13 +250,20 @@ public class PartnerInvoiceService {
                 .reduce(Long::sum);
     }
 
-    public record ImportInvoice(UUID tenantId, String providerCode, String providerInvoiceRef,
-            UUID legalEntityId, LocalDate periodStart, LocalDate periodEnd, long totalMinor,
-            String currency, List<ImportedLine> lines, ActorRef actor, String reason) { }
+    public record ImportInvoice(
+            UUID tenantId,
+            String providerCode,
+            String providerInvoiceRef,
+            UUID legalEntityId,
+            LocalDate periodStart,
+            LocalDate periodEnd,
+            long totalMinor,
+            String currency,
+            List<ImportedLine> lines,
+            ActorRef actor,
+            String reason) {}
 
-    public record ImportedLine(String providerShipmentRef, long amountMinor,
-            PartnerChargeType chargeType) { }
+    public record ImportedLine(String providerShipmentRef, long amountMinor, PartnerChargeType chargeType) {}
 
-    public record MatchReport(int matchedLines, List<UUID> varianceLineIds,
-            List<UUID> unmatchedLineIds) { }
+    public record MatchReport(int matchedLines, List<UUID> varianceLineIds, List<UUID> unmatchedLineIds) {}
 }

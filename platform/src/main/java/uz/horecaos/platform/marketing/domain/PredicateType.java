@@ -73,8 +73,7 @@ public enum PredicateType {
 
     private static final Set<PredicateOperator> RANGE_OPERATORS =
             Set.of(PredicateOperator.AT_LEAST, PredicateOperator.AT_MOST, PredicateOperator.BETWEEN);
-    private static final Set<PredicateOperator> SET_OPERATORS =
-            Set.of(PredicateOperator.IN, PredicateOperator.NOT_IN);
+    private static final Set<PredicateOperator> SET_OPERATORS = Set.of(PredicateOperator.IN, PredicateOperator.NOT_IN);
 
     private final String projectionColumn;
     private final ValueKind valueKind;

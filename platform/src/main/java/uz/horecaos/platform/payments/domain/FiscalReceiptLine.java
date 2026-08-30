@@ -65,8 +65,7 @@ public record FiscalReceiptLine(
      * {@link #unitPrice()}.
      */
     public SomAmount lineTotal() {
-        return new SomAmount(
-                Math.multiplyExact(unitPrice.value(), (long) quantity), unitPrice.currency());
+        return new SomAmount(Math.multiplyExact(unitPrice.value(), (long) quantity), unitPrice.currency());
     }
 
     public boolean marked() {

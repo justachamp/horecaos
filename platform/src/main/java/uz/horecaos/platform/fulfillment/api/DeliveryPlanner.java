@@ -41,6 +41,5 @@ public interface DeliveryPlanner {
      *                    promise
      * @return the delivery plan id, or empty when there was nothing to plan
      */
-    Optional<UUID> planFor(UUID tenantId, UUID brandId, UUID locationId, UUID orderId,
-            Instant confirmedAt);
+    Optional<UUID> planFor(UUID tenantId, UUID brandId, UUID locationId, UUID orderId, Instant confirmedAt);
 }

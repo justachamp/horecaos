@@ -1,7 +1,5 @@
 package uz.horecaos.platform.tenancy;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -21,7 +19,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -31,16 +29,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.json.JsonMapper;
-
-import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.LocationCapacityPort;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
@@ -49,12 +44,12 @@ import uz.horecaos.platform.tenancy.api.Serviceability;
 import uz.horecaos.platform.tenancy.api.ServiceabilityReason;
 import uz.horecaos.platform.tenancy.api.TenantCreated;
 import uz.horecaos.platform.tenancy.api.TenantId;
-import uz.horecaos.platform.tenancy.application.TenantResourceNotFoundException;
-import uz.horecaos.platform.tenancy.application.StorefrontChannelSeeder;
 import uz.horecaos.platform.tenancy.application.SalesChannelService;
 import uz.horecaos.platform.tenancy.application.ServiceScheduleService;
 import uz.horecaos.platform.tenancy.application.ServiceabilityService;
+import uz.horecaos.platform.tenancy.application.StorefrontChannelSeeder;
 import uz.horecaos.platform.tenancy.application.TenantResourceConflictException;
+import uz.horecaos.platform.tenancy.application.TenantResourceNotFoundException;
 import uz.horecaos.platform.tenancy.domain.channel.ServiceMode;
 import uz.horecaos.platform.tenancy.domain.channel.WeeklySchedule;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
@@ -107,7 +102,8 @@ class SalesChannelAndServiceabilityTests {
 
     @BeforeAll
     static void startDatabase() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for sales channel and serviceability tests");
         db = TestDatabase.migrated();
         jdbcUrl = db.jdbcUrl();
@@ -127,8 +123,9 @@ class SalesChannelAndServiceabilityTests {
         dataSource = db.dataSource();
         jdbc = JdbcClient.create(dataSource);
         jdbc.sql("TRUNCATE TABLE catalog.publication_items, catalog.publications, "
-                + "catalog.location_offerings, catalog.variants, catalog.products, "
-                + "catalog.catalogs CASCADE").update();
+                        + "catalog.location_offerings, catalog.variants, catalog.products, "
+                        + "catalog.catalogs CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE audit.audit_events CASCADE").update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
 
@@ -136,10 +133,13 @@ class SalesChannelAndServiceabilityTests {
         channelStore = new JdbcSalesChannelStore(jdbc);
         serviceabilityStore = new JdbcServiceabilityStore(jdbc);
         channels = new SalesChannelService(channelStore, clock);
-        CurrentActor actor = () -> new AuthenticatedActor(
-                UUID.randomUUID().toString(), java.util.Set.of("tenant-admin"), Map.of());
-        schedules = new ServiceScheduleService(serviceabilityStore,
-                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()), actor, clock);
+        CurrentActor actor =
+                () -> new AuthenticatedActor(UUID.randomUUID().toString(), java.util.Set.of("tenant-admin"), Map.of());
+        schedules = new ServiceScheduleService(
+                serviceabilityStore,
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                actor,
+                clock);
         serviceability = new ServiceabilityService(serviceabilityStore, clock);
 
         seedTenancy();
@@ -163,13 +163,16 @@ class SalesChannelAndServiceabilityTests {
         assertThat(catchThrowable(() -> jdbc.sql("""
                 INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name)
                 VALUES (:id, :tenantId, 'MARKET', 'MARKETPLACE', 'Marketplace')
-                """).param("id", UUID.randomUUID()).param("tenantId", TENANT).update()))
+                """)
+                        .param("id", UUID.randomUUID())
+                        .param("tenantId", TENANT)
+                        .update()))
                 .isInstanceOf(DataIntegrityViolationException.class);
 
         // The premise: every name the ADR does own inserts.
         for (SalesChannelSystemType type : SalesChannelSystemType.values()) {
             assertThat(channels.create(TENANT, createCommand("CH_" + type.name(), type.name()))
-                    .systemType())
+                            .systemType())
                     .isEqualTo(type);
         }
     }
@@ -189,12 +192,10 @@ class SalesChannelAndServiceabilityTests {
         // Without this a freshly created tenant could author a menu and not
         // publish it: catalog.publications.channel defaults to STOREFRONT and is
         // now a foreign key to this registry.
-        assertThat(channelStore.byCode(freshTenant, "STOREFRONT"))
-                .get()
-                .satisfies(channel -> {
-                    assertThat(channel.systemType()).isEqualTo(SalesChannelSystemType.WEB);
-                    assertThat(channel.sellable()).isTrue();
-                });
+        assertThat(channelStore.byCode(freshTenant, "STOREFRONT")).get().satisfies(channel -> {
+            assertThat(channel.systemType()).isEqualTo(SalesChannelSystemType.WEB);
+            assertThat(channel.sellable()).isTrue();
+        });
 
         // A replayed event must not collide with the unique code.
         seeder.on(tenantCreated(freshTenant));
@@ -210,16 +211,16 @@ class SalesChannelAndServiceabilityTests {
         // The reason the registry is tenant data rather than a code enum: a tenant
         // signing a second marketplace must not need a schema change.
         assertThat(tezkor.id()).isNotEqualTo(yandex.id());
-        assertThat(channels.list(TENANT)).extracting(SalesChannel::code)
-                .contains("UZUM_TEZKOR", "YANDEX_EDA");
+        assertThat(channels.list(TENANT)).extracting(SalesChannel::code).contains("UZUM_TEZKOR", "YANDEX_EDA");
     }
 
     @Test
     @DisplayName("a price plane is one hop and never a chain")
     void aPricePlaneIsOneHop() {
         var hall = channels.create(TENANT, createCommand("HALL", "POS"));
-        var qr = channels.create(TENANT, new SalesChannelService.CreateChannelCommand(
-                "QR", "QR_TABLE", "QR", hall.id(), false, true, null));
+        var qr = channels.create(
+                TENANT,
+                new SalesChannelService.CreateChannelCommand("QR", "QR_TABLE", "QR", hall.id(), false, true, null));
 
         assertThat(qr.pricingChannelId())
                 .as("QR takes the hall's prices without duplicating a price book")
@@ -230,16 +231,18 @@ class SalesChannelAndServiceabilityTests {
 
         // A chain would resolve to the middle of itself, because the resolver
         // follows exactly one hop and does not recurse.
-        assertThat(catchThrowable(() -> channels.create(TENANT,
-                new SalesChannelService.CreateChannelCommand(
-                        "KIOSK", "KIOSK", "Kiosk", qr.id(), false, true, null))))
+        assertThat(catchThrowable(() -> channels.create(
+                        TENANT,
+                        new SalesChannelService.CreateChannelCommand(
+                                "KIOSK", "KIOSK", "Kiosk", qr.id(), false, true, null))))
                 .isInstanceOf(TenantResourceConflictException.class);
     }
 
     @Test
     @DisplayName("a cross-tenant channel id cannot be bound to this tenant's location")
     void aCrossTenantChannelIsRefusedByTheDatabase() {
-        UUID foreign = channels.create(OTHER_TENANT, createCommand("FOREIGN", "WEB")).id();
+        UUID foreign =
+                channels.create(OTHER_TENANT, createCommand("FOREIGN", "WEB")).id();
 
         // The composite foreign key matches (tenant_id, channel_id). Matching on
         // the channel id alone would have accepted this silently.
@@ -247,8 +250,10 @@ class SalesChannelAndServiceabilityTests {
                 INSERT INTO tenant.sales_channel_locations (tenant_id, channel_id, location_id)
                 VALUES (:tenantId, :channelId, :locationId)
                 """)
-                .param("tenantId", TENANT).param("channelId", foreign)
-                .param("locationId", LOCATION).update()))
+                        .param("tenantId", TENANT)
+                        .param("channelId", foreign)
+                        .param("locationId", LOCATION)
+                        .update()))
                 .isInstanceOf(DataIntegrityViolationException.class);
 
         // And the lookup does not find it either, so nothing downstream can act
@@ -270,7 +275,8 @@ class SalesChannelAndServiceabilityTests {
         // still render. A delete would make that order unattributable.
         assertThat(channelStore.byId(TENANT, kiosk.id())).isPresent();
         assertThat(jdbc.sql("SELECT count(*) FROM catalog.publications WHERE channel = 'KIOSK'")
-                .query(Long.class).single())
+                        .query(Long.class)
+                        .single())
                 .as("the publication that named it is untouched")
                 .isEqualTo(1L);
     }
@@ -279,8 +285,9 @@ class SalesChannelAndServiceabilityTests {
     @DisplayName("archiving a channel another one prices through is refused")
     void aPricePlaneInUseCannotBeArchived() {
         var hall = channels.create(TENANT, createCommand("HALL", "POS"));
-        channels.create(TENANT, new SalesChannelService.CreateChannelCommand(
-                "QR", "QR_TABLE", "QR", hall.id(), false, true, null));
+        channels.create(
+                TENANT,
+                new SalesChannelService.CreateChannelCommand("QR", "QR_TABLE", "QR", hall.id(), false, true, null));
 
         // Otherwise QR silently falls back to brand prices — a price change nobody
         // made, visible only on the receipt.
@@ -293,8 +300,7 @@ class SalesChannelAndServiceabilityTests {
     void aPublicationChannelMustBeRegistered() {
         // ADR 0036 correcting ADR 0016. Free text meant a typo published a menu to
         // a channel nobody would ever see, and nothing failed.
-        assertThat(catchThrowable(() -> publish("TYPO")))
-                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(catchThrowable(() -> publish("TYPO"))).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     // ------------------------------------------------- the eight-rule resolver
@@ -303,10 +309,10 @@ class SalesChannelAndServiceabilityTests {
     @DisplayName("rule 1: an inactive channel is not enabled")
     void anInactiveChannelIsRefusedFirst() {
         jdbc.sql("UPDATE tenant.sales_channels SET status = 'INACTIVE' WHERE id = :id")
-                .param("id", storefront).update();
+                .param("id", storefront)
+                .update();
 
-        assertThat(resolve(FRIDAY_NOON_LOCAL).reason())
-                .isEqualTo(ServiceabilityReason.CHANNEL_NOT_ENABLED);
+        assertThat(resolve(FRIDAY_NOON_LOCAL).reason()).isEqualTo(ServiceabilityReason.CHANNEL_NOT_ENABLED);
     }
 
     @Test
@@ -314,26 +320,27 @@ class SalesChannelAndServiceabilityTests {
     void aLocationOffTheChannelIsRefused() {
         channels.replaceLocations(TENANT, storefront, List.of(), currentVersion(storefront));
 
-        assertThat(resolve(FRIDAY_NOON_LOCAL).reason())
-                .isEqualTo(ServiceabilityReason.CHANNEL_NOT_ENABLED);
+        assertThat(resolve(FRIDAY_NOON_LOCAL).reason()).isEqualTo(ServiceabilityReason.CHANNEL_NOT_ENABLED);
     }
 
     @Test
     @DisplayName("rule 3: a fulfilment mode the channel does not carry is unavailable")
     void anUnlistedFulfilmentModeIsRefused() {
-        channels.replaceFulfillmentModes(TENANT, storefront,
-                Map.of(FulfillmentMode.PICKUP, true), currentVersion(storefront));
+        channels.replaceFulfillmentModes(
+                TENANT, storefront, Map.of(FulfillmentMode.PICKUP, true), currentVersion(storefront));
 
         // Absent means unavailable, so a half-configured channel is visibly broken
         // rather than quietly permissive.
-        assertThat(resolve(FRIDAY_NOON_LOCAL).reason())
-                .isEqualTo(ServiceabilityReason.FULFILMENT_MODE_UNAVAILABLE);
+        assertThat(resolve(FRIDAY_NOON_LOCAL).reason()).isEqualTo(ServiceabilityReason.FULFILMENT_MODE_UNAVAILABLE);
     }
 
     @Test
     @DisplayName("rule 4: a manual close beats the schedule and says so")
     void aManualCloseBeatsTheSchedule() {
-        schedules.changeServiceState(TENANT, BRAND, LOCATION,
+        schedules.changeServiceState(
+                TENANT,
+                BRAND,
+                LOCATION,
                 new ServiceScheduleService.ChangeServiceStateCommand(
                         ServiceMode.FORCE_CLOSED, "EQUIPMENT_FAILURE", "Fryer down", null));
 
@@ -353,13 +360,21 @@ class SalesChannelAndServiceabilityTests {
         // in the URL, so the capability check passes. All they supply is the
         // victim's schedule id -- an opaque UUID, but a stable one that travels
         // through support tickets, exports and migration tooling.
-        assertThatThrownBy(() -> schedules.replaceRules(OTHER_TENANT, OTHER_BRAND, scheduleId,
-                List.of(new WeeklySchedule.Rule(1, LocalTime.of(3, 0), LocalTime.of(4, 0)))))
+        assertThatThrownBy(() -> schedules.replaceRules(
+                        OTHER_TENANT,
+                        OTHER_BRAND,
+                        scheduleId,
+                        List.of(new WeeklySchedule.Rule(1, LocalTime.of(3, 0), LocalTime.of(4, 0)))))
                 .as("rewriting another brand's opening hours must be refused")
                 .isInstanceOf(TenantResourceNotFoundException.class);
 
-        assertThatThrownBy(() -> schedules.closeForDay(OTHER_TENANT, OTHER_BRAND, scheduleId,
-                LocalDate.of(2026, 8, 21), "Closed", "not mine to close"))
+        assertThatThrownBy(() -> schedules.closeForDay(
+                        OTHER_TENANT,
+                        OTHER_BRAND,
+                        scheduleId,
+                        LocalDate.of(2026, 8, 21),
+                        "Closed",
+                        "not mine to close"))
                 .as("shutting another brand's branches for the day must be refused")
                 .isInstanceOf(TenantResourceNotFoundException.class);
 
@@ -398,8 +413,7 @@ class SalesChannelAndServiceabilityTests {
         jdbc.sql("UPDATE catalog.publications SET status = 'RETIRED' WHERE channel = 'STOREFRONT'")
                 .update();
 
-        assertThat(resolve(FRIDAY_NOON_LOCAL).reason())
-                .isEqualTo(ServiceabilityReason.NO_LIVE_MENU);
+        assertThat(resolve(FRIDAY_NOON_LOCAL).reason()).isEqualTo(ServiceabilityReason.NO_LIVE_MENU);
     }
 
     @Test
@@ -408,8 +422,7 @@ class SalesChannelAndServiceabilityTests {
         schedules.setCapacity(TENANT, BRAND, LOCATION, 1);
         transactionally(() -> serviceability.claimCapacity(TENANT, BRAND, LOCATION, UUID.randomUUID()));
 
-        assertThat(resolve(FRIDAY_NOON_LOCAL).reason())
-                .isEqualTo(ServiceabilityReason.AT_CAPACITY);
+        assertThat(resolve(FRIDAY_NOON_LOCAL).reason()).isEqualTo(ServiceabilityReason.AT_CAPACITY);
     }
 
     @Test
@@ -428,8 +441,11 @@ class SalesChannelAndServiceabilityTests {
     void anAfterMidnightWindowIsHandled() {
         // Saturday 18:00 to Sunday 02:00, local. Stored as one row whose closing
         // time is before its opening time.
-        schedules.replaceRules(TENANT, BRAND, scheduleId, List.of(
-                new WeeklySchedule.Rule(6, LocalTime.of(18, 0), LocalTime.of(2, 0))));
+        schedules.replaceRules(
+                TENANT,
+                BRAND,
+                scheduleId,
+                List.of(new WeeklySchedule.Rule(6, LocalTime.of(18, 0), LocalTime.of(2, 0))));
 
         // Saturday 23:00 Tashkent = 18:00Z; Sunday 01:00 Tashkent = Saturday 20:00Z;
         // Sunday 03:00 Tashkent = Saturday 22:00Z.
@@ -445,7 +461,10 @@ class SalesChannelAndServiceabilityTests {
     @DisplayName("FORCE_OPEN beats hours and exceptions but never the menu or the ceiling")
     void forceOpenSkipsOnlyRulesFiveAndSix() {
         schedules.closeForDay(TENANT, BRAND, scheduleId, LocalDate.of(2026, 8, 21), "Navruz", "Public holiday");
-        schedules.changeServiceState(TENANT, BRAND, LOCATION,
+        schedules.changeServiceState(
+                TENANT,
+                BRAND,
+                LOCATION,
                 new ServiceScheduleService.ChangeServiceStateCommand(
                         ServiceMode.FORCE_OPEN, "MANAGER_OVERRIDE", "Trading anyway", null));
 
@@ -456,22 +475,23 @@ class SalesChannelAndServiceabilityTests {
         // But a manager deciding to be open cannot conjure a menu.
         jdbc.sql("UPDATE catalog.publications SET status = 'RETIRED' WHERE channel = 'STOREFRONT'")
                 .update();
-        assertThat(resolve(FRIDAY_NOON_LOCAL).reason())
-                .isEqualTo(ServiceabilityReason.NO_LIVE_MENU);
+        assertThat(resolve(FRIDAY_NOON_LOCAL).reason()).isEqualTo(ServiceabilityReason.NO_LIVE_MENU);
 
         // Nor override the kitchen ceiling.
         publish("STOREFRONT");
         schedules.setCapacity(TENANT, BRAND, LOCATION, 1);
         transactionally(() -> serviceability.claimCapacity(TENANT, BRAND, LOCATION, UUID.randomUUID()));
-        assertThat(resolve(FRIDAY_NOON_LOCAL).reason())
-                .isEqualTo(ServiceabilityReason.AT_CAPACITY);
+        assertThat(resolve(FRIDAY_NOON_LOCAL).reason()).isEqualTo(ServiceabilityReason.AT_CAPACITY);
     }
 
     @Test
     @DisplayName("an elapsed expiry reopens the branch with no operator action and no job")
     void anElapsedExpiryReturnsToTheSchedule() {
         Instant reopensAt = FRIDAY_NOON_LOCAL.plus(Duration.ofHours(1));
-        schedules.changeServiceState(TENANT, BRAND, LOCATION,
+        schedules.changeServiceState(
+                TENANT,
+                BRAND,
+                LOCATION,
                 new ServiceScheduleService.ChangeServiceStateCommand(
                         ServiceMode.FORCE_CLOSED, "EQUIPMENT_FAILURE", "Fryer down", reopensAt));
 
@@ -484,9 +504,10 @@ class SalesChannelAndServiceabilityTests {
         // Nothing ran in between. The row still says FORCE_CLOSED; it is read as
         // elapsed. A scheduled job that failed would leave a network closed with a
         // cause indistinguishable from an outage.
-        assertThat(jdbc.sql("SELECT mode FROM tenant.location_service_state "
-                        + "WHERE location_id = :id").param("id", LOCATION)
-                .query(String.class).single())
+        assertThat(jdbc.sql("SELECT mode FROM tenant.location_service_state " + "WHERE location_id = :id")
+                        .param("id", LOCATION)
+                        .query(String.class)
+                        .single())
                 .isEqualTo("FORCE_CLOSED");
         assertThat(resolve(reopensAt).available()).isTrue();
     }
@@ -496,23 +517,28 @@ class SalesChannelAndServiceabilityTests {
     void anExpiryPastClosingTimeDefersToTheSchedule() {
         // Closed until 23:30 local (18:30Z) on a branch whose hours end at 23:00.
         Instant expiry = Instant.parse("2026-08-21T18:30:00Z");
-        schedules.changeServiceState(TENANT, BRAND, LOCATION,
+        schedules.changeServiceState(
+                TENANT,
+                BRAND,
+                LOCATION,
                 new ServiceScheduleService.ChangeServiceStateCommand(
                         ServiceMode.FORCE_CLOSED, "EQUIPMENT_FAILURE", "Fryer down", expiry));
 
         // A close until 23:30 on a branch that shuts at 23:00 does not reopen at
         // 23:30. Saturday 09:00 Tashkent = 04:00Z is the first moment both the
         // override and the timetable agree.
-        assertThat(resolve(FRIDAY_NOON_LOCAL).nextAvailableAt())
-                .isEqualTo(Instant.parse("2026-08-22T04:00:00Z"));
+        assertThat(resolve(FRIDAY_NOON_LOCAL).nextAvailableAt()).isEqualTo(Instant.parse("2026-08-22T04:00:00Z"));
     }
 
     @Test
     @DisplayName("a manual close without a reason is refused by the service and the database")
     void aManualCloseAlwaysCarriesAReason() {
-        assertThat(catchThrowable(() -> schedules.changeServiceState(TENANT, BRAND, LOCATION,
-                new ServiceScheduleService.ChangeServiceStateCommand(
-                        ServiceMode.FORCE_CLOSED, null, null, null))))
+        assertThat(catchThrowable(() -> schedules.changeServiceState(
+                        TENANT,
+                        BRAND,
+                        LOCATION,
+                        new ServiceScheduleService.ChangeServiceStateCommand(
+                                ServiceMode.FORCE_CLOSED, null, null, null))))
                 .isInstanceOf(IllegalArgumentException.class);
 
         // Enforced by the schema too, because a close with no reason is exactly the
@@ -523,21 +549,27 @@ class SalesChannelAndServiceabilityTests {
                     location_id, tenant_id, brand_id, mode)
                 VALUES (:locationId, :tenantId, :brandId, 'FORCE_CLOSED')
                 """)
-                .param("locationId", OTHER_LOCATION).param("tenantId", TENANT)
-                .param("brandId", OTHER_BRAND).update()))
+                        .param("locationId", OTHER_LOCATION)
+                        .param("tenantId", TENANT)
+                        .param("brandId", OTHER_BRAND)
+                        .update()))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     @DisplayName("a service-state change is an audit fact naming the actor and the reason")
     void aServiceStateChangeIsAudited() {
-        schedules.changeServiceState(TENANT, BRAND, LOCATION,
+        schedules.changeServiceState(
+                TENANT,
+                BRAND,
+                LOCATION,
                 new ServiceScheduleService.ChangeServiceStateCommand(
                         ServiceMode.FORCE_CLOSED, "EQUIPMENT_FAILURE", "Fryer down", null));
 
         assertThat(jdbc.sql("SELECT reason FROM audit.audit_events "
-                        + "WHERE action_code = 'location.service_state.changed'")
-                .query(String.class).list())
+                                + "WHERE action_code = 'location.service_state.changed'")
+                        .query(String.class)
+                        .list())
                 .as("\"who closed this branch and why\" must have an answer years later")
                 .containsExactly("EQUIPMENT_FAILURE");
     }
@@ -545,14 +577,18 @@ class SalesChannelAndServiceabilityTests {
     @Test
     @DisplayName("a schedule of another brand cannot be bound to this location")
     void aCrossBrandBindingIsRefusedByTheDatabase() {
-        UUID otherBrandSchedule = schedules.createSchedule(TENANT, OTHER_BRAND,
-                new ServiceScheduleService.CreateScheduleCommand("Other brand hours", true,
+        UUID otherBrandSchedule = schedules.createSchedule(
+                TENANT,
+                OTHER_BRAND,
+                new ServiceScheduleService.CreateScheduleCommand(
+                        "Other brand hours",
+                        true,
                         List.of(new WeeklySchedule.Rule(5, LocalTime.of(9, 0), LocalTime.of(23, 0)))));
 
         // The binding's foreign key matches (tenant_id, brand_id, schedule_id), so
         // one brand's Ramadan timetable can never silently govern another's.
-        assertThat(catchThrowable(() -> schedules.bind(
-                TENANT, BRAND, LOCATION, FulfillmentMode.DELIVERY, otherBrandSchedule)))
+        assertThat(catchThrowable(
+                        () -> schedules.bind(TENANT, BRAND, LOCATION, FulfillmentMode.DELIVERY, otherBrandSchedule)))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -561,12 +597,15 @@ class SalesChannelAndServiceabilityTests {
     @Test
     @DisplayName("the preparation promise takes the band, then the longest line override")
     void thePreparationPromiseIsTheLongest() {
-        schedules.replacePreparationBands(TENANT, BRAND, LOCATION, List.of(
-                new JdbcServiceabilityStore.Band(null, null,
-                        LocalTime.of(9, 0), LocalTime.of(17, 0), 25, 0),
-                // The Friday rush band, narrower and higher priority.
-                new JdbcServiceabilityStore.Band(FulfillmentMode.DELIVERY, 5,
-                        LocalTime.of(11, 0), LocalTime.of(14, 0), 45, 10)));
+        schedules.replacePreparationBands(
+                TENANT,
+                BRAND,
+                LOCATION,
+                List.of(
+                        new JdbcServiceabilityStore.Band(null, null, LocalTime.of(9, 0), LocalTime.of(17, 0), 25, 0),
+                        // The Friday rush band, narrower and higher priority.
+                        new JdbcServiceabilityStore.Band(
+                                FulfillmentMode.DELIVERY, 5, LocalTime.of(11, 0), LocalTime.of(14, 0), 45, 10)));
 
         assertThat(resolve(FRIDAY_NOON_LOCAL).preparationMinutes())
                 .as("a Friday rush quotes 45 minutes rather than 25")
@@ -575,11 +614,11 @@ class SalesChannelAndServiceabilityTests {
         // A pizza that takes 40 minutes does not become 20 because the quiet-hours
         // band says so — and equally the 45-minute rush is not shortened by a
         // 30-minute item.
-        assertThat(serviceability.preparationMinutes(TENANT, LOCATION, FulfillmentMode.DELIVERY,
-                FRIDAY_NOON_LOCAL, List.of(30, 60)))
+        assertThat(serviceability.preparationMinutes(
+                        TENANT, LOCATION, FulfillmentMode.DELIVERY, FRIDAY_NOON_LOCAL, List.of(30, 60)))
                 .isEqualTo(60);
-        assertThat(serviceability.preparationMinutes(TENANT, LOCATION, FulfillmentMode.DELIVERY,
-                FRIDAY_NOON_LOCAL, List.of(30)))
+        assertThat(serviceability.preparationMinutes(
+                        TENANT, LOCATION, FulfillmentMode.DELIVERY, FRIDAY_NOON_LOCAL, List.of(30)))
                 .isEqualTo(45);
     }
 
@@ -594,10 +633,9 @@ class SalesChannelAndServiceabilityTests {
         CountDownLatch secondHasStarted = new CountDownLatch(1);
         ExecutorService pool = Executors.newFixedThreadPool(2);
         try {
-            Future<LocationCapacityPort.CapacityOutcome> first = pool.submit(() ->
-                    transactionTemplate().execute(status -> {
-                        var outcome = serviceability.claimCapacity(
-                                TENANT, BRAND, LOCATION, UUID.randomUUID());
+            Future<LocationCapacityPort.CapacityOutcome> first =
+                    pool.submit(() -> transactionTemplate().execute(status -> {
+                        var outcome = serviceability.claimCapacity(TENANT, BRAND, LOCATION, UUID.randomUUID());
                         firstHasClaimed.countDown();
                         // Stay uncommitted while the second transaction attempts its
                         // claim. Without the row lock the second would count zero
@@ -610,15 +648,13 @@ class SalesChannelAndServiceabilityTests {
 
             firstHasClaimed.await(5, TimeUnit.SECONDS);
 
-            Future<LocationCapacityPort.CapacityOutcome> second = pool.submit(() ->
-                    transactionTemplate().execute(status -> {
+            Future<LocationCapacityPort.CapacityOutcome> second =
+                    pool.submit(() -> transactionTemplate().execute(status -> {
                         secondHasStarted.countDown();
-                        return serviceability.claimCapacity(
-                                TENANT, BRAND, LOCATION, UUID.randomUUID());
+                        return serviceability.claimCapacity(TENANT, BRAND, LOCATION, UUID.randomUUID());
                     }));
 
-            assertThat(first.get(20, TimeUnit.SECONDS))
-                    .isEqualTo(LocationCapacityPort.CapacityOutcome.CLAIMED);
+            assertThat(first.get(20, TimeUnit.SECONDS)).isEqualTo(LocationCapacityPort.CapacityOutcome.CLAIMED);
             assertThat(second.get(20, TimeUnit.SECONDS))
                     .as("settled by the database, not by a number either read a second earlier")
                     .isEqualTo(LocationCapacityPort.CapacityOutcome.AT_CAPACITY);
@@ -660,8 +696,7 @@ class SalesChannelAndServiceabilityTests {
     @DisplayName("a location with no ceiling is never refused for capacity")
     void anUncappedLocationIsNeverAtCapacity() {
         for (int i = 0; i < 5; i++) {
-            assertThat(transactionally(() ->
-                    serviceability.claimCapacity(TENANT, BRAND, LOCATION, UUID.randomUUID())))
+            assertThat(transactionally(() -> serviceability.claimCapacity(TENANT, BRAND, LOCATION, UUID.randomUUID())))
                     .isEqualTo(LocationCapacityPort.CapacityOutcome.CLAIMED);
         }
         assertThat(resolve(FRIDAY_NOON_LOCAL).available()).isTrue();
@@ -670,8 +705,7 @@ class SalesChannelAndServiceabilityTests {
     // ------------------------------------------------------------------ helpers
 
     private Serviceability resolve(Instant at) {
-        return serviceability.resolve(TENANT, BRAND, LOCATION, storefront,
-                FulfillmentMode.DELIVERY, at);
+        return serviceability.resolve(TENANT, BRAND, LOCATION, storefront, FulfillmentMode.DELIVERY, at);
     }
 
     private int currentVersion(UUID channelId) {
@@ -679,8 +713,16 @@ class SalesChannelAndServiceabilityTests {
     }
 
     private static TenantCreated tenantCreated(UUID tenantId) {
-        return new TenantCreated(UUID.randomUUID(), new TenantId(tenantId), FRIDAY_NOON_LOCAL,
-                "fresh-tenant", "Legal", "Display", "UZS", "Asia/Tashkent", "ACTIVE",
+        return new TenantCreated(
+                UUID.randomUUID(),
+                new TenantId(tenantId),
+                FRIDAY_NOON_LOCAL,
+                "fresh-tenant",
+                "Legal",
+                "Display",
+                "UZS",
+                "Asia/Tashkent",
+                "ACTIVE",
                 "TENANT_SHARED");
     }
 
@@ -717,16 +759,21 @@ class SalesChannelAndServiceabilityTests {
     /** Makes the location sellable: channel bound, mode enabled, hours, and a live menu. */
     private void openForBusiness() {
         channels.replaceLocations(TENANT, storefront, List.of(LOCATION), currentVersion(storefront));
-        channels.replaceFulfillmentModes(TENANT, storefront,
+        channels.replaceFulfillmentModes(
+                TENANT,
+                storefront,
                 Map.of(FulfillmentMode.DELIVERY, true, FulfillmentMode.PICKUP, true),
                 currentVersion(storefront));
 
         // 09:00 to 23:00 local, every day.
-        scheduleId = schedules.createSchedule(TENANT, BRAND,
-                new ServiceScheduleService.CreateScheduleCommand("Standard hours", true,
+        scheduleId = schedules.createSchedule(
+                TENANT,
+                BRAND,
+                new ServiceScheduleService.CreateScheduleCommand(
+                        "Standard hours",
+                        true,
                         java.util.stream.IntStream.rangeClosed(1, 7)
-                                .mapToObj(day -> new WeeklySchedule.Rule(
-                                        day, LocalTime.of(9, 0), LocalTime.of(23, 0)))
+                                .mapToObj(day -> new WeeklySchedule.Rule(day, LocalTime.of(9, 0), LocalTime.of(23, 0)))
                                 .toList()));
         schedules.bind(TENANT, BRAND, LOCATION, FulfillmentMode.DELIVERY, scheduleId);
         publish("STOREFRONT");
@@ -738,8 +785,11 @@ class SalesChannelAndServiceabilityTests {
                     status, content_hash, activated_at)
                 VALUES (:id, :tenantId, :brandId, :catalogId, :channel, 'PUBLISHED', 'hash', now())
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("catalogId", catalogId).param("channel", channel)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("catalogId", catalogId)
+                .param("channel", channel)
                 .update();
     }
 
@@ -759,7 +809,9 @@ class SalesChannelAndServiceabilityTests {
                 INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
                 VALUES (:id, :tenantId, :brandId, 'MAIN', 'Main menu', 'ACTIVE')
                 """)
-                .param("id", catalogId).param("tenantId", TENANT).param("brandId", BRAND)
+                .param("id", catalogId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
                 .update();
     }
 
@@ -775,8 +827,12 @@ class SalesChannelAndServiceabilityTests {
         jdbc.sql("""
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
                 VALUES (:id, :tenantId, :code, :slug, 'Brand', 'ACTIVE', 0)
-                """).param("id", id).param("tenantId", tenantId)
-                .param("code", code).param("slug", slug).update();
+                """)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("code", code)
+                .param("slug", slug)
+                .update();
     }
 
     private void insertLocation(UUID id, UUID brandId, String code, String slug) {
@@ -784,8 +840,13 @@ class SalesChannelAndServiceabilityTests {
                 INSERT INTO tenant.locations (id, tenant_id, brand_id, code, slug, display_name,
                     timezone, status, version)
                 VALUES (:id, :tenantId, :brandId, :code, :slug, 'Branch', :zone, 'ACTIVE', 0)
-                """).param("id", id).param("tenantId", TENANT).param("brandId", brandId)
-                .param("code", code).param("slug", slug).param("zone", TASHKENT.getId())
+                """)
+                .param("id", id)
+                .param("tenantId", TENANT)
+                .param("brandId", brandId)
+                .param("code", code)
+                .param("slug", slug)
+                .param("zone", TASHKENT.getId())
                 .update();
     }
 }

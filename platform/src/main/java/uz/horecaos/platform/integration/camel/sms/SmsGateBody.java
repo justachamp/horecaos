@@ -23,8 +23,7 @@ package uz.horecaos.platform.integration.camel.sms;
  */
 final class SmsGateBody {
 
-    private SmsGateBody() {
-    }
+    private SmsGateBody() {}
 
     /**
      * {@code POST /send}.

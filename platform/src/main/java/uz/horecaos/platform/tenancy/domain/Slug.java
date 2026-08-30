@@ -13,8 +13,7 @@ public record Slug(String value) {
         Objects.requireNonNull(value, "Slug is required");
         value = value.strip().toLowerCase(Locale.ROOT);
         if (value.length() > MAX_LENGTH || !FORMAT.matcher(value).matches()) {
-            throw new IllegalArgumentException(
-                    "Slug must contain 1-63 lowercase letters, digits, or internal hyphens");
+            throw new IllegalArgumentException("Slug must contain 1-63 lowercase letters, digits, or internal hyphens");
         }
     }
 }

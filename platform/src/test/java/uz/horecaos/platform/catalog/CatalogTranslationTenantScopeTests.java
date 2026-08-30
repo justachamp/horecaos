@@ -1,11 +1,12 @@
 package uz.horecaos.platform.catalog;
 
-import javax.sql.DataSource;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -13,19 +14,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.support.TestDatabase;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * The cross-tenant write no foreign key could have caught.
@@ -69,7 +64,8 @@ class CatalogTranslationTenantScopeTests {
 
     @BeforeAll
     static void startDatabase() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for catalog translation scope tests");
         db = TestDatabase.migrated();
         jdbcUrl = db.jdbcUrl();
@@ -89,7 +85,8 @@ class CatalogTranslationTenantScopeTests {
         DataSource dataSource = db.dataSource();
         jdbc = JdbcClient.create(dataSource);
         jdbc.sql("TRUNCATE TABLE catalog.translations, catalog.variants, catalog.products, "
-                + "catalog.catalogs CASCADE").update();
+                        + "catalog.catalogs CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
 
         insertTenant(TENANT_A, "translation-tenant-a");
@@ -112,12 +109,29 @@ class CatalogTranslationTenantScopeTests {
     @DisplayName("one tenant cannot overwrite another tenant's translation through the upsert")
     void aCrossTenantUpsertDoesNotRewriteTheOtherTenantsText() {
         UUID catalogA = authoring.createCatalog(TENANT_A, BRAND_A, "MAIN", "Asosiy menyu", LOCALE);
-        UUID productA = authoring.createProduct(TENANT_A, BRAND_A, catalogA, "PLOV",
-                "Osh", "Qo'y go'shti bilan", LOCALE, "SKU-PLOV", "PIECE", UNCLASSIFIED, ACTOR)
+        UUID productA = authoring
+                .createProduct(
+                        TENANT_A,
+                        BRAND_A,
+                        catalogA,
+                        "PLOV",
+                        "Osh",
+                        "Qo'y go'shti bilan",
+                        LOCALE,
+                        "SKU-PLOV",
+                        "PIECE",
+                        UNCLASSIFIED,
+                        ACTOR)
                 .productId();
 
-        assertThatThrownBy(() -> authoring.translate(TENANT_B, BRAND_B, EntityType.PRODUCT,
-                productA, LOCALE, "Arzon osh", "Boshqa ijarachining matni"))
+        assertThatThrownBy(() -> authoring.translate(
+                        TENANT_B,
+                        BRAND_B,
+                        EntityType.PRODUCT,
+                        productA,
+                        LOCALE,
+                        "Arzon osh",
+                        "Boshqa ijarachining matni"))
                 .isInstanceOf(CatalogAuthoringService.UnknownCatalogEntityException.class);
 
         assertThat(translation(TENANT_A, productA))
@@ -139,8 +153,20 @@ class CatalogTranslationTenantScopeTests {
     @DisplayName("a translation against an unknown id and against another tenant's id are refused alike")
     void notYoursAndDoesNotExistGiveTheSameAnswer() {
         UUID catalogA = authoring.createCatalog(TENANT_A, BRAND_A, "MAIN", "Asosiy menyu", LOCALE);
-        UUID productA = authoring.createProduct(TENANT_A, BRAND_A, catalogA, "PLOV",
-                "Osh", null, LOCALE, "SKU-PLOV", "PIECE", UNCLASSIFIED, ACTOR).productId();
+        UUID productA = authoring
+                .createProduct(
+                        TENANT_A,
+                        BRAND_A,
+                        catalogA,
+                        "PLOV",
+                        "Osh",
+                        null,
+                        LOCALE,
+                        "SKU-PLOV",
+                        "PIECE",
+                        UNCLASSIFIED,
+                        ACTOR)
+                .productId();
         UUID nowhere = UUID.randomUUID();
 
         Throwable foreign = catchTranslate(productA);
@@ -153,7 +179,9 @@ class CatalogTranslationTenantScopeTests {
                 .isEqualTo(absent.getMessage().replace(nowhere.toString(), "ID"));
 
         assertThat(jdbc.sql("SELECT count(*) FROM catalog.translations WHERE tenant_id = :t")
-                .param("t", TENANT_B).query(Integer.class).single())
+                        .param("t", TENANT_B)
+                        .query(Integer.class)
+                        .single())
                 .as("neither refusal may leave a row behind")
                 .isZero();
     }
@@ -172,15 +200,15 @@ class CatalogTranslationTenantScopeTests {
     void theWidenedKeyKeepsTwoTenantsRowsApart() {
         UUID sharedId = UUID.randomUUID();
 
-        store.upsertTranslation(TENANT_A, BRAND_A, EntityType.PRODUCT, sharedId, LOCALE,
-                "Osh", "A ning matni");
-        store.upsertTranslation(TENANT_B, BRAND_B, EntityType.PRODUCT, sharedId, LOCALE,
-                "Arzon osh", "B ning matni");
+        store.upsertTranslation(TENANT_A, BRAND_A, EntityType.PRODUCT, sharedId, LOCALE, "Osh", "A ning matni");
+        store.upsertTranslation(TENANT_B, BRAND_B, EntityType.PRODUCT, sharedId, LOCALE, "Arzon osh", "B ning matni");
 
         assertThat(translation(TENANT_A, sharedId)).containsEntry("name", "Osh");
         assertThat(translation(TENANT_B, sharedId)).containsEntry("name", "Arzon osh");
         assertThat(jdbc.sql("SELECT count(*) FROM catalog.translations WHERE entity_id = :id")
-                .param("id", sharedId).query(Integer.class).single())
+                        .param("id", sharedId)
+                        .query(Integer.class)
+                        .single())
                 .isEqualTo(2);
     }
 
@@ -202,14 +230,15 @@ class CatalogTranslationTenantScopeTests {
                    AND con.contype IN ('p', 'u')
                 """).query(String.class).list();
 
-        assertThat(keys).singleElement().asString()
+        assertThat(keys)
+                .singleElement()
+                .asString()
                 .isEqualTo("PRIMARY KEY (tenant_id, entity_type, entity_id, locale)");
     }
 
     private Throwable catchTranslate(UUID entityId) {
         try {
-            authoring.translate(TENANT_B, BRAND_B, EntityType.PRODUCT, entityId, LOCALE,
-                    "Arzon osh", null);
+            authoring.translate(TENANT_B, BRAND_B, EntityType.PRODUCT, entityId, LOCALE, "Arzon osh", null);
             return null;
         } catch (Throwable thrown) {
             return thrown;
@@ -222,8 +251,11 @@ class CatalogTranslationTenantScopeTests {
                  WHERE tenant_id = :tenantId AND entity_type = 'PRODUCT'
                    AND entity_id = :entityId AND locale = :locale
                 """)
-                .param("tenantId", tenantId).param("entityId", entityId).param("locale", LOCALE)
-                .query().singleRow();
+                .param("tenantId", tenantId)
+                .param("entityId", entityId)
+                .param("locale", LOCALE)
+                .query()
+                .singleRow();
     }
 
     private void insertTenant(UUID tenantId, String slug) {
@@ -239,6 +271,10 @@ class CatalogTranslationTenantScopeTests {
         jdbc.sql("""
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
                 VALUES (:id, :tenantId, :code, lower(:code), 'Brand', 'ACTIVE', 0)
-                """).param("id", brandId).param("tenantId", tenantId).param("code", code).update();
+                """)
+                .param("id", brandId)
+                .param("tenantId", tenantId)
+                .param("code", code)
+                .update();
     }
 }

@@ -4,15 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,7 +31,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.support.TestDatabase;
 
@@ -85,7 +82,8 @@ class IdempotencyResponseBodyProtectionTests {
 
     @BeforeAll
     static void requireDocker() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required to read the idempotency table this test is about");
     }
 
@@ -101,8 +99,7 @@ class IdempotencyResponseBodyProtectionTests {
         // A real key-encryption key. Stubbing FieldProtection here would make the
         // ciphertext agree with itself by construction, and the assertion that a
         // replay decrypts would then be about the stub rather than about ADR 0029.
-        registry.add("horecaos.secrets.data_encryption.platform.kek",
-                () -> "a-test-key-encryption-key");
+        registry.add("horecaos.secrets.data_encryption.platform.kek", () -> "a-test-key-encryption-key");
     }
 
     @Autowired
@@ -113,13 +110,18 @@ class IdempotencyResponseBodyProtectionTests {
 
     @BeforeEach
     void seed() {
-        jdbc.sql("DELETE FROM customer.addresses WHERE tenant_id = :t").param("t", TENANT).update();
-        jdbc.sql("DELETE FROM customer.principal_links WHERE tenant_id = :t").param("t", TENANT)
+        jdbc.sql("DELETE FROM customer.addresses WHERE tenant_id = :t")
+                .param("t", TENANT)
                 .update();
-        jdbc.sql("DELETE FROM customer.customer_accounts WHERE tenant_id = :t").param("t", TENANT)
+        jdbc.sql("DELETE FROM customer.principal_links WHERE tenant_id = :t")
+                .param("t", TENANT)
+                .update();
+        jdbc.sql("DELETE FROM customer.customer_accounts WHERE tenant_id = :t")
+                .param("t", TENANT)
                 .update();
         jdbc.sql("DELETE FROM platform.idempotency_records WHERE tenant_id = :t")
-                .param("t", TENANT).update();
+                .param("t", TENANT)
+                .update();
 
         seedEstate();
         account(OWNER);
@@ -141,15 +143,12 @@ class IdempotencyResponseBodyProtectionTests {
         List<String> stored = storedBodies();
 
         assertThat(stored)
-                .as("the endpoint is @Idempotent, so a record was written and there is "
-                        + "something to inspect")
+                .as("the endpoint is @Idempotent, so a record was written and there is " + "something to inspect")
                 .isNotEmpty();
-        assertThat(stored)
-                .as("""
+        assertThat(stored).as("""
                         ADR 0029: this text exists nowhere in clear. It was written to
                         platform.idempotency_records.response_body as plain text and kept
-                        for twenty-four hours by IdempotencyPurgeJob.""")
-                .noneSatisfy(body -> assertThat(body).contains(OWNERS_STREET));
+                        for twenty-four hours by IdempotencyPurgeJob.""").noneSatisfy(body -> assertThat(body).contains(OWNERS_STREET));
         assertThat(stored)
                 .as("a delivery instruction is personal data too, and is encrypted in its "
                         + "own column for the same reason")
@@ -241,9 +240,12 @@ class IdempotencyResponseBodyProtectionTests {
                  "latitude":41.3,"longitude":69.2,"coordinateSource":"GEOCODER"}
                 """;
 
-        MvcResult first = mvc.perform(post(me() + "/addresses").with(token(OWNER))
-                .header("Idempotency-Key", "a-refusal").contentType(MediaType.APPLICATION_JSON)
-                .content(refusal)).andReturn();
+        MvcResult first = mvc.perform(post(me() + "/addresses")
+                        .with(token(OWNER))
+                        .header("Idempotency-Key", "a-refusal")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refusal))
+                .andReturn();
 
         assertThat(first.getResponse().getStatus()).isEqualTo(400);
         assertThat(first.getResponse().getContentAsString()).contains("VALIDATION_FAILED");
@@ -253,9 +255,12 @@ class IdempotencyResponseBodyProtectionTests {
                         + "body here to have got wrong")
                 .isNotEmpty();
 
-        MvcResult replay = mvc.perform(post(me() + "/addresses").with(token(OWNER))
-                .header("Idempotency-Key", "a-refusal").contentType(MediaType.APPLICATION_JSON)
-                .content(refusal)).andReturn();
+        MvcResult replay = mvc.perform(post(me() + "/addresses")
+                        .with(token(OWNER))
+                        .header("Idempotency-Key", "a-refusal")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refusal))
+                .andReturn();
 
         assertThat(replay.getResponse().getHeader(IdempotencyInterceptor.REPLAYED_HEADER))
                 .isEqualTo("true");
@@ -277,11 +282,14 @@ class IdempotencyResponseBodyProtectionTests {
 
     private int addressCount() {
         return jdbc.sql("SELECT count(*) FROM customer.addresses WHERE tenant_id = :t")
-                .param("t", TENANT).query(Integer.class).single();
+                .param("t", TENANT)
+                .query(Integer.class)
+                .single();
     }
 
     private MvcResult saveAddress(String idempotencyKey) throws Exception {
-        return mvc.perform(post(me() + "/addresses").with(token(OWNER))
+        return mvc.perform(post(me() + "/addresses")
+                        .with(token(OWNER))
                         .header("Idempotency-Key", idempotencyKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -303,14 +311,19 @@ class IdempotencyResponseBodyProtectionTests {
                     id, tenant_id, version, identity_mode, effective_from)
                 VALUES (:id, :tenantId, 1, 'TENANT_SHARED', TIMESTAMPTZ '2020-01-01T00:00:00Z')
                 ON CONFLICT DO NOTHING
-                """).param("id", UUID.nameUUIDFromBytes(TENANT.toString().getBytes()))
-                .param("tenantId", TENANT).update();
+                """)
+                .param("id", UUID.nameUUIDFromBytes(TENANT.toString().getBytes()))
+                .param("tenantId", TENANT)
+                .update();
         jdbc.sql("""
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
                 VALUES (:id, :tenantId, 'MAIN', :slug, 'Brand', 'ACTIVE', 0)
                 ON CONFLICT (id) DO NOTHING
-                """).param("id", BRAND).param("tenantId", TENANT)
-                .param("slug", "main".toLowerCase(Locale.ROOT)).update();
+                """)
+                .param("id", BRAND)
+                .param("tenantId", TENANT)
+                .param("slug", "main".toLowerCase(Locale.ROOT))
+                .update();
     }
 
     private void account(String subject) {
@@ -320,15 +333,24 @@ class IdempotencyResponseBodyProtectionTests {
                 INSERT INTO customer.customer_accounts (id, tenant_id,
                     identity_partition_brand_id, status, created_at, updated_at)
                 VALUES (:id, :tenantId, NULL, 'ACTIVE', :now, :now)
-                """).param("id", accountId).param("tenantId", TENANT).param("now", now).update();
+                """)
+                .param("id", accountId)
+                .param("tenantId", TENANT)
+                .param("now", now)
+                .update();
         jdbc.sql("""
                 INSERT INTO customer.principal_links (id, tenant_id,
                     identity_partition_brand_id, customer_account_id, issuer, subject, status,
                     linked_at)
                 VALUES (:id, :tenantId, NULL, :accountId, :issuer, :subject, 'ACTIVE', :now)
-                """).param("id", UUID.randomUUID()).param("tenantId", TENANT)
-                .param("accountId", accountId).param("issuer", ISSUER).param("subject", subject)
-                .param("now", now).update();
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("accountId", accountId)
+                .param("issuer", ISSUER)
+                .param("subject", subject)
+                .param("now", now)
+                .update();
     }
 
     private static String me() {
@@ -345,8 +367,10 @@ class IdempotencyResponseBodyProtectionTests {
         /** Avoids contacting a real issuer; this suite exercises the MVC chain. */
         @Bean
         JwtDecoder jwtDecoder() {
-            return token -> Jwt.withTokenValue(token).header("alg", "none")
-                    .claim("sub", "unused").build();
+            return token -> Jwt.withTokenValue(token)
+                    .header("alg", "none")
+                    .claim("sub", "unused")
+                    .build();
         }
     }
 }

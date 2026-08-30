@@ -5,12 +5,10 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.loyalty.api.HeldTenderPort;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.payments.domain.PaymentAttempt;
@@ -127,8 +125,8 @@ public class HeldTenderProgress implements HeldTenderPort {
      * on ordering's internal vocabulary, and a status this build does not know is
      * then a status this class treats as "not working", which is the safe answer.
      */
-    private static final Set<String> STILL_WORKING = Set.of(
-            "AWAITING_APPROVAL", "CONFIRMED", "PREPARING", "READY", "FULFILLING");
+    private static final Set<String> STILL_WORKING =
+            Set.of("AWAITING_APPROVAL", "CONFIRMED", "PREPARING", "READY", "FULFILLING");
 
     /**
      * The two statuses in which the platform is waiting on a customer rather than
@@ -139,8 +137,7 @@ public class HeldTenderProgress implements HeldTenderPort {
      * it is somehow still open: the order is over, and {@code OrderStateService}
      * has already failed its settlement.
      */
-    private static final Set<String> WAITING_ON_THE_CUSTOMER = Set.of(
-            "RECEIVED", "PAYMENT_AUTHORIZING");
+    private static final Set<String> WAITING_ON_THE_CUSTOMER = Set.of("RECEIVED", "PAYMENT_AUTHORIZING");
 
     private final JdbcSettlementStore store;
     private final OrderDirectory orders;
@@ -148,8 +145,12 @@ public class HeldTenderProgress implements HeldTenderPort {
     private final JdbcPaymentAttemptStore attempts;
     private final Clock clock;
 
-    public HeldTenderProgress(JdbcSettlementStore store, OrderDirectory orders,
-            JdbcPaymentIntentStore intents, JdbcPaymentAttemptStore attempts, Clock clock) {
+    public HeldTenderProgress(
+            JdbcSettlementStore store,
+            OrderDirectory orders,
+            JdbcPaymentIntentStore intents,
+            JdbcPaymentAttemptStore attempts,
+            Clock clock) {
         this.store = store;
         this.orders = orders;
         this.intents = intents;
@@ -181,21 +182,18 @@ public class HeldTenderProgress implements HeldTenderPort {
         // here on the strength of an answer about points would be inventing a
         // release nobody performed.
         if (tender.settlesFromBalance()) {
-            store.transitionTender(tenantId, tenderId, TenderStatus.RESERVED,
-                    TenderStatus.RELEASED, clock.instant());
+            store.transitionTender(tenantId, tenderId, TenderStatus.RESERVED, TenderStatus.RELEASED, clock.instant());
         }
         return false;
     }
 
     private boolean awaiting(UUID tenantId, TenderRow tender) {
-        Optional<SettlementRow> settlement = store.findSettlementById(tenantId,
-                tender.settlementId());
+        Optional<SettlementRow> settlement = store.findSettlementById(tenantId, tender.settlementId());
         if (settlement.isEmpty()) {
             return false;
         }
         UUID orderId = settlement.get().orderId();
-        Optional<String> status = orders.summary(tenantId, orderId)
-                .map(OrderDirectory.OrderSummary::status);
+        Optional<String> status = orders.summary(tenantId, orderId).map(OrderDirectory.OrderSummary::status);
         if (status.isEmpty()) {
             return false;
         }
@@ -228,8 +226,11 @@ public class HeldTenderProgress implements HeldTenderPort {
             // renewed against nothing.
             return false;
         }
-        log.debug("Order {} is not being worked on, but its payment attempt is {}; the points "
-                + "hold is renewed rather than released", orderId, attempt.get().status());
+        log.debug(
+                "Order {} is not being worked on, but its payment attempt is {}; the points "
+                        + "hold is renewed rather than released",
+                orderId,
+                attempt.get().status());
         return true;
     }
 }

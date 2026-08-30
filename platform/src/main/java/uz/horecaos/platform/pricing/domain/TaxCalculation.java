@@ -28,8 +28,7 @@ public final class TaxCalculation {
      */
     public static final RoundingMode ROUNDING = RoundingMode.HALF_UP;
 
-    private TaxCalculation() {
-    }
+    private TaxCalculation() {}
 
     /**
      * The tax contained within a VAT-inclusive amount.

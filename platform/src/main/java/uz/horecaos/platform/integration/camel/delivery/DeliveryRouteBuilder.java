@@ -1,11 +1,9 @@
 package uz.horecaos.platform.integration.camel.delivery;
 
 import java.time.Duration;
-
 import org.apache.camel.builder.RouteBuilder;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 
 /**
@@ -61,12 +59,10 @@ public class DeliveryRouteBuilder extends RouteBuilder {
                 // outage. DeliveryCircuitBreakers keys a breaker per partner.
                 .process(processor::invoke)
                 .choice()
-                    .when(exchange -> outcome(exchange) != null
-                            && outcome(exchange).requiresReconciliation())
-                        .to(RECONCILE_ENDPOINT)
-                    .when(exchange -> outcome(exchange) != null
-                            && outcome(exchange).mayRetryDirectly())
-                        .process(processor::scheduleRetry)
+                .when(exchange -> outcome(exchange) != null && outcome(exchange).requiresReconciliation())
+                .to(RECONCILE_ENDPOINT)
+                .when(exchange -> outcome(exchange) != null && outcome(exchange).mayRetryDirectly())
+                .process(processor::scheduleRetry)
                 .end()
                 .process(processor::recordOutcome);
 
@@ -76,11 +72,11 @@ public class DeliveryRouteBuilder extends RouteBuilder {
                 // Redelivery is safe here and nowhere else in this route: a query
                 // has no side effect, so repeating it cannot book a second courier.
                 .onException(Exception.class)
-                    .maximumRedeliveries(3)
-                    .redeliveryDelay(Duration.ofSeconds(5).toMillis())
-                    .backOffMultiplier(2)
-                    .handled(false)
-                    .end()
+                .maximumRedeliveries(3)
+                .redeliveryDelay(Duration.ofSeconds(5).toMillis())
+                .backOffMultiplier(2)
+                .handled(false)
+                .end()
                 .process(processor::reconcile);
     }
 

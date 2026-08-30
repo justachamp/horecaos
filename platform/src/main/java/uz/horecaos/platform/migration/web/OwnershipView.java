@@ -1,7 +1,6 @@
 package uz.horecaos.platform.migration.web;
 
 import java.util.UUID;
-
 import uz.horecaos.platform.migration.api.CapabilityOwnership;
 import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.domain.ReadMode;
@@ -34,8 +33,12 @@ public record OwnershipView(
 
     static OwnershipView of(CapabilityOwnership ownership) {
         return new OwnershipView(
-                ownership.scopeId(), ownership.capability(), ownership.state(),
-                ownership.writeMode(), ownership.readMode(),
-                ownership.targetMayWrite(), ownership.legacyMayWrite());
+                ownership.scopeId(),
+                ownership.capability(),
+                ownership.state(),
+                ownership.writeMode(),
+                ownership.readMode(),
+                ownership.targetMayWrite(),
+                ownership.legacyMayWrite());
     }
 }

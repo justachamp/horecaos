@@ -42,8 +42,7 @@ public record ApiMoney(long amountMinor, String currency) {
 
     private void requireSameCurrency(ApiMoney other) {
         if (!currency.equals(other.currency)) {
-            throw new IllegalArgumentException(
-                    "Cannot combine %s with %s".formatted(currency, other.currency));
+            throw new IllegalArgumentException("Cannot combine %s with %s".formatted(currency, other.currency));
         }
     }
 }

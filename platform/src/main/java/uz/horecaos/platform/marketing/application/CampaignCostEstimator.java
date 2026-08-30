@@ -3,9 +3,7 @@ package uz.horecaos.platform.marketing.application;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
-
 import org.springframework.stereotype.Service;
-
 import uz.horecaos.platform.marketing.domain.MarketingChannel;
 import uz.horecaos.platform.marketing.domain.SmsSegments;
 
@@ -52,9 +50,12 @@ public class CampaignCostEstimator {
      * @param pricePerSegmentMinor the tenant-configured price, in integer minor
      *                             units. For UZS a minor unit is a whole som
      */
-    public Optional<Estimate> estimate(MarketingChannel channel,
-            Map<String, String> bodiesByLocale, Map<String, Integer> membersByLocale,
-            Long pricePerSegmentMinor, String currency) {
+    public Optional<Estimate> estimate(
+            MarketingChannel channel,
+            Map<String, String> bodiesByLocale,
+            Map<String, Integer> membersByLocale,
+            Long pricePerSegmentMinor,
+            String currency) {
 
         if (!channel.carriesMarginalCost()) {
             // Push and Telegram carry no marginal money, so there is nothing to
@@ -86,15 +87,11 @@ public class CampaignCostEstimator {
         }
 
         return Optional.of(new Estimate(
-                lowSegments * pricePerSegmentMinor,
-                highSegments * pricePerSegmentMinor,
-                recipients,
-                currency));
+                lowSegments * pricePerSegmentMinor, highSegments * pricePerSegmentMinor, recipients, currency));
     }
 
     /** What one recipient's message costs, used to reserve a batch before sending it. */
-    public long perRecipientCostMinor(MarketingChannel channel, String body,
-            Long pricePerSegmentMinor) {
+    public long perRecipientCostMinor(MarketingChannel channel, String body, Long pricePerSegmentMinor) {
         if (!channel.carriesMarginalCost() || pricePerSegmentMinor == null || body == null) {
             return 0;
         }
@@ -118,5 +115,5 @@ public class CampaignCostEstimator {
      * @param lowMinor every placeholder empty
      * @param highMinor every placeholder at its allowance
      */
-    public record Estimate(long lowMinor, long highMinor, int recipients, String currency) { }
+    public record Estimate(long lowMinor, long highMinor, int recipients, String currency) {}
 }

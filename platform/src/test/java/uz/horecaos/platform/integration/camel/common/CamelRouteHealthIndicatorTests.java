@@ -27,8 +27,8 @@ class CamelRouteHealthIndicatorTests {
         camel.addRoutes(new RouteBuilder() {
             @Override
             public void configure() {
-                from("direct:health.first").routeId("health.first.v1").process(exchange -> { });
-                from("direct:health.second").routeId("health.second.v1").process(exchange -> { });
+                from("direct:health.first").routeId("health.first.v1").process(exchange -> {});
+                from("direct:health.second").routeId("health.second.v1").process(exchange -> {});
             }
         });
         camel.start();

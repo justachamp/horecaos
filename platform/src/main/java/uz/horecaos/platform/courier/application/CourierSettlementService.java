@@ -13,15 +13,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.audit.api.ActorRef;
-import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.ApprovalAction;
+import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.ApprovalParameters;
 import uz.horecaos.platform.audit.api.ApprovalRequestCommand;
 import uz.horecaos.platform.audit.api.ApprovalService;
@@ -74,9 +71,14 @@ public class CourierSettlementService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
-    public CourierSettlementService(JdbcCourierLedgerStore ledger, JdbcCourierStore couriers,
-            JdbcDeliveryCostStore costLines, ApprovalService approvals, AuditRecorder audit,
-            ObjectMapper objectMapper, Clock clock) {
+    public CourierSettlementService(
+            JdbcCourierLedgerStore ledger,
+            JdbcCourierStore couriers,
+            JdbcDeliveryCostStore costLines,
+            ApprovalService approvals,
+            AuditRecorder audit,
+            ObjectMapper objectMapper,
+            Clock clock) {
         this.ledger = ledger;
         this.couriers = couriers;
         this.costLines = costLines;
@@ -98,9 +100,10 @@ public class CourierSettlementService {
     public Statement close(UUID tenantId, UUID periodId, ActorRef actor, String reason) {
         PeriodRow period = period(tenantId, periodId);
         if (period.status() != SettlementPeriodStatus.OPEN) {
-            throw new ApiException(ErrorCode.UNPROCESSABLE_STATE,
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
                     "This period is %s; a closed period is never reopened, because reopening "
-                            .formatted(period.status())
+                                    .formatted(period.status())
                             + "changes a figure somebody has already been paid against");
         }
 
@@ -108,21 +111,22 @@ public class CourierSettlementService {
         List<EarningRow> earnings = ledger.earningsOf(tenantId, periodId);
         PeriodTotals totals = ledger.computeTotals(tenantId, periodId);
         EngagementRow engagement = couriers.findEngagement(tenantId, period.engagementId())
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No such engagement: " + period.engagementId()));
+                .orElseThrow(() ->
+                        new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such engagement: " + period.engagementId()));
 
-        List<UUID> afterLapse = entriesAfterLapse(entries, engagement,
+        List<UUID> afterLapse = entriesAfterLapse(
+                entries,
+                engagement,
                 couriers.firstLapseNoticeAt(tenantId, engagement.id()).orElse(null));
         boolean complianceFlag = !afterLapse.isEmpty();
 
-        Map<String, Object> document = buildDocument(period, engagement, entries, earnings, totals,
-                afterLapse);
+        Map<String, Object> document = buildDocument(period, engagement, entries, earnings, totals, afterLapse);
         StatementVocabulary.assertCarriesNoTaxLanguage(document);
         String json = objectMapper.writeValueAsString(document);
         String hash = sha256(json);
 
-        boolean closed = ledger.closePeriod(tenantId, periodId, period.version(), totals,
-                complianceFlag, hash, actor.subject(), clock.instant());
+        boolean closed = ledger.closePeriod(
+                tenantId, periodId, period.version(), totals, complianceFlag, hash, actor.subject(), clock.instant());
         if (!closed) {
             throw ApiException.staleVersion(period.version(), period.version() + 1L);
         }
@@ -132,11 +136,23 @@ public class CourierSettlementService {
         // basis means on this side, and it is why INVOICED is not a valid
         // internal basis at all.
         for (EarningRow earning : earnings) {
-            costLines.insertLine(new CostLineRow(UUID.randomUUID(), tenantId, earning.shipmentId(),
-                    earning.legalEntityId(), earning.businessDate(), CostPath.INTERNAL,
-                    CostBasis.SETTLED, earning.totalMinor(), earning.currency(),
-                    "courier_settlement_period", periodId, earning.courierId(), null,
-                    clock.instant(), null, "courier-settlement-service"));
+            costLines.insertLine(new CostLineRow(
+                    UUID.randomUUID(),
+                    tenantId,
+                    earning.shipmentId(),
+                    earning.legalEntityId(),
+                    earning.businessDate(),
+                    CostPath.INTERNAL,
+                    CostBasis.SETTLED,
+                    earning.totalMinor(),
+                    earning.currency(),
+                    "courier_settlement_period",
+                    periodId,
+                    earning.courierId(),
+                    null,
+                    clock.instant(),
+                    null,
+                    "courier-settlement-service"));
         }
 
         audit.record(AuditFact.of("courier.settlement.closed", AuditClass.BUSINESS)
@@ -144,11 +160,17 @@ public class CourierSettlementService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("courier_settlement_period", periodId)
                 .because(reason)
-                .changed(Map.of("amountPayableMinor", totals.amountPayableMinor(),
-                        "grossEarningsMinor", totals.grossEarningsMinor(),
-                        "cashHeldMinor", totals.cashHeldMinor(),
-                        "complianceFlag", complianceFlag,
-                        "statementHash", hash))
+                .changed(Map.of(
+                        "amountPayableMinor",
+                        totals.amountPayableMinor(),
+                        "grossEarningsMinor",
+                        totals.grossEarningsMinor(),
+                        "cashHeldMinor",
+                        totals.cashHeldMinor(),
+                        "complianceFlag",
+                        complianceFlag,
+                        "statementHash",
+                        hash))
                 .evidence(hash)
                 .usingCapability("courier.settlement.close")
                 .correlatedBy("courier-settlement")
@@ -167,16 +189,18 @@ public class CourierSettlementService {
      * that an accountant sees the exposure before the transfer rather than after.
      */
     @Transactional
-    public PayoutOutcome authorisePayout(UUID tenantId, UUID periodId, PayoutMethod method,
-            ActorRef actor, String reason) {
+    public PayoutOutcome authorisePayout(
+            UUID tenantId, UUID periodId, PayoutMethod method, ActorRef actor, String reason) {
 
         PeriodRow period = period(tenantId, periodId);
         if (period.status() != SettlementPeriodStatus.CLOSED) {
-            throw new ApiException(ErrorCode.UNPROCESSABLE_STATE,
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
                     "A payout is authorised against a CLOSED period; this one is " + period.status());
         }
         if (period.amountPayableMinor() <= 0) {
-            throw new ApiException(ErrorCode.UNPROCESSABLE_STATE,
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
                     "Nothing is payable for this period; the courier's position is %d"
                             .formatted(period.amountPayableMinor()));
         }
@@ -202,30 +226,52 @@ public class CourierSettlementService {
                 case ApprovalOutcome.Pending pending -> {
                     return new PayoutOutcome(null, pending.requestId(), false);
                 }
-                case ApprovalOutcome.Declined declined -> throw new ApiException(
-                        ErrorCode.UNPROCESSABLE_STATE,
-                        "The payout was declined: " + declined.reason());
-                case ApprovalOutcome.NotRequired ignored -> throw new ApiException(
-                        ErrorCode.UNPROCESSABLE_STATE,
-                        "This period's work fell after a registration lapse, so its payout "
-                                + "requires four-eyes approval and no approval policy provided one");
+                case ApprovalOutcome.Declined declined ->
+                    throw new ApiException(
+                            ErrorCode.UNPROCESSABLE_STATE, "The payout was declined: " + declined.reason());
+                case ApprovalOutcome.NotRequired ignored ->
+                    throw new ApiException(
+                            ErrorCode.UNPROCESSABLE_STATE,
+                            "This period's work fell after a registration lapse, so its payout "
+                                    + "requires four-eyes approval and no approval policy provided one");
             }
         }
 
         UUID payoutId = UUID.randomUUID();
-        ledger.insertPayout(payoutId, tenantId, period.courierId(), periodId,
-                period.amountPayableMinor(), period.currency(), method, actor.subject(),
+        ledger.insertPayout(
+                payoutId,
+                tenantId,
+                period.courierId(),
+                periodId,
+                period.amountPayableMinor(),
+                period.currency(),
+                method,
+                actor.subject(),
                 approvalRequestId);
 
         // The ledger entry that takes the money off the courier's balance. HorecaOS
         // records the payout; somebody else moves the money, and that seam is
         // deliberate — worker payment is a different rail from ADR 0013's
         // customer-payment rail and building it now would be building it blind.
-        ledger.append(new JdbcCourierLedgerStore.LedgerEntryRow(UUID.randomUUID(), tenantId,
-                period.courierId(), periodId, null, LedgerEntryType.PAYOUT,
-                -period.amountPayableMinor(), period.currency(), "courier_payout", payoutId,
-                uz.horecaos.platform.courier.domain.AdjustmentOrigin.SYSTEM, null, clock.instant(),
-                clock.instant(), "payout:" + payoutId, approvalRequestId, null, actor.subject()));
+        ledger.append(new JdbcCourierLedgerStore.LedgerEntryRow(
+                UUID.randomUUID(),
+                tenantId,
+                period.courierId(),
+                periodId,
+                null,
+                LedgerEntryType.PAYOUT,
+                -period.amountPayableMinor(),
+                period.currency(),
+                "courier_payout",
+                payoutId,
+                uz.horecaos.platform.courier.domain.AdjustmentOrigin.SYSTEM,
+                null,
+                clock.instant(),
+                clock.instant(),
+                "payout:" + payoutId,
+                approvalRequestId,
+                null,
+                actor.subject()));
 
         ledger.markSettled(tenantId, periodId, clock.instant());
 
@@ -234,9 +280,13 @@ public class CourierSettlementService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("courier_payout", payoutId)
                 .because(reason)
-                .changed(Map.of("amountMinor", period.amountPayableMinor(),
-                        "method", method.name(),
-                        "complianceFlag", period.complianceFlag()))
+                .changed(Map.of(
+                        "amountMinor",
+                        period.amountPayableMinor(),
+                        "method",
+                        method.name(),
+                        "complianceFlag",
+                        period.complianceFlag()))
                 .underApproval(approvalRequestId)
                 .usingCapability("courier.payout.authorise")
                 .correlatedBy("courier-settlement")
@@ -252,16 +302,20 @@ public class CourierSettlementService {
      */
     public Map<String, Object> statementOf(UUID tenantId, UUID periodId) {
         return ledger.findStatement(tenantId, periodId)
-                .map(row -> objectMapper.readValue(row.document(),
-                        new tools.jackson.core.type.TypeReference<Map<String, Object>>() { }))
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "This period has no statement; it has not been closed"));
+                .map(row -> objectMapper.readValue(
+                        row.document(), new tools.jackson.core.type.TypeReference<Map<String, Object>>() {}))
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.RESOURCE_NOT_FOUND, "This period has no statement; it has not been closed"));
     }
 
     // ------------------------------------------------------------- the document
 
-    private Map<String, Object> buildDocument(PeriodRow period, EngagementRow engagement,
-            List<LedgerEntryRow> entries, List<EarningRow> earnings, PeriodTotals totals,
+    private Map<String, Object> buildDocument(
+            PeriodRow period,
+            EngagementRow engagement,
+            List<LedgerEntryRow> entries,
+            List<EarningRow> earnings,
+            PeriodTotals totals,
             List<UUID> afterLapse) {
 
         Map<String, Object> document = new LinkedHashMap<>();
@@ -278,54 +332,78 @@ public class CourierSettlementService {
         // 2. Gross earnings by component, each naming the rate card version it
         // was computed under.
         Map<String, Long> byComponent = new LinkedHashMap<>();
-        byComponent.put("perOrder", earnings.stream().mapToLong(EarningRow::perOrderMinor).sum());
-        byComponent.put("perKilometre", earnings.stream().mapToLong(EarningRow::perKmMinor).sum());
-        byComponent.put("perShiftFixed", entries.stream()
-                .filter(entry -> entry.entryType() == LedgerEntryType.SHIFT_EARNING)
-                .mapToLong(LedgerEntryRow::amountMinor).sum());
-        byComponent.put("minimumTopUp",
+        byComponent.put(
+                "perOrder",
+                earnings.stream().mapToLong(EarningRow::perOrderMinor).sum());
+        byComponent.put(
+                "perKilometre",
+                earnings.stream().mapToLong(EarningRow::perKmMinor).sum());
+        byComponent.put(
+                "perShiftFixed",
+                entries.stream()
+                        .filter(entry -> entry.entryType() == LedgerEntryType.SHIFT_EARNING)
+                        .mapToLong(LedgerEntryRow::amountMinor)
+                        .sum());
+        byComponent.put(
+                "minimumTopUp",
                 earnings.stream().mapToLong(EarningRow::minimumTopUpMinor).sum());
         document.put("grossEarningsByComponent", byComponent);
-        document.put("rateCardVersions", earnings.stream()
-                .map(earning -> earning.rateCardId() + ":" + earning.rateCardVersion())
-                .distinct().sorted().toList());
+        document.put(
+                "rateCardVersions",
+                earnings.stream()
+                        .map(earning -> earning.rateCardId() + ":" + earning.rateCardVersion())
+                        .distinct()
+                        .sorted()
+                        .toList());
 
         // 3. Adjustments, each naming its origin.
-        document.put("adjustments", entries.stream()
-                .filter(entry -> entry.entryType().isAdjustment())
-                .map(entry -> {
-                    Map<String, Object> line = new LinkedHashMap<>();
-                    line.put("entryId", entry.id().toString());
-                    line.put("entryType", entry.entryType().name());
-                    line.put("amountMinor", entry.amountMinor());
-                    line.put("origin", entry.origin().name());
-                    line.put("reasonCode", entry.reasonCode());
-                    line.put("approvalRequestId", String.valueOf(entry.approvalRequestId()));
-                    line.put("recordedBy", entry.createdBy());
-                    return line;
-                })
-                .toList());
+        document.put(
+                "adjustments",
+                entries.stream()
+                        .filter(entry -> entry.entryType().isAdjustment())
+                        .map(entry -> {
+                            Map<String, Object> line = new LinkedHashMap<>();
+                            line.put("entryId", entry.id().toString());
+                            line.put("entryType", entry.entryType().name());
+                            line.put("amountMinor", entry.amountMinor());
+                            line.put("origin", entry.origin().name());
+                            line.put("reasonCode", entry.reasonCode());
+                            line.put("approvalRequestId", String.valueOf(entry.approvalRequestId()));
+                            line.put("recordedBy", entry.createdBy());
+                            return line;
+                        })
+                        .toList());
 
         // 4. The figure the courier invoices for.
         document.put("grossTotalMinor", totals.grossEarningsMinor());
 
         // 5. Cash, in its own block.
         Map<String, Object> cash = new LinkedHashMap<>();
-        cash.put("collectedMinor", -entries.stream()
-                .filter(entry -> entry.entryType() == LedgerEntryType.CASH_COLLECTED)
-                .mapToLong(LedgerEntryRow::amountMinor).sum());
-        cash.put("handedOverMinor", entries.stream()
-                .filter(entry -> entry.entryType() == LedgerEntryType.CASH_HANDED_OVER)
-                .mapToLong(LedgerEntryRow::amountMinor).sum());
-        cash.put("varianceMinor", entries.stream()
-                .filter(entry -> entry.entryType() == LedgerEntryType.CASH_VARIANCE)
-                .mapToLong(LedgerEntryRow::amountMinor).sum());
+        cash.put(
+                "collectedMinor",
+                -entries.stream()
+                        .filter(entry -> entry.entryType() == LedgerEntryType.CASH_COLLECTED)
+                        .mapToLong(LedgerEntryRow::amountMinor)
+                        .sum());
+        cash.put(
+                "handedOverMinor",
+                entries.stream()
+                        .filter(entry -> entry.entryType() == LedgerEntryType.CASH_HANDED_OVER)
+                        .mapToLong(LedgerEntryRow::amountMinor)
+                        .sum());
+        cash.put(
+                "varianceMinor",
+                entries.stream()
+                        .filter(entry -> entry.entryType() == LedgerEntryType.CASH_VARIANCE)
+                        .mapToLong(LedgerEntryRow::amountMinor)
+                        .sum());
         cash.put("closingPositionMinor", totals.cashHeldMinor());
         document.put("cashReconciliation", cash);
 
         // 6. What the tenant transfers, labelled in those words.
         document.put("amountToTransferMinor", totals.amountPayableMinor());
-        document.put("declaration",
+        document.put(
+                "declaration",
                 "This is a gross figure. No tax has been deducted from it and none will be. "
                         + "The courier is a registered self-employed person and accounts for "
                         + "their own obligations.");
@@ -340,17 +418,21 @@ public class CourierSettlementService {
         document.put("basisCounts", counts);
 
         // 8. One row per assignment.
-        document.put("lines", earnings.stream().map(earning -> {
-            Map<String, Object> line = new LinkedHashMap<>();
-            line.put("shipmentId", earning.shipmentId().toString());
-            line.put("deliveredAt", earning.deliveredAt().toString());
-            line.put("distanceMeters", earning.distanceMeters());
-            line.put("distanceSource", earning.distanceSource().name());
-            line.put("rateCardVersion", earning.rateCardVersion());
-            line.put("onTimeOutcome", earning.onTimeOutcome().name());
-            line.put("amountMinor", earning.totalMinor());
-            return line;
-        }).toList());
+        document.put(
+                "lines",
+                earnings.stream()
+                        .map(earning -> {
+                            Map<String, Object> line = new LinkedHashMap<>();
+                            line.put("shipmentId", earning.shipmentId().toString());
+                            line.put("deliveredAt", earning.deliveredAt().toString());
+                            line.put("distanceMeters", earning.distanceMeters());
+                            line.put("distanceSource", earning.distanceSource().name());
+                            line.put("rateCardVersion", earning.rateCardVersion());
+                            line.put("onTimeOutcome", earning.onTimeOutcome().name());
+                            line.put("amountMinor", earning.totalMinor());
+                            return line;
+                        })
+                        .toList());
 
         // 9. Per-entity subtotals, sorted so the document hashes reproducibly.
         Map<String, Long> byEntity = new TreeMap<>();
@@ -365,9 +447,10 @@ public class CourierSettlementService {
         // 10. The compliance flag and the lines it applies to.
         Map<String, Object> compliance = new LinkedHashMap<>();
         compliance.put("flag", !afterLapse.isEmpty());
-        compliance.put("registrationValidUntil",
-                String.valueOf(engagement.registrationValidUntil()));
-        compliance.put("affectedEntryIds", afterLapse.stream().map(UUID::toString).sorted().toList());
+        compliance.put("registrationValidUntil", String.valueOf(engagement.registrationValidUntil()));
+        compliance.put(
+                "affectedEntryIds",
+                afterLapse.stream().map(UUID::toString).sorted().toList());
         document.put("compliance", compliance);
 
         return document;
@@ -379,8 +462,8 @@ public class CourierSettlementService {
      * <p>They stay on the statement and stay payable. The flag exists so nobody
      * discovers them from an inspector.
      */
-    private static List<UUID> entriesAfterLapse(List<LedgerEntryRow> entries,
-            EngagementRow engagement, java.time.Instant lapsedAt) {
+    private static List<UUID> entriesAfterLapse(
+            List<LedgerEntryRow> entries, EngagementRow engagement, java.time.Instant lapsedAt) {
 
         LocalDate dueOn = engagement.reverificationDueOn();
         java.time.Instant reverifiedAt = engagement.registrationVerifiedAt();
@@ -394,8 +477,8 @@ public class CourierSettlementService {
             // performed after it reopens the window. Reading the current
             // verification instant without that check would treat the original
             // onboarding attestation as if it had cured a later lapse.
-            java.time.Instant curedAt = reverifiedAt != null && lapsedAt != null
-                    && reverifiedAt.isAfter(lapsedAt) ? reverifiedAt : null;
+            java.time.Instant curedAt =
+                    reverifiedAt != null && lapsedAt != null && reverifiedAt.isAfter(lapsedAt) ? reverifiedAt : null;
 
             boolean insideRecordedLapse = lapsedAt != null
                     && !entry.occurredAt().isBefore(lapsedAt)
@@ -405,7 +488,8 @@ public class CourierSettlementService {
             // and the sweeper noticing. Without it, closing a period during that
             // gap would produce an unflagged statement for work that was already
             // uncovered.
-            boolean pastDueAndNeverSwept = lapsedAt == null && dueOn != null
+            boolean pastDueAndNeverSwept = lapsedAt == null
+                    && dueOn != null
                     && LocalDate.ofInstant(entry.occurredAt(), ZoneOffset.UTC).isAfter(dueOn);
 
             if (insideRecordedLapse || pastDueAndNeverSwept) {
@@ -417,14 +501,14 @@ public class CourierSettlementService {
 
     private PeriodRow period(UUID tenantId, UUID periodId) {
         return ledger.findPeriod(tenantId, periodId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No such settlement period: " + periodId));
+                .orElseThrow(
+                        () -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such settlement period: " + periodId));
     }
 
     static String sha256(String value) {
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(value.getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException impossible) {
             throw new IllegalStateException("SHA-256 is required by the platform", impossible);
         }
@@ -458,19 +542,32 @@ public class CourierSettlementService {
      */
     static String payoutApprovalHash(UUID tenantId, PeriodRow period, PayoutMethod method) {
         return ApprovalParameters.of(new PayoutParameters(
-                        tenantId, period.id(), period.courierId(), period.amountPayableMinor(),
-                        period.currency(), method))
+                        tenantId,
+                        period.id(),
+                        period.courierId(),
+                        period.amountPayableMinor(),
+                        period.currency(),
+                        method))
                 .excluding()
                 .hash();
     }
 
     /** The whole of what a payout approval is bound to. */
-    private record PayoutParameters(UUID tenantId, UUID periodId, UUID courierId,
-            long amountPayableMinor, String currency, PayoutMethod method) { }
+    private record PayoutParameters(
+            UUID tenantId,
+            UUID periodId,
+            UUID courierId,
+            long amountPayableMinor,
+            String currency,
+            PayoutMethod method) {}
 
-    public record Statement(UUID periodId, String statementHash, Map<String, Object> document,
-            PeriodTotals totals, boolean complianceFlag) { }
+    public record Statement(
+            UUID periodId,
+            String statementHash,
+            Map<String, Object> document,
+            PeriodTotals totals,
+            boolean complianceFlag) {}
 
     /** @param authorised false when the payout is waiting on a second pair of eyes */
-    public record PayoutOutcome(UUID payoutId, UUID approvalRequestId, boolean authorised) { }
+    public record PayoutOutcome(UUID payoutId, UUID approvalRequestId, boolean authorised) {}
 }

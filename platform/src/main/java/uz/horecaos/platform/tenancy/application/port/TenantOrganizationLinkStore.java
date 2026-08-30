@@ -31,8 +31,5 @@ public interface TenantOrganizationLinkStore {
      *                       may match on
      */
     record TenantOrganizationLink(
-            UUID tenantId,
-            String expectedAlias,
-            String tenantStatus,
-            Optional<String> organizationId) { }
+            UUID tenantId, String expectedAlias, String tenantStatus, Optional<String> organizationId) {}
 }

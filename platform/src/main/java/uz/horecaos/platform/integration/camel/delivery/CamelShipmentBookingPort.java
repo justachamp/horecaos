@@ -7,11 +7,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.apache.camel.Exchange;
 import org.apache.camel.ProducerTemplate;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort;
 import uz.horecaos.platform.integration.api.delivery.DeliveryCapability;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.DeliveryRequest;
@@ -58,15 +56,14 @@ public class CamelShipmentBookingPort implements ShipmentBookingPort {
      * a two-phase one declares the reservation, and looking for only one of them
      * makes half the configured partners invisible to the fallback.
      */
-    static final List<String> BOOKING_CAPABILITY_CODES =
-            List.of("CreateOnDemandShipment", "ReserveShipment");
+    static final List<String> BOOKING_CAPABILITY_CODES = List.of("CreateOnDemandShipment", "ReserveShipment");
 
     private final ProducerTemplate producer;
     private final ProviderInstallationLookup installations;
     private final DeliveryGateway gateway;
 
-    public CamelShipmentBookingPort(ProducerTemplate producer,
-            ProviderInstallationLookup installations, DeliveryGateway gateway) {
+    public CamelShipmentBookingPort(
+            ProducerTemplate producer, ProviderInstallationLookup installations, DeliveryGateway gateway) {
         this.producer = producer;
         this.installations = installations;
         this.gateway = gateway;
@@ -76,8 +73,7 @@ public class CamelShipmentBookingPort implements ShipmentBookingPort {
     public List<PartnerOption> partners(UUID tenantId, UUID brandId, UUID locationId) {
         Map<UUID, BindingRef> byBinding = new LinkedHashMap<>();
         for (String code : BOOKING_CAPABILITY_CODES) {
-            for (BindingRef binding : installations.candidateBindings(
-                    tenantId, brandId, locationId, code)) {
+            for (BindingRef binding : installations.candidateBindings(tenantId, brandId, locationId, code)) {
                 byBinding.putIfAbsent(binding.bindingId(), binding);
             }
         }
@@ -88,7 +84,9 @@ public class CamelShipmentBookingPort implements ShipmentBookingPort {
             // what a tenant enabled; the adapter records what the partner
             // documented, verified on 2026-08-20, and it is the second of those
             // that decides whether a create is a hold or a courier on a scooter.
-            options.add(new PartnerOption(binding.bindingId(), binding.providerType(),
+            options.add(new PartnerOption(
+                    binding.bindingId(),
+                    binding.providerType(),
                     gateway.supports(binding, DeliveryCapability.RESERVE_SHIPMENT),
                     gateway.supports(binding, DeliveryCapability.SCHEDULE_SHIPMENT)));
         }
@@ -103,15 +101,25 @@ public class CamelShipmentBookingPort implements ShipmentBookingPort {
             // and the booking is an ordinary race during a configuration change,
             // and sourcing should move to the next partner rather than page
             // somebody.
-            return BookingReceipt.of(BookingStatus.REJECTED, command, null,
-                    null, "BINDING_UNAVAILABLE",
+            return BookingReceipt.of(
+                    BookingStatus.REJECTED,
+                    command,
+                    null,
+                    null,
+                    "BINDING_UNAVAILABLE",
                     "Binding " + command.bindingId() + " is not bookable for this location");
         }
         BindingRef binding = resolved.get();
         DeliveryCapability capability = capabilityFor(command.intent(), binding);
 
-        ProviderOutcome outcome = send(new DeliveryOperation(command.commandId(),
-                command.tenantId(), binding, capability, request(command), null, null,
+        ProviderOutcome outcome = send(new DeliveryOperation(
+                command.commandId(),
+                command.tenantId(),
+                binding,
+                capability,
+                request(command),
+                null,
+                null,
                 command.correlationId()));
 
         if (outcome.status() != ProviderOutcome.Status.SUCCESS) {
@@ -130,8 +138,13 @@ public class CamelShipmentBookingPort implements ShipmentBookingPort {
         // which does not win must be explicitly cancelled from applying to a
         // hold nobody meant to take.
         ProviderOutcome confirmed = send(new DeliveryOperation(
-                confirmationId(command.commandId()), command.tenantId(), binding,
-                DeliveryCapability.CONFIRM_SHIPMENT, null, outcome.externalReference(), null,
+                confirmationId(command.commandId()),
+                command.tenantId(),
+                binding,
+                DeliveryCapability.CONFIRM_SHIPMENT,
+                null,
+                outcome.externalReference(),
+                null,
                 command.correlationId()));
 
         if (confirmed.status() == ProviderOutcome.Status.SUCCESS) {
@@ -141,10 +154,13 @@ public class CamelShipmentBookingPort implements ShipmentBookingPort {
         // hold's own reference, because that reference is the only thing that
         // can cancel it, and a receipt without it is an abandoned hold.
         return new BookingReceipt(
-                confirmed.status() == ProviderOutcome.Status.REJECTED
-                        ? BookingStatus.HELD : statusOf(confirmed, false),
-                command.commandId(), binding.bindingId(), binding.providerType(),
-                outcome.externalReference(), confirmed.errorCode(), confirmed.detail());
+                confirmed.status() == ProviderOutcome.Status.REJECTED ? BookingStatus.HELD : statusOf(confirmed, false),
+                command.commandId(),
+                binding.bindingId(),
+                binding.providerType(),
+                outcome.externalReference(),
+                confirmed.errorCode(),
+                confirmed.detail());
     }
 
     /**
@@ -163,8 +179,8 @@ public class CamelShipmentBookingPort implements ShipmentBookingPort {
     private List<BindingRef> partnersAsBindings(BookingCommand command) {
         List<BindingRef> bindings = new ArrayList<>();
         for (String code : BOOKING_CAPABILITY_CODES) {
-            bindings.addAll(installations.candidateBindings(command.tenantId(),
-                    command.brandId(), command.locationId(), code));
+            bindings.addAll(
+                    installations.candidateBindings(command.tenantId(), command.brandId(), command.locationId(), code));
         }
         return bindings;
     }
@@ -182,9 +198,7 @@ public class CamelShipmentBookingPort implements ShipmentBookingPort {
         return switch (intent) {
             case HOLD -> DeliveryCapability.RESERVE_SHIPMENT;
             case BOOK_FOR_PICKUP_WINDOW -> DeliveryCapability.SCHEDULE_SHIPMENT;
-            case BOOK_NOW -> holds
-                    ? DeliveryCapability.RESERVE_SHIPMENT
-                    : DeliveryCapability.CREATE_ON_DEMAND_SHIPMENT;
+            case BOOK_NOW -> holds ? DeliveryCapability.RESERVE_SHIPMENT : DeliveryCapability.CREATE_ON_DEMAND_SHIPMENT;
         };
     }
 
@@ -192,30 +206,34 @@ public class CamelShipmentBookingPort implements ShipmentBookingPort {
         // The whole exchange rather than a body: the outcome travels as a
         // header, and the dead-letter path replaces the body, so reading the
         // body would erase the classification the caller needs most.
-        Exchange result = producer.request(DeliveryRouteBuilder.OPERATION_ENDPOINT,
-                exchange -> {
-                    exchange.getIn().setBody(operation);
-                    exchange.getIn().setHeader(DeliveryProcessor.OPERATION_HEADER, operation);
-                });
+        Exchange result = producer.request(DeliveryRouteBuilder.OPERATION_ENDPOINT, exchange -> {
+            exchange.getIn().setBody(operation);
+            exchange.getIn().setHeader(DeliveryProcessor.OPERATION_HEADER, operation);
+        });
 
-        ProviderOutcome outcome = result.getMessage()
-                .getHeader(DeliveryRouteBuilder.OUTCOME_HEADER, ProviderOutcome.class);
+        ProviderOutcome outcome =
+                result.getMessage().getHeader(DeliveryRouteBuilder.OUTCOME_HEADER, ProviderOutcome.class);
 
         return outcome == null
                 // A route that classified nothing cannot say whether the partner
                 // acted, so this is uncertain rather than retryable. Guessing the
                 // comfortable answer here is how a misconfiguration becomes two
                 // couriers at one door.
-                ? ProviderOutcome.uncertain("ROUTE_PRODUCED_NO_OUTCOME",
-                        "The route returned without classifying the call")
+                ? ProviderOutcome.uncertain(
+                        "ROUTE_PRODUCED_NO_OUTCOME", "The route returned without classifying the call")
                 : outcome;
     }
 
-    private static BookingReceipt translate(ProviderOutcome outcome, BookingCommand command,
-            BindingRef binding, boolean live) {
+    private static BookingReceipt translate(
+            ProviderOutcome outcome, BookingCommand command, BindingRef binding, boolean live) {
 
-        return BookingReceipt.of(statusOf(outcome, live), command, binding.providerType(),
-                outcome.externalReference(), outcome.errorCode(), outcome.detail());
+        return BookingReceipt.of(
+                statusOf(outcome, live),
+                command,
+                binding.providerType(),
+                outcome.externalReference(),
+                outcome.errorCode(),
+                outcome.detail());
     }
 
     /**
@@ -244,20 +262,28 @@ public class CamelShipmentBookingPort implements ShipmentBookingPort {
      * {@code DeliveryOperation} says a retry depends on.
      */
     static UUID confirmationId(UUID commandId) {
-        return UUID.nameUUIDFromBytes(
-                ("horecaos.delivery-confirm:" + commandId).getBytes(StandardCharsets.UTF_8));
+        return UUID.nameUUIDFromBytes(("horecaos.delivery-confirm:" + commandId).getBytes(StandardCharsets.UTF_8));
     }
 
     private static DeliveryRequest request(BookingCommand command) {
         return new DeliveryRequest(
                 command.horecaosReference(),
-                new Pickup(command.pickup().latitude(), command.pickup().longitude(),
-                        command.pickup().address(), command.pickup().contactName(),
-                        command.pickup().contactPhone(), command.pickup().comment()),
-                new Dropoff(command.dropoff().latitude(), command.dropoff().longitude(),
-                        command.dropoff().address(), command.dropoff().contactName(),
-                        command.dropoff().contactPhone(), command.dropoff().comment(),
-                        command.dropoff().entrance(), command.dropoff().floor(),
+                new Pickup(
+                        command.pickup().latitude(),
+                        command.pickup().longitude(),
+                        command.pickup().address(),
+                        command.pickup().contactName(),
+                        command.pickup().contactPhone(),
+                        command.pickup().comment()),
+                new Dropoff(
+                        command.dropoff().latitude(),
+                        command.dropoff().longitude(),
+                        command.dropoff().address(),
+                        command.dropoff().contactName(),
+                        command.dropoff().contactPhone(),
+                        command.dropoff().comment(),
+                        command.dropoff().entrance(),
+                        command.dropoff().floor(),
                         command.dropoff().apartment()),
                 command.requestedPickupAt(),
                 // Carried through untouched. Noor reads it as product_paid, and

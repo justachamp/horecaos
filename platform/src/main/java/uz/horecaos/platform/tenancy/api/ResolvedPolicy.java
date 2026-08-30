@@ -2,7 +2,6 @@ package uz.horecaos.platform.tenancy.api;
 
 import java.util.Objects;
 import java.util.UUID;
-
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 
 /**
@@ -14,12 +13,7 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
  * today's.
  */
 public record ResolvedPolicy<P>(
-        String keyCode,
-        UUID policyId,
-        int policyVersion,
-        ScopeType winningScope,
-        String documentHash,
-        P document) {
+        String keyCode, UUID policyId, int policyVersion, ScopeType winningScope, String documentHash, P document) {
 
     public ResolvedPolicy {
         Objects.requireNonNull(keyCode, "Key code is required");

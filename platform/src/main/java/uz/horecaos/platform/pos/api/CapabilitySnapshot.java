@@ -27,10 +27,7 @@ import java.util.Optional;
  * @param adapterVersion the adapter that did the discovering, so a snapshot
  *                       cannot be read as though later code had produced it
  */
-public record CapabilitySnapshot(
-        Map<PosCapability, Entry> entries,
-        Instant verifiedAt,
-        String adapterVersion) {
+public record CapabilitySnapshot(Map<PosCapability, Entry> entries, Instant verifiedAt, String adapterVersion) {
 
     public CapabilitySnapshot {
         entries = entries == null ? Map.of() : Map.copyOf(entries);
@@ -95,8 +92,8 @@ public record CapabilitySnapshot(
         }
 
         public static Entry unsupported(String evidence) {
-            return new Entry(CapabilitySupport.UNSUPPORTED, IdempotencyBehaviour.NONE,
-                    false, null, Map.of(), evidence, null);
+            return new Entry(
+                    CapabilitySupport.UNSUPPORTED, IdempotencyBehaviour.NONE, false, null, Map.of(), evidence, null);
         }
     }
 

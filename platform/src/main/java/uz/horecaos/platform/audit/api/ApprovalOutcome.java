@@ -15,7 +15,7 @@ public sealed interface ApprovalOutcome {
      * An action whose entry requires configuration instead fails with
      * {@code APPROVAL_POLICY_REQUIRED}; it never reaches this outcome.
      */
-    record NotRequired() implements ApprovalOutcome { }
+    record NotRequired() implements ApprovalOutcome {}
 
     /**
      * Approval is required and has been requested.
@@ -24,7 +24,7 @@ public sealed interface ApprovalOutcome {
      * and resumes when the request is decided, which composes with the process
      * managers in ADR 0019 and the step handlers in ADR 0008.
      */
-    record Pending(UUID requestId) implements ApprovalOutcome { }
+    record Pending(UUID requestId) implements ApprovalOutcome {}
 
     /**
      * A matching request was approved; the action may proceed exactly once.
@@ -36,10 +36,10 @@ public sealed interface ApprovalOutcome {
      * resubmission a maker cared to make. The grant is the half that was
      * missing: hold it, perform the action, and spend it in the same transaction.
      */
-    record Approved(UUID requestId, String approvedBy, ApprovalGrant grant) implements ApprovalOutcome { }
+    record Approved(UUID requestId, String approvedBy, ApprovalGrant grant) implements ApprovalOutcome {}
 
     /** A matching request was declined. */
-    record Declined(UUID requestId, String reason) implements ApprovalOutcome { }
+    record Declined(UUID requestId, String reason) implements ApprovalOutcome {}
 
     default boolean mayProceed() {
         return this instanceof NotRequired || this instanceof Approved;

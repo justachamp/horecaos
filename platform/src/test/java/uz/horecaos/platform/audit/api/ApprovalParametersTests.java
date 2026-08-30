@@ -7,7 +7,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -21,9 +20,15 @@ import org.junit.jupiter.api.Test;
  */
 class ApprovalParametersTests {
 
-    private record Command(UUID tenantId, long amountMinor, String currency, Channel channel,
-            String providerReference, Instant executedAt, Duration validFor,
-            String idempotencyKey) { }
+    private record Command(
+            UUID tenantId,
+            long amountMinor,
+            String currency,
+            Channel channel,
+            String providerReference,
+            Instant executedAt,
+            Duration validFor,
+            String idempotencyKey) {}
 
     private enum Channel {
         PROVIDER_CONSOLE,
@@ -42,33 +47,89 @@ class ApprovalParametersTests {
     void anUnnamedComponentIsCovered() {
         String base = hash(command());
 
-        assertThat(hash(new Command(UUID.randomUUID(), 500_000L, "UZS", Channel.PROVIDER_CONSOLE,
-                "CLICK-1", Instant.parse("2026-08-25T14:00:00Z"), Duration.ofDays(7), "key-1")))
+        assertThat(hash(new Command(
+                        UUID.randomUUID(),
+                        500_000L,
+                        "UZS",
+                        Channel.PROVIDER_CONSOLE,
+                        "CLICK-1",
+                        Instant.parse("2026-08-25T14:00:00Z"),
+                        Duration.ofDays(7),
+                        "key-1")))
                 .isNotEqualTo(base);
-        assertThat(hash(new Command(TENANT, 900_000L, "UZS", Channel.PROVIDER_CONSOLE, "CLICK-1",
-                Instant.parse("2026-08-25T14:00:00Z"), Duration.ofDays(7), "key-1")))
+        assertThat(hash(new Command(
+                        TENANT,
+                        900_000L,
+                        "UZS",
+                        Channel.PROVIDER_CONSOLE,
+                        "CLICK-1",
+                        Instant.parse("2026-08-25T14:00:00Z"),
+                        Duration.ofDays(7),
+                        "key-1")))
                 .isNotEqualTo(base);
-        assertThat(hash(new Command(TENANT, 500_000L, "USD", Channel.PROVIDER_CONSOLE, "CLICK-1",
-                Instant.parse("2026-08-25T14:00:00Z"), Duration.ofDays(7), "key-1")))
+        assertThat(hash(new Command(
+                        TENANT,
+                        500_000L,
+                        "USD",
+                        Channel.PROVIDER_CONSOLE,
+                        "CLICK-1",
+                        Instant.parse("2026-08-25T14:00:00Z"),
+                        Duration.ofDays(7),
+                        "key-1")))
                 .isNotEqualTo(base);
-        assertThat(hash(new Command(TENANT, 500_000L, "UZS", Channel.CASH_DRAWER, "CLICK-1",
-                Instant.parse("2026-08-25T14:00:00Z"), Duration.ofDays(7), "key-1")))
+        assertThat(hash(new Command(
+                        TENANT,
+                        500_000L,
+                        "UZS",
+                        Channel.CASH_DRAWER,
+                        "CLICK-1",
+                        Instant.parse("2026-08-25T14:00:00Z"),
+                        Duration.ofDays(7),
+                        "key-1")))
                 .isNotEqualTo(base);
-        assertThat(hash(new Command(TENANT, 500_000L, "UZS", Channel.PROVIDER_CONSOLE, "CLICK-2",
-                Instant.parse("2026-08-25T14:00:00Z"), Duration.ofDays(7), "key-1")))
+        assertThat(hash(new Command(
+                        TENANT,
+                        500_000L,
+                        "UZS",
+                        Channel.PROVIDER_CONSOLE,
+                        "CLICK-2",
+                        Instant.parse("2026-08-25T14:00:00Z"),
+                        Duration.ofDays(7),
+                        "key-1")))
                 .isNotEqualTo(base);
-        assertThat(hash(new Command(TENANT, 500_000L, "UZS", Channel.PROVIDER_CONSOLE, "CLICK-1",
-                Instant.parse("2026-08-24T14:00:00Z"), Duration.ofDays(7), "key-1")))
+        assertThat(hash(new Command(
+                        TENANT,
+                        500_000L,
+                        "UZS",
+                        Channel.PROVIDER_CONSOLE,
+                        "CLICK-1",
+                        Instant.parse("2026-08-24T14:00:00Z"),
+                        Duration.ofDays(7),
+                        "key-1")))
                 .isNotEqualTo(base);
-        assertThat(hash(new Command(TENANT, 500_000L, "UZS", Channel.PROVIDER_CONSOLE, "CLICK-1",
-                Instant.parse("2026-08-25T14:00:00Z"), Duration.ofDays(365), "key-1")))
+        assertThat(hash(new Command(
+                        TENANT,
+                        500_000L,
+                        "UZS",
+                        Channel.PROVIDER_CONSOLE,
+                        "CLICK-1",
+                        Instant.parse("2026-08-25T14:00:00Z"),
+                        Duration.ofDays(365),
+                        "key-1")))
                 .isNotEqualTo(base);
     }
 
     @Test
     void anExcludedComponentDoesNotChangeTheHash() {
-        assertThat(hash(new Command(TENANT, 500_000L, "UZS", Channel.PROVIDER_CONSOLE, "CLICK-1",
-                Instant.parse("2026-08-25T14:00:00Z"), Duration.ofDays(7), "key-2")))
+        assertThat(hash(new Command(
+                        TENANT,
+                        500_000L,
+                        "UZS",
+                        Channel.PROVIDER_CONSOLE,
+                        "CLICK-1",
+                        Instant.parse("2026-08-25T14:00:00Z"),
+                        Duration.ofDays(7),
+                        "key-2")))
                 .isEqualTo(hash(command()));
     }
 
@@ -85,15 +146,22 @@ class ApprovalParametersTests {
      */
     @Test
     void aValueContainingTheSeparatorCannotBeSplitDifferently() {
-        assertThat(ApprovalParameters.none().and("left", "a").and("right", "b|c").hash())
-                .isNotEqualTo(ApprovalParameters.none().and("left", "a|b").and("right", "c").hash());
+        assertThat(ApprovalParameters.none()
+                        .and("left", "a")
+                        .and("right", "b|c")
+                        .hash())
+                .isNotEqualTo(ApprovalParameters.none()
+                        .and("left", "a|b")
+                        .and("right", "c")
+                        .hash());
     }
 
     /** An absent reference and a blank one are different claims about the cabinet. */
     @Test
     void aNullIsNotAnEmptyString() {
         assertThat(ApprovalParameters.none().and("providerReference", null).hash())
-                .isNotEqualTo(ApprovalParameters.none().and("providerReference", "").hash());
+                .isNotEqualTo(
+                        ApprovalParameters.none().and("providerReference", "").hash());
     }
 
     /**
@@ -128,23 +196,22 @@ class ApprovalParametersTests {
      */
     @Test
     void aComponentWithNoCanonicalFormIsRefusedRatherThanHashedByIdentity() {
-        record WithLines(UUID tenantId, List<String> lines) { }
+        record WithLines(UUID tenantId, List<String> lines) {}
 
-        assertThatThrownBy(() -> ApprovalParameters
-                .of(new WithLines(TENANT, List.of("a")))
-                .excluding()
-                .hash())
+        assertThatThrownBy(() -> ApprovalParameters.of(new WithLines(TENANT, List.of("a")))
+                        .excluding()
+                        .hash())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("lines");
     }
 
     @Test
     void floatingPointIsNotACanonicalFormForMoney() {
-        record WithDouble(UUID tenantId, double amount) { }
+        record WithDouble(UUID tenantId, double amount) {}
 
         assertThatThrownBy(() -> ApprovalParameters.of(new WithDouble(TENANT, 1.5))
-                .excluding()
-                .hash())
+                        .excluding()
+                        .hash())
                 .as("money here is integer minor units; a hash over a double depends on the parse")
                 .isInstanceOf(IllegalArgumentException.class);
     }
@@ -152,16 +219,26 @@ class ApprovalParametersTests {
     @Test
     void coveredComponentsReportsWhatTheHashWouldBindTo() {
         assertThat(ApprovalParameters.coveredComponents(Command.class, "idempotencyKey"))
-                .containsExactly("tenantId", "amountMinor", "currency", "channel",
-                        "providerReference", "executedAt", "validFor");
+                .containsExactly(
+                        "tenantId",
+                        "amountMinor",
+                        "currency",
+                        "channel",
+                        "providerReference",
+                        "executedAt",
+                        "validFor");
     }
 
     @Test
     void anAddedSegmentBindsAsWell() {
-        assertThat(ApprovalParameters.of(command()).excluding("idempotencyKey")
-                .and("remedyType", "ORDER_REFUND").hash())
-                .isNotEqualTo(ApprovalParameters.of(command()).excluding("idempotencyKey")
-                        .and("remedyType", "DELIVERY_FEE_REIMBURSEMENT").hash());
+        assertThat(ApprovalParameters.of(command())
+                        .excluding("idempotencyKey")
+                        .and("remedyType", "ORDER_REFUND")
+                        .hash())
+                .isNotEqualTo(ApprovalParameters.of(command())
+                        .excluding("idempotencyKey")
+                        .and("remedyType", "DELIVERY_FEE_REIMBURSEMENT")
+                        .hash());
     }
 
     @Test
@@ -171,8 +248,15 @@ class ApprovalParametersTests {
     }
 
     private static Command command() {
-        return new Command(TENANT, 500_000L, "UZS", Channel.PROVIDER_CONSOLE, "CLICK-1",
-                Instant.parse("2026-08-25T14:00:00Z"), Duration.ofDays(7), "key-1");
+        return new Command(
+                TENANT,
+                500_000L,
+                "UZS",
+                Channel.PROVIDER_CONSOLE,
+                "CLICK-1",
+                Instant.parse("2026-08-25T14:00:00Z"),
+                Duration.ofDays(7),
+                "key-1");
     }
 
     private static String hash(Command command) {

@@ -25,10 +25,7 @@ import java.util.UUID;
  * @param resolvedAt     when the resolution was performed
  */
 public record EntitlementSnapshot(
-        UUID tenantId,
-        UUID subscriptionId,
-        Map<String, EntitlementValue> values,
-        Instant resolvedAt) {
+        UUID tenantId, UUID subscriptionId, Map<String, EntitlementValue> values, Instant resolvedAt) {
 
     public EntitlementSnapshot {
         Objects.requireNonNull(tenantId, "A tenant is required");
@@ -40,8 +37,7 @@ public record EntitlementSnapshot(
         EntitlementValue value = values.get(key.code());
         if (value == null) {
             throw new IllegalStateException(
-                    "The snapshot does not carry %s; it was resolved from a stale catalogue"
-                            .formatted(key.code()));
+                    "The snapshot does not carry %s; it was resolved from a stale catalogue".formatted(key.code()));
         }
         return value;
     }
@@ -57,17 +53,28 @@ public record EntitlementSnapshot(
      */
     public String hash() {
         StringBuilder canonical = new StringBuilder();
-        new TreeMap<>(values).forEach((code, value) -> canonical
-                .append(code).append('=')
-                .append(value.limit()).append('|')
-                .append(value.featureEnabled()).append('|')
-                .append(value.declaredMode()).append('|')
-                .append(value.effectiveMode()).append('|')
-                .append(value.resetPeriod()).append('|')
-                .append(value.warnThresholdBasisPoints()).append('|')
-                .append(value.overageUnitPriceMinor()).append('|')
-                .append(value.currency()).append('|')
-                .append(value.source()).append('\n'));
+        new TreeMap<>(values)
+                .forEach((code, value) -> canonical
+                        .append(code)
+                        .append('=')
+                        .append(value.limit())
+                        .append('|')
+                        .append(value.featureEnabled())
+                        .append('|')
+                        .append(value.declaredMode())
+                        .append('|')
+                        .append(value.effectiveMode())
+                        .append('|')
+                        .append(value.resetPeriod())
+                        .append('|')
+                        .append(value.warnThresholdBasisPoints())
+                        .append('|')
+                        .append(value.overageUnitPriceMinor())
+                        .append('|')
+                        .append(value.currency())
+                        .append('|')
+                        .append(value.source())
+                        .append('\n'));
 
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")

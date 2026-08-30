@@ -1,11 +1,10 @@
 package uz.horecaos.platform.payments.click;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.payments.infrastructure.click.ClickErrorCodes;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * What an absent {@code error_code} may and may not be taken to mean (ADR 0013).

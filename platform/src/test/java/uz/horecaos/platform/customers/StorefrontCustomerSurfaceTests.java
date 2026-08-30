@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -15,10 +17,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,7 +39,6 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.customers.api.RecipientContactDirectory;
 import uz.horecaos.platform.payments.application.PaymentLegalEntityResolver;
 import uz.horecaos.platform.support.TestDatabase;
@@ -124,7 +121,8 @@ class StorefrontCustomerSurfaceTests {
 
     @BeforeAll
     static void requireDocker() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for the storefront customer surface test");
     }
 
@@ -143,8 +141,7 @@ class StorefrontCustomerSurfaceTests {
         // over the addresses below. Stubbing FieldProtection would make the
         // tenant and row bindings agree by construction, and the assertion that an
         // address comes back to its own owner would then be about the stub.
-        registry.add("horecaos.secrets.data_encryption.platform.kek",
-                () -> "a-test-key-encryption-key");
+        registry.add("horecaos.secrets.data_encryption.platform.kek", () -> "a-test-key-encryption-key");
     }
 
     @Autowired
@@ -161,24 +158,39 @@ class StorefrontCustomerSurfaceTests {
 
     @BeforeEach
     void seed() {
-        jdbc.sql("DELETE FROM ordering.orders WHERE tenant_id = :t").param("t", SHARED_TENANT)
+        jdbc.sql("DELETE FROM ordering.orders WHERE tenant_id = :t")
+                .param("t", SHARED_TENANT)
                 .update();
-        jdbc.sql("DELETE FROM ordering.carts WHERE tenant_id = :t").param("t", SHARED_TENANT)
+        jdbc.sql("DELETE FROM ordering.carts WHERE tenant_id = :t")
+                .param("t", SHARED_TENANT)
                 .update();
-        jdbc.sql("DELETE FROM pricing.quotes WHERE tenant_id = :t").param("t", SHARED_TENANT)
+        jdbc.sql("DELETE FROM pricing.quotes WHERE tenant_id = :t")
+                .param("t", SHARED_TENANT)
                 .update();
         jdbc.sql("DELETE FROM customer.addresses WHERE tenant_id IN (:a, :b)")
-                .param("a", SHARED_TENANT).param("b", ISOLATED_TENANT).update();
+                .param("a", SHARED_TENANT)
+                .param("b", ISOLATED_TENANT)
+                .update();
         jdbc.sql("DELETE FROM customer.contact_points WHERE tenant_id IN (:a, :b)")
-                .param("a", SHARED_TENANT).param("b", ISOLATED_TENANT).update();
+                .param("a", SHARED_TENANT)
+                .param("b", ISOLATED_TENANT)
+                .update();
         jdbc.sql("DELETE FROM customer.brand_profiles WHERE tenant_id IN (:a, :b)")
-                .param("a", SHARED_TENANT).param("b", ISOLATED_TENANT).update();
+                .param("a", SHARED_TENANT)
+                .param("b", ISOLATED_TENANT)
+                .update();
         jdbc.sql("DELETE FROM customer.principal_links WHERE tenant_id IN (:a, :b)")
-                .param("a", SHARED_TENANT).param("b", ISOLATED_TENANT).update();
+                .param("a", SHARED_TENANT)
+                .param("b", ISOLATED_TENANT)
+                .update();
         jdbc.sql("DELETE FROM customer.customer_accounts WHERE tenant_id IN (:a, :b)")
-                .param("a", SHARED_TENANT).param("b", ISOLATED_TENANT).update();
+                .param("a", SHARED_TENANT)
+                .param("b", ISOLATED_TENANT)
+                .update();
         jdbc.sql("DELETE FROM platform.idempotency_records WHERE tenant_id IN (:a, :b)")
-                .param("a", SHARED_TENANT).param("b", ISOLATED_TENANT).update();
+                .param("a", SHARED_TENANT)
+                .param("b", ISOLATED_TENANT)
+                .update();
 
         seedEstate();
         ownerAccount = account(SHARED_TENANT, null, OWNER);
@@ -190,8 +202,8 @@ class StorefrontCustomerSurfaceTests {
     @Test
     @DisplayName("a customer reads their own account, which nothing else would tell them")
     void theOwnerReadsTheirOwnProfile() throws Exception {
-        MvcResult result = mvc.perform(get(me(SHARED_TENANT, BRAND)).with(token(OWNER)))
-                .andReturn();
+        MvcResult result =
+                mvc.perform(get(me(SHARED_TENANT, BRAND)).with(token(OWNER))).andReturn();
 
         assertThat(result.getResponse().getStatus()).isEqualTo(200);
         JsonNode body = json(result);
@@ -231,13 +243,14 @@ class StorefrontCustomerSurfaceTests {
     @Test
     @DisplayName("under TENANT_SHARED one profile answers at both of a tenant's brands")
     void aSharedProfileIsOneAccountAcrossBrands() throws Exception {
-        JsonNode here = json(mvc.perform(get(me(SHARED_TENANT, BRAND)).with(token(OWNER)))
-                .andReturn());
-        JsonNode sibling = json(mvc.perform(get(me(SHARED_TENANT, SIBLING_BRAND))
-                        .with(token(OWNER)))
-                .andReturn());
+        JsonNode here = json(
+                mvc.perform(get(me(SHARED_TENANT, BRAND)).with(token(OWNER))).andReturn());
+        JsonNode sibling =
+                json(mvc.perform(get(me(SHARED_TENANT, SIBLING_BRAND)).with(token(OWNER)))
+                        .andReturn());
 
-        assertThat(sibling.path("accountId").asText()).isEqualTo(here.path("accountId").asText());
+        assertThat(sibling.path("accountId").asText())
+                .isEqualTo(here.path("accountId").asText());
         assertThat(here.path("identityMode").asText()).isEqualTo("TENANT_SHARED");
         assertThat(here.path("profileScope").asText())
                 .as("a change made here is visible at the sibling brand, and the response has to "
@@ -252,10 +265,10 @@ class StorefrontCustomerSurfaceTests {
         UUID atB = account(ISOLATED_TENANT, ISOLATED_BRAND_B, TWO_BRAND_PERSON);
         assertThat(atA).isNotEqualTo(atB);
 
-        JsonNode a = json(mvc.perform(get(me(ISOLATED_TENANT, ISOLATED_BRAND_A))
-                .with(token(TWO_BRAND_PERSON))).andReturn());
-        JsonNode b = json(mvc.perform(get(me(ISOLATED_TENANT, ISOLATED_BRAND_B))
-                .with(token(TWO_BRAND_PERSON))).andReturn());
+        JsonNode a = json(mvc.perform(get(me(ISOLATED_TENANT, ISOLATED_BRAND_A)).with(token(TWO_BRAND_PERSON)))
+                .andReturn());
+        JsonNode b = json(mvc.perform(get(me(ISOLATED_TENANT, ISOLATED_BRAND_B)).with(token(TWO_BRAND_PERSON)))
+                .andReturn());
 
         assertThat(a.path("accountId").asText()).isEqualTo(atA.toString());
         assertThat(b.path("accountId").asText())
@@ -268,14 +281,17 @@ class StorefrontCustomerSurfaceTests {
         // And the address books are separate, which is the consequence that
         // matters: an address saved at one brand must not appear at the other.
         saveAddress(ISOLATED_TENANT, ISOLATED_BRAND_A, TWO_BRAND_PERSON, "Home", "Brand A street");
-        assertThat(addressesOf(ISOLATED_TENANT, ISOLATED_BRAND_A, TWO_BRAND_PERSON)).hasSize(1);
-        assertThat(addressesOf(ISOLATED_TENANT, ISOLATED_BRAND_B, TWO_BRAND_PERSON)).isEmpty();
+        assertThat(addressesOf(ISOLATED_TENANT, ISOLATED_BRAND_A, TWO_BRAND_PERSON))
+                .hasSize(1);
+        assertThat(addressesOf(ISOLATED_TENANT, ISOLATED_BRAND_B, TWO_BRAND_PERSON))
+                .isEmpty();
     }
 
     @Test
     @DisplayName("a profile change requires an Idempotency-Key and an If-Match")
     void aProfileChangeCarriesBothPreconditions() throws Exception {
-        MvcResult noKey = mvc.perform(patch(me(SHARED_TENANT, BRAND)).with(token(OWNER))
+        MvcResult noKey = mvc.perform(patch(me(SHARED_TENANT, BRAND))
+                        .with(token(OWNER))
                         .header("If-Match", "W/\"1\"")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"preferredLocale\":\"uz\"}"))
@@ -283,7 +299,8 @@ class StorefrontCustomerSurfaceTests {
         assertThat(noKey.getResponse().getStatus()).isEqualTo(400);
         assertThat(codeOf(noKey)).isEqualTo("IDEMPOTENCY_KEY_REQUIRED");
 
-        MvcResult noMatch = mvc.perform(patch(me(SHARED_TENANT, BRAND)).with(token(OWNER))
+        MvcResult noMatch = mvc.perform(patch(me(SHARED_TENANT, BRAND))
+                        .with(token(OWNER))
                         .header("Idempotency-Key", "profile-no-if-match")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"preferredLocale\":\"uz\"}"))
@@ -300,7 +317,8 @@ class StorefrontCustomerSurfaceTests {
                         + "so every message went out in the default language")
                 .isEmpty();
 
-        MvcResult result = mvc.perform(patch(me(SHARED_TENANT, BRAND)).with(token(OWNER))
+        MvcResult result = mvc.perform(patch(me(SHARED_TENANT, BRAND))
+                        .with(token(OWNER))
                         .header("Idempotency-Key", "set-my-language")
                         .header("If-Match", "W/\"1\"")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -318,13 +336,18 @@ class StorefrontCustomerSurfaceTests {
     @Test
     @DisplayName("a stale If-Match on the profile is a conflict, not a silent overwrite")
     void aStaleProfileVersionIsRefused() throws Exception {
-        mvc.perform(patch(me(SHARED_TENANT, BRAND)).with(token(OWNER))
-                .header("Idempotency-Key", "first-edit").header("If-Match", "W/\"1\"")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"displayName\":\"First\"}")).andReturn();
+        mvc.perform(patch(me(SHARED_TENANT, BRAND))
+                        .with(token(OWNER))
+                        .header("Idempotency-Key", "first-edit")
+                        .header("If-Match", "W/\"1\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayName\":\"First\"}"))
+                .andReturn();
 
-        MvcResult second = mvc.perform(patch(me(SHARED_TENANT, BRAND)).with(token(OWNER))
-                        .header("Idempotency-Key", "second-edit").header("If-Match", "W/\"1\"")
+        MvcResult second = mvc.perform(patch(me(SHARED_TENANT, BRAND))
+                        .with(token(OWNER))
+                        .header("Idempotency-Key", "second-edit")
+                        .header("If-Match", "W/\"1\"")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"displayName\":\"Second\"}"))
                 .andReturn();
@@ -340,13 +363,16 @@ class StorefrontCustomerSurfaceTests {
     @DisplayName("a profile write cannot reach a column that decides something")
     void aProfileWriteLeavesTheDecidingColumnsAlone() throws Exception {
         jdbc.sql("UPDATE customer.customer_accounts SET status = 'SUSPENDED' WHERE id = :id")
-                .param("id", ownerAccount).update();
+                .param("id", ownerAccount)
+                .update();
 
-        mvc.perform(patch(me(SHARED_TENANT, BRAND)).with(token(OWNER))
-                .header("Idempotency-Key", "cannot-unsuspend").header("If-Match", "W/\"1\"")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"displayName\":\"Ozod\",\"status\":\"ACTIVE\","
-                        + "\"identityPolicyVersion\":99}")).andReturn();
+        mvc.perform(patch(me(SHARED_TENANT, BRAND))
+                        .with(token(OWNER))
+                        .header("Idempotency-Key", "cannot-unsuspend")
+                        .header("If-Match", "W/\"1\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayName\":\"Ozod\",\"status\":\"ACTIVE\"," + "\"identityPolicyVersion\":99}"))
+                .andReturn();
 
         assertThat(statusOf(ownerAccount))
                 .as("the update statement never names status, so no request field can reach it")
@@ -382,10 +408,11 @@ class StorefrontCustomerSurfaceTests {
         UUID strangers = addressId(saveAddress(SHARED_TENANT, BRAND, STRANGER, "Uy", "Their street"));
 
         MvcResult notMine = mvc.perform(get(me(SHARED_TENANT, BRAND) + "/addresses/" + strangers)
-                .with(token(OWNER))).andReturn();
-        MvcResult neverExisted = mvc.perform(
-                get(me(SHARED_TENANT, BRAND) + "/addresses/" + UUID.randomUUID())
-                        .with(token(OWNER))).andReturn();
+                        .with(token(OWNER)))
+                .andReturn();
+        MvcResult neverExisted = mvc.perform(get(me(SHARED_TENANT, BRAND) + "/addresses/" + UUID.randomUUID())
+                        .with(token(OWNER)))
+                .andReturn();
 
         assertThat(notMine.getResponse().getStatus()).isEqualTo(404);
         assertThat(distinguishing(notMine))
@@ -405,13 +432,12 @@ class StorefrontCustomerSurfaceTests {
         UUID strangers = addressId(saveAddress(SHARED_TENANT, BRAND, STRANGER, "Uy", "Their street"));
         String before = ciphertextOf(strangers);
 
-        MvcResult overwrite = mvc.perform(
-                        put(me(SHARED_TENANT, BRAND) + "/addresses/" + strangers)
-                                .with(token(OWNER))
-                                .header("Idempotency-Key", "steal-an-address")
-                                .header("If-Match", "W/\"1\"")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(addressBody("Uy", "My street", "LANDMARK_ONLY")))
+        MvcResult overwrite = mvc.perform(put(me(SHARED_TENANT, BRAND) + "/addresses/" + strangers)
+                        .with(token(OWNER))
+                        .header("Idempotency-Key", "steal-an-address")
+                        .header("If-Match", "W/\"1\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(addressBody("Uy", "My street", "LANDMARK_ONLY")))
                 .andReturn();
 
         assertThat(overwrite.getResponse().getStatus()).isEqualTo(404);
@@ -420,11 +446,10 @@ class StorefrontCustomerSurfaceTests {
                         + "surface that will not show you an address and will let you rewrite it")
                 .isEqualTo(before);
 
-        MvcResult archive = mvc.perform(
-                        delete(me(SHARED_TENANT, BRAND) + "/addresses/" + strangers)
-                                .with(token(OWNER))
-                                .header("Idempotency-Key", "archive-an-address")
-                                .header("If-Match", "W/\"1\""))
+        MvcResult archive = mvc.perform(delete(me(SHARED_TENANT, BRAND) + "/addresses/" + strangers)
+                        .with(token(OWNER))
+                        .header("Idempotency-Key", "archive-an-address")
+                        .header("If-Match", "W/\"1\""))
                 .andReturn();
 
         assertThat(archive.getResponse().getStatus()).isEqualTo(404);
@@ -456,14 +481,18 @@ class StorefrontCustomerSurfaceTests {
     @DisplayName("a stale version is refused on an edit and on a removal")
     void aStaleAddressVersionIsRefused() throws Exception {
         UUID mine = addressId(saveAddress(SHARED_TENANT, BRAND, OWNER, "Uy", OWNERS_STREET));
-        mvc.perform(put(me(SHARED_TENANT, BRAND) + "/addresses/" + mine).with(token(OWNER))
-                .header("Idempotency-Key", "edit-one").header("If-Match", "W/\"1\"")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(addressBody("Ish", "Amir Temur 1", "LANDMARK_ONLY"))).andReturn();
+        mvc.perform(put(me(SHARED_TENANT, BRAND) + "/addresses/" + mine)
+                        .with(token(OWNER))
+                        .header("Idempotency-Key", "edit-one")
+                        .header("If-Match", "W/\"1\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(addressBody("Ish", "Amir Temur 1", "LANDMARK_ONLY")))
+                .andReturn();
 
         MvcResult stale = mvc.perform(delete(me(SHARED_TENANT, BRAND) + "/addresses/" + mine)
                         .with(token(OWNER))
-                        .header("Idempotency-Key", "remove-stale").header("If-Match", "W/\"1\""))
+                        .header("Idempotency-Key", "remove-stale")
+                        .header("If-Match", "W/\"1\""))
                 .andReturn();
 
         assertThat(stale.getResponse().getStatus()).isEqualTo(409);
@@ -479,10 +508,13 @@ class StorefrontCustomerSurfaceTests {
     void anEditReplacesTheWholeDocument() throws Exception {
         UUID mine = addressId(saveAddress(SHARED_TENANT, BRAND, OWNER, "Uy", OWNERS_STREET));
 
-        mvc.perform(put(me(SHARED_TENANT, BRAND) + "/addresses/" + mine).with(token(OWNER))
-                .header("Idempotency-Key", "replace-the-lot").header("If-Match", "W/\"1\"")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(addressBody("Ish", "Amir Temur 1", "LANDMARK_ONLY"))).andReturn();
+        mvc.perform(put(me(SHARED_TENANT, BRAND) + "/addresses/" + mine)
+                        .with(token(OWNER))
+                        .header("Idempotency-Key", "replace-the-lot")
+                        .header("If-Match", "W/\"1\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(addressBody("Ish", "Amir Temur 1", "LANDMARK_ONLY")))
+                .andReturn();
 
         JsonNode after = addressesOf(SHARED_TENANT, BRAND, OWNER).get(0);
         assertThat(after.path("fields").path("line1").asText()).isEqualTo("Amir Temur 1");
@@ -519,8 +551,9 @@ class StorefrontCustomerSurfaceTests {
         // The same token that now sails through /me. An agent editing an address
         // on the telephone is exactly what a capability is for, and giving the
         // customer their own surface must not have weakened that one.
-        MvcResult reveal = mvc.perform(get("/api/v1/tenants/" + SHARED_TENANT + "/customers/"
-                        + ownerAccount + "/addresses?purpose=curiosity").with(token(OWNER)))
+        MvcResult reveal = mvc.perform(get("/api/v1/tenants/" + SHARED_TENANT + "/customers/" + ownerAccount
+                                + "/addresses?purpose=curiosity")
+                        .with(token(OWNER)))
                 .andReturn();
 
         assertThat(reveal.getResponse().getStatus()).isEqualTo(403);
@@ -536,8 +569,9 @@ class StorefrontCustomerSurfaceTests {
         UUID second = order(ownerAccount, "A-2", "2026-08-02T10:00:00Z");
         order(strangerAccount, "A-3", "2026-08-03T10:00:00Z");
 
-        JsonNode page = json(mvc.perform(get(brand(SHARED_TENANT, BRAND) + "/orders")
-                .with(token(OWNER))).andReturn());
+        JsonNode page =
+                json(mvc.perform(get(brand(SHARED_TENANT, BRAND) + "/orders").with(token(OWNER)))
+                        .andReturn());
 
         assertThat(idsIn(page))
                 .as("newest first, and a stranger's order is not an order of mine")
@@ -557,8 +591,8 @@ class StorefrontCustomerSurfaceTests {
         List<String> walked = new ArrayList<>();
         String cursor = null;
         for (int page = 0; page < 5; page++) {
-            String query = brand(SHARED_TENANT, BRAND) + "/orders?limit=1"
-                    + (cursor == null ? "" : "&cursor=" + cursor);
+            String query =
+                    brand(SHARED_TENANT, BRAND) + "/orders?limit=1" + (cursor == null ? "" : "&cursor=" + cursor);
             JsonNode body = json(mvc.perform(get(query).with(token(OWNER))).andReturn());
             walked.addAll(idsIn(body));
             if (body.path("nextCursor").isNull()) {
@@ -580,7 +614,8 @@ class StorefrontCustomerSurfaceTests {
         UUID theirs = order(strangerAccount, "C-2", "2026-08-05T10:00:00Z");
 
         MvcResult result = mvc.perform(get(brand(SHARED_TENANT, BRAND) + "/orders?cursor=" + theirs)
-                .with(token(OWNER))).andReturn();
+                        .with(token(OWNER)))
+                .andReturn();
 
         assertThat(result.getResponse().getStatus()).isEqualTo(400);
         assertThat(codeOf(result)).isEqualTo("INVALID_REQUEST");
@@ -595,7 +630,9 @@ class StorefrontCustomerSurfaceTests {
         order(ownerAccount, "D-1", "2026-08-01T10:00:00Z");
 
         String body = mvc.perform(get(brand(SHARED_TENANT, BRAND) + "/orders").with(token(OWNER)))
-                .andReturn().getResponse().getContentAsString();
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
 
         assertThat(body).contains("D-1");
         assertThat(body)
@@ -619,9 +656,9 @@ class StorefrontCustomerSurfaceTests {
         channelPaymentMethod("TELEGRAM", false);
         clickBinding("ACTIVE");
 
-        JsonNode body = json(mvc.perform(
-                get(brand(SHARED_TENANT, BRAND) + "/carts/" + cart + "/payment-methods")
-                        .with(token(OWNER))).andReturn());
+        JsonNode body = json(mvc.perform(get(brand(SHARED_TENANT, BRAND) + "/carts/" + cart + "/payment-methods")
+                        .with(token(OWNER)))
+                .andReturn());
 
         assertThat(codes(body))
                 .as("CASH needs no merchant account; CLICK has one; PAYME is configured and has "
@@ -639,19 +676,19 @@ class StorefrontCustomerSurfaceTests {
         channelPaymentMethod("CLICK", true);
         clickBinding("ACTIVE");
 
-        assertThat(codes(json(mvc.perform(
-                get(brand(SHARED_TENANT, BRAND) + "/carts/" + cart + "/payment-methods")
-                        .with(token(OWNER))).andReturn())))
-                .as("a fixture that never showed the method available would pass however the "
-                        + "filter was written")
+        assertThat(codes(json(mvc.perform(get(brand(SHARED_TENANT, BRAND) + "/carts/" + cart + "/payment-methods")
+                                .with(token(OWNER)))
+                        .andReturn())))
+                .as("a fixture that never showed the method available would pass however the " + "filter was written")
                 .contains("CLICK");
 
         jdbc.sql("UPDATE payments.merchant_bindings SET status = 'SUSPENDED' WHERE id = :id")
-                .param("id", CLICK_BINDING).update();
+                .param("id", CLICK_BINDING)
+                .update();
 
-        assertThat(codes(json(mvc.perform(
-                get(brand(SHARED_TENANT, BRAND) + "/carts/" + cart + "/payment-methods")
-                        .with(token(OWNER))).andReturn())))
+        assertThat(codes(json(mvc.perform(get(brand(SHARED_TENANT, BRAND) + "/carts/" + cart + "/payment-methods")
+                                .with(token(OWNER)))
+                        .andReturn())))
                 .as("the merchant account is gone, so the method is gone — not listed as "
                         + "unavailable for a client to remember to filter")
                 .containsExactly("CASH");
@@ -662,9 +699,9 @@ class StorefrontCustomerSurfaceTests {
     void anUnconfiguredChannelOffersNothing() throws Exception {
         UUID cart = cart(ownerAccount);
 
-        JsonNode body = json(mvc.perform(
-                get(brand(SHARED_TENANT, BRAND) + "/carts/" + cart + "/payment-methods")
-                        .with(token(OWNER))).andReturn());
+        JsonNode body = json(mvc.perform(get(brand(SHARED_TENANT, BRAND) + "/carts/" + cart + "/payment-methods")
+                        .with(token(OWNER)))
+                .andReturn());
 
         assertThat(codes(body))
                 .as("V0020 makes an absent row mean unavailable; defaulting to every code would "
@@ -678,9 +715,9 @@ class StorefrontCustomerSurfaceTests {
         UUID theirs = cart(strangerAccount);
         channelPaymentMethod("CASH", true);
 
-        MvcResult result = mvc.perform(
-                get(brand(SHARED_TENANT, BRAND) + "/carts/" + theirs + "/payment-methods")
-                        .with(token(OWNER))).andReturn();
+        MvcResult result = mvc.perform(get(brand(SHARED_TENANT, BRAND) + "/carts/" + theirs + "/payment-methods")
+                        .with(token(OWNER)))
+                .andReturn();
 
         assertThat(result.getResponse().getStatus()).isEqualTo(404);
         assertThat(codeOf(result)).isEqualTo("RESOURCE_NOT_FOUND");
@@ -702,7 +739,10 @@ class StorefrontCustomerSurfaceTests {
                 VALUES (:id, :tenantId, :brandId, 'MAIN01', 'main-01', 'Branch', 'Asia/Tashkent',
                     'ACTIVE', 0)
                 ON CONFLICT (id) DO NOTHING
-                """).param("id", LOCATION).param("tenantId", SHARED_TENANT).param("brandId", BRAND)
+                """)
+                .param("id", LOCATION)
+                .param("tenantId", SHARED_TENANT)
+                .param("brandId", BRAND)
                 .update();
         jdbc.sql("""
                 INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name,
@@ -714,15 +754,22 @@ class StorefrontCustomerSurfaceTests {
                 INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
                 VALUES (:id, :tenantId, :brandId, 'MENU', 'Menu', 'ACTIVE')
                 ON CONFLICT (id) DO NOTHING
-                """).param("id", CATALOG).param("tenantId", SHARED_TENANT).param("brandId", BRAND)
+                """)
+                .param("id", CATALOG)
+                .param("tenantId", SHARED_TENANT)
+                .param("brandId", BRAND)
                 .update();
         jdbc.sql("""
                 INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel,
                     status, content_hash, activated_at)
                 VALUES (:id, :tenantId, :brandId, :catalogId, 'WEB', 'PUBLISHED', 'hash', now())
                 ON CONFLICT (id) DO NOTHING
-                """).param("id", PUBLICATION).param("tenantId", SHARED_TENANT)
-                .param("brandId", BRAND).param("catalogId", CATALOG).update();
+                """)
+                .param("id", PUBLICATION)
+                .param("tenantId", SHARED_TENANT)
+                .param("brandId", BRAND)
+                .param("catalogId", CATALOG)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO tenant.legal_entities (id, tenant_id, code, legal_name, tin, status)
@@ -747,13 +794,19 @@ class StorefrontCustomerSurfaceTests {
                 INSERT INTO integration.bindings (id, tenant_id, installation_id, brand_id, status)
                 VALUES (:id, :tenantId, :installationId, :brandId, 'ACTIVE')
                 ON CONFLICT (id) DO NOTHING
-                """).param("id", INTEGRATION_BINDING).param("tenantId", SHARED_TENANT)
-                .param("installationId", INSTALLATION).param("brandId", BRAND).update();
+                """)
+                .param("id", INTEGRATION_BINDING)
+                .param("tenantId", SHARED_TENANT)
+                .param("installationId", INSTALLATION)
+                .param("brandId", BRAND)
+                .update();
 
         jdbc.sql("DELETE FROM payments.merchant_bindings WHERE tenant_id = :t")
-                .param("t", SHARED_TENANT).update();
+                .param("t", SHARED_TENANT)
+                .update();
         jdbc.sql("DELETE FROM tenant.channel_payment_methods WHERE tenant_id = :t")
-                .param("t", SHARED_TENANT).update();
+                .param("t", SHARED_TENANT)
+                .update();
     }
 
     private void tenant(UUID id, String slug, String identityMode) {
@@ -768,8 +821,11 @@ class StorefrontCustomerSurfaceTests {
                     id, tenant_id, version, identity_mode, effective_from)
                 VALUES (:id, :tenantId, 1, :mode, TIMESTAMPTZ '2020-01-01T00:00:00Z')
                 ON CONFLICT DO NOTHING
-                """).param("id", UUID.nameUUIDFromBytes(id.toString().getBytes()))
-                .param("tenantId", id).param("mode", identityMode).update();
+                """)
+                .param("id", UUID.nameUUIDFromBytes(id.toString().getBytes()))
+                .param("tenantId", id)
+                .param("mode", identityMode)
+                .update();
     }
 
     private void brandRow(UUID tenantId, UUID brandId, String code) {
@@ -777,8 +833,12 @@ class StorefrontCustomerSurfaceTests {
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
                 VALUES (:id, :tenantId, :code, :slug, 'Brand', 'ACTIVE', 0)
                 ON CONFLICT (id) DO NOTHING
-                """).param("id", brandId).param("tenantId", tenantId).param("code", code)
-                .param("slug", code.toLowerCase(java.util.Locale.ROOT)).update();
+                """)
+                .param("id", brandId)
+                .param("tenantId", tenantId)
+                .param("code", code)
+                .param("slug", code.toLowerCase(java.util.Locale.ROOT))
+                .update();
     }
 
     /**
@@ -796,17 +856,25 @@ class StorefrontCustomerSurfaceTests {
                     identity_partition_brand_id, status, created_at, updated_at)
                 VALUES (:id, :tenantId, :partition, 'ACTIVE', :now, :now)
                 """)
-                .param("id", accountId).param("tenantId", tenantId)
-                .param("partition", partitionBrandId).param("now", now).update();
+                .param("id", accountId)
+                .param("tenantId", tenantId)
+                .param("partition", partitionBrandId)
+                .param("now", now)
+                .update();
         jdbc.sql("""
                 INSERT INTO customer.principal_links (id, tenant_id,
                     identity_partition_brand_id, customer_account_id, issuer, subject, status,
                     linked_at)
                 VALUES (:id, :tenantId, :partition, :accountId, :issuer, :subject, 'ACTIVE', :now)
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", tenantId)
-                .param("partition", partitionBrandId).param("accountId", accountId)
-                .param("issuer", ISSUER).param("subject", subject).param("now", now).update();
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("partition", partitionBrandId)
+                .param("accountId", accountId)
+                .param("issuer", ISSUER)
+                .param("subject", subject)
+                .param("now", now)
+                .update();
         return accountId;
     }
 
@@ -820,10 +888,15 @@ class StorefrontCustomerSurfaceTests {
                 VALUES (:id, :tenantId, :brandId, :locationId, :channelId, :accountId,
                     'DELIVERY', 'UZS', 'ACTIVE', 1, :expiresAt, :now, :now)
                 """)
-                .param("id", cartId).param("tenantId", SHARED_TENANT).param("brandId", BRAND)
-                .param("locationId", LOCATION).param("channelId", CHANNEL)
-                .param("accountId", accountId).param("expiresAt", now.plusHours(4))
-                .param("now", now).update();
+                .param("id", cartId)
+                .param("tenantId", SHARED_TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", LOCATION)
+                .param("channelId", CHANNEL)
+                .param("accountId", accountId)
+                .param("expiresAt", now.plusHours(4))
+                .param("now", now)
+                .update();
         return cartId;
     }
 
@@ -840,8 +913,12 @@ class StorefrontCustomerSurfaceTests {
                 VALUES (:id, :tenantId, :brandId, :locationId, 'UZS', 'ACTIVE', :publicationId,
                     1, 'hash', 12000, 0, 12000, now() + interval '1 day')
                 """)
-                .param("id", quote).param("tenantId", SHARED_TENANT).param("brandId", BRAND)
-                .param("locationId", LOCATION).param("publicationId", PUBLICATION).update();
+                .param("id", quote)
+                .param("tenantId", SHARED_TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", LOCATION)
+                .param("publicationId", PUBLICATION)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO ordering.orders (
@@ -856,11 +933,18 @@ class StorefrontCustomerSurfaceTests {
                     12000, 0, 12000, :quoteId, 'hash', :publicationId, :cartId, :key,
                     CAST(:createdAt AS timestamptz))
                 """)
-                .param("id", orderId).param("number", number).param("tenantId", SHARED_TENANT)
-                .param("brandId", BRAND).param("locationId", LOCATION).param("channelId", CHANNEL)
-                .param("accountId", accountId).param("quoteId", quote)
-                .param("publicationId", PUBLICATION).param("cartId", cart)
-                .param("key", UUID.randomUUID().toString()).param("createdAt", createdAt)
+                .param("id", orderId)
+                .param("number", number)
+                .param("tenantId", SHARED_TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", LOCATION)
+                .param("channelId", CHANNEL)
+                .param("accountId", accountId)
+                .param("quoteId", quote)
+                .param("publicationId", PUBLICATION)
+                .param("cartId", cart)
+                .param("key", UUID.randomUUID().toString())
+                .param("createdAt", createdAt)
                 .update();
         return orderId;
     }
@@ -873,8 +957,11 @@ class StorefrontCustomerSurfaceTests {
                 ON CONFLICT (channel_id, payment_method_code)
                 DO UPDATE SET enabled = EXCLUDED.enabled
                 """)
-                .param("tenantId", SHARED_TENANT).param("channelId", CHANNEL)
-                .param("code", code).param("enabled", enabled).update();
+                .param("tenantId", SHARED_TENANT)
+                .param("channelId", CHANNEL)
+                .param("code", code)
+                .param("enabled", enabled)
+                .update();
     }
 
     private void clickBinding(String status) {
@@ -888,19 +975,23 @@ class StorefrontCustomerSurfaceTests {
                     true, true, :status, :effectiveFrom)
                 ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status
                 """)
-                .param("id", CLICK_BINDING).param("tenantId", SHARED_TENANT)
-                .param("legalEntityId", LEGAL_ENTITY).param("installationId", INSTALLATION)
+                .param("id", CLICK_BINDING)
+                .param("tenantId", SHARED_TENANT)
+                .param("legalEntityId", LEGAL_ENTITY)
+                .param("installationId", INSTALLATION)
                 .param("bindingId", INTEGRATION_BINDING)
                 .param("segment", "click-" + CLICK_BINDING.toString().substring(0, 8))
-                .param("status", status).param("effectiveFrom", LocalDate.of(2020, 1, 1))
+                .param("status", status)
+                .param("effectiveFrom", LocalDate.of(2020, 1, 1))
                 .update();
     }
 
     // -------------------------------------------------------------------- helpers
 
-    private MvcResult saveAddress(UUID tenantId, UUID brandId, String subject, String label,
-            String line1) throws Exception {
-        return mvc.perform(post(me(tenantId, brandId) + "/addresses").with(token(subject))
+    private MvcResult saveAddress(UUID tenantId, UUID brandId, String subject, String label, String line1)
+            throws Exception {
+        return mvc.perform(post(me(tenantId, brandId) + "/addresses")
+                        .with(token(subject))
                         .header("Idempotency-Key", UUID.randomUUID().toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(addressBody(label, line1, "LANDMARK_ONLY")))
@@ -914,10 +1005,10 @@ class StorefrontCustomerSurfaceTests {
                 """.formatted(label, line1, source);
     }
 
-    private List<JsonNode> addressesOf(UUID tenantId, UUID brandId, String subject)
-            throws Exception {
-        JsonNode body = json(mvc.perform(get(me(tenantId, brandId) + "/addresses")
-                .with(token(subject))).andReturn());
+    private List<JsonNode> addressesOf(UUID tenantId, UUID brandId, String subject) throws Exception {
+        JsonNode body =
+                json(mvc.perform(get(me(tenantId, brandId) + "/addresses").with(token(subject)))
+                        .andReturn());
         List<JsonNode> items = new ArrayList<>();
         body.forEach(items::add);
         return items;
@@ -941,22 +1032,30 @@ class StorefrontCustomerSurfaceTests {
 
     private String ciphertextOf(UUID addressId) {
         return jdbc.sql("SELECT encrypted_fields FROM customer.addresses WHERE id = :id")
-                .param("id", addressId).query(String.class).single();
+                .param("id", addressId)
+                .query(String.class)
+                .single();
     }
 
     private String rowStatusOf(UUID addressId) {
         return jdbc.sql("SELECT status FROM customer.addresses WHERE id = :id")
-                .param("id", addressId).query(String.class).single();
+                .param("id", addressId)
+                .query(String.class)
+                .single();
     }
 
     private String statusOf(UUID accountId) {
         return jdbc.sql("SELECT status FROM customer.customer_accounts WHERE id = :id")
-                .param("id", accountId).query(String.class).single();
+                .param("id", accountId)
+                .query(String.class)
+                .single();
     }
 
     private String displayNameOf(UUID accountId) {
         return jdbc.sql("SELECT display_name FROM customer.customer_accounts WHERE id = :id")
-                .param("id", accountId).query(String.class).single();
+                .param("id", accountId)
+                .query(String.class)
+                .single();
     }
 
     private static String brand(UUID tenantId, UUID brandId) {
@@ -1016,17 +1115,18 @@ class StorefrontCustomerSurfaceTests {
         @Bean
         @Primary
         PaymentLegalEntityResolver legalEntityResolver() {
-            return (tenantId, locationId, businessDate) ->
-                    SHARED_TENANT.equals(tenantId) && LOCATION.equals(locationId)
-                            ? Optional.of(LEGAL_ENTITY)
-                            : Optional.empty();
+            return (tenantId, locationId, businessDate) -> SHARED_TENANT.equals(tenantId) && LOCATION.equals(locationId)
+                    ? Optional.of(LEGAL_ENTITY)
+                    : Optional.empty();
         }
 
         /** Avoids contacting a real issuer; this suite exercises the MVC chain. */
         @Bean
         JwtDecoder jwtDecoder() {
-            return token -> Jwt.withTokenValue(token).header("alg", "none")
-                    .claim("sub", "unused").build();
+            return token -> Jwt.withTokenValue(token)
+                    .header("alg", "none")
+                    .claim("sub", "unused")
+                    .build();
         }
     }
 }

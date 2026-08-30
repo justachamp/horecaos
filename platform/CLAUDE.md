@@ -11,6 +11,7 @@ make verify           # full build + all tests — the definition of "done"
 make lint             # this repo's own rules — under a minute, no JVM. Run it often.
 make test             # tests only
 make arch             # Spring Modulith boundary + architecture tests
+make format           # reformat Java sources (ADR 0054); verify enforces this
 make up / make down   # local Postgres, Kafka, Keycloak
 make run              # start the API on :8080
 make eval             # agent-configuration regression suite (evals/README.md)

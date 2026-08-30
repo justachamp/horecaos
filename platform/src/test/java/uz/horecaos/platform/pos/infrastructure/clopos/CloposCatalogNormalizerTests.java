@@ -5,10 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.pos.domain.CatalogSnapshot;
 import uz.horecaos.platform.pos.domain.SourceKind;
 
@@ -30,19 +28,29 @@ class CloposCatalogNormalizerTests {
     void theTwoWordsThreeCharactersApartDoNotCross() {
         Map<String, Object> dish = product(41, "Lagman", "DISH", 32000);
         dish.put("modifications", List.of(product(410, "Large", "MODIFICATION", 36000)));
-        dish.put("modificator_groups", List.of(Map.of(
-                "id", 90, "name", "Spice level", "min", 0, "max", 1,
-                "modificators", List.of(Map.of("id", 901, "name", "Extra chilli", "price", 2000)))));
+        dish.put(
+                "modificator_groups",
+                List.of(Map.of(
+                        "id",
+                        90,
+                        "name",
+                        "Spice level",
+                        "min",
+                        0,
+                        "max",
+                        1,
+                        "modificators",
+                        List.of(Map.of("id", 901, "name", "Extra chilli", "price", 2000)))));
 
-        CatalogSnapshot snapshot = normalizer.normalize(
-                List.of(dish), List.of(), List.of(), NOW, false, 1);
+        CatalogSnapshot snapshot = normalizer.normalize(List.of(dish), List.of(), List.of(), NOW, false, 1);
 
         assertThat(snapshot.variants()).singleElement().satisfies(variant -> {
             assertThat(variant.externalId()).isEqualTo("410");
             assertThat(variant.externalProductId()).isEqualTo("41");
             assertThat(variant.priceMinor()).isEqualTo(36000L);
         });
-        assertThat(snapshot.modifierGroups()).singleElement()
+        assertThat(snapshot.modifierGroups())
+                .singleElement()
                 .satisfies(group -> assertThat(group.externalId()).isEqualTo("90"));
         assertThat(snapshot.modifiers()).singleElement().satisfies(modifier -> {
             assertThat(modifier.externalId()).isEqualTo("901");
@@ -56,24 +64,29 @@ class CloposCatalogNormalizerTests {
         Map<String, Object> parent = product(7, "Cola", "GOODS", 0);
         parent.put("modifications", List.of(product(70, "0.5l", "MODIFICATION", 9000)));
 
-        CatalogSnapshot snapshot = normalizer.normalize(
-                List.of(parent), List.of(), List.of(), NOW, false, 1);
+        CatalogSnapshot snapshot = normalizer.normalize(List.of(parent), List.of(), List.of(), NOW, false, 1);
 
-        assertThat(snapshot.products()).singleElement().satisfies(product -> assertThat(
-                product.parentOnly())
-                .as("the provider states the parent's price may be zero and is not inherited "
-                        + "at sale time, so publishing it as priceable publishes a free dish")
-                .isTrue());
+        assertThat(snapshot.products())
+                .singleElement()
+                .satisfies(product -> assertThat(product.parentOnly())
+                        .as("the provider states the parent's price may be zero and is not inherited "
+                                + "at sale time, so publishing it as priceable publishes a free dish")
+                        .isTrue());
     }
 
     @Test
     @DisplayName("ingredients are staged and marked, never dropped and never comparable")
     void inventoryKindsSurviveAsEvidence() {
         CatalogSnapshot snapshot = normalizer.normalize(
-                List.of(product(3, "Test_Tomato", "INGREDIENT", 0),
+                List.of(
+                        product(3, "Test_Tomato", "INGREDIENT", 0),
                         product(4, "Test_Onion", "PREPARATION", 0),
                         product(5, "PS5 hour", "TIMER", 0)),
-                List.of(), List.of(), NOW, false, 1);
+                List.of(),
+                List.of(),
+                NOW,
+                false,
+                1);
 
         assertThat(snapshot.products()).hasSize(3);
         assertThat(snapshot.comparableProducts())
@@ -88,10 +101,10 @@ class CloposCatalogNormalizerTests {
     @DisplayName("a product type the OpenAPI enum does not contain is UNKNOWN rather than guessed")
     void anUnrecognisedTypeIsNotMappedToAGuess() {
         CatalogSnapshot snapshot = normalizer.normalize(
-                List.of(product(8, "Extra cheese", "MODIFIER", 3000)),
-                List.of(), List.of(), NOW, false, 1);
+                List.of(product(8, "Extra cheese", "MODIFIER", 3000)), List.of(), List.of(), NOW, false, 1);
 
-        assertThat(snapshot.products()).singleElement()
+        assertThat(snapshot.products())
+                .singleElement()
                 .satisfies(product -> assertThat(product.sourceKind())
                         .as("MODIFIER appears in the prose field reference and not in the schema "
                                 + "enum; guessing would hide the discrepancy")
@@ -101,9 +114,8 @@ class CloposCatalogNormalizerTests {
     @Test
     @DisplayName("the stop list timestamp is milliseconds while the rest of the API is not")
     void theStopListIsReadInMilliseconds() {
-        CatalogSnapshot snapshot = normalizer.normalize(List.of(), List.of(),
-                List.of(Map.of("id", 54, "limit", 0, "timestamp", 1761202010781L)),
-                NOW, true, 1);
+        CatalogSnapshot snapshot = normalizer.normalize(
+                List.of(), List.of(), List.of(Map.of("id", 54, "limit", 0, "timestamp", 1761202010781L)), NOW, true, 1);
 
         assertThat(snapshot.availability()).singleElement().satisfies(availability -> {
             assertThat(availability.externalId()).isEqualTo("54");
@@ -118,10 +130,10 @@ class CloposCatalogNormalizerTests {
     @DisplayName("a fractional price is read exactly rather than through a double")
     void moneyDoesNotPassThroughFloatingPoint() {
         CatalogSnapshot snapshot = normalizer.normalize(
-                List.of(product(11, "Espresso", "DISH", 8.5)),
-                List.of(), List.of(), NOW, false, 1);
+                List.of(product(11, "Espresso", "DISH", 8.5)), List.of(), List.of(), NOW, false, 1);
 
-        assertThat(snapshot.products()).singleElement()
+        assertThat(snapshot.products())
+                .singleElement()
                 .satisfies(product -> assertThat(product.priceMinor())
                         .as("for UZS a minor unit is a whole som, and truncating 8.5 would lose "
                                 + "money quietly on every line")
@@ -131,10 +143,27 @@ class CloposCatalogNormalizerTests {
     @Test
     @DisplayName("a nested-set column is never read as an identifier")
     void categoriesAreReadByParentIdAndDepth() {
-        CatalogSnapshot snapshot = normalizer.normalize(List.of(),
-                List.of(Map.of("id", 12, "parent_id", 3, "name", "Hot dishes",
-                        "depth", 1, "_lft", 44, "_rgt", 51, "status", 1)),
-                List.of(), NOW, false, 1);
+        CatalogSnapshot snapshot = normalizer.normalize(
+                List.of(),
+                List.of(Map.of(
+                        "id",
+                        12,
+                        "parent_id",
+                        3,
+                        "name",
+                        "Hot dishes",
+                        "depth",
+                        1,
+                        "_lft",
+                        44,
+                        "_rgt",
+                        51,
+                        "status",
+                        1)),
+                List.of(),
+                NOW,
+                false,
+                1);
 
         assertThat(snapshot.categories()).singleElement().satisfies(category -> {
             assertThat(category.externalId()).isEqualTo("12");
@@ -154,8 +183,7 @@ class CloposCatalogNormalizerTests {
         raw.put("status", 0);
         raw.put("hidden", 1);
 
-        CatalogSnapshot snapshot = normalizer.normalize(
-                List.of(raw), List.of(), List.of(), NOW, false, 1);
+        CatalogSnapshot snapshot = normalizer.normalize(List.of(raw), List.of(), List.of(), NOW, false, 1);
 
         assertThat(snapshot.products()).singleElement().satisfies(product -> {
             assertThat(product.active()).isFalse();

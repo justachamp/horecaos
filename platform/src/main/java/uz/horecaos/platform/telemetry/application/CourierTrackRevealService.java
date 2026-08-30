@@ -6,13 +6,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -66,8 +63,8 @@ public class CourierTrackRevealService {
     private final ObjectMapper json;
     private final Clock clock;
 
-    public CourierTrackRevealService(JdbcTelemetryStore store, FieldProtection protection,
-            AuditRecorder audit, ObjectMapper json, Clock clock) {
+    public CourierTrackRevealService(
+            JdbcTelemetryStore store, FieldProtection protection, AuditRecorder audit, ObjectMapper json, Clock clock) {
         this.store = store;
         this.protection = protection;
         this.audit = audit;
@@ -82,7 +79,8 @@ public class CourierTrackRevealService {
             // "investigation" is not a purpose and neither is "check". The audit
             // entry is only worth writing if the sentence in it answers, months
             // later, why somebody looked.
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
                     "A track reveal states why, in a sentence somebody can be held to. "
                             + "At least %d characters (ADR 0029).".formatted(MINIMUM_PURPOSE_LENGTH),
                     Map.of("field", "purpose"));
@@ -91,7 +89,8 @@ public class CourierTrackRevealService {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "The window ends after it starts");
         }
         if (Duration.between(command.from(), command.to()).compareTo(MAXIMUM_REVEAL_WINDOW) > 0) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
                     "A reveal covers at most %d days".formatted(MAXIMUM_REVEAL_WINDOW.toDays()),
                     Map.of("field", "window"));
         }
@@ -107,8 +106,7 @@ public class CourierTrackRevealService {
         // ordering inside the transaction is what makes it true of a crash too.
         audit.record(AuditFact.of("telemetry.courier_track.revealed", AuditClass.SECURITY)
                 .by(command.actor())
-                .at(ResourceScope.location(
-                        command.tenantId(), command.brandId(), command.locationId()))
+                .at(ResourceScope.location(command.tenantId(), command.brandId(), command.locationId()))
                 .target("CourierTrack", command.courierId())
                 .because(purpose)
                 .usingCapability("courier.track.reveal")
@@ -123,8 +121,11 @@ public class CourierTrackRevealService {
 
         List<RevealedWindow> revealed = windows.stream()
                 .map(window -> new RevealedWindow(
-                        window.windowStart(), window.windowEnd(), window.observationCount(),
-                        window.distanceMeters(), decrypt(command.tenantId(), window, purpose)))
+                        window.windowStart(),
+                        window.windowEnd(),
+                        window.observationCount(),
+                        window.distanceMeters(),
+                        decrypt(command.tenantId(), window, purpose)))
                 .toList();
 
         return new Reveal(command.courierId(), command.from(), command.to(), purpose, revealed);
@@ -134,11 +135,10 @@ public class CourierTrackRevealService {
         String plaintext = protection.reveal(
                 tenantId,
                 ProtectedValue.deserialize(window.protectedTrack()),
-                new FieldProtection.RecordRef(
-                        "fulfillment.courier_location_tracks", "protected_track", window.id()),
+                new FieldProtection.RecordRef("fulfillment.courier_location_tracks", "protected_track", window.id()),
                 purpose);
 
-        return json.readValue(plaintext, new TypeReference<List<Map<String, Object>>>() { });
+        return json.readValue(plaintext, new TypeReference<List<Map<String, Object>>>() {});
     }
 
     /**
@@ -148,16 +148,22 @@ public class CourierTrackRevealService {
      * @param purpose  free text, mandatory, and long enough to be a sentence
      */
     public record RevealCommand(
-            UUID tenantId, UUID brandId, UUID locationId, UUID courierId,
-            Instant from, Instant to, String purpose, ActorRef actor, String correlationId) {
-    }
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID courierId,
+            Instant from,
+            Instant to,
+            String purpose,
+            ActorRef actor,
+            String correlationId) {}
 
     public record RevealedWindow(
-            Instant windowStart, Instant windowEnd, int observationCount, int distanceMeters,
-            List<Map<String, Object>> observations) {
-    }
+            Instant windowStart,
+            Instant windowEnd,
+            int observationCount,
+            int distanceMeters,
+            List<Map<String, Object>> observations) {}
 
-    public record Reveal(
-            UUID courierId, Instant from, Instant to, String purpose, List<RevealedWindow> windows) {
-    }
+    public record Reveal(UUID courierId, Instant from, Instant to, String purpose, List<RevealedWindow> windows) {}
 }

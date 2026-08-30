@@ -6,12 +6,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeOutcome;
 import uz.horecaos.platform.fulfillment.domain.DeliveryFeeResolution;
 import uz.horecaos.platform.fulfillment.domain.tariff.DistanceMode;
@@ -82,9 +79,7 @@ public class JdbcDeliveryFeeResolutionStore {
                     :providerQuote, :computedFee, :finalFee,
                     :tariffDiscount, :discountSequence, :currency,
                     :losingZoneIds, CAST(:evidence AS jsonb))
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     /**
@@ -107,7 +102,8 @@ public class JdbcDeliveryFeeResolutionStore {
                 WHERE tenant_id = :tenantId AND quote_id = :quoteId
                 ORDER BY created_at DESC, id
                 """)
-                .param("tenantId", tenantId).param("quoteId", quoteId)
+                .param("tenantId", tenantId)
+                .param("quoteId", quoteId)
                 .query((row, number) -> new ResolutionRow(
                         row.getObject("id", UUID.class),
                         row.getObject("quote_id", UUID.class),
@@ -146,15 +142,30 @@ public class JdbcDeliveryFeeResolutionStore {
     }
 
     public record ResolutionRow(
-            UUID id, UUID quoteId, UUID locationId, int resolutionVersion,
-            DeliveryFeeOutcome outcome, String reasonCode,
-            UUID zoneId, Integer zoneVersion, UUID tariffId, Integer tariffVersion,
-            Integer bandSequence, Integer timeRuleSequence,
-            Integer distanceMeters, String distanceMode, String distanceSource,
-            String routingProvider, Long providerQuoteMinor, Long computedFeeMinor,
-            Long finalFeeMinor, Long tariffDiscountMinor, Integer discountSequence,
-            String currency, List<UUID> losingZoneIds,
-            java.time.Instant createdAt) { }
+            UUID id,
+            UUID quoteId,
+            UUID locationId,
+            int resolutionVersion,
+            DeliveryFeeOutcome outcome,
+            String reasonCode,
+            UUID zoneId,
+            Integer zoneVersion,
+            UUID tariffId,
+            Integer tariffVersion,
+            Integer bandSequence,
+            Integer timeRuleSequence,
+            Integer distanceMeters,
+            String distanceMode,
+            String distanceSource,
+            String routingProvider,
+            Long providerQuoteMinor,
+            Long computedFeeMinor,
+            Long finalFeeMinor,
+            Long tariffDiscountMinor,
+            Integer discountSequence,
+            String currency,
+            List<UUID> losingZoneIds,
+            java.time.Instant createdAt) {}
 
     /**
      * Reads a {@code uuid[]} without assuming the driver's element type.

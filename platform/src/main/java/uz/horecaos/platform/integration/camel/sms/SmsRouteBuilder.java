@@ -1,7 +1,6 @@
 package uz.horecaos.platform.integration.camel.sms;
 
 import java.time.Duration;
-
 import org.apache.camel.builder.RouteBuilder;
 import org.springframework.stereotype.Component;
 
@@ -81,8 +80,8 @@ public class SmsRouteBuilder extends RouteBuilder {
                 // caller gets one answer rather than a promise to find out later:
                 // the customer is standing at a form waiting for a code.
                 .choice()
-                    .when(processor::isUncertain)
-                        .to(SEARCH_ENDPOINT)
+                .when(processor::isUncertain)
+                .to(SEARCH_ENDPOINT)
                 .end()
                 .process(processor::recordOutcome);
 
@@ -93,11 +92,11 @@ public class SmsRouteBuilder extends RouteBuilder {
                 // has no side effect, so repeating it cannot send a second code.
                 // Bounded tightly because a customer is waiting on the answer.
                 .onException(Exception.class)
-                    .maximumRedeliveries(2)
-                    .redeliveryDelay(Duration.ofSeconds(1).toMillis())
-                    .backOffMultiplier(2)
-                    .handled(false)
-                    .end()
+                .maximumRedeliveries(2)
+                .redeliveryDelay(Duration.ofSeconds(1).toMillis())
+                .backOffMultiplier(2)
+                .handled(false)
+                .end()
                 .process(processor::resolve);
     }
 }

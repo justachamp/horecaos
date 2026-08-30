@@ -10,7 +10,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
-
 import uz.horecaos.platform.payments.domain.FiscalDocument;
 
 /**
@@ -42,20 +41,17 @@ public final class ClickReceiptUrl {
      * recorded as an instant so that a later correction is a data fix rather than
      * a reinterpretation of every stored row.
      */
-    private static final DateTimeFormatter RECEIPT_TIME =
-            DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+    private static final DateTimeFormatter RECEIPT_TIME = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
     private static final ZoneOffset TASHKENT = ZoneOffset.ofHours(5);
 
-    private ClickReceiptUrl() {
-    }
+    private ClickReceiptUrl() {}
 
     /**
      * @param registeredAt when the receipt says it was issued, which is not when
      *                     HorecaOS read it
      */
-    public static FiscalDocument.FiscalEvidence parse(String qrCodeUrl, String paymentId,
-            Instant observedAt) {
+    public static FiscalDocument.FiscalEvidence parse(String qrCodeUrl, String paymentId, Instant observedAt) {
         Map<String, String> query = query(qrCodeUrl);
         return new FiscalDocument.FiscalEvidence(
                 // The receipt number is what a tax inspector and a customer both
@@ -92,7 +88,8 @@ public final class ClickReceiptUrl {
         for (String pair : raw.split("&")) {
             int split = pair.indexOf('=');
             if (split > 0) {
-                values.put(URLDecoder.decode(pair.substring(0, split), StandardCharsets.UTF_8),
+                values.put(
+                        URLDecoder.decode(pair.substring(0, split), StandardCharsets.UTF_8),
                         URLDecoder.decode(pair.substring(split + 1), StandardCharsets.UTF_8));
             }
         }

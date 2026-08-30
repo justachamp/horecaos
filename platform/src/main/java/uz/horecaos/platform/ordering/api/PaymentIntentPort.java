@@ -59,8 +59,13 @@ public interface PaymentIntentPort {
      *                    refund can reach it either
      * @return the intent id, or null when no payment is required
      */
-    UUID createIntent(UUID tenantId, UUID orderId, long amountMinor, String currency,
-            String paymentMethodCode, String idempotencyKey);
+    UUID createIntent(
+            UUID tenantId,
+            UUID orderId,
+            long amountMinor,
+            String currency,
+            String paymentMethodCode,
+            String idempotencyKey);
 
     /**
      * Whether a real implementation is present.

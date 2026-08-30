@@ -6,10 +6,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.commercial.api.EntitlementKey;
 import uz.horecaos.platform.commercial.api.EntitlementKeys;
 import uz.horecaos.platform.commercial.api.UsageMeter;
@@ -57,8 +55,8 @@ public class UsageMeteringService implements UsageMeter {
         // an imported estate would charge a tenant's current period for five years
         // of history and, where enforcement is on, exhaust the entitlement that
         // their live orders are about to need.
-        if (ImportSuppression.suppress(ExternalEffect.BENEFIT_CONSUMPTION,
-                movement.sourceType(), movement.sourceEventId())) {
+        if (ImportSuppression.suppress(
+                ExternalEffect.BENEFIT_CONSUMPTION, movement.sourceType(), movement.sourceEventId())) {
             return false;
         }
 
@@ -66,9 +64,17 @@ public class UsageMeteringService implements UsageMeter {
         UsagePeriod period = periodOf(movement);
 
         boolean appended = usage.appendEvent(
-                UUID.randomUUID(), movement.tenantId(), movement.key().code(), movement.quantity(),
-                movement.key().unit(), period.key(), movement.sourceType(), movement.sourceEventId(),
-                movement.occurredAt(), movement.dimensions(), now);
+                UUID.randomUUID(),
+                movement.tenantId(),
+                movement.key().code(),
+                movement.quantity(),
+                movement.key().unit(),
+                period.key(),
+                movement.sourceType(),
+                movement.sourceEventId(),
+                movement.occurredAt(),
+                movement.dimensions(),
+                now);
 
         if (!appended) {
             // A redelivery. Deliberately not an error and deliberately not a
@@ -77,8 +83,10 @@ public class UsageMeteringService implements UsageMeter {
             return false;
         }
 
-        usage.storeTotals(movement.tenantId(),
-                usage.recompute(movement.tenantId(), movement.key().code(), period), now);
+        usage.storeTotals(
+                movement.tenantId(),
+                usage.recompute(movement.tenantId(), movement.key().code(), period),
+                now);
         return true;
     }
 
@@ -91,13 +99,20 @@ public class UsageMeteringService implements UsageMeter {
      * were recorded.
      */
     @Transactional
-    public UUID adjust(UUID tenantId, EntitlementKey<Long> key, String periodKey, long delta,
-            String reason, String sourceReference, String createdBy, String approvedBy) {
+    public UUID adjust(
+            UUID tenantId,
+            EntitlementKey<Long> key,
+            String periodKey,
+            long delta,
+            String reason,
+            String sourceReference,
+            String createdBy,
+            String approvedBy) {
 
         Instant now = clock.instant();
         UUID id = UUID.randomUUID();
-        usage.insertAdjustment(id, tenantId, key.code(), periodKey, delta, reason,
-                sourceReference, createdBy, approvedBy, now);
+        usage.insertAdjustment(
+                id, tenantId, key.code(), periodKey, delta, reason, sourceReference, createdBy, approvedBy, now);
 
         rebuildPeriod(tenantId, key.code(), periodKey, now);
         return id;
@@ -122,8 +137,11 @@ public class UsageMeteringService implements UsageMeter {
                     .orElse(Long.MIN_VALUE);
 
             if (stored != recomputed.consumed()) {
-                divergences.add(new Divergence(ref.entitlementKey(), ref.periodKey(),
-                        stored == Long.MIN_VALUE ? null : stored, recomputed.consumed()));
+                divergences.add(new Divergence(
+                        ref.entitlementKey(),
+                        ref.periodKey(),
+                        stored == Long.MIN_VALUE ? null : stored,
+                        recomputed.consumed()));
             }
             usage.storeTotals(tenantId, recomputed, now);
         }
@@ -196,5 +214,5 @@ public class UsageMeteringService implements UsageMeter {
     }
 
     /** A cached figure that disagreed with the ledger it is supposed to summarise. */
-    public record Divergence(String entitlementKey, String periodKey, Long stored, long recomputed) { }
+    public record Divergence(String entitlementKey, String periodKey, Long stored, long recomputed) {}
 }

@@ -1,21 +1,17 @@
 package uz.horecaos.platform.customers.infrastructure.security;
 
-import java.io.IOException;
-
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-
+import java.io.IOException;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.customers.application.CustomerSessionService;
 import uz.horecaos.platform.customers.application.CustomerSessionService.Resolution;
 import uz.horecaos.platform.customers.domain.CustomerSessionToken;
@@ -63,8 +59,8 @@ public class CustomerSessionAuthenticationFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
-            FilterChain chain) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+            throws ServletException, IOException {
 
         String presented = CustomerSessionBearerTokenResolver.presentedBearer(request);
         if (!CustomerSessionToken.looksLikeOne(presented)) {
@@ -97,18 +93,15 @@ public class CustomerSessionAuthenticationFilter extends OncePerRequestFilter {
             // Both an expired session and a signed-out one. Real, and over: the
             // caller was signed in, and the storefront's answer is to sign them in
             // again rather than to treat them as a stranger.
-            case ENDED -> refuse(response, ErrorCode.SESSION_EXPIRED,
-                    "Your session has ended. Sign in again.");
+            case ENDED -> refuse(response, ErrorCode.SESSION_EXPIRED, "Your session has ended. Sign in again.");
             // Not a session this platform issued. Nothing here says whether it
             // ever was one, because there is nothing to say: the caller invented a
             // 256-bit value.
-            case UNKNOWN -> refuse(response, ErrorCode.UNAUTHENTICATED,
-                    "This session is not valid. Sign in again.");
+            case UNKNOWN -> refuse(response, ErrorCode.UNAUTHENTICATED, "This session is not valid. Sign in again.");
         }
     }
 
-    private void refuse(HttpServletResponse response, ErrorCode code, String detail)
-            throws IOException {
+    private void refuse(HttpServletResponse response, ErrorCode code, String detail) throws IOException {
 
         ProblemDetail problem = ApiProblem.of(code, detail);
         response.setStatus(code.status().value());

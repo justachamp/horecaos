@@ -1,18 +1,15 @@
 package uz.horecaos.platform.fulfillment.infrastructure.persistence;
 
+import static uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore.utc;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryQuote;
-
-import static uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore.utc;
 
 /**
  * {@code fulfillment.delivery_quotes} (ADR 0014, V0054).
@@ -73,8 +70,10 @@ public class JdbcDeliveryQuoteStore {
         // What the adapter declared at the moment this quote was scored. A
         // selection re-read against today's capability matrix is not the selection
         // that was made.
-        params.put("capabilities", objectMapper.writeValueAsString(Map.of(
-                "providerType", quote.providerType() == null ? "" : quote.providerType())));
+        params.put(
+                "capabilities",
+                objectMapper.writeValueAsString(
+                        Map.of("providerType", quote.providerType() == null ? "" : quote.providerType())));
 
         jdbc.sql("""
                 INSERT INTO fulfillment.delivery_quotes (
@@ -88,8 +87,6 @@ public class JdbcDeliveryQuoteStore {
                     :distance, :deadHead, :expiresAt, :validitySource,
                     CAST(:capabilities AS jsonb), :failureCode, :receivedAt)
                 ON CONFLICT (provider_binding_id, request_id) DO NOTHING
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 }

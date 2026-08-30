@@ -4,9 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner;
 import uz.horecaos.platform.integration.api.provider.ProviderCapabilityCatalog;
 import uz.horecaos.platform.integration.api.provider.ProviderCategory;
@@ -18,8 +16,8 @@ public class DeliveryProviderCapabilityCatalog implements ProviderCapabilityCata
     private final Map<String, DeliveryPartner> partners;
 
     public DeliveryProviderCapabilityCatalog(List<DeliveryPartner> partners) {
-        this.partners = partners.stream().collect(Collectors.toUnmodifiableMap(
-                DeliveryPartner::providerType, partner -> partner));
+        this.partners = partners.stream()
+                .collect(Collectors.toUnmodifiableMap(DeliveryPartner::providerType, partner -> partner));
     }
 
     @Override
@@ -29,8 +27,9 @@ public class DeliveryProviderCapabilityCatalog implements ProviderCapabilityCata
 
     @Override
     public Optional<Declaration> declarationFor(String providerType) {
-        return Optional.ofNullable(partners.get(providerType)).map(partner -> new Declaration(
-                partner.capabilities().stream().map(Enum::name).collect(Collectors.toUnmodifiableSet()),
-                "delivery/%s/v1".formatted(partner.providerType())));
+        return Optional.ofNullable(partners.get(providerType))
+                .map(partner -> new Declaration(
+                        partner.capabilities().stream().map(Enum::name).collect(Collectors.toUnmodifiableSet()),
+                        "delivery/%s/v1".formatted(partner.providerType())));
     }
 }

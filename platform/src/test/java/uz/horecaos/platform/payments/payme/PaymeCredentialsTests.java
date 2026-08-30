@@ -1,5 +1,9 @@
 package uz.horecaos.platform.payments.payme;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -7,10 +11,8 @@ import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.Map;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.infrastructure.secrets.EnvironmentSecretResolver;
@@ -18,10 +20,6 @@ import uz.horecaos.platform.payments.domain.PaymentProviderType;
 import uz.horecaos.platform.payments.domain.ProviderBinding;
 import uz.horecaos.platform.payments.infrastructure.payme.PaymeCredentials;
 import uz.horecaos.platform.payments.infrastructure.payme.PaymeRpcException;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * The Basic credential, checked by hand.
@@ -43,22 +41,32 @@ class PaymeCredentialsTests {
             new SecretReference("test", SecretCategory.PROVIDER_PAYMENT, "payme", "cashbox-one");
 
     /** Mutable, so a rotation can happen mid-test the way it happens mid-service. */
-    private final Map<String, String> vault = new java.util.HashMap<>(
-            Map.of("horecaos.secrets.provider_payment.payme.cashbox-one", KEY));
+    private final Map<String, String> vault =
+            new java.util.HashMap<>(Map.of("horecaos.secrets.provider_payment.payme.cashbox-one", KEY));
 
-    private final Clock clock =
-            Clock.fixed(java.time.Instant.parse("2026-08-22T09:00:00Z"), ZoneOffset.UTC);
+    private final Clock clock = Clock.fixed(java.time.Instant.parse("2026-08-22T09:00:00Z"), ZoneOffset.UTC);
 
     private final PaymeCredentials credentials = new PaymeCredentials(
             new uz.horecaos.platform.payments.infrastructure.RotationAwareSecrets(
                     new EnvironmentSecretResolver(vault::get, clock), clock),
             "Paycom");
 
-    private final ProviderBinding binding = new ProviderBinding(UUID.randomUUID(),
-            UUID.randomUUID(), UUID.randomUUID(), PaymentProviderType.PAYME, UUID.randomUUID(),
-            UUID.randomUUID(), "587f72c72cac0d162c722ae2", null, null, SECRET,
+    private final ProviderBinding binding = new ProviderBinding(
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            PaymentProviderType.PAYME,
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            "587f72c72cac0d162c722ae2",
+            null,
+            null,
+            SECRET,
             "payme-cashbox-one",
-            false, true, LocalDate.of(2026, 1, 1), null);
+            false,
+            true,
+            LocalDate.of(2026, 1, 1),
+            null);
 
     /**
      * The login is the literal string {@code Paycom}.
@@ -78,9 +86,10 @@ class PaymeCredentialsTests {
     @Test
     @DisplayName("a key one character out is refused")
     void refusesANearMissKey() {
-        assertThatThrownBy(() -> credentials.authenticate(binding,
-                basic("Paycom:" + KEY.substring(0, KEY.length() - 1) + "Y")))
-                .isInstanceOfSatisfying(PaymeRpcException.class,
+        assertThatThrownBy(() ->
+                        credentials.authenticate(binding, basic("Paycom:" + KEY.substring(0, KEY.length() - 1) + "Y")))
+                .isInstanceOfSatisfying(
+                        PaymeRpcException.class,
                         failure -> assertThat(failure.code()).isEqualTo(-32504));
     }
 
@@ -103,15 +112,15 @@ class PaymeCredentialsTests {
     @DisplayName("a malformed header is -32504 rather than a decoder failure")
     void refusesAMalformedHeader() {
         assertThatThrownBy(() -> credentials.authenticate(binding, "Basic ***not base64***"))
-                .isInstanceOfSatisfying(PaymeRpcException.class,
+                .isInstanceOfSatisfying(
+                        PaymeRpcException.class,
                         failure -> assertThat(failure.code()).isEqualTo(-32504));
     }
 
     @Test
     @DisplayName("no header at all is -32504")
     void refusesAMissingHeader() {
-        assertThatThrownBy(() -> credentials.authenticate(binding, null))
-                .isInstanceOf(PaymeRpcException.class);
+        assertThatThrownBy(() -> credentials.authenticate(binding, null)).isInstanceOf(PaymeRpcException.class);
         assertThatThrownBy(() -> credentials.authenticate(binding, "Bearer a-token"))
                 .isInstanceOf(PaymeRpcException.class);
     }
@@ -130,8 +139,7 @@ class PaymeCredentialsTests {
     void anUnconfiguredKeyIsAFault() {
         PaymeCredentials unconfigured = new PaymeCredentials(
                 new uz.horecaos.platform.payments.infrastructure.RotationAwareSecrets(
-                        new EnvironmentSecretResolver(Map.<String, String>of()::get,
-                                Clock.systemUTC()),
+                        new EnvironmentSecretResolver(Map.<String, String>of()::get, Clock.systemUTC()),
                         Clock.systemUTC()),
                 "Paycom");
 
@@ -140,8 +148,7 @@ class PaymeCredentialsTests {
     }
 
     private static String basic(String credential) {
-        return "Basic " + Base64.getEncoder()
-                .encodeToString(credential.getBytes(StandardCharsets.UTF_8));
+        return "Basic " + Base64.getEncoder().encodeToString(credential.getBytes(StandardCharsets.UTF_8));
     }
 
     /**
@@ -181,10 +188,13 @@ class PaymeCredentialsTests {
         java.util.concurrent.atomic.AtomicInteger reads = new java.util.concurrent.atomic.AtomicInteger();
         PaymeCredentials counted = new PaymeCredentials(
                 new uz.horecaos.platform.payments.infrastructure.RotationAwareSecrets(
-                        new EnvironmentSecretResolver(key -> {
-                            reads.incrementAndGet();
-                            return vault.get(key);
-                        }, clock), clock),
+                        new EnvironmentSecretResolver(
+                                key -> {
+                                    reads.incrementAndGet();
+                                    return vault.get(key);
+                                },
+                                clock),
+                        clock),
                 "Paycom");
 
         for (int attempt = 0; attempt < 50; attempt++) {
@@ -196,5 +206,4 @@ class PaymeCredentialsTests {
                 .as("one cached fill plus at most one fresh read inside the cooldown")
                 .isLessThanOrEqualTo(2);
     }
-
 }

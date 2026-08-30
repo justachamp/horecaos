@@ -10,7 +10,6 @@ package uz.horecaos.platform.payments.settlement;
  * </pre>
  */
 public enum TenderStatus {
-
     PLANNED,
 
     /** A balance tender holding points, or an external tender with an initiated intent. */

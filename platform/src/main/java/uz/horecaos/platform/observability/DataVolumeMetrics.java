@@ -1,10 +1,8 @@
 package uz.horecaos.platform.observability;
 
-import java.io.File;
-
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.system.DiskSpaceMetrics;
-
+import java.io.File;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -32,16 +30,12 @@ import org.springframework.context.annotation.Configuration;
  * buy that day, which is why it is a morning item rather than a page.
  */
 @Configuration(proxyBeanMethods = false)
-@ConditionalOnProperty(
-        name = "horecaos.observability.metrics.enabled",
-        havingValue = "true",
-        matchIfMissing = true)
+@ConditionalOnProperty(name = "horecaos.observability.metrics.enabled", havingValue = "true", matchIfMissing = true)
 public class DataVolumeMetrics {
 
     @Bean
     DiskSpaceMetrics dataVolumeDiskSpaceMetrics(
-            MeterRegistry meters,
-            @Value("${horecaos.observability.data-volume-path:.}") String dataVolumePath) {
+            MeterRegistry meters, @Value("${horecaos.observability.data-volume-path:.}") String dataVolumePath) {
         DiskSpaceMetrics metrics = new DiskSpaceMetrics(new File(dataVolumePath));
         metrics.bindTo(meters);
         return metrics;

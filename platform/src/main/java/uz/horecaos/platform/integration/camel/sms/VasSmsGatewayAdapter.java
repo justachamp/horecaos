@@ -2,9 +2,7 @@ package uz.horecaos.platform.integration.camel.sms;
 
 import java.util.List;
 import java.util.Map;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.ProviderCall;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.integration.camel.common.ProviderHttpClient;
@@ -53,6 +51,7 @@ public class VasSmsGatewayAdapter {
 
     /** Keys the route and the transport read off a normalised outcome. Bounded and safe. */
     static final String MESSAGE_ID_KEY = "providerMessageId";
+
     static final String SEGMENTS_KEY = "providerSegments";
     static final String DELIVERY_STATE_KEY = "providerDeliveryState";
 
@@ -81,16 +80,14 @@ public class VasSmsGatewayAdapter {
      * treated as uncertain rather than believed — {@code id} is the only evidence
      * the gateway actually took the message.
      */
-    public ProviderOutcome send(SmsVerificationOperation operation, SmsAccount account,
-            ProviderCall call) {
+    public ProviderOutcome send(SmsVerificationOperation operation, SmsAccount account, ProviderCall call) {
 
-        SmsGateBody.Send body = new SmsGateBody.Send(account.login(), call.credential(),
-                account.sender(), operation.destination(), operation.text());
+        SmsGateBody.Send body = new SmsGateBody.Send(
+                account.login(), call.credential(), account.sender(), operation.destination(), operation.text());
 
         return http.post(call, SEND_PATH, NO_HEADERS, body, response -> {
-            SmsGateCode code = SmsGateCode.of(integer(response.get("status") instanceof Map<?, ?> status
-                    ? status.get("code")
-                    : null));
+            SmsGateCode code = SmsGateCode.of(
+                    integer(response.get("status") instanceof Map<?, ?> status ? status.get("code") : null));
 
             if (code.effect() != SmsGateCode.Effect.ACCEPTED) {
                 return classify(code);
@@ -102,13 +99,16 @@ public class VasSmsGatewayAdapter {
                 // uses id 0 to mean "nothing was accepted", so a 0 here is at best
                 // ambiguous, and there is nothing to carry into a callback or a
                 // support conversation. Resolved by asking, never by resending.
-                return ProviderOutcome.uncertain("SMS_ACCEPTED_WITHOUT_ID",
-                        "The gateway reported success without a message id");
+                return ProviderOutcome.uncertain(
+                        "SMS_ACCEPTED_WITHOUT_ID", "The gateway reported success without a message id");
             }
 
             return ProviderOutcome.success(
-                    Map.of(MESSAGE_ID_KEY, messageId,
-                            SEGMENTS_KEY, String.valueOf(integerOr(response.get("parts"), 1))),
+                    Map.of(
+                            MESSAGE_ID_KEY,
+                            messageId,
+                            SEGMENTS_KEY,
+                            String.valueOf(integerOr(response.get("parts"), 1))),
                     messageId);
         });
     }
@@ -130,16 +130,17 @@ public class VasSmsGatewayAdapter {
      * never "not sent" — the second would license the resend this whole path
      * exists to prevent.
      */
-    public ProviderOutcome resolve(SmsVerificationOperation operation, SmsAccount account,
-            ProviderCall call) {
+    public ProviderOutcome resolve(SmsVerificationOperation operation, SmsAccount account, ProviderCall call) {
 
-        SmsGateBody.Search body = new SmsGateBody.Search(account.login(), call.credential(),
-                operation.destination(), operation.issuedAt().getEpochSecond());
+        SmsGateBody.Search body = new SmsGateBody.Search(
+                account.login(),
+                call.credential(),
+                operation.destination(),
+                operation.issuedAt().getEpochSecond());
 
         return http.post(call, SEARCH_PATH, NO_HEADERS, body, response -> {
-            SmsGateCode code = SmsGateCode.of(integer(response.get("status") instanceof Map<?, ?> status
-                    ? status.get("code")
-                    : null));
+            SmsGateCode code = SmsGateCode.of(
+                    integer(response.get("status") instanceof Map<?, ?> status ? status.get("code") : null));
             if (code.effect() != SmsGateCode.Effect.ACCEPTED) {
                 // The search itself was refused. That says nothing about the send,
                 // so it stays uncertain rather than inheriting the search's own
@@ -156,7 +157,8 @@ public class VasSmsGatewayAdapter {
                 return found(entry);
             }
 
-            return ProviderOutcome.uncertain("SMS_SEND_UNCONFIRMED",
+            return ProviderOutcome.uncertain(
+                    "SMS_SEND_UNCONFIRMED",
                     "The gateway holds no message carrying this challenge for that destination");
         });
     }
@@ -176,16 +178,15 @@ public class VasSmsGatewayAdapter {
         String messageId = text(entry.get("id"));
 
         if (state.isBlacklisted()) {
-            return ProviderOutcome.rejected(SmsGateCode.RECEIVER_IN_BLACKLIST.reasonCode(),
-                    "The operator's blacklist holds this destination");
+            return ProviderOutcome.rejected(
+                    SmsGateCode.RECEIVER_IN_BLACKLIST.reasonCode(), "The operator's blacklist holds this destination");
         }
         if (state.isFailure()) {
-            return ProviderOutcome.retryable("SMS_DELIVERY_FAILED",
-                    "The gateway reports " + state.name() + " for this message", null);
+            return ProviderOutcome.retryable(
+                    "SMS_DELIVERY_FAILED", "The gateway reports " + state.name() + " for this message", null);
         }
         return ProviderOutcome.success(
-                Map.of(MESSAGE_ID_KEY, messageId == null ? "" : messageId,
-                        DELIVERY_STATE_KEY, state.name()),
+                Map.of(MESSAGE_ID_KEY, messageId == null ? "" : messageId, DELIVERY_STATE_KEY, state.name()),
                 messageId);
     }
 

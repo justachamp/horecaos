@@ -9,7 +9,6 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -127,7 +126,8 @@ class BackupScriptTests {
                     .as("the off-site guard runs before anything that can block on a network")
                     .isTrue();
 
-            return new Result(process.exitValue(),
+            return new Result(
+                    process.exitValue(),
                     Files.readString(out, StandardCharsets.UTF_8),
                     Files.readString(err, StandardCharsets.UTF_8));
         } finally {

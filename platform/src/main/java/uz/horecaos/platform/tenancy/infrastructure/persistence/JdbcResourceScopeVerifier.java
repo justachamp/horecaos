@@ -1,11 +1,9 @@
 package uz.horecaos.platform.tenancy.infrastructure.persistence;
 
 import java.util.UUID;
-
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScopeVerifier;
 
@@ -58,26 +56,29 @@ public class JdbcResourceScopeVerifier implements ResourceScopeVerifier {
                 .isPresent();
     }
 
-    @Cacheable(cacheNames = "tenant.hierarchy", key = "'b:' + #tenantId + ':' + #brandId",
-            unless = "!#result")
+    @Cacheable(cacheNames = "tenant.hierarchy", key = "'b:' + #tenantId + ':' + #brandId", unless = "!#result")
     public boolean brandExists(UUID tenantId, UUID brandId) {
         return jdbc.sql("""
                 SELECT 1 FROM tenant.brands WHERE tenant_id = :tenantId AND id = :brandId
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .query(Integer.class)
                 .optional()
                 .isPresent();
     }
 
-    @Cacheable(cacheNames = "tenant.hierarchy",
-            key = "'l:' + #tenantId + ':' + #brandId + ':' + #locationId", unless = "!#result")
+    @Cacheable(
+            cacheNames = "tenant.hierarchy",
+            key = "'l:' + #tenantId + ':' + #brandId + ':' + #locationId",
+            unless = "!#result")
     public boolean locationExists(UUID tenantId, UUID brandId, UUID locationId) {
         return jdbc.sql("""
                 SELECT 1 FROM tenant.locations
                  WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :locationId
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("locationId", locationId)
                 .query(Integer.class)
                 .optional()

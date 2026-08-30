@@ -10,11 +10,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
-
 import uz.horecaos.platform.media.api.MediaEvent;
 import uz.horecaos.platform.ordering.api.OrderingEvent;
 import uz.horecaos.platform.tenancy.api.TenancyEvent;
@@ -34,9 +32,8 @@ class EventCatalogCompletenessTests {
 
     @Test
     void everyPublishableTenancyEventIsRegistered() {
-        List<String> registered = EventCatalog.all().stream()
-                .map(EventContract::eventType)
-                .toList();
+        List<String> registered =
+                EventCatalog.all().stream().map(EventContract::eventType).toList();
 
         List<String> publishable = Arrays.stream(TenancyEvent.class.getPermittedSubclasses())
                 .map(Class::getSimpleName)
@@ -49,9 +46,8 @@ class EventCatalogCompletenessTests {
 
     @Test
     void everyPublishableOrderingEventIsRegistered() {
-        List<String> registered = EventCatalog.all().stream()
-                .map(EventContract::eventType)
-                .toList();
+        List<String> registered =
+                EventCatalog.all().stream().map(EventContract::eventType).toList();
 
         List<String> publishable = Arrays.stream(OrderingEvent.class.getPermittedSubclasses())
                 .map(Class::getSimpleName)
@@ -67,9 +63,8 @@ class EventCatalogCompletenessTests {
 
     @Test
     void everyPublishableMediaEventIsRegistered() {
-        List<String> registered = EventCatalog.all().stream()
-                .map(EventContract::eventType)
-                .toList();
+        List<String> registered =
+                EventCatalog.all().stream().map(EventContract::eventType).toList();
 
         List<String> publishable = Arrays.stream(MediaEvent.class.getPermittedSubclasses())
                 .map(Class::getSimpleName)

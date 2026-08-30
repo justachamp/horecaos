@@ -17,7 +17,6 @@ package uz.horecaos.platform.integration.camel.sms;
  * Only the three states the provider states as failures are treated as failures.
  */
 enum SmsGateDeliveryState {
-
     CREATED(0, false),
     SENDING(1, false),
 

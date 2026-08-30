@@ -1,11 +1,13 @@
 package uz.horecaos.platform;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
-
 import javax.sql.DataSource;
-
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.AfterAll;
@@ -16,12 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.support.TestDatabase;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * The four references whose target holds platform-owned rows beside tenant-owned
@@ -69,8 +66,8 @@ class MixedOwnershipReferenceTests {
 
     @BeforeAll
     static void startDatabase() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
-                "Docker is required to ask the schema");
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(), "Docker is required to ask the schema");
         db = TestDatabase.migrated();
         jdbc = JdbcClient.create(db.dataSource());
     }
@@ -184,8 +181,7 @@ class MixedOwnershipReferenceTests {
         UUID tenantA = tenant("policy-platform");
         UUID platformPolicy = approvalPolicy(null);
 
-        assertThatCode(() -> approvalRequest(tenantA, platformPolicy))
-                .doesNotThrowAnyException();
+        assertThatCode(() -> approvalRequest(tenantA, platformPolicy)).doesNotThrowAnyException();
     }
 
     @Test
@@ -193,8 +189,7 @@ class MixedOwnershipReferenceTests {
     void anApprovalRequestMayNameItsOwnPolicy() {
         UUID tenantA = tenant("policy-own");
 
-        assertThatCode(() -> approvalRequest(tenantA, approvalPolicy(tenantA)))
-                .doesNotThrowAnyException();
+        assertThatCode(() -> approvalRequest(tenantA, approvalPolicy(tenantA))).doesNotThrowAnyException();
     }
 
     /**
@@ -249,8 +244,7 @@ class MixedOwnershipReferenceTests {
         UUID tenantA = tenant("region-platform");
         UUID zoneA = serviceZone(tenantA);
 
-        assertThatCode(() -> zoneVersion(tenantA, zoneA, 1, region(null), true))
-                .doesNotThrowAnyException();
+        assertThatCode(() -> zoneVersion(tenantA, zoneA, 1, region(null), true)).doesNotThrowAnyException();
     }
 
     @Test
@@ -269,8 +263,7 @@ class MixedOwnershipReferenceTests {
         UUID tenantA = tenant("region-none");
         UUID zoneA = serviceZone(tenantA);
 
-        assertThatCode(() -> zoneVersion(tenantA, zoneA, 1, null, null))
-                .doesNotThrowAnyException();
+        assertThatCode(() -> zoneVersion(tenantA, zoneA, 1, null, null)).doesNotThrowAnyException();
     }
 
     // -----------------------------------------------------------------------
@@ -349,7 +342,11 @@ class MixedOwnershipReferenceTests {
     void theMigrationRefusesAPopulatedDatabaseRatherThanRepairingIt() {
         try (TestDatabase.Handle older = TestDatabase.empty()) {
             DataSource dataSource = older.dataSource();
-            Flyway.configure().dataSource(dataSource).target(BEFORE_THE_REPAIR).load().migrate();
+            Flyway.configure()
+                    .dataSource(dataSource)
+                    .target(BEFORE_THE_REPAIR)
+                    .load()
+                    .migrate();
             JdbcClient old = JdbcClient.create(dataSource);
 
             UUID tenantA = tenant(old, "pre-a");
@@ -362,11 +359,14 @@ class MixedOwnershipReferenceTests {
             UUID decision = cutoverDecision(old, tenantA, scopeA, approvalB, null);
             assertThat(decision).isNotNull();
 
-            assertThatThrownBy(() -> Flyway.configure().dataSource(dataSource).load().migrate())
+            assertThatThrownBy(() ->
+                            Flyway.configure().dataSource(dataSource).load().migrate())
                     .hasMessageContaining("cite an approval request belonging to another tenant");
 
             assertThat(old.sql("SELECT count(*) FROM migration.cutover_decisions WHERE id = :id")
-                    .param("id", decision).query(Integer.class).single())
+                            .param("id", decision)
+                            .query(Integer.class)
+                            .single())
                     .as("the decision is still there to be adjudicated; a migration that "
                             + "quietly deleted it would be destroying the evidence of the claim")
                     .isEqualTo(1);
@@ -432,8 +432,7 @@ class MixedOwnershipReferenceTests {
      *                         parameter is ignored, so the same helper serves the
      *                         pre-migration fixture.
      */
-    private static UUID approvalRequest(JdbcClient client, UUID tenantId, UUID policyId,
-            Boolean policyIsPlatform) {
+    private static UUID approvalRequest(JdbcClient client, UUID tenantId, UUID policyId, Boolean policyIsPlatform) {
 
         UUID id = UUID.randomUUID();
         if (!hasColumn(client, "audit", "approval_requests", "policy_is_platform")) {
@@ -445,8 +444,10 @@ class MixedOwnershipReferenceTests {
                     VALUES (:id, :tenantId, :actionCode, :hash, :scopeType, :scopeId,
                         :policyId, 1, 'probe', 'PENDING', 'maker', 'probe', :expiresAt)
                     """)
-                    .param("id", id).param("tenantId", tenantId)
-                    .param("actionCode", "probe.action." + id).param("hash", hash(id))
+                    .param("id", id)
+                    .param("tenantId", tenantId)
+                    .param("actionCode", "probe.action." + id)
+                    .param("hash", hash(id))
                     .param("scopeType", tenantId == null ? "PLATFORM" : "TENANT")
                     .param("scopeId", tenantId)
                     .param("policyId", policyId)
@@ -454,8 +455,9 @@ class MixedOwnershipReferenceTests {
                     .update();
             return id;
         }
-        boolean declared = policyIsPlatform != null ? policyIsPlatform : isPlatformOwned(
-                client, "audit.approval_policies", policyId);
+        boolean declared = policyIsPlatform != null
+                ? policyIsPlatform
+                : isPlatformOwned(client, "audit.approval_policies", policyId);
         client.sql("""
                 INSERT INTO audit.approval_requests (
                     id, tenant_id, action_code, parameters_hash, scope_type, scope_id,
@@ -465,8 +467,10 @@ class MixedOwnershipReferenceTests {
                     :policyId, :policyIsPlatform, 1, 'probe', 'PENDING', 'maker', 'probe',
                     :expiresAt)
                 """)
-                .param("id", id).param("tenantId", tenantId)
-                .param("actionCode", "probe.action." + id).param("hash", hash(id))
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("actionCode", "probe.action." + id)
+                .param("hash", hash(id))
                 .param("scopeType", tenantId == null ? "PLATFORM" : "TENANT")
                 .param("scopeId", tenantId)
                 .param("policyId", policyId)
@@ -486,20 +490,26 @@ class MixedOwnershipReferenceTests {
                 INSERT INTO migration.programs (
                     id, name, status, source_environment, target_environment, policy_version)
                 VALUES (:id, :name, 'PLANNING', 'delever-prod', 'horecaos-prod', 1)
-                """).param("id", programId).param("name", "probe-" + programId).update();
+                """)
+                .param("id", programId)
+                .param("name", "probe-" + programId)
+                .update();
 
         UUID scopeId = UUID.randomUUID();
         client.sql("""
                 INSERT INTO migration.scopes (
                     id, program_id, tenant_id, capability, source_owner, target_owner, state)
                 VALUES (:id, :programId, :tenantId, 'ORDERS', 'DELEVER', 'HORECAOS_ORDERING', 'CANARY')
-                """).param("id", scopeId).param("programId", programId)
-                .param("tenantId", tenantId).update();
+                """)
+                .param("id", scopeId)
+                .param("programId", programId)
+                .param("tenantId", tenantId)
+                .update();
         return scopeId;
     }
 
-    private static UUID cutoverDecision(UUID tenantId, UUID scopeId, UUID approvalRequestId,
-            Boolean approvalIsPlatform) {
+    private static UUID cutoverDecision(
+            UUID tenantId, UUID scopeId, UUID approvalRequestId, Boolean approvalIsPlatform) {
         return cutoverDecision(jdbc, tenantId, scopeId, approvalRequestId, approvalIsPlatform);
     }
 
@@ -510,12 +520,11 @@ class MixedOwnershipReferenceTests {
      *                           {@code ck_cutover_approval_ownership_declared}
      *                           refuses afterwards.
      */
-    private static UUID cutoverDecision(JdbcClient client, UUID tenantId, UUID scopeId,
-            UUID approvalRequestId, Boolean approvalIsPlatform) {
+    private static UUID cutoverDecision(
+            JdbcClient client, UUID tenantId, UUID scopeId, UUID approvalRequestId, Boolean approvalIsPlatform) {
 
         UUID id = UUID.randomUUID();
-        boolean declares = hasColumn(
-                client, "migration", "cutover_decisions", "approval_request_is_platform");
+        boolean declares = hasColumn(client, "migration", "cutover_decisions", "approval_request_is_platform");
         client.sql("""
                 INSERT INTO migration.cutover_decisions (
                     id, tenant_id, scope_id, from_state, to_state, scope_version, decision,
@@ -525,13 +534,15 @@ class MixedOwnershipReferenceTests {
                     'probe', '{}'::jsonb, 'maker', 'checker', :approvalRequestId,
                     %s :idempotencyKey, :now, :now)
                 """.formatted(
-                        declares ? "approval_request_is_platform," : "",
-                        declares ? ":approvalIsPlatform," : ""))
-                .param("id", id).param("tenantId", tenantId).param("scopeId", scopeId)
+                        declares ? "approval_request_is_platform," : "", declares ? ":approvalIsPlatform," : ""))
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("scopeId", scopeId)
                 .param("approvalRequestId", approvalRequestId)
-                .params(declares
-                        ? java.util.Collections.singletonMap("approvalIsPlatform", approvalIsPlatform)
-                        : java.util.Map.<String, Object>of())
+                .params(
+                        declares
+                                ? java.util.Collections.singletonMap("approvalIsPlatform", approvalIsPlatform)
+                                : java.util.Map.<String, Object>of())
                 .param("idempotencyKey", "probe-" + id)
                 .param("now", OffsetDateTime.now(ZoneOffset.UTC))
                 .update();
@@ -548,8 +559,11 @@ class MixedOwnershipReferenceTests {
                 VALUES (:id, :tenantId, :code, 'RU', 'UZ', 'EN',
                     41.31, 69.24, 41.0, 69.0, 41.6, 69.5)
                 """)
-                .param("id", id).param("tenantId", tenantId)
-                .param("code", "R" + id.toString().replace("-", "").substring(0, 20).toUpperCase())
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param(
+                        "code",
+                        "R" + id.toString().replace("-", "").substring(0, 20).toUpperCase())
                 .update();
         return id;
     }
@@ -559,9 +573,18 @@ class MixedOwnershipReferenceTests {
         jdbc.sql("""
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
                 VALUES (:id, :tenantId, :code, :slug, 'Brand', 'ACTIVE', 0)
-                """).param("id", brandId).param("tenantId", tenantId)
-                .param("code", "B" + brandId.toString().replace("-", "").substring(0, 8).toUpperCase())
-                .param("slug", "brand-" + brandId).update();
+                """)
+                .param("id", brandId)
+                .param("tenantId", tenantId)
+                .param(
+                        "code",
+                        "B"
+                                + brandId.toString()
+                                        .replace("-", "")
+                                        .substring(0, 8)
+                                        .toUpperCase())
+                .param("slug", "brand-" + brandId)
+                .update();
 
         UUID zoneId = UUID.randomUUID();
         jdbc.sql("""
@@ -569,14 +592,18 @@ class MixedOwnershipReferenceTests {
                     id, tenant_id, brand_id, zone_role, code,
                     display_name_ru, display_name_uz, display_name_en)
                 VALUES (:id, :tenantId, :brandId, 'DELIVERY', :code, 'RU', 'UZ', 'EN')
-                """).param("id", zoneId).param("tenantId", tenantId).param("brandId", brandId)
-                .param("code", "Z" + zoneId.toString().replace("-", "").substring(0, 8).toUpperCase())
+                """)
+                .param("id", zoneId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param(
+                        "code",
+                        "Z" + zoneId.toString().replace("-", "").substring(0, 8).toUpperCase())
                 .update();
         return zoneId;
     }
 
-    private static UUID zoneVersion(UUID tenantId, UUID zoneId, int version, UUID regionId,
-            Boolean regionIsPlatform) {
+    private static UUID zoneVersion(UUID tenantId, UUID zoneId, int version, UUID regionId, Boolean regionIsPlatform) {
 
         UUID id = UUID.randomUUID();
         jdbc.sql("""
@@ -589,7 +616,9 @@ class MixedOwnershipReferenceTests {
                         1000)::geometry)::geography,
                     '{}'::jsonb, :regionId, :regionIsPlatform, 0, 1000.0, 'UZS', :createdBy)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("zoneId", zoneId)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("zoneId", zoneId)
                 .param("version", version)
                 .param("regionId", regionId)
                 .param("regionIsPlatform", regionIsPlatform)
@@ -608,9 +637,11 @@ class MixedOwnershipReferenceTests {
                 VALUES (:id, :keyCode, :scopeType, :tenantId, 1, 'ACTIVE', '{}'::jsonb,
                     :hash, :from, 'fixture')
                 """)
-                .param("id", id).param("keyCode", keyCode)
+                .param("id", id)
+                .param("keyCode", keyCode)
                 .param("scopeType", tenantId == null ? "PLATFORM" : "TENANT")
-                .param("tenantId", tenantId).param("hash", hash(id))
+                .param("tenantId", tenantId)
+                .param("hash", hash(id))
                 .param("from", OffsetDateTime.now(ZoneOffset.UTC).minusDays(1))
                 .update();
         return id;
@@ -624,14 +655,16 @@ class MixedOwnershipReferenceTests {
                 """)
                 .param("keyCode", keyCode)
                 .param("scopeType", tenantId == null ? "PLATFORM" : "TENANT")
-                .param("tenantId", tenantId).param("policyId", policyId)
+                .param("tenantId", tenantId)
+                .param("policyId", policyId)
                 .update();
     }
 
     private static boolean isPlatformOwned(JdbcClient client, String table, UUID id) {
-        return Boolean.TRUE.equals(client
-                .sql("SELECT tenant_id IS NULL FROM " + table + " WHERE id = :id")
-                .param("id", id).query(Boolean.class).single());
+        return Boolean.TRUE.equals(client.sql("SELECT tenant_id IS NULL FROM " + table + " WHERE id = :id")
+                .param("id", id)
+                .query(Boolean.class)
+                .single());
     }
 
     /**
@@ -646,13 +679,18 @@ class MixedOwnershipReferenceTests {
                 SELECT count(*) FROM information_schema.columns
                  WHERE table_schema = :schema AND table_name = :table AND column_name = :column
                 """)
-                .param("schema", schema).param("table", table).param("column", column)
-                .query(Integer.class).single() > 0;
+                        .param("schema", schema)
+                        .param("table", table)
+                        .param("column", column)
+                        .query(Integer.class)
+                        .single()
+                > 0;
     }
 
     /** A 64-character lowercase hex string, which is all the CHECK asks of it. */
     private static String hash(UUID seed) {
         return (seed.toString().replace("-", "") + seed.toString().replace("-", ""))
-                .toLowerCase().substring(0, 64);
+                .toLowerCase()
+                .substring(0, 64);
     }
 }

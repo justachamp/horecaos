@@ -3,10 +3,8 @@ package uz.horecaos.platform.notifications.application;
 import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
 import uz.horecaos.platform.notifications.domain.NotificationClass;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
@@ -48,14 +46,18 @@ public class NotificationPreferenceService {
      *                for one brand
      */
     @Transactional
-    public void set(UUID tenantId, UUID accountId, UUID brandId,
-            NotificationClass notificationClass, NotificationChannel channel, boolean enabled) {
+    public void set(
+            UUID tenantId,
+            UUID accountId,
+            UUID brandId,
+            NotificationClass notificationClass,
+            NotificationChannel channel,
+            boolean enabled) {
 
         if (!notificationClass.respectsPreference()) {
-            throw new IllegalArgumentException(
-                    notificationClass + " is not something a customer can switch off");
+            throw new IllegalArgumentException(notificationClass + " is not something a customer can switch off");
         }
-        notifications.upsertPreference(tenantId, accountId, brandId, notificationClass.name(),
-                channel.name(), enabled, clock.instant());
+        notifications.upsertPreference(
+                tenantId, accountId, brandId, notificationClass.name(), channel.name(), enabled, clock.instant());
     }
 }

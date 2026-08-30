@@ -2,10 +2,8 @@ package uz.horecaos.platform.tenancy.infrastructure.persistence;
 
 import java.util.List;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 
 /**
@@ -107,5 +105,5 @@ public class JdbcStorefrontPickupLocationStore {
             String addressLine,
             String district,
             String city,
-            double distanceMeters) { }
+            double distanceMeters) {}
 }

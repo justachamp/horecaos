@@ -5,7 +5,6 @@ import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Objects;
-
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -44,8 +43,7 @@ public final class HandoverCodeHasher {
     public HandoverCodeHasher(byte[] pepper) {
         Objects.requireNonNull(pepper, "A handover pepper is required");
         if (pepper.length < 16) {
-            throw new IllegalArgumentException(
-                    "A handover pepper shorter than 16 bytes is not worth having");
+            throw new IllegalArgumentException("A handover pepper shorter than 16 bytes is not worth having");
         }
         this.pepper = pepper.clone();
     }

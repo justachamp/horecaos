@@ -3,7 +3,6 @@ package uz.horecaos.platform.migration.application.reconciliation;
 import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
-
 import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.domain.ReconciliationSeverity;
 
@@ -128,10 +127,10 @@ public final class CrossTenantAncestryRule implements ReconciliationRule {
                 zeroExpected("FOREIGN_LOCATION", context, FOREIGN_LOCATION, parameters));
     }
 
-    private static Measurement zeroExpected(String dimension, RuleContext context, String sql,
-            Map<String, Object> parameters) {
+    private static Measurement zeroExpected(
+            String dimension, RuleContext context, String sql, Map<String, Object> parameters) {
         BigInteger actual = context.target().exactInteger(sql, parameters).orElse(BigInteger.ZERO);
-        return new Measurement(dimension, Measurement.MeasureKind.COUNT,
-                BigInteger.ZERO, actual, null, null, null, null);
+        return new Measurement(
+                dimension, Measurement.MeasureKind.COUNT, BigInteger.ZERO, actual, null, null, null, null);
     }
 }

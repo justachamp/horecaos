@@ -3,7 +3,6 @@ package uz.horecaos.platform.tenancy.application.port;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-
 import uz.horecaos.platform.tenancy.api.BrandId;
 import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.domain.Brand;

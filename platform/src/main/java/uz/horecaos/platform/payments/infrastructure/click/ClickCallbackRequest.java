@@ -78,8 +78,13 @@ public record ClickCallbackRequest(
      * else. The PHP reference is correct and this follows it.
      */
     public boolean hasEveryRequiredField() {
-        boolean common = present(clickTransId) && present(serviceId) && present(merchantTransId)
-                && present(amount) && present(action) && present(signTime) && present(signString);
+        boolean common = present(clickTransId)
+                && present(serviceId)
+                && present(merchantTransId)
+                && present(amount)
+                && present(action)
+                && present(signTime)
+                && present(signString);
         return common && (!isComplete() || present(merchantPrepareId));
     }
 
@@ -147,7 +152,7 @@ public record ClickCallbackRequest(
      */
     @Override
     public String toString() {
-        return "ClickCallbackRequest[action=" + action + " clickTransId=" + clickTransId
-                + " paydoc=" + clickPaydocId + "]";
+        return "ClickCallbackRequest[action=" + action + " clickTransId=" + clickTransId + " paydoc=" + clickPaydocId
+                + "]";
     }
 }

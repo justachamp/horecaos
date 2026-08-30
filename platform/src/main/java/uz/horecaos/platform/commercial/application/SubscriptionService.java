@@ -8,10 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -46,8 +44,12 @@ public class SubscriptionService {
     private final AuditRecorder audit;
     private final Clock clock;
 
-    public SubscriptionService(JdbcSubscriptionStore subscriptions, JdbcPlanStore plans,
-            EntitlementQueryService entitlements, AuditRecorder audit, Clock clock) {
+    public SubscriptionService(
+            JdbcSubscriptionStore subscriptions,
+            JdbcPlanStore plans,
+            EntitlementQueryService entitlements,
+            AuditRecorder audit,
+            Clock clock) {
         this.subscriptions = subscriptions;
         this.plans = plans;
         this.entitlements = entitlements;
@@ -64,20 +66,26 @@ public class SubscriptionService {
      * every plan change since.
      */
     @Transactional
-    public UUID start(UUID tenantId, UUID planVersionId, Integer trialDays, ActorRef actor,
-            String reason, String correlationId) {
+    public UUID start(
+            UUID tenantId, UUID planVersionId, Integer trialDays, ActorRef actor, String reason, String correlationId) {
 
         PlanVersion version = plans.findVersion(planVersionId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such plan version"));
         if (!version.isActivated()) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
                     "A tenant is only put on an activated plan version",
                     Map.of("planVersionId", planVersionId.toString()));
         }
         subscriptions.findLive(tenantId).ifPresent(live -> {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
                     "The tenant already has a live subscription",
-                    Map.of("subscriptionId", live.id().toString(), "status", live.status().name()));
+                    Map.of(
+                            "subscriptionId",
+                            live.id().toString(),
+                            "status",
+                            live.status().name()));
         });
 
         Instant now = clock.instant();
@@ -86,10 +94,20 @@ public class SubscriptionService {
         Instant trialEnd = trialDays == null ? null : now.plus(java.time.Duration.ofDays(trialDays));
 
         Subscription subscription = new Subscription(
-                UUID.randomUUID(), tenantId, planVersionId,
+                UUID.randomUUID(),
+                tenantId,
+                planVersionId,
                 trialDays == null ? SubscriptionStatus.ACTIVE : SubscriptionStatus.TRIALING,
-                now, trialEnd, now, UsagePeriods.advance(now, zone, months),
-                null, null, null, null, null, 1);
+                now,
+                trialEnd,
+                now,
+                UsagePeriods.advance(now, zone, months),
+                null,
+                null,
+                null,
+                null,
+                null,
+                1);
 
         subscriptions.insert(subscription, now);
 
@@ -101,7 +119,8 @@ public class SubscriptionService {
         change.put("entitlementHash", snapshot.hash());
 
         audit.record(AuditFact.of("commercial.subscription.started", AuditClass.BUSINESS)
-                .by(actor).at(ResourceScope.tenant(tenantId))
+                .by(actor)
+                .at(ResourceScope.tenant(tenantId))
                 .target("commercial.subscription", subscription.id())
                 .targetVersion(1L)
                 .because(reason)
@@ -123,22 +142,29 @@ public class SubscriptionService {
      * suspension with no recorded cause is one nobody can lift with confidence.
      */
     @Transactional
-    public void transition(UUID tenantId, SubscriptionStatus to, long expectedVersion,
-            String suspensionReason, Instant cancelAt, ActorRef actor, String reason,
+    public void transition(
+            UUID tenantId,
+            SubscriptionStatus to,
+            long expectedVersion,
+            String suspensionReason,
+            Instant cancelAt,
+            ActorRef actor,
+            String reason,
             String correlationId) {
 
-        Subscription live = subscriptions.findLive(tenantId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "The tenant has no live subscription"));
+        Subscription live = subscriptions
+                .findLive(tenantId)
+                .orElseThrow(
+                        () -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "The tenant has no live subscription"));
 
         if (!live.status().canTransitionTo(to)) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
                     "A subscription cannot go from %s to %s".formatted(live.status(), to),
                     Map.of("currentStatus", live.status().name(), "requestedStatus", to.name()));
         }
         if (to == SubscriptionStatus.SUSPENDED && (suspensionReason == null || suspensionReason.isBlank())) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A suspension records why it happened");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A suspension records why it happened");
         }
         if (live.version() != expectedVersion) {
             throw ApiException.staleVersion(expectedVersion, live.version());
@@ -148,7 +174,11 @@ public class SubscriptionService {
         boolean suspending = to == SubscriptionStatus.SUSPENDED;
         boolean terminal = to.isTerminal();
 
-        boolean moved = subscriptions.transition(tenantId, live.id(), live.status(), to,
+        boolean moved = subscriptions.transition(
+                tenantId,
+                live.id(),
+                live.status(),
+                to,
                 expectedVersion,
                 suspending ? now : null,
                 suspending ? suspensionReason : null,
@@ -169,7 +199,8 @@ public class SubscriptionService {
         }
 
         audit.record(AuditFact.of("commercial.subscription.transitioned", AuditClass.BUSINESS)
-                .by(actor).at(ResourceScope.tenant(tenantId))
+                .by(actor)
+                .at(ResourceScope.tenant(tenantId))
                 .target("commercial.subscription", live.id())
                 .targetVersion(expectedVersion + 1)
                 .because(reason)
@@ -188,27 +219,47 @@ public class SubscriptionService {
      * the replacement.
      */
     @Transactional
-    public UUID override(UUID tenantId, String entitlementKey, Long integerValue,
-            Boolean booleanValue, Instant validUntil, ActorRef requester, String approvedBy,
-            String reason, String correlationId) {
+    public UUID override(
+            UUID tenantId,
+            String entitlementKey,
+            Long integerValue,
+            Boolean booleanValue,
+            Instant validUntil,
+            ActorRef requester,
+            String approvedBy,
+            String reason,
+            String correlationId) {
 
         Instant now = clock.instant();
         if (validUntil == null || !validUntil.isAfter(now)) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "An override is time-bounded and expires in the future");
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "An override is time-bounded and expires in the future");
         }
         if (approvedBy == null || approvedBy.equals(requesterSubject(requester))) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
                     "An override is approved by somebody other than its requester (ADR 0027)");
         }
 
         subscriptions.revokeOverride(tenantId, entitlementKey, requesterSubject(requester), now);
         UUID id = UUID.randomUUID();
-        subscriptions.insertOverride(id, tenantId, entitlementKey, integerValue, booleanValue,
-                null, reason, now, validUntil, requesterSubject(requester), approvedBy, now);
+        subscriptions.insertOverride(
+                id,
+                tenantId,
+                entitlementKey,
+                integerValue,
+                booleanValue,
+                null,
+                reason,
+                now,
+                validUntil,
+                requesterSubject(requester),
+                approvedBy,
+                now);
 
         audit.record(AuditFact.of("commercial.entitlement_override.granted", AuditClass.BUSINESS)
-                .by(requester).at(ResourceScope.tenant(tenantId))
+                .by(requester)
+                .at(ResourceScope.tenant(tenantId))
                 .target("commercial.entitlement_override", id)
                 .because(reason)
                 .changed(Map.of(

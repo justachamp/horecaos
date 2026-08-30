@@ -8,11 +8,9 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
 import uz.horecaos.platform.iam.api.secrets.SecretValue;
@@ -46,6 +44,7 @@ public class NotificationGateway {
 
     /** Keys under which the binding travels back on a normalised outcome. */
     static final String BINDING_ID_KEY = "providerBindingId";
+
     static final String PROVIDER_TYPE_KEY = "providerType";
 
     private static final Logger log = LoggerFactory.getLogger(NotificationGateway.class);
@@ -55,11 +54,12 @@ public class NotificationGateway {
     private final ProviderInstallationLookup installations;
     private final SecretResolver secrets;
 
-    public NotificationGateway(List<NotificationChannelAdapter> adapters,
-            ProviderInstallationLookup installations, SecretResolver secrets) {
+    public NotificationGateway(
+            List<NotificationChannelAdapter> adapters,
+            ProviderInstallationLookup installations,
+            SecretResolver secrets) {
         this.adaptersByChannel = adapters.stream()
-                .collect(Collectors.toUnmodifiableMap(NotificationChannelAdapter::channel,
-                        adapter -> adapter));
+                .collect(Collectors.toUnmodifiableMap(NotificationChannelAdapter::channel, adapter -> adapter));
         this.installations = installations;
         this.secrets = secrets;
     }
@@ -70,8 +70,12 @@ public class NotificationGateway {
     }
 
     public ProviderOutcome send(NotificationDispatch dispatch) {
-        return invoke(dispatch.tenantId(), dispatch.brandId(), dispatch.locationId(),
-                dispatch.channel(), dispatch.providerIdempotencyKey(),
+        return invoke(
+                dispatch.tenantId(),
+                dispatch.brandId(),
+                dispatch.locationId(),
+                dispatch.channel(),
+                dispatch.providerIdempotencyKey(),
                 (adapter, call) -> adapter.send(dispatch, call));
     }
 
@@ -83,13 +87,22 @@ public class NotificationGateway {
      * that holds the message. Asking at the tenant alone resolves nothing and
      * leaves every uncertain message stuck in uncertainty.
      */
-    public ProviderOutcome queryStatus(UUID tenantId, UUID brandId, UUID locationId,
-            String channel, String providerIdempotencyKey) {
-        return invoke(tenantId, brandId, locationId, channel, providerIdempotencyKey,
+    public ProviderOutcome queryStatus(
+            UUID tenantId, UUID brandId, UUID locationId, String channel, String providerIdempotencyKey) {
+        return invoke(
+                tenantId,
+                brandId,
+                locationId,
+                channel,
+                providerIdempotencyKey,
                 (adapter, call) -> adapter.queryStatus(providerIdempotencyKey, call));
     }
 
-    private ProviderOutcome invoke(UUID tenantId, UUID brandId, UUID locationId, String channel,
+    private ProviderOutcome invoke(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            String channel,
             String idempotencyKey,
             BiFunction<NotificationChannelAdapter, ProviderCall, ProviderOutcome> operation) {
 
@@ -98,13 +111,11 @@ public class NotificationGateway {
         // future import port that dispatches inline instead of leaving the message
         // to the worker. An SMS is the one effect on this list that cannot be
         // withdrawn once it has left, so it is worth failing a run over.
-        ImportSuppression.refuse(ExternalEffect.NOTIFICATION_PROVIDER_CALL,
-                "send on channel " + channel);
+        ImportSuppression.refuse(ExternalEffect.NOTIFICATION_PROVIDER_CALL, "send on channel " + channel);
 
         NotificationChannelAdapter adapter = adaptersByChannel.get(channel);
         if (adapter == null) {
-            return ProviderOutcome.rejected("NO_ADAPTER",
-                    "No notification adapter is registered for " + channel);
+            return ProviderOutcome.rejected("NO_ADAPTER", "No notification adapter is registered for " + channel);
         }
 
         Optional<BindingRef> binding =
@@ -113,23 +124,23 @@ public class NotificationGateway {
             // A rejection rather than a failure: nothing is wrong with the message,
             // the tenant simply has no gateway bound here. Retrying on a timer would
             // hide a configuration gap behind a growing backlog.
-            return ProviderOutcome.rejected("NO_PROVIDER_BINDING",
-                    "No %s provider is bound for this brand".formatted(channel));
+            return ProviderOutcome.rejected(
+                    "NO_PROVIDER_BINDING", "No %s provider is bound for this brand".formatted(channel));
         }
 
         Optional<InstallationSnapshot> snapshot =
                 installations.installation(tenantId, binding.get().installationId());
         if (snapshot.isEmpty()) {
-            return ProviderOutcome.rejected("INSTALLATION_MISSING",
-                    "Installation " + binding.get().installationId() + " is not available");
+            return ProviderOutcome.rejected(
+                    "INSTALLATION_MISSING", "Installation " + binding.get().installationId() + " is not available");
         }
         InstallationSnapshot installation = snapshot.get();
         if (!"ACTIVE".equals(installation.status())) {
             // A suspended installation is a deliberate stop — often mid-rotation or
             // after a billing failure — and calling anyway would earn a 401.
-            return ProviderOutcome.rejected("INSTALLATION_INACTIVE",
-                    "Installation " + binding.get().installationId() + " is "
-                            + installation.status());
+            return ProviderOutcome.rejected(
+                    "INSTALLATION_INACTIVE",
+                    "Installation " + binding.get().installationId() + " is " + installation.status());
         }
 
         BindingRef resolved = binding.get();
@@ -141,32 +152,37 @@ public class NotificationGateway {
             // fail with a 404, and be marked permanently rejected — a silent loss
             // of that tenant's order confirmations. The binding names the provider;
             // the adapter has to be the one that speaks it.
-            log.error("Binding {} claims {} with provider type {}, but the wired adapter speaks {}",
-                    resolved.bindingId(), channel, resolved.providerType(), adapter.providerType());
-            return ProviderOutcome.rejected("PROVIDER_ADAPTER_MISMATCH",
-                    "No %s adapter is wired for provider type %s"
-                            .formatted(channel, resolved.providerType()));
+            log.error(
+                    "Binding {} claims {} with provider type {}, but the wired adapter speaks {}",
+                    resolved.bindingId(),
+                    channel,
+                    resolved.providerType(),
+                    adapter.providerType());
+            return ProviderOutcome.rejected(
+                    "PROVIDER_ADAPTER_MISMATCH",
+                    "No %s adapter is wired for provider type %s".formatted(channel, resolved.providerType()));
         }
 
         SecretReference reference = SecretReference.parse(installation.secretReference());
         // Not disposed: the resolver caches and hands back the same instance, so
         // clearing it here would blank the credential for every other caller.
         SecretValue credential = secrets.resolve(reference);
-        ProviderOutcome outcome = operation.apply(adapter,
-                new ProviderCall(installation.baseUrl(), credential.reveal(), idempotencyKey,
-                        DEFAULT_TIMEOUT));
+        ProviderOutcome outcome = operation.apply(
+                adapter,
+                new ProviderCall(installation.baseUrl(), credential.reveal(), idempotencyKey, DEFAULT_TIMEOUT));
 
         if (isAuthenticationFailure(outcome)) {
             // One retry past the cache, exactly as ADR 0028 prescribes: a token
             // rotated after we cached it looks identical to a revoked one, and only
             // a fresh read tells them apart. Once, not in a loop — a genuinely
             // revoked credential must surface as an incident, not as retry traffic.
-            log.warn("The {} gateway rejected the cached credential for installation {}; "
-                    + "refreshing once", channel, binding.get().installationId());
+            log.warn(
+                    "The {} gateway rejected the cached credential for installation {}; " + "refreshing once",
+                    channel,
+                    binding.get().installationId());
             SecretValue fresh = secrets.resolveFresh(reference);
-            outcome = operation.apply(adapter,
-                    new ProviderCall(installation.baseUrl(), fresh.reveal(), idempotencyKey,
-                            DEFAULT_TIMEOUT));
+            outcome = operation.apply(
+                    adapter, new ProviderCall(installation.baseUrl(), fresh.reveal(), idempotencyKey, DEFAULT_TIMEOUT));
         }
         // Attributed to the account that handled it, whatever the answer was. A
         // rejection from a named gateway and a rejection from no gateway at all
@@ -186,8 +202,12 @@ public class NotificationGateway {
         Map<String, Object> normalized = new LinkedHashMap<>(outcome.normalized());
         normalized.put(BINDING_ID_KEY, binding.bindingId().toString());
         normalized.put(PROVIDER_TYPE_KEY, binding.providerType());
-        return new ProviderOutcome(outcome.status(), Map.copyOf(normalized),
-                outcome.externalReference(), outcome.errorCode(), outcome.detail(),
+        return new ProviderOutcome(
+                outcome.status(),
+                Map.copyOf(normalized),
+                outcome.externalReference(),
+                outcome.errorCode(),
+                outcome.detail(),
                 outcome.retryAfter());
     }
 
@@ -198,8 +218,7 @@ public class NotificationGateway {
             // well. They are absent rather than mapped to codes nothing declares,
             // because a capability code with no adapter behind it resolves a
             // binding that then cannot be used.
-            default -> throw new IllegalArgumentException(
-                    "No provider capability is defined for channel " + channel);
+            default -> throw new IllegalArgumentException("No provider capability is defined for channel " + channel);
         };
     }
 

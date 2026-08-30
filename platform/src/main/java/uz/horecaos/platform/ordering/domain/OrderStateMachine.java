@@ -4,7 +4,6 @@ import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
-
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 
 /**
@@ -25,38 +24,37 @@ public final class OrderStateMachine {
 
     private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED = allowed();
 
-    private OrderStateMachine() {
-    }
+    private OrderStateMachine() {}
 
     private static Map<OrderStatus, Set<OrderStatus>> allowed() {
         Map<OrderStatus, Set<OrderStatus>> transitions = new EnumMap<>(OrderStatus.class);
 
         // Three ways out of RECEIVED, chosen by payment timing and acceptance mode.
-        transitions.put(OrderStatus.RECEIVED, EnumSet.of(
+        transitions.put(
+                OrderStatus.RECEIVED,
+                EnumSet.of(
+                        OrderStatus.PAYMENT_AUTHORIZING,
+                        OrderStatus.AWAITING_APPROVAL,
+                        OrderStatus.CONFIRMED,
+                        OrderStatus.CANCELLED));
+
+        transitions.put(
                 OrderStatus.PAYMENT_AUTHORIZING,
-                OrderStatus.AWAITING_APPROVAL,
-                OrderStatus.CONFIRMED,
-                OrderStatus.CANCELLED));
+                EnumSet.of(
+                        OrderStatus.AWAITING_APPROVAL,
+                        OrderStatus.CONFIRMED,
+                        OrderStatus.PAYMENT_FAILED,
+                        OrderStatus.CANCELLED));
 
-        transitions.put(OrderStatus.PAYMENT_AUTHORIZING, EnumSet.of(
+        transitions.put(
                 OrderStatus.AWAITING_APPROVAL,
-                OrderStatus.CONFIRMED,
-                OrderStatus.PAYMENT_FAILED,
-                OrderStatus.CANCELLED));
-
-        transitions.put(OrderStatus.AWAITING_APPROVAL, EnumSet.of(
-                OrderStatus.CONFIRMED,
-                OrderStatus.REJECTED,
-                OrderStatus.EXPIRED,
-                OrderStatus.CANCELLED));
+                EnumSet.of(OrderStatus.CONFIRMED, OrderStatus.REJECTED, OrderStatus.EXPIRED, OrderStatus.CANCELLED));
 
         // CONFIRMED -> CANCELLED is in the canonical diagram, gated on policy.
         // The gate lives in the application because "policy permits" is a runtime
         // question; the transition existing at all is a modelling question and
         // belongs here.
-        transitions.put(OrderStatus.CONFIRMED, EnumSet.of(
-                OrderStatus.PREPARING,
-                OrderStatus.CANCELLED));
+        transitions.put(OrderStatus.CONFIRMED, EnumSet.of(OrderStatus.PREPARING, OrderStatus.CANCELLED));
 
         transitions.put(OrderStatus.PREPARING, EnumSet.of(OrderStatus.READY));
 
@@ -64,9 +62,7 @@ public final class OrderStateMachine {
         // Both edges exist here and the fulfilment mode picks between them, rather
         // than a pickup order being able to enter a courier state it has no
         // courier for.
-        transitions.put(OrderStatus.READY, EnumSet.of(
-                OrderStatus.FULFILLING,
-                OrderStatus.COMPLETED));
+        transitions.put(OrderStatus.READY, EnumSet.of(OrderStatus.FULFILLING, OrderStatus.COMPLETED));
 
         transitions.put(OrderStatus.FULFILLING, EnumSet.of(OrderStatus.COMPLETED));
 
@@ -124,8 +120,7 @@ public final class OrderStateMachine {
         private final OrderStatus to;
 
         public IllegalTransitionException(OrderStatus from, OrderStatus to) {
-            super("An order cannot move from %s to %s (docs/domains/state-machines.md)"
-                    .formatted(from, to));
+            super("An order cannot move from %s to %s (docs/domains/state-machines.md)".formatted(from, to));
             this.from = from;
             this.to = to;
         }

@@ -1,5 +1,7 @@
 package uz.horecaos.platform.tenancy.application.identity;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -10,17 +12,12 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -63,8 +60,7 @@ import uz.horecaos.platform.tenancy.application.port.TenantOrganizationLinkStore
  * reason rather than because memberships are known to be correct.
  */
 @Component
-@ConditionalOnProperty(
-        name = "horecaos.iam.drift-report.enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = "horecaos.iam.drift-report.enabled", havingValue = "true", matchIfMissing = true)
 public class IdentityDriftReporter {
 
     private static final Logger log = LoggerFactory.getLogger(IdentityDriftReporter.class);
@@ -95,7 +91,7 @@ public class IdentityDriftReporter {
      * @param detail safe to log and to put in an audit fact: identifiers and
      *               states only, never a Keycloak message about a person
      */
-    public record DriftFinding(UUID tenantId, DriftCode code, String detail) { }
+    public record DriftFinding(UUID tenantId, DriftCode code, String detail) {}
 
     /**
      * @param unreachable tenants Keycloak could not be asked about, kept separate
@@ -103,7 +99,7 @@ public class IdentityDriftReporter {
      *                    and reporting an unreachable realm as drift would raise
      *                    a finding for every tenant at once
      */
-    public record DriftReport(List<DriftFinding> findings, int checked, int unreachable) { }
+    public record DriftReport(List<DriftFinding> findings, int checked, int unreachable) {}
 
     private final TenantOrganizationLinkStore tenants;
     private final OrganizationDirectory directory;
@@ -130,7 +126,9 @@ public class IdentityDriftReporter {
         this.batchSize = batchSize;
 
         meters.gauge("horecaos.iam.identity.drift", this, reporter -> reporter.outstandingDrift.get());
-        meters.gauge("horecaos.iam.identity.drift.report.age.seconds", this,
+        meters.gauge(
+                "horecaos.iam.identity.drift.report.age.seconds",
+                this,
                 IdentityDriftReporter::secondsSinceLastCompletedScan);
     }
 
@@ -141,8 +139,10 @@ public class IdentityDriftReporter {
         try {
             DriftReport report = scan();
             if (!report.findings().isEmpty()) {
-                log.warn("Identity drift report: {} findings across {} tenants",
-                        report.findings().size(), report.checked());
+                log.warn(
+                        "Identity drift report: {} findings across {} tenants",
+                        report.findings().size(),
+                        report.checked());
             }
         } catch (RuntimeException failure) {
             // A scheduled report that throws would stop reporting silently. The
@@ -173,8 +173,10 @@ public class IdentityDriftReporter {
                 // for a minute would otherwise report every tenant as missing an
                 // organization and bury the one that really is.
                 unreachable++;
-                log.warn("Identity drift check for tenant {} could not reach Keycloak: {}",
-                        link.tenantId(), cannotAsk.getClass().getSimpleName());
+                log.warn(
+                        "Identity drift check for tenant {} could not reach Keycloak: {}",
+                        link.tenantId(),
+                        cannotAsk.getClass().getSimpleName());
             }
         }
 
@@ -193,7 +195,9 @@ public class IdentityDriftReporter {
             // would make every new tenant a finding for as long as onboarding
             // takes.
             return "ACTIVE".equals(link.tenantStatus())
-                    ? Optional.of(new DriftFinding(link.tenantId(), DriftCode.ORGANIZATION_UNLINKED,
+                    ? Optional.of(new DriftFinding(
+                            link.tenantId(),
+                            DriftCode.ORGANIZATION_UNLINKED,
                             "The tenant is active with no Keycloak organization"))
                     : Optional.empty();
         }
@@ -202,14 +206,18 @@ public class IdentityDriftReporter {
         Optional<OrganizationSnapshot> organization = directory.getOrganization(organizationId);
 
         if (organization.isEmpty()) {
-            return Optional.of(new DriftFinding(link.tenantId(), DriftCode.ORGANIZATION_MISSING,
+            return Optional.of(new DriftFinding(
+                    link.tenantId(),
+                    DriftCode.ORGANIZATION_MISSING,
                     "Organization %s is referenced by the tenant and does not exist in Keycloak"
                             .formatted(organizationId)));
         }
         OrganizationSnapshot found = organization.get();
 
         if (!found.enabled() && !"SUSPENDED".equals(link.tenantStatus())) {
-            return Optional.of(new DriftFinding(link.tenantId(), DriftCode.ORGANIZATION_DISABLED,
+            return Optional.of(new DriftFinding(
+                    link.tenantId(),
+                    DriftCode.ORGANIZATION_DISABLED,
                     "Organization %s is disabled while the tenant is %s"
                             .formatted(organizationId, link.tenantStatus())));
         }
@@ -217,7 +225,9 @@ public class IdentityDriftReporter {
             // Reported rather than corrected even though the alias is a mutable
             // field: an alias that changed under us may mean the id was reused,
             // and rewriting it would erase the only evidence of that.
-            return Optional.of(new DriftFinding(link.tenantId(), DriftCode.ORGANIZATION_ALIAS_MISMATCH,
+            return Optional.of(new DriftFinding(
+                    link.tenantId(),
+                    DriftCode.ORGANIZATION_ALIAS_MISMATCH,
                     "Organization %s has alias %s where the tenant derives %s"
                             .formatted(organizationId, found.alias(), link.expectedAlias())));
         }
@@ -265,6 +275,8 @@ public class IdentityDriftReporter {
      */
     private double secondsSinceLastCompletedScan() {
         Instant last = lastCompletedScan.get();
-        return last == null ? -1 : java.time.Duration.between(last, clock.instant()).toSeconds();
+        return last == null
+                ? -1
+                : java.time.Duration.between(last, clock.instant()).toSeconds();
     }
 }

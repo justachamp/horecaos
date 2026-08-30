@@ -6,10 +6,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -49,7 +47,8 @@ public class PlanCatalogService {
     @Transactional
     public UUID createPlan(String code, String name, ActorRef actor, String reason, String correlationId) {
         plans.findPlanIdByCode(code).ifPresent(existing -> {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
                     "A plan with code %s already exists".formatted(code),
                     Map.of("planCode", code));
         });
@@ -59,7 +58,8 @@ public class PlanCatalogService {
         plans.insertPlan(id, code, name, now);
 
         audit.record(AuditFact.of("commercial.plan.created", AuditClass.BUSINESS)
-                .by(actor).at(ResourceScope.platform())
+                .by(actor)
+                .at(ResourceScope.platform())
                 .target("commercial.plan", id)
                 .because(reason)
                 .changed(Map.of("code", code, "name", name))
@@ -77,9 +77,16 @@ public class PlanCatalogService {
      * which is what makes "the tenant was on version 3" a complete answer.
      */
     @Transactional
-    public UUID draftVersion(UUID planId, String currency, long priceMinor, String billingPeriod,
-            String termsReference, Map<String, PlanEntitlement> entitlements,
-            ActorRef actor, String reason, String correlationId) {
+    public UUID draftVersion(
+            UUID planId,
+            String currency,
+            long priceMinor,
+            String billingPeriod,
+            String termsReference,
+            Map<String, PlanEntitlement> entitlements,
+            ActorRef actor,
+            String reason,
+            String correlationId) {
 
         validate(entitlements);
 
@@ -87,8 +94,16 @@ public class PlanCatalogService {
         Instant now = clock.instant();
         int versionNumber = plans.nextVersionNumber(planId);
 
-        plans.insertPlanVersion(id, planId, versionNumber, currency, priceMinor, billingPeriod,
-                termsReference, actorSubject(actor), now);
+        plans.insertPlanVersion(
+                id,
+                planId,
+                versionNumber,
+                currency,
+                priceMinor,
+                billingPeriod,
+                termsReference,
+                actorSubject(actor),
+                now);
         entitlements.forEach((key, entitlement) -> plans.upsertPlanEntitlement(id, key, entitlement));
 
         Map<String, Object> change = new HashMap<>();
@@ -99,7 +114,8 @@ public class PlanCatalogService {
         change.put("entitlementKeys", List.copyOf(entitlements.keySet()));
 
         audit.record(AuditFact.of("commercial.plan_version.drafted", AuditClass.BUSINESS)
-                .by(actor).at(ResourceScope.platform())
+                .by(actor)
+                .at(ResourceScope.platform())
                 .target("commercial.plan_version", id)
                 .because(reason)
                 .changed(change)
@@ -124,11 +140,13 @@ public class PlanCatalogService {
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such plan version"));
 
         if (version.isActivated()) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
                     "Plan version %d is already active".formatted(version.versionNumber()));
         }
         if (actorSubject(approver).equals(version.createdBy())) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
                     "A plan version is approved by somebody other than its author (ADR 0027)",
                     Map.of("createdBy", version.createdBy()));
         }
@@ -138,12 +156,13 @@ public class PlanCatalogService {
 
         Instant now = clock.instant();
         if (!plans.activate(planVersionId, actorSubject(approver), now, now)) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
-                    "The plan version changed while it was being activated");
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT, "The plan version changed while it was being activated");
         }
 
         audit.record(AuditFact.of("commercial.plan_version.activated", AuditClass.BUSINESS)
-                .by(approver).at(ResourceScope.platform())
+                .by(approver)
+                .at(ResourceScope.platform())
                 .target("commercial.plan_version", planVersionId)
                 .because(reason)
                 .changed(Map.of(
@@ -176,19 +195,22 @@ public class PlanCatalogService {
     private void validate(Map<String, PlanEntitlement> entitlements) {
         entitlements.forEach((code, entitlement) -> {
             EntitlementKey<?> key = EntitlementKeys.find(code)
-                    .orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_FAILED,
+                    .orElseThrow(() -> new ApiException(
+                            ErrorCode.VALIDATION_FAILED,
                             "Unknown entitlement key %s".formatted(code),
                             Map.of("entitlementKey", code)));
 
             boolean counted = entitlement.integerValue() != null;
             if (counted != key.isCounted()) {
-                throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                        "Entitlement %s is declared as %s".formatted(
-                                code, key.isCounted() ? "a counted limit" : "a feature"),
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED,
+                        "Entitlement %s is declared as %s"
+                                .formatted(code, key.isCounted() ? "a counted limit" : "a feature"),
                         Map.of("entitlementKey", code));
             }
             if (!key.isCounted() && entitlement.overageUnitPriceMinor() != null) {
-                throw new ApiException(ErrorCode.VALIDATION_FAILED,
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED,
                         "A feature has no overage to price: %s".formatted(code),
                         Map.of("entitlementKey", code));
             }

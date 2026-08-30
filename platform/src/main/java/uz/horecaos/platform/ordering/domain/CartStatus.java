@@ -14,7 +14,6 @@ package uz.horecaos.platform.ordering.domain;
  * cannot edit.
  */
 public enum CartStatus {
-
     ACTIVE,
     CHECKOUT_IN_PROGRESS,
     CONVERTED,

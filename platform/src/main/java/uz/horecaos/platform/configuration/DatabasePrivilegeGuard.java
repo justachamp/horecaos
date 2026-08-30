@@ -6,9 +6,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 import java.util.Set;
-
 import javax.sql.DataSource;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -108,11 +106,13 @@ public class DatabasePrivilegeGuard implements ApplicationRunner {
                 // platform-db volume predates the two-role split lands in exactly
                 // this state, and the symptom without this line is a REVOKE that
                 // appears not to work.
-                log.warn("Connected as '{}', which {} — every GRANT and REVOKE in the migrations is "
+                log.warn(
+                        "Connected as '{}', which {} — every GRANT and REVOKE in the migrations is "
                                 + "bypassed on this connection. Expected on a Testcontainers database; "
                                 + "on a local stack it means the platform-db volume predates the "
                                 + "horecaos_app/horecaos_migrator split (docker compose down -v && up -d).",
-                        identity.roleName(), identity.describe());
+                        identity.roleName(),
+                        identity.describe());
                 return;
             }
             throw new IllegalStateException("""
@@ -126,8 +126,7 @@ public class DatabasePrivilegeGuard implements ApplicationRunner {
                     Connect as the least-privileged role instead — horecaos_app, created by
                     infra/production/postgres-init/10-application-role.sh — and leave schema changes
                     to the migration role. compose.production.yaml already sets HORECAOS_DB_USERNAME
-                    for the application container; check that nothing is overriding it."""
-                    .formatted(active, identity.roleName(), identity.describe()));
+                    for the application container; check that nothing is overriding it.""".formatted(active, identity.roleName(), identity.describe()));
         }
 
         if (!identity.inApplicationRole()) {
@@ -139,8 +138,7 @@ public class DatabasePrivilegeGuard implements ApplicationRunner {
 
                     That role therefore holds no privilege any migration granted, and the first
                     statement against any table will fail with 'permission denied'. Grant it:
-                    GRANT %s TO <the login role>."""
-                    .formatted(active, identity.roleName(), APPLICATION_ROLE, detail, APPLICATION_ROLE);
+                    GRANT %s TO <the login role>.""".formatted(active, identity.roleName(), APPLICATION_ROLE, detail, APPLICATION_ROLE);
             if (localOnly) {
                 log.warn(message);
                 return;
@@ -148,8 +146,10 @@ public class DatabasePrivilegeGuard implements ApplicationRunner {
             throw new IllegalStateException(message);
         }
 
-        log.info("Database connection is '{}': not a superuser, not the database owner, "
-                + "member of {}.", identity.roleName(), APPLICATION_ROLE);
+        log.info(
+                "Database connection is '{}': not a superuser, not the database owner, " + "member of {}.",
+                identity.roleName(),
+                APPLICATION_ROLE);
     }
 
     private Identity read() {

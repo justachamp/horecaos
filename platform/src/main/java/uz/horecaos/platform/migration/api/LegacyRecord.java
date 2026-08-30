@@ -43,8 +43,7 @@ public record LegacyRecord(String stableKey, String sourceVersion, Map<String, O
     public LegacyRecord {
         Objects.requireNonNull(stableKey, "A legacy row needs its stable key");
         if (stableKey.isBlank()) {
-            throw new IllegalArgumentException(
-                    "A blank stable key cannot be paged from or crosswalked to");
+            throw new IllegalArgumentException("A blank stable key cannot be paged from or crosswalked to");
         }
         Objects.requireNonNull(values, "Column values are required");
         // Not Map.copyOf: SQL NULL arrives as a null value and Map.copyOf rejects
@@ -73,8 +72,7 @@ public record LegacyRecord(String stableKey, String sourceVersion, Map<String, O
             case null -> null;
             case UUID id -> id;
             case String text -> UUID.fromString(text);
-            default -> throw new IllegalArgumentException(
-                    "Column %s is not a uuid".formatted(column));
+            default -> throw new IllegalArgumentException("Column %s is not a uuid".formatted(column));
         };
     }
 
@@ -91,8 +89,7 @@ public record LegacyRecord(String stableKey, String sourceVersion, Map<String, O
             case null -> null;
             case Number n -> n.longValue();
             case String text -> Long.valueOf(text.strip());
-            default -> throw new IllegalArgumentException(
-                    "Column %s is not a whole number".formatted(column));
+            default -> throw new IllegalArgumentException("Column %s is not a whole number".formatted(column));
         };
     }
 
@@ -117,8 +114,7 @@ public record LegacyRecord(String stableKey, String sourceVersion, Map<String, O
             case null -> null;
             case LocalDateTime local -> local;
             case java.sql.Timestamp stamp -> stamp.toLocalDateTime();
-            default -> throw new IllegalArgumentException(
-                    "Column %s is not a naive timestamp".formatted(column));
+            default -> throw new IllegalArgumentException("Column %s is not a naive timestamp".formatted(column));
         };
     }
 
@@ -130,8 +126,8 @@ public record LegacyRecord(String stableKey, String sourceVersion, Map<String, O
      * than assume UTC.
      */
     public Instant instantAt(String column, ZoneId sourceZone) {
-        Objects.requireNonNull(sourceZone,
-                "The legacy server's zone is required; a naive timestamp read without one is a guess");
+        Objects.requireNonNull(
+                sourceZone, "The legacy server's zone is required; a naive timestamp read without one is a guess");
         LocalDateTime naive = naiveTimestamp(column);
         return naive == null ? null : naive.atZone(sourceZone).toInstant();
     }
@@ -140,7 +136,7 @@ public record LegacyRecord(String stableKey, String sourceVersion, Map<String, O
         if (!values.containsKey(column)) {
             throw new IllegalArgumentException(
                     ("Column %s was not selected for this entity. Extraction selects a named list, "
-                            + "so a missing column is a mapping error and not an empty value.")
+                                    + "so a missing column is a mapping error and not an empty value.")
                             .formatted(column));
         }
         return values.get(column);

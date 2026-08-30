@@ -21,6 +21,5 @@ public final class MetricDefinitions {
     /** ADR 0043's registry version 1, provisional and stamped on every row. */
     public static final int CURRENT_VERSION = 1;
 
-    private MetricDefinitions() {
-    }
+    private MetricDefinitions() {}
 }

@@ -58,8 +58,7 @@ public final class LivePositionRules {
      */
     public static final int MAXIMUM_BATCH_SIZE = 60;
 
-    private LivePositionRules() {
-    }
+    private LivePositionRules() {}
 
     /** Whether an observation is recent enough to move the pin. */
     public static boolean freshEnoughForTheMap(Instant capturedAt, Instant now) {

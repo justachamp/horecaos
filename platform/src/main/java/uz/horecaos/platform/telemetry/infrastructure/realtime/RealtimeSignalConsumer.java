@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
-
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -18,7 +17,6 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
@@ -28,10 +26,8 @@ import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.stereotype.Component;
-
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.telemetry.api.RealtimeSignal;
 import uz.horecaos.platform.telemetry.api.ScopeKey;
 import uz.horecaos.platform.telemetry.api.StreamChannel;
@@ -61,8 +57,7 @@ import uz.horecaos.platform.telemetry.api.StreamChannel;
  * a hidden cliff.
  */
 @Component
-@ConditionalOnProperty(name = "horecaos.realtime.signals.consume",
-        havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = "horecaos.realtime.signals.consume", havingValue = "true", matchIfMissing = true)
 public class RealtimeSignalConsumer implements DisposableBean, Runnable {
 
     private static final Logger log = LoggerFactory.getLogger(RealtimeSignalConsumer.class);
@@ -80,6 +75,7 @@ public class RealtimeSignalConsumer implements DisposableBean, Runnable {
      * exactly the state this backoff exists to make impossible.
      */
     private static final Duration RETRY_BACKOFF_INITIAL = Duration.ofSeconds(1);
+
     private static final Duration RETRY_BACKOFF_MAX = Duration.ofSeconds(60);
 
     private final ConsumerFactory<String, String> consumers;
@@ -91,8 +87,10 @@ public class RealtimeSignalConsumer implements DisposableBean, Runnable {
     private volatile Consumer<String, String> consumer;
     private volatile Thread worker;
 
-    public RealtimeSignalConsumer(ConsumerFactory<String, String> consumers,
-            SseStreamRegistry registry, ObjectMapper json,
+    public RealtimeSignalConsumer(
+            ConsumerFactory<String, String> consumers,
+            SseStreamRegistry registry,
+            ObjectMapper json,
             @Value("${horecaos.messaging.topics.realtime-signals:realtime.signals}") String topic) {
         this.consumers = consumers;
         this.registry = registry;
@@ -154,8 +152,11 @@ public class RealtimeSignalConsumer implements DisposableBean, Runnable {
                     // which is the fallback ADR 0045 requires to keep working —
                     // but the fallback is a degraded mode, not a destination, so
                     // the connection is rebuilt rather than abandoned.
-                    log.warn("Realtime signal consumption failed; operational surfaces fall back "
-                            + "to polling and this replica retries in {}", backoff, failure);
+                    log.warn(
+                            "Realtime signal consumption failed; operational surfaces fall back "
+                                    + "to polling and this replica retries in {}",
+                            backoff,
+                            failure);
                 } finally {
                     closeConsumer();
                 }
@@ -200,8 +201,7 @@ public class RealtimeSignalConsumer implements DisposableBean, Runnable {
      * against a failure that no test can otherwise arrange.
      */
     Consumer<String, String> createConsumer() {
-        return new KafkaConsumer<>(consumerProperties(),
-                new StringDeserializer(), new StringDeserializer());
+        return new KafkaConsumer<>(consumerProperties(), new StringDeserializer(), new StringDeserializer());
     }
 
     /**
@@ -214,8 +214,7 @@ public class RealtimeSignalConsumer implements DisposableBean, Runnable {
     private boolean assignAndSeekToEnd() {
         List<PartitionInfo> partitions = consumer.partitionsFor(topic);
         if (partitions == null || partitions.isEmpty()) {
-            log.warn("Topic {} has no partitions yet; retrying rather than polling an unassigned "
-                    + "consumer", topic);
+            log.warn("Topic {} has no partitions yet; retrying rather than polling an unassigned " + "consumer", topic);
             return false;
         }
         List<TopicPartition> assigned = new ArrayList<>(partitions.size());
@@ -223,8 +222,11 @@ public class RealtimeSignalConsumer implements DisposableBean, Runnable {
 
         consumer.assign(assigned);
         consumer.seekToEnd(assigned);
-        log.info("Assigned {} partitions of {} and sought to the end; this replica receives only "
-                + "signals produced from now on", assigned.size(), topic);
+        log.info(
+                "Assigned {} partitions of {} and sought to the end; this replica receives only "
+                        + "signals produced from now on",
+                assigned.size(),
+                topic);
         return true;
     }
 
@@ -239,14 +241,17 @@ public class RealtimeSignalConsumer implements DisposableBean, Runnable {
     java.util.Optional<RealtimeSignal> parse(String payload) {
         try {
             JsonNode node = json.readTree(payload);
-            java.util.Optional<StreamChannel> channel = StreamChannel.find(node.path("channel").asString());
+            java.util.Optional<StreamChannel> channel =
+                    StreamChannel.find(node.path("channel").asString());
             if (channel.isEmpty()) {
                 return java.util.Optional.empty();
             }
             String resourceId = node.path("resourceId").isNull()
-                    ? null : node.path("resourceId").asString(null);
+                    ? null
+                    : node.path("resourceId").asString(null);
             Long version = node.path("version").isNull() || node.path("version").isMissingNode()
-                    ? null : node.path("version").asLong();
+                    ? null
+                    : node.path("version").asLong();
 
             return java.util.Optional.of(new RealtimeSignal(
                     UUID.fromString(node.path("signalId").asString()),

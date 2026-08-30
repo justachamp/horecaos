@@ -2,9 +2,7 @@ package uz.horecaos.platform.migration.application.importing;
 
 import java.util.List;
 import java.util.Objects;
-
 import uz.horecaos.platform.migration.api.LegacyRecord;
-
 
 /**
  * One page of legacy rows, and whether there are more (ADR 0024).
@@ -25,8 +23,7 @@ public record SourcePage(List<LegacyRecord> records, String nextKey, boolean exh
         Objects.requireNonNull(records, "A page has a row list, possibly empty");
         records = List.copyOf(records);
         if (!records.isEmpty() && nextKey == null) {
-            throw new IllegalArgumentException(
-                    "A page with rows has a next key, or a restart re-reads it forever");
+            throw new IllegalArgumentException("A page with rows has a next key, or a restart re-reads it forever");
         }
     }
 

@@ -9,10 +9,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.courier.domain.RateCard;
 import uz.horecaos.platform.courier.domain.RateComponent;
 import uz.horecaos.platform.courier.domain.RateComponentType;
@@ -34,8 +32,15 @@ public class JdbcCourierRateCardStore {
         this.jdbc = jdbc;
     }
 
-    public void insertCard(UUID id, UUID tenantId, UUID brandId, UUID locationId,
-            UUID courierTypeId, String code, int cardVersion, String currency) {
+    public void insertCard(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID courierTypeId,
+            String code,
+            int cardVersion,
+            String currency) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("id", id);
@@ -54,9 +59,7 @@ public class JdbcCourierRateCardStore {
                     status, currency, created_at, updated_at)
                 VALUES (:id, :tenantId, :brandId, :locationId, :courierTypeId, :code, :cardVersion,
                     'DRAFT', :currency, :now, :now)
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     public void insertComponent(UUID id, UUID tenantId, UUID cardId, RateComponent component) {
@@ -77,9 +80,7 @@ public class JdbcCourierRateCardStore {
                     band_from_meters, band_to_meters, minimum_paid_seconds, created_at)
                 VALUES (:id, :tenantId, :cardId, :type, :priority, :amount,
                     :bandFrom, :bandTo, :minimumSeconds, now())
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     /**
@@ -95,7 +96,8 @@ public class JdbcCourierRateCardStore {
                    AND code = (SELECT code FROM fulfillment.courier_rate_cards
                                 WHERE tenant_id = :tenantId AND id = :id)
                 """)
-                .param("tenantId", tenantId).param("id", cardId)
+                .param("tenantId", tenantId)
+                .param("id", cardId)
                 .param("effectiveFrom", JdbcCourierStore.utc(effectiveFrom))
                 .param("now", JdbcCourierStore.utc(Instant.now()))
                 .update();
@@ -106,11 +108,13 @@ public class JdbcCourierRateCardStore {
                        effective_from = :effectiveFrom, updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id AND status = 'DRAFT'
                 """)
-                .param("tenantId", tenantId).param("id", cardId)
-                .param("activatedBy", activatedBy)
-                .param("effectiveFrom", JdbcCourierStore.utc(effectiveFrom))
-                .param("now", JdbcCourierStore.utc(Instant.now()))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", cardId)
+                        .param("activatedBy", activatedBy)
+                        .param("effectiveFrom", JdbcCourierStore.utc(effectiveFrom))
+                        .param("now", JdbcCourierStore.utc(Instant.now()))
+                        .update()
+                == 1;
     }
 
     public Optional<RateCard> findCard(UUID tenantId, UUID cardId) {
@@ -119,14 +123,15 @@ public class JdbcCourierRateCardStore {
                   FROM fulfillment.courier_rate_cards
                  WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("id", cardId)
+                .param("tenantId", tenantId)
+                .param("id", cardId)
                 .query((ResultSet rs, int rowNumber) -> new CardHeader(
                         rs.getObject("id", UUID.class), rs.getInt("card_version"),
                         rs.getString("currency"), rs.getString("status")))
                 .optional();
 
-        return header.map(found -> new RateCard(
-                found.id(), found.version(), found.currency(), componentsOf(tenantId, found.id())));
+        return header.map(found ->
+                new RateCard(found.id(), found.version(), found.currency(), componentsOf(tenantId, found.id())));
     }
 
     /**
@@ -134,8 +139,7 @@ public class JdbcCourierRateCardStore {
      * Ordering is by how many of the three scopes the card names, so a card
      * naming the branch and the type beats one naming only the brand.
      */
-    public Optional<RateCard> resolve(UUID tenantId, UUID brandId, UUID locationId,
-            UUID courierTypeId, Instant at) {
+    public Optional<RateCard> resolve(UUID tenantId, UUID brandId, UUID locationId, UUID courierTypeId, Instant at) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
@@ -166,8 +170,8 @@ public class JdbcCourierRateCardStore {
                         rs.getString("currency"), rs.getString("status")))
                 .optional();
 
-        return header.map(found -> new RateCard(
-                found.id(), found.version(), found.currency(), componentsOf(tenantId, found.id())));
+        return header.map(found ->
+                new RateCard(found.id(), found.version(), found.currency(), componentsOf(tenantId, found.id())));
     }
 
     private List<RateComponent> componentsOf(UUID tenantId, UUID cardId) {
@@ -178,7 +182,8 @@ public class JdbcCourierRateCardStore {
                  WHERE tenant_id = :tenantId AND rate_card_id = :cardId
                  ORDER BY priority, band_from_meters NULLS FIRST
                 """)
-                .param("tenantId", tenantId).param("cardId", cardId)
+                .param("tenantId", tenantId)
+                .param("cardId", cardId)
                 .query(JdbcCourierRateCardStore::mapComponent)
                 .list());
         return List.copyOf(components);
@@ -197,5 +202,5 @@ public class JdbcCourierRateCardStore {
                 rs.getObject("minimum_paid_seconds", Integer.class));
     }
 
-    private record CardHeader(UUID id, int version, String currency, String status) { }
+    private record CardHeader(UUID id, int version, String currency, String status) {}
 }

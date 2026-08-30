@@ -1,10 +1,9 @@
 package uz.horecaos.platform.notifications;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -13,7 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
+import javax.sql.DataSource;
 import org.apache.camel.CamelContext;
 import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.AfterAll;
@@ -24,14 +23,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.customers.api.RecipientContactDirectory;
 import uz.horecaos.platform.customers.application.ConsentService;
 import uz.horecaos.platform.customers.application.CustomerProfileService;
@@ -120,7 +114,8 @@ class NotificationDeliveryTests {
 
     @BeforeAll
     static void startDatabase() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for notification delivery tests");
         db = TestDatabase.migrated();
         jdbcUrl = db.jdbcUrl();
@@ -149,12 +144,12 @@ class NotificationDeliveryTests {
         // A real envelope-encryption stack over a throwaway key, so the contact
         // value genuinely round-trips through ADR 0029 rather than being stubbed
         // into agreeing.
-        SecretResolver secrets = new EnvironmentSecretResolver(Map.of(
-                "horecaos.secrets.data_encryption.platform.kek", "a-test-key-encryption-key",
-                "horecaos.secrets.provider_notification.platform.sms", "a-test-gateway-token")::get,
+        SecretResolver secrets = new EnvironmentSecretResolver(
+                Map.of(
+                        "horecaos.secrets.data_encryption.platform.kek", "a-test-key-encryption-key",
+                        "horecaos.secrets.provider_notification.platform.sms", "a-test-gateway-token")::get,
                 clock);
-        FieldProtection protection = new EnvelopeFieldProtection(
-                new DataEncryptionKeyProvider(secrets, "local"));
+        FieldProtection protection = new EnvelopeFieldProtection(new DataEncryptionKeyProvider(secrets, "local"));
 
         JdbcCustomerStore customerStore = new JdbcCustomerStore(jdbc);
         profiles = new CustomerProfileService(customerStore, protection, objectMapper, clock);
@@ -169,14 +164,14 @@ class NotificationDeliveryTests {
         seedProviderInstallation();
 
         NotificationGateway providerGateway = new NotificationGateway(
-                java.util.List.of(new SmsGatewayAdapter(
-                        new ProviderHttpClient(objectMapper, new ProviderExceptionClassifier()))),
+                java.util.List.of(
+                        new SmsGatewayAdapter(new ProviderHttpClient(objectMapper, new ProviderExceptionClassifier()))),
                 new JdbcProviderInstallationLookup(jdbc, clock),
                 secrets);
 
         camel = new DefaultCamelContext();
-        camel.addRoutes(new NotificationRouteBuilder(
-                new NotificationProcessor(providerGateway, new SimpleMeterRegistry())));
+        camel.addRoutes(
+                new NotificationRouteBuilder(new NotificationProcessor(providerGateway, new SimpleMeterRegistry())));
         camel.start();
 
         CamelNotificationTransport transport =
@@ -184,21 +179,18 @@ class NotificationDeliveryTests {
 
         orders = new StubOrderDirectory();
         orderId = UUID.randomUUID();
-        orders.publish(new OrderDirectory.OrderSummary(orderId, TENANT, BRAND, null, "A-17",
-                accountId, null, "CONFIRMED", "UZS", 12_500_000L, 3));
+        orders.publish(new OrderDirectory.OrderSummary(
+                orderId, TENANT, BRAND, null, "A-17", accountId, null, "CONFIRMED", "UZS", 12_500_000L, 3));
 
         NotificationEligibilityService eligibility = new NotificationEligibilityService(
                 notifications, templates, consent, contacts, orders, transport, objectMapper, clock);
         NotificationDispatchService dispatch = new NotificationDispatchService(
-                notifications, templateStore, contacts, transport, objectMapper, clock,
-                8, Duration.ofSeconds(30));
+                notifications, templateStore, contacts, transport, objectMapper, clock, 8, Duration.ofSeconds(30));
 
-        worker = new NotificationWorker(notifications, eligibility, dispatch, clock,
-                50, Duration.ofMinutes(2));
+        worker = new NotificationWorker(notifications, eligibility, dispatch, clock, 50, Duration.ofMinutes(2));
         queries = new NotificationQueryService(notifications, clock);
         preferences = new NotificationPreferenceService(notifications, clock);
-        trigger = new OrderNotificationTrigger(notifications, objectMapper, clock, "SMS",
-                Duration.ofHours(6));
+        trigger = new OrderNotificationTrigger(notifications, objectMapper, clock, "SMS", Duration.ofHours(6));
 
         activateConfirmationTemplate();
     }
@@ -276,9 +268,17 @@ class NotificationDeliveryTests {
     @Test
     @DisplayName("granted consent lets the same optional message through")
     void anOptionalMessageWithConsentIsSent() {
-        consent.record(TENANT, accountId, BRAND, MARKETING_PURPOSE, "SMS",
-                ConsentService.Decision.GRANTED, "v1", ConsentService.Source.STOREFRONT,
-                "evidence-1", NOW.minusSeconds(60));
+        consent.record(
+                TENANT,
+                accountId,
+                BRAND,
+                MARKETING_PURPOSE,
+                "SMS",
+                ConsentService.Decision.GRANTED,
+                "v1",
+                ConsentService.Source.STOREFRONT,
+                "evidence-1",
+                NOW.minusSeconds(60));
 
         UUID notificationId = createOptionalUpdate();
         worker.drain();
@@ -289,27 +289,55 @@ class NotificationDeliveryTests {
     @Test
     @DisplayName("a withdrawal after a grant refuses the next message")
     void aWithdrawalSupersedesAGrant() {
-        consent.record(TENANT, accountId, BRAND, MARKETING_PURPOSE, "SMS",
-                ConsentService.Decision.GRANTED, "v1", ConsentService.Source.STOREFRONT, null,
+        consent.record(
+                TENANT,
+                accountId,
+                BRAND,
+                MARKETING_PURPOSE,
+                "SMS",
+                ConsentService.Decision.GRANTED,
+                "v1",
+                ConsentService.Source.STOREFRONT,
+                null,
                 NOW.minusSeconds(600));
-        consent.record(TENANT, accountId, BRAND, MARKETING_PURPOSE, "SMS",
-                ConsentService.Decision.WITHDRAWN, "v1", ConsentService.Source.STOREFRONT, null,
+        consent.record(
+                TENANT,
+                accountId,
+                BRAND,
+                MARKETING_PURPOSE,
+                "SMS",
+                ConsentService.Decision.WITHDRAWN,
+                "v1",
+                ConsentService.Source.STOREFRONT,
+                null,
                 NOW.minusSeconds(60));
 
         UUID notificationId = createOptionalUpdate();
         worker.drain();
 
-        assertThat(queries.detail(TENANT, notificationId).orElseThrow()
-                .notification().suppressionReason()).isEqualTo("CONSENT_WITHHELD");
+        assertThat(queries.detail(TENANT, notificationId)
+                        .orElseThrow()
+                        .notification()
+                        .suppressionReason())
+                .isEqualTo("CONSENT_WITHHELD");
     }
 
     @Test
     @DisplayName("a customer preference switches off an optional message but not a required one")
     void preferenceAppliesOnlyToWhatTheCustomerMaySwitchOff() {
-        consent.record(TENANT, accountId, BRAND, MARKETING_PURPOSE, "SMS",
-                ConsentService.Decision.GRANTED, "v1", ConsentService.Source.STOREFRONT, null, NOW);
-        preferences.set(TENANT, accountId, null, NotificationClass.TRANSACTIONAL_OPTIONAL,
-                NotificationChannel.SMS, false);
+        consent.record(
+                TENANT,
+                accountId,
+                BRAND,
+                MARKETING_PURPOSE,
+                "SMS",
+                ConsentService.Decision.GRANTED,
+                "v1",
+                ConsentService.Source.STOREFRONT,
+                null,
+                NOW);
+        preferences.set(
+                TENANT, accountId, null, NotificationClass.TRANSACTIONAL_OPTIONAL, NotificationChannel.SMS, false);
 
         UUID optional = createOptionalUpdate();
         trigger.onOrderingEvent(orderConfirmed());
@@ -325,8 +353,13 @@ class NotificationDeliveryTests {
     void aRequiredClassIsRefusedRatherThanIgnored() {
         // Accepting the toggle and then sending anyway is worse than saying no:
         // the customer believes they opted out and the messages keep arriving.
-        assertThat(catchThrowable(() -> preferences.set(TENANT, accountId, null,
-                NotificationClass.TRANSACTIONAL_REQUIRED, NotificationChannel.SMS, false)))
+        assertThat(catchThrowable(() -> preferences.set(
+                        TENANT,
+                        accountId,
+                        null,
+                        NotificationClass.TRANSACTIONAL_REQUIRED,
+                        NotificationChannel.SMS,
+                        false)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -337,7 +370,8 @@ class NotificationDeliveryTests {
         worker.drain();
         assertThat(statusOf(notificationId)).isEqualTo("SUPPRESSED");
 
-        assertThat(queries.retry(TENANT, notificationId, "customer called support")).isTrue();
+        assertThat(queries.retry(TENANT, notificationId, "customer called support"))
+                .isTrue();
         worker.drain();
 
         assertThat(statusOf(notificationId))
@@ -363,14 +397,13 @@ class NotificationDeliveryTests {
     @DisplayName("a guest order is recorded as having no recipient, not silently skipped")
     void aGuestOrderIsSuppressedWithItsReason() {
         UUID guestOrder = UUID.randomUUID();
-        orders.publish(new OrderDirectory.OrderSummary(guestOrder, TENANT, BRAND, null, "A-18",
-                null, "hash", "CONFIRMED", "UZS", 1_000L, 1));
+        orders.publish(new OrderDirectory.OrderSummary(
+                guestOrder, TENANT, BRAND, null, "A-18", null, "hash", "CONFIRMED", "UZS", 1_000L, 1));
 
         trigger.onOrderingEvent(orderConfirmed(guestOrder));
         worker.drain();
 
-        assertThat(suppressionReasonOf(confirmationFor(guestOrder)))
-                .isEqualTo("NO_RECIPIENT_ACCOUNT");
+        assertThat(suppressionReasonOf(confirmationFor(guestOrder))).isEqualTo("NO_RECIPIENT_ACCOUNT");
     }
 
     @Test
@@ -378,14 +411,13 @@ class NotificationDeliveryTests {
     void anAccountWithoutAContactPointIsSuppressed() {
         UUID silentAccount = insertAccount();
         UUID theirOrder = UUID.randomUUID();
-        orders.publish(new OrderDirectory.OrderSummary(theirOrder, TENANT, BRAND, null, "A-19",
-                silentAccount, null, "CONFIRMED", "UZS", 1_000L, 1));
+        orders.publish(new OrderDirectory.OrderSummary(
+                theirOrder, TENANT, BRAND, null, "A-19", silentAccount, null, "CONFIRMED", "UZS", 1_000L, 1));
 
         trigger.onOrderingEvent(orderConfirmed(theirOrder));
         worker.drain();
 
-        assertThat(suppressionReasonOf(confirmationFor(theirOrder)))
-                .isEqualTo("NO_RECIPIENT_ENDPOINT");
+        assertThat(suppressionReasonOf(confirmationFor(theirOrder))).isEqualTo("NO_RECIPIENT_ENDPOINT");
     }
 
     // ------------------------------------------------------------- uncertainty
@@ -478,15 +510,14 @@ class NotificationDeliveryTests {
     @Test
     @DisplayName("a version missing a translation cannot be saved")
     void anIncompleteVersionIsRefusedWhileItIsBeingAuthored() {
-        UUID templateId = templates.createTemplate(TENANT, BRAND, "ORDER_READY",
-                NotificationClass.TRANSACTIONAL_REQUIRED, NotificationChannel.SMS, null);
+        UUID templateId = templates.createTemplate(
+                TENANT, BRAND, "ORDER_READY", NotificationClass.TRANSACTIONAL_REQUIRED, NotificationChannel.SMS, null);
 
         Map<MessageLocale, Wording> twoOfThree = new LinkedHashMap<>();
         twoOfThree.put(MessageLocale.RU, new Wording(null, "Готово"));
         twoOfThree.put(MessageLocale.EN, new Wording(null, "Ready"));
 
-        assertThat(catchThrowable(() ->
-                templates.addVersion(TENANT, templateId, twoOfThree, Map.of())))
+        assertThat(catchThrowable(() -> templates.addVersion(TENANT, templateId, twoOfThree, Map.of())))
                 .as("a missing translation must fail at authoring time, not at 22:00 at a counter")
                 .isInstanceOf(IncompleteTranslationException.class)
                 .hasMessageContaining("UZ_LATN");
@@ -495,16 +526,14 @@ class NotificationDeliveryTests {
     @Test
     @DisplayName("a template naming an undeclared variable cannot be saved")
     void anUndeclaredVariableIsRefused() {
-        UUID templateId = templates.createTemplate(TENANT, BRAND, "ORDER_READY",
-                NotificationClass.TRANSACTIONAL_REQUIRED, NotificationChannel.SMS, null);
+        UUID templateId = templates.createTemplate(
+                TENANT, BRAND, "ORDER_READY", NotificationClass.TRANSACTIONAL_REQUIRED, NotificationChannel.SMS, null);
 
         Map<MessageLocale, Wording> wordings = new LinkedHashMap<>();
-        MessageLocale.required().forEach(locale ->
-                wordings.put(locale, new Wording(null, "Order {{orderNumbr}}")));
+        MessageLocale.required().forEach(locale -> wordings.put(locale, new Wording(null, "Order {{orderNumbr}}")));
 
-        assertThat(catchThrowable(() ->
-                templates.addVersion(TENANT, templateId, wordings,
-                        Map.of("orderNumber", "string"))))
+        assertThat(catchThrowable(
+                        () -> templates.addVersion(TENANT, templateId, wordings, Map.of("orderNumber", "string"))))
                 .hasMessageContaining("orderNumbr");
     }
 
@@ -512,7 +541,8 @@ class NotificationDeliveryTests {
     @DisplayName("the customer's language decides which translation is sent")
     void localeIsResolvedFromTheCustomersPreference() {
         jdbc.sql("UPDATE customer.customer_accounts SET preferred_locale = 'uz-Latn' WHERE id = :id")
-                .param("id", accountId).update();
+                .param("id", accountId)
+                .update();
 
         trigger.onOrderingEvent(orderConfirmed());
         worker.drain();
@@ -526,13 +556,17 @@ class NotificationDeliveryTests {
     void brandWordingOverridesTheTenantDefault() {
         // The tenant-wide template is authored second, so this also proves the
         // precedence is the ORDER BY rather than insertion order.
-        UUID tenantWide = templates.createTemplate(TENANT, null,
+        UUID tenantWide = templates.createTemplate(
+                TENANT,
+                null,
                 OrderNotificationTrigger.ORDER_CONFIRMED,
-                NotificationClass.TRANSACTIONAL_REQUIRED, NotificationChannel.SMS, null);
+                NotificationClass.TRANSACTIONAL_REQUIRED,
+                NotificationChannel.SMS,
+                null);
         activateAllLocales(tenantWide, "Tenant default {{orderNumber}}");
 
-        var resolved = templates.resolve(TENANT, BRAND, OrderNotificationTrigger.ORDER_CONFIRMED,
-                NotificationChannel.SMS, MessageLocale.RU);
+        var resolved = templates.resolve(
+                TENANT, BRAND, OrderNotificationTrigger.ORDER_CONFIRMED, NotificationChannel.SMS, MessageLocale.RU);
 
         assertThat(resolved.isFound()).isTrue();
         assertThat(resolved.template().brandId()).isEqualTo(BRAND);
@@ -566,15 +600,19 @@ class NotificationDeliveryTests {
         trigger.onOrderingEvent(orderConfirmed());
         worker.drain();
 
-        UUID endpointId = queries.detail(TENANT, confirmationFor(orderId)).orElseThrow()
-                .notification().recipientEndpointId();
+        UUID endpointId = queries.detail(TENANT, confirmationFor(orderId))
+                .orElseThrow()
+                .notification()
+                .recipientEndpointId();
         var endpoint = notifications.endpoint(TENANT, endpointId).orElseThrow();
 
         assertThat(endpoint.normalizedHash()).isNotBlank();
         assertThat(endpoint.contactPointId()).isNotNull();
-        assertThat(endpoint.normalizedHash()).isEqualTo(
-                jdbc.sql("SELECT normalized_hash FROM customer.contact_points WHERE id = :id")
-                        .param("id", endpoint.contactPointId()).query(String.class).single());
+        assertThat(endpoint.normalizedHash())
+                .isEqualTo(jdbc.sql("SELECT normalized_hash FROM customer.contact_points WHERE id = :id")
+                        .param("id", endpoint.contactPointId())
+                        .query(String.class)
+                        .single());
     }
 
     // --------------------------------------------------------------- isolation
@@ -588,16 +626,27 @@ class NotificationDeliveryTests {
 
         assertThat(queries.detail(OTHER_TENANT, notificationId)).isEmpty();
         assertThat(queries.forOrder(OTHER_TENANT, orderId)).isEmpty();
-        assertThat(notifications.endpoint(OTHER_TENANT,
-                queries.detail(TENANT, notificationId).orElseThrow()
-                        .notification().recipientEndpointId())).isEmpty();
+        assertThat(notifications.endpoint(
+                        OTHER_TENANT,
+                        queries.detail(TENANT, notificationId)
+                                .orElseThrow()
+                                .notification()
+                                .recipientEndpointId()))
+                .isEmpty();
     }
 
     @Test
     @DisplayName("another tenant's template is not resolvable here")
     void templatesDoNotCrossTenants() {
-        assertThat(templates.resolve(OTHER_TENANT, BRAND, OrderNotificationTrigger.ORDER_CONFIRMED,
-                NotificationChannel.SMS, MessageLocale.RU).isFound()).isFalse();
+        assertThat(templates
+                        .resolve(
+                                OTHER_TENANT,
+                                BRAND,
+                                OrderNotificationTrigger.ORDER_CONFIRMED,
+                                NotificationChannel.SMS,
+                                MessageLocale.RU)
+                        .isFound())
+                .isFalse();
     }
 
     // ----------------------------------------------------------------- helpers
@@ -608,9 +657,20 @@ class NotificationDeliveryTests {
 
     /** A fresh event id every time, which is exactly what a replay looks like. */
     private OrderConfirmed orderConfirmed(UUID subject) {
-        return new OrderConfirmed(UUID.randomUUID(), new TenantId(TENANT), subject, NOW, BRAND,
-                null, "RESTAURANT_APPROVAL", "HORECAOS_OPERATIONS", NOW, "UZS", 12_500_000L,
-                "CONFIRMED", 3);
+        return new OrderConfirmed(
+                UUID.randomUUID(),
+                new TenantId(TENANT),
+                subject,
+                NOW,
+                BRAND,
+                null,
+                "RESTAURANT_APPROVAL",
+                "HORECAOS_OPERATIONS",
+                NOW,
+                "UZS",
+                12_500_000L,
+                "CONFIRMED",
+                3);
     }
 
     /**
@@ -621,24 +681,44 @@ class NotificationDeliveryTests {
      * store rather than through a trigger that does not exist yet.
      */
     private UUID createOptionalUpdate() {
-        UUID templateId = templates.createTemplate(TENANT, BRAND, "ORDER_UPDATE",
-                NotificationClass.TRANSACTIONAL_OPTIONAL, NotificationChannel.SMS,
+        UUID templateId = templates.createTemplate(
+                TENANT,
+                BRAND,
+                "ORDER_UPDATE",
+                NotificationClass.TRANSACTIONAL_OPTIONAL,
+                NotificationChannel.SMS,
                 MARKETING_PURPOSE);
         activateAllLocales(templateId, "Update for {{orderNumber}}");
 
         UUID id = UUID.randomUUID();
-        notifications.createIntent(new NewNotification(id, TENANT, BRAND, null,
-                NotificationClass.TRANSACTIONAL_OPTIONAL.name(), "SMS", "ORDER_UPDATE",
-                "Order", orderId, null, UUID.randomUUID(),
-                "ORDER_UPDATE:Order:%s:SMS".formatted(orderId), "{}", NOW,
-                NOW.plus(Duration.ofHours(6)), NOW));
+        notifications.createIntent(new NewNotification(
+                id,
+                TENANT,
+                BRAND,
+                null,
+                NotificationClass.TRANSACTIONAL_OPTIONAL.name(),
+                "SMS",
+                "ORDER_UPDATE",
+                "Order",
+                orderId,
+                null,
+                UUID.randomUUID(),
+                "ORDER_UPDATE:Order:%s:SMS".formatted(orderId),
+                "{}",
+                NOW,
+                NOW.plus(Duration.ofHours(6)),
+                NOW));
         return id;
     }
 
     private void activateConfirmationTemplate() {
-        UUID templateId = templates.createTemplate(TENANT, BRAND,
+        UUID templateId = templates.createTemplate(
+                TENANT,
+                BRAND,
                 OrderNotificationTrigger.ORDER_CONFIRMED,
-                NotificationClass.TRANSACTIONAL_REQUIRED, NotificationChannel.SMS, null);
+                NotificationClass.TRANSACTIONAL_REQUIRED,
+                NotificationChannel.SMS,
+                null);
         activateAllLocales(templateId, "Buyurtma {{orderNumber}}: {{amount}} {{currency}}");
     }
 
@@ -646,9 +726,11 @@ class NotificationDeliveryTests {
         Map<MessageLocale, Wording> wordings = new LinkedHashMap<>();
         MessageLocale.required().forEach(locale -> wordings.put(locale, new Wording(null, body)));
 
-        int versionNumber = templates.addVersion(TENANT, templateId, wordings, Map.of(
-                "orderNumber", "string", "amount", "string", "currency", "string",
-                "reasonCode", "string"));
+        int versionNumber = templates.addVersion(
+                TENANT,
+                templateId,
+                wordings,
+                Map.of("orderNumber", "string", "amount", "string", "currency", "string", "reasonCode", "string"));
         templates.activate(TENANT, templateId, versionNumber, "copy-approver");
     }
 
@@ -658,13 +740,11 @@ class NotificationDeliveryTests {
                     id, slug, legal_name, display_name, default_currency, default_timezone,
                     status, version)
                 VALUES (:id, 'pilot', 'Legal', 'Pilot', 'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
-                """)
-                .param("id", TENANT).update();
+                """).param("id", TENANT).update();
         jdbc.sql("""
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status)
                 VALUES (:id, :tenantId, 'PILOT', 'pilot-brand', 'Pilot brand', 'ACTIVE')
-                """)
-                .param("id", BRAND).param("tenantId", TENANT).update();
+                """).param("id", BRAND).param("tenantId", TENANT).update();
 
         accountId = insertAccount();
         profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, PHONE, true);
@@ -675,8 +755,7 @@ class NotificationDeliveryTests {
         jdbc.sql("""
                 INSERT INTO customer.customer_accounts (id, tenant_id, status)
                 VALUES (:id, :tenantId, 'ACTIVE')
-                """)
-                .param("id", id).param("tenantId", TENANT).update();
+                """).param("id", id).param("tenantId", TENANT).update();
         return id;
     }
 
@@ -696,8 +775,7 @@ class NotificationDeliveryTests {
                     code, provider_category, provider_type, base_url, is_production,
                     egress_allowlist)
                 VALUES ('sms-fake', 'NOTIFICATION', 'GENERIC_SMS', :baseUrl, false, '127.0.0.1')
-                """)
-                .param("baseUrl", gateway.baseUrl()).update();
+                """).param("baseUrl", gateway.baseUrl()).update();
 
         jdbc.sql("""
                 INSERT INTO integration.installations (
@@ -705,8 +783,7 @@ class NotificationDeliveryTests {
                     display_name, status, secret_reference)
                 VALUES (:id, :tenantId, 'NOTIFICATION', 'GENERIC_SMS', 'sms-fake',
                         'Pilot SMS', 'ACTIVE', 'horecaos:local:provider_notification:platform:sms')
-                """)
-                .param("id", installationId).param("tenantId", TENANT).update();
+                """).param("id", installationId).param("tenantId", TENANT).update();
 
         // effective_from is set explicitly rather than left to now(). The clock
         // under test is fixed, and a binding that becomes effective at the
@@ -717,10 +794,11 @@ class NotificationDeliveryTests {
                     id, tenant_id, installation_id, brand_id, status, effective_from)
                 VALUES (:id, :tenantId, :installationId, :brandId, 'ACTIVE', :from)
                 """)
-                .param("id", bindingId).param("tenantId", TENANT)
-                .param("installationId", installationId).param("brandId", BRAND)
-                .param("from", java.time.OffsetDateTime.ofInstant(
-                        NOW.minus(Duration.ofDays(1)), ZoneOffset.UTC))
+                .param("id", bindingId)
+                .param("tenantId", TENANT)
+                .param("installationId", installationId)
+                .param("brandId", BRAND)
+                .param("from", java.time.OffsetDateTime.ofInstant(NOW.minus(Duration.ofDays(1)), ZoneOffset.UTC))
                 .update();
 
         jdbc.sql("""
@@ -728,21 +806,25 @@ class NotificationDeliveryTests {
                     binding_id, tenant_id, capability_code, enabled, is_primary)
                 VALUES (:bindingId, :tenantId, :capability, true, true)
                 """)
-                .param("bindingId", bindingId).param("tenantId", TENANT)
-                .param("capability", NotificationGateway.SEND_SMS).update();
+                .param("bindingId", bindingId)
+                .param("tenantId", TENANT)
+                .param("capability", NotificationGateway.SEND_SMS)
+                .update();
     }
 
     private void truncate() {
         jdbc.sql("TRUNCATE TABLE notifications.delivery_status_events, "
-                + "notifications.delivery_attempts, notifications.notifications, "
-                + "notifications.recipient_endpoints, notifications.template_versions, "
-                + "notifications.templates, notifications.notification_preferences CASCADE")
+                        + "notifications.delivery_attempts, notifications.notifications, "
+                        + "notifications.recipient_endpoints, notifications.template_versions, "
+                        + "notifications.templates, notifications.notification_preferences CASCADE")
                 .update();
         jdbc.sql("TRUNCATE TABLE integration.binding_capabilities, integration.bindings, "
-                + "integration.installations, integration.provider_environments CASCADE").update();
+                        + "integration.installations, integration.provider_environments CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE customer.consent_decisions, customer.contact_points, "
-                + "customer.brand_profiles, customer.principal_links, "
-                + "customer.customer_accounts CASCADE").update();
+                        + "customer.brand_profiles, customer.principal_links, "
+                        + "customer.customer_accounts CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
     }
 
@@ -756,20 +838,21 @@ class NotificationDeliveryTests {
 
     private long notificationCount() {
         return jdbc.sql("SELECT count(*) FROM notifications.notifications")
-                .query(Long.class).single();
+                .query(Long.class)
+                .single();
     }
 
     private UUID onlyNotification() {
         return jdbc.sql("SELECT id FROM notifications.notifications")
-                .query(UUID.class).single();
+                .query(UUID.class)
+                .single();
     }
 
     private UUID confirmationFor(UUID subject) {
         return jdbc.sql("""
                 SELECT id FROM notifications.notifications
                 WHERE subject_id = :subject AND template_key = 'ORDER_CONFIRMED'
-                """)
-                .param("subject", subject).query(UUID.class).single();
+                """).param("subject", subject).query(UUID.class).single();
     }
 
     private String statusOf(UUID notificationId) {
@@ -786,8 +869,11 @@ class NotificationDeliveryTests {
 
     /** Every column of every row, as text, so a leak cannot hide in a column nobody named. */
     private String everythingIn(String table) {
-        return String.join("|", jdbc.sql("SELECT t::text FROM %s t".formatted(table))
-                .query(String.class).list());
+        return String.join(
+                "|",
+                jdbc.sql("SELECT t::text FROM %s t".formatted(table))
+                        .query(String.class)
+                        .list());
     }
 
     /**

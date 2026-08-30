@@ -6,10 +6,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalParameters;
 import uz.horecaos.platform.payments.api.EntitlementBenefit;
@@ -45,39 +43,36 @@ class RemedyApprovalHashTests {
     @Test
     @DisplayName("one signature does not cover two irreconcilable claims about where the money went")
     void theAttestationIsPartOfWhatWasApproved() {
-        RefundCommand approved = refund()
-                .channel(ExecutionChannel.PROVIDER_CONSOLE)
+        RefundCommand approved = refund().channel(ExecutionChannel.PROVIDER_CONSOLE)
                 .providerReference("CLICK-88213")
                 .executedBy("gateway-account")
                 .build();
-        RefundCommand executed = refund()
-                .channel(ExecutionChannel.CASH_DRAWER)
+        RefundCommand executed = refund().channel(ExecutionChannel.CASH_DRAWER)
                 .providerReference(null)
                 .executedBy("operator-1")
                 .build();
 
         assertThat(OrderRemedyService.refundApprovalHash(executed, RemedyType.ORDER_REFUND))
                 .as("cash out of the drawer by me is not the CLICK reversal the checker signed")
-                .isNotEqualTo(OrderRemedyService.refundApprovalHash(approved,
-                        RemedyType.ORDER_REFUND));
+                .isNotEqualTo(OrderRemedyService.refundApprovalHash(approved, RemedyType.ORDER_REFUND));
     }
 
     @Test
     void eachHalfOfTheAttestationBindsOnItsOwn() {
-        String base = OrderRemedyService.refundApprovalHash(refund().build(),
-                RemedyType.ORDER_REFUND);
+        String base = OrderRemedyService.refundApprovalHash(refund().build(), RemedyType.ORDER_REFUND);
 
         assertThat(OrderRemedyService.refundApprovalHash(
-                refund().providerReference("CLICK-99999").build(), RemedyType.ORDER_REFUND))
+                        refund().providerReference("CLICK-99999").build(), RemedyType.ORDER_REFUND))
                 .as("a different cabinet reference points at a different settlement line")
                 .isNotEqualTo(base);
         assertThat(OrderRemedyService.refundApprovalHash(
-                refund().executedBy("somebody-else").build(), RemedyType.ORDER_REFUND))
+                        refund().executedBy("somebody-else").build(), RemedyType.ORDER_REFUND))
                 .as("who moved the money is the claim being attested")
                 .isNotEqualTo(base);
         assertThat(OrderRemedyService.refundApprovalHash(
-                refund().executedAt(Instant.parse("2026-08-24T09:00:00Z")).build(),
-                RemedyType.ORDER_REFUND))
+                        refund().executedAt(Instant.parse("2026-08-24T09:00:00Z"))
+                                .build(),
+                        RemedyType.ORDER_REFUND))
                 .as("when they say they did it decides which settlement day it lands in")
                 .isNotEqualTo(base);
     }
@@ -90,7 +85,7 @@ class RemedyApprovalHashTests {
     @Test
     void anAbsentProviderReferenceIsNotAnEmptyOne() {
         assertThat(OrderRemedyService.refundApprovalHash(
-                refund().providerReference(null).build(), RemedyType.ORDER_REFUND))
+                        refund().providerReference(null).build(), RemedyType.ORDER_REFUND))
                 .isNotEqualTo(OrderRemedyService.refundApprovalHash(
                         refund().providerReference("").build(), RemedyType.ORDER_REFUND));
     }
@@ -101,20 +96,18 @@ class RemedyApprovalHashTests {
 
         assertThat(OrderRemedyService.refundApprovalHash(command, RemedyType.ORDER_REFUND))
                 .as("a 300 000 refund is not a 300 000 delivery-fee reimbursement")
-                .isNotEqualTo(OrderRemedyService.refundApprovalHash(command,
-                        RemedyType.DELIVERY_FEE_REIMBURSEMENT));
+                .isNotEqualTo(OrderRemedyService.refundApprovalHash(command, RemedyType.DELIVERY_FEE_REIMBURSEMENT));
     }
 
     @Test
     void theAmountAndTheOrderStillBind() {
-        String base = OrderRemedyService.refundApprovalHash(refund().build(),
-                RemedyType.ORDER_REFUND);
+        String base = OrderRemedyService.refundApprovalHash(refund().build(), RemedyType.ORDER_REFUND);
 
         assertThat(OrderRemedyService.refundApprovalHash(
-                refund().amountMinor(900_000L).build(), RemedyType.ORDER_REFUND))
+                        refund().amountMinor(900_000L).build(), RemedyType.ORDER_REFUND))
                 .isNotEqualTo(base);
         assertThat(OrderRemedyService.refundApprovalHash(
-                refund().orderId(UUID.randomUUID()).build(), RemedyType.ORDER_REFUND))
+                        refund().orderId(UUID.randomUUID()).build(), RemedyType.ORDER_REFUND))
                 .isNotEqualTo(base);
     }
 
@@ -128,10 +121,11 @@ class RemedyApprovalHashTests {
     @Test
     void aRetryOfTheSameSubmissionIsTheSameIntendedAction() {
         assertThat(OrderRemedyService.refundApprovalHash(
-                refund().idempotencyKey("attempt-2").correlationId("trace-2").build(),
-                RemedyType.ORDER_REFUND))
-                .isEqualTo(OrderRemedyService.refundApprovalHash(refund().build(),
-                        RemedyType.ORDER_REFUND));
+                        refund().idempotencyKey("attempt-2")
+                                .correlationId("trace-2")
+                                .build(),
+                        RemedyType.ORDER_REFUND))
+                .isEqualTo(OrderRemedyService.refundApprovalHash(refund().build(), RemedyType.ORDER_REFUND));
     }
 
     /**
@@ -142,13 +136,35 @@ class RemedyApprovalHashTests {
     @Test
     @DisplayName("a ten-use capped percentage does not ride in on a one-use fixed amount's signature")
     void theFactorsBindNotJustTheirProduct() {
-        FutureDiscountCommand signed = new FutureDiscountCommand(TENANT, ORDER,
-                EntitlementScope.SUBTOTAL, EntitlementBenefit.FIXED_AMOUNT, null, 500_000L, null,
-                1, Duration.ofDays(7), "SERVICE_FAILURE", "Cold delivery", MAKER, "key-1",
+        FutureDiscountCommand signed = new FutureDiscountCommand(
+                TENANT,
+                ORDER,
+                EntitlementScope.SUBTOTAL,
+                EntitlementBenefit.FIXED_AMOUNT,
+                null,
+                500_000L,
+                null,
+                1,
+                Duration.ofDays(7),
+                "SERVICE_FAILURE",
+                "Cold delivery",
+                MAKER,
+                "key-1",
                 "trace-1");
-        FutureDiscountCommand executed = new FutureDiscountCommand(TENANT, ORDER,
-                EntitlementScope.DELIVERY_FEE, EntitlementBenefit.PERCENT, 10_000, null, 50_000L,
-                10, Duration.ofDays(365), "SERVICE_FAILURE", "Cold delivery", MAKER, "key-1",
+        FutureDiscountCommand executed = new FutureDiscountCommand(
+                TENANT,
+                ORDER,
+                EntitlementScope.DELIVERY_FEE,
+                EntitlementBenefit.PERCENT,
+                10_000,
+                null,
+                50_000L,
+                10,
+                Duration.ofDays(365),
+                "SERVICE_FAILURE",
+                "Cold delivery",
+                MAKER,
+                "key-1",
                 "trace-1");
 
         assertThat(exposure(signed))
@@ -160,22 +176,34 @@ class RemedyApprovalHashTests {
 
     @Test
     void everyFactorOfAGrantBindsOnItsOwn() {
-        FutureDiscountCommand base = discount(EntitlementBenefit.FIXED_AMOUNT, 500_000L, null, 1,
-                Duration.ofDays(7), EntitlementScope.SUBTOTAL);
+        FutureDiscountCommand base = discount(
+                EntitlementBenefit.FIXED_AMOUNT, 500_000L, null, 1, Duration.ofDays(7), EntitlementScope.SUBTOTAL);
         String hash = OrderRemedyService.futureDiscountApprovalHash(base);
 
-        assertThat(OrderRemedyService.futureDiscountApprovalHash(
-                discount(EntitlementBenefit.FIXED_AMOUNT, 500_000L, null, 2, Duration.ofDays(7),
+        assertThat(OrderRemedyService.futureDiscountApprovalHash(discount(
+                        EntitlementBenefit.FIXED_AMOUNT,
+                        500_000L,
+                        null,
+                        2,
+                        Duration.ofDays(7),
                         EntitlementScope.SUBTOTAL)))
                 .as("twice as many uses is twice the liability")
                 .isNotEqualTo(hash);
-        assertThat(OrderRemedyService.futureDiscountApprovalHash(
-                discount(EntitlementBenefit.FIXED_AMOUNT, 500_000L, null, 1, Duration.ofDays(365),
+        assertThat(OrderRemedyService.futureDiscountApprovalHash(discount(
+                        EntitlementBenefit.FIXED_AMOUNT,
+                        500_000L,
+                        null,
+                        1,
+                        Duration.ofDays(365),
                         EntitlementScope.SUBTOTAL)))
                 .as("a year is not a week; an entitlement's window is what prices it")
                 .isNotEqualTo(hash);
-        assertThat(OrderRemedyService.futureDiscountApprovalHash(
-                discount(EntitlementBenefit.FIXED_AMOUNT, 500_000L, null, 1, Duration.ofDays(7),
+        assertThat(OrderRemedyService.futureDiscountApprovalHash(discount(
+                        EntitlementBenefit.FIXED_AMOUNT,
+                        500_000L,
+                        null,
+                        1,
+                        Duration.ofDays(7),
                         EntitlementScope.DELIVERY_FEE)))
                 .as("what the grant applies to changes what it is worth")
                 .isNotEqualTo(hash);
@@ -193,38 +221,71 @@ class RemedyApprovalHashTests {
      */
     @Test
     void aComponentAddedToARemedyCommandEntersTheHashAndThisListSaysSo() {
-        assertThat(ApprovalParameters.coveredComponents(RefundCommand.class,
-                "actor", "idempotencyKey", "correlationId"))
-                .containsExactly("tenantId", "orderId", "amountMinor", "currency", "reasonCode",
-                        "reason", "channel", "providerReference", "executedBy", "executedAt");
+        assertThat(ApprovalParameters.coveredComponents(
+                        RefundCommand.class, "actor", "idempotencyKey", "correlationId"))
+                .containsExactly(
+                        "tenantId",
+                        "orderId",
+                        "amountMinor",
+                        "currency",
+                        "reasonCode",
+                        "reason",
+                        "channel",
+                        "providerReference",
+                        "executedBy",
+                        "executedAt");
 
-        assertThat(ApprovalParameters.coveredComponents(FutureDiscountCommand.class,
-                "actor", "idempotencyKey", "correlationId"))
-                .containsExactly("tenantId", "orderId", "appliesTo", "benefit",
-                        "percentBasisPoints", "amountMinor", "maximumMinor", "uses", "validFor",
-                        "reasonCode", "reason");
+        assertThat(ApprovalParameters.coveredComponents(
+                        FutureDiscountCommand.class, "actor", "idempotencyKey", "correlationId"))
+                .containsExactly(
+                        "tenantId",
+                        "orderId",
+                        "appliesTo",
+                        "benefit",
+                        "percentBasisPoints",
+                        "amountMinor",
+                        "maximumMinor",
+                        "uses",
+                        "validFor",
+                        "reasonCode",
+                        "reason");
     }
 
     @Test
     void anExclusionNamingAFieldThatIsNotThereFailsLoudly() {
-        assertThatThrownBy(() -> ApprovalParameters.coveredComponents(RefundCommand.class,
-                "idempotency_key"))
+        assertThatThrownBy(() -> ApprovalParameters.coveredComponents(RefundCommand.class, "idempotency_key"))
                 .as("a renamed component must not stay excluded under its old name")
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("idempotencyKey");
     }
 
     private static long exposure(FutureDiscountCommand command) {
-        long perUse = command.benefit() == EntitlementBenefit.FIXED_AMOUNT
-                ? command.amountMinor()
-                : command.maximumMinor();
+        long perUse =
+                command.benefit() == EntitlementBenefit.FIXED_AMOUNT ? command.amountMinor() : command.maximumMinor();
         return perUse * command.uses();
     }
 
-    private static FutureDiscountCommand discount(EntitlementBenefit benefit, Long amountMinor,
-            Long maximumMinor, int uses, Duration validFor, EntitlementScope appliesTo) {
-        return new FutureDiscountCommand(TENANT, ORDER, appliesTo, benefit, null, amountMinor,
-                maximumMinor, uses, validFor, "SERVICE_FAILURE", "Cold delivery", MAKER, "key-1",
+    private static FutureDiscountCommand discount(
+            EntitlementBenefit benefit,
+            Long amountMinor,
+            Long maximumMinor,
+            int uses,
+            Duration validFor,
+            EntitlementScope appliesTo) {
+        return new FutureDiscountCommand(
+                TENANT,
+                ORDER,
+                appliesTo,
+                benefit,
+                null,
+                amountMinor,
+                maximumMinor,
+                uses,
+                validFor,
+                "SERVICE_FAILURE",
+                "Cold delivery",
+                MAKER,
+                "key-1",
                 "trace-1");
     }
 
@@ -285,9 +346,20 @@ class RemedyApprovalHashTests {
         }
 
         RefundCommand build() {
-            return new RefundCommand(TENANT, orderId, amountMinor, "UZS", "SERVICE_FAILURE",
-                    "Customer reported a missing item", channel, providerReference, executedBy,
-                    executedAt, MAKER, idempotencyKey, correlationId);
+            return new RefundCommand(
+                    TENANT,
+                    orderId,
+                    amountMinor,
+                    "UZS",
+                    "SERVICE_FAILURE",
+                    "Customer reported a missing item",
+                    channel,
+                    providerReference,
+                    executedBy,
+                    executedAt,
+                    MAKER,
+                    idempotencyKey,
+                    correlationId);
         }
     }
 }

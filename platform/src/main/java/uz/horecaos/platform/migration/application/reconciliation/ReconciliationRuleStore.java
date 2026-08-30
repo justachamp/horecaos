@@ -4,7 +4,6 @@ import java.math.BigInteger;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
-
 import uz.horecaos.platform.migration.domain.ReconciliationSeverity;
 
 /**
@@ -84,5 +83,5 @@ public interface ReconciliationRuleStore {
             int ruleVersion,
             String dimensionKey,
             ReconciliationSeverity severity,
-            Measurement measurement) { }
+            Measurement measurement) {}
 }

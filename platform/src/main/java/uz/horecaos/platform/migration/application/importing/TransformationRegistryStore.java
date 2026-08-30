@@ -37,5 +37,5 @@ public interface TransformationRegistryStore {
             String ruleDigest,
             String summary,
             String declaredBy,
-            Instant retiredAt) { }
+            Instant retiredAt) {}
 }

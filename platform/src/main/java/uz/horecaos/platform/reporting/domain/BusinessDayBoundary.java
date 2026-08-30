@@ -41,8 +41,7 @@ public record BusinessDayBoundary(ZoneId zone, LocalTime start, int version) {
         // A boundary at a whole minute is what an operator can state and verify.
         // Seconds would be unenforceable in the UI and invisible in the data.
         if (start.getSecond() != 0 || start.getNano() != 0) {
-            throw new IllegalArgumentException(
-                    "A business day starts on a whole minute, was " + start);
+            throw new IllegalArgumentException("A business day starts on a whole minute, was " + start);
         }
     }
 
@@ -62,9 +61,7 @@ public record BusinessDayBoundary(ZoneId zone, LocalTime start, int version) {
     public LocalDate dateOf(Instant instant) {
         Objects.requireNonNull(instant, "An instant is required");
         ZonedDateTime local = instant.atZone(zone);
-        return local.toLocalTime().isBefore(start)
-                ? local.toLocalDate().minusDays(1)
-                : local.toLocalDate();
+        return local.toLocalTime().isBefore(start) ? local.toLocalDate().minusDays(1) : local.toLocalDate();
     }
 
     /** The instant the given business date begins, inclusive. */

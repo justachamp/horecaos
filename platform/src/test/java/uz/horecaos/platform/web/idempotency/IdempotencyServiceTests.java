@@ -1,8 +1,5 @@
 package uz.horecaos.platform.web.idempotency;
 
-import javax.sql.DataSource;
-
-import uz.horecaos.platform.support.TestDatabase;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Clock;
@@ -15,17 +12,15 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
+import uz.horecaos.platform.support.TestDatabase;
 
 /**
  * ADR 0031 idempotency. The single-threaded cases document the contract; the
@@ -98,10 +93,9 @@ class IdempotencyServiceTests {
     void theSameKeyWithADifferentBodyIsAConflict() {
         service.begin(request("key-1"));
 
-        IdempotencyOutcome outcome = service.begin(new IdempotencyRequest(
-                SCOPE, "key-1", TENANT, "subject-a", """
-                {"cartId":"018f6f4e-899d-7b1c-a8cf-0242ac1207ff"}""",
-                IdempotencyService.DEFAULT_RETENTION));
+        IdempotencyOutcome outcome = service.begin(
+                new IdempotencyRequest(SCOPE, "key-1", TENANT, "subject-a", """
+                {"cartId":"018f6f4e-899d-7b1c-a8cf-0242ac1207ff"}""", IdempotencyService.DEFAULT_RETENTION));
 
         assertThat(outcome)
                 .as("reusing a key for a different request is a client bug, never a retry")
@@ -131,8 +125,7 @@ class IdempotencyServiceTests {
         service.begin(request("key-1"));
 
         IdempotencyOutcome other = service.begin(new IdempotencyRequest(
-                "storefront.cancellation", "key-1", TENANT, "subject-a", BODY,
-                IdempotencyService.DEFAULT_RETENTION));
+                "storefront.cancellation", "key-1", TENANT, "subject-a", BODY, IdempotencyService.DEFAULT_RETENTION));
 
         assertThat(other).isInstanceOf(IdempotencyOutcome.Proceed.class);
     }
@@ -142,8 +135,12 @@ class IdempotencyServiceTests {
         service.begin(request("key-1"));
 
         IdempotencyOutcome other = service.begin(new IdempotencyRequest(
-                SCOPE, "key-1", UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120801"),
-                "subject-a", BODY, IdempotencyService.DEFAULT_RETENTION));
+                SCOPE,
+                "key-1",
+                UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120801"),
+                "subject-a",
+                BODY,
+                IdempotencyService.DEFAULT_RETENTION));
 
         assertThat(other).isInstanceOf(IdempotencyOutcome.Proceed.class);
     }
@@ -160,8 +157,8 @@ class IdempotencyServiceTests {
     void concurrentIdenticalRequestsProduceExactlyOneProceed() throws Exception {
         int attempts = 16;
         try (ExecutorService executor = Executors.newFixedThreadPool(attempts)) {
-            List<Callable<IdempotencyOutcome>> calls = java.util.Collections.nCopies(
-                    attempts, () -> service.begin(request("race-key")));
+            List<Callable<IdempotencyOutcome>> calls =
+                    java.util.Collections.nCopies(attempts, () -> service.begin(request("race-key")));
 
             List<Future<IdempotencyOutcome>> results = executor.invokeAll(calls);
 

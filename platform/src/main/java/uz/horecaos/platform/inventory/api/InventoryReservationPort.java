@@ -25,8 +25,8 @@ public interface InventoryReservationPort {
      * <p>Repeating the call for the same quote returns the existing hold rather
      * than taking a second one.
      */
-    ReservationResult reserveForQuote(UUID tenantId, UUID brandId, UUID locationId,
-            UUID quoteId, Map<UUID, Integer> quantitiesByVariant);
+    ReservationResult reserveForQuote(
+            UUID tenantId, UUID brandId, UUID locationId, UUID quoteId, Map<UUID, Integer> quantitiesByVariant);
 
     /**
      * Turns a hold into a committed sale when an order is confirmed.

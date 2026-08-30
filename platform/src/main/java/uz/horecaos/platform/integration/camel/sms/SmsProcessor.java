@@ -1,13 +1,11 @@
 package uz.horecaos.platform.integration.camel.sms;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.camel.Exchange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
-
-import io.micrometer.core.instrument.MeterRegistry;
-
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 
 /**
@@ -39,8 +37,12 @@ public class SmsProcessor {
      * account. Neither is a case for backing off and trying later.
      */
     private static final java.util.Set<String> ALARMS = java.util.Set.of(
-            "PROVIDER_AUTHENTICATION", "SMS_SPAM_LIMIT", "SMS_SENDER_NOT_REGISTERED",
-            "SMS_ACCOUNT_MISCONFIGURED", "SMS_TEXT_TOO_LONG", "SMS_PROVIDER_UNSUPPORTED");
+            "PROVIDER_AUTHENTICATION",
+            "SMS_SPAM_LIMIT",
+            "SMS_SENDER_NOT_REGISTERED",
+            "SMS_ACCOUNT_MISCONFIGURED",
+            "SMS_TEXT_TOO_LONG",
+            "SMS_PROVIDER_UNSUPPORTED");
 
     private static final Logger log = LoggerFactory.getLogger(SmsProcessor.class);
 
@@ -99,8 +101,11 @@ public class SmsProcessor {
         ProviderOutcome resolved = gateway.resolve(operation.resolving());
         count("resolve", resolved);
 
-        log.warn("An uncertain verification send for challenge {} resolved as {} ({})",
-                operation.challengeId(), resolved.status(), resolved.errorCode());
+        log.warn(
+                "An uncertain verification send for challenge {} resolved as {} ({})",
+                operation.challengeId(),
+                resolved.status(),
+                resolved.errorCode());
         exchange.getIn().setHeader(SmsRouteBuilder.OUTCOME_HEADER, resolved);
     }
 
@@ -113,9 +118,11 @@ public class SmsProcessor {
             // ADR 0023. Loud on purpose and at ERROR: every code in this set is a
             // configuration or credential fault that no amount of waiting fixes,
             // and each one stops every customer of that tenant from signing in.
-            log.error("The SMS gateway refused a verification code for tenant {} as {}. "
-                    + "This will not resolve on its own; see docs/routes/sms-verification.md",
-                    operation.tenantId(), reason);
+            log.error(
+                    "The SMS gateway refused a verification code for tenant {} as {}. "
+                            + "This will not resolve on its own; see docs/routes/sms-verification.md",
+                    operation.tenantId(),
+                    reason);
         }
         clearContext();
     }
@@ -136,8 +143,10 @@ public class SmsProcessor {
         String detail = failure == null ? "unknown" : failure.getClass().getSimpleName();
         ProviderOutcome outcome = ProviderOutcome.uncertain("ROUTE_FAILURE", detail);
 
-        log.error("The verification route failed for challenge {}: {}",
-                operation == null ? "unknown" : operation.challengeId(), detail);
+        log.error(
+                "The verification route failed for challenge {}: {}",
+                operation == null ? "unknown" : operation.challengeId(),
+                detail);
         count("dead_letter", outcome);
         exchange.getIn().setHeader(SmsRouteBuilder.OUTCOME_HEADER, outcome);
         clearContext();
@@ -146,11 +155,14 @@ public class SmsProcessor {
     private void count(String step, ProviderOutcome outcome) {
         // Bounded tags only. A tenant id or a challenge id here would make the
         // cardinality unbounded and eventually take the registry down.
-        meters.counter("horecaos.sms.verification.calls",
-                "step", step,
-                "status", outcome == null ? "NONE" : outcome.status().name(),
-                "reason", outcome == null || outcome.errorCode() == null
-                        ? "none" : outcome.errorCode())
+        meters.counter(
+                        "horecaos.sms.verification.calls",
+                        "step",
+                        step,
+                        "status",
+                        outcome == null ? "NONE" : outcome.status().name(),
+                        "reason",
+                        outcome == null || outcome.errorCode() == null ? "none" : outcome.errorCode())
                 .increment();
     }
 

@@ -10,7 +10,6 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
-
 import uz.horecaos.platform.customers.infrastructure.security.CustomerSessionAuthenticationFilter;
 import uz.horecaos.platform.customers.infrastructure.security.CustomerSessionBearerTokenResolver;
 import uz.horecaos.platform.observability.LocalMetricsScrapeMatcher;
@@ -31,12 +30,13 @@ public class SecurityConfiguration {
      * malformed token.
      */
     @Bean
-    SecurityFilterChain apiSecurity(HttpSecurity http, LocalMetricsScrapeMatcher localMetricsScrape,
+    SecurityFilterChain apiSecurity(
+            HttpSecurity http,
+            LocalMetricsScrapeMatcher localMetricsScrape,
             CustomerSessionAuthenticationFilter customerSessions,
             CustomerSessionBearerTokenResolver bearerTokenResolver)
             throws Exception {
-        return http
-                .addFilterBefore(customerSessions, BearerTokenAuthenticationFilter.class)
+        return http.addFilterBefore(customerSessions, BearerTokenAuthenticationFilter.class)
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
@@ -188,15 +188,12 @@ public class SecurityConfiguration {
                         // Click sends no credential, and a 401 would be read as a
                         // transport failure and retried until the payment went to
                         // manual investigation.
-                        .requestMatchers(
-                                HttpMethod.POST,
-                                "/providers/click/*/prepare",
-                                "/providers/click/*/complete")
+                        .requestMatchers(HttpMethod.POST, "/providers/click/*/prepare", "/providers/click/*/complete")
                         .permitAll()
-                        .anyRequest().authenticated())
-                .oauth2ResourceServer(resourceServer -> resourceServer
-                        .bearerTokenResolver(bearerTokenResolver)
-                        .jwt(Customizer.withDefaults()))
+                        .anyRequest()
+                        .authenticated())
+                .oauth2ResourceServer(resourceServer ->
+                        resourceServer.bearerTokenResolver(bearerTokenResolver).jwt(Customizer.withDefaults()))
                 .build();
     }
 }

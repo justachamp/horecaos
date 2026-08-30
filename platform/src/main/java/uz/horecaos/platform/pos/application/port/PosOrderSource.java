@@ -88,8 +88,7 @@ public interface PosOrderSource {
                 List<UUID> modifierOptionIds) {
 
             public Line {
-                modifierOptionIds = List.copyOf(
-                        modifierOptionIds == null ? List.of() : modifierOptionIds);
+                modifierOptionIds = List.copyOf(modifierOptionIds == null ? List.of() : modifierOptionIds);
             }
         }
     }

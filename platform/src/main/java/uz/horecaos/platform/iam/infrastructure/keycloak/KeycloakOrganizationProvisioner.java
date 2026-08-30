@@ -3,13 +3,11 @@ package uz.horecaos.platform.iam.infrastructure.keycloak;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
-
 import uz.horecaos.platform.iam.api.organizations.OrganizationDirectory;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
 
@@ -36,8 +34,7 @@ public class KeycloakOrganizationProvisioner implements OrganizationProvisioner 
     private final OrganizationDirectory directory;
     private final String realm;
 
-    public KeycloakOrganizationProvisioner(
-            RestClient client, OrganizationDirectory directory, String realm) {
+    public KeycloakOrganizationProvisioner(RestClient client, OrganizationDirectory directory, String realm) {
         this.client = client;
         this.directory = directory;
         this.realm = realm;
@@ -46,7 +43,8 @@ public class KeycloakOrganizationProvisioner implements OrganizationProvisioner 
     @Override
     public OrganizationRef ensureOrganization(EnsureOrganization command) {
         // 1. A stored immutable id is the authority. Fetch by it.
-        if (command.existingOrganizationId() != null && !command.existingOrganizationId().isBlank()) {
+        if (command.existingOrganizationId() != null
+                && !command.existingOrganizationId().isBlank()) {
             return getOrganization(command.existingOrganizationId())
                     .map(existing -> new OrganizationRef(existing.organizationId(), existing.alias(), false))
                     .orElseThrow(() -> new OrganizationDriftException(
@@ -60,34 +58,38 @@ public class KeycloakOrganizationProvisioner implements OrganizationProvisioner 
         List<OrganizationSnapshot> matches = directory.findByAlias(command.alias());
         if (matches.size() > 1) {
             throw new OrganizationDriftException(
-                    "Alias %s matches %d organizations; resolve manually"
-                            .formatted(command.alias(), matches.size()));
+                    "Alias %s matches %d organizations; resolve manually".formatted(command.alias(), matches.size()));
         }
         if (matches.size() == 1) {
             OrganizationSnapshot found = matches.getFirst();
-            log.info("Linking existing Keycloak organization {} for tenant {}",
-                    found.organizationId(), command.tenantId());
+            log.info(
+                    "Linking existing Keycloak organization {} for tenant {}",
+                    found.organizationId(),
+                    command.tenantId());
             return new OrganizationRef(found.organizationId(), found.alias(), false);
         }
 
         client.post()
                 .uri("/admin/realms/{realm}/organizations", realm)
                 .body(Map.of(
-                        "name", command.displayName() == null ? command.alias() : command.displayName(),
-                        "alias", command.alias(),
-                        "enabled", true))
+                        "name",
+                        command.displayName() == null ? command.alias() : command.displayName(),
+                        "alias",
+                        command.alias(),
+                        "enabled",
+                        true))
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, (request, response) -> {
                     // A 409 is not automatically success: it may be an unrelated
                     // object with the same alias, so read back rather than assume.
-                    throw new OrganizationDriftException(
-                            "Creating organization %s failed with %s"
-                                    .formatted(command.alias(), response.getStatusCode()));
+                    throw new OrganizationDriftException("Creating organization %s failed with %s"
+                            .formatted(command.alias(), response.getStatusCode()));
                 })
                 .toBodilessEntity();
 
         // 3. Read back. The response body is not trusted as proof of what exists.
-        OrganizationSnapshot created = directory.findByAlias(command.alias()).stream().findFirst()
+        OrganizationSnapshot created = directory.findByAlias(command.alias()).stream()
+                .findFirst()
                 .orElseThrow(() -> new OrganizationDriftException(
                         "Organization %s was created but cannot be read back".formatted(command.alias())));
 
@@ -111,14 +113,18 @@ public class KeycloakOrganizationProvisioner implements OrganizationProvisioner 
             client.post()
                     .uri("/admin/realms/{realm}/users", realm)
                     .body(Map.of(
-                            "username", command.email(),
-                            "email", command.email(),
-                            "enabled", true,
-                            "emailVerified", false))
+                            "username",
+                            command.email(),
+                            "email",
+                            command.email(),
+                            "enabled",
+                            true,
+                            "emailVerified",
+                            false))
                     .retrieve()
                     .toBodilessEntity();
-            subjectId = findUserByEmail(command.email()).orElseThrow(() ->
-                    new OrganizationDriftException(
+            subjectId = findUserByEmail(command.email())
+                    .orElseThrow(() -> new OrganizationDriftException(
                             "User %s was created but cannot be read back".formatted(command.email())));
             created = true;
         }
@@ -148,14 +154,16 @@ public class KeycloakOrganizationProvisioner implements OrganizationProvisioner 
                 .uri("/admin/realms/{realm}/organizations/{org}/members", realm, organizationId)
                 .retrieve()
                 .body(LIST);
-        return members != null && members.stream()
-                .anyMatch(member -> subjectId.equals(String.valueOf(member.get("id"))));
+        return members != null
+                && members.stream().anyMatch(member -> subjectId.equals(String.valueOf(member.get("id"))));
     }
 
     private Optional<String> findUserByEmail(String email) {
         List<Map<String, Object>> users = client.get()
                 .uri(builder -> builder.path("/admin/realms/{realm}/users")
-                        .queryParam("email", email).queryParam("exact", true).build(realm))
+                        .queryParam("email", email)
+                        .queryParam("exact", true)
+                        .build(realm))
                 .retrieve()
                 .body(LIST);
         return users == null || users.isEmpty()
@@ -164,5 +172,5 @@ public class KeycloakOrganizationProvisioner implements OrganizationProvisioner 
     }
 
     private static final org.springframework.core.ParameterizedTypeReference<List<Map<String, Object>>> LIST =
-            new org.springframework.core.ParameterizedTypeReference<>() { };
+            new org.springframework.core.ParameterizedTypeReference<>() {};
 }

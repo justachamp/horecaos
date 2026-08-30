@@ -5,7 +5,6 @@ package uz.horecaos.platform.iam.api.secrets;
  * and a documented procedure, and a runtime role may read only its own.
  */
 public enum SecretCategory {
-
     PROVIDER_POS,
     PROVIDER_PAYMENT,
     PROVIDER_DELIVERY,

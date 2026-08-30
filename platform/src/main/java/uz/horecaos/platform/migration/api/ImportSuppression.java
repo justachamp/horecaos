@@ -1,7 +1,6 @@
 package uz.horecaos.platform.migration.api;
 
 import java.util.Objects;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,8 +39,7 @@ public final class ImportSuppression {
 
     private static final Logger log = LoggerFactory.getLogger(ImportSuppression.class);
 
-    private ImportSuppression() {
-    }
+    private ImportSuppression() {}
 
     /**
      * Whether this effect must be skipped because an import is running.
@@ -62,7 +60,7 @@ public final class ImportSuppression {
         if (effect.suppression() != ExternalEffect.Suppression.SKIPPED) {
             throw new IllegalArgumentException(
                     ("%s is refused during an import, not skipped. Skipping it would return a "
-                            + "result the caller can only satisfy by inventing one.")
+                                    + "result the caller can only satisfy by inventing one.")
                             .formatted(effect));
         }
         if (!ImportContext.isImporting()) {
@@ -92,7 +90,7 @@ public final class ImportSuppression {
         if (effect.suppression() != ExternalEffect.Suppression.REFUSED) {
             throw new IllegalArgumentException(
                     ("%s is skipped during an import, not refused. Failing the run for an effect "
-                            + "that has a truthful no-op stops a legitimate import.")
+                                    + "that has a truthful no-op stops a legitimate import.")
                             .formatted(effect));
         }
         if (ImportContext.isImporting()) {

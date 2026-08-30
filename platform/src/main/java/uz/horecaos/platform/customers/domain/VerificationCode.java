@@ -29,8 +29,7 @@ public final class VerificationCode {
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
-    private VerificationCode() {
-    }
+    private VerificationCode() {}
 
     /**
      * A fresh code, zero-padded so every code is the same width.

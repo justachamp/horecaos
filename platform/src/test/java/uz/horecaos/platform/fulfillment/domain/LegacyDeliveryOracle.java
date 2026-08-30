@@ -3,7 +3,6 @@ package uz.horecaos.platform.fulfillment.domain;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
-
 import uz.horecaos.platform.fulfillment.domain.tariff.LegacyTariffImport.LegacyDeliveryConfig;
 import uz.horecaos.platform.fulfillment.domain.tariff.LegacyTariffImport.LegacyDiscount;
 import uz.horecaos.platform.fulfillment.domain.tariff.LegacyTariffImport.LegacyPeak;
@@ -21,8 +20,7 @@ import uz.horecaos.platform.fulfillment.domain.tariff.LegacyTariffImport.LegacyW
  */
 public final class LegacyDeliveryOracle {
 
-    private LegacyDeliveryOracle() {
-    }
+    private LegacyDeliveryOracle() {}
 
     public static long price(LegacyDeliveryConfig config, int distance, LocalDateTime at) {
         return run(config, distance, at)[0];
@@ -114,7 +112,7 @@ public final class LegacyDeliveryOracle {
         if (deliveryDiscount != 0) {
             finalDiscount = Math.min(roundToStep(deliveryDiscount), price);
         }
-        return new long[] { price, finalDiscount };
+        return new long[] {price, finalDiscount};
     }
 
     /** {@code int(round(x / 500) * 500)}. Python's round is half to even. */

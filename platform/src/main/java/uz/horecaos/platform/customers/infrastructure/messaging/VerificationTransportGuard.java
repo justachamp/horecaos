@@ -2,13 +2,11 @@ package uz.horecaos.platform.customers.infrastructure.messaging;
 
 import java.util.List;
 import java.util.Set;
-
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.customers.spi.VerificationCodeTransport;
 
 /**
@@ -35,8 +33,7 @@ public class VerificationTransportGuard implements ApplicationRunner {
     private final Environment environment;
     private final ObjectProvider<VerificationCodeTransport> transports;
 
-    public VerificationTransportGuard(Environment environment,
-            ObjectProvider<VerificationCodeTransport> transports) {
+    public VerificationTransportGuard(Environment environment, ObjectProvider<VerificationCodeTransport> transports) {
         this.environment = environment;
         this.transports = transports;
     }
@@ -54,8 +51,7 @@ public class VerificationTransportGuard implements ApplicationRunner {
                     Profile %s has no VerificationCodeTransport, so no customer can be issued a
                     one-time code and nobody can register (ADR 0015).
                     Wire an SMS adapter implementing uz.horecaos.platform.customers.spi
-                    .VerificationCodeTransport, or run a local profile."""
-                    .formatted(active));
+                    .VerificationCodeTransport, or run a local profile.""".formatted(active));
         }
     }
 }

@@ -21,8 +21,7 @@ package uz.horecaos.platform.marketing.domain;
 public final class SmsSegments {
 
     /** GSM 03.38 basic characters, as one string for a membership test. */
-    private static final String GSM_BASIC =
-            "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?"
+    private static final String GSM_BASIC = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?"
             + "¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
 
     /**
@@ -37,8 +36,7 @@ public final class SmsSegments {
     private static final int UCS2_SINGLE = 70;
     private static final int UCS2_CONCATENATED = 67;
 
-    private SmsSegments() {
-    }
+    private SmsSegments() {}
 
     /** Which alphabet the whole body will be sent in. */
     public enum Encoding {

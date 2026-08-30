@@ -7,7 +7,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
-
 import org.junit.jupiter.api.Test;
 
 /**
@@ -30,7 +29,8 @@ class InProcessRateLimiterBoundTests {
 
         floodDistinctKeys(limiter, policy, InProcessRateLimiter.MAXIMUM_BUCKETS + 1_000);
 
-        assertThat(limiter.check(new RateLimiter.Key("qr.exchange", null, "one-more"), policy).allowed())
+        assertThat(limiter.check(new RateLimiter.Key("qr.exchange", null, "one-more"), policy)
+                        .allowed())
                 .as("a limit that fails closed must refuse rather than admit an unbounded key")
                 .isFalse();
     }
@@ -40,11 +40,12 @@ class InProcessRateLimiterBoundTests {
         MutableClock clock = new MutableClock(START);
         InProcessRateLimiter limiter = new InProcessRateLimiter(clock);
 
-        floodDistinctKeys(limiter, RateLimiter.Policy.strictPerMinute(1),
-                InProcessRateLimiter.MAXIMUM_BUCKETS + 1_000);
+        floodDistinctKeys(limiter, RateLimiter.Policy.strictPerMinute(1), InProcessRateLimiter.MAXIMUM_BUCKETS + 1_000);
 
-        assertThat(limiter.check(new RateLimiter.Key("menu.read", "tenant-a", "user-1"),
-                        RateLimiter.Policy.perMinute(30)).allowed())
+        assertThat(limiter.check(
+                                new RateLimiter.Key("menu.read", "tenant-a", "user-1"),
+                                RateLimiter.Policy.perMinute(30))
+                        .allowed())
                 .as("a saturated limiter is an unavailable backend, and Policy.failOpen already "
                         + "says what each limit wants done about that")
                 .isTrue();
@@ -111,8 +112,7 @@ class InProcessRateLimiterBoundTests {
                 .isFalse();
     }
 
-    private static void floodDistinctKeys(
-            InProcessRateLimiter limiter, RateLimiter.Policy policy, int count) {
+    private static void floodDistinctKeys(InProcessRateLimiter limiter, RateLimiter.Policy policy, int count) {
         for (int i = 0; i < count; i++) {
             limiter.check(new RateLimiter.Key("qr.exchange", null, "flood-" + i), policy);
         }

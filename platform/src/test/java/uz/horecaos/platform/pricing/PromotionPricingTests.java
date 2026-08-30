@@ -1,14 +1,14 @@
 package uz.horecaos.platform.pricing;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.pricing.application.MenuMembershipLookup;
 import uz.horecaos.platform.pricing.application.PricingEngine;
 import uz.horecaos.platform.pricing.application.PricingEngine.PricingInputs;
@@ -20,8 +20,6 @@ import uz.horecaos.platform.pricing.domain.Promotion.Action;
 import uz.horecaos.platform.pricing.domain.Promotion.Operands;
 import uz.horecaos.platform.pricing.domain.Quote;
 import uz.horecaos.platform.pricing.domain.QuoteRequest;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * ADR 0018 stages 3 and 4, through {@link PricingEngine} rather than through the
@@ -107,7 +105,8 @@ class PromotionPricingTests {
 
         Quote.QuoteLine line = result.lines().stream()
                 .filter(candidate -> candidate.type() == Quote.LineType.ITEM)
-                .findFirst().orElseThrow();
+                .findFirst()
+                .orElseThrow();
 
         assertThat(line.baseAmount().minor())
                 .as("the base is what it cost before the offer")
@@ -120,12 +119,12 @@ class PromotionPricingTests {
     @Test
     @DisplayName("suspending a promotion invalidates a quote in flight")
     void thePromotionIsInTheContextHash() {
-        String withOffer = engine.price(cart(1), inputs(offers(tenPercentOff())), NOW).contextHash();
+        String withOffer =
+                engine.price(cart(1), inputs(offers(tenPercentOff())), NOW).contextHash();
         String withoutOffer = engine.price(cart(1), inputs(null), NOW).contextHash();
 
         assertThat(withOffer)
-                .as("otherwise a promotion pulled mid-checkout leaves the quote valid "
-                        + "and the total wrong")
+                .as("otherwise a promotion pulled mid-checkout leaves the quote valid " + "and the total wrong")
                 .isNotEqualTo(withoutOffer);
     }
 
@@ -133,20 +132,34 @@ class PromotionPricingTests {
     @DisplayName("re-authoring a promotion invalidates a quote in flight")
     void theDefinitionVersionIsInTheContextHash() {
         Promotion first = tenPercentOff();
-        Promotion rewritten = new Promotion(first.promotionId(), first.tenantId(), first.brandId(),
-                first.code(), first.scope(), first.stackingGroup(), false, 0, false, null, "UZS",
-                first.validFrom(), null, 2, first.conditions(), first.actions());
+        Promotion rewritten = new Promotion(
+                first.promotionId(),
+                first.tenantId(),
+                first.brandId(),
+                first.code(),
+                first.scope(),
+                first.stackingGroup(),
+                false,
+                0,
+                false,
+                null,
+                "UZS",
+                first.validFrom(),
+                null,
+                2,
+                first.conditions(),
+                first.actions());
 
         assertThat(engine.price(cart(1), inputs(offers(first)), NOW).contextHash())
-                .isNotEqualTo(engine.price(cart(1), inputs(offers(rewritten)), NOW).contextHash());
+                .isNotEqualTo(
+                        engine.price(cart(1), inputs(offers(rewritten)), NOW).contextHash());
     }
 
     @Test
     @DisplayName("a cart with no promotions prices exactly as it did before")
     void nothingChangesWhenNothingIsOnOffer() {
         var withNullInputs = engine.price(cart(2), inputs(null), NOW);
-        var withEmptyList = engine.price(cart(2),
-                inputs(new PromotionInputs(List.of(), context(), membership())), NOW);
+        var withEmptyList = engine.price(cart(2), inputs(new PromotionInputs(List.of(), context(), membership())), NOW);
 
         assertThat(withNullInputs.total().minor()).isEqualTo(100_000L);
         assertThat(withEmptyList.total().minor()).isEqualTo(100_000L);
@@ -159,13 +172,28 @@ class PromotionPricingTests {
     @Test
     @DisplayName("a promotion matching no line leaves the total alone")
     void anUnmatchedPromotionChangesNothing() {
-        Promotion elsewhere = new Promotion(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                "OTHER", Promotion.Scope.ITEM, "SEASONAL", false, 0, false, null, "UZS",
-                NOW.minusSeconds(60), null, 1,
-                List.of(new Promotion.Condition(1, Promotion.Condition.Type.PRODUCT,
-                        new Operands(Map.of("productIds", List.of(UUID.randomUUID().toString()))))),
-                List.of(new Action(1, Action.Type.ITEM_PERCENTAGE_DISCOUNT,
-                        new Operands(Map.of("basisPoints", 5_000L)))));
+        Promotion elsewhere = new Promotion(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "OTHER",
+                Promotion.Scope.ITEM,
+                "SEASONAL",
+                false,
+                0,
+                false,
+                null,
+                "UZS",
+                NOW.minusSeconds(60),
+                null,
+                1,
+                List.of(new Promotion.Condition(
+                        1,
+                        Promotion.Condition.Type.PRODUCT,
+                        new Operands(
+                                Map.of("productIds", List.of(UUID.randomUUID().toString()))))),
+                List.of(new Action(
+                        1, Action.Type.ITEM_PERCENTAGE_DISCOUNT, new Operands(Map.of("basisPoints", 5_000L)))));
 
         assertThat(engine.price(cart(1), inputs(offers(elsewhere)), NOW).total().minor())
                 .isEqualTo(50_000L);
@@ -174,13 +202,30 @@ class PromotionPricingTests {
     // ------------------------------------------------------------------ fixtures
 
     private static QuoteRequest cart(int quantity) {
-        return new QuoteRequest(TENANT, BRAND, LOCATION, null, "STOREFRONT",
-                List.of(new QuoteRequest.Line("line-1", OSH_VARIANT, quantity, List.of())), null);
+        return new QuoteRequest(
+                TENANT,
+                BRAND,
+                LOCATION,
+                null,
+                "STOREFRONT",
+                List.of(new QuoteRequest.Line("line-1", OSH_VARIANT, quantity, List.of())),
+                null);
     }
 
     private static PricingInputs inputs(PromotionInputs promotions) {
-        return new PricingInputs("UZS", PUBLICATION, PRICE_BOOK, 1, TAX_PROFILE, 1, 1_200,
-                TaxMode.INCLUSIVE, Map.of(OSH_VARIANT, 50_000L), Map.of(), Map.of(), null,
+        return new PricingInputs(
+                "UZS",
+                PUBLICATION,
+                PRICE_BOOK,
+                1,
+                TAX_PROFILE,
+                1,
+                1_200,
+                TaxMode.INCLUSIVE,
+                Map.of(OSH_VARIANT, 50_000L),
+                Map.of(),
+                Map.of(),
+                null,
                 promotions);
     }
 
@@ -189,22 +234,35 @@ class PromotionPricingTests {
     }
 
     private static PromotionEvaluator.PromotionContext context() {
-        return new PromotionEvaluator.PromotionContext("STOREFRONT", LOCATION, "PICKUP", false,
-                Set.of(), Set.of(), 5, 12 * 60);
+        return new PromotionEvaluator.PromotionContext(
+                "STOREFRONT", LOCATION, "PICKUP", false, Set.of(), Set.of(), 5, 12 * 60);
     }
 
     private static Map<UUID, MenuMembershipLookup.Membership> membership() {
-        return Map.of(OSH_VARIANT,
-                new MenuMembershipLookup.Membership(OSH_PRODUCT, Set.of(MAINS)));
+        return Map.of(OSH_VARIANT, new MenuMembershipLookup.Membership(OSH_PRODUCT, Set.of(MAINS)));
     }
 
     private static Promotion tenPercentOff() {
-        return new Promotion(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "TEN",
-                Promotion.Scope.ITEM, "SEASONAL", false, 0, false, null, "UZS",
-                NOW.minusSeconds(60), null, 1,
-                List.of(new Promotion.Condition(1, Promotion.Condition.Type.PRODUCT,
+        return new Promotion(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "TEN",
+                Promotion.Scope.ITEM,
+                "SEASONAL",
+                false,
+                0,
+                false,
+                null,
+                "UZS",
+                NOW.minusSeconds(60),
+                null,
+                1,
+                List.of(new Promotion.Condition(
+                        1,
+                        Promotion.Condition.Type.PRODUCT,
                         new Operands(Map.of("productIds", List.of(OSH_PRODUCT.toString()))))),
-                List.of(new Action(1, Action.Type.ITEM_PERCENTAGE_DISCOUNT,
-                        new Operands(Map.of("basisPoints", 1_000L)))));
+                List.of(new Action(
+                        1, Action.Type.ITEM_PERCENTAGE_DISCOUNT, new Operands(Map.of("basisPoints", 1_000L)))));
     }
 }

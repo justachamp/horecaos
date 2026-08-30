@@ -27,7 +27,12 @@ public record SyncDifference(
         String note) {
 
     public enum EntityType {
-        PRODUCT, VARIANT, CATEGORY, MODIFIER_GROUP, MODIFIER, AVAILABILITY
+        PRODUCT,
+        VARIANT,
+        CATEGORY,
+        MODIFIER_GROUP,
+        MODIFIER,
+        AVAILABILITY
     }
 
     public enum DifferenceCategory {
@@ -82,7 +87,11 @@ public record SyncDifference(
         REVIEWED_IMPORT
     }
 
-    public enum Severity { INFO, WARNING, BLOCKING }
+    public enum Severity {
+        INFO,
+        WARNING,
+        BLOCKING
+    }
 
     public enum RecommendedAction {
 

@@ -3,18 +3,15 @@ package uz.horecaos.platform.tenancy.infrastructure.persistence;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
-
+import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
 import uz.horecaos.platform.tenancy.api.PolicyResolver;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
-import uz.horecaos.platform.iam.api.ResourceScope;
-import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 
 /**
  * SQL adapter for ADR 0030 policy resolution.
@@ -119,5 +116,5 @@ public class JdbcPolicyResolver implements PolicyResolver {
         }
     }
 
-    private record Row(UUID id, int version, ScopeType scopeType, String documentHash, String document) { }
+    private record Row(UUID id, int version, ScopeType scopeType, String documentHash, String document) {}
 }

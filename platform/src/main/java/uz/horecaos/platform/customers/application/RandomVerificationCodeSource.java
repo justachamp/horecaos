@@ -1,7 +1,6 @@
 package uz.horecaos.platform.customers.application;
 
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.customers.domain.VerificationCode;
 
 /**

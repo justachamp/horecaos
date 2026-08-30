@@ -1,14 +1,12 @@
 package uz.horecaos.platform.integration.camel.pos;
 
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.camel.Exchange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
-
-import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
-import io.micrometer.core.instrument.MeterRegistry;
-
 import uz.horecaos.platform.integration.api.pos.PosApiCall;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 
@@ -77,8 +75,8 @@ public class PosProcessor {
             // The breaker refused, so nothing was sent. Retryable rather than
             // uncertain even on an unkeyed create: the provider provably did not
             // act, and there is nothing to discover.
-            outcome = ProviderOutcome.retryable("CIRCUIT_OPEN",
-                    "Circuit open for " + call.providerType(), java.time.Duration.ofSeconds(30));
+            outcome = ProviderOutcome.retryable(
+                    "CIRCUIT_OPEN", "Circuit open for " + call.providerType(), java.time.Duration.ofSeconds(30));
             count("circuit_open", call, outcome);
             log.warn("Circuit open for {}; {} not attempted", call.providerType(), call.operation());
         } catch (PosCircuitBreakers.PosCallFailed failed) {
@@ -90,10 +88,12 @@ public class PosProcessor {
 
     public void recordOutcome(Exchange exchange) {
         PosApiCall call = call(exchange);
-        ProviderOutcome outcome = exchange.getIn()
-                .getHeader(PosRouteBuilder.OUTCOME_HEADER, ProviderOutcome.class);
+        ProviderOutcome outcome = exchange.getIn().getHeader(PosRouteBuilder.OUTCOME_HEADER, ProviderOutcome.class);
         count("completed", call, outcome);
-        log.info("POS call {} on {} finished as {}", call.operation(), call.providerType(),
+        log.info(
+                "POS call {} on {} finished as {}",
+                call.operation(),
+                call.providerType(),
                 outcome == null ? "NONE" : outcome.status());
         PosRouteBuilder.clearContext();
     }
@@ -110,7 +110,8 @@ public class PosProcessor {
     public void deadLetter(Exchange exchange) {
         PosApiCall call = call(exchange);
         Throwable cause = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Throwable.class);
-        String detail = cause == null ? "Unknown route failure" : cause.getClass().getSimpleName();
+        String detail =
+                cause == null ? "Unknown route failure" : cause.getClass().getSimpleName();
 
         ProviderOutcome outcome;
         if (cause instanceof PosCircuitBreakers.PosCallFailed failed) {
@@ -123,20 +124,25 @@ public class PosProcessor {
 
         exchange.getIn().setHeader(PosRouteBuilder.OUTCOME_HEADER, outcome);
         count("dead_lettered", call, outcome);
-        log.error("POS call {} on {} dead-lettered as {}",
-                call.operation(), call.providerType(), outcome.errorCode());
+        log.error("POS call {} on {} dead-lettered as {}", call.operation(), call.providerType(), outcome.errorCode());
         PosRouteBuilder.clearContext();
     }
 
     private void count(String event, PosApiCall call, ProviderOutcome outcome) {
         // Bounded tags only. A tenant id or an order id here would make the
         // cardinality unbounded and eventually take the registry down.
-        meters.counter("horecaos.pos.route",
-                "event", event,
-                "provider", call.providerType(),
-                "operation", call.operation(),
-                "effect", call.effect().name(),
-                "status", outcome == null ? "NONE" : outcome.status().name())
+        meters.counter(
+                        "horecaos.pos.route",
+                        "event",
+                        event,
+                        "provider",
+                        call.providerType(),
+                        "operation",
+                        call.operation(),
+                        "effect",
+                        call.effect().name(),
+                        "status",
+                        outcome == null ? "NONE" : outcome.status().name())
                 .increment();
     }
 

@@ -1,18 +1,15 @@
 package uz.horecaos.platform.reporting.projection;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -20,18 +17,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.json.JsonMapper;
-
-import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.integration.inbox.EnvelopeValidator;
 import uz.horecaos.platform.integration.inbox.InboxExecutor;
 import uz.horecaos.platform.integration.inbox.InboxHandlerRegistry;
 import uz.horecaos.platform.integration.inbox.InboxResult;
 import uz.horecaos.platform.integration.inbox.JdbcInboxStore;
+import uz.horecaos.platform.support.TestDatabase;
 
 /**
  * The platform's first real consumer (ADR 0005).
@@ -137,9 +131,7 @@ class TenantSummaryProjectionTests {
 
         offer(tenantCreated(), TENANT, 1);
 
-        assertThat(summary())
-                .containsEntry("status", "PROVISIONING")
-                .containsEntry("brand_count", 1);
+        assertThat(summary()).containsEntry("status", "PROVISIONING").containsEntry("brand_count", 1);
     }
 
     @Test
@@ -155,9 +147,7 @@ class TenantSummaryProjectionTests {
         offer(tenantCreated(), TENANT, 0);
         offer(brandCreated(BRAND_A), BRAND_A, 1);
 
-        assertThat(summary())
-                .containsEntry("slug", "acme")
-                .containsEntry("brand_count", 1);
+        assertThat(summary()).containsEntry("slug", "acme").containsEntry("brand_count", 1);
     }
 
     @Test
@@ -168,21 +158,29 @@ class TenantSummaryProjectionTests {
                 SELECT status FROM integration.inbox_messages
                  WHERE consumer_name = :consumer
                 """)
-                .param("consumer", TenantSummaryProjection.CONSUMER_NAME)
-                .query(String.class).single())
+                        .param("consumer", TenantSummaryProjection.CONSUMER_NAME)
+                        .query(String.class)
+                        .single())
                 .isEqualTo("PROCESSED");
         assertThat(summary()).isNotEmpty();
     }
 
     private InboxResult offer(String body, UUID aggregateId, long offset) {
         return executor.execute(
-                TenantSummaryProjection.CONSUMER_NAME, aggregateId.toString(), body,
-                Map.of(), "tenancy.events", 0, offset);
+                TenantSummaryProjection.CONSUMER_NAME,
+                aggregateId.toString(),
+                body,
+                Map.of(),
+                "tenancy.events",
+                0,
+                offset);
     }
 
     private Map<String, Object> summary() {
         return jdbc.sql("SELECT * FROM reporting.tenant_summaries WHERE tenant_id = :id")
-                .param("id", TENANT).query().singleRow();
+                .param("id", TENANT)
+                .query()
+                .singleRow();
     }
 
     private static String tenantCreated() {
@@ -194,8 +192,7 @@ class TenantSummaryProjectionTests {
 
     private static String brandCreated(UUID brandId) {
         return envelope(UUID.randomUUID(), "BrandCreated", "Brand", brandId, """
-                {"brandId":"%s","code":"ACME","slug":"acme-brand","displayName":"Acme","status":"ACTIVE"}"""
-                .formatted(brandId));
+                {"brandId":"%s","code":"ACME","slug":"acme-brand","displayName":"Acme","status":"ACTIVE"}""".formatted(brandId));
     }
 
     private static String locationCreated() {
@@ -209,8 +206,7 @@ class TenantSummaryProjectionTests {
         return """
                 {"eventId":"%s","eventType":"%s","eventVersion":1,"tenantId":"%s",
                  "aggregateType":"%s","aggregateId":"%s","correlationId":"correlation-1",
-                 "causationId":null,"occurredAt":"2026-08-20T09:00:00Z","payload":%s}"""
-                .formatted(eventId, eventType, TENANT, aggregateType, aggregateId, payload);
+                 "causationId":null,"occurredAt":"2026-08-20T09:00:00Z","payload":%s}""".formatted(eventId, eventType, TENANT, aggregateType, aggregateId, payload);
     }
 
     private void insertTenant() {

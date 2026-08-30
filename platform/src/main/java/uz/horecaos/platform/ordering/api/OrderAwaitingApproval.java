@@ -3,7 +3,6 @@ package uz.horecaos.platform.ordering.api;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
-
 import uz.horecaos.platform.tenancy.api.TenantId;
 
 /**
@@ -24,7 +23,8 @@ public record OrderAwaitingApproval(
         Instant approvalDeadlineAt,
         String timeoutAction,
         String status,
-        int orderVersion) implements OrderingEvent {
+        int orderVersion)
+        implements OrderingEvent {
 
     public OrderAwaitingApproval {
         Objects.requireNonNull(eventId, "Event ID is required");
@@ -46,8 +46,15 @@ public record OrderAwaitingApproval(
 
     @Override
     public Object payload() {
-        return new Payload(orderId, brandId, locationId, approvalChannel,
-                approvalDeadlineAt.toString(), timeoutAction, status, orderVersion);
+        return new Payload(
+                orderId,
+                brandId,
+                locationId,
+                approvalChannel,
+                approvalDeadlineAt.toString(),
+                timeoutAction,
+                status,
+                orderVersion);
     }
 
     public record Payload(
@@ -62,5 +69,5 @@ public record OrderAwaitingApproval(
             String approvalDeadlineAt,
             String timeoutAction,
             String status,
-            int orderVersion) { }
+            int orderVersion) {}
 }

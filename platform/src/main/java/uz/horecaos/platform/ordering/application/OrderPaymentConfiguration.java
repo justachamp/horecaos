@@ -1,15 +1,12 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
-import java.util.Optional;
-
 import uz.horecaos.platform.ordering.api.OrderSettlementPort;
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
 
@@ -48,21 +45,27 @@ public class OrderPaymentConfiguration {
     @Bean
     @ConditionalOnMissingBean(PaymentIntentPort.class)
     PaymentIntentPort unwiredPaymentIntentPort() {
-        log.warn("No payments module is wired (ADR 0013): checkout creates no payment intent and "
-                + "every order takes the offline-payment path. Every checkout result and order "
-                + "read carries {}.", PaymentIntentPort.NOT_WIRED_WARNING);
+        log.warn(
+                "No payments module is wired (ADR 0013): checkout creates no payment intent and "
+                        + "every order takes the offline-payment path. Every checkout result and order "
+                        + "read carries {}.",
+                PaymentIntentPort.NOT_WIRED_WARNING);
 
         return new PaymentIntentPort() {
 
             @Override
-            public boolean paymentRequiredBeforeConfirmation(UUID tenantId, UUID orderId,
-                    String paymentMethodCode) {
+            public boolean paymentRequiredBeforeConfirmation(UUID tenantId, UUID orderId, String paymentMethodCode) {
                 return false;
             }
 
             @Override
-            public UUID createIntent(UUID tenantId, UUID orderId, long amountMinor, String currency,
-                    String paymentMethodCode, String idempotencyKey) {
+            public UUID createIntent(
+                    UUID tenantId,
+                    UUID orderId,
+                    long amountMinor,
+                    String currency,
+                    String paymentMethodCode,
+                    String idempotencyKey) {
                 // Returning a fabricated id would be worse than returning none: a
                 // consumer would follow it to a payments module that has no such
                 // row, and the failure would surface far from its cause.
@@ -93,8 +96,9 @@ public class OrderPaymentConfiguration {
     @Bean
     @ConditionalOnMissingBean(OrderSettlementPort.class)
     OrderSettlementPort unwiredOrderSettlementPort() {
-        log.warn("No payments module is wired (ADR 0046): checkout plans no settlement, so no "
-                + "order can be refunded or reimbursed. Every checkout result carries {}.",
+        log.warn(
+                "No payments module is wired (ADR 0046): checkout plans no settlement, so no "
+                        + "order can be refunded or reimbursed. Every checkout result carries {}.",
                 OrderSettlementPort.NOT_WIRED_WARNING);
 
         return new OrderSettlementPort() {
@@ -117,8 +121,7 @@ public class OrderPaymentConfiguration {
             }
 
             @Override
-            public void recordTerminalOutcome(UUID tenantId, UUID orderId, String reasonCode,
-                    String actor) {
+            public void recordTerminalOutcome(UUID tenantId, UUID orderId, String reasonCode, String actor) {
                 // Nothing was planned, so nothing is held. A cancellation must not
                 // fail because payments is absent either.
             }

@@ -1,5 +1,7 @@
 package uz.horecaos.platform.integration.camel.delivery;
 
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -9,10 +11,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
-
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
-
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -31,7 +29,7 @@ import tools.jackson.databind.json.JsonMapper;
 final class RecordingPartnerServer implements AutoCloseable {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
-    private static final TypeReference<Map<String, Object>> MAP = new TypeReference<>() { };
+    private static final TypeReference<Map<String, Object>> MAP = new TypeReference<>() {};
 
     private final HttpServer server;
     private final List<Call> calls = new CopyOnWriteArrayList<>();
@@ -85,8 +83,8 @@ final class RecordingPartnerServer implements AutoCloseable {
         return calls.stream()
                 .filter(call -> call.path().equals(path))
                 .reduce((first, second) -> second)
-                .orElseThrow(() -> new AssertionError(
-                        "No call to " + path + "; saw " + calls.stream().map(Call::path).toList()));
+                .orElseThrow(() -> new AssertionError("No call to " + path + "; saw "
+                        + calls.stream().map(Call::path).toList()));
     }
 
     @Override
@@ -127,8 +125,7 @@ final class RecordingPartnerServer implements AutoCloseable {
         }
     }
 
-    record Call(String method, String path, String query, Map<String, String> headers,
-            Map<String, Object> body) {
+    record Call(String method, String path, String query, Map<String, String> headers, Map<String, Object> body) {
 
         /** Reads a nested field, e.g. {@code field("delivery", "product_paid")}. */
         @SuppressWarnings("unchecked")
@@ -150,5 +147,5 @@ final class RecordingPartnerServer implements AutoCloseable {
         }
     }
 
-    private record Reply(int status, String json) { }
+    private record Reply(int status, String json) {}
 }

@@ -9,13 +9,11 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.tenancy.api.FiscalSeller;
 import uz.horecaos.platform.tenancy.api.LegalEntityDirectory;
 import uz.horecaos.platform.tenancy.api.LegalEntityId;
@@ -81,8 +79,7 @@ public class JdbcLegalEntityStore implements LegalEntityDirectory {
         boolean present = Boolean.TRUE.equals(jdbc.sql("""
                 SELECT to_regclass('tenant.legal_entities') IS NOT NULL
                    AND to_regclass('tenant.location_fiscal_assignments') IS NOT NULL
-                """)
-                .query(Boolean.class).single());
+                """).query(Boolean.class).single());
         if (present) {
             schemaPresent = true;
         } else {
@@ -187,19 +184,20 @@ public class JdbcLegalEntityStore implements LegalEntityDirectory {
                     updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
                 """)
-                .param("id", entity.id().value())
-                .param("tenantId", entity.tenantId().value())
-                .param("legalName", entity.legalName())
-                .param("shortName", entity.shortName())
-                .param("vatRegistered", entity.vatRegistered())
-                .param("certificate", entity.vatCertificateReference())
-                .param("taxProfileId", entity.taxProfileId())
-                .param("address", entity.registeredAddress())
-                .param("phone", entity.contactPhone())
-                .param("status", entity.status().name())
-                .param("expectedVersion", expectedVersion)
-                .param("now", timestamp(now))
-                .update() == 1;
+                        .param("id", entity.id().value())
+                        .param("tenantId", entity.tenantId().value())
+                        .param("legalName", entity.legalName())
+                        .param("shortName", entity.shortName())
+                        .param("vatRegistered", entity.vatRegistered())
+                        .param("certificate", entity.vatCertificateReference())
+                        .param("taxProfileId", entity.taxProfileId())
+                        .param("address", entity.registeredAddress())
+                        .param("phone", entity.contactPhone())
+                        .param("status", entity.status().name())
+                        .param("expectedVersion", expectedVersion)
+                        .param("now", timestamp(now))
+                        .update()
+                == 1;
     }
 
     public Optional<LegalEntity> find(UUID tenantId, UUID entityId) {
@@ -210,7 +208,8 @@ public class JdbcLegalEntityStore implements LegalEntityDirectory {
                  FROM tenant.legal_entities
                  WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("id", entityId)
+                .param("tenantId", tenantId)
+                .param("id", entityId)
                 .query(JdbcLegalEntityStore::toEntity)
                 .optional();
     }
@@ -274,8 +273,10 @@ public class JdbcLegalEntityStore implements LegalEntityDirectory {
                 WHERE tenant_id = :tenantId AND location_id = :locationId
                   AND effective_until IS NULL
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
-                .param("endingOn", endingOn).param("now", timestamp(now))
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("endingOn", endingOn)
+                .param("now", timestamp(now))
                 .update();
     }
 
@@ -295,7 +296,8 @@ public class JdbcLegalEntityStore implements LegalEntityDirectory {
                  WHERE tenant_id = :tenantId AND location_id = :locationId
                  ORDER BY effective_from DESC
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
                 .query(JdbcLegalEntityStore::toAssignment)
                 .list();
     }
@@ -308,12 +310,11 @@ public class JdbcLegalEntityStore implements LegalEntityDirectory {
                     + "over part of this period; two would make two INNs correct at once");
         }
         if (message.contains("uq_legal_entity_tin")) {
-            return new IllegalStateException("A legal entity with this taxpayer number already "
-                    + "exists for the tenant");
+            return new IllegalStateException(
+                    "A legal entity with this taxpayer number already " + "exists for the tenant");
         }
         if (message.contains("uq_legal_entity_code")) {
-            return new IllegalStateException("A legal entity with this code already exists for "
-                    + "the tenant");
+            return new IllegalStateException("A legal entity with this code already exists for " + "the tenant");
         }
         if (message.contains("fk_location_fiscal_assignment_entity")) {
             return new IllegalArgumentException("That legal entity does not belong to this tenant");
@@ -357,8 +358,7 @@ public class JdbcLegalEntityStore implements LegalEntityDirectory {
                 row.getInt("version"));
     }
 
-    private static LocationFiscalAssignment toAssignment(ResultSet row, int number)
-            throws SQLException {
+    private static LocationFiscalAssignment toAssignment(ResultSet row, int number) throws SQLException {
         return new LocationFiscalAssignment(
                 row.getObject("id", UUID.class),
                 row.getObject("tenant_id", UUID.class),

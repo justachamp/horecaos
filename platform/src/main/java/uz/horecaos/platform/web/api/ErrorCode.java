@@ -10,7 +10,6 @@ import org.springframework.http.HttpStatus;
  * Adding a code is a compatible change; changing the meaning of one is not.
  */
 public enum ErrorCode {
-
     VALIDATION_FAILED(HttpStatus.BAD_REQUEST, "Request validation failed"),
     INVALID_REQUEST(HttpStatus.BAD_REQUEST, "Invalid request"),
     MALFORMED_BODY(HttpStatus.BAD_REQUEST, "Malformed request body"),

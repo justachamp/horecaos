@@ -1,7 +1,6 @@
 package uz.horecaos.platform.commercial.domain;
 
 import java.time.Instant;
-
 import uz.horecaos.platform.commercial.api.EnforcementMode;
 import uz.horecaos.platform.commercial.api.EntitlementKey;
 import uz.horecaos.platform.commercial.api.EntitlementSource;
@@ -28,8 +27,7 @@ import uz.horecaos.platform.commercial.api.ResetPeriod;
  */
 public final class EntitlementResolution {
 
-    private EntitlementResolution() {
-    }
+    private EntitlementResolution() {}
 
     /**
      * Resolves one key.
@@ -51,8 +49,7 @@ public final class EntitlementResolution {
             EnforcementMode ceiling,
             Instant at) {
 
-        boolean planApplies = planEntitlement != null
-                && status != null && status.grantsPlanEntitlements();
+        boolean planApplies = planEntitlement != null && status != null && status.grantsPlanEntitlements();
         PlanEntitlement plan = planApplies ? planEntitlement : null;
         EntitlementOverride live = override != null && override.isLiveAt(at) ? override : null;
 
@@ -72,8 +69,8 @@ public final class EntitlementResolution {
         if (live != null) {
             limit = key.isCounted() ? live.integerValue() : null;
             feature = key.isFeature() ? live.booleanValue() : null;
-            declaredMode = firstNonNull(live.enforcementMode(),
-                    plan != null ? plan.enforcementMode() : key.defaultMode());
+            declaredMode =
+                    firstNonNull(live.enforcementMode(), plan != null ? plan.enforcementMode() : key.defaultMode());
             source = EntitlementSource.TENANT_OVERRIDE;
         } else if (plan != null) {
             limit = key.isCounted() ? plan.integerValue() : null;
@@ -114,8 +111,17 @@ public final class EntitlementResolution {
 
         EnforcementMode effectiveMode = EnforcementMode.weakerOf(declaredMode, ceiling);
 
-        return new EntitlementValue(key, limit, feature, declaredMode, effectiveMode, resetPeriod,
-                warnThreshold, overagePrice, currency, source);
+        return new EntitlementValue(
+                key,
+                limit,
+                feature,
+                declaredMode,
+                effectiveMode,
+                resetPeriod,
+                warnThreshold,
+                overagePrice,
+                currency,
+                source);
     }
 
     private static EnforcementMode firstNonNull(EnforcementMode first, EnforcementMode second) {

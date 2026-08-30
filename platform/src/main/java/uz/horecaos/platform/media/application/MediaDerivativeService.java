@@ -8,11 +8,9 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-
 import uz.horecaos.platform.media.api.ImageDerivativeRenderer;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.ObjectStorage;
@@ -47,8 +45,12 @@ public class MediaDerivativeService {
     private final ImageDerivativeRenderer renderer;
     private final Clock clock;
 
-    public MediaDerivativeService(JdbcMediaAssetStore assets, MediaDerivativeStore derivatives,
-            ObjectStorage storage, ImageDerivativeRenderer renderer, Clock clock) {
+    public MediaDerivativeService(
+            JdbcMediaAssetStore assets,
+            MediaDerivativeStore derivatives,
+            ObjectStorage storage,
+            ImageDerivativeRenderer renderer,
+            Clock clock) {
         this.assets = assets;
         this.derivatives = derivatives;
         this.storage = storage;
@@ -93,11 +95,10 @@ public class MediaDerivativeService {
             return new DerivativeReport(List.of(), List.copyOf(existing), null);
         }
 
-        byte[] source = storage.readPrefix(asset.bucket(), asset.objectKey(),
-                Math.toIntExact(asset.verifiedSizeBytes()));
+        byte[] source =
+                storage.readPrefix(asset.bucket(), asset.objectKey(), Math.toIntExact(asset.verifiedSizeBytes()));
         if (source.length == 0) {
-            throw new IllegalStateException(
-                    "The original object for asset %s could not be read".formatted(assetId));
+            throw new IllegalStateException("The original object for asset %s could not be read".formatted(assetId));
         }
 
         // One call for every missing variant, so the source is decoded once.
@@ -124,8 +125,11 @@ public class MediaDerivativeService {
                 // a WebP original on the next delivery, and a source too large
                 // to decode will still declare the same header.
                 unsupportedReason = settled.reason();
-                log.info("Asset {} has no renderable derivative ({}): {} was not decoded here",
-                        assetId, unsupportedReason, asset.verifiedContentType());
+                log.info(
+                        "Asset {} has no renderable derivative ({}): {} was not decoded here",
+                        assetId,
+                        unsupportedReason,
+                        asset.verifiedContentType());
             }
             case ImageDerivativeRenderer.Failed failed ->
                 // Not settled, and emphatically not a success. Thrown so the
@@ -145,8 +149,8 @@ public class MediaDerivativeService {
         return derivatives.findAll(tenantId, assetId);
     }
 
-    private boolean record(UUID tenantId, MediaAsset asset, DerivativeVariant variant,
-            ImageDerivativeRenderer.Rendition rendered) {
+    private boolean record(
+            UUID tenantId, MediaAsset asset, DerivativeVariant variant, ImageDerivativeRenderer.Rendition rendered) {
 
         String key = variant.objectKey(asset.objectKey());
         // The object is written before the row. The other order leaves a row
@@ -157,9 +161,19 @@ public class MediaDerivativeService {
 
         Instant now = clock.instant();
         return derivatives.insertIfAbsent(new MediaDerivative(
-                UUID.randomUUID(), tenantId, asset.assetId(), variant, key, asset.bucket(),
-                rendered.contentType(), rendered.content().length, sha256(rendered.content()),
-                rendered.widthPx(), rendered.heightPx(), renderer.processorVersion(), now));
+                UUID.randomUUID(),
+                tenantId,
+                asset.assetId(),
+                variant,
+                key,
+                asset.bucket(),
+                rendered.contentType(),
+                rendered.content().length,
+                sha256(rendered.content()),
+                rendered.widthPx(),
+                rendered.heightPx(),
+                renderer.processorVersion(),
+                now));
     }
 
     private static String sha256(byte[] content) {
@@ -184,8 +198,8 @@ public class MediaDerivativeService {
      *                          will never exist and a caller must be able to
      *                          fall back to the original
      */
-    public record DerivativeReport(List<DerivativeVariant> created,
-            List<DerivativeVariant> alreadyPresent, String unsupportedReason) {
+    public record DerivativeReport(
+            List<DerivativeVariant> created, List<DerivativeVariant> alreadyPresent, String unsupportedReason) {
 
         public boolean sourceUnsupported() {
             return unsupportedReason != null;

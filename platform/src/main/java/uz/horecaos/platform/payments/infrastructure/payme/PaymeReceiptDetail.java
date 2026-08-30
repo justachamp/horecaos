@@ -6,7 +6,6 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
 import uz.horecaos.platform.payments.domain.FiscalReceiptLine;
 import uz.horecaos.platform.payments.domain.SomAmount;
 import uz.horecaos.platform.payments.domain.TiyinAmount;
@@ -52,8 +51,7 @@ public final class PaymeReceiptDetail {
     /** Sale. The docs describe this field as "Sale/Return = 0" for both directions. */
     private static final int RECEIPT_TYPE_SALE = 0;
 
-    private PaymeReceiptDetail() {
-    }
+    private PaymeReceiptDetail() {}
 
     /**
      * Builds the object, or explains why this order cannot be fiscalized by Payme.
@@ -65,8 +63,8 @@ public final class PaymeReceiptDetail {
      */
     public static Map<String, Object> of(List<FiscalReceiptLine> lines, TiyinAmount total) {
         if (lines == null || lines.isEmpty()) {
-            throw new PaymeReceiptRefused("NO_RECEIPT_LINES",
-                    "A fiscalised Payme cashbox needs item lines, and this document carries none");
+            throw new PaymeReceiptRefused(
+                    "NO_RECEIPT_LINES", "A fiscalised Payme cashbox needs item lines, and this document carries none");
         }
 
         List<Map<String, Object>> items = new ArrayList<>(lines.size());
@@ -74,16 +72,15 @@ public final class PaymeReceiptDetail {
 
         for (FiscalReceiptLine line : lines) {
             if (line.marked()) {
-                throw new PaymeReceiptRefused("MARKING_CODES_UNSUPPORTED",
+                throw new PaymeReceiptRefused(
+                        "MARKING_CODES_UNSUPPORTED",
                         "Payme's detail object has no field for a marking code, so a marked good "
                                 + "cannot be fiscalized through it: " + line.fiscalName());
             }
 
             TiyinAmount unitPrice = TiyinAmount.of(line.unitPrice());
             TiyinAmount discount = TiyinAmount.of(
-                    line.discount() == null
-                            ? new SomAmount(0, line.unitPrice().currency())
-                            : line.discount());
+                    line.discount() == null ? new SomAmount(0, line.unitPrice().currency()) : line.discount());
 
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("title", line.fiscalName());
@@ -103,16 +100,16 @@ public final class PaymeReceiptDetail {
             }
             items.add(item);
 
-            declared = Math.addExact(declared,
+            declared = Math.addExact(
+                    declared,
                     Math.subtractExact(
-                            Math.multiplyExact(unitPrice.value(), (long) line.quantity()),
-                            discount.value()));
+                            Math.multiplyExact(unitPrice.value(), (long) line.quantity()), discount.value()));
         }
 
         if (declared != total.value()) {
-            throw new PaymeReceiptRefused("RECEIPT_DOES_NOT_MATCH_CHARGE",
-                    "The receipt lines total " + declared + " tiyin and the charge is "
-                            + total.value() + " tiyin");
+            throw new PaymeReceiptRefused(
+                    "RECEIPT_DOES_NOT_MATCH_CHARGE",
+                    "The receipt lines total " + declared + " tiyin and the charge is " + total.value() + " tiyin");
         }
 
         Map<String, Object> detail = new LinkedHashMap<>();

@@ -43,8 +43,8 @@ public record Serviceability(
         return new Serviceability(true, null, null, acceptsScheduledOrders, preparationMinutes);
     }
 
-    public static Serviceability refused(ServiceabilityReason reason, Instant nextAvailableAt,
-            boolean acceptsScheduledOrders) {
+    public static Serviceability refused(
+            ServiceabilityReason reason, Instant nextAvailableAt, boolean acceptsScheduledOrders) {
         return new Serviceability(false, reason, nextAvailableAt, acceptsScheduledOrders, null);
     }
 

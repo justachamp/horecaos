@@ -2,7 +2,6 @@ package uz.horecaos.platform.payments.web.payme;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-
 import uz.horecaos.platform.payments.infrastructure.payme.PaymeRpcException;
 
 /**
@@ -38,8 +37,7 @@ final class PaymeJsonRpc {
 
     private static final String VERSION = "2.0";
 
-    private PaymeJsonRpc() {
-    }
+    private PaymeJsonRpc() {}
 
     static Map<String, Object> success(Object requestId, Map<String, Object> result) {
         Map<String, Object> body = envelope(requestId);

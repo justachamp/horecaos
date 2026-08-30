@@ -4,15 +4,12 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-
-import uz.horecaos.platform.payments.infrastructure.RotationAwareSecrets;
-import uz.horecaos.platform.iam.api.secrets.SecretValue;
 import uz.horecaos.platform.payments.domain.ProviderBinding;
+import uz.horecaos.platform.payments.infrastructure.RotationAwareSecrets;
 
 /**
  * Basic authentication for the Payme endpoint, done by hand and on purpose
@@ -54,8 +51,8 @@ public class PaymeCredentials {
      *              therefore a default with an override rather than a constant, so
      *              that a per-merchant login is a property change and not a release
      */
-    public PaymeCredentials(RotationAwareSecrets secrets,
-            @Value("${horecaos.payments.payme.login:Paycom}") String login) {
+    public PaymeCredentials(
+            RotationAwareSecrets secrets, @Value("${horecaos.payments.payme.login:Paycom}") String login) {
         this.secrets = secrets;
         this.login = login;
     }
@@ -84,8 +81,8 @@ public class PaymeCredentials {
         // caller, so clearing it here would blank the credential underneath the
         // next request; disposal is the resolver's, per its contract.
         byte[] offered = digest(presented);
-        if (MessageDigest.isEqual(digest(login + ":" + secrets.cached(binding.secretReference())
-                .reveal()), offered)) {
+        if (MessageDigest.isEqual(
+                digest(login + ":" + secrets.cached(binding.secretReference()).reveal()), offered)) {
             return;
         }
 
@@ -118,8 +115,7 @@ public class PaymeCredentials {
 
     private static byte[] digest(String value) {
         try {
-            return MessageDigest.getInstance("SHA-256")
-                    .digest(value.getBytes(StandardCharsets.UTF_8));
+            return MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
         } catch (NoSuchAlgorithmException impossible) {
             // SHA-256 is mandatory in every JRE. If it is genuinely absent the
             // process cannot authenticate anything and must not fall back to a

@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-
 import org.junit.jupiter.api.Test;
 
 /**
@@ -25,8 +24,8 @@ class ChangeDocumentsTests {
 
     @Test
     void redactsAProtectedFieldWhileStillRecordingThatItChanged() {
-        Map<String, Object> document = ChangeDocuments.sanitize(
-                ChangeDocuments.change("customerPhone", "+998901231076", "+998901231077"));
+        Map<String, Object> document =
+                ChangeDocuments.sanitize(ChangeDocuments.change("customerPhone", "+998901231076", "+998901231077"));
 
         assertThat(asMap(document.get("customerPhone")))
                 .as("the fact of the change is evidence; the value is not")
@@ -65,8 +64,8 @@ class ChangeDocumentsTests {
 
     @Test
     void keepsNullsDistinguishableFromRedactions() {
-        Map<String, Object> sanitized = ChangeDocuments.sanitize(
-                ChangeDocuments.change("customerPhone", null, "+998901231077"));
+        Map<String, Object> sanitized =
+                ChangeDocuments.sanitize(ChangeDocuments.change("customerPhone", null, "+998901231077"));
 
         assertThat(asMap(sanitized.get("customerPhone")))
                 .as("null means the field was unset, which is different from hidden")

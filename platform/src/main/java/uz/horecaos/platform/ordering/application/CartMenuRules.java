@@ -29,8 +29,7 @@ public interface CartMenuRules {
      * rules to violate, and it is refused by pricing — which can name it — rather
      * than here.
      */
-    Optional<ProductRules> forVariant(UUID tenantId, UUID brandId, String channelCode,
-            UUID variantId);
+    Optional<ProductRules> forVariant(UUID tenantId, UUID brandId, String channelCode, UUID variantId);
 
     /** @param groups every group the product offers, in publication order */
     record ProductRules(UUID productId, List<GroupRules> groups) {
@@ -46,8 +45,13 @@ public interface CartMenuRules {
      * @param maximumQuantityByOption the per-option repeat cap, which only means
      *                                anything when {@code allowSameOptionMultipleTimes}
      */
-    record GroupRules(UUID groupId, String code, boolean required, int minimumSelections,
-            int maximumSelections, boolean allowSameOptionMultipleTimes,
+    record GroupRules(
+            UUID groupId,
+            String code,
+            boolean required,
+            int minimumSelections,
+            int maximumSelections,
+            boolean allowSameOptionMultipleTimes,
             Map<UUID, Integer> maximumQuantityByOption) {
 
         public boolean offers(UUID optionId) {

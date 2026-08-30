@@ -1,5 +1,8 @@
 package uz.horecaos.platform.payments.infrastructure.persistence;
 
+import static uz.horecaos.platform.payments.infrastructure.persistence.PaymentTimestamps.instant;
+import static uz.horecaos.platform.payments.infrastructure.persistence.PaymentTimestamps.utc;
+
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -9,11 +12,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.payments.domain.PaymentAttempt;
 import uz.horecaos.platform.payments.domain.PaymentAttemptStatus;
 import uz.horecaos.platform.payments.domain.PaymentProviderType;
@@ -21,9 +22,6 @@ import uz.horecaos.platform.payments.domain.PresentationKind;
 import uz.horecaos.platform.payments.domain.ProviderEvidence;
 import uz.horecaos.platform.payments.domain.SomAmount;
 import uz.horecaos.platform.payments.domain.UncertaintyResolver;
-
-import static uz.horecaos.platform.payments.infrastructure.persistence.PaymentTimestamps.instant;
-import static uz.horecaos.platform.payments.infrastructure.persistence.PaymentTimestamps.utc;
 
 /**
  * Payment attempt persistence (ADR 0013).
@@ -105,14 +103,13 @@ public class JdbcPaymentAttemptStore {
                     :id, :tenantId, :intentId, :providerType, :bindingId,
                     :merchantTransId, :businessDate, :amount, :currency, :status,
                     :providerCreatedAt, :expiresAt, 1, :createdAt, :createdAt)
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
     }
 
     public Optional<PaymentAttempt> find(UUID tenantId, UUID attemptId) {
         return jdbc.sql(SELECT + " WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", attemptId)
+                .param("tenantId", tenantId)
+                .param("id", attemptId)
                 .query(JdbcPaymentAttemptStore::map)
                 .optional();
     }
@@ -124,26 +121,28 @@ public class JdbcPaymentAttemptStore {
      * as {@code account.order_id}, so one query serves both. The provider is in the
      * predicate because the id space is per provider, not global.
      */
-    public Optional<PaymentAttempt> findByMerchantTransId(UUID tenantId,
-            PaymentProviderType providerType, String merchantTransId) {
+    public Optional<PaymentAttempt> findByMerchantTransId(
+            UUID tenantId, PaymentProviderType providerType, String merchantTransId) {
         return jdbc.sql(SELECT + """
                  WHERE tenant_id = :tenantId AND provider_type = :providerType
                    AND merchant_trans_id = :merchantTransId
                 """)
-                .param("tenantId", tenantId).param("providerType", providerType.name())
+                .param("tenantId", tenantId)
+                .param("providerType", providerType.name())
                 .param("merchantTransId", merchantTransId)
                 .query(JdbcPaymentAttemptStore::map)
                 .optional();
     }
 
     /** The Payme lookup by the transaction id Payme minted. */
-    public Optional<PaymentAttempt> findByExternalPaymentId(UUID tenantId,
-            PaymentProviderType providerType, String externalPaymentId) {
+    public Optional<PaymentAttempt> findByExternalPaymentId(
+            UUID tenantId, PaymentProviderType providerType, String externalPaymentId) {
         return jdbc.sql(SELECT + """
                  WHERE tenant_id = :tenantId AND provider_type = :providerType
                    AND external_payment_id = :externalPaymentId
                 """)
-                .param("tenantId", tenantId).param("providerType", providerType.name())
+                .param("tenantId", tenantId)
+                .param("providerType", providerType.name())
                 .param("externalPaymentId", externalPaymentId)
                 .query(JdbcPaymentAttemptStore::map)
                 .optional();
@@ -154,7 +153,8 @@ public class JdbcPaymentAttemptStore {
                  WHERE tenant_id = :tenantId AND intent_id = :intentId
                    AND status IN ('RESERVED', 'CAPTURED', 'UNCERTAIN')
                 """)
-                .param("tenantId", tenantId).param("intentId", intentId)
+                .param("tenantId", tenantId)
+                .param("intentId", intentId)
                 .query(JdbcPaymentAttemptStore::map)
                 .optional();
     }
@@ -176,7 +176,8 @@ public class JdbcPaymentAttemptStore {
                  WHERE tenant_id = :tenantId AND intent_id = :intentId
                    AND status NOT IN ('CANCELLED', 'EXPIRED', 'REVERSED', 'FAILED')
                 """)
-                .param("tenantId", tenantId).param("intentId", intentId)
+                .param("tenantId", tenantId)
+                .param("intentId", intentId)
                 .query(JdbcPaymentAttemptStore::map)
                 .optional();
     }
@@ -195,7 +196,8 @@ public class JdbcPaymentAttemptStore {
                 SELECT presentation_count FROM payments.payment_attempts
                 WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("id", attemptId)
+                .param("tenantId", tenantId)
+                .param("id", attemptId)
                 .query(Integer.class)
                 .optional()
                 .orElse(0);
@@ -206,7 +208,8 @@ public class JdbcPaymentAttemptStore {
                  WHERE tenant_id = :tenantId AND intent_id = :intentId
                  ORDER BY created_at
                 """)
-                .param("tenantId", tenantId).param("intentId", intentId)
+                .param("tenantId", tenantId)
+                .param("intentId", intentId)
                 .query(JdbcPaymentAttemptStore::map)
                 .list();
     }
@@ -218,7 +221,8 @@ public class JdbcPaymentAttemptStore {
                  ORDER BY uncertain_deadline
                  LIMIT :limit
                 """)
-                .param("tenantId", tenantId).param("limit", limit)
+                .param("tenantId", tenantId)
+                .param("limit", limit)
                 .query(JdbcPaymentAttemptStore::map)
                 .list();
     }
@@ -238,7 +242,8 @@ public class JdbcPaymentAttemptStore {
                  ORDER BY expires_at
                  LIMIT :limit
                 """)
-                .param("now", utc(now)).param("limit", limit)
+                .param("now", utc(now))
+                .param("limit", limit)
                 .query(JdbcPaymentAttemptStore::map)
                 .list();
     }
@@ -252,9 +257,16 @@ public class JdbcPaymentAttemptStore {
      *
      * @return the new version when this caller won, or empty when it lost
      */
-    public Optional<Integer> transition(UUID tenantId, UUID attemptId,
-            PaymentAttemptStatus from, PaymentAttemptStatus to, ProviderEvidence evidence,
-            String externalPaymentId, String externalDocumentId, String failureCode, Instant now) {
+    public Optional<Integer> transition(
+            UUID tenantId,
+            UUID attemptId,
+            PaymentAttemptStatus from,
+            PaymentAttemptStatus to,
+            ProviderEvidence evidence,
+            String externalPaymentId,
+            String externalDocumentId,
+            String failureCode,
+            Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
         parameters.put("id", attemptId);
@@ -290,10 +302,7 @@ public class JdbcPaymentAttemptStore {
                         ELSE uncertain_resolved_at END
                 WHERE tenant_id = :tenantId AND id = :id AND status = :from
                 RETURNING version
-                """)
-                .params(parameters)
-                .query(Integer.class)
-                .optional();
+                """).params(parameters).query(Integer.class).optional();
     }
 
     /**
@@ -305,9 +314,14 @@ public class JdbcPaymentAttemptStore {
      * a response can be lost at any point, including the response to a reversal of
      * something already captured.
      */
-    public Optional<Integer> markUncertain(UUID tenantId, UUID attemptId,
-            PaymentAttemptStatus from, UncertaintyResolver resolver, Instant since,
-            Instant deadline, String failureCode) {
+    public Optional<Integer> markUncertain(
+            UUID tenantId,
+            UUID attemptId,
+            PaymentAttemptStatus from,
+            UncertaintyResolver resolver,
+            Instant since,
+            Instant deadline,
+            String failureCode) {
         return jdbc.sql("""
                 UPDATE payments.payment_attempts
                 SET status = 'UNCERTAIN',
@@ -322,9 +336,12 @@ public class JdbcPaymentAttemptStore {
                 WHERE tenant_id = :tenantId AND id = :id AND status = :from
                 RETURNING version
                 """)
-                .param("tenantId", tenantId).param("id", attemptId)
-                .param("from", from.name()).param("resolver", resolver.name())
-                .param("since", utc(since)).param("deadline", utc(deadline))
+                .param("tenantId", tenantId)
+                .param("id", attemptId)
+                .param("from", from.name())
+                .param("resolver", resolver.name())
+                .param("since", utc(since))
+                .param("deadline", utc(deadline))
                 .param("failureCode", failureCode)
                 .query(Integer.class)
                 .optional();
@@ -339,8 +356,7 @@ public class JdbcPaymentAttemptStore {
      * a Click {@code status_by_mti} that keeps reporting nothing into an operations
      * exception rather than an infinite poll.
      */
-    public void recordResolutionAttempt(UUID tenantId, UUID attemptId,
-            UncertaintyResolver resolver, Instant now) {
+    public void recordResolutionAttempt(UUID tenantId, UUID attemptId, UncertaintyResolver resolver, Instant now) {
         jdbc.sql("""
                 UPDATE payments.payment_attempts
                 SET uncertain_resolution_attempts = uncertain_resolution_attempts + 1,
@@ -348,8 +364,10 @@ public class JdbcPaymentAttemptStore {
                     updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :id AND status = 'UNCERTAIN'
                 """)
-                .param("tenantId", tenantId).param("id", attemptId)
-                .param("resolver", resolver.name()).param("now", utc(now))
+                .param("tenantId", tenantId)
+                .param("id", attemptId)
+                .param("resolver", resolver.name())
+                .param("now", utc(now))
                 .update();
     }
 
@@ -362,8 +380,13 @@ public class JdbcPaymentAttemptStore {
      * is a fact worth having in the row when somebody asks why an order sat in
      * {@code PAYMENT_AUTHORIZING} for an hour.
      */
-    public void recordPresentation(UUID tenantId, UUID attemptId, PresentationKind kind,
-            String externalInvoiceId, Instant expiresAt, Instant now) {
+    public void recordPresentation(
+            UUID tenantId,
+            UUID attemptId,
+            PresentationKind kind,
+            String externalInvoiceId,
+            Instant expiresAt,
+            Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
         parameters.put("id", attemptId);
@@ -387,9 +410,7 @@ public class JdbcPaymentAttemptStore {
                     expires_at = COALESCE(CAST(:expiresAt AS timestamptz), expires_at),
                     updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :id
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
     }
 
     /**
@@ -416,8 +437,8 @@ public class JdbcPaymentAttemptStore {
      *
      * @return whether this caller owns the attempt and its deadline was written
      */
-    public boolean recordProviderCreation(UUID tenantId, UUID attemptId,
-            String externalPaymentId, Instant providerCreatedAt, Instant expiresAt) {
+    public boolean recordProviderCreation(
+            UUID tenantId, UUID attemptId, String externalPaymentId, Instant providerCreatedAt, Instant expiresAt) {
         return jdbc.sql("""
                 UPDATE payments.payment_attempts
                 SET provider_created_at = :providerCreatedAt,
@@ -426,11 +447,13 @@ public class JdbcPaymentAttemptStore {
                 WHERE tenant_id = :tenantId AND id = :id
                   AND external_payment_id = :externalPaymentId
                 """)
-                .param("tenantId", tenantId).param("id", attemptId)
-                .param("externalPaymentId", externalPaymentId)
-                .param("providerCreatedAt", utc(providerCreatedAt))
-                .param("expiresAt", utc(expiresAt))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", attemptId)
+                        .param("externalPaymentId", externalPaymentId)
+                        .param("providerCreatedAt", utc(providerCreatedAt))
+                        .param("expiresAt", utc(expiresAt))
+                        .update()
+                == 1;
     }
 
     private static PaymentAttempt map(ResultSet row, int rowNumber) throws SQLException {
@@ -452,21 +475,25 @@ public class JdbcPaymentAttemptStore {
                 new SomAmount(row.getLong("requested_amount_minor"), row.getString("currency")),
                 PaymentAttemptStatus.valueOf(row.getString("status")),
                 presentationKind == null ? null : PresentationKind.valueOf(presentationKind),
-                providerState == null ? null : new ProviderEvidence(
-                        providerState,
-                        row.getString("provider_reason"),
-                        instant(row, "provider_state_recorded_at")),
+                providerState == null
+                        ? null
+                        : new ProviderEvidence(
+                                providerState,
+                                row.getString("provider_reason"),
+                                instant(row, "provider_state_recorded_at")),
                 instant(row, "provider_created_at"),
                 instant(row, "expires_at"),
                 row.getString("failure_code"),
-                uncertainSince == null ? null : new PaymentAttempt.Uncertainty(
-                        uncertainSince,
-                        UncertaintyResolver.valueOf(resolver),
-                        instant(row, "uncertain_deadline"),
-                        // getInt answers 0 for SQL NULL, which here would be a
-                        // plausible count rather than an obvious error.
-                        row.getObject("uncertain_resolution_attempts", Integer.class),
-                        instant(row, "uncertain_resolved_at")),
+                uncertainSince == null
+                        ? null
+                        : new PaymentAttempt.Uncertainty(
+                                uncertainSince,
+                                UncertaintyResolver.valueOf(resolver),
+                                instant(row, "uncertain_deadline"),
+                                // getInt answers 0 for SQL NULL, which here would be a
+                                // plausible count rather than an obvious error.
+                                row.getObject("uncertain_resolution_attempts", Integer.class),
+                                instant(row, "uncertain_resolved_at")),
                 row.getObject("version", Integer.class),
                 instant(row, "created_at"),
                 instant(row, "settled_at"));

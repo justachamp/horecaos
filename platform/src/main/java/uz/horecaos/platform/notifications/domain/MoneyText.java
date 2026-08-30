@@ -38,8 +38,7 @@ public final class MoneyText {
      */
     private static final Map<String, Integer> PLATFORM_EXPONENT = Map.of("UZS", 0);
 
-    private MoneyText() {
-    }
+    private MoneyText() {}
 
     public static String format(long minor, String currencyCode) {
         if (currencyCode == null || currencyCode.isBlank()) {

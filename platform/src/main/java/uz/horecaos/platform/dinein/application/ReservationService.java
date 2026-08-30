@@ -6,11 +6,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -61,8 +59,12 @@ public class ReservationService {
     private final AuditRecorder audit;
     private final Clock clock;
 
-    public ReservationService(JdbcDineInStore store, FloorPlanService floorPlan,
-            FieldProtection protection, AuditRecorder audit, Clock clock) {
+    public ReservationService(
+            JdbcDineInStore store,
+            FloorPlanService floorPlan,
+            FieldProtection protection,
+            AuditRecorder audit,
+            Clock clock) {
         this.store = store;
         this.floorPlan = floorPlan;
         this.protection = protection;
@@ -76,70 +78,86 @@ public class ReservationService {
      *                 transaction, so the constraint that refuses the fourth rolls
      *                 back the first three
      */
-    public record NewReservation(UUID tenantId, UUID brandId, UUID locationId,
-            UUID customerAccountId, String guestName, String guestPhone, String secondaryPhone,
-            String note, int partySize, Instant requestedFrom, Instant requestedTo,
-            List<UUID> tableIds, UUID sourceChannelId, String createdBy) {
-    }
+    public record NewReservation(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID customerAccountId,
+            String guestName,
+            String guestPhone,
+            String secondaryPhone,
+            String note,
+            int partySize,
+            Instant requestedFrom,
+            Instant requestedTo,
+            List<UUID> tableIds,
+            UUID sourceChannelId,
+            String createdBy) {}
 
     @Transactional
     public ReservationRow request(NewReservation request) {
         if (request.tableIds() == null || request.tableIds().isEmpty()) {
             // A booking with no table is a note in a diary. It cannot be held,
             // cannot be excluded against, and cannot answer "which table".
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A booking names at least one table");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A booking names at least one table");
         }
         if (!request.requestedTo().isAfter(request.requestedFrom())) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A booking's end is after its start");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A booking's end is after its start");
         }
 
-        SettingsRow settings = floorPlan.settings(
-                request.tenantId(), request.brandId(), request.locationId());
+        SettingsRow settings = floorPlan.settings(request.tenantId(), request.brandId(), request.locationId());
 
         UUID reservationId = UUID.randomUUID();
         Instant now = clock.instant();
 
         ReservationRow reservation = new ReservationRow(
-                reservationId, request.tenantId(), request.brandId(), request.locationId(),
+                reservationId,
+                request.tenantId(),
+                request.brandId(),
+                request.locationId(),
                 request.customerAccountId(),
-                protect(request.tenantId(), reservationId, "guest_name_encrypted",
+                protect(
+                        request.tenantId(),
+                        reservationId,
+                        "guest_name_encrypted",
                         require(request.guestName(), "A booking needs a name to call at the door")),
-                protect(request.tenantId(), reservationId, "guest_phone_encrypted",
+                protect(
+                        request.tenantId(),
+                        reservationId,
+                        "guest_phone_encrypted",
                         require(request.guestPhone(), "A booking needs a number to ring")),
-                protection.lookupHash(request.tenantId(), PHONE_LOOKUP_DOMAIN,
-                        normalizePhone(request.guestPhone())),
-                protectNullable(request.tenantId(), reservationId, "secondary_phone_encrypted",
-                        request.secondaryPhone()),
-                protectNullable(request.tenantId(), reservationId, "note_encrypted",
-                        request.note()),
-                request.partySize(), request.requestedFrom(), request.requestedTo(),
-                settings.turnaroundMinutes(), ReservationStatus.REQUESTED,
-                request.sourceChannelId(), request.createdBy(), 1);
+                protection.lookupHash(request.tenantId(), PHONE_LOOKUP_DOMAIN, normalizePhone(request.guestPhone())),
+                protectNullable(
+                        request.tenantId(), reservationId, "secondary_phone_encrypted", request.secondaryPhone()),
+                protectNullable(request.tenantId(), reservationId, "note_encrypted", request.note()),
+                request.partySize(),
+                request.requestedFrom(),
+                request.requestedTo(),
+                settings.turnaroundMinutes(),
+                ReservationStatus.REQUESTED,
+                request.sourceChannelId(),
+                request.createdBy(),
+                1);
 
         store.insertReservation(reservation, now);
 
-        Instant heldFrom = request.requestedFrom()
-                .minus(Duration.ofMinutes(settings.turnaroundMinutes()));
-        Instant heldTo = request.requestedTo()
-                .plus(Duration.ofMinutes(settings.turnaroundMinutes()));
+        Instant heldFrom = request.requestedFrom().minus(Duration.ofMinutes(settings.turnaroundMinutes()));
+        Instant heldTo = request.requestedTo().plus(Duration.ofMinutes(settings.turnaroundMinutes()));
 
         for (UUID tableId : request.tableIds()) {
             TableRow table = store.findTable(request.tenantId(), tableId)
-                    .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                            "No such table"));
+                    .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such table"));
             if (!table.locationId().equals(request.locationId())) {
-                throw new ApiException(ErrorCode.INVALID_REQUEST,
-                        "Table %s is at another branch".formatted(table.code()));
+                throw new ApiException(
+                        ErrorCode.INVALID_REQUEST, "Table %s is at another branch".formatted(table.code()));
             }
             if (!"ACTIVE".equals(table.status())) {
-                throw new ApiException(ErrorCode.INVALID_REQUEST,
-                        "Table %s is %s and cannot be booked".formatted(
-                                table.code(), table.status()));
+                throw new ApiException(
+                        ErrorCode.INVALID_REQUEST,
+                        "Table %s is %s and cannot be booked".formatted(table.code(), table.status()));
             }
-            store.insertReservationTable(reservationId, tableId, request.tenantId(),
-                    request.locationId(), heldFrom, heldTo);
+            store.insertReservationTable(
+                    reservationId, tableId, request.tenantId(), request.locationId(), heldFrom, heldTo);
         }
 
         // No guest name, phone or note in the change document. ADR 0029 keeps
@@ -147,8 +165,7 @@ public class ReservationService {
         // people than the booking is.
         audit.record(AuditFact.of("dinein.reservation.requested", AuditClass.BUSINESS)
                 .by(ActorRef.user(request.createdBy(), null))
-                .at(ResourceScope.location(request.tenantId(), request.brandId(),
-                        request.locationId()))
+                .at(ResourceScope.location(request.tenantId(), request.brandId(), request.locationId()))
                 .target("dinein.reservation", reservationId)
                 .targetVersion(1L)
                 .because("Booking taken")
@@ -177,45 +194,49 @@ public class ReservationService {
      * already been taken.
      */
     @Transactional
-    public ReservationRow move(UUID tenantId, UUID reservationId, ReservationStatus to,
-            int expectedVersion, String actorSubject, String reason) {
+    public ReservationRow move(
+            UUID tenantId,
+            UUID reservationId,
+            ReservationStatus to,
+            int expectedVersion,
+            String actorSubject,
+            String reason) {
 
         ReservationRow reservation = store.findReservation(tenantId, reservationId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No such booking"));
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such booking"));
 
         if (!DineInStateMachine.permits(reservation.status(), to)) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST,
-                    "A %s booking cannot become %s. Permitted: %s".formatted(
-                            reservation.status(), to,
-                            DineInStateMachine.nextFor(reservation.status())),
-                    Map.of("currentStatus", reservation.status().name(),
-                            "requestedStatus", to.name()));
+            throw new ApiException(
+                    ErrorCode.INVALID_REQUEST,
+                    "A %s booking cannot become %s. Permitted: %s"
+                            .formatted(reservation.status(), to, DineInStateMachine.nextFor(reservation.status())),
+                    Map.of("currentStatus", reservation.status().name(), "requestedStatus", to.name()));
         }
 
         Instant now = clock.instant();
         int turnaround = reservation.turnaroundMinutes();
 
         if (to == ReservationStatus.CONFIRMED) {
-            SettingsRow settings = floorPlan.settings(
-                    tenantId, reservation.brandId(), reservation.locationId());
+            SettingsRow settings = floorPlan.settings(tenantId, reservation.brandId(), reservation.locationId());
             turnaround = settings.turnaroundMinutes();
-            store.rewriteHolds(tenantId, reservationId,
+            store.rewriteHolds(
+                    tenantId,
+                    reservationId,
                     reservation.requestedFrom().minus(Duration.ofMinutes(turnaround)),
                     reservation.requestedTo().plus(Duration.ofMinutes(turnaround)));
         }
 
         boolean moved;
         try {
-            moved = store.moveReservation(tenantId, reservationId, reservation.status(), to,
-                    expectedVersion, now);
+            moved = store.moveReservation(tenantId, reservationId, reservation.status(), to, expectedVersion, now);
         } catch (DataIntegrityViolationException conflict) {
             if (isDoubleBooking(conflict)) {
                 // The loser of a Friday-night race. A stable conflict code and a
                 // sentence a host can act on, never a leaked constraint violation:
                 // the person reading this is standing at a door with a guest in
                 // front of them.
-                throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
+                throw new ApiException(
+                        ErrorCode.RESOURCE_CONFLICT,
                         "One of these tables is already booked for an overlapping time. "
                                 + "Re-read availability and choose another table or another time.",
                         Map.of("conflict", "TABLE_ALREADY_BOOKED"));
@@ -227,11 +248,9 @@ public class ReservationService {
             throw ApiException.staleVersion(expectedVersion, reservation.version());
         }
 
-        audit.record(AuditFact.of("dinein.reservation." + to.name().toLowerCase(),
-                        AuditClass.BUSINESS)
+        audit.record(AuditFact.of("dinein.reservation." + to.name().toLowerCase(), AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
-                .at(ResourceScope.location(tenantId, reservation.brandId(),
-                        reservation.locationId()))
+                .at(ResourceScope.location(tenantId, reservation.brandId(), reservation.locationId()))
                 .target("dinein.reservation", reservationId)
                 .targetVersion((long) expectedVersion + 1)
                 .because(reason)
@@ -255,20 +274,17 @@ public class ReservationService {
      * treated this answer as a reservation would be exactly the check-on-read
      * ADR 0047 rejects.
      */
-    public List<AvailabilityRow> availability(UUID tenantId, UUID locationId, Instant from,
-            Instant to) {
+    public List<AvailabilityRow> availability(UUID tenantId, UUID locationId, Instant from, Instant to) {
 
         if (!to.isAfter(from)) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "An availability window's end is after its start");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "An availability window's end is after its start");
         }
         return store.tableAvailability(tenantId, locationId, from, to);
     }
 
     public ReservationRow find(UUID tenantId, UUID reservationId) {
         return store.findReservation(tenantId, reservationId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No such booking"));
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such booking"));
     }
 
     public List<UUID> tablesFor(UUID tenantId, UUID reservationId) {
@@ -298,15 +314,17 @@ public class ReservationService {
     }
 
     private String protect(UUID tenantId, UUID reservationId, String column, String plaintext) {
-        return protection.protect(tenantId, DataClass.PERSONAL,
-                new RecordRef("dinein.reservations", column, reservationId), plaintext).serialize();
+        return protection
+                .protect(
+                        tenantId,
+                        DataClass.PERSONAL,
+                        new RecordRef("dinein.reservations", column, reservationId),
+                        plaintext)
+                .serialize();
     }
 
-    private String protectNullable(UUID tenantId, UUID reservationId, String column,
-            String plaintext) {
-        return plaintext == null || plaintext.isBlank()
-                ? null
-                : protect(tenantId, reservationId, column, plaintext);
+    private String protectNullable(UUID tenantId, UUID reservationId, String column, String plaintext) {
+        return plaintext == null || plaintext.isBlank() ? null : protect(tenantId, reservationId, column, plaintext);
     }
 
     private static String require(String value, String message) {

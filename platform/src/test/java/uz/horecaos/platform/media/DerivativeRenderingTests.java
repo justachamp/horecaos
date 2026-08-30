@@ -1,16 +1,15 @@
 package uz.horecaos.platform.media;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-
 import javax.imageio.ImageIO;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.media.api.ImageDerivativeRenderer;
 import uz.horecaos.platform.media.api.ImageDerivativeRenderer.Rendered;
 import uz.horecaos.platform.media.api.ImageDerivativeRenderer.Unsupported;
@@ -18,8 +17,6 @@ import uz.horecaos.platform.media.domain.DerivativeVariant;
 import uz.horecaos.platform.media.domain.ImageCostLimits;
 import uz.horecaos.platform.media.domain.ImageProbe;
 import uz.horecaos.platform.media.infrastructure.imaging.ImageIoDerivativeRenderer;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /** What the renderer will and will not decode, and how it says which (ADR 0010). */
 class DerivativeRenderingTests {
@@ -35,8 +32,7 @@ class DerivativeRenderingTests {
         assertThat(card.widthPx()).isEqualTo(400);
         assertThat(card.heightPx()).isEqualTo(300);
         assertThat(card.contentType()).isEqualTo("image/jpeg");
-        assertThat(ImageProbe.probe(card.content()).orElseThrow().contentType())
-                .isEqualTo("image/jpeg");
+        assertThat(ImageProbe.probe(card.content()).orElseThrow().contentType()).isEqualTo("image/jpeg");
     }
 
     @Test
@@ -45,16 +41,20 @@ class DerivativeRenderingTests {
         // The source is expanded into a raster once and scaled from it three
         // times. Asked variant by variant, a 300MB original was decoded three
         // times over for three outputs that differ only in a scale factor.
-        var rendered = renderer.render(encode("jpg", 1600, 1200),
-                List.of(DerivativeVariant.values()));
+        var rendered = renderer.render(encode("jpg", 1600, 1200), List.of(DerivativeVariant.values()));
 
         assertThat(rendered).isInstanceOf(Rendered.class);
         assertThat(((Rendered) rendered).renditions())
-                .containsOnlyKeys(DerivativeVariant.THUMBNAIL, DerivativeVariant.CARD,
-                        DerivativeVariant.DETAIL);
-        assertThat(((Rendered) rendered).renditions().get(DerivativeVariant.THUMBNAIL).widthPx())
+                .containsOnlyKeys(DerivativeVariant.THUMBNAIL, DerivativeVariant.CARD, DerivativeVariant.DETAIL);
+        assertThat(((Rendered) rendered)
+                        .renditions()
+                        .get(DerivativeVariant.THUMBNAIL)
+                        .widthPx())
                 .isEqualTo(200);
-        assertThat(((Rendered) rendered).renditions().get(DerivativeVariant.DETAIL).widthPx())
+        assertThat(((Rendered) rendered)
+                        .renditions()
+                        .get(DerivativeVariant.DETAIL)
+                        .widthPx())
                 .isEqualTo(800);
     }
 
@@ -114,8 +114,7 @@ class DerivativeRenderingTests {
         // Twenty-six bytes claiming a 50,000-pixel square at 16-bit RGBA. Handing
         // this to a decoder to find out costs twenty gigabytes of heap; reading
         // IHDR costs the twenty-six bytes.
-        assertThat(renderer.render(pngHeader(50_000, 50_000, 16, 6),
-                List.of(DerivativeVariant.THUMBNAIL)))
+        assertThat(renderer.render(pngHeader(50_000, 50_000, 16, 6), List.of(DerivativeVariant.THUMBNAIL)))
                 .isEqualTo(new Unsupported("SOURCE_TOO_LARGE_TO_DECODE"));
     }
 
@@ -126,21 +125,22 @@ class DerivativeRenderingTests {
         // that used to be the whole test — at 16-bit RGBA, which is 305MB to
         // decode. This is the header of the 311KB file the defect was reported
         // with; the identical dimensions at 8-bit RGB still render.
-        assertThat(renderer.render(pngHeader(8000, 5000, 16, 6),
-                List.of(DerivativeVariant.THUMBNAIL)))
+        assertThat(renderer.render(pngHeader(8000, 5000, 16, 6), List.of(DerivativeVariant.THUMBNAIL)))
                 .isEqualTo(new Unsupported("SOURCE_TOO_LARGE_TO_DECODE"));
         // The identical dimensions at 8-bit RGB are 120MB and stay within
         // budget: the limit is what the old comment always claimed it was —
         // "roughly an 8000x5000 photograph" — stated in the unit it was about.
         assertThat(ImageCostLimits.withinBudget(
-                ImageProbe.probe(pngHeader(8000, 5000, 8, 2)).orElseThrow())).isTrue();
+                        ImageProbe.probe(pngHeader(8000, 5000, 8, 2)).orElseThrow()))
+                .isTrue();
     }
 
     @Test
     @DisplayName("bytes that are not an image are refused")
     void refusesNonImages() {
-        assertThat(renderer.render("<html><body>hello</body></html>".getBytes(StandardCharsets.UTF_8),
-                List.of(DerivativeVariant.THUMBNAIL)))
+        assertThat(renderer.render(
+                        "<html><body>hello</body></html>".getBytes(StandardCharsets.UTF_8),
+                        List.of(DerivativeVariant.THUMBNAIL)))
                 .isEqualTo(new Unsupported("NOT_AN_IMAGE"));
     }
 
@@ -161,9 +161,37 @@ class DerivativeRenderingTests {
     }
 
     private static byte[] pngHeader(int width, int height, int bitDepth, int colourType) {
-        byte[] png = new byte[]{(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A,
-            0, 0, 0, 13, 'I', 'H', 'D', 'R',
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+        byte[] png = new byte[] {
+            (byte) 0x89,
+            'P',
+            'N',
+            'G',
+            0x0D,
+            0x0A,
+            0x1A,
+            0x0A,
+            0,
+            0,
+            0,
+            13,
+            'I',
+            'H',
+            'D',
+            'R',
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        };
         for (int i = 0; i < 4; i++) {
             png[16 + i] = (byte) (width >>> (24 - 8 * i));
             png[20 + i] = (byte) (height >>> (24 - 8 * i));

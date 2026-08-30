@@ -4,10 +4,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore.AccountRow;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore.EntryRow;
@@ -45,15 +43,20 @@ public class LoyaltyQueryService {
      * @param heldMinor      already debited by an unsettled tender
      * @param nextExpiryAt   null when nothing is due to expire
      */
-    public record BalanceView(UUID accountId, UUID brandId, String currency, long balanceMinor,
-            long spendableMinor, long heldMinor, Instant nextExpiryAt, long nextExpiryMinor) {
-    }
+    public record BalanceView(
+            UUID accountId,
+            UUID brandId,
+            String currency,
+            long balanceMinor,
+            long spendableMinor,
+            long heldMinor,
+            Instant nextExpiryAt,
+            long nextExpiryMinor) {}
 
     @Transactional(readOnly = true)
     public BalanceView balance(UUID tenantId, UUID accountId) {
         AccountRow account = store.findAccountById(tenantId, accountId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No such points account"));
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such points account"));
         return toView(tenantId, account);
     }
 
@@ -87,8 +90,7 @@ public class LoyaltyQueryService {
     @Transactional(readOnly = true)
     public long balanceDrift(UUID tenantId, UUID accountId) {
         AccountRow account = store.findAccountById(tenantId, accountId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No such points account"));
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such points account"));
         return account.balanceMinor() - store.ledgerBalance(tenantId, accountId);
     }
 
@@ -109,8 +111,12 @@ public class LoyaltyQueryService {
         Instant now = clock.instant();
         List<LotRow> open = store.openLots(tenantId, account.id());
         LotRow next = open.stream().findFirst().orElse(null);
-        return new BalanceView(account.id(), account.brandId(), account.currency(),
-                account.balanceMinor(), store.spendableMinor(tenantId, account.id(), now),
+        return new BalanceView(
+                account.id(),
+                account.brandId(),
+                account.currency(),
+                account.balanceMinor(),
+                store.spendableMinor(tenantId, account.id(), now),
                 account.reservedMinor(),
                 next == null ? null : next.expiresAt(),
                 next == null ? 0L : next.remainingMinor());

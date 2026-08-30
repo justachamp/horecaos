@@ -3,12 +3,10 @@ package uz.horecaos.platform.migration.application;
 import java.time.Clock;
 import java.util.Map;
 import java.util.UUID;
-
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -43,8 +41,15 @@ class MigrationAudit {
      * one that never moved, and the second question anyone asks after a bad
      * cutover is who authorised it.
      */
-    void record(String actionCode, ActorRef actor, ResourceScope scope, String targetType,
-            UUID targetId, Integer targetVersion, String reason, Map<String, Object> changes,
+    void record(
+            String actionCode,
+            ActorRef actor,
+            ResourceScope scope,
+            String targetType,
+            UUID targetId,
+            Integer targetVersion,
+            String reason,
+            Map<String, Object> changes,
             UUID approvalRequestId) {
 
         audit.record(AuditFact.of(actionCode, AuditClass.BUSINESS)
@@ -78,8 +83,15 @@ class MigrationAudit {
      * problem.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    void recordRefusal(String actionCode, ActorRef actor, ResourceScope scope, String targetType,
-            UUID targetId, Integer targetVersion, String reason, Map<String, Object> changes) {
+    void recordRefusal(
+            String actionCode,
+            ActorRef actor,
+            ResourceScope scope,
+            String targetType,
+            UUID targetId,
+            Integer targetVersion,
+            String reason,
+            Map<String, Object> changes) {
 
         audit.record(AuditFact.of(actionCode, AuditClass.SECURITY)
                 .by(actor)
@@ -114,6 +126,7 @@ class MigrationAudit {
     private static String correlationId() {
         String correlationId = MDC.get("correlationId");
         return correlationId == null || correlationId.isBlank()
-                ? UUID.randomUUID().toString() : correlationId;
+                ? UUID.randomUUID().toString()
+                : correlationId;
     }
 }

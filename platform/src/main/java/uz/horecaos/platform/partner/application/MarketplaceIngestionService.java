@@ -11,13 +11,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionOperations;
-
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.ordering.api.OrderSettlementPort;
@@ -112,8 +110,7 @@ public class MarketplaceIngestionService {
         // written: a push naming a venue this credential does not hold is the
         // enumeration attempt the partner surface exists to refuse, and it must
         // not leave a staging row against a binding the caller does not own.
-        Optional<JdbcPartnerStore.Venue> venue =
-                store.findVenue(principal.tenantId(), push.venueReference(), now);
+        Optional<JdbcPartnerStore.Venue> venue = store.findVenue(principal.tenantId(), push.venueReference(), now);
         if (venue.isEmpty()) {
             return Outcome.rejected(RejectionCode.UNKNOWN_VENUE, null);
         }
@@ -146,8 +143,12 @@ public class MarketplaceIngestionService {
         }
     }
 
-    private Outcome ingest(PartnerPrincipal principal, JdbcPartnerStore.Venue venue,
-            PartnerOrderPush push, JdbcPartnerStore.InboundPush staged, Instant now) {
+    private Outcome ingest(
+            PartnerPrincipal principal,
+            JdbcPartnerStore.Venue venue,
+            PartnerOrderPush push,
+            JdbcPartnerStore.InboundPush staged,
+            Instant now) {
 
         RejectionCode rejection = validate(principal, venue, push, now);
         if (rejection != null) {
@@ -155,18 +156,23 @@ public class MarketplaceIngestionService {
             // The failure is recorded against the channel too. A partner sending
             // malformed orders and a partner sending nothing look identical from
             // the order list, and only one of them is the integration's fault.
-            store.recordFailure(principal.tenantId(), venue.bindingId(), venue.locationId(),
-                    "INBOUND", rejection.name(), DEFAULT_STALE_AFTER_SECONDS, now);
+            store.recordFailure(
+                    principal.tenantId(),
+                    venue.bindingId(),
+                    venue.locationId(),
+                    "INBOUND",
+                    rejection.name(),
+                    DEFAULT_STALE_AFTER_SECONDS,
+                    now);
             return Outcome.rejected(rejection, null);
         }
 
-        List<String> externalItemIds = push.lines().stream()
-                .map(PushLine::externalItemReference)
-                .toList();
-        Map<String, UUID> variants =
-                store.resolveMenuItems(principal.tenantId(), venue.bindingId(), externalItemIds);
+        List<String> externalItemIds =
+                push.lines().stream().map(PushLine::externalItemReference).toList();
+        Map<String, UUID> variants = store.resolveMenuItems(principal.tenantId(), venue.bindingId(), externalItemIds);
 
-        List<MarketplaceOrderIntake.IntakeLine> lines = new ArrayList<>(push.lines().size());
+        List<MarketplaceOrderIntake.IntakeLine> lines =
+                new ArrayList<>(push.lines().size());
         for (PushLine line : push.lines()) {
             UUID variantId = variants.get(line.externalItemReference());
             lines.add(new MarketplaceOrderIntake.IntakeLine(
@@ -181,52 +187,54 @@ public class MarketplaceIngestionService {
         }
 
         List<ExternalReference> references = new ArrayList<>(2);
-        references.add(ExternalReference.partner(
-                ExternalReferenceType.PARTNER_ORDER_ID, push.externalOrderId()));
+        references.add(ExternalReference.partner(ExternalReferenceType.PARTNER_ORDER_ID, push.externalOrderId()));
         if (push.displayCode() != null && !push.displayCode().isBlank()) {
-            references.add(ExternalReference.partner(
-                    ExternalReferenceType.PARTNER_DISPLAY_CODE, push.displayCode()));
+            references.add(ExternalReference.partner(ExternalReferenceType.PARTNER_DISPLAY_CODE, push.displayCode()));
         }
 
-        HandoverChallengeType challengeType = push.handoverCode() == null || push.handoverCode().isBlank()
-                ? HandoverChallengeType.NONE
-                : HandoverChallengeType.CODE;
+        HandoverChallengeType challengeType =
+                push.handoverCode() == null || push.handoverCode().isBlank()
+                        ? HandoverChallengeType.NONE
+                        : HandoverChallengeType.CODE;
 
         // The order id is chosen here rather than by the adapter, because the
         // handover hash is bound to it: a hash computed after the row exists
         // could be lifted from one order and replayed against another.
         UUID orderId = UUID.randomUUID();
 
-        MarketplaceOrderIntake.Created created = intake.create(
-                new MarketplaceOrderIntake.NewMarketplaceOrder(
-                        orderId,
-                        principal.tenantId(),
-                        venue.brandId(),
-                        venue.locationId(),
-                        venue.channelId(),
-                        venue.channelCode(),
-                        venue.bindingId(),
-                        push.externalOrderId(),
-                        push.fulfillmentMode(),
-                        guestReferenceHash(venue.bindingId(), push.externalOrderId()),
-                        derivedIdempotencyKey(venue.bindingId(), push.externalOrderId()),
-                        push.totals(),
-                        push.discountFunding() == null ? DiscountFunding.UNKNOWN : push.discountFunding(),
-                        push.rawTotalsJson(),
-                        lines,
-                        references,
-                        challengeType,
-                        challengeType == HandoverChallengeType.NONE
-                                ? null
-                                : hasher.hash(orderId, push.handoverCode()),
-                        "PARTNER",
-                        now));
+        MarketplaceOrderIntake.Created created = intake.create(new MarketplaceOrderIntake.NewMarketplaceOrder(
+                orderId,
+                principal.tenantId(),
+                venue.brandId(),
+                venue.locationId(),
+                venue.channelId(),
+                venue.channelCode(),
+                venue.bindingId(),
+                push.externalOrderId(),
+                push.fulfillmentMode(),
+                guestReferenceHash(venue.bindingId(), push.externalOrderId()),
+                derivedIdempotencyKey(venue.bindingId(), push.externalOrderId()),
+                push.totals(),
+                push.discountFunding() == null ? DiscountFunding.UNKNOWN : push.discountFunding(),
+                push.rawTotalsJson(),
+                lines,
+                references,
+                challengeType,
+                challengeType == HandoverChallengeType.NONE ? null : hasher.hash(orderId, push.handoverCode()),
+                "PARTNER",
+                now));
 
         planSettlement(principal, venue, push, created.orderId());
 
         store.recordAccepted(staged, created.orderId());
-        store.recordSuccess(principal.tenantId(), venue.bindingId(), venue.locationId(),
-                "INBOUND", push.externalOrderId(), DEFAULT_STALE_AFTER_SECONDS, now);
+        store.recordSuccess(
+                principal.tenantId(),
+                venue.bindingId(),
+                venue.locationId(),
+                "INBOUND",
+                push.externalOrderId(),
+                DEFAULT_STALE_AFTER_SECONDS,
+                now);
 
         List<String> unmapped = push.lines().stream()
                 .map(PushLine::externalItemReference)
@@ -293,34 +301,44 @@ public class MarketplaceIngestionService {
      * back. The partner retries an order HorecaOS never acknowledged, which is the
      * outcome this class is built around.
      */
-    private void planSettlement(PartnerPrincipal principal, JdbcPartnerStore.Venue venue,
-            PartnerOrderPush push, UUID orderId) {
+    private void planSettlement(
+            PartnerPrincipal principal, JdbcPartnerStore.Venue venue, PartnerOrderPush push, UUID orderId) {
 
         ExternalTotals totals = push.totals();
         if (totals.customerPaidTotalMinor() == 0) {
             // Ids and figures only (ADR 0029): nothing here names the customer.
-            log.info("Order {} was pushed fully discounted, so no money is owed on it and it is "
-                    + "planned no settlement. A discount of {} {} was applied by the partner; it "
-                    + "is recorded on ordering.order_external_pricing and is not a tender.",
-                    orderId, totals.discountMinor(), totals.currency());
+            log.info(
+                    "Order {} was pushed fully discounted, so no money is owed on it and it is "
+                            + "planned no settlement. A discount of {} {} was applied by the partner; it "
+                            + "is recorded on ordering.order_external_pricing and is not a tender.",
+                    orderId,
+                    totals.discountMinor(),
+                    totals.currency());
             return;
         }
 
-        settlements.planSettlement(new OrderSettlementPort.SettlementRequest(
-                        principal.tenantId(), venue.brandId(), orderId, null,
-                        totals.currency(), totals.customerPaidTotalMinor(), MARKETPLACE_TENDER, 0L,
+        settlements
+                .planSettlement(new OrderSettlementPort.SettlementRequest(
+                        principal.tenantId(),
+                        venue.brandId(),
+                        orderId,
+                        null,
+                        totals.currency(),
+                        totals.customerPaidTotalMinor(),
+                        MARKETPLACE_TENDER,
+                        0L,
                         derivedIdempotencyKey(venue.bindingId(), push.externalOrderId()),
                         "marketplace"))
-                .orElseThrow(() -> new IllegalStateException(
-                        "Order " + orderId + " was accepted with no settlement: the tender "
+                .orElseThrow(() ->
+                        new IllegalStateException("Order " + orderId + " was accepted with no settlement: the tender "
                                 + MARKETPLACE_TENDER + " is not one this build can plan. An "
                                 + "aggregator order the customer paid for and that has no "
                                 + "settlement cannot be refunded or remedied, so it is not an "
                                 + "order this platform will acknowledge."));
     }
 
-    private RejectionCode validate(PartnerPrincipal principal, JdbcPartnerStore.Venue venue,
-            PartnerOrderPush push, Instant now) {
+    private RejectionCode validate(
+            PartnerPrincipal principal, JdbcPartnerStore.Venue venue, PartnerOrderPush push, Instant now) {
 
         if (push.lines().isEmpty()) {
             // An order with no lines reconciles arithmetically at a total of
@@ -352,8 +370,8 @@ public class MarketplaceIngestionService {
         return null;
     }
 
-    private JdbcPartnerStore.InboundPush stage(PartnerPrincipal principal,
-            JdbcPartnerStore.Venue venue, PartnerOrderPush push, Instant now) {
+    private JdbcPartnerStore.InboundPush stage(
+            PartnerPrincipal principal, JdbcPartnerStore.Venue venue, PartnerOrderPush push, Instant now) {
 
         // ADR 0029: the payload carries a proxied customer contact, so the body
         // is envelope-encrypted before it is stored and never written to a log,
@@ -362,17 +380,22 @@ public class MarketplaceIngestionService {
         // retry, which encryption alone would hide.
         String payload = push.rawPayloadJson() == null ? "{}" : push.rawPayloadJson();
         UUID stagingId = UUID.randomUUID();
-        String encrypted = protection.protect(
+        String encrypted = protection
+                .protect(
                         principal.tenantId(),
                         DataClass.PERSONAL,
-                        new FieldProtection.RecordRef(
-                                "partner.inbound_orders", "raw_payload_encrypted", stagingId),
+                        new FieldProtection.RecordRef("partner.inbound_orders", "raw_payload_encrypted", stagingId),
                         payload)
                 .serialize();
 
         return new JdbcPartnerStore.InboundPush(
-                principal.tenantId(), venue.bindingId(), push.externalOrderId(),
-                encrypted, sha256(payload), push.pickupExpectedAt(), now);
+                principal.tenantId(),
+                venue.bindingId(),
+                push.externalOrderId(),
+                encrypted,
+                sha256(payload),
+                push.pickupExpectedAt(),
+                now);
     }
 
     /**
@@ -398,8 +421,8 @@ public class MarketplaceIngestionService {
 
     private static String sha256(String value) {
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(value.getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException failure) {
             throw new IllegalStateException("SHA-256 is unavailable", failure);
         }
@@ -445,7 +468,7 @@ public class MarketplaceIngestionService {
             int quantity,
             long unitAmountMinor,
             long lineAmountMinor,
-            Long taxAmountMinor) { }
+            Long taxAmountMinor) {}
 
     /**
      * @param unmappedItems the partner item identifiers the catalogue does not

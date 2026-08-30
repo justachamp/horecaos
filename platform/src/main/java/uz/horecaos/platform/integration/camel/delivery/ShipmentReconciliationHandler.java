@@ -1,19 +1,16 @@
 package uz.horecaos.platform.integration.camel.delivery;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.apache.camel.Exchange;
 import org.apache.camel.ProducerTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-
-import io.micrometer.core.instrument.MeterRegistry;
-
 import uz.horecaos.platform.integration.api.ExternalEventEnvelope;
 import uz.horecaos.platform.integration.api.ExternalWorkInboxHandler;
 import uz.horecaos.platform.integration.api.delivery.DeliveryCapability;
@@ -54,8 +51,7 @@ import uz.horecaos.platform.integration.outbox.ShipmentReconciliationOutbox.Sett
  * record does not reach the partner at all.
  */
 @Component
-public class ShipmentReconciliationHandler
-        implements ExternalWorkInboxHandler<Command, Settlement> {
+public class ShipmentReconciliationHandler implements ExternalWorkInboxHandler<Command, Settlement> {
 
     /** Stable across restarts and deployments; it is half the deduplication key. */
     public static final String CONSUMER_NAME = "delivery-reconciliation";
@@ -78,9 +74,12 @@ public class ShipmentReconciliationHandler
     private final MeterRegistry meters;
     private final Clock clock;
 
-    public ShipmentReconciliationHandler(ProducerTemplate producer,
-            ProviderInstallationLookup installations, ShipmentReconciliationOutbox outbox,
-            MeterRegistry meters, Clock clock) {
+    public ShipmentReconciliationHandler(
+            ProducerTemplate producer,
+            ProviderInstallationLookup installations,
+            ShipmentReconciliationOutbox outbox,
+            MeterRegistry meters,
+            Clock clock) {
         this.producer = producer;
         this.installations = installations;
         this.outbox = outbox;
@@ -131,8 +130,7 @@ public class ShipmentReconciliationHandler
             count("malformed", "unresolved", "REFUSED");
             // The aggregate id rather than the payload's own field, because the
             // payload is what is in doubt and the envelope is what was validated.
-            log.error("Reconciliation command {} is malformed and was not attempted",
-                    event.aggregateId());
+            log.error("Reconciliation command {} is malformed and was not attempted", event.aggregateId());
             return null;
         }
 
@@ -150,16 +148,24 @@ public class ShipmentReconciliationHandler
             // tag taken from one is an unbounded cardinality hole that a
             // stream of junk provider names would use to take the registry down.
             count("binding_refused", "unresolved", "REFUSED");
-            log.error("Reconciliation command {} names binding {} which tenant {} may not use",
-                    command.operationCommandId(), command.bindingId(), event.tenantId());
+            log.error(
+                    "Reconciliation command {} names binding {} which tenant {} may not use",
+                    command.operationCommandId(),
+                    command.bindingId(),
+                    event.tenantId());
             return null;
         }
         BindingRef binding = authorized.get();
 
         ProviderOutcome outcome = query(new DeliveryOperation(
-                command.operationCommandId(), event.tenantId(), binding,
-                DeliveryCapability.QUERY_SHIPMENT, null, command.externalReference(),
-                null, event.correlationId()));
+                command.operationCommandId(),
+                event.tenantId(),
+                binding,
+                DeliveryCapability.QUERY_SHIPMENT,
+                null,
+                command.externalReference(),
+                null,
+                event.correlationId()));
 
         return switch (outcome.status()) {
             // The partner holds it, so the uncertain call did take effect and
@@ -195,8 +201,10 @@ public class ShipmentReconciliationHandler
         }
         outbox.appendSettlement(settlement, event.tenantId(), event.correlationId());
         count("settled", settlement.providerType(), settlement.resolution());
-        log.info("Shipment {} for operation {} reconciled as {}",
-                settlement.externalReference(), settlement.operationCommandId(),
+        log.info(
+                "Shipment {} for operation {} reconciled as {}",
+                settlement.externalReference(),
+                settlement.operationCommandId(),
                 settlement.resolution());
     }
 
@@ -217,8 +225,10 @@ public class ShipmentReconciliationHandler
      * record no version of this consumer was meant to handle.
      */
     private static boolean isWellFormed(Command command) {
-        if (command == null || command.operationCommandId() == null
-                || command.bindingId() == null || command.brandId() == null) {
+        if (command == null
+                || command.operationCommandId() == null
+                || command.bindingId() == null
+                || command.brandId() == null) {
             return false;
         }
         String reference = command.externalReference();
@@ -247,8 +257,7 @@ public class ShipmentReconciliationHandler
     private Optional<BindingRef> resolve(UUID tenantId, Command command) {
         List<BindingRef> candidates = new ArrayList<>();
         for (String code : CamelShipmentBookingPort.BOOKING_CAPABILITY_CODES) {
-            candidates.addAll(installations.candidateBindings(
-                    tenantId, command.brandId(), command.locationId(), code));
+            candidates.addAll(installations.candidateBindings(tenantId, command.brandId(), command.locationId(), code));
         }
         return candidates.stream()
                 .filter(candidate -> candidate.bindingId().equals(command.bindingId()))
@@ -264,31 +273,43 @@ public class ShipmentReconciliationHandler
             exchange.getIn().setHeader(DeliveryProcessor.OPERATION_HEADER, operation);
         });
 
-        ProviderOutcome outcome = result.getMessage()
-                .getHeader(DeliveryRouteBuilder.OUTCOME_HEADER, ProviderOutcome.class);
+        ProviderOutcome outcome =
+                result.getMessage().getHeader(DeliveryRouteBuilder.OUTCOME_HEADER, ProviderOutcome.class);
 
         return outcome == null
-                ? ProviderOutcome.uncertain("ROUTE_PRODUCED_NO_OUTCOME",
-                        "The route returned without classifying the query")
+                ? ProviderOutcome.uncertain(
+                        "ROUTE_PRODUCED_NO_OUTCOME", "The route returned without classifying the query")
                 : outcome;
     }
 
-    private Settlement settlement(Command command, BindingRef binding, String resolution,
-            ProviderOutcome outcome, Attempt attempt) {
+    private Settlement settlement(
+            Command command, BindingRef binding, String resolution, ProviderOutcome outcome, Attempt attempt) {
 
-        return Settlement.at(clock.instant(), command.operationCommandId(), binding.bindingId(),
-                binding.providerType(), capabilityOf(command).name(), command.externalReference(),
-                resolution, outcome.status().name(), outcome.errorCode(), attempt.number());
+        return Settlement.at(
+                clock.instant(),
+                command.operationCommandId(),
+                binding.bindingId(),
+                binding.providerType(),
+                capabilityOf(command).name(),
+                command.externalReference(),
+                resolution,
+                outcome.status().name(),
+                outcome.errorCode(),
+                attempt.number());
     }
 
     private void count(String event, String providerType, String resolution) {
         // Bounded tags on purpose: provider type, event and resolution are small
         // closed sets. A tenant or command id here would make the cardinality
         // unbounded and eventually take the registry down.
-        meters.counter("horecaos.delivery.reconciliation",
-                "event", event,
-                "provider", providerType == null ? "unknown" : providerType,
-                "resolution", resolution)
+        meters.counter(
+                        "horecaos.delivery.reconciliation",
+                        "event",
+                        event,
+                        "provider",
+                        providerType == null ? "unknown" : providerType,
+                        "resolution",
+                        resolution)
                 .increment();
     }
 

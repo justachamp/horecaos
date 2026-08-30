@@ -7,10 +7,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.catalog.api.MenuPriceLookup;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.LocationOffering;
@@ -47,8 +45,8 @@ public class StorefrontCatalogQuery {
      *         menu are different answers, and a storefront needs to tell them apart
      */
     @Transactional(readOnly = true)
-    public Optional<StorefrontMenu> menuFor(UUID tenantId, UUID brandId, UUID locationId,
-            String locale, String channelCode) {
+    public Optional<StorefrontMenu> menuFor(
+            UUID tenantId, UUID brandId, UUID locationId, String locale, String channelCode) {
         // ADR 0036: the channel supplies the publication, and it is the caller's
         // own channel rather than a literal. This read was hardcoded to
         // 'STOREFRONT', which meant a kiosk browsing its own menu was served the
@@ -61,10 +59,9 @@ public class StorefrontCatalogQuery {
         }
         UUID publication = publicationId.get();
 
-        Map<UUID, OfferingStatus> offeringByVariant = store.offeringsForLocation(tenantId, locationId)
-                .stream()
-                .collect(Collectors.toMap(LocationOffering::variantId, LocationOffering::status,
-                        (first, second) -> first));
+        Map<UUID, OfferingStatus> offeringByVariant = store.offeringsForLocation(tenantId, locationId).stream()
+                .collect(Collectors.toMap(
+                        LocationOffering::variantId, LocationOffering::status, (first, second) -> first));
 
         List<PublicationItem> categoryItems = store.publicationItems(publication, EntityType.CATEGORY);
         List<PublicationItem> productItems = store.publicationItems(publication, EntityType.PRODUCT);
@@ -96,9 +93,8 @@ public class StorefrontCatalogQuery {
         // A product the location does not offer was dropped above. Its id must
         // not survive in a category, or the customer taps a name with nothing
         // behind it.
-        Set<UUID> servedProducts = products.stream()
-                .map(MenuProduct::productId)
-                .collect(Collectors.toUnmodifiableSet());
+        Set<UUID> servedProducts =
+                products.stream().map(MenuProduct::productId).collect(Collectors.toUnmodifiableSet());
 
         List<MenuCategory> categories = categoryItems.stream()
                 .map(item -> new MenuCategory(
@@ -114,8 +110,7 @@ public class StorefrontCatalogQuery {
                 // empty shelf to show the customer; it is not part of this
                 // location's menu. Parents are kept: one holds children, not
                 // products.
-                .filter(category -> !category.productIds().isEmpty()
-                        || isParent(category.categoryId(), categoryItems))
+                .filter(category -> !category.productIds().isEmpty() || isParent(category.categoryId(), categoryItems))
                 .sorted(java.util.Comparator.comparingInt(MenuCategory::sortOrder))
                 .toList();
 
@@ -161,13 +156,11 @@ public class StorefrontCatalogQuery {
                 .map(group -> group.withPrices(optionPrices))
                 .toList();
 
-        return Optional.of(new StorefrontMenu(publication, locale, currency, categories,
-                pricedProducts, pricedGroups));
+        return Optional.of(new StorefrontMenu(publication, locale, currency, categories, pricedProducts, pricedGroups));
     }
 
     @SuppressWarnings("unchecked")
-    private static List<MenuVariant> variantsOf(PublicationItem item,
-            Map<UUID, OfferingStatus> offeringByVariant) {
+    private static List<MenuVariant> variantsOf(PublicationItem item, Map<UUID, OfferingStatus> offeringByVariant) {
 
         Object raw = item.content().get("variants");
         if (!(raw instanceof List<?> list)) {
@@ -271,13 +264,14 @@ public class StorefrontCatalogQuery {
         if (!(raw instanceof List<?> list)) {
             return List.of();
         }
-        return list.stream().map(value -> UUID.fromString(String.valueOf(value))).toList();
+        return list.stream()
+                .map(value -> UUID.fromString(String.valueOf(value)))
+                .toList();
     }
 
     /** Whether any other category names this one as its parent. */
     private static boolean isParent(UUID categoryId, List<PublicationItem> categoryItems) {
-        return categoryItems.stream()
-                .anyMatch(item -> categoryId.equals(parentOf(item.content())));
+        return categoryItems.stream().anyMatch(item -> categoryId.equals(parentOf(item.content())));
     }
 
     private static UUID parentOf(Map<String, Object> content) {
@@ -321,13 +315,17 @@ public class StorefrontCatalogQuery {
      *     amount below is null too, and a client must render the menu without
      *     prices rather than as free.
      */
-    public record StorefrontMenu(UUID publicationId, String locale, String currency,
-            List<MenuCategory> categories, List<MenuProduct> products,
-            List<MenuModifierGroup> modifierGroups) { }
+    public record StorefrontMenu(
+            UUID publicationId,
+            String locale,
+            String currency,
+            List<MenuCategory> categories,
+            List<MenuProduct> products,
+            List<MenuModifierGroup> modifierGroups) {}
 
     /** @param productIds in the category's own order, filtered to what this location serves */
-    public record MenuCategory(UUID categoryId, String code, String name, UUID parentCategoryId,
-            int sortOrder, List<UUID> productIds) { }
+    public record MenuCategory(
+            UUID categoryId, String code, String name, UUID parentCategoryId, int sortOrder, List<UUID> productIds) {}
 
     /**
      * @param imageUrls one platform URL per entry of {@code mediaAssetIds}, in the
@@ -337,14 +335,27 @@ public class StorefrontCatalogQuery {
      *     origin does not exist yet, so this is the only shape that works today
      *     and the same URL can be fronted by the CDN when it lands.
      */
-    public record MenuProduct(UUID productId, String code, String name, String description,
-            List<String> mediaAssetIds, List<String> imageUrls, List<MenuVariant> variants,
+    public record MenuProduct(
+            UUID productId,
+            String code,
+            String name,
+            String description,
+            List<String> mediaAssetIds,
+            List<String> imageUrls,
+            List<MenuVariant> variants,
             List<UUID> modifierGroupIds) {
 
         MenuProduct withPrices(Map<UUID, Long> variantPrices) {
-            return new MenuProduct(productId, code, name, description, mediaAssetIds, imageUrls,
-                    variants.stream().map(variant -> variant.withPrice(
-                            variantPrices.get(variant.variantId()))).toList(),
+            return new MenuProduct(
+                    productId,
+                    code,
+                    name,
+                    description,
+                    mediaAssetIds,
+                    imageUrls,
+                    variants.stream()
+                            .map(variant -> variant.withPrice(variantPrices.get(variant.variantId())))
+                            .toList(),
                     modifierGroupIds);
         }
     }
@@ -358,8 +369,8 @@ public class StorefrontCatalogQuery {
      *     an unpriced variant is a menu that is not finished, and showing it as
      *     free is how a brand sells a dish for nothing.
      */
-    public record MenuVariant(UUID variantId, String sku, String unitCode, boolean isDefault,
-            boolean orderable, Long amountMinor) {
+    public record MenuVariant(
+            UUID variantId, String sku, String unitCode, boolean isDefault, boolean orderable, Long amountMinor) {
 
         MenuVariant withPrice(Long price) {
             return new MenuVariant(variantId, sku, unitCode, isDefault, orderable, price);
@@ -371,21 +382,33 @@ public class StorefrontCatalogQuery {
      *     than once, without which a client cannot honour maximumQuantity and
      *     has to pin it to one
      */
-    public record MenuModifierGroup(UUID modifierGroupId, String code, String name, boolean required,
-            int minimumSelections, int maximumSelections, boolean allowSameOptionMultipleTimes,
+    public record MenuModifierGroup(
+            UUID modifierGroupId,
+            String code,
+            String name,
+            boolean required,
+            int minimumSelections,
+            int maximumSelections,
+            boolean allowSameOptionMultipleTimes,
             List<MenuModifierOption> options) {
 
         MenuModifierGroup withPrices(Map<UUID, Long> optionPrices) {
-            return new MenuModifierGroup(modifierGroupId, code, name, required, minimumSelections,
-                    maximumSelections, allowSameOptionMultipleTimes,
-                    options.stream().map(option -> option.withPrice(
-                            optionPrices.get(option.optionId()))).toList());
+            return new MenuModifierGroup(
+                    modifierGroupId,
+                    code,
+                    name,
+                    required,
+                    minimumSelections,
+                    maximumSelections,
+                    allowSameOptionMultipleTimes,
+                    options.stream()
+                            .map(option -> option.withPrice(optionPrices.get(option.optionId())))
+                            .toList());
         }
     }
 
     /** @param amountMinor null when unpriced, and never zero for "no price". */
-    public record MenuModifierOption(UUID optionId, String code, int maximumQuantity,
-            Long amountMinor) {
+    public record MenuModifierOption(UUID optionId, String code, int maximumQuantity, Long amountMinor) {
 
         MenuModifierOption withPrice(Long price) {
             return new MenuModifierOption(optionId, code, maximumQuantity, price);

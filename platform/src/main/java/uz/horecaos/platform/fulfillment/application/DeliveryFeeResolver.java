@@ -1,5 +1,6 @@
 package uz.horecaos.platform.fulfillment.application;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -7,14 +8,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
-import io.micrometer.core.instrument.MeterRegistry;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeOutcome;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeePort;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeQuery;
@@ -67,8 +64,11 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
     private final RoadDistancePort routing;
     private final MeterRegistry meters;
 
-    public DeliveryFeeResolver(JdbcServiceZoneStore zones, JdbcDeliveryTariffStore tariffs,
-            JdbcDeliveryFeeResolutionStore resolutions, RoadDistancePort routing,
+    public DeliveryFeeResolver(
+            JdbcServiceZoneStore zones,
+            JdbcDeliveryTariffStore tariffs,
+            JdbcDeliveryFeeResolutionStore resolutions,
+            RoadDistancePort routing,
             MeterRegistry meters) {
         this.zones = zones;
         this.tariffs = tariffs;
@@ -82,8 +82,11 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
     public ResolvedDeliveryCharge resolve(DeliveryFeeQuery query) {
         DeliveryFeeResolution resolution = run(query);
         resolutions.insert(resolution);
-        meters.counter("horecaos.delivery.fee.resolutions",
-                "outcome", resolution.outcome().name()).increment();
+        meters.counter(
+                        "horecaos.delivery.fee.resolutions",
+                        "outcome",
+                        resolution.outcome().name())
+                .increment();
         return resolution.toCharge();
     }
 
@@ -115,8 +118,7 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
         // total, so nothing would ever fail.
         if (query.pricingAuthority() == PricingAuthority.EXTERNAL) {
             evidence.put("pricingAuthority", PricingAuthority.EXTERNAL.name());
-            return refusal(query, DeliveryFeeOutcome.EXTERNALLY_PRICED,
-                    "PARTNER_PRICED_ORDER", evidence);
+            return refusal(query, DeliveryFeeOutcome.EXTERNALLY_PRICED, "PARTNER_PRICED_ORDER", evidence);
         }
 
         // ---- Step 1a. The branch must be somewhere.
@@ -126,11 +128,9 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
         // and distance test in the system while being 6,000 km from every customer,
         // so it would fall out of step 5 as BEYOND_MAX_DISTANCE and send an
         // operator to widen a tariff that is not the problem.
-        Optional<JdbcServiceZoneStore.Branch> branch =
-                zones.findBranch(query.tenantId(), query.locationId());
+        Optional<JdbcServiceZoneStore.Branch> branch = zones.findBranch(query.tenantId(), query.locationId());
         if (branch.isEmpty()) {
-            return refusal(query, DeliveryFeeOutcome.LOCATION_NOT_LOCATED,
-                    "LOCATION_NOT_FOUND", evidence);
+            return refusal(query, DeliveryFeeOutcome.LOCATION_NOT_LOCATED, "LOCATION_NOT_FOUND", evidence);
         }
 
         BranchOrigin origin;
@@ -142,10 +142,8 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
             // is what a resolver that simply found no candidates would report —
             // would be true and useless.
             evidence.put("refusalDetail", unlocated.getMessage());
-            log.warn("Delivery fee resolution refused: location {} cannot originate a zone",
-                    query.locationId());
-            return refusal(query, DeliveryFeeOutcome.LOCATION_NOT_LOCATED,
-                    "BRANCH_NOT_LOCATED", evidence);
+            log.warn("Delivery fee resolution refused: location {} cannot originate a zone", query.locationId());
+            return refusal(query, DeliveryFeeOutcome.LOCATION_NOT_LOCATED, "BRANCH_NOT_LOCATED", evidence);
         }
 
         // ---- Step 2a. The catchment guard.
@@ -154,17 +152,15 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
         // the delivery zones rather than after, because a branch that will not
         // serve this part of the city should say so rather than price a fee first
         // and then refuse.
-        var catchment = zones.catchmentCheck(query.tenantId(), query.locationId(),
-                query.destination(), query.at());
+        var catchment = zones.catchmentCheck(query.tenantId(), query.locationId(), query.destination(), query.at());
         if (catchment.guardApplies() && !catchment.covered()) {
             evidence.put("catchmentZonesBound", catchment.bound());
-            return refusal(query, DeliveryFeeOutcome.OUTSIDE_CATCHMENT,
-                    "OUTSIDE_BRANCH_CATCHMENT", evidence);
+            return refusal(query, DeliveryFeeOutcome.OUTSIDE_CATCHMENT, "OUTSIDE_BRANCH_CATCHMENT", evidence);
         }
 
         // ---- Step 2. Serviceability.
-        List<ZoneCandidate> candidates = new ArrayList<>(zones.containingDeliveryZones(
-                query.tenantId(), query.locationId(), query.destination(), query.at()));
+        List<ZoneCandidate> candidates = new ArrayList<>(
+                zones.containingDeliveryZones(query.tenantId(), query.locationId(), query.destination(), query.at()));
         if (candidates.isEmpty()) {
             // Never re-homed to a location that does cover it. Substituting a
             // branch changes the menu, the prices, the preparation time and — once
@@ -183,7 +179,8 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
         // change or an index rebuild cannot silently become a pricing change.
         candidates.sort(ZoneCandidate.RANKING);
         ZoneCandidate winner = candidates.getFirst();
-        List<UUID> losers = candidates.stream().skip(1).map(ZoneCandidate::zoneId).toList();
+        List<UUID> losers =
+                candidates.stream().skip(1).map(ZoneCandidate::zoneId).toList();
         evidence.put("candidateCount", candidates.size());
         evidence.put("winningZonePriority", winner.priority());
 
@@ -191,8 +188,7 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
         TariffChoice choice = chooseTariff(query, winner);
         if (choice == null) {
             evidence.put("tariffRungsTried", List.of("ZONE", "LOCATION", "BRAND_DEFAULT"));
-            return refusal(query, DeliveryFeeOutcome.NO_TARIFF, "NO_TARIFF_CONFIGURED", evidence,
-                    winner, losers);
+            return refusal(query, DeliveryFeeOutcome.NO_TARIFF, "NO_TARIFF_CONFIGURED", evidence, winner, losers);
         }
         DeliveryTariff tariff = choice.tariff();
         evidence.put("tariffRung", choice.rung());
@@ -215,17 +211,38 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
             // exists to forbid everywhere else. A legacy branch whose max_distance
             // was inclusive imports as that value plus one, so nothing it used to
             // serve stops being served.
-            return new DeliveryFeeResolution(UUID.randomUUID(), query.tenantId(), query.quoteId(),
-                    query.locationId(), DeliveryFeeOutcome.BEYOND_MAX_DISTANCE,
-                    "BEYOND_TARIFF_MAX_DISTANCE", query.currency(),
-                    winner.zoneId(), winner.zoneVersion(), tariff.tariffId(), tariff.version(),
-                    null, null, distance.meters(), tariff.distanceMode(), distance.source(),
-                    distance.provider(), null, null, null, null, null,
-                    winner.minBasketMinor(), winner.freeDeliveryFromMinor(), losers, evidence);
+            return new DeliveryFeeResolution(
+                    UUID.randomUUID(),
+                    query.tenantId(),
+                    query.quoteId(),
+                    query.locationId(),
+                    DeliveryFeeOutcome.BEYOND_MAX_DISTANCE,
+                    "BEYOND_TARIFF_MAX_DISTANCE",
+                    query.currency(),
+                    winner.zoneId(),
+                    winner.zoneVersion(),
+                    tariff.tariffId(),
+                    tariff.version(),
+                    null,
+                    null,
+                    distance.meters(),
+                    tariff.distanceMode(),
+                    distance.source(),
+                    distance.provider(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    winner.minBasketMinor(),
+                    winner.freeDeliveryFromMinor(),
+                    losers,
+                    evidence);
         }
 
         // ---- Step 6. Computation.
-        LocalDateTime localMoment = LocalDateTime.ofInstant(query.at(), branch.get().timezone());
+        LocalDateTime localMoment =
+                LocalDateTime.ofInstant(query.at(), branch.get().timezone());
         var computation = DeliveryFeeCalculator.compute(tariff, distance.meters(), localMoment);
 
         Long providerQuote = null;
@@ -252,15 +269,33 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
             evidence.put("providerQuoteFallback", "TARIFF");
         }
 
-        return new DeliveryFeeResolution(UUID.randomUUID(), query.tenantId(), query.quoteId(),
-                query.locationId(), DeliveryFeeOutcome.RESOLVED, null, query.currency(),
-                winner.zoneId(), winner.zoneVersion(), tariff.tariffId(), tariff.version(),
+        return new DeliveryFeeResolution(
+                UUID.randomUUID(),
+                query.tenantId(),
+                query.quoteId(),
+                query.locationId(),
+                DeliveryFeeOutcome.RESOLVED,
+                null,
+                query.currency(),
+                winner.zoneId(),
+                winner.zoneVersion(),
+                tariff.tariffId(),
+                tariff.version(),
                 computation.band().sequence(),
                 computation.rule() == null ? null : computation.rule().sequence(),
-                distance.meters(), tariff.distanceMode(), distance.source(), distance.provider(),
-                providerQuote, computedFee, finalFee, tariffDiscount,
+                distance.meters(),
+                tariff.distanceMode(),
+                distance.source(),
+                distance.provider(),
+                providerQuote,
+                computedFee,
+                finalFee,
+                tariffDiscount,
                 computation.discount() == null ? null : computation.discount().sequence(),
-                winner.minBasketMinor(), winner.freeDeliveryFromMinor(), losers, evidence);
+                winner.minBasketMinor(),
+                winner.freeDeliveryFromMinor(),
+                losers,
+                evidence);
     }
 
     /**
@@ -279,8 +314,7 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
      */
     private TariffChoice chooseTariff(DeliveryFeeQuery query, ZoneCandidate winner) {
         if (winner.deliveryTariffId() != null) {
-            Optional<DeliveryTariff> zoneTariff =
-                    tariffs.loadActive(query.tenantId(), winner.deliveryTariffId());
+            Optional<DeliveryTariff> zoneTariff = tariffs.loadActive(query.tenantId(), winner.deliveryTariffId());
             if (zoneTariff.isPresent()) {
                 return new TariffChoice("ZONE", zoneTariff.get());
             }
@@ -288,13 +322,11 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
             // and not an invitation to fall through: falling through would price
             // the district at the branch's general rate, which is a plausible
             // wrong answer nobody would notice.
-            log.warn("Zone {} names tariff {} which has no ACTIVE version",
-                    winner.zoneId(), winner.deliveryTariffId());
+            log.warn("Zone {} names tariff {} which has no ACTIVE version", winner.zoneId(), winner.deliveryTariffId());
             return null;
         }
 
-        Optional<UUID> locationTariffId =
-                tariffs.locationTariffId(query.tenantId(), query.locationId(), query.at());
+        Optional<UUID> locationTariffId = tariffs.locationTariffId(query.tenantId(), query.locationId(), query.at());
         if (locationTariffId.isPresent()) {
             Optional<DeliveryTariff> found = tariffs.loadActive(query.tenantId(), locationTariffId.get());
             if (found.isPresent()) {
@@ -326,10 +358,11 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
             return new Distance(straightLine, DistanceSource.RADIUS, null);
         }
 
-        Optional<RoadDistancePort.RoadDistance> routed = routing.distance(
-                origin.point(), query.destination(), tariff.routingProviderInstallationId());
+        Optional<RoadDistancePort.RoadDistance> routed =
+                routing.distance(origin.point(), query.destination(), tariff.routingProviderInstallationId());
         if (routed.isPresent()) {
-            return new Distance(routed.get().meters(), DistanceSource.ROAD, routed.get().provider());
+            return new Distance(
+                    routed.get().meters(), DistanceSource.ROAD, routed.get().provider());
         }
 
         meters.counter("horecaos.delivery.distance.fallbacks", "mode", DistanceMode.ROAD.name())
@@ -338,27 +371,49 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
         return new Distance(Math.toIntExact(inflated), DistanceSource.RADIUS_FALLBACK, null);
     }
 
-    private DeliveryFeeResolution refusal(DeliveryFeeQuery query, DeliveryFeeOutcome outcome,
-            String reasonCode, Map<String, Object> evidence) {
+    private DeliveryFeeResolution refusal(
+            DeliveryFeeQuery query, DeliveryFeeOutcome outcome, String reasonCode, Map<String, Object> evidence) {
         return refusal(query, outcome, reasonCode, evidence, null, List.of());
     }
 
-    private DeliveryFeeResolution refusal(DeliveryFeeQuery query, DeliveryFeeOutcome outcome,
-            String reasonCode, Map<String, Object> evidence, ZoneCandidate winner,
+    private DeliveryFeeResolution refusal(
+            DeliveryFeeQuery query,
+            DeliveryFeeOutcome outcome,
+            String reasonCode,
+            Map<String, Object> evidence,
+            ZoneCandidate winner,
             List<UUID> losers) {
-        return new DeliveryFeeResolution(UUID.randomUUID(), query.tenantId(), query.quoteId(),
-                query.locationId(), outcome, reasonCode, query.currency(),
+        return new DeliveryFeeResolution(
+                UUID.randomUUID(),
+                query.tenantId(),
+                query.quoteId(),
+                query.locationId(),
+                outcome,
+                reasonCode,
+                query.currency(),
                 winner == null ? null : winner.zoneId(),
                 winner == null ? null : winner.zoneVersion(),
-                null, null, null, null, null, null, null, null,
-                null, null, null, null, null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 winner == null ? null : winner.minBasketMinor(),
                 winner == null ? null : winner.freeDeliveryFromMinor(),
-                losers, evidence);
+                losers,
+                evidence);
     }
 
     /** @param rung which precedence step answered, so the evidence explains itself */
-    private record TariffChoice(String rung, DeliveryTariff tariff) { }
+    private record TariffChoice(String rung, DeliveryTariff tariff) {}
 
-    private record Distance(int meters, DistanceSource source, String provider) { }
+    private record Distance(int meters, DistanceSource source, String provider) {}
 }

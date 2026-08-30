@@ -5,7 +5,6 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-
 import uz.horecaos.platform.payments.domain.TiyinAmount;
 
 /**
@@ -63,8 +62,7 @@ public final class PaymeCheckoutLink {
 
     private static final char PARAMETER_SEPARATOR = ';';
 
-    private PaymeCheckoutLink() {
-    }
+    private PaymeCheckoutLink() {}
 
     /**
      * The plaintext payload, in the order the documented example uses.
@@ -85,10 +83,18 @@ public final class PaymeCheckoutLink {
             throw new IllegalArgumentException("A Payme checkout amount must be greater than zero");
         }
 
-        return MERCHANT + '=' + cashboxId
-                + PARAMETER_SEPARATOR + ACCOUNT_PREFIX + PaymeAccount.ORDER_FIELD + '='
+        return MERCHANT
+                + '='
+                + cashboxId
+                + PARAMETER_SEPARATOR
+                + ACCOUNT_PREFIX
+                + PaymeAccount.ORDER_FIELD
+                + '='
                 + orderReference
-                + PARAMETER_SEPARATOR + AMOUNT + '=' + amount.value();
+                + PARAMETER_SEPARATOR
+                + AMOUNT
+                + '='
+                + amount.value();
     }
 
     /** Standard RFC 4648 base64, padding kept. See the class comment. */
@@ -104,8 +110,7 @@ public final class PaymeCheckoutLink {
      *                                   default; a sandbox that rejects it flips
      *                                   one property
      */
-    public static String url(String checkoutHost, String payload,
-            boolean percentEncodePathSeparator) {
+    public static String url(String checkoutHost, String payload, boolean percentEncodePathSeparator) {
         String encoded = encode(payload);
         if (percentEncodePathSeparator) {
             encoded = encoded.replace("/", "%2F");
@@ -127,8 +132,13 @@ public final class PaymeCheckoutLink {
      * back to the request's {@code Referer} — and either way the return is a
      * browser redirect that proves nothing. Only {@code PerformTransaction} does.
      */
-    public static Map<String, String> formFields(String cashboxId, String orderReference,
-            TiyinAmount amount, String language, String callbackUrl, String detailBase64) {
+    public static Map<String, String> formFields(
+            String cashboxId,
+            String orderReference,
+            TiyinAmount amount,
+            String language,
+            String callbackUrl,
+            String detailBase64) {
         Map<String, String> fields = new LinkedHashMap<>();
         fields.put("merchant", cashboxId);
         fields.put("amount", Long.toString(amount.value()));

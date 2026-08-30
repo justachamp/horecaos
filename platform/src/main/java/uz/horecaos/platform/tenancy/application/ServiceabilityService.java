@@ -7,11 +7,9 @@ import java.time.ZoneId;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.LocationCapacityPort;
 import uz.horecaos.platform.tenancy.api.Serviceability;
@@ -58,12 +56,12 @@ public class ServiceabilityService implements ServiceabilityResolver, LocationCa
 
     @Override
     @Transactional(readOnly = true)
-    public Serviceability resolve(UUID tenantId, UUID brandId, UUID locationId,
-            UUID channelId, FulfillmentMode mode, Instant at) {
+    public Serviceability resolve(
+            UUID tenantId, UUID brandId, UUID locationId, UUID channelId, FulfillmentMode mode, Instant at) {
 
         ZoneId zone = store.timezoneOf(tenantId, locationId)
-                .orElseThrow(() -> new TenantResourceNotFoundException(
-                        "No location %s for this tenant".formatted(locationId)));
+                .orElseThrow(() ->
+                        new TenantResourceNotFoundException("No location %s for this tenant".formatted(locationId)));
 
         // Rules 1 and 2. A channel that does not exist for this tenant answers the
         // same way as one that is archived: not enabled. Both are "you cannot order
@@ -76,13 +74,12 @@ public class ServiceabilityService implements ServiceabilityResolver, LocationCa
 
         // Rule 3.
         if (!store.fulfillmentModeEnabled(tenantId, channelId, mode)) {
-            return Serviceability.refused(
-                    ServiceabilityReason.FULFILMENT_MODE_UNAVAILABLE, null, false);
+            return Serviceability.refused(ServiceabilityReason.FULFILMENT_MODE_UNAVAILABLE, null, false);
         }
 
         Optional<JdbcServiceabilityStore.BoundSchedule> bound = store.scheduleFor(tenantId, locationId, mode);
-        boolean acceptsScheduledOrders = bound
-                .map(schedule -> schedule.schedule().acceptsScheduledOrders())
+        boolean acceptsScheduledOrders = bound.map(
+                        schedule -> schedule.schedule().acceptsScheduledOrders())
                 .orElse(false);
 
         // Local wall-clock, resolved through the location's IANA zone rather than a
@@ -96,7 +93,8 @@ public class ServiceabilityService implements ServiceabilityResolver, LocationCa
 
         // Rule 4.
         if (serviceMode == ServiceMode.FORCE_CLOSED) {
-            return Serviceability.refused(ServiceabilityReason.MANUALLY_CLOSED,
+            return Serviceability.refused(
+                    ServiceabilityReason.MANUALLY_CLOSED,
                     reopeningInstant(state.effectiveUntil(), bound, zone),
                     acceptsScheduledOrders);
         }
@@ -104,9 +102,9 @@ public class ServiceabilityService implements ServiceabilityResolver, LocationCa
         if (serviceMode != ServiceMode.FORCE_OPEN) {
             // Rule 5. A dated exception beats the weekly rule; FORCE_CLOSED already
             // beat both above.
-            if (bound.isPresent()
-                    && bound.get().schedule().closedByExceptionOn(local.toLocalDate())) {
-                return Serviceability.refused(ServiceabilityReason.CLOSED_BY_EXCEPTION,
+            if (bound.isPresent() && bound.get().schedule().closedByExceptionOn(local.toLocalDate())) {
+                return Serviceability.refused(
+                        ServiceabilityReason.CLOSED_BY_EXCEPTION,
                         nextOpening(bound.get().schedule(), local, zone).orElse(null),
                         acceptsScheduledOrders);
             }
@@ -115,8 +113,10 @@ public class ServiceabilityService implements ServiceabilityResolver, LocationCa
             // defaulting an unbound mode to "always open" would let a branch that
             // has never configured delivery hours take delivery orders at 04:00.
             if (bound.isEmpty() || !bound.get().schedule().isOpenAt(local)) {
-                return Serviceability.refused(ServiceabilityReason.OUTSIDE_SERVICE_HOURS,
-                        bound.map(schedule -> nextOpening(schedule.schedule(), local, zone).orElse(null))
+                return Serviceability.refused(
+                        ServiceabilityReason.OUTSIDE_SERVICE_HOURS,
+                        bound.map(schedule -> nextOpening(schedule.schedule(), local, zone)
+                                        .orElse(null))
                                 .orElse(null),
                         acceptsScheduledOrders);
             }
@@ -125,8 +125,7 @@ public class ServiceabilityService implements ServiceabilityResolver, LocationCa
         // Rule 7. Read by channel code, which the ADR 0016 correction in V0020 makes
         // a reference to a registered channel rather than free text.
         if (!store.hasLivePublication(tenantId, brandId, channel.channelCode())) {
-            return Serviceability.refused(ServiceabilityReason.NO_LIVE_MENU, null,
-                    acceptsScheduledOrders);
+            return Serviceability.refused(ServiceabilityReason.NO_LIVE_MENU, null, acceptsScheduledOrders);
         }
 
         // Rule 8, advisory here. The authoritative decision is claimCapacity below,
@@ -134,13 +133,14 @@ public class ServiceabilityService implements ServiceabilityResolver, LocationCa
         // true a moment ago, which is fine for browse and never enough to commit on.
         if (state.maxConcurrentOrders() != null
                 && store.openCapacityHolds(tenantId, locationId) >= state.maxConcurrentOrders()) {
-            return Serviceability.refused(ServiceabilityReason.AT_CAPACITY, null,
-                    acceptsScheduledOrders);
+            return Serviceability.refused(ServiceabilityReason.AT_CAPACITY, null, acceptsScheduledOrders);
         }
 
-        return Serviceability.available(acceptsScheduledOrders,
-                store.preparationMinutes(tenantId, locationId, mode,
-                        local.getDayOfWeek().getValue(), local.toLocalTime()).orElse(null));
+        return Serviceability.available(
+                acceptsScheduledOrders,
+                store.preparationMinutes(
+                                tenantId, locationId, mode, local.getDayOfWeek().getValue(), local.toLocalTime())
+                        .orElse(null));
     }
 
     /**
@@ -152,14 +152,15 @@ public class ServiceabilityService implements ServiceabilityResolver, LocationCa
      * rather than read here, so tenancy does not reach into the catalog.
      */
     @Transactional(readOnly = true)
-    public Integer preparationMinutes(UUID tenantId, UUID locationId, FulfillmentMode mode,
-            Instant at, Collection<Integer> lineOverrideMinutes) {
+    public Integer preparationMinutes(
+            UUID tenantId, UUID locationId, FulfillmentMode mode, Instant at, Collection<Integer> lineOverrideMinutes) {
         ZoneId zone = store.timezoneOf(tenantId, locationId)
-                .orElseThrow(() -> new TenantResourceNotFoundException(
-                        "No location %s for this tenant".formatted(locationId)));
+                .orElseThrow(() ->
+                        new TenantResourceNotFoundException("No location %s for this tenant".formatted(locationId)));
         LocalDateTime local = at.atZone(zone).toLocalDateTime();
-        Integer band = store.preparationMinutes(tenantId, locationId, mode,
-                local.getDayOfWeek().getValue(), local.toLocalTime()).orElse(null);
+        Integer band = store.preparationMinutes(
+                        tenantId, locationId, mode, local.getDayOfWeek().getValue(), local.toLocalTime())
+                .orElse(null);
         return PreparationPromise.minutes(band, lineOverrideMinutes);
     }
 
@@ -203,8 +204,8 @@ public class ServiceabilityService implements ServiceabilityResolver, LocationCa
      * schedule shuts at 19:00 does not reopen at 20:00. The later of the two is the
      * first moment both the override and the timetable agree.
      */
-    private Instant reopeningInstant(Instant effectiveUntil,
-            Optional<JdbcServiceabilityStore.BoundSchedule> bound, ZoneId zone) {
+    private Instant reopeningInstant(
+            Instant effectiveUntil, Optional<JdbcServiceabilityStore.BoundSchedule> bound, ZoneId zone) {
 
         if (effectiveUntil == null) {
             // "Until I reopen it" has no computable next-available instant, and
@@ -230,6 +231,7 @@ public class ServiceabilityService implements ServiceabilityResolver, LocationCa
     }
 
     private Optional<Instant> nextOpening(WeeklySchedule schedule, LocalDateTime from, ZoneId zone) {
-        return schedule.nextOpeningAtOrAfter(from).map(opening -> opening.atZone(zone).toInstant());
+        return schedule.nextOpeningAtOrAfter(from)
+                .map(opening -> opening.atZone(zone).toInstant());
     }
 }

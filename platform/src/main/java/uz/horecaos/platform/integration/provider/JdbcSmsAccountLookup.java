@@ -2,13 +2,10 @@ package uz.horecaos.platform.integration.provider;
 
 import java.util.Map;
 import java.util.Optional;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.integration.api.provider.BindingRef;
 
 /**
@@ -32,9 +29,10 @@ public class JdbcSmsAccountLookup implements SmsAccountLookup {
 
     /** The keys this provider's account is configured under. */
     static final String LOGIN_KEY = "login";
+
     static final String SENDER_KEY = "sender";
 
-    private static final TypeReference<Map<String, Object>> JSON_OBJECT = new TypeReference<>() { };
+    private static final TypeReference<Map<String, Object>> JSON_OBJECT = new TypeReference<>() {};
 
     private final JdbcClient jdbc;
     private final ObjectMapper objectMapper;
@@ -56,9 +54,7 @@ public class JdbcSmsAccountLookup implements SmsAccountLookup {
                 """)
                 .param("tenantId", binding.tenantId())
                 .param("bindingId", binding.bindingId())
-                .query((row, number) -> read(
-                        row.getString("installation_config"),
-                        row.getString("binding_config")))
+                .query((row, number) -> read(row.getString("installation_config"), row.getString("binding_config")))
                 .optional();
     }
 

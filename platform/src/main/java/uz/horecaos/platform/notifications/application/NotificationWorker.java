@@ -5,14 +5,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.notifications.domain.NotificationStatus;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore.NotificationRow;
@@ -34,8 +32,7 @@ import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotific
  * other branch's confirmations behind one bad row.
  */
 @Component
-@ConditionalOnProperty(name = "horecaos.notifications.worker.enabled", havingValue = "true",
-        matchIfMissing = true)
+@ConditionalOnProperty(name = "horecaos.notifications.worker.enabled", havingValue = "true", matchIfMissing = true)
 public class NotificationWorker {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationWorker.class);
@@ -47,8 +44,10 @@ public class NotificationWorker {
     private final int batchSize;
     private final Duration lease;
 
-    public NotificationWorker(JdbcNotificationStore notifications,
-            NotificationEligibilityService eligibility, NotificationDispatchService dispatch,
+    public NotificationWorker(
+            JdbcNotificationStore notifications,
+            NotificationEligibilityService eligibility,
+            NotificationDispatchService dispatch,
             Clock clock,
             @Value("${horecaos.notifications.worker.batch-size:50}") int batchSize,
             @Value("${horecaos.notifications.worker.lease:PT2M}") Duration lease) {
@@ -80,8 +79,7 @@ public class NotificationWorker {
     public int drain() {
         Instant now = clock.instant();
         UUID claimToken = UUID.randomUUID();
-        List<NotificationRow> claimed =
-                notifications.claimDue(now, now.plus(lease), batchSize, claimToken);
+        List<NotificationRow> claimed = notifications.claimDue(now, now.plus(lease), batchSize, claimToken);
 
         int handled = 0;
         for (NotificationRow row : claimed) {

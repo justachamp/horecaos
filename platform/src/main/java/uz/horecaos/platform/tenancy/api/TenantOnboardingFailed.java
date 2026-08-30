@@ -14,12 +14,8 @@ import java.util.UUID;
  * is one authorized read away.
  */
 public record TenantOnboardingFailed(
-        UUID eventId,
-        TenantId tenantId,
-        UUID runId,
-        String stepKey,
-        String errorCode,
-        Instant occurredAt) implements TenancyEvent {
+        UUID eventId, TenantId tenantId, UUID runId, String stepKey, String errorCode, Instant occurredAt)
+        implements TenancyEvent {
 
     public TenantOnboardingFailed {
         Objects.requireNonNull(eventId, "Event ID is required");
@@ -53,5 +49,5 @@ public record TenantOnboardingFailed(
         return new Payload(tenantId.value(), runId, stepKey, errorCode);
     }
 
-    public record Payload(UUID tenantId, UUID runId, String stepKey, String errorCode) { }
+    public record Payload(UUID tenantId, UUID runId, String stepKey, String errorCode) {}
 }

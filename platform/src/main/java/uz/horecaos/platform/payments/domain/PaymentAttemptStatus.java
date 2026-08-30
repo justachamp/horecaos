@@ -31,7 +31,6 @@ import java.util.Set;
  * still HorecaOS's state.
  */
 public enum PaymentAttemptStatus {
-
     INITIATED,
 
     PRESENTED,
@@ -64,14 +63,11 @@ public enum PaymentAttemptStatus {
      */
     UNCERTAIN;
 
-    private static final Set<PaymentAttemptStatus> TERMINAL =
-            EnumSet.of(CANCELLED, EXPIRED, REVERSED, FAILED);
+    private static final Set<PaymentAttemptStatus> TERMINAL = EnumSet.of(CANCELLED, EXPIRED, REVERSED, FAILED);
 
-    private static final Set<PaymentAttemptStatus> LIVE =
-            EnumSet.of(RESERVED, CAPTURED, UNCERTAIN);
+    private static final Set<PaymentAttemptStatus> LIVE = EnumSet.of(RESERVED, CAPTURED, UNCERTAIN);
 
-    private static final Set<PaymentAttemptStatus> RE_PRESENTABLE =
-            EnumSet.of(INITIATED, PRESENTED, RESERVED);
+    private static final Set<PaymentAttemptStatus> RE_PRESENTABLE = EnumSet.of(INITIATED, PRESENTED, RESERVED);
 
     /** Whether nothing further can happen to an attempt in this state. */
     public boolean terminal() {

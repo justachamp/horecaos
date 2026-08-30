@@ -1,11 +1,9 @@
 package uz.horecaos.platform.tenancy.application;
 
 import java.util.Set;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
@@ -64,7 +62,9 @@ public class TenantAccessPolicy {
         }
         if (enforceCapabilities) {
             authorization.require(
-                    actor.subject(), Capability.TENANT_READ, ResourceScope.tenant(tenant.id().value()));
+                    actor.subject(),
+                    Capability.TENANT_READ,
+                    ResourceScope.tenant(tenant.id().value()));
         }
     }
 
@@ -74,17 +74,15 @@ public class TenantAccessPolicy {
             return;
         }
         String organizationId = tenant.keycloakOrganizationId().orElseThrow(TenantAccessPolicy::denied);
-        boolean permitted = TENANT_MANAGEMENT_ROLES.stream()
-                .anyMatch(role -> actor.hasOrganizationRole(organizationId, role));
+        boolean permitted =
+                TENANT_MANAGEMENT_ROLES.stream().anyMatch(role -> actor.hasOrganizationRole(organizationId, role));
         if (!permitted) {
             throw denied();
         }
     }
 
     private static boolean belongsToTenant(AuthenticatedActor actor, Tenant tenant) {
-        return tenant.keycloakOrganizationId()
-                .map(actor::belongsToOrganization)
-                .orElse(false);
+        return tenant.keycloakOrganizationId().map(actor::belongsToOrganization).orElse(false);
     }
 
     private static AccessDeniedException denied() {

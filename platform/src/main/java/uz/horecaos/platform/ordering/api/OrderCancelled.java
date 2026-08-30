@@ -3,7 +3,6 @@ package uz.horecaos.platform.ordering.api;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
-
 import uz.horecaos.platform.tenancy.api.TenantId;
 
 /**
@@ -40,7 +39,8 @@ public record OrderCancelled(
         int orderVersion,
         String systemCategory,
         String stockDisposition,
-        String liabilityParty) implements OrderingEvent {
+        String liabilityParty)
+        implements OrderingEvent {
 
     public OrderCancelled {
         Objects.requireNonNull(eventId, "Event ID is required");
@@ -57,11 +57,33 @@ public record OrderCancelled(
      * carries nulls in the three new fields, which is honest: the fields describe
      * a decision that path never made.
      */
-    public OrderCancelled(UUID eventId, TenantId tenantId, UUID orderId, Instant occurredAt,
-            UUID brandId, UUID locationId, String cancelledByActorType, String reasonCode,
-            String previousStatus, String status, int orderVersion) {
-        this(eventId, tenantId, orderId, occurredAt, brandId, locationId, cancelledByActorType,
-                reasonCode, previousStatus, status, orderVersion, null, null, null);
+    public OrderCancelled(
+            UUID eventId,
+            TenantId tenantId,
+            UUID orderId,
+            Instant occurredAt,
+            UUID brandId,
+            UUID locationId,
+            String cancelledByActorType,
+            String reasonCode,
+            String previousStatus,
+            String status,
+            int orderVersion) {
+        this(
+                eventId,
+                tenantId,
+                orderId,
+                occurredAt,
+                brandId,
+                locationId,
+                cancelledByActorType,
+                reasonCode,
+                previousStatus,
+                status,
+                orderVersion,
+                null,
+                null,
+                null);
     }
 
     @Override
@@ -76,8 +98,17 @@ public record OrderCancelled(
 
     @Override
     public Object payload() {
-        return new Payload(orderId, brandId, locationId, cancelledByActorType, reasonCode,
-                previousStatus, status, orderVersion, systemCategory, stockDisposition,
+        return new Payload(
+                orderId,
+                brandId,
+                locationId,
+                cancelledByActorType,
+                reasonCode,
+                previousStatus,
+                status,
+                orderVersion,
+                systemCategory,
+                stockDisposition,
                 liabilityParty);
     }
 
@@ -92,5 +123,5 @@ public record OrderCancelled(
             int orderVersion,
             String systemCategory,
             String stockDisposition,
-            String liabilityParty) { }
+            String liabilityParty) {}
 }

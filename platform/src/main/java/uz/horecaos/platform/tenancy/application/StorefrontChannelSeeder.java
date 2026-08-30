@@ -1,10 +1,8 @@
 package uz.horecaos.platform.tenancy.application;
 
 import java.time.Clock;
-
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.api.SalesChannelSystemType;
 import uz.horecaos.platform.tenancy.api.TenantCreated;
@@ -46,9 +44,19 @@ public class StorefrontChannelSeeder {
         if (store.byCode(tenantId, STOREFRONT_CODE).isPresent()) {
             return;
         }
-        store.insert(new SalesChannel(
-                java.util.UUID.randomUUID(), tenantId, STOREFRONT_CODE,
-                SalesChannelSystemType.WEB, "Storefront", SalesChannel.Status.ACTIVE,
-                null, false, true, null, 1), clock.instant());
+        store.insert(
+                new SalesChannel(
+                        java.util.UUID.randomUUID(),
+                        tenantId,
+                        STOREFRONT_CODE,
+                        SalesChannelSystemType.WEB,
+                        "Storefront",
+                        SalesChannel.Status.ACTIVE,
+                        null,
+                        false,
+                        true,
+                        null,
+                        1),
+                clock.instant());
     }
 }

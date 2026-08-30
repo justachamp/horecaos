@@ -12,10 +12,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.telemetry.domain.CollectionGate;
 import uz.horecaos.platform.telemetry.domain.DutySessionStatus;
 
@@ -123,8 +121,8 @@ public class JdbcTelemetryStore {
      * question, and PostgreSQL answers it rather than whichever request arrived
      * first.
      */
-    public boolean transitionSession(UUID tenantId, UUID sessionId,
-            DutySessionStatus expected, DutySessionStatus next, Instant at) {
+    public boolean transitionSession(
+            UUID tenantId, UUID sessionId, DutySessionStatus expected, DutySessionStatus next, Instant at) {
 
         return jdbc.sql("""
                 UPDATE fulfillment.courier_duty_sessions
@@ -135,12 +133,13 @@ public class JdbcTelemetryStore {
                  WHERE tenant_id = :tenantId AND id = :id
                    AND status = :expected AND ended_at IS NULL
                 """)
-                .param("tenantId", tenantId)
-                .param("id", sessionId)
-                .param("expected", expected.name())
-                .param("next", next.name())
-                .param("at", utc(at))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", sessionId)
+                        .param("expected", expected.name())
+                        .param("next", next.name())
+                        .param("at", utc(at))
+                        .update()
+                == 1;
     }
 
     public boolean closeSession(UUID tenantId, UUID sessionId, String endReason, Instant at) {
@@ -151,11 +150,12 @@ public class JdbcTelemetryStore {
                        version = version + 1, updated_at = :at
                  WHERE tenant_id = :tenantId AND id = :id AND ended_at IS NULL
                 """)
-                .param("tenantId", tenantId)
-                .param("id", sessionId)
-                .param("reason", endReason)
-                .param("at", utc(at))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", sessionId)
+                        .param("reason", endReason)
+                        .param("at", utc(at))
+                        .update()
+                == 1;
     }
 
     // ------------------------------------------------------------- live positions
@@ -211,9 +211,7 @@ public class JdbcTelemetryStore {
                        captured_at = excluded.captured_at,
                        received_at = excluded.received_at
                  WHERE excluded.captured_at > fulfillment.courier_positions_live.captured_at
-                """)
-                .params(params)
-                .update() == 1;
+                """).params(params).update() == 1;
     }
 
     public List<LivePositionRow> livePositionsAtLocation(UUID tenantId, UUID locationId) {
@@ -271,8 +269,7 @@ public class JdbcTelemetryStore {
      * decide what the map may draw, and a rule that lives in a WHERE clause is
      * the kind that is quietly wrong for months.
      */
-    public List<ProximityRow> metresFromBranch(UUID tenantId, UUID locationId,
-            Collection<UUID> courierIds) {
+    public List<ProximityRow> metresFromBranch(UUID tenantId, UUID locationId, Collection<UUID> courierIds) {
 
         if (courierIds.isEmpty()) {
             // An empty collection renders as `IN ()`, which PostgreSQL rejects.
@@ -319,9 +316,7 @@ public class JdbcTelemetryStore {
                    AND session.tenant_id = live.tenant_id
                    AND session.ended_at IS NOT NULL
                    AND session.ended_at < :cutoff
-                """)
-                .param("cutoff", utc(cutoff))
-                .update();
+                """).param("cutoff", utc(cutoff)).update();
     }
 
     // --------------------------------------------------------------------- tracks
@@ -355,19 +350,20 @@ public class JdbcTelemetryStore {
                  WHERE excluded.observation_count
                        > fulfillment.courier_location_tracks.observation_count
                 """)
-                .param("id", window.id())
-                .param("tenantId", window.tenantId())
-                .param("courierId", window.courierId())
-                .param("sessionId", window.dutySessionId())
-                .param("windowStart", utc(window.windowStart()))
-                .param("windowEnd", utc(window.windowEnd()))
-                .param("first", window.geohash5First())
-                .param("last", window.geohash5Last())
-                .param("count", window.observationCount())
-                .param("distance", window.distanceMeters())
-                .param("protectedTrack", window.protectedTrack())
-                .param("now", utc(window.createdAt()))
-                .update() == 1;
+                        .param("id", window.id())
+                        .param("tenantId", window.tenantId())
+                        .param("courierId", window.courierId())
+                        .param("sessionId", window.dutySessionId())
+                        .param("windowStart", utc(window.windowStart()))
+                        .param("windowEnd", utc(window.windowEnd()))
+                        .param("first", window.geohash5First())
+                        .param("last", window.geohash5Last())
+                        .param("count", window.observationCount())
+                        .param("distance", window.distanceMeters())
+                        .param("protectedTrack", window.protectedTrack())
+                        .param("now", utc(window.createdAt()))
+                        .update()
+                == 1;
     }
 
     /** The reveal's read. Always bounded by a window, never "everything for this courier". */
@@ -410,7 +406,9 @@ public class JdbcTelemetryStore {
                             resultSet.getInt("distance_meters"),
                             resultSet.getInt("observation_count"),
                             first.toInstant(),
-                            resultSet.getObject("last_observed_at", OffsetDateTime.class).toInstant());
+                            resultSet
+                                    .getObject("last_observed_at", OffsetDateTime.class)
+                                    .toInstant());
                 })
                 .optional()
                 .filter(aggregate -> aggregate != null);
@@ -440,9 +438,7 @@ public class JdbcTelemetryStore {
                     protected_pickup_point, protected_delivery_point, created_at)
                 VALUES (:id, :tenantId, :courierId, :sessionId, :shipmentId,
                     :distance, :count, :firstAt, :lastAt, :pickup, :delivery, :now)
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     public List<TrackSummaryRow> summariesForCourier(UUID tenantId, UUID courierId) {
@@ -556,19 +552,40 @@ public class JdbcTelemetryStore {
     // ------------------------------------------------------------------- row types
 
     public record DutySessionRow(
-            UUID id, UUID tenantId, UUID brandId, UUID locationId, UUID courierId, UUID shiftId,
-            String deviceId, DutySessionStatus status, CollectionGate collectionGate,
-            Instant registrationCheckedAt, LocalDate registrationValidUntil,
-            String openedBySubject, Instant startedAt, Instant suspendedAt,
-            Instant endedAt, String endReason, int version) {
-    }
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID courierId,
+            UUID shiftId,
+            String deviceId,
+            DutySessionStatus status,
+            CollectionGate collectionGate,
+            Instant registrationCheckedAt,
+            LocalDate registrationValidUntil,
+            String openedBySubject,
+            Instant startedAt,
+            Instant suspendedAt,
+            Instant endedAt,
+            String endReason,
+            int version) {}
 
     public record LivePositionRow(
-            UUID tenantId, UUID courierId, UUID dutySessionId, UUID brandId, UUID locationId,
-            double latitude, double longitude, double accuracyMeters,
-            Double headingDegrees, Double speedMps, Integer batteryPercent, Boolean deviceCharging,
-            int activeAssignmentCount, Instant capturedAt, Instant receivedAt) {
-    }
+            UUID tenantId,
+            UUID courierId,
+            UUID dutySessionId,
+            UUID brandId,
+            UUID locationId,
+            double latitude,
+            double longitude,
+            double accuracyMeters,
+            Double headingDegrees,
+            Double speedMps,
+            Integer batteryPercent,
+            Boolean deviceCharging,
+            int activeAssignmentCount,
+            Instant capturedAt,
+            Instant receivedAt) {}
 
     /**
      * One courier's distance from a branch, with the two facts that decide
@@ -579,24 +596,37 @@ public class JdbcTelemetryStore {
      * upstream of it ever holding a position, and adding a latitude here would
      * quietly undo that.
      */
-    public record ProximityRow(UUID courierId, double metres, double accuracyMeters,
-            Instant capturedAt) {
-    }
+    public record ProximityRow(UUID courierId, double metres, double accuracyMeters, Instant capturedAt) {}
 
     public record TrackWindowRow(
-            UUID id, UUID tenantId, UUID courierId, UUID dutySessionId,
-            Instant windowStart, Instant windowEnd, String geohash5First, String geohash5Last,
-            int observationCount, int distanceMeters, String protectedTrack, Instant createdAt) {
-    }
+            UUID id,
+            UUID tenantId,
+            UUID courierId,
+            UUID dutySessionId,
+            Instant windowStart,
+            Instant windowEnd,
+            String geohash5First,
+            String geohash5Last,
+            int observationCount,
+            int distanceMeters,
+            String protectedTrack,
+            Instant createdAt) {}
 
     public record TrackSummaryRow(
-            UUID id, UUID tenantId, UUID courierId, UUID dutySessionId, UUID shipmentId,
-            int distanceMeters, int observationCount, Instant firstObservedAt, Instant lastObservedAt,
-            String protectedPickupPoint, String protectedDeliveryPoint, Instant createdAt) {
-    }
+            UUID id,
+            UUID tenantId,
+            UUID courierId,
+            UUID dutySessionId,
+            UUID shipmentId,
+            int distanceMeters,
+            int observationCount,
+            Instant firstObservedAt,
+            Instant lastObservedAt,
+            String protectedPickupPoint,
+            String protectedDeliveryPoint,
+            Instant createdAt) {}
 
     /** What a session's windows add up to, computed without decrypting one. */
     public record TrackAggregate(
-            int distanceMeters, int observationCount, Instant firstObservedAt, Instant lastObservedAt) {
-    }
+            int distanceMeters, int observationCount, Instant firstObservedAt, Instant lastObservedAt) {}
 }

@@ -4,16 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
 import java.net.SocketTimeoutException;
+import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.net.URI;
 import java.time.Duration;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.integration.camel.common.ProviderExceptionClassifier;
 
@@ -44,7 +42,9 @@ class ProviderContractTests {
     void aSuccessfulCallIsNormalisedToSuccess() throws Exception {
         var response = call(ControlledFakeProvider.Scenario.SUCCESS, "key-1", Duration.ofSeconds(5));
 
-        assertThat(classifier.classify(response.statusCode(), response.body(), null).status())
+        assertThat(classifier
+                        .classify(response.statusCode(), response.body(), null)
+                        .status())
                 .isEqualTo(ProviderOutcome.Status.SUCCESS);
         assertThat(provider.sideEffectCount()).isEqualTo(1);
     }
@@ -71,8 +71,10 @@ class ProviderContractTests {
     @Test
     void aRateLimitIsRetryableAndCarriesItsDelay() throws Exception {
         var response = call(ControlledFakeProvider.Scenario.RATE_LIMITED, "key-1", Duration.ofSeconds(5));
-        Duration retryAfter = response.headers().firstValue("Retry-After")
-                .map(value -> Duration.ofSeconds(Long.parseLong(value))).orElse(null);
+        Duration retryAfter = response.headers()
+                .firstValue("Retry-After")
+                .map(value -> Duration.ofSeconds(Long.parseLong(value)))
+                .orElse(null);
 
         var outcome = classifier.classify(response.statusCode(), response.body(), retryAfter);
 
@@ -96,7 +98,9 @@ class ProviderContractTests {
     void aServerErrorIsRetryable() throws Exception {
         var response = call(ControlledFakeProvider.Scenario.SERVER_ERROR, "key-1", Duration.ofSeconds(5));
 
-        assertThat(classifier.classify(response.statusCode(), response.body(), null).mayRetryDirectly())
+        assertThat(classifier
+                        .classify(response.statusCode(), response.body(), null)
+                        .mayRetryDirectly())
                 .isTrue();
     }
 
@@ -131,7 +135,9 @@ class ProviderContractTests {
 
     @Test
     void aConnectionResetAfterSendingIsUncertain() {
-        assertThat(classifier.classify(new IOException("connection reset"), true).requiresReconciliation())
+        assertThat(classifier
+                        .classify(new IOException("connection reset"), true)
+                        .requiresReconciliation())
                 .isTrue();
     }
 
@@ -156,7 +162,9 @@ class ProviderContractTests {
     void aSlowResponseStillSucceedsWithinAGenerousTimeout() throws Exception {
         var response = call(ControlledFakeProvider.Scenario.SLOW, "key-1", Duration.ofSeconds(6));
 
-        assertThat(classifier.classify(response.statusCode(), response.body(), null).status())
+        assertThat(classifier
+                        .classify(response.statusCode(), response.body(), null)
+                        .status())
                 .isEqualTo(ProviderOutcome.Status.SUCCESS);
     }
 
@@ -169,8 +177,7 @@ class ProviderContractTests {
                 .containsExactly("key-42");
     }
 
-    private HttpResponse<String> call(
-            ControlledFakeProvider.Scenario scenario, String idempotencyKey, Duration timeout)
+    private HttpResponse<String> call(ControlledFakeProvider.Scenario scenario, String idempotencyKey, Duration timeout)
             throws Exception {
 
         HttpRequest request = HttpRequest.newBuilder()
@@ -182,8 +189,8 @@ class ProviderContractTests {
                 .POST(HttpRequest.BodyPublishers.ofString("{\"command\":\"test\"}"))
                 .build();
 
-        try (HttpClient client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(2)).build()) {
+        try (HttpClient client =
+                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build()) {
             return client.send(request, HttpResponse.BodyHandlers.ofString());
         }
     }

@@ -5,7 +5,6 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,9 +12,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.telemetry.api.TelemetryConfigurationKeys;
-
 
 /**
  * Retention as a job that runs, rather than a paragraph in an ADR (ADR 0045).
@@ -69,8 +66,7 @@ import uz.horecaos.platform.telemetry.api.TelemetryConfigurationKeys;
  * "expired" means, and cannot be made to drop anything a day early.
  */
 @Component
-@ConditionalOnProperty(name = "horecaos.telemetry.retention.enabled",
-        havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = "horecaos.telemetry.retention.enabled", havingValue = "true", matchIfMissing = true)
 public class TrackRetentionSweeper {
 
     private static final Logger log = LoggerFactory.getLogger(TrackRetentionSweeper.class);
@@ -87,7 +83,10 @@ public class TrackRetentionSweeper {
     private final boolean reportOnly;
     private final int configuredRetentionDays;
 
-    public TrackRetentionSweeper(JdbcClient jdbc, JdbcTelemetryStore store, Clock clock,
+    public TrackRetentionSweeper(
+            JdbcClient jdbc,
+            JdbcTelemetryStore store,
+            Clock clock,
             @Value("${horecaos.telemetry.retention.report-only:false}") boolean reportOnly,
             @Value("${horecaos.telemetry.retention.days:30}") int retentionDays) {
         this.jdbc = jdbc;
@@ -154,15 +153,15 @@ public class TrackRetentionSweeper {
      */
     public int expireLivePositions() {
         if (reportOnly) {
-            log.info("Telemetry retention is report-only: live positions past the {} grace "
-                    + "would be deleted", LIVE_ROW_GRACE);
+            log.info(
+                    "Telemetry retention is report-only: live positions past the {} grace " + "would be deleted",
+                    LIVE_ROW_GRACE);
             return 0;
         }
-        int removed = store.deleteLivePositionsForSessionsClosedBefore(
-                clock.instant().minus(LIVE_ROW_GRACE));
+        int removed =
+                store.deleteLivePositionsForSessionsClosedBefore(clock.instant().minus(LIVE_ROW_GRACE));
         if (removed > 0) {
-            log.info("Removed {} live courier positions past the {} grace after sign-off",
-                    removed, LIVE_ROW_GRACE);
+            log.info("Removed {} live courier positions past the {} grace after sign-off", removed, LIVE_ROW_GRACE);
         }
         return removed;
     }
@@ -206,8 +205,7 @@ public class TrackRetentionSweeper {
     public List<String> dropExpiredPartitions() {
         int retentionDays = effectiveRetentionDays();
 
-        List<String> expired = jdbc.sql(
-                "SELECT fulfillment.sweep_expired_track_partitions(:days, :reportOnly)")
+        List<String> expired = jdbc.sql("SELECT fulfillment.sweep_expired_track_partitions(:days, :reportOnly)")
                 .param("days", retentionDays)
                 .param("reportOnly", reportOnly)
                 .query(String.class)
@@ -217,12 +215,18 @@ public class TrackRetentionSweeper {
             return expired;
         }
         if (reportOnly) {
-            log.info("Telemetry retention is report-only: {} courier track partitions are past "
-                    + "the {}-day window and would be dropped: {}",
-                    expired.size(), retentionDays, expired);
+            log.info(
+                    "Telemetry retention is report-only: {} courier track partitions are past "
+                            + "the {}-day window and would be dropped: {}",
+                    expired.size(),
+                    retentionDays,
+                    expired);
         } else {
-            log.info("Dropped {} courier track partitions past the {}-day retention window: {}",
-                    expired.size(), retentionDays, expired);
+            log.info(
+                    "Dropped {} courier track partitions past the {}-day retention window: {}",
+                    expired.size(),
+                    retentionDays,
+                    expired);
         }
         return expired;
     }
@@ -252,8 +256,6 @@ public class TrackRetentionSweeper {
                 .optional()
                 .orElse(null);
 
-        return longest == null
-                ? configuredRetentionDays
-                : Math.max(configuredRetentionDays, Math.toIntExact(longest));
+        return longest == null ? configuredRetentionDays : Math.max(configuredRetentionDays, Math.toIntExact(longest));
     }
 }

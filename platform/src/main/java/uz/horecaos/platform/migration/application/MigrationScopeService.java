@@ -10,15 +10,12 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalRequestOwnership;
-import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.migration.application.MigrationCutoverDecisionStore.Decision;
 import uz.horecaos.platform.migration.application.MigrationCutoverDecisionStore.DecisionRow;
 import uz.horecaos.platform.migration.application.MigrationScopeStore.ScopeRow;
@@ -114,10 +111,15 @@ public class MigrationScopeService {
     private final MigrationAudit audit;
     private final Clock clock;
 
-    public MigrationScopeService(MigrationScopeStore scopes,
-            MigrationReconciliationStore reconciliation, MigrationCutoverDecisionStore decisions,
-            MigrationQuarantineStore quarantine, MigrationAccessPolicy access,
-            ApprovalRequestOwnership approvals, MigrationAudit audit, Clock clock) {
+    public MigrationScopeService(
+            MigrationScopeStore scopes,
+            MigrationReconciliationStore reconciliation,
+            MigrationCutoverDecisionStore decisions,
+            MigrationQuarantineStore quarantine,
+            MigrationAccessPolicy access,
+            ApprovalRequestOwnership approvals,
+            MigrationAudit audit,
+            Clock clock) {
         this.scopes = scopes;
         this.reconciliation = reconciliation;
         this.decisions = decisions;
@@ -154,12 +156,16 @@ public class MigrationScopeService {
         requireVersion(scope, command.expectedVersion());
 
         if (from.holding()) {
-            throw wrongEntryPoint(scope, to,
+            throw wrongEntryPoint(
+                    scope,
+                    to,
                     "A held scope leaves through resume, which returns it to the state it left. "
                             + "Advancing from %s would let a pause become a promotion.".formatted(from));
         }
         if (to.holding()) {
-            throw wrongEntryPoint(scope, to,
+            throw wrongEntryPoint(
+                    scope,
+                    to,
                     "Suspending a scope goes through suspend, which records the state it is "
                             + "leaving. Without that record it could not be resumed to anywhere.");
         }
@@ -172,7 +178,9 @@ public class MigrationScopeService {
             // ordering and leave it fenced for the length of a full re-validation:
             // ROLLING_BACK -> CATCHING_UP -> SHADOW_READING -> CANARY ->
             // CUTOVER_READY, then a second approver at cutOver.
-            throw wrongEntryPoint(scope, to,
+            throw wrongEntryPoint(
+                    scope,
+                    to,
                     "Reversing a cutover goes through rollBack, which the approver capability "
                             + "guards. Taking a writer back is the same decision as giving it, and "
                             + "it is not the maker's to make.");
@@ -185,7 +193,9 @@ public class MigrationScopeService {
             // in the same transaction, and only cutOver does that. Refusing here
             // rather than checking for an existing decision keeps one path to
             // TARGET_ONLY instead of two that must agree.
-            throw wrongEntryPoint(scope, to,
+            throw wrongEntryPoint(
+                    scope,
+                    to,
                     "Taking target ownership goes through cutOver, which records the approver and "
                             + "the evidence before the write mode moves, never after.");
         }
@@ -200,8 +210,16 @@ public class MigrationScopeService {
             requireQuarantineSettled(scope, actor);
         }
 
-        return apply(scope, to, modes, scope.checkpoint(), command.reason(), actor,
-                "migration.scope.advanced", Map.of(), null);
+        return apply(
+                scope,
+                to,
+                modes,
+                scope.checkpoint(),
+                command.reason(),
+                actor,
+                "migration.scope.advanced",
+                Map.of(),
+                null);
     }
 
     /**
@@ -232,8 +250,16 @@ public class MigrationScopeService {
         Map<String, Object> checkpoint = mutableCheckpoint(scope);
         checkpoint.put(RESUME_STATE, scope.state().name());
 
-        return apply(scope, to, scope.modes(), checkpoint, command.reason(), actor,
-                "migration.scope.suspended", Map.of(RESUME_STATE, scope.state().name()), null);
+        return apply(
+                scope,
+                to,
+                scope.modes(),
+                checkpoint,
+                command.reason(),
+                actor,
+                "migration.scope.suspended",
+                Map.of(RESUME_STATE, scope.state().name()),
+                null);
     }
 
     /**
@@ -253,7 +279,9 @@ public class MigrationScopeService {
         ScopeRow scope = requireScope(tenantId, scopeId);
         requireVersion(scope, command.expectedVersion());
         if (!scope.state().holding()) {
-            throw wrongEntryPoint(scope, scope.state(),
+            throw wrongEntryPoint(
+                    scope,
+                    scope.state(),
                     "Scope %s is %s, which is not a held state".formatted(scopeId, scope.state()));
         }
 
@@ -266,11 +294,18 @@ public class MigrationScopeService {
         // of the state and the modes is the true one is guessing at whether a
         // capability is legacy-owned or target-owned.
         if (!to.permits(scope.modes())) {
-            throw refuse(scope, MigrationPreconditionException.INCOHERENT_OWNERSHIP_MODES, actor,
+            throw refuse(
+                    scope,
+                    MigrationPreconditionException.INCOHERENT_OWNERSHIP_MODES,
+                    actor,
                     ("Scope %s is held with write mode %s and read mode %s, which %s does not "
-                            + "permit. Its stored modes and its recorded resume state disagree and "
-                            + "one of them is wrong.").formatted(scopeId, scope.modes().writeMode(),
-                            scope.modes().readMode(), to));
+                                    + "permit. Its stored modes and its recorded resume state disagree and "
+                                    + "one of them is wrong.")
+                            .formatted(
+                                    scopeId,
+                                    scope.modes().writeMode(),
+                                    scope.modes().readMode(),
+                                    to));
         }
 
         if (scope.state() == ScopeState.BLOCKED_RECONCILIATION) {
@@ -284,8 +319,16 @@ public class MigrationScopeService {
         Map<String, Object> checkpoint = mutableCheckpoint(scope);
         checkpoint.remove(RESUME_STATE);
 
-        return apply(scope, to, scope.modes(), checkpoint, command.reason(), actor,
-                "migration.scope.resumed", Map.of("resumedFrom", scope.state().name()), null);
+        return apply(
+                scope,
+                to,
+                scope.modes(),
+                checkpoint,
+                command.reason(),
+                actor,
+                "migration.scope.resumed",
+                Map.of("resumedFrom", scope.state().name()),
+                null);
     }
 
     /**
@@ -317,13 +360,21 @@ public class MigrationScopeService {
         requireVersion(scope, command.expectedVersion());
         ScopeStateMachine.require(scope.state(), ScopeState.ROLLING_BACK);
 
-        String reason = requireText(command.reason(),
-                "A rollback records why the writer is being taken back");
+        String reason = requireText(command.reason(), "A rollback records why the writer is being taken back");
 
-        return apply(scope, ScopeState.ROLLING_BACK, scope.modes(), scope.checkpoint(), reason,
-                actor, "migration.scope.rollback.started",
-                Map.of("rolledBackFrom", scope.state().name(),
-                        "writeMode", scope.modes().writeMode().name()),
+        return apply(
+                scope,
+                ScopeState.ROLLING_BACK,
+                scope.modes(),
+                scope.checkpoint(),
+                reason,
+                actor,
+                "migration.scope.rollback.started",
+                Map.of(
+                        "rolledBackFrom",
+                        scope.state().name(),
+                        "writeMode",
+                        scope.modes().writeMode().name()),
                 null);
     }
 
@@ -332,7 +383,7 @@ public class MigrationScopeService {
      *               an incident, and the reason is the first thing the review asks
      *               for.
      */
-    public record RollbackCommand(int expectedVersion, String reason, String idempotencyKey) { }
+    public record RollbackCommand(int expectedVersion, String reason, String idempotencyKey) {}
 
     /**
      * Transfers ownership: the one transition that changes who writes a tenant's
@@ -357,8 +408,7 @@ public class MigrationScopeService {
         Objects.requireNonNull(command, "A cutover command is required");
         String actor = access.requireOperator();
 
-        Optional<DecisionRow> replayed = decisions.findByIdempotencyKey(tenantId,
-                requireKey(command.idempotencyKey()));
+        Optional<DecisionRow> replayed = decisions.findByIdempotencyKey(tenantId, requireKey(command.idempotencyKey()));
         if (replayed.isPresent()) {
             // ADR 0031. The decision is append-only and its key is unique per
             // tenant, so a retried approval reports the scope as the first attempt
@@ -376,14 +426,12 @@ public class MigrationScopeService {
             // cutover, goes and fences legacy by hand. That leaves the capability
             // with no writer at all, which is the one outcome this module exists
             // to make unreachable.
-            if (decision.decision() != Decision.APPROVED
-                    || decision.toState() != command.targetState()) {
+            if (decision.decision() != Decision.APPROVED || decision.toState() != command.targetState()) {
                 throw new MigrationConflictException(
                         ("That idempotency key already recorded a %s decision for %s -> %s on this "
-                                + "scope. A replay may only report back the decision it made; use "
-                                + "a new key for a new one.")
-                                .formatted(decision.decision(), decision.fromState(),
-                                        decision.toState()));
+                                        + "scope. A replay may only report back the decision it made; use "
+                                        + "a new key for a new one.")
+                                .formatted(decision.decision(), decision.fromState(), decision.toState()));
             }
             return requireScope(tenantId, scopeId);
         }
@@ -396,16 +444,22 @@ public class MigrationScopeService {
 
         OwnershipModes modes = modesEntering(scope, to);
         if (!entersTargetOwnership(scope.modes(), modes)) {
-            throw wrongEntryPoint(scope, to,
+            throw wrongEntryPoint(
+                    scope,
+                    to,
                     ("%s -> %s does not take target ownership, so it is an ordinary transition and "
-                            + "belongs in advance. Recording a cutover decision for it would put "
-                            + "rows nobody decided in the approval evidence.").formatted(from, to));
+                                    + "belongs in advance. Recording a cutover decision for it would put "
+                                    + "rows nobody decided in the approval evidence.")
+                            .formatted(from, to));
         }
 
         String requestedBy = requireText(command.requestedBy(), "A requester is required");
         String decidedBy = requireText(command.decidedBy(), "An approver is required");
         if (decidedBy.equals(requestedBy)) {
-            throw refuse(scope, MigrationPreconditionException.SELF_APPROVAL, actor,
+            throw refuse(
+                    scope,
+                    MigrationPreconditionException.SELF_APPROVAL,
+                    actor,
                     "The person who asked to move a capability's writer may not be the person who "
                             + "agreed (ADR 0027)");
         }
@@ -415,15 +469,34 @@ public class MigrationScopeService {
         Boolean approvalIsPlatform = resolveCitedApproval(scope, command, actor);
 
         Instant now = clock.instant();
-        DecisionRow decision = new DecisionRow(UUID.randomUUID(), tenantId, scopeId, from, to,
-                scope.version(), Decision.APPROVED, requireText(command.reason(), "A reason is required"),
-                sanitizedEvidence(command.evidenceSnapshot()), requestedBy, decidedBy,
-                command.approvalRequestId(), approvalIsPlatform, command.idempotencyKey(),
-                command.requestedAt() == null ? now : command.requestedAt(), now);
+        DecisionRow decision = new DecisionRow(
+                UUID.randomUUID(),
+                tenantId,
+                scopeId,
+                from,
+                to,
+                scope.version(),
+                Decision.APPROVED,
+                requireText(command.reason(), "A reason is required"),
+                sanitizedEvidence(command.evidenceSnapshot()),
+                requestedBy,
+                decidedBy,
+                command.approvalRequestId(),
+                approvalIsPlatform,
+                command.idempotencyKey(),
+                command.requestedAt() == null ? now : command.requestedAt(),
+                now);
         decisions.insert(decision);
 
-        ScopeRow moved = apply(scope, to, modes, scope.checkpoint(), command.reason(), actor,
-                "migration.scope.cutover", Map.of(
+        ScopeRow moved = apply(
+                scope,
+                to,
+                modes,
+                scope.checkpoint(),
+                command.reason(),
+                actor,
+                "migration.scope.cutover",
+                Map.of(
                         "decisionId", decision.id(),
                         "requestedBy", requestedBy,
                         "decidedBy", decidedBy,
@@ -431,8 +504,13 @@ public class MigrationScopeService {
                         "readMode", modes.readMode().name()),
                 command.approvalRequestId());
 
-        log.info("Scope {} moved {} -> {}: {} now owns writes for {}", scopeId, from, to,
-                scope.targetOwner(), scope.capability());
+        log.info(
+                "Scope {} moved {} -> {}: {} now owns writes for {}",
+                scopeId,
+                from,
+                to,
+                scope.targetOwner(),
+                scope.capability());
         return moved;
     }
 
@@ -451,8 +529,7 @@ public class MigrationScopeService {
         Objects.requireNonNull(command, "A cutover command is required");
         String actor = access.requireOperator();
 
-        Optional<DecisionRow> replayed = decisions.findByIdempotencyKey(tenantId,
-                requireKey(command.idempotencyKey()));
+        Optional<DecisionRow> replayed = decisions.findByIdempotencyKey(tenantId, requireKey(command.idempotencyKey()));
         if (replayed.isPresent()) {
             return replayed.get();
         }
@@ -462,7 +539,10 @@ public class MigrationScopeService {
         String requestedBy = requireText(command.requestedBy(), "A requester is required");
         String decidedBy = requireText(command.decidedBy(), "A decider is required");
         if (decidedBy.equals(requestedBy)) {
-            throw refuse(scope, MigrationPreconditionException.SELF_APPROVAL, actor,
+            throw refuse(
+                    scope,
+                    MigrationPreconditionException.SELF_APPROVAL,
+                    actor,
                     "The person who asked to move a capability's writer may not be the person who "
                             + "decided (ADR 0027)");
         }
@@ -470,20 +550,40 @@ public class MigrationScopeService {
         Boolean approvalIsPlatform = resolveCitedApproval(scope, command, actor);
 
         Instant now = clock.instant();
-        DecisionRow decision = new DecisionRow(UUID.randomUUID(), tenantId, scopeId, scope.state(),
+        DecisionRow decision = new DecisionRow(
+                UUID.randomUUID(),
+                tenantId,
+                scopeId,
+                scope.state(),
                 Objects.requireNonNull(command.targetState(), "A target state is required"),
-                scope.version(), Decision.REFUSED,
+                scope.version(),
+                Decision.REFUSED,
                 requireText(command.reason(), "A reason is required"),
-                sanitizedEvidence(command.evidenceSnapshot()), requestedBy, decidedBy,
-                command.approvalRequestId(), approvalIsPlatform, command.idempotencyKey(),
-                command.requestedAt() == null ? now : command.requestedAt(), now);
+                sanitizedEvidence(command.evidenceSnapshot()),
+                requestedBy,
+                decidedBy,
+                command.approvalRequestId(),
+                approvalIsPlatform,
+                command.idempotencyKey(),
+                command.requestedAt() == null ? now : command.requestedAt(),
+                now);
         decisions.insert(decision);
 
-        audit.record("migration.scope.cutover-refused", ActorRef.user(actor, null),
+        audit.record(
+                "migration.scope.cutover-refused",
+                ActorRef.user(actor, null),
                 MigrationAudit.scopeOf(scope.tenantId(), scope.brandId(), scope.locationId()),
-                "migration.scope", scopeId, scope.version(), command.reason(),
-                Map.of("decisionId", decision.id(), "decidedBy", decidedBy,
-                        "proposedState", command.targetState().name()),
+                "migration.scope",
+                scopeId,
+                scope.version(),
+                command.reason(),
+                Map.of(
+                        "decisionId",
+                        decision.id(),
+                        "decidedBy",
+                        decidedBy,
+                        "proposedState",
+                        command.targetState().name()),
                 command.approvalRequestId());
         return decision;
     }
@@ -505,8 +605,8 @@ public class MigrationScopeService {
      * source was decided, and be on record as having said it.
      */
     @Transactional
-    public ScopeRow republishCoverage(UUID tenantId, UUID scopeId, int undecidedSources,
-            int expectedVersion, String reason) {
+    public ScopeRow republishCoverage(
+            UUID tenantId, UUID scopeId, int undecidedSources, int expectedVersion, String reason) {
 
         String actor = access.requireOperator();
         if (undecidedSources < 0) {
@@ -518,21 +618,38 @@ public class MigrationScopeService {
         Map<String, Object> checkpoint = mutableCheckpoint(scope);
         Object previous = checkpoint.put(COVERAGE_UNDECIDED, undecidedSources);
 
-        int version = scopes.updateCheckpoint(tenantId, scopeId, checkpoint, expectedVersion,
-                        clock.instant())
-                .orElseThrow(() -> MigrationConflictException.staleVersion(
-                        "scope", expectedVersion, scope.version()));
+        int version = scopes.updateCheckpoint(tenantId, scopeId, checkpoint, expectedVersion, clock.instant())
+                .orElseThrow(() -> MigrationConflictException.staleVersion("scope", expectedVersion, scope.version()));
 
-        audit.record("migration.scope.coverage-published", ActorRef.user(actor, null),
+        audit.record(
+                "migration.scope.coverage-published",
+                ActorRef.user(actor, null),
                 MigrationAudit.scopeOf(scope.tenantId(), scope.brandId(), scope.locationId()),
-                "migration.scope", scopeId, version, reason,
-                Map.of("undecidedSources", undecidedSources,
-                        "previousUndecidedSources", previous == null ? "unknown" : previous),
+                "migration.scope",
+                scopeId,
+                version,
+                reason,
+                Map.of(
+                        "undecidedSources",
+                        undecidedSources,
+                        "previousUndecidedSources",
+                        previous == null ? "unknown" : previous),
                 null);
 
-        return new ScopeRow(scope.id(), scope.programId(), scope.tenantId(), scope.brandId(),
-                scope.locationId(), scope.capability(), scope.sourceOwner(), scope.targetOwner(),
-                scope.modes(), scope.state(), scope.stateEnteredAt(), Map.copyOf(checkpoint), version);
+        return new ScopeRow(
+                scope.id(),
+                scope.programId(),
+                scope.tenantId(),
+                scope.brandId(),
+                scope.locationId(),
+                scope.capability(),
+                scope.sourceOwner(),
+                scope.targetOwner(),
+                scope.modes(),
+                scope.state(),
+                scope.stateEnteredAt(),
+                Map.copyOf(checkpoint),
+                version);
     }
 
     // ------------------------------------------------------------------ gates
@@ -542,35 +659,50 @@ public class MigrationScopeService {
         if (!reconciliation.hasOpenCritical(scope.tenantId(), scope.id())) {
             return;
         }
-        String blocking = reconciliation
-                .openCriticalResults(scope.tenantId(), scope.id(), REFUSAL_DETAIL).stream()
+        String blocking = reconciliation.openCriticalResults(scope.tenantId(), scope.id(), REFUSAL_DETAIL).stream()
                 .map(MigrationReconciliationStore.BlockingResult::describe)
                 .collect(Collectors.joining("; "));
-        throw refuse(scope, MigrationPreconditionException.OPEN_CRITICAL_RECONCILIATION, actor,
+        throw refuse(
+                scope,
+                MigrationPreconditionException.OPEN_CRITICAL_RECONCILIATION,
+                actor,
                 ("Scope %s cannot move to %s: unresolved CRITICAL reconciliation differences stand "
-                        + "against it (%s). Resolve them, or approve them against their rule's "
-                        + "tolerance; there is no override.").formatted(scope.id(), to, blocking));
+                                + "against it (%s). Resolve them, or approve them against their rule's "
+                                + "tolerance; there is no override.")
+                        .formatted(scope.id(), to, blocking));
     }
 
     /** Rule 2. Unknown blocks as firmly as non-zero. */
     private void requireCoverageDecided(ScopeRow scope, String actor) {
         Object published = scope.checkpoint().get(COVERAGE_UNDECIDED);
         if (published == null) {
-            throw refuse(scope, MigrationPreconditionException.UNDECIDED_SOURCES, actor,
+            throw refuse(
+                    scope,
+                    MigrationPreconditionException.UNDECIDED_SOURCES,
+                    actor,
                     ("Scope %s has never published its source coverage. \"Not yet counted\" is not "
-                            + "\"nothing left to decide\", and the scope cannot become cutover-ready "
-                            + "on the difference.").formatted(scope.id()));
+                                    + "\"nothing left to decide\", and the scope cannot become cutover-ready "
+                                    + "on the difference.")
+                            .formatted(scope.id()));
         }
         if (!(published instanceof Number count)) {
-            throw refuse(scope, MigrationPreconditionException.UNDECIDED_SOURCES, actor,
+            throw refuse(
+                    scope,
+                    MigrationPreconditionException.UNDECIDED_SOURCES,
+                    actor,
                     ("Scope %s carries an unreadable undecided-source count (%s), so the coverage "
-                            + "gate cannot be evaluated.").formatted(scope.id(), published));
+                                    + "gate cannot be evaluated.")
+                            .formatted(scope.id(), published));
         }
         if (count.longValue() > 0) {
-            throw refuse(scope, MigrationPreconditionException.UNDECIDED_SOURCES, actor,
+            throw refuse(
+                    scope,
+                    MigrationPreconditionException.UNDECIDED_SOURCES,
+                    actor,
                     ("Scope %s still has %s in-scope source(s) classified DECIDE in the coverage "
-                            + "register. Every source is migrated, transformed, dropped or decided "
-                            + "before a capability changes hands.").formatted(scope.id(), count));
+                                    + "register. Every source is migrated, transformed, dropped or decided "
+                                    + "before a capability changes hands.")
+                            .formatted(scope.id(), count));
         }
     }
 
@@ -583,10 +715,14 @@ public class MigrationScopeService {
     private void requireQuarantineSettled(ScopeRow scope, String actor) {
         int open = quarantine.openCount(scope.tenantId(), scope.id());
         if (open > 0) {
-            throw refuse(scope, MigrationPreconditionException.OPEN_QUARANTINE, actor,
+            throw refuse(
+                    scope,
+                    MigrationPreconditionException.OPEN_QUARANTINE,
+                    actor,
                     ("Scope %s has %d open quarantine item(s). Retiring revokes access to the "
-                            + "source, and an item settled after that is settled without being able "
-                            + "to look at the row.").formatted(scope.id(), open));
+                                    + "source, and an item settled after that is settled without being able "
+                                    + "to look at the row.")
+                            .formatted(scope.id(), open));
         }
     }
 
@@ -616,9 +752,13 @@ public class MigrationScopeService {
         throw new MigrationPreconditionException(
                 MigrationPreconditionException.INCOHERENT_OWNERSHIP_MODES,
                 ("Scope %s carries write mode %s and read mode %s, which %s does not permit, and %s "
-                        + "permits several pairs so the correct one cannot be derived.")
-                        .formatted(scope.id(), scope.modes().writeMode(), scope.modes().readMode(),
-                                to, to));
+                                + "permits several pairs so the correct one cannot be derived.")
+                        .formatted(
+                                scope.id(),
+                                scope.modes().writeMode(),
+                                scope.modes().readMode(),
+                                to,
+                                to));
     }
 
     /**
@@ -631,8 +771,7 @@ public class MigrationScopeService {
      * operational hiccup.
      */
     private static boolean entersTargetOwnership(OwnershipModes current, OwnershipModes next) {
-        return next.writeMode() == WriteMode.TARGET_ONLY
-                && current.writeMode() != WriteMode.TARGET_ONLY;
+        return next.writeMode() == WriteMode.TARGET_ONLY && current.writeMode() != WriteMode.TARGET_ONLY;
     }
 
     /**
@@ -654,22 +793,32 @@ public class MigrationScopeService {
         return !(from == ScopeState.ROLLBACK_WINDOW && to == ScopeState.TARGET_OWNED);
     }
 
-    private ScopeRow apply(ScopeRow scope, ScopeState to, OwnershipModes modes,
-            Map<String, Object> checkpoint, String reason, String actor, String actionCode,
-            Map<String, Object> extraChanges, UUID approvalRequestId) {
+    private ScopeRow apply(
+            ScopeRow scope,
+            ScopeState to,
+            OwnershipModes modes,
+            Map<String, Object> checkpoint,
+            String reason,
+            String actor,
+            String actionCode,
+            Map<String, Object> extraChanges,
+            UUID approvalRequestId) {
 
         Instant now = clock.instant();
-        int version = scopes.transition(scope.tenantId(), scope.id(), scope.state(), to, modes,
-                        checkpoint, scope.version(), now)
+        int version = scopes.transition(
+                        scope.tenantId(), scope.id(), scope.state(), to, modes, checkpoint, scope.version(), now)
                 .orElseThrow(() -> {
                     // Somebody moved the scope between the read and this statement.
                     // Their move stands, and the loser is told what actually
                     // happened rather than being invited to force theirs on top.
                     ScopeRow settled = requireScope(scope.tenantId(), scope.id());
-                    log.info("Transition of scope {} to {} lost the race; it is {} at version {}",
-                            scope.id(), to, settled.state(), settled.version());
-                    return MigrationConflictException.staleVersion("scope", scope.version(),
+                    log.info(
+                            "Transition of scope {} to {} lost the race; it is {} at version {}",
+                            scope.id(),
+                            to,
+                            settled.state(),
                             settled.version());
+                    return MigrationConflictException.staleVersion("scope", scope.version(), settled.version());
                 });
 
         Map<String, Object> changes = new LinkedHashMap<>(extraChanges);
@@ -677,27 +826,51 @@ public class MigrationScopeService {
         changes.put("toState", to.name());
         changes.put("capability", scope.capability().name());
         changes.put("targetOwner", scope.targetOwner());
-        audit.record(actionCode, ActorRef.user(actor, null),
+        audit.record(
+                actionCode,
+                ActorRef.user(actor, null),
                 MigrationAudit.scopeOf(scope.tenantId(), scope.brandId(), scope.locationId()),
-                "migration.scope", scope.id(), version, reason, changes, approvalRequestId);
+                "migration.scope",
+                scope.id(),
+                version,
+                reason,
+                changes,
+                approvalRequestId);
 
-        return new ScopeRow(scope.id(), scope.programId(), scope.tenantId(), scope.brandId(),
-                scope.locationId(), scope.capability(), scope.sourceOwner(), scope.targetOwner(),
-                modes, to, now, Map.copyOf(checkpoint), version);
+        return new ScopeRow(
+                scope.id(),
+                scope.programId(),
+                scope.tenantId(),
+                scope.brandId(),
+                scope.locationId(),
+                scope.capability(),
+                scope.sourceOwner(),
+                scope.targetOwner(),
+                modes,
+                to,
+                now,
+                Map.copyOf(checkpoint),
+                version);
     }
 
     private ScopeState recordedResumeState(ScopeRow scope, String actor) {
         Object recorded = scope.checkpoint().get(RESUME_STATE);
         if (recorded == null) {
-            throw refuse(scope, MigrationPreconditionException.RESUME_STATE_UNKNOWN, actor,
+            throw refuse(
+                    scope,
+                    MigrationPreconditionException.RESUME_STATE_UNKNOWN,
+                    actor,
                     ("Scope %s is %s but carries no record of the state it left, so there is nowhere "
-                            + "to resume it to. Anything chosen here could promote it.")
+                                    + "to resume it to. Anything chosen here could promote it.")
                             .formatted(scope.id(), scope.state()));
         }
         try {
             return ScopeState.valueOf(recorded.toString());
         } catch (IllegalArgumentException unreadable) {
-            throw refuse(scope, MigrationPreconditionException.RESUME_STATE_UNKNOWN, actor,
+            throw refuse(
+                    scope,
+                    MigrationPreconditionException.RESUME_STATE_UNKNOWN,
+                    actor,
                     "Scope %s records \"%s\" as the state it left, which is not a scope state"
                             .formatted(scope.id(), recorded));
         }
@@ -741,30 +914,42 @@ public class MigrationScopeService {
         if (approvalRequestId == null) {
             return null;
         }
-        return approvals.resolve(approvalRequestId, scope.tenantId())
+        return approvals
+                .resolve(approvalRequestId, scope.tenantId())
                 .map(owner -> owner == ApprovalRequestOwnership.Owner.PLATFORM)
-                .orElseThrow(() -> refuse(scope,
-                        MigrationPreconditionException.APPROVAL_NOT_CITABLE, actor,
+                .orElseThrow(() -> refuse(
+                        scope,
+                        MigrationPreconditionException.APPROVAL_NOT_CITABLE,
+                        actor,
                         "The cited approval request is not one this tenant may cite. A cutover "
                                 + "decision may discharge a PLATFORM-scope approval or one of its "
                                 + "own tenant's, and nothing else (ADR 0027)"));
     }
 
-    private MigrationPreconditionException refuse(ScopeRow scope, String reasonCode, String actor,
-            String message) {
+    private MigrationPreconditionException refuse(ScopeRow scope, String reasonCode, String actor, String message) {
 
-        audit.recordRefusal("migration.scope.transition-refused", ActorRef.user(actor, null),
+        audit.recordRefusal(
+                "migration.scope.transition-refused",
+                ActorRef.user(actor, null),
                 MigrationAudit.scopeOf(scope.tenantId(), scope.brandId(), scope.locationId()),
-                "migration.scope", scope.id(), scope.version(), reasonCode,
-                Map.of("state", scope.state().name(), "capability", scope.capability().name(),
-                        "refusal", reasonCode));
+                "migration.scope",
+                scope.id(),
+                scope.version(),
+                reasonCode,
+                Map.of(
+                        "state",
+                        scope.state().name(),
+                        "capability",
+                        scope.capability().name(),
+                        "refusal",
+                        reasonCode));
         log.warn("Refused a transition of scope {} in {}: {}", scope.id(), scope.state(), message);
         return new MigrationPreconditionException(reasonCode, message);
     }
 
-    private static MigrationPreconditionException wrongEntryPoint(ScopeRow scope, ScopeState to,
-            String message) {
-        return new MigrationPreconditionException(MigrationPreconditionException.WRONG_ENTRY_POINT,
+    private static MigrationPreconditionException wrongEntryPoint(ScopeRow scope, ScopeState to, String message) {
+        return new MigrationPreconditionException(
+                MigrationPreconditionException.WRONG_ENTRY_POINT,
                 "%s -> %s on scope %s: %s".formatted(scope.state(), to, scope.id(), message));
     }
 
@@ -781,8 +966,7 @@ public class MigrationScopeService {
     }
 
     private static Map<String, Object> mutableCheckpoint(ScopeRow scope) {
-        return scope.checkpoint() == null
-                ? new LinkedHashMap<>() : new LinkedHashMap<>(scope.checkpoint());
+        return scope.checkpoint() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(scope.checkpoint());
     }
 
     /**
@@ -808,7 +992,8 @@ public class MigrationScopeService {
             throw new MigrationPreconditionException(
                     MigrationPreconditionException.EVIDENCE_NOT_A_REFERENCE,
                     ("Evidence entries %s are nested documents. A snapshot carries totals and "
-                            + "references, never rows (ADR 0029).").formatted(nested));
+                                    + "references, never rows (ADR 0029).")
+                            .formatted(nested));
         }
         return Map.copyOf(evidence);
     }
@@ -825,15 +1010,13 @@ public class MigrationScopeService {
     }
 
     /** @param expectedVersion the scope version the operator was looking at (ADR 0031) */
-    public record AdvanceCommand(ScopeState targetState, int expectedVersion, String reason,
-            String idempotencyKey) { }
+    public record AdvanceCommand(ScopeState targetState, int expectedVersion, String reason, String idempotencyKey) {}
 
     /** @param holdingState {@code PAUSED} for a decision, {@code BLOCKED_RECONCILIATION} for evidence */
-    public record SuspendCommand(ScopeState holdingState, int expectedVersion, String reason,
-            String idempotencyKey) { }
+    public record SuspendCommand(ScopeState holdingState, int expectedVersion, String reason, String idempotencyKey) {}
 
     /** Carries no destination: the destination is the state the suspension recorded. */
-    public record ResumeCommand(int expectedVersion, String reason, String idempotencyKey) { }
+    public record ResumeCommand(int expectedVersion, String reason, String idempotencyKey) {}
 
     /**
      * @param evidenceSnapshot the aggregate figures the decision rests on:
@@ -855,5 +1038,5 @@ public class MigrationScopeService {
             String decidedBy,
             UUID approvalRequestId,
             Instant requestedAt,
-            String idempotencyKey) { }
+            String idempotencyKey) {}
 }

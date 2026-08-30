@@ -1,13 +1,11 @@
 package uz.horecaos.platform.observability;
 
-import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
-
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.MultiGauge;
 import io.micrometer.core.instrument.Tags;
-
+import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -36,10 +34,7 @@ import org.springframework.stereotype.Component;
  * bounded by the schema rather than by hope.
  */
 @Component
-@ConditionalOnProperty(
-        name = "horecaos.observability.metrics.enabled",
-        havingValue = "true",
-        matchIfMissing = true)
+@ConditionalOnProperty(name = "horecaos.observability.metrics.enabled", havingValue = "true", matchIfMissing = true)
 public class OrderFlowMetrics {
 
     private static final Logger log = LoggerFactory.getLogger(OrderFlowMetrics.class);
@@ -80,9 +75,8 @@ public class OrderFlowMetrics {
                             WHERE status IN (%s)
                             GROUP BY status
                             """.formatted(LIVE_STATUSES))
-                    .query((resultSet, rowNumber) -> new StatusCount(
-                            resultSet.getString("status"),
-                            resultSet.getLong("total")))
+                    .query((resultSet, rowNumber) ->
+                            new StatusCount(resultSet.getString("status"), resultSet.getLong("total")))
                     .list();
             ordersByStatus.register(
                     counts.stream()
@@ -91,19 +85,17 @@ public class OrderFlowMetrics {
                             .toList(),
                     true);
 
-            Long oldest = jdbc.sql("""
+            Long oldest =
+                    jdbc.sql("""
                             SELECT coalesce(EXTRACT(EPOCH FROM now() - min(created_at)), 0) AS oldest_age_seconds
                             FROM ordering.orders
                             WHERE status IN (%s)
-                            """.formatted(LIVE_STATUSES))
-                    .query(Long.class)
-                    .single();
+                            """.formatted(LIVE_STATUSES)).query(Long.class).single();
             oldestLiveOrderAgeSeconds.set(oldest == null ? 0L : oldest);
         } catch (RuntimeException failure) {
             log.warn("Could not refresh order flow metrics: {}", failure.toString());
         }
     }
 
-    private record StatusCount(String status, long total) {
-    }
+    private record StatusCount(String status, long total) {}
 }

@@ -2,6 +2,10 @@ package uz.horecaos.platform.configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -11,12 +15,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -31,7 +29,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -57,8 +54,7 @@ class OpenApiContractTests {
     @BeforeAll
     static void requireDocker() {
         Assumptions.assumeTrue(
-                DockerClientFactory.instance().isDockerAvailable(),
-                "Docker is required for the OpenAPI contract test");
+                DockerClientFactory.instance().isDockerAvailable(), "Docker is required for the OpenAPI contract test");
     }
 
     @DynamicPropertySource
@@ -101,15 +97,14 @@ class OpenApiContractTests {
     }
 
     private String canonicalDocument() throws Exception {
-        String body = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                        .get("/v3/api-docs"))
+        String body = mvc.perform(
+                        org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/v3/api-docs"))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
         JsonNode document = JSON.readTree(body);
         assertThat(document.path("openapi").asText()).startsWith("3.");
-        return JSON.writerWithDefaultPrettyPrinter()
-                .writeValueAsString(canonical(document)) + System.lineSeparator();
+        return JSON.writerWithDefaultPrettyPrinter().writeValueAsString(canonical(document)) + System.lineSeparator();
     }
 
     private static JsonNode canonical(JsonNode node) {
@@ -157,15 +152,17 @@ class OpenApiContractTests {
             String path, String method, JsonNode oldOperation, JsonNode newOperation) {
         Map<String, JsonNode> current = indexedParameters(newOperation.path("parameters"));
         oldOperation.path("parameters").forEach(parameter -> {
-            String key = parameter.path("in").asText() + ":" + parameter.path("name").asText();
+            String key =
+                    parameter.path("in").asText() + ":" + parameter.path("name").asText();
             JsonNode replacement = current.get(key);
             assertThat(replacement)
                     .as("published %s parameter %s on %s %s must remain", key, method.toUpperCase(), path, method)
                     .isNotNull();
             if (!parameter.path("required").asBoolean(false)) {
                 assertThat(replacement.path("required").asBoolean(false))
-                        .as("published optional parameter %s on %s %s cannot become required", key,
-                                method.toUpperCase(), path)
+                        .as(
+                                "published optional parameter %s on %s %s cannot become required",
+                                key, method.toUpperCase(), path)
                         .isFalse();
             }
         });
@@ -179,8 +176,12 @@ class OpenApiContractTests {
     }
 
     private static void assertRequestBodyCompatible(
-            String path, String method, JsonNode oldOperation, JsonNode newOperation,
-            JsonNode released, JsonNode generated) {
+            String path,
+            String method,
+            JsonNode oldOperation,
+            JsonNode newOperation,
+            JsonNode released,
+            JsonNode generated) {
         JsonNode oldBody = oldOperation.path("requestBody");
         if (oldBody.isMissingNode()) {
             return;
@@ -191,25 +192,38 @@ class OpenApiContractTests {
                 .isTrue();
         if (!oldBody.path("required").asBoolean(false)) {
             assertThat(newBody.path("required").asBoolean(false))
-                    .as("published optional request body on %s %s cannot become required",
-                            method.toUpperCase(), path)
+                    .as("published optional request body on %s %s cannot become required", method.toUpperCase(), path)
                     .isFalse();
         }
-        assertSchemasCompatible(path + " " + method + " request", mediaSchema(oldBody), mediaSchema(newBody),
-                released, generated, new HashSet<>());
+        assertSchemasCompatible(
+                path + " " + method + " request",
+                mediaSchema(oldBody),
+                mediaSchema(newBody),
+                released,
+                generated,
+                new HashSet<>());
     }
 
     private static void assertResponsesCompatible(
-            String path, String method, JsonNode oldOperation, JsonNode newOperation,
-            JsonNode released, JsonNode generated) {
+            String path,
+            String method,
+            JsonNode oldOperation,
+            JsonNode newOperation,
+            JsonNode released,
+            JsonNode generated) {
         oldOperation.path("responses").fieldNames().forEachRemaining(status -> {
             JsonNode oldResponse = oldOperation.path("responses").path(status);
             JsonNode newResponse = newOperation.path("responses").path(status);
             assertThat(newResponse.isObject())
                     .as("published response %s on %s %s must remain", status, method.toUpperCase(), path)
                     .isTrue();
-            assertSchemasCompatible(path + " " + method + " response " + status,
-                    mediaSchema(oldResponse), mediaSchema(newResponse), released, generated, new HashSet<>());
+            assertSchemasCompatible(
+                    path + " " + method + " response " + status,
+                    mediaSchema(oldResponse),
+                    mediaSchema(newResponse),
+                    released,
+                    generated,
+                    new HashSet<>());
         });
     }
 
@@ -220,14 +234,16 @@ class OpenApiContractTests {
     }
 
     private static void assertSchemasCompatible(
-            String context, JsonNode oldSchema, JsonNode newSchema, JsonNode released, JsonNode generated,
+            String context,
+            JsonNode oldSchema,
+            JsonNode newSchema,
+            JsonNode released,
+            JsonNode generated,
             Set<String> visitedReferences) {
         if (oldSchema == null || oldSchema.isMissingNode() || oldSchema.isNull()) {
             return;
         }
-        assertThat(newSchema)
-                .as("schema for %s must remain", context)
-                .isNotNull();
+        assertThat(newSchema).as("schema for %s must remain", context).isNotNull();
         // The released and generated schemas commonly point at the same component
         // name. They are two independent reference chains, not a cycle; only a
         // repeated reference while resolving one document is recursive.
@@ -236,7 +252,9 @@ class OpenApiContractTests {
         String oldType = oldResolved.path("type").asText();
         String newType = newResolved.path("type").asText();
         if (!oldType.isBlank() || !newType.isBlank()) {
-            assertThat(newType).as("type for %s cannot narrow or change", context).isEqualTo(oldType);
+            assertThat(newType)
+                    .as("type for %s cannot narrow or change", context)
+                    .isEqualTo(oldType);
         }
         if (oldResolved.has("enum")) {
             assertThat(newResolved.path("enum"))
@@ -256,13 +274,22 @@ class OpenApiContractTests {
             assertThat(newProperty.isMissingNode())
                     .as("schema for %s cannot remove property %s", context, property)
                     .isFalse();
-            assertSchemasCompatible(context + "." + property,
-                    oldResolved.path("properties").path(property), newProperty, released, generated,
+            assertSchemasCompatible(
+                    context + "." + property,
+                    oldResolved.path("properties").path(property),
+                    newProperty,
+                    released,
+                    generated,
                     new HashSet<>(visitedReferences));
         });
         if (oldResolved.has("items")) {
-            assertSchemasCompatible(context + "[]", oldResolved.path("items"), newResolved.path("items"),
-                    released, generated, new HashSet<>(visitedReferences));
+            assertSchemasCompatible(
+                    context + "[]",
+                    oldResolved.path("items"),
+                    newResolved.path("items"),
+                    released,
+                    generated,
+                    new HashSet<>(visitedReferences));
         }
     }
 
@@ -275,7 +302,9 @@ class OpenApiContractTests {
                 .as("cyclic schema reference %s requires an explicit compatibility rule", reference)
                 .isTrue();
         JsonNode resolved = document.at(reference.substring(1));
-        assertThat(resolved.isMissingNode()).as("schema reference %s must resolve", reference).isFalse();
+        assertThat(resolved.isMissingNode())
+                .as("schema reference %s must resolve", reference)
+                .isFalse();
         return resolve(resolved, document, visitedReferences);
     }
 
@@ -295,7 +324,10 @@ class OpenApiContractTests {
 
         @Bean
         JwtDecoder jwtDecoder() {
-            return token -> Jwt.withTokenValue(token).header("alg", "none").claim("sub", "unused").build();
+            return token -> Jwt.withTokenValue(token)
+                    .header("alg", "none")
+                    .claim("sub", "unused")
+                    .build();
         }
     }
 }

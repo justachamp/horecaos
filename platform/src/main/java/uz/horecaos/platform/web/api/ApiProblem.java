@@ -2,7 +2,6 @@ package uz.horecaos.platform.web.api;
 
 import java.net.URI;
 import java.util.List;
-
 import org.slf4j.MDC;
 import org.springframework.http.ProblemDetail;
 
@@ -18,8 +17,7 @@ public final class ApiProblem {
 
     private static final String CORRELATION_ID_MDC_KEY = "correlationId";
 
-    private ApiProblem() {
-    }
+    private ApiProblem() {}
 
     public static ProblemDetail of(ErrorCode code, String detail) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(code.status(), detail);
@@ -47,5 +45,5 @@ public final class ApiProblem {
     }
 
     /** A field-level validation failure with a stable code, not a prose message. */
-    public record FieldError(String field, String code, String message) { }
+    public record FieldError(String field, String code, String message) {}
 }

@@ -4,10 +4,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.pos.domain.DifferenceEngine.TargetCatalog;
 import uz.horecaos.platform.pos.domain.SyncDifference.EntityType;
 
@@ -52,8 +50,7 @@ public class JdbcPosTargetCatalog {
         return new TargetCatalog(byType);
     }
 
-    private Map<String, TargetCatalog.Entity> products(UUID tenantId, UUID bindingId, UUID brandId,
-            String locale) {
+    private Map<String, TargetCatalog.Entity> products(UUID tenantId, UUID bindingId, UUID brandId, String locale) {
 
         Map<String, TargetCatalog.Entity> entities = new LinkedHashMap<>();
         jdbc.sql("""
@@ -80,19 +77,16 @@ public class JdbcPosTargetCatalog {
                     putIfPresent(fields, "product.name", row.getString("translated_name"));
                     putIfPresent(fields, "product.status", row.getString("status"));
                     putIfPresent(fields, "product.governmentCode", row.getString("tax_category_code"));
-                    return Map.entry(row.getString("external_entity_id"),
-                            new TargetCatalog.Entity(
-                                    row.getObject("id", UUID.class),
-                                    row.getInt("version"),
-                                    fields));
+                    return Map.entry(
+                            row.getString("external_entity_id"),
+                            new TargetCatalog.Entity(row.getObject("id", UUID.class), row.getInt("version"), fields));
                 })
                 .list()
                 .forEach(entry -> entities.put(entry.getKey(), entry.getValue()));
         return Map.copyOf(entities);
     }
 
-    private Map<String, TargetCatalog.Entity> variants(UUID tenantId, UUID bindingId, UUID brandId,
-            String locale) {
+    private Map<String, TargetCatalog.Entity> variants(UUID tenantId, UUID bindingId, UUID brandId, String locale) {
 
         Map<String, TargetCatalog.Entity> entities = new LinkedHashMap<>();
         jdbc.sql("""
@@ -119,11 +113,9 @@ public class JdbcPosTargetCatalog {
                     putIfPresent(fields, "variant.name", row.getString("translated_name"));
                     putIfPresent(fields, "variant.status", row.getString("status"));
                     putIfPresent(fields, "variant.unit", row.getString("unit_code"));
-                    return Map.entry(row.getString("external_entity_id"),
-                            new TargetCatalog.Entity(
-                                    row.getObject("id", UUID.class),
-                                    row.getInt("version"),
-                                    fields));
+                    return Map.entry(
+                            row.getString("external_entity_id"),
+                            new TargetCatalog.Entity(row.getObject("id", UUID.class), row.getInt("version"), fields));
                 })
                 .list()
                 .forEach(entry -> entities.put(entry.getKey(), entry.getValue()));

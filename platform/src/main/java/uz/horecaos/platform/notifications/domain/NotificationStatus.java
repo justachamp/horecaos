@@ -50,7 +50,10 @@ public enum NotificationStatus {
     MANUAL_REVIEW;
 
     public boolean isTerminal() {
-        return this == DELIVERED || this == FAILED_TERMINAL || this == SUPPRESSED
-                || this == EXPIRED || this == MANUAL_REVIEW;
+        return this == DELIVERED
+                || this == FAILED_TERMINAL
+                || this == SUPPRESSED
+                || this == EXPIRED
+                || this == MANUAL_REVIEW;
     }
 }

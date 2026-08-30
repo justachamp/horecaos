@@ -4,7 +4,6 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-
 import uz.horecaos.platform.iam.api.ResourceScope;
 
 /**
@@ -53,8 +52,7 @@ public record AuditFact(
         // An operator-initiated action without a reason produces an audit trail
         // that records what happened and never why, which is half an answer.
         if (actor.type() == ActorRef.Type.USER && (reason == null || reason.isBlank())) {
-            throw new IllegalArgumentException(
-                    "A user-initiated action requires a reason: " + actionCode);
+            throw new IllegalArgumentException("A user-initiated action requires a reason: " + actionCode);
         }
     }
 
@@ -160,9 +158,23 @@ public record AuditFact(
 
         public AuditFact build() {
             return new AuditFact(
-                    id, auditClass, actionCode, actor, scope, targetType, targetId, targetVersion,
-                    outcome, reason, changeDocument, evidenceReference, capabilityUsed,
-                    approvalRequestId, correlationId, causationId, occurredAt);
+                    id,
+                    auditClass,
+                    actionCode,
+                    actor,
+                    scope,
+                    targetType,
+                    targetId,
+                    targetVersion,
+                    outcome,
+                    reason,
+                    changeDocument,
+                    evidenceReference,
+                    capabilityUsed,
+                    approvalRequestId,
+                    correlationId,
+                    causationId,
+                    occurredAt);
         }
     }
 }

@@ -7,7 +7,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Set;
 import java.util.stream.Collectors;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.kafka.config.TopicBuilder;
 
@@ -20,16 +19,13 @@ class KafkaTopicCatalogTests {
                 .map(KafkaTopicCatalog.TopicSpecification::name)
                 .collect(Collectors.toSet());
 
-        assertThat(EventCatalog.all())
-                .extracting(EventContract::topic)
-                .containsOnlyElementsOf(provisioned);
+        assertThat(EventCatalog.all()).extracting(EventContract::topic).containsOnlyElementsOf(provisioned);
     }
 
     @Test
     void everyProvisionedTopicHasAtLeastOnePublishedContract() {
-        Set<String> published = EventCatalog.all().stream()
-                .map(EventContract::topic)
-                .collect(Collectors.toSet());
+        Set<String> published =
+                EventCatalog.all().stream().map(EventContract::topic).collect(Collectors.toSet());
 
         assertThat(KafkaTopicCatalog.all())
                 .extracting(KafkaTopicCatalog.TopicSpecification::name)
@@ -48,8 +44,10 @@ class KafkaTopicCatalogTests {
 
             assertThat(newTopic.numPartitions()).isEqualTo(topic.partitions());
             assertThat(newTopic.replicationFactor()).isEqualTo(topic.replicationFactor());
-            assertThat(newTopic.configs()).containsEntry("cleanup.policy", "delete")
-                    .containsEntry("retention.ms", Long.toString(topic.retention().toMillis()));
+            assertThat(newTopic.configs())
+                    .containsEntry("cleanup.policy", "delete")
+                    .containsEntry(
+                            "retention.ms", Long.toString(topic.retention().toMillis()));
         });
     }
 
@@ -57,9 +55,14 @@ class KafkaTopicCatalogTests {
     void topicProvisioningTableDocumentsEveryCodeOwnedPolicy() throws Exception {
         String catalogue = Files.readString(Path.of("docs/domains/events.md"), StandardCharsets.UTF_8);
 
-        KafkaTopicCatalog.all().forEach(topic -> assertThat(catalogue)
-                .contains("`%s` | %d | %d | `%s` | `%s`".formatted(
-                        topic.name(), topic.partitions(), topic.replicationFactor(),
-                        topic.retention(), topic.cleanupPolicy())));
+        KafkaTopicCatalog.all()
+                .forEach(topic -> assertThat(catalogue)
+                        .contains("`%s` | %d | %d | `%s` | `%s`"
+                                .formatted(
+                                        topic.name(),
+                                        topic.partitions(),
+                                        topic.replicationFactor(),
+                                        topic.retention(),
+                                        topic.cleanupPolicy())));
     }
 }

@@ -4,9 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.pos.api.PosCapability;
 import uz.horecaos.platform.pos.application.port.PosAdapter;
 
@@ -24,8 +22,8 @@ public class PosAdapterRegistry {
     private final Map<String, PosAdapter> byType;
 
     public PosAdapterRegistry(List<PosAdapter> adapters) {
-        this.byType = adapters.stream()
-                .collect(Collectors.toUnmodifiableMap(PosAdapter::providerType, adapter -> adapter));
+        this.byType =
+                adapters.stream().collect(Collectors.toUnmodifiableMap(PosAdapter::providerType, adapter -> adapter));
     }
 
     public Optional<PosAdapter> forProvider(String providerType) {

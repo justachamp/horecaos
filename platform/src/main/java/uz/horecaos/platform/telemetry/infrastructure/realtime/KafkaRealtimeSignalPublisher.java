@@ -2,16 +2,13 @@ package uz.horecaos.platform.telemetry.infrastructure.realtime;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.telemetry.api.RealtimeSignal;
 import uz.horecaos.platform.telemetry.api.RealtimeSignalPublisher;
 
@@ -39,8 +36,7 @@ import uz.horecaos.platform.telemetry.api.RealtimeSignalPublisher;
  * the frames are hints, and a hint out of order is a hint.
  */
 @Component
-@ConditionalOnProperty(name = "horecaos.realtime.signals.publish",
-        havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = "horecaos.realtime.signals.publish", havingValue = "true", matchIfMissing = true)
 public class KafkaRealtimeSignalPublisher implements RealtimeSignalPublisher {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaRealtimeSignalPublisher.class);
@@ -49,7 +45,9 @@ public class KafkaRealtimeSignalPublisher implements RealtimeSignalPublisher {
     private final ObjectMapper json;
     private final String topic;
 
-    public KafkaRealtimeSignalPublisher(KafkaTemplate<String, String> kafka, ObjectMapper json,
+    public KafkaRealtimeSignalPublisher(
+            KafkaTemplate<String, String> kafka,
+            ObjectMapper json,
             @Value("${horecaos.messaging.topics.realtime-signals:realtime.signals}") String topic) {
         this.kafka = kafka;
         this.json = json;
@@ -64,8 +62,10 @@ public class KafkaRealtimeSignalPublisher implements RealtimeSignalPublisher {
             // Debug rather than warn. A broker that is down is already alarmed on
             // by ADR 0023's outbox age gauge, and one log line per signal would
             // bury it under thousands of copies of the same fact.
-            log.debug("Could not publish a realtime signal for {}; clients fall back to polling",
-                    signal.channel(), failure);
+            log.debug(
+                    "Could not publish a realtime signal for {}; clients fall back to polling",
+                    signal.channel(),
+                    failure);
         }
     }
 
@@ -84,7 +84,9 @@ public class KafkaRealtimeSignalPublisher implements RealtimeSignalPublisher {
         shape.put("channel", signal.channel().name());
         shape.put("scope", signal.scopeKey().canonical());
         shape.put("resourceType", signal.resourceType());
-        shape.put("resourceId", signal.resourceId() == null ? null : signal.resourceId().toString());
+        shape.put(
+                "resourceId",
+                signal.resourceId() == null ? null : signal.resourceId().toString());
         shape.put("version", signal.version());
         shape.put("occurredAt", signal.occurredAt().toString());
         return shape;

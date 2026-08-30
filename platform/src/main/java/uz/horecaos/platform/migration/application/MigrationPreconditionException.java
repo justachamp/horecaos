@@ -93,8 +93,7 @@ public class MigrationPreconditionException extends RuntimeException {
     public static final String NO_RECONCILIATION_RULES = "NO_RECONCILIATION_RULES";
 
     /** A rule's implemented version and its declared version no longer agree. */
-    public static final String RECONCILIATION_RULE_VERSION_DRIFT =
-            "RECONCILIATION_RULE_VERSION_DRIFT";
+    public static final String RECONCILIATION_RULE_VERSION_DRIFT = "RECONCILIATION_RULE_VERSION_DRIFT";
 
     private final String reasonCode;
 

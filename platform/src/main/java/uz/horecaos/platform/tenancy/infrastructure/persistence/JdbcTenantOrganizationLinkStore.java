@@ -3,10 +3,8 @@ package uz.horecaos.platform.tenancy.infrastructure.persistence;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.tenancy.application.port.TenantOrganizationLinkStore;
 
 /**

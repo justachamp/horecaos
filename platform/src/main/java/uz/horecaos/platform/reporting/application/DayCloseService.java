@@ -10,12 +10,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayAggregate;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayKey;
 import uz.horecaos.platform.reporting.application.ReportingFacts.OrderFact;
@@ -58,8 +56,8 @@ public class DayCloseService {
     private final SubjectPseudonym pseudonym;
     private final Clock clock;
 
-    public DayCloseService(JdbcReportingStore store, BusinessDayService businessDays,
-            SubjectPseudonym pseudonym, Clock clock) {
+    public DayCloseService(
+            JdbcReportingStore store, BusinessDayService businessDays, SubjectPseudonym pseudonym, Clock clock) {
         this.store = store;
         this.businessDays = businessDays;
         this.pseudonym = pseudonym;
@@ -78,31 +76,43 @@ public class DayCloseService {
         BusinessDayBoundary boundary = businessDays.boundaryFor(tenantId);
         UUID runId = UUID.randomUUID();
         Instant startedAt = clock.instant();
-        store.insertRun(runId, tenantId, businessDate, "CLOSE", boundary.version(),
-                MetricRegistry.CALCULATION_VERSION, startedAt);
+        store.insertRun(
+                runId,
+                tenantId,
+                businessDate,
+                "CLOSE",
+                boundary.version(),
+                MetricRegistry.CALCULATION_VERSION,
+                startedAt);
 
         DerivedDay derived = derive(tenantId, businessDate, boundary);
 
         store.clearDay(tenantId, businessDate);
-        store.clearMisfiledOrders(tenantId,
-                derived.orders().stream().map(OrderFact::orderId).toList(), businessDate);
+        store.clearMisfiledOrders(
+                tenantId, derived.orders().stream().map(OrderFact::orderId).toList(), businessDate);
 
         derived.orders().forEach(store::insertOrderFact);
         derived.lines().forEach(store::insertLineFact);
         derived.refunds().forEach(store::insertRefundFact);
         derived.aggregates().forEach(store::insertAggregate);
-        DayAggregator.slaBuckets(tenantId, businessDate, derived.orders())
-                .forEach(store::insertSlaBucket);
+        DayAggregator.slaBuckets(tenantId, businessDate, derived.orders()).forEach(store::insertSlaBucket);
 
-        store.completeRun(runId, derived.orders().size(), derived.lines().size(), 0,
-                clock.instant());
+        store.completeRun(runId, derived.orders().size(), derived.lines().size(), 0, clock.instant());
 
-        log.info("Closed business day {} for tenant {}: {} orders, {} lines, {} refunds",
-                businessDate, tenantId, derived.orders().size(), derived.lines().size(),
+        log.info(
+                "Closed business day {} for tenant {}: {} orders, {} lines, {} refunds",
+                businessDate,
+                tenantId,
+                derived.orders().size(),
+                derived.lines().size(),
                 derived.refunds().size());
 
-        return new CloseResult(runId, derived.orders().size(), derived.lines().size(),
-                derived.refunds().size(), List.of());
+        return new CloseResult(
+                runId,
+                derived.orders().size(),
+                derived.lines().size(),
+                derived.refunds().size(),
+                List.of());
     }
 
     /**
@@ -117,14 +127,19 @@ public class DayCloseService {
     public CloseResult recut(UUID tenantId, LocalDate businessDate) {
         BusinessDayBoundary boundary = businessDays.boundaryFor(tenantId);
         UUID runId = UUID.randomUUID();
-        store.insertRun(runId, tenantId, businessDate, "RECUT", boundary.version(),
-                MetricRegistry.CALCULATION_VERSION, clock.instant());
+        store.insertRun(
+                runId,
+                tenantId,
+                businessDate,
+                "RECUT",
+                boundary.version(),
+                MetricRegistry.CALCULATION_VERSION,
+                clock.instant());
 
         DerivedDay derived = derive(tenantId, businessDate, boundary);
 
         Map<BranchDayKey, BranchDayAggregate> stored = new LinkedHashMap<>();
-        store.readAggregates(tenantId, businessDate, businessDate)
-                .forEach(row -> stored.put(row.key(), row));
+        store.readAggregates(tenantId, businessDate, businessDate).forEach(row -> stored.put(row.key(), row));
 
         Map<BranchDayKey, BranchDayAggregate> fresh = new LinkedHashMap<>();
         derived.aggregates().forEach(row -> fresh.put(row.key(), row));
@@ -134,40 +149,65 @@ public class DayCloseService {
             BranchDayAggregate before = stored.get(key);
             BranchDayAggregate after = fresh.get(key);
 
-            compare(divergences, key, "revenue.gross", 1,
-                    before == null ? 0 : before.grossSom(), after == null ? 0 : after.grossSom());
-            compare(divergences, key, "revenue.net", 1,
+            compare(
+                    divergences,
+                    key,
+                    "revenue.gross",
+                    1,
+                    before == null ? 0 : before.grossSom(),
+                    after == null ? 0 : after.grossSom());
+            compare(
+                    divergences,
+                    key,
+                    "revenue.net",
+                    1,
                     before == null ? 0 : before.netSom() - before.refundedSom(),
                     after == null ? 0 : after.netSom() - after.refundedSom());
-            compare(divergences, key, "orders.count", 1,
+            compare(
+                    divergences,
+                    key,
+                    "orders.count",
+                    1,
                     before == null ? 0 : before.orderCount(),
                     after == null ? 0 : after.orderCount());
         }
 
         for (Divergence divergence : divergences) {
-            store.insertDivergence(UUID.randomUUID(), tenantId, runId, businessDate,
-                    divergence.metricName(), divergence.metricVersion(),
-                    describe(divergence.key()), divergence.storedValue(), divergence.recutValue());
+            store.insertDivergence(
+                    UUID.randomUUID(),
+                    tenantId,
+                    runId,
+                    businessDate,
+                    divergence.metricName(),
+                    divergence.metricVersion(),
+                    describe(divergence.key()),
+                    divergence.storedValue(),
+                    divergence.recutValue());
         }
-        store.completeRun(runId, derived.orders().size(), derived.lines().size(),
-                divergences.size(), clock.instant());
+        store.completeRun(runId, derived.orders().size(), derived.lines().size(), divergences.size(), clock.instant());
 
         if (!divergences.isEmpty()) {
             // Logged at warn and not error: the stored figure is still what every
             // surface shows, deliberately, so this is something a person has to
             // decide about rather than an outage.
-            log.warn("Recut of {} for tenant {} disagrees with the stored day in {} places; "
+            log.warn(
+                    "Recut of {} for tenant {} disagrees with the stored day in {} places; "
                             + "the stored figures were left alone (ADR 0043)",
-                    businessDate, tenantId, divergences.size());
+                    businessDate,
+                    tenantId,
+                    divergences.size());
         }
-        return new CloseResult(runId, derived.orders().size(), derived.lines().size(),
-                derived.refunds().size(), divergences);
+        return new CloseResult(
+                runId,
+                derived.orders().size(),
+                derived.lines().size(),
+                derived.refunds().size(),
+                divergences);
     }
 
     // ------------------------------------------------------------ derivation
 
-    private DerivedDay derive(UUID tenantId, LocalDate businessDate,
-            BusinessDayBoundary boundary) {
+    private DerivedDay derive(UUID tenantId, LocalDate businessDate, BusinessDayBoundary boundary) {
 
         Instant from = boundary.startOf(businessDate);
         Instant to = boundary.endOf(businessDate);
@@ -177,9 +217,9 @@ public class DayCloseService {
         List<SourceRefund> sourceRefunds = store.readSourceRefunds(tenantId, from, to);
 
         Map<UUID, List<SourceLine>> linesByOrder = new HashMap<>();
-        sourceLines.forEach(line ->
-                linesByOrder.computeIfAbsent(line.orderId(), ignored -> new ArrayList<>())
-                        .add(line));
+        sourceLines.forEach(line -> linesByOrder
+                .computeIfAbsent(line.orderId(), ignored -> new ArrayList<>())
+                .add(line));
 
         List<OrderFact> orders = new ArrayList<>(sourceOrders.size());
         List<OrderLineFact> lines = new ArrayList<>(sourceLines.size());
@@ -192,8 +232,8 @@ public class DayCloseService {
             }
         }
 
-        Map<UUID, RefundedOrder> refundedOrders = store.findRefundedOrders(tenantId,
-                sourceRefunds.stream().map(SourceRefund::orderId).toList());
+        Map<UUID, RefundedOrder> refundedOrders = store.findRefundedOrders(
+                tenantId, sourceRefunds.stream().map(SourceRefund::orderId).toList());
 
         List<RefundFact> refunds = new ArrayList<>();
         for (SourceRefund refund : sourceRefunds) {
@@ -201,20 +241,36 @@ public class DayCloseService {
             if (order == null) {
                 continue;
             }
-            refunds.add(new RefundFact(tenantId, businessDate, refund.refundId(),
-                    refund.orderId(), boundary.dateOf(order.createdAt()),
-                    order.locationId(), order.legalEntityId(), order.channelCode(),
-                    order.fulfilmentMode(), refund.amountMinor(), refund.occurredAt(),
-                    boundary.version(), MetricRegistry.CALCULATION_VERSION));
+            refunds.add(new RefundFact(
+                    tenantId,
+                    businessDate,
+                    refund.refundId(),
+                    refund.orderId(),
+                    boundary.dateOf(order.createdAt()),
+                    order.locationId(),
+                    order.legalEntityId(),
+                    order.channelCode(),
+                    order.fulfilmentMode(),
+                    refund.amountMinor(),
+                    refund.occurredAt(),
+                    boundary.version(),
+                    MetricRegistry.CALCULATION_VERSION));
         }
 
-        return new DerivedDay(orders, lines, refunds,
-                DayAggregator.branchDay(businessDate, orders, refunds, boundary.version(),
-                        MetricRegistry.CALCULATION_VERSION));
+        return new DerivedDay(
+                orders,
+                lines,
+                refunds,
+                DayAggregator.branchDay(
+                        businessDate, orders, refunds, boundary.version(), MetricRegistry.CALCULATION_VERSION));
     }
 
-    private OrderFact toFact(UUID tenantId, LocalDate businessDate, BusinessDayBoundary boundary,
-            SourceOrder source, List<SourceLine> lines) {
+    private OrderFact toFact(
+            UUID tenantId,
+            LocalDate businessDate,
+            BusinessDayBoundary boundary,
+            SourceOrder source,
+            List<SourceLine> lines) {
 
         // Gross is the order value before discount. The order row stores the total
         // net of discount (ADR 0019: total = subtotal + tax + fee - discount), and
@@ -235,32 +291,59 @@ public class DayCloseService {
 
         int itemCount = lines.stream().mapToInt(SourceLine::quantity).sum();
 
-        return new OrderFact(tenantId, source.orderId(), businessDate, boundary.version(),
-                source.createdAt(), source.closedAt(), source.brandId(), source.locationId(),
-                source.legalEntityId(), source.channelCode(), source.fulfilmentMode(),
-                source.status(), source.cancellationReasonCode(),
+        return new OrderFact(
+                tenantId,
+                source.orderId(),
+                businessDate,
+                boundary.version(),
+                source.createdAt(),
+                source.closedAt(),
+                source.brandId(),
+                source.locationId(),
+                source.legalEntityId(),
+                source.channelCode(),
+                source.fulfilmentMode(),
+                source.status(),
+                source.cancellationReasonCode(),
                 pseudonym.of(tenantId, source.customerAccountId()),
                 source.customerAccountId() == null ? null : source.firstOrder(),
-                gross, source.discountMinor(), source.feeMinor(), source.taxMinor(),
-                gross - source.discountMinor(), lines.size(), itemCount,
-                secondsToConfirm, secondsToReady, secondsTotal,
-                source.promisedAt(), source.promiseTravelMinutes(), secondsLate,
-                MetricRegistry.CALCULATION_VERSION, source.version());
+                gross,
+                source.discountMinor(),
+                source.feeMinor(),
+                source.taxMinor(),
+                gross - source.discountMinor(),
+                lines.size(),
+                itemCount,
+                secondsToConfirm,
+                secondsToReady,
+                secondsTotal,
+                source.promisedAt(),
+                source.promiseTravelMinutes(),
+                secondsLate,
+                MetricRegistry.CALCULATION_VERSION,
+                source.version());
     }
 
-    private static OrderLineFact toFact(UUID tenantId, LocalDate businessDate, SourceOrder order,
-            SourceLine line) {
+    private static OrderLineFact toFact(UUID tenantId, LocalDate businessDate, SourceOrder order, SourceLine line) {
         // A line's final amount can exceed its base once paid modifiers are added,
         // so the discount is the drop from the higher of the two rather than a
         // subtraction that would go negative and fail ck_fact_order_line_amounts.
         long gross = Math.max(line.baseAmountMinor(), line.finalAmountMinor());
-        return new OrderLineFact(tenantId, businessDate, order.orderId(), line.lineId(),
-                order.locationId(), line.variantId(),
+        return new OrderLineFact(
+                tenantId,
+                businessDate,
+                order.orderId(),
+                line.lineId(),
+                order.locationId(),
+                line.variantId(),
                 // The category needs a catalogue join that reaches into a module
                 // schema for a dimension this build does not cut by. Left null
                 // rather than half-resolved.
                 null,
-                line.productName(), line.quantity(), gross, gross - line.finalAmountMinor(),
+                line.productName(),
+                line.quantity(),
+                gross,
+                gross - line.finalAmountMinor(),
                 line.finalAmountMinor());
     }
 
@@ -270,28 +353,29 @@ public class DayCloseService {
                 : (int) Duration.between(from, to).toSeconds();
     }
 
-    private static void compare(List<Divergence> into, BranchDayKey key, String metricName,
-            int metricVersion, long stored, long recut) {
+    private static void compare(
+            List<Divergence> into, BranchDayKey key, String metricName, int metricVersion, long stored, long recut) {
         if (stored != recut) {
             into.add(new Divergence(key, metricName, metricVersion, stored, recut));
         }
     }
 
-    private static List<BranchDayKey> union(java.util.Set<BranchDayKey> left,
-            java.util.Set<BranchDayKey> right) {
+    private static List<BranchDayKey> union(java.util.Set<BranchDayKey> left, java.util.Set<BranchDayKey> right) {
         List<BranchDayKey> all = new ArrayList<>(left);
         right.stream().filter(key -> !left.contains(key)).forEach(all::add);
         return all;
     }
 
     private static String describe(BranchDayKey key) {
-        return "location=%s;entity=%s;channel=%s;fulfilment=%s".formatted(
-                key.locationId(), key.legalEntityId(), key.channelCode(), key.fulfilmentType());
+        return "location=%s;entity=%s;channel=%s;fulfilment=%s"
+                .formatted(key.locationId(), key.legalEntityId(), key.channelCode(), key.fulfilmentType());
     }
 
-    private record DerivedDay(List<OrderFact> orders, List<OrderLineFact> lines,
-            List<RefundFact> refunds, List<BranchDayAggregate> aggregates) {
-    }
+    private record DerivedDay(
+            List<OrderFact> orders,
+            List<OrderLineFact> lines,
+            List<RefundFact> refunds,
+            List<BranchDayAggregate> aggregates) {}
 
     /**
      * One slice whose re-derived figure disagrees with the stored one.
@@ -299,8 +383,8 @@ public class DayCloseService {
      * <p>Never applied. It is evidence that something is wrong, handed to a person
      * along with the figure that is still on the screen.
      */
-    public record Divergence(BranchDayKey key, String metricName, int metricVersion,
-            long storedValue, long recutValue) {
+    public record Divergence(
+            BranchDayKey key, String metricName, int metricVersion, long storedValue, long recutValue) {
 
         public long difference() {
             return recutValue - storedValue;
@@ -308,7 +392,6 @@ public class DayCloseService {
     }
 
     /** What a close or a recut did. */
-    public record CloseResult(UUID runId, int ordersWritten, int linesWritten, int refundsWritten,
-            List<Divergence> divergences) {
-    }
+    public record CloseResult(
+            UUID runId, int ordersWritten, int linesWritten, int refundsWritten, List<Divergence> divergences) {}
 }

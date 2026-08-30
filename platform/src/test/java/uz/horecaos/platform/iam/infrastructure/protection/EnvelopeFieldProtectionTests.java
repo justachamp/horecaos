@@ -10,14 +10,11 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.UUID;
-
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
@@ -33,16 +30,15 @@ class EnvelopeFieldProtectionTests {
     private static final UUID TENANT = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120c01");
     private static final UUID OTHER_TENANT = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120c02");
     private static final UUID RECORD = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120c03");
-    private static final RecordRef CONTACT =
-            new RecordRef("customer.contact_points", "encrypted_value", RECORD);
+    private static final RecordRef CONTACT = new RecordRef("customer.contact_points", "encrypted_value", RECORD);
 
     private EnvelopeFieldProtection protection;
 
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(Instant.parse("2026-08-20T10:00:00Z"), ZoneOffset.UTC);
-        Map<String, String> secrets = Map.of(
-                "horecaos.secrets.data_encryption.platform.kek", "a-test-key-encryption-key");
+        Map<String, String> secrets =
+                Map.of("horecaos.secrets.data_encryption.platform.kek", "a-test-key-encryption-key");
         protection = new EnvelopeFieldProtection(
                 new DataEncryptionKeyProvider(new EnvironmentSecretResolver(secrets::get, clock), "local"));
     }
@@ -97,8 +93,7 @@ class EnvelopeFieldProtectionTests {
     void aCiphertextMovedToAnotherRecordFailsToDecrypt() {
         ProtectedValue protectedValue = protection.protect(TENANT, DataClass.PERSONAL, CONTACT, "+998901231076");
         RecordRef otherRecord = new RecordRef(
-                "customer.contact_points", "encrypted_value",
-                UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120cff"));
+                "customer.contact_points", "encrypted_value", UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120cff"));
 
         assertThatThrownBy(() -> protection.reveal(TENANT, protectedValue, otherRecord, "attack"))
                 .isInstanceOf(FieldProtection.ProtectionIntegrityException.class);
@@ -118,8 +113,8 @@ class EnvelopeFieldProtectionTests {
         ProtectedValue original = protection.protect(TENANT, DataClass.PERSONAL, CONTACT, "+998901231076");
         byte[] tampered = original.ciphertext();
         tampered[0] ^= 0x01;
-        ProtectedValue altered = new ProtectedValue(
-                original.keyId(), original.algorithm(), original.nonce(), tampered, 1);
+        ProtectedValue altered =
+                new ProtectedValue(original.keyId(), original.algorithm(), original.nonce(), tampered, 1);
 
         assertThatThrownBy(() -> protection.reveal(TENANT, altered, CONTACT, "attack"))
                 .as("GCM authenticates the ciphertext, so a silent modification is impossible")
@@ -130,14 +125,14 @@ class EnvelopeFieldProtectionTests {
     void theKeyIdentifierTravelsWithTheValueSoRotationCanCoexist() {
         ProtectedValue protectedValue = protection.protect(TENANT, DataClass.PERSONAL, CONTACT, "value");
 
-        assertThat(protectedValue.keyId())
-                .contains(TENANT.toString())
-                .contains("personal");
+        assertThat(protectedValue.keyId()).contains(TENANT.toString()).contains("personal");
     }
 
     @Test
     void newWritesUseTheCurrentGenerationAndOldOnesKeepTheirs() {
-        assertThat(protection.protect(TENANT, DataClass.PERSONAL, CONTACT, "value").keyId())
+        assertThat(protection
+                        .protect(TENANT, DataClass.PERSONAL, CONTACT, "value")
+                        .keyId())
                 .endsWith(":g2");
     }
 
@@ -157,13 +152,11 @@ class EnvelopeFieldProtectionTests {
 
         byte[] nonce = new byte[12];
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(digest.digest(), "AES"),
-                new GCMParameterSpec(128, nonce));
+        cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(digest.digest(), "AES"), new GCMParameterSpec(128, nonce));
         cipher.updateAAD(("v1|" + TENANT + "|" + CONTACT.canonical()).getBytes(StandardCharsets.UTF_8));
         byte[] ciphertext = cipher.doFinal("+998901231076".getBytes(StandardCharsets.UTF_8));
 
-        ProtectedValue stored = new ProtectedValue(
-                legacyKeyId, "AES/GCM/NoPadding", nonce, ciphertext, 1);
+        ProtectedValue stored = new ProtectedValue(legacyKeyId, "AES/GCM/NoPadding", nonce, ciphertext, 1);
 
         assertThat(protection.reveal(TENANT, stored, CONTACT, "support lookup"))
                 .as("changing how keys are derived must not orphan a single existing record")
@@ -174,12 +167,14 @@ class EnvelopeFieldProtectionTests {
     void aCiphertextNamingAnotherTenantsKeyIsRefused() {
         ProtectedValue protectedValue = protection.protect(TENANT, DataClass.PERSONAL, CONTACT, "value");
         ProtectedValue swapped = new ProtectedValue(
-                OTHER_TENANT + ":personal:g2", protectedValue.algorithm(),
-                protectedValue.nonce(), protectedValue.ciphertext(), 1);
+                OTHER_TENANT + ":personal:g2",
+                protectedValue.algorithm(),
+                protectedValue.nonce(),
+                protectedValue.ciphertext(),
+                1);
 
         assertThatThrownBy(() -> protection.reveal(TENANT, swapped, CONTACT, "attack"))
-                .as("the identifier is read from the same column an attacker who can write "
-                        + "ciphertext can write")
+                .as("the identifier is read from the same column an attacker who can write " + "ciphertext can write")
                 .isInstanceOf(FieldProtection.ProtectionIntegrityException.class);
     }
 
@@ -187,8 +182,11 @@ class EnvelopeFieldProtectionTests {
     void aCiphertextPointedAtTheLookupKeyIsRefused() {
         ProtectedValue protectedValue = protection.protect(TENANT, DataClass.PERSONAL, CONTACT, "value");
         ProtectedValue borrowed = new ProtectedValue(
-                "lookup:" + TENANT + ":phone", protectedValue.algorithm(),
-                protectedValue.nonce(), protectedValue.ciphertext(), 1);
+                "lookup:" + TENANT + ":phone",
+                protectedValue.algorithm(),
+                protectedValue.nonce(),
+                protectedValue.ciphertext(),
+                1);
 
         assertThatThrownBy(() -> protection.reveal(TENANT, borrowed, CONTACT, "attack"))
                 .as("the lookup key is an HMAC key; using it as a GCM key is reuse across purposes")

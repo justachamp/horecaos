@@ -3,9 +3,7 @@ package uz.horecaos.platform.partner.application;
 import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
-
 import uz.horecaos.platform.partner.infrastructure.persistence.JdbcPartnerStore;
 
 /**

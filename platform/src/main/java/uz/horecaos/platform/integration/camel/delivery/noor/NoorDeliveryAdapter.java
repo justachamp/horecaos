@@ -6,9 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.integration.api.delivery.DeliveryCapability;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
@@ -116,8 +114,8 @@ public class NoorDeliveryAdapter implements DeliveryPartner {
      */
     @Override
     public ProviderOutcome confirmShipment(String externalReference, ProviderCall call) {
-        return ProviderOutcome.rejected("CAPABILITY_UNSUPPORTED",
-                "Noor creates live deliveries; there is no reservation to confirm");
+        return ProviderOutcome.rejected(
+                "CAPABILITY_UNSUPPORTED", "Noor creates live deliveries; there is no reservation to confirm");
     }
 
     @Override
@@ -125,14 +123,18 @@ public class NoorDeliveryAdapter implements DeliveryPartner {
         // Noor exposes no cancellation-cost endpoint. UNCERTAIN is the honest
         // answer: it tells the caller the cost is unknown, where a zero would
         // tell it the cancellation is free.
-        return ProviderOutcome.uncertain("CAPABILITY_UNSUPPORTED",
-                "Noor does not publish cancellation cost before cancelling");
+        return ProviderOutcome.uncertain(
+                "CAPABILITY_UNSUPPORTED", "Noor does not publish cancellation cost before cancelling");
     }
 
     @Override
     public ProviderOutcome cancelShipment(String externalReference, String reason, ProviderCall call) {
-        return http.patch(call, "/api/v1/orders/" + externalReference + "/cancel", headers(call),
-                Map.of("reason", reason == null ? "" : reason), response -> {
+        return http.patch(
+                call,
+                "/api/v1/orders/" + externalReference + "/cancel",
+                headers(call),
+                Map.of("reason", reason == null ? "" : reason),
+                response -> {
                     Map<String, Object> normalized = new LinkedHashMap<>();
                     normalized.put("state", "CANCELLED");
                     normalized.put("providerStatus", response.getOrDefault("stage", "CANCELED"));
@@ -161,9 +163,19 @@ public class NoorDeliveryAdapter implements DeliveryPartner {
 
     private Map<String, Object> evalBody(DeliveryRequest request) {
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("addresses", List.of(
-                Map.of("lat", request.pickup().latitude(), "lon", request.pickup().longitude()),
-                Map.of("lat", request.dropoff().latitude(), "lon", request.dropoff().longitude())));
+        body.put(
+                "addresses",
+                List.of(
+                        Map.of(
+                                "lat",
+                                request.pickup().latitude(),
+                                "lon",
+                                request.pickup().longitude()),
+                        Map.of(
+                                "lat",
+                                request.dropoff().latitude(),
+                                "lon",
+                                request.dropoff().longitude())));
         return body;
     }
 
@@ -185,13 +197,18 @@ public class NoorDeliveryAdapter implements DeliveryPartner {
         body.put("vendor_order_id", request.horecaosReference());
         // Noor accepts exactly one pickup point per order. A multi-pickup basket
         // has to become several orders upstream; it cannot be flattened here.
-        body.put("pickup", Map.of(
-                "lat", request.pickup().latitude(),
-                "lon", request.pickup().longitude(),
-                "address", request.pickup().address(),
-                "contact_name", request.pickup().contactName(),
-                "contact_phone", request.pickup().contactPhone(),
-                "comment", request.pickup().comment() == null ? "" : request.pickup().comment()));
+        body.put(
+                "pickup",
+                Map.of(
+                        "lat", request.pickup().latitude(),
+                        "lon", request.pickup().longitude(),
+                        "address", request.pickup().address(),
+                        "contact_name", request.pickup().contactName(),
+                        "contact_phone", request.pickup().contactPhone(),
+                        "comment",
+                                request.pickup().comment() == null
+                                        ? ""
+                                        : request.pickup().comment()));
         body.put("dropoff", dropoff(request));
         body.put("delivery", delivery);
         return body;

@@ -2,11 +2,9 @@ package uz.horecaos.platform.fulfillment.infrastructure.routing;
 
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
 import uz.horecaos.platform.fulfillment.application.port.RoadDistancePort;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 
@@ -36,8 +34,7 @@ public class DeliveryRoutingConfiguration {
     RoadDistancePort unboundRoadDistancePort() {
         return new RoadDistancePort() {
             @Override
-            public Optional<RoadDistance> distance(GeoPoint origin, GeoPoint destination,
-                    UUID installationId) {
+            public Optional<RoadDistance> distance(GeoPoint origin, GeoPoint destination, UUID installationId) {
                 return Optional.empty();
             }
         };

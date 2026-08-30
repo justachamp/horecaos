@@ -10,11 +10,7 @@ import java.util.UUID;
  * <p>Ready is not live. Activation is a separate platform decision, and this
  * fact exists so that the decision can be prompted rather than polled for.
  */
-public record TenantReady(
-        UUID eventId,
-        TenantId tenantId,
-        UUID runId,
-        Instant occurredAt) implements TenancyEvent {
+public record TenantReady(UUID eventId, TenantId tenantId, UUID runId, Instant occurredAt) implements TenancyEvent {
 
     public TenantReady {
         Objects.requireNonNull(eventId, "Event ID is required");
@@ -48,5 +44,5 @@ public record TenantReady(
         return new Payload(tenantId.value(), runId);
     }
 
-    public record Payload(UUID tenantId, UUID runId) { }
+    public record Payload(UUID tenantId, UUID runId) {}
 }

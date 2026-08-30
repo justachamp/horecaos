@@ -26,21 +26,17 @@ import java.util.Locale;
  */
 final class VerificationCodeText {
 
-    private VerificationCodeText() {
-    }
+    private VerificationCodeText() {}
 
     static String render(String code, Duration validFor, String locale) {
         long minutes = Math.max(1, validFor.toMinutes());
         return switch (language(locale)) {
-            case "ru" -> "HorecaOS: kod %s. Deystvitelen %d min. Nikomu ego ne soobshchayte."
-                    .formatted(code, minutes);
-            case "en" -> "HorecaOS: your code is %s. Valid for %d min. Do not share it."
-                    .formatted(code, minutes);
+            case "ru" -> "HorecaOS: kod %s. Deystvitelen %d min. Nikomu ego ne soobshchayte.".formatted(code, minutes);
+            case "en" -> "HorecaOS: your code is %s. Valid for %d min. Do not share it.".formatted(code, minutes);
             // Uzbek is the default rather than English: it is the market's
             // language, and a customer with no stored preference is far likelier
             // to read it than to read ours.
-            default -> "HorecaOS: kod %s. %d daqiqa amal qiladi. Hech kimga aytmang."
-                    .formatted(code, minutes);
+            default -> "HorecaOS: kod %s. %d daqiqa amal qiladi. Hech kimga aytmang.".formatted(code, minutes);
         };
     }
 

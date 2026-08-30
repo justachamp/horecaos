@@ -3,11 +3,9 @@ package uz.horecaos.platform.payments.infrastructure.click;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.payments.application.PaymentProviderPort;
 import uz.horecaos.platform.payments.domain.PaymentAttempt;
 import uz.horecaos.platform.payments.domain.PaymentAttemptStatus;
@@ -91,8 +89,7 @@ public class ClickPaymentAdapter implements PaymentProviderPort {
      * it.
      */
     @Override
-    public ProviderInvoice createInvoice(PaymentAttempt attempt, ProviderBinding binding,
-            PresentationRequest request) {
+    public ProviderInvoice createInvoice(PaymentAttempt attempt, ProviderBinding binding, PresentationRequest request) {
 
         if (request.preferredKind() == PresentationKind.INVOICE_PUSH) {
             return push(attempt, binding, request);
@@ -100,16 +97,16 @@ public class ClickPaymentAdapter implements PaymentProviderPort {
         return link(attempt, binding, request);
     }
 
-    private ProviderInvoice link(PaymentAttempt attempt, ProviderBinding binding,
-            PresentationRequest request) {
+    private ProviderInvoice link(PaymentAttempt attempt, ProviderBinding binding, PresentationRequest request) {
 
-        String merchantId = binding.merchantId().orElseThrow(() -> new PresentationFailure.Refused(
-                "CLICK_MERCHANT_ID_MISSING",
-                // Refused rather than built without it. Click documents merchant_id
-                // as mandatory on this link, and a link that omits it is either
-                // rejected at my.click.uz or resolved against whichever merchant
-                // Click infers — which would be another restaurant's account.
-                "This Click binding carries no merchant_id, so no payment link can be built"));
+        String merchantId = binding.merchantId()
+                .orElseThrow(() -> new PresentationFailure.Refused(
+                        "CLICK_MERCHANT_ID_MISSING",
+                        // Refused rather than built without it. Click documents merchant_id
+                        // as mandatory on this link, and a link that omits it is either
+                        // rejected at my.click.uz or resolved against whichever merchant
+                        // Click infers — which would be another restaurant's account.
+                        "This Click binding carries no merchant_id, so no payment link can be built"));
 
         String url = ClickCheckoutLink.build(
                 merchantId,
@@ -123,15 +120,14 @@ public class ClickPaymentAdapter implements PaymentProviderPort {
         return new ProviderInvoice(PresentationKind.PAYMENT_LINK, url, null, null, null, null, null);
     }
 
-    private ProviderInvoice push(PaymentAttempt attempt, ProviderBinding binding,
-            PresentationRequest request) {
+    private ProviderInvoice push(PaymentAttempt attempt, ProviderBinding binding, PresentationRequest request) {
 
-        String recipient = request.recipient().orElseThrow(
-                () -> new PresentationFailure.Refused("CLICK_PUSH_RECIPIENT_MISSING",
-                        "An invoice push needs the number to push it to"));
+        String recipient = request.recipient()
+                .orElseThrow(() -> new PresentationFailure.Refused(
+                        "CLICK_PUSH_RECIPIENT_MISSING", "An invoice push needs the number to push it to"));
 
-        ClickMerchantApi.ClickResponse response = click.createInvoice(
-                binding, attempt.merchantTransId(), attempt.amount(), recipient);
+        ClickMerchantApi.ClickResponse response =
+                click.createInvoice(binding, attempt.merchantTransId(), attempt.amount(), recipient);
 
         if (response.uncertain()) {
             // Nobody can say whether an invoice was created and a phone rang. There
@@ -139,8 +135,8 @@ public class ClickPaymentAdapter implements PaymentProviderPort {
             // invoice it may not have made, so the attempt carries the question and
             // the payment resolver — status_by_mti against the id committed before
             // this call — is what settles it.
-            throw new PresentationFailure.Uncertain("CLICK_INVOICE_UNCERTAIN",
-                    "invoice/create did not answer: " + response.describe());
+            throw new PresentationFailure.Uncertain(
+                    "CLICK_INVOICE_UNCERTAIN", "invoice/create did not answer: " + response.describe());
         }
         if (!response.successful()) {
             throw new PresentationFailure.Refused("CLICK_INVOICE_REFUSED", response.describe());
@@ -148,8 +144,7 @@ public class ClickPaymentAdapter implements PaymentProviderPort {
 
         String invoiceId = response.field("invoice_id");
         log.info("Click accepted an invoice for attempt {}", attempt.id());
-        return new ProviderInvoice(PresentationKind.INVOICE_PUSH, null, null, invoiceId,
-                null, null, null);
+        return new ProviderInvoice(PresentationKind.INVOICE_PUSH, null, null, invoiceId, null, null, null);
     }
 
     /**
@@ -168,13 +163,14 @@ public class ClickPaymentAdapter implements PaymentProviderPort {
 
         String paymentId = attempt.externalPayment().orElse(null);
         if (paymentId == null) {
-            ClickResponse resolved = click.statusByMerchantTransId(
-                    binding, attempt.merchantTransId(), attempt.businessDate());
+            ClickResponse resolved =
+                    click.statusByMerchantTransId(binding, attempt.merchantTransId(), attempt.businessDate());
 
-            if (resolved.uncertain() || resolved.status() != uz.horecaos.platform.integration.api
-                    .provider.ProviderOutcome.Status.SUCCESS) {
-                return ProviderOutcome.uncertain("CLICK_STATUS_LOOKUP_FAILED",
-                        "status_by_mti did not answer: " + resolved.describe());
+            if (resolved.uncertain()
+                    || resolved.status()
+                            != uz.horecaos.platform.integration.api.provider.ProviderOutcome.Status.SUCCESS) {
+                return ProviderOutcome.uncertain(
+                        "CLICK_STATUS_LOOKUP_FAILED", "status_by_mti did not answer: " + resolved.describe());
             }
             paymentId = resolved.field("payment_id");
 
@@ -184,34 +180,38 @@ public class ClickPaymentAdapter implements PaymentProviderPort {
                 // undocumented, so this is "we did not find it", not "it did not
                 // happen" — and answering the second would let a caller charge the
                 // card again.
-                log.warn("Click reports no payment for attempt {} on {}; staying uncertain",
-                        attempt.id(), attempt.businessDate());
-                return ProviderOutcome.uncertain("CLICK_PAYMENT_NOT_FOUND",
-                        "status_by_mti found no payment for the recorded business date");
+                log.warn(
+                        "Click reports no payment for attempt {} on {}; staying uncertain",
+                        attempt.id(),
+                        attempt.businessDate());
+                return ProviderOutcome.uncertain(
+                        "CLICK_PAYMENT_NOT_FOUND", "status_by_mti found no payment for the recorded business date");
             }
         }
 
         ClickResponse state = click.paymentStatus(binding, paymentId);
         if (!state.successful()) {
-            return ProviderOutcome.uncertain("CLICK_STATUS_UNREADABLE",
-                    "payment/status did not answer: " + state.describe());
+            return ProviderOutcome.uncertain(
+                    "CLICK_STATUS_UNREADABLE", "payment/status did not answer: " + state.describe());
         }
 
         ClickPaymentStatus status = state.paymentStatus();
-        ProviderEvidence evidence = ProviderEvidence.of(
-                String.valueOf(state.body().get("payment_status")), now);
+        ProviderEvidence evidence =
+                ProviderEvidence.of(String.valueOf(state.body().get("payment_status")), now);
 
         return switch (status) {
-            case PAID -> ProviderOutcome.success(PaymentAttemptStatus.CAPTURED, evidence,
-                    paymentId, attempt.amount());
-            case FAILED -> ProviderOutcome.rejected("CLICK_PAYMENT_FAILED",
-                    "Click reports a negative payment_status; the enumeration is unpublished",
-                    evidence);
+            case PAID -> ProviderOutcome.success(PaymentAttemptStatus.CAPTURED, evidence, paymentId, attempt.amount());
+            case FAILED ->
+                ProviderOutcome.rejected(
+                        "CLICK_PAYMENT_FAILED",
+                        "Click reports a negative payment_status; the enumeration is unpublished",
+                        evidence);
             // Created and in processing are not money. Answering uncertain again is
             // a legitimate result and means "still in flight" — several of Click's
             // own examples pair payment_status 1 with error_note "Success".
-            case CREATED, IN_PROCESSING, UNKNOWN -> ProviderOutcome.uncertain("CLICK_IN_FLIGHT",
-                    "Click reports payment_status " + status + ", which is not yet money");
+            case CREATED, IN_PROCESSING, UNKNOWN ->
+                ProviderOutcome.uncertain(
+                        "CLICK_IN_FLIGHT", "Click reports payment_status " + status + ", which is not yet money");
         };
     }
 
@@ -235,14 +235,14 @@ public class ClickPaymentAdapter implements PaymentProviderPort {
     @Override
     public ProviderOutcome reverse(PaymentAttempt attempt, ProviderBinding binding, String reason) {
         if (!binding.supportsReversal()) {
-            return ProviderOutcome.rejected("REVERSAL_UNSUPPORTED",
-                    "This Click binding is not configured for reversals", null);
+            return ProviderOutcome.rejected(
+                    "REVERSAL_UNSUPPORTED", "This Click binding is not configured for reversals", null);
         }
 
         Optional<String> paymentId = resolvePaymentId(attempt, binding);
         if (paymentId.isEmpty()) {
-            return ProviderOutcome.uncertain("CLICK_PAYMENT_ID_UNRESOLVED",
-                    "The payment to reverse could not be identified from status_by_mti");
+            return ProviderOutcome.uncertain(
+                    "CLICK_PAYMENT_ID_UNRESOLVED", "The payment to reverse could not be identified from status_by_mti");
         }
 
         ClickResponse reversal = click.reversal(binding, paymentId.get());
@@ -250,8 +250,11 @@ public class ClickPaymentAdapter implements PaymentProviderPort {
 
         if (reversal.successful()) {
             log.info("Click reversed payment for attempt {} ({})", attempt.id(), reason);
-            return ProviderOutcome.success(PaymentAttemptStatus.REVERSED,
-                    ProviderEvidence.of("reversed", now), paymentId.get(), attempt.amount());
+            return ProviderOutcome.success(
+                    PaymentAttemptStatus.REVERSED,
+                    ProviderEvidence.of("reversed", now),
+                    paymentId.get(),
+                    attempt.amount());
         }
         if (reversal.uncertain()) {
             // The money may or may not have gone back. Resolved by reading the
@@ -262,16 +265,16 @@ public class ClickPaymentAdapter implements PaymentProviderPort {
         // error_code enumeration is unpublished and is an open question with CLICK,
         // so the code travels in the detail for a human rather than into a mapping
         // table this adapter invented.
-        return ProviderOutcome.rejected("CLICK_REVERSAL_REFUSED", reversal.describe(),
-                ProviderEvidence.of("reversal-refused", now));
+        return ProviderOutcome.rejected(
+                "CLICK_REVERSAL_REFUSED", reversal.describe(), ProviderEvidence.of("reversal-refused", now));
     }
 
     private Optional<String> resolvePaymentId(PaymentAttempt attempt, ProviderBinding binding) {
         if (attempt.externalPayment().filter(id -> !id.isBlank()).isPresent()) {
             return attempt.externalPayment();
         }
-        ClickResponse resolved = click.statusByMerchantTransId(
-                binding, attempt.merchantTransId(), attempt.businessDate());
+        ClickResponse resolved =
+                click.statusByMerchantTransId(binding, attempt.merchantTransId(), attempt.businessDate());
         if (!resolved.successful()) {
             return Optional.empty();
         }

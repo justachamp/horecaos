@@ -16,7 +16,6 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,7 +37,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.payments.application.PaymentCheckoutService;
 import uz.horecaos.platform.payments.domain.PaymentProviderType;
@@ -162,14 +160,20 @@ class StorefrontOwnershipAuthorizationTests {
     void seed() {
         seedEstate();
         jdbc.sql("DELETE FROM notifications.notification_preferences WHERE tenant_id = :t")
-                .param("t", TENANT).update();
-        jdbc.sql("DELETE FROM ordering.carts WHERE tenant_id = :t").param("t", TENANT).update();
+                .param("t", TENANT)
+                .update();
+        jdbc.sql("DELETE FROM ordering.carts WHERE tenant_id = :t")
+                .param("t", TENANT)
+                .update();
         jdbc.sql("DELETE FROM customer.principal_links WHERE tenant_id = :t")
-                .param("t", TENANT).update();
+                .param("t", TENANT)
+                .update();
         jdbc.sql("DELETE FROM customer.customer_accounts WHERE tenant_id = :t")
-                .param("t", TENANT).update();
+                .param("t", TENANT)
+                .update();
         jdbc.sql("DELETE FROM platform.idempotency_records WHERE tenant_id = :t")
-                .param("t", TENANT).update();
+                .param("t", TENANT)
+                .update();
 
         ownerAccount = account(OWNER_SUBJECT);
         strangerAccount = account(STRANGER_SUBJECT);
@@ -294,12 +298,21 @@ class StorefrontOwnershipAuthorizationTests {
         when(orders.summary(TENANT, second)).thenReturn(Optional.of(order(ownerAccount)));
         when(paymentCheckout.openOrRePresent(any(), any(), any(), any()))
                 .thenReturn(new PaymentCheckoutService.PaymentSession(
-                        UUID.randomUUID(), "merchant-trans-id", PaymentProviderType.CLICK,
-                        PresentationKind.PAYMENT_LINK, "https://checkout.example/pay", null,
-                        Instant.now().plusSeconds(900), 42_000L, "UZS", false, 1));
+                        UUID.randomUUID(),
+                        "merchant-trans-id",
+                        PaymentProviderType.CLICK,
+                        PresentationKind.PAYMENT_LINK,
+                        "https://checkout.example/pay",
+                        null,
+                        Instant.now().plusSeconds(900),
+                        42_000L,
+                        "UZS",
+                        false,
+                        1));
 
         mvc.perform(paymentSession(first, "one-key-two-orders")).andReturn();
-        MvcResult other = mvc.perform(paymentSession(second, "one-key-two-orders")).andReturn();
+        MvcResult other =
+                mvc.perform(paymentSession(second, "one-key-two-orders")).andReturn();
 
         assertThat(other.getResponse().getHeader("Idempotency-Replayed"))
                 .as("order B must get its own attempt, not order A's response")
@@ -330,8 +343,8 @@ class StorefrontOwnershipAuthorizationTests {
         UUID orderId = UUID.randomUUID();
         when(orders.summary(TENANT, orderId)).thenReturn(Optional.of(order(null)));
 
-        MvcResult result = mvc.perform(paymentSession(orderId, "key-for-a-phone-order"))
-                .andReturn();
+        MvcResult result =
+                mvc.perform(paymentSession(orderId, "key-for-a-phone-order")).andReturn();
 
         assertThat(result.getResponse().getStatus()).isEqualTo(404);
         assertThat(result.getResponse().getContentAsString())
@@ -347,9 +360,17 @@ class StorefrontOwnershipAuthorizationTests {
         when(orders.summary(TENANT, orderId)).thenReturn(Optional.of(order(ownerAccount)));
         when(paymentCheckout.openOrRePresent(any(), any(), any(), any()))
                 .thenReturn(new PaymentCheckoutService.PaymentSession(
-                        UUID.randomUUID(), "merchant-trans-id", PaymentProviderType.CLICK,
-                        PresentationKind.PAYMENT_LINK, "https://checkout.example/pay", null,
-                        Instant.now().plusSeconds(900), 42_000L, "UZS", false, 1));
+                        UUID.randomUUID(),
+                        "merchant-trans-id",
+                        PaymentProviderType.CLICK,
+                        PresentationKind.PAYMENT_LINK,
+                        "https://checkout.example/pay",
+                        null,
+                        Instant.now().plusSeconds(900),
+                        42_000L,
+                        "UZS",
+                        false,
+                        1));
 
         int status = statusOf(paymentSession(orderId, "key-for-the-owner"));
 
@@ -371,8 +392,7 @@ class StorefrontOwnershipAuthorizationTests {
     @Test
     @DisplayName("another customer's preferences are not found rather than forbidden")
     void anotherAccountsPreferencesAreNotFound() throws Exception {
-        MvcResult result = mvc.perform(get(preferencesPath(strangerAccount))
-                        .with(token(OWNER_SUBJECT)))
+        MvcResult result = mvc.perform(get(preferencesPath(strangerAccount)).with(token(OWNER_SUBJECT)))
                 .andReturn();
 
         assertThat(result.getResponse().getStatus())
@@ -415,9 +435,9 @@ class StorefrontOwnershipAuthorizationTests {
         // The same token that now sails through the storefront. An agent acting on
         // somebody else's order is exactly what a capability is for, and loosening
         // the customer's side must not loosen this one.
-        MvcResult result = mvc.perform(get("/api/v1/tenants/" + TENANT + "/brands/" + BRAND
-                        + "/locations/" + LOCATION + "/orders")
-                        .with(token(OWNER_SUBJECT)))
+        MvcResult result = mvc.perform(
+                        get("/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + LOCATION + "/orders")
+                                .with(token(OWNER_SUBJECT)))
                 .andReturn();
 
         assertThat(result.getResponse().getStatus()).isEqualTo(403);
@@ -452,7 +472,10 @@ class StorefrontOwnershipAuthorizationTests {
                 VALUES (:id, :tenantId, :brandId, 'MAIN01', 'main-01', 'Branch', 'Asia/Tashkent',
                     'ACTIVE', 0)
                 ON CONFLICT (id) DO NOTHING
-                """).param("id", LOCATION).param("tenantId", TENANT).param("brandId", BRAND)
+                """)
+                .param("id", LOCATION)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
                 .update();
         jdbc.sql("""
                 INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name,
@@ -469,15 +492,20 @@ class StorefrontOwnershipAuthorizationTests {
                 INSERT INTO customer.customer_accounts (id, tenant_id, status, created_at, updated_at)
                 VALUES (:id, :tenantId, 'ACTIVE', :now, :now)
                 """)
-                .param("id", accountId).param("tenantId", TENANT).param("now", now)
+                .param("id", accountId)
+                .param("tenantId", TENANT)
+                .param("now", now)
                 .update();
         jdbc.sql("""
                 INSERT INTO customer.principal_links (
                     id, tenant_id, customer_account_id, issuer, subject, status, linked_at)
                 VALUES (:id, :tenantId, :accountId, :issuer, :subject, 'ACTIVE', :now)
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", TENANT)
-                .param("accountId", accountId).param("issuer", ISSUER).param("subject", subject)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("accountId", accountId)
+                .param("issuer", ISSUER)
+                .param("subject", subject)
                 .param("now", now)
                 .update();
         return accountId;
@@ -494,18 +522,32 @@ class StorefrontOwnershipAuthorizationTests {
                 VALUES (:id, :tenantId, :brandId, :locationId, :channelId, :accountId,
                     :guestHash, 'DELIVERY', 'UZS', 'ACTIVE', 1, :expiresAt, :now, :now)
                 """)
-                .param("id", cartId).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("locationId", LOCATION).param("channelId", CHANNEL)
-                .param("accountId", accountId).param("guestHash", guestHash)
-                .param("expiresAt", now.plusHours(4)).param("now", now)
+                .param("id", cartId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", LOCATION)
+                .param("channelId", CHANNEL)
+                .param("accountId", accountId)
+                .param("guestHash", guestHash)
+                .param("expiresAt", now.plusHours(4))
+                .param("now", now)
                 .update();
         return cartId;
     }
 
     private static OrderDirectory.OrderSummary order(UUID accountId) {
-        return new OrderDirectory.OrderSummary(UUID.randomUUID(), TENANT, BRAND, LOCATION,
-                "A-1", accountId, accountId == null ? "a-guest-hash" : null, "RECEIVED",
-                "UZS", 42_000L, 1);
+        return new OrderDirectory.OrderSummary(
+                UUID.randomUUID(),
+                TENANT,
+                BRAND,
+                LOCATION,
+                "A-1",
+                accountId,
+                accountId == null ? "a-guest-hash" : null,
+                "RECEIVED",
+                "UZS",
+                42_000L,
+                1);
     }
 
     private MockHttpServletRequestBuilder paymentSession(UUID orderId, String key) {
@@ -529,8 +571,7 @@ class StorefrontOwnershipAuthorizationTests {
     }
 
     private static String preferencesPath(UUID accountId) {
-        return "/api/v1/tenants/" + TENANT + "/customers/" + accountId
-                + "/notification-preferences";
+        return "/api/v1/tenants/" + TENANT + "/customers/" + accountId + "/notification-preferences";
     }
 
     private static String checkoutBody() {
@@ -539,8 +580,7 @@ class StorefrontOwnershipAuthorizationTests {
                 """.formatted(UUID.randomUUID(), UUID.randomUUID());
     }
 
-    private static org.springframework.test.web.servlet.request.RequestPostProcessor token(
-            String subject) {
+    private static org.springframework.test.web.servlet.request.RequestPostProcessor token(String subject) {
         return jwt().jwt(builder -> builder.issuer(ISSUER).subject(subject));
     }
 
@@ -560,8 +600,10 @@ class StorefrontOwnershipAuthorizationTests {
 
         @Bean
         JwtDecoder jwtDecoder() {
-            return token -> Jwt.withTokenValue(token).header("alg", "none")
-                    .claim("sub", "unused").build();
+            return token -> Jwt.withTokenValue(token)
+                    .header("alg", "none")
+                    .claim("sub", "unused")
+                    .build();
         }
     }
 }

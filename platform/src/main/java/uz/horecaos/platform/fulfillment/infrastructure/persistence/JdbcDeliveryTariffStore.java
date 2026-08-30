@@ -9,10 +9,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.fulfillment.domain.VersionStatus;
 import uz.horecaos.platform.fulfillment.domain.tariff.DeliveryTariff;
 import uz.horecaos.platform.fulfillment.domain.tariff.DistanceAccrual;
@@ -49,7 +47,8 @@ public class JdbcDeliveryTariffStore {
                 ORDER BY valid_from DESC
                 LIMIT 1
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
                 .param("at", timestamp(at))
                 .query(UUID.class)
                 .optional();
@@ -70,7 +69,8 @@ public class JdbcDeliveryTariffStore {
                 WHERE tenant_id = :tenantId AND brand_id = :brandId
                   AND is_brand_default AND status = 'ACTIVE'
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .query(UUID.class)
                 .optional();
     }
@@ -91,7 +91,9 @@ public class JdbcDeliveryTariffStore {
                 SELECT 1 FROM fulfillment.delivery_tariffs
                  WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :tariffId
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId).param("tariffId", tariffId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("tariffId", tariffId)
                 .query(Integer.class)
                 .optional()
                 .isPresent();
@@ -150,15 +152,25 @@ public class JdbcDeliveryTariffStore {
                         // not a coarser rounding, it is a division by nothing.
                         row.getObject("fee_rounding_step_minor", Long.class),
                         row.getString("fee_rounding_mode") == null
-                                ? null : RoundingRule.valueOf(row.getString("fee_rounding_mode"))))
+                                ? null
+                                : RoundingRule.valueOf(row.getString("fee_rounding_mode"))))
                 .optional();
 
         return header.map(found -> new DeliveryTariff(
-                found.tariffId(), found.version(), found.status(), found.currency(),
-                found.feeSource(), found.distanceMode(), found.roadFactorBasisPoints(),
-                found.routingProviderInstallationId(), found.maxDistanceMeters(),
-                found.minFeeMinor(), found.maxFeeMinor(),
-                found.distanceAccrual(), found.feeRoundingStepMinor(), found.feeRoundingRule(),
+                found.tariffId(),
+                found.version(),
+                found.status(),
+                found.currency(),
+                found.feeSource(),
+                found.distanceMode(),
+                found.roadFactorBasisPoints(),
+                found.routingProviderInstallationId(),
+                found.maxDistanceMeters(),
+                found.minFeeMinor(),
+                found.maxFeeMinor(),
+                found.distanceAccrual(),
+                found.feeRoundingStepMinor(),
+                found.feeRoundingRule(),
                 bands(tenantId, tariffId, found.version()),
                 timeRules(tenantId, tariffId, found.version()),
                 discounts(tenantId, tariffId, found.version())));
@@ -171,7 +183,9 @@ public class JdbcDeliveryTariffStore {
                 WHERE tenant_id = :tenantId AND tariff_id = :tariffId AND tariff_version = :version
                 ORDER BY band_set, from_meters, sequence
                 """)
-                .param("tenantId", tenantId).param("tariffId", tariffId).param("version", version)
+                .param("tenantId", tenantId)
+                .param("tariffId", tariffId)
+                .param("version", version)
                 .query((row, number) -> new TariffBand(
                         row.getInt("sequence"),
                         row.getString("band_set"),
@@ -190,7 +204,9 @@ public class JdbcDeliveryTariffStore {
                 WHERE tenant_id = :tenantId AND tariff_id = :tariffId AND tariff_version = :version
                 ORDER BY priority DESC, sequence
                 """)
-                .param("tenantId", tenantId).param("tariffId", tariffId).param("version", version)
+                .param("tenantId", tenantId)
+                .param("tariffId", tariffId)
+                .param("version", version)
                 .query((row, number) -> new TariffTimeRule(
                         row.getInt("sequence"),
                         row.getInt("priority"),
@@ -217,7 +233,9 @@ public class JdbcDeliveryTariffStore {
                 WHERE tenant_id = :tenantId AND tariff_id = :tariffId AND tariff_version = :version
                 ORDER BY priority DESC, sequence
                 """)
-                .param("tenantId", tenantId).param("tariffId", tariffId).param("version", version)
+                .param("tenantId", tenantId)
+                .param("tariffId", tariffId)
+                .param("version", version)
                 .query((row, number) -> new TariffDiscount(
                         row.getInt("sequence"),
                         row.getInt("priority"),
@@ -238,27 +256,32 @@ public class JdbcDeliveryTariffStore {
                 SELECT coalesce(max(version), 0) + 1 FROM fulfillment.delivery_tariff_versions
                 WHERE tenant_id = :tenantId AND tariff_id = :tariffId
                 """)
-                .param("tenantId", tenantId).param("tariffId", tariffId)
-                .query(Integer.class).single();
+                .param("tenantId", tenantId)
+                .param("tariffId", tariffId)
+                .query(Integer.class)
+                .single();
     }
 
     // ------------------------------------------------------------------ writes
 
-    public void insertTariff(UUID id, UUID tenantId, UUID brandId, String code, String name,
-            boolean brandDefault, Instant now) {
+    public void insertTariff(
+            UUID id, UUID tenantId, UUID brandId, String code, String name, boolean brandDefault, Instant now) {
         jdbc.sql("""
                 INSERT INTO fulfillment.delivery_tariffs (
                     id, tenant_id, brand_id, code, name, is_brand_default, created_at, updated_at)
                 VALUES (:id, :tenantId, :brandId, :code, :name, :brandDefault, :now, :now)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("brandId", brandId)
-                .param("code", code).param("name", name).param("brandDefault", brandDefault)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("code", code)
+                .param("name", name)
+                .param("brandDefault", brandDefault)
                 .param("now", timestamp(now))
                 .update();
     }
 
-    public void insertVersion(UUID id, UUID tenantId, DeliveryTariff draft, UUID createdBy,
-            Instant now) {
+    public void insertVersion(UUID id, UUID tenantId, DeliveryTariff draft, UUID createdBy, Instant now) {
         Map<String, Object> params = new HashMap<>();
         params.put("id", id);
         params.put("tenantId", tenantId);
@@ -274,7 +297,8 @@ public class JdbcDeliveryTariffStore {
         params.put("maxFee", draft.maxFeeMinor());
         params.put("accrual", draft.distanceAccrual().name());
         params.put("roundingStep", draft.feeRoundingStepMinor());
-        params.put("roundingMode",
+        params.put(
+                "roundingMode",
                 draft.feeRoundingRule() == null ? null : draft.feeRoundingRule().name());
         params.put("createdBy", createdBy);
         params.put("now", timestamp(now));
@@ -290,9 +314,7 @@ public class JdbcDeliveryTariffStore {
                     :distanceMode, :roadFactor, :routingInstallationId,
                     :maxDistance, :minFee, :maxFee,
                     :accrual, :roundingStep, :roundingMode, :createdBy, :now)
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
 
         for (TariffBand band : draft.bands()) {
             jdbc.sql("""
@@ -302,11 +324,15 @@ public class JdbcDeliveryTariffStore {
                     VALUES (:tenantId, :tariffId, :version, :sequence, :bandSet,
                         :from, :to, :base, :perKm)
                     """)
-                    .param("tenantId", tenantId).param("tariffId", draft.tariffId())
-                    .param("version", draft.version()).param("sequence", band.sequence())
+                    .param("tenantId", tenantId)
+                    .param("tariffId", draft.tariffId())
+                    .param("version", draft.version())
+                    .param("sequence", band.sequence())
                     .param("bandSet", band.bandSet())
-                    .param("from", band.fromMeters()).param("to", band.toMeters())
-                    .param("base", band.baseMinor()).param("perKm", band.perKmMinor())
+                    .param("from", band.fromMeters())
+                    .param("to", band.toMeters())
+                    .param("base", band.baseMinor())
+                    .param("perKm", band.perKmMinor())
                     .update();
         }
 
@@ -334,9 +360,7 @@ public class JdbcDeliveryTariffStore {
                         multiplier_basis_points, surcharge_minor)
                     VALUES (:tenantId, :tariffId, :version, :sequence, :priority,
                         :dayMask, :fromTime, :toTime, :bandSet, :multiplier, :surcharge)
-                    """)
-                    .params(ruleParams)
-                    .update();
+                    """).params(ruleParams).update();
         }
 
         for (TariffDiscount discount : draft.discounts()) {
@@ -360,9 +384,7 @@ public class JdbcDeliveryTariffStore {
                         day_of_week_mask, local_from_time, local_to_time)
                     VALUES (:tenantId, :tariffId, :version, :sequence, :priority,
                         :kind, :amount, :allowance, :dayMask, :fromTime, :toTime)
-                    """)
-                    .params(discountParams)
-                    .update();
+                    """).params(discountParams).update();
         }
     }
 
@@ -374,8 +396,10 @@ public class JdbcDeliveryTariffStore {
                 WHERE tenant_id = :tenantId AND tariff_id = :tariffId AND status = 'ACTIVE'
                   AND version <> :version
                 """)
-                .param("tenantId", tenantId).param("tariffId", tariffId)
-                .param("version", version).param("now", timestamp(now))
+                .param("tenantId", tenantId)
+                .param("tariffId", tariffId)
+                .param("version", version)
+                .param("now", timestamp(now))
                 .update();
 
         return jdbc.sql("""
@@ -384,30 +408,44 @@ public class JdbcDeliveryTariffStore {
                 WHERE tenant_id = :tenantId AND tariff_id = :tariffId AND version = :version
                   AND status = 'DRAFT'
                 """)
-                .param("tenantId", tenantId).param("tariffId", tariffId).param("version", version)
-                .param("actorId", actorId).param("now", timestamp(now))
+                .param("tenantId", tenantId)
+                .param("tariffId", tariffId)
+                .param("version", version)
+                .param("actorId", actorId)
+                .param("now", timestamp(now))
                 .update();
     }
 
-    public void bindLocation(UUID tenantId, UUID brandId, UUID locationId, UUID tariffId,
-            Instant from) {
+    public void bindLocation(UUID tenantId, UUID brandId, UUID locationId, UUID tariffId, Instant from) {
         jdbc.sql("""
                 INSERT INTO fulfillment.location_tariff_bindings (
                     tenant_id, brand_id, location_id, tariff_id, valid_from)
                 VALUES (:tenantId, :brandId, :locationId, :tariffId, :from)
                 ON CONFLICT (location_id, valid_from) DO UPDATE SET tariff_id = EXCLUDED.tariff_id
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
-                .param("locationId", locationId).param("tariffId", tariffId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("tariffId", tariffId)
                 .param("from", timestamp(from))
                 .update();
     }
 
-    private record Header(UUID tariffId, int version, VersionStatus status, String currency,
-            FeeSource feeSource, DistanceMode distanceMode, int roadFactorBasisPoints,
-            UUID routingProviderInstallationId, int maxDistanceMeters, long minFeeMinor,
-            Long maxFeeMinor, DistanceAccrual distanceAccrual, Long feeRoundingStepMinor,
-            RoundingRule feeRoundingRule) { }
+    private record Header(
+            UUID tariffId,
+            int version,
+            VersionStatus status,
+            String currency,
+            FeeSource feeSource,
+            DistanceMode distanceMode,
+            int roadFactorBasisPoints,
+            UUID routingProviderInstallationId,
+            int maxDistanceMeters,
+            long minFeeMinor,
+            Long maxFeeMinor,
+            DistanceAccrual distanceAccrual,
+            Long feeRoundingStepMinor,
+            RoundingRule feeRoundingRule) {}
 
     private static OffsetDateTime timestamp(Instant instant) {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);

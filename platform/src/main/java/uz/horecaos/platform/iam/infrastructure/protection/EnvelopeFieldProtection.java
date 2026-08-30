@@ -7,15 +7,12 @@ import java.util.Base64;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
@@ -99,13 +96,11 @@ public class EnvelopeFieldProtection implements FieldProtection {
             // The stored identifier names a key this tenant may not use. Same
             // class of event as a failed tag check, and reported the same way, so
             // a caller cannot tell a swapped identifier from a swapped ciphertext.
-            throw new ProtectionIntegrityException(
-                    "A protected value names a key it may not be read with", rejected);
+            throw new ProtectionIntegrityException("A protected value names a key it may not be read with", rejected);
         }
         try {
             Cipher cipher = Cipher.getInstance(value.algorithm());
-            cipher.init(Cipher.DECRYPT_MODE, key,
-                    new GCMParameterSpec(TAG_LENGTH_BITS, value.nonce()));
+            cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(TAG_LENGTH_BITS, value.nonce()));
             cipher.updateAAD(associatedData(tenantId, record));
             return new String(cipher.doFinal(value.ciphertext()), StandardCharsets.UTF_8);
         } catch (GeneralSecurityException failure) {
@@ -123,7 +118,8 @@ public class EnvelopeFieldProtection implements FieldProtection {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(key);
-            return Base64.getUrlEncoder().withoutPadding()
+            return Base64.getUrlEncoder()
+                    .withoutPadding()
                     .encodeToString(mac.doFinal(normalizedValue.getBytes(StandardCharsets.UTF_8)));
         } catch (GeneralSecurityException failure) {
             throw new IllegalStateException("Lookup hashing failed", failure);
@@ -135,7 +131,8 @@ public class EnvelopeFieldProtection implements FieldProtection {
      * those changing makes decryption fail.
      */
     private byte[] associatedData(UUID tenantId, RecordRef record) {
-        return "v%d|%s|%s".formatted(CURRENT_AAD_VERSION, tenantId, record.canonical())
+        return "v%d|%s|%s"
+                .formatted(CURRENT_AAD_VERSION, tenantId, record.canonical())
                 .getBytes(StandardCharsets.UTF_8);
     }
 

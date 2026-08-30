@@ -2,6 +2,8 @@ package uz.horecaos.platform.integration.events;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -11,10 +13,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -58,8 +56,7 @@ class EventSchemaCompatibilityTests {
                 .as("""
                         %s changed incompatibly within version %d.
                         Removing a property, narrowing its type, or adding a required property
-                        needs a new eventVersion, not an edit to the existing schema.""",
-                        contract.key(), contract.eventVersion())
+                        needs a new eventVersion, not an edit to the existing schema.""", contract.key(), contract.eventVersion())
                 .isEmpty();
     }
 
@@ -69,7 +66,7 @@ class EventSchemaCompatibilityTests {
         JsonNode baseProps = baseline.path("properties");
         JsonNode currProps = current.path("properties");
 
-        for (Iterator<Map.Entry<String, JsonNode>> it = baseProps.fields(); it.hasNext();) {
+        for (Iterator<Map.Entry<String, JsonNode>> it = baseProps.fields(); it.hasNext(); ) {
             Map.Entry<String, JsonNode> property = it.next();
             JsonNode currentProperty = currProps.path(property.getKey());
 
@@ -80,8 +77,7 @@ class EventSchemaCompatibilityTests {
             Set<String> baseTypes = typesOf(property.getValue());
             Set<String> currentTypes = typesOf(currentProperty);
             if (!currentTypes.containsAll(baseTypes)) {
-                breaks.add("narrowed type of %s from %s to %s"
-                        .formatted(property.getKey(), baseTypes, currentTypes));
+                breaks.add("narrowed type of %s from %s to %s".formatted(property.getKey(), baseTypes, currentTypes));
             }
             Set<String> baseEnum = enumOf(property.getValue());
             Set<String> currentEnum = enumOf(currentProperty);

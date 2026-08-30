@@ -5,7 +5,6 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 import java.util.UUID;
-
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -21,7 +20,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -113,7 +111,9 @@ class StorefrontReadAuthenticationTests {
     @DisplayName("a cart read without a principal is refused even with enforcement off")
     void aCartReadRequiresAPrincipal() throws Exception {
         int status = mvc.perform(get(brandPath() + "/carts/" + UUID.randomUUID()))
-                .andReturn().getResponse().getStatus();
+                .andReturn()
+                .getResponse()
+                .getStatus();
 
         assertThat(status)
                 .as("the identifiers are unguessable, but an unguessable identifier is not a credential")
@@ -124,7 +124,9 @@ class StorefrontReadAuthenticationTests {
     @DisplayName("an order read without a principal is refused even with enforcement off")
     void anOrderReadRequiresAPrincipal() throws Exception {
         int status = mvc.perform(get(brandPath() + "/orders/" + UUID.randomUUID()))
-                .andReturn().getResponse().getStatus();
+                .andReturn()
+                .getResponse()
+                .getStatus();
 
         assertThat(status).isEqualTo(401);
     }
@@ -132,11 +134,14 @@ class StorefrontReadAuthenticationTests {
     @Test
     @DisplayName("a points balance without a principal is refused even with enforcement off")
     void aLoyaltyReadRequiresAPrincipal() throws Exception {
-        String account = "/api/v1/storefront/loyalty/tenants/" + TENANT
-                + "/accounts/" + UUID.randomUUID();
+        String account = "/api/v1/storefront/loyalty/tenants/" + TENANT + "/accounts/" + UUID.randomUUID();
 
-        assertThat(mvc.perform(get(account)).andReturn().getResponse().getStatus()).isEqualTo(401);
-        assertThat(mvc.perform(get(account + "/entries")).andReturn().getResponse().getStatus())
+        assertThat(mvc.perform(get(account)).andReturn().getResponse().getStatus())
+                .isEqualTo(401);
+        assertThat(mvc.perform(get(account + "/entries"))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
                 .isEqualTo(401);
     }
 
@@ -168,7 +173,9 @@ class StorefrontReadAuthenticationTests {
     void aPrincipalReachesTheSameCartRead() throws Exception {
         int status = mvc.perform(get(brandPath() + "/carts/" + UUID.randomUUID())
                         .with(jwt().jwt(builder -> builder.subject("a-customer"))))
-                .andReturn().getResponse().getStatus();
+                .andReturn()
+                .getResponse()
+                .getStatus();
 
         assertThat(status)
                 .as("without this the 401s would pass just as happily against an unmapped path")
@@ -185,7 +192,10 @@ class StorefrontReadAuthenticationTests {
 
         @Bean
         JwtDecoder jwtDecoder() {
-            return token -> Jwt.withTokenValue(token).header("alg", "none").claim("sub", "unused").build();
+            return token -> Jwt.withTokenValue(token)
+                    .header("alg", "none")
+                    .claim("sub", "unused")
+                    .build();
         }
     }
 }

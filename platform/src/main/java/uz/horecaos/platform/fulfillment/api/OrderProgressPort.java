@@ -79,8 +79,14 @@ public interface OrderProgressPort {
      *                       offline client replaying twelve queued advances
      *                       produces twelve transitions rather than twenty-four
      */
-    ProposalOutcome propose(UUID tenantId, UUID orderId, OrderProgress progress,
-            String idempotencyKey, String reasonCode, String actorType, String actorId,
+    ProposalOutcome propose(
+            UUID tenantId,
+            UUID orderId,
+            OrderProgress progress,
+            String idempotencyKey,
+            String reasonCode,
+            String actorType,
+            String actorId,
             String correlationId);
 
     /**

@@ -11,10 +11,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.commercial.api.EnforcementMode;
 import uz.horecaos.platform.commercial.domain.EntitlementOverride;
 import uz.horecaos.platform.commercial.domain.Subscription;
@@ -86,9 +84,17 @@ public class JdbcSubscriptionStore {
      *
      * @return true when this call performed the transition
      */
-    public boolean transition(UUID tenantId, UUID subscriptionId, SubscriptionStatus from,
-            SubscriptionStatus to, long expectedVersion, Instant suspendedAt,
-            String suspensionReason, Instant cancelAt, Instant endedAt, Instant now) {
+    public boolean transition(
+            UUID tenantId,
+            UUID subscriptionId,
+            SubscriptionStatus from,
+            SubscriptionStatus to,
+            long expectedVersion,
+            Instant suspendedAt,
+            String suspensionReason,
+            Instant cancelAt,
+            Instant endedAt,
+            Instant now) {
 
         return jdbc.sql("""
                 UPDATE commercial.subscriptions
@@ -102,20 +108,28 @@ public class JdbcSubscriptionStore {
                  WHERE id = :id AND tenant_id = :tenantId
                    AND status = :from AND version = :expectedVersion
                 """)
-                .param("id", subscriptionId).param("tenantId", tenantId)
-                .param("from", from.name()).param("to", to.name())
-                .param("expectedVersion", expectedVersion)
-                .param("suspendedAt", utc(suspendedAt))
-                .param("suspensionReason", suspensionReason)
-                .param("cancelAt", utc(cancelAt))
-                .param("endedAt", utc(endedAt))
-                .param("now", utc(now))
-                .update() == 1;
+                        .param("id", subscriptionId)
+                        .param("tenantId", tenantId)
+                        .param("from", from.name())
+                        .param("to", to.name())
+                        .param("expectedVersion", expectedVersion)
+                        .param("suspendedAt", utc(suspendedAt))
+                        .param("suspensionReason", suspensionReason)
+                        .param("cancelAt", utc(cancelAt))
+                        .param("endedAt", utc(endedAt))
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /** Rolls the billing window forward without touching anything else. */
-    public boolean advancePeriod(UUID tenantId, UUID subscriptionId, Instant periodStart,
-            Instant periodEnd, long expectedVersion, Instant now) {
+    public boolean advancePeriod(
+            UUID tenantId,
+            UUID subscriptionId,
+            Instant periodStart,
+            Instant periodEnd,
+            long expectedVersion,
+            Instant now) {
 
         return jdbc.sql("""
                 UPDATE commercial.subscriptions
@@ -123,17 +137,31 @@ public class JdbcSubscriptionStore {
                        version = version + 1, updated_at = :now
                  WHERE id = :id AND tenant_id = :tenantId AND version = :expectedVersion
                 """)
-                .param("id", subscriptionId).param("tenantId", tenantId)
-                .param("periodStart", utc(periodStart)).param("periodEnd", utc(periodEnd))
-                .param("expectedVersion", expectedVersion).param("now", utc(now))
-                .update() == 1;
+                        .param("id", subscriptionId)
+                        .param("tenantId", tenantId)
+                        .param("periodStart", utc(periodStart))
+                        .param("periodEnd", utc(periodEnd))
+                        .param("expectedVersion", expectedVersion)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     // ------------------------------------------------------------- overrides
 
-    public void insertOverride(UUID id, UUID tenantId, String key, Long integerValue,
-            Boolean booleanValue, EnforcementMode mode, String reason, Instant validFrom,
-            Instant validUntil, String requestedBy, String approvedBy, Instant now) {
+    public void insertOverride(
+            UUID id,
+            UUID tenantId,
+            String key,
+            Long integerValue,
+            Boolean booleanValue,
+            EnforcementMode mode,
+            String reason,
+            Instant validFrom,
+            Instant validUntil,
+            String requestedBy,
+            String approvedBy,
+            Instant now) {
 
         jdbc.sql("""
                 INSERT INTO commercial.entitlement_overrides (
@@ -145,13 +173,18 @@ public class JdbcSubscriptionStore {
                     :mode, :reason, :validFrom, :validUntil,
                     :requestedBy, :approvedBy, 1, :now, :now)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("key", key)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("key", key)
                 .param("valueType", integerValue != null ? "INTEGER" : "BOOLEAN")
-                .param("booleanValue", booleanValue).param("integerValue", integerValue)
+                .param("booleanValue", booleanValue)
+                .param("integerValue", integerValue)
                 .param("mode", mode == null ? null : mode.name())
                 .param("reason", reason)
-                .param("validFrom", utc(validFrom)).param("validUntil", utc(validUntil))
-                .param("requestedBy", requestedBy).param("approvedBy", approvedBy)
+                .param("validFrom", utc(validFrom))
+                .param("validUntil", utc(validUntil))
+                .param("requestedBy", requestedBy)
+                .param("approvedBy", approvedBy)
                 .param("now", utc(now))
                 .update();
     }
@@ -163,9 +196,12 @@ public class JdbcSubscriptionStore {
                        version = version + 1, updated_at = :now
                  WHERE tenant_id = :tenantId AND entitlement_key = :key AND revoked_at IS NULL
                 """)
-                .param("tenantId", tenantId).param("key", key)
-                .param("revokedBy", revokedBy).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("key", key)
+                        .param("revokedBy", revokedBy)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -189,7 +225,8 @@ public class JdbcSubscriptionStore {
                         row.getObject("integer_value", Long.class),
                         row.getObject("boolean_value", Boolean.class),
                         row.getString("enforcement_mode") == null
-                                ? null : EnforcementMode.valueOf(row.getString("enforcement_mode")),
+                                ? null
+                                : EnforcementMode.valueOf(row.getString("enforcement_mode")),
                         row.getObject("valid_from", OffsetDateTime.class).toInstant(),
                         row.getObject("valid_until", OffsetDateTime.class).toInstant()))
                 .list();

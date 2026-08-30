@@ -8,7 +8,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -25,7 +24,6 @@ import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.kafka.KafkaContainer;
-
 import tools.jackson.databind.json.JsonMapper;
 
 class KafkaOutboxPublisherTests {
@@ -63,16 +61,18 @@ class KafkaOutboxPublisherTests {
 
         var producerFactory = new DefaultKafkaProducerFactory<String, String>(
                 Map.of(
-                        ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
-                        ProducerConfig.ACKS_CONFIG, "all",
-                        ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true),
+                        ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,
+                        bootstrapServers,
+                        ProducerConfig.ACKS_CONFIG,
+                        "all",
+                        ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,
+                        true),
                 new StringSerializer(),
                 new StringSerializer());
         KafkaTemplate<String, String> template = new KafkaTemplate<>(producerFactory);
         try {
             JsonMapper objectMapper = JsonMapper.builder().findAndAddModules().build();
-            KafkaOutboxPublisher publisher = new KafkaOutboxPublisher(
-                    template, objectMapper, Duration.ofSeconds(10));
+            KafkaOutboxPublisher publisher = new KafkaOutboxPublisher(template, objectMapper, Duration.ofSeconds(10));
             UUID eventId = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120401");
             UUID tenantId = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120402");
             publisher.publish(new ClaimedOutboxEvent(
@@ -101,11 +101,14 @@ class KafkaOutboxPublisherTests {
                     .contains("\"payload\":{")
                     .contains("\"traceId\":\"trace-42\"");
             assertThat(new String(
-                    record.headers().lastHeader("horecaos-event-id").value(),
-                    StandardCharsets.UTF_8)).isEqualTo(eventId.toString());
+                            record.headers().lastHeader("horecaos-event-id").value(), StandardCharsets.UTF_8))
+                    .isEqualTo(eventId.toString());
             assertThat(new String(
-                    record.headers().lastHeader("horecaos-correlation-id").value(),
-                    StandardCharsets.UTF_8)).isEqualTo("request-42");
+                            record.headers()
+                                    .lastHeader("horecaos-correlation-id")
+                                    .value(),
+                            StandardCharsets.UTF_8))
+                    .isEqualTo("request-42");
         } finally {
             template.destroy();
             producerFactory.destroy();
@@ -114,27 +117,31 @@ class KafkaOutboxPublisherTests {
     }
 
     private static void createTopic(String topic) throws Exception {
-        try (AdminClient admin = AdminClient.create(Map.of(
-                AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers))) {
+        try (AdminClient admin =
+                AdminClient.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers))) {
             admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).all().get();
         }
     }
 
     private static void deleteTopic(String topic) throws Exception {
-        try (AdminClient admin = AdminClient.create(Map.of(
-                AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers))) {
+        try (AdminClient admin =
+                AdminClient.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers))) {
             admin.deleteTopics(List.of(topic)).all().get();
         }
     }
 
     private static org.apache.kafka.clients.consumer.ConsumerRecord<String, String> consumeOne(String topic) {
         Map<String, Object> properties = Map.of(
-                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
-                ConsumerConfig.GROUP_ID_CONFIG, "horecaos-outbox-test-" + UUID.randomUUID(),
-                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
-                ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
-        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(
-                properties, new StringDeserializer(), new StringDeserializer())) {
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
+                bootstrapServers,
+                ConsumerConfig.GROUP_ID_CONFIG,
+                "horecaos-outbox-test-" + UUID.randomUUID(),
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
+                "earliest",
+                ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG,
+                false);
+        try (KafkaConsumer<String, String> consumer =
+                new KafkaConsumer<>(properties, new StringDeserializer(), new StringDeserializer())) {
             consumer.subscribe(List.of(topic));
             Instant deadline = Instant.now().plusSeconds(15);
             while (Instant.now().isBefore(deadline)) {

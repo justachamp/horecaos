@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 
 /**
@@ -19,12 +18,19 @@ class MetricRegistryTests {
         // figure. A surface naming a metric the registry does not define is the
         // build failure this test exists to be.
         List<String> named = List.of(
-                "revenue.gross.v1", "revenue.net.v1", "average_check.v1", "orders.count.v1",
-                "orders.cancelled.v1", "orders.late.v1", "prep_time.median.v1",
-                "sla_bucket_set.v1", "channel_mix.count.v1");
+                "revenue.gross.v1",
+                "revenue.net.v1",
+                "average_check.v1",
+                "orders.count.v1",
+                "orders.cancelled.v1",
+                "orders.late.v1",
+                "prep_time.median.v1",
+                "sla_bucket_set.v1",
+                "channel_mix.count.v1");
 
-        assertThat(named).allSatisfy(code ->
-                assertThat(MetricRegistry.find(code)).as(code).isPresent());
+        assertThat(named)
+                .allSatisfy(
+                        code -> assertThat(MetricRegistry.find(code)).as(code).isPresent());
     }
 
     @Test
@@ -55,34 +61,42 @@ class MetricRegistryTests {
                 .isFalse();
         assertThat(variance.openQuestion()).contains("ADR 0042");
         assertThat(variance.effectiveFrom())
-                .as("an unbuilt metric governs no dates, and saying otherwise implies "
-                        + "figures exist")
+                .as("an unbuilt metric governs no dates, and saying otherwise implies " + "figures exist")
                 .isNull();
     }
 
     @Test
     void aDigestChangesWithTheWordsItCovers() {
         MetricDefinition original = MetricRegistry.require("orders.count.v1");
-        MetricDefinition reworded = new MetricDefinition(original.id(), original.grain(),
-                original.sourceFact(), original.sourceAvailable(), original.aggregation(),
-                original.inclusionRule(), original.currencyRule(), original.roundingRule(),
-                original.unit(), original.definition() + " Slightly different.",
-                original.inclusion(), original.exclusion(), original.refundTreatment(),
-                original.openQuestion(), original.effectiveFrom());
+        MetricDefinition reworded = new MetricDefinition(
+                original.id(),
+                original.grain(),
+                original.sourceFact(),
+                original.sourceAvailable(),
+                original.aggregation(),
+                original.inclusionRule(),
+                original.currencyRule(),
+                original.roundingRule(),
+                original.unit(),
+                original.definition() + " Slightly different.",
+                original.inclusion(),
+                original.exclusion(),
+                original.refundTreatment(),
+                original.openQuestion(),
+                original.effectiveFrom());
 
         // This is what makes an edited-in-place definition a startup failure
         // rather than a signature standing over words finance never read.
         assertThat(reworded.digest()).isNotEqualTo(original.digest());
-        assertThat(original.digest()).isEqualTo(MetricRegistry.require("orders.count.v1").digest());
+        assertThat(original.digest())
+                .isEqualTo(MetricRegistry.require("orders.count.v1").digest());
     }
 
     @Test
     void aMetricIdRoundTripsThroughItsWireForm() {
-        assertThat(MetricId.parse("revenue.gross.v1"))
-                .isEqualTo(new MetricId("revenue.gross", 1));
+        assertThat(MetricId.parse("revenue.gross.v1")).isEqualTo(new MetricId("revenue.gross", 1));
         assertThat(new MetricId("revenue.gross", 1).code()).isEqualTo("revenue.gross.v1");
-        assertThatThrownBy(() -> MetricId.parse("revenue.gross"))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> MetricId.parse("revenue.gross")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -94,8 +108,7 @@ class MetricRegistryTests {
             long seconds = minutes * 60;
             List<SlaBucketSet.Bucket> matching = SlaBucketSet.buckets().stream()
                     .filter(bucket -> bucket.fromMinutes() <= seconds / 60
-                            && (bucket.toMinutesExclusive() == null
-                                || seconds / 60 < bucket.toMinutesExclusive()))
+                            && (bucket.toMinutesExclusive() == null || seconds / 60 < bucket.toMinutesExclusive()))
                     .toList();
 
             assertThat(matching).as("%d minutes", minutes).hasSize(1);
@@ -105,7 +118,6 @@ class MetricRegistryTests {
 
     @Test
     void anOrderThatClosedBeforeItOpenedIsRefusedRatherThanBucketed() {
-        assertThatThrownBy(() -> SlaBucketSet.bucketFor(-1))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> SlaBucketSet.bucketFor(-1)).isInstanceOf(IllegalArgumentException.class);
     }
 }

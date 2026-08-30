@@ -1,5 +1,14 @@
 package uz.horecaos.platform.payments.payme;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -8,15 +17,12 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
@@ -46,15 +52,6 @@ import uz.horecaos.platform.payments.infrastructure.payme.PaymeRpcException;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcFiscalDocumentStore;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentAttemptStore;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentIntentStore;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * Fiscalization on Payme, in both directions.
@@ -96,13 +93,18 @@ class PaymeFiscalTests {
         intents = mock(JdbcPaymentIntentStore.class);
         fiscalDocuments = mock(JdbcFiscalDocumentStore.class);
 
-        api = new PaymeMerchantApi(attempts, intents, fiscalDocuments,
-                mock(JdbcPaymeTransactionView.class), mock(PaymentAttemptService.class),
-                mock(OrderDirectory.class), clock);
+        api = new PaymeMerchantApi(
+                attempts,
+                intents,
+                fiscalDocuments,
+                mock(JdbcPaymeTransactionView.class),
+                mock(PaymentAttemptService.class),
+                mock(OrderDirectory.class),
+                clock);
         binding = binding();
 
-        when(attempts.findByExternalPaymentId(eq(tenantId), eq(PaymentProviderType.PAYME),
-                eq(PAYME_ID))).thenReturn(Optional.of(attempt()));
+        when(attempts.findByExternalPaymentId(eq(tenantId), eq(PaymentProviderType.PAYME), eq(PAYME_ID)))
+                .thenReturn(Optional.of(attempt()));
         when(intents.find(eq(tenantId), eq(intentId))).thenReturn(Optional.of(intent()));
         when(fiscalDocuments.listForOrder(tenantId, orderId)).thenReturn(List.of(sale()));
     }
@@ -127,9 +129,15 @@ class PaymeFiscalTests {
 
         ArgumentCaptor<FiscalDocument.FiscalEvidence> evidence =
                 ArgumentCaptor.forClass(FiscalDocument.FiscalEvidence.class);
-        verify(fiscalDocuments).recordEvidence(eq(tenantId), eq(saleDocumentId),
-                eq(FiscalStatus.ISSUED), eq(FiscalReason.PARTNER_FISCALIZED), evidence.capture(),
-                any(), eq(now));
+        verify(fiscalDocuments)
+                .recordEvidence(
+                        eq(tenantId),
+                        eq(saleDocumentId),
+                        eq(FiscalStatus.ISSUED),
+                        eq(FiscalReason.PARTNER_FISCALIZED),
+                        evidence.capture(),
+                        any(),
+                        eq(now));
 
         assertThat(evidence.getValue().fiscalSign()).isEqualTo("800031554082");
         assertThat(evidence.getValue().terminalId()).isEqualTo("EP000000000025");
@@ -150,12 +158,17 @@ class PaymeFiscalTests {
     @Test
     @DisplayName("a non-zero status_code fails the document rather than issuing it")
     void aNonZeroStatusCodeIsAFailure() {
-        api.dispatch(binding, "SetFiscalData",
-                fiscalParams("PERFORM", 14, "ОФД недоступен"));
+        api.dispatch(binding, "SetFiscalData", fiscalParams("PERFORM", 14, "ОФД недоступен"));
 
-        verify(fiscalDocuments).recordEvidence(eq(tenantId), eq(saleDocumentId),
-                eq(FiscalStatus.FAILED), eq(FiscalReason.PROVIDER_REJECTED), any(), any(),
-                eq(now));
+        verify(fiscalDocuments)
+                .recordEvidence(
+                        eq(tenantId),
+                        eq(saleDocumentId),
+                        eq(FiscalStatus.FAILED),
+                        eq(FiscalReason.PROVIDER_REJECTED),
+                        any(),
+                        any(),
+                        eq(now));
     }
 
     /**
@@ -171,8 +184,9 @@ class PaymeFiscalTests {
                 {"id":"%s","type":"PERFORM",
                  "fiscal_data":{"status_code":0,"message":"accepted"}}""".formatted(PAYME_ID)));
 
-        verify(fiscalDocuments).recordEvidence(eq(tenantId), eq(saleDocumentId),
-                eq(FiscalStatus.FAILED), any(), any(), any(), eq(now));
+        verify(fiscalDocuments)
+                .recordEvidence(
+                        eq(tenantId), eq(saleDocumentId), eq(FiscalStatus.FAILED), any(), any(), any(), eq(now));
     }
 
     /**
@@ -194,45 +208,56 @@ class PaymeFiscalTests {
 
         assertThat(inserted.getValue().documentType()).isEqualTo(FiscalDocumentType.REFUND);
         assertThat(inserted.getValue().correctsDocumentId()).isEqualTo(saleDocumentId);
-        verify(fiscalDocuments, never()).recordEvidence(any(), eq(saleDocumentId), any(), any(),
-                any(), any(), any());
+        verify(fiscalDocuments, never()).recordEvidence(any(), eq(saleDocumentId), any(), any(), any(), any(), any());
     }
 
     /** A repeated CANCEL finds the document the first one created. */
     @Test
     @DisplayName("a repeated CANCEL does not create a second refund document")
     void cancelIsIdempotent() {
-        FiscalDocument refund = new FiscalDocument(UUID.randomUUID(), tenantId, orderId,
-                UUID.randomUUID(), intentId, null, PaymentProviderType.PAYME,
-                FiscalDocumentType.REFUND, saleDocumentId, FiscalStatus.SUBMITTED,
-                FiscalReason.AWAITING_PROVIDER, "already here", List.of(), null, 1, now);
+        FiscalDocument refund = new FiscalDocument(
+                UUID.randomUUID(),
+                tenantId,
+                orderId,
+                UUID.randomUUID(),
+                intentId,
+                null,
+                PaymentProviderType.PAYME,
+                FiscalDocumentType.REFUND,
+                saleDocumentId,
+                FiscalStatus.SUBMITTED,
+                FiscalReason.AWAITING_PROVIDER,
+                "already here",
+                List.of(),
+                null,
+                1,
+                now);
         when(fiscalDocuments.listForOrder(tenantId, orderId)).thenReturn(List.of(sale(), refund));
 
         api.dispatch(binding, "SetFiscalData", fiscalParams("CANCEL", 0, "accepted"));
 
         verify(fiscalDocuments, never()).insert(any());
-        verify(fiscalDocuments).recordEvidence(eq(tenantId), eq(refund.id()), any(), any(), any(),
-                any(), eq(now));
+        verify(fiscalDocuments).recordEvidence(eq(tenantId), eq(refund.id()), any(), any(), any(), any(), eq(now));
     }
 
     @Test
     @DisplayName("an unrecognised type is -32602 naming the parameter")
     void refusesAnUnknownType() {
-        assertThatThrownBy(() ->
-                api.dispatch(binding, "SetFiscalData", fiscalParams("REVERSE", 0, "accepted")))
-                .isInstanceOfSatisfying(PaymeRpcException.class,
+        assertThatThrownBy(() -> api.dispatch(binding, "SetFiscalData", fiscalParams("REVERSE", 0, "accepted")))
+                .isInstanceOfSatisfying(
+                        PaymeRpcException.class,
                         failure -> assertThat(failure.code()).isEqualTo(-32602));
     }
 
     @Test
     @DisplayName("a receipt for a transaction HorecaOS does not hold is -32001")
     void unknownReceipt() {
-        when(attempts.findByExternalPaymentId(eq(tenantId), eq(PaymentProviderType.PAYME),
-                eq(PAYME_ID))).thenReturn(Optional.empty());
+        when(attempts.findByExternalPaymentId(eq(tenantId), eq(PaymentProviderType.PAYME), eq(PAYME_ID)))
+                .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() ->
-                api.dispatch(binding, "SetFiscalData", fiscalParams("PERFORM", 0, "accepted")))
-                .isInstanceOfSatisfying(PaymeRpcException.class,
+        assertThatThrownBy(() -> api.dispatch(binding, "SetFiscalData", fiscalParams("PERFORM", 0, "accepted")))
+                .isInstanceOfSatisfying(
+                        PaymeRpcException.class,
                         failure -> assertThat(failure.code()).isEqualTo(-32001));
     }
 
@@ -252,8 +277,7 @@ class PaymeFiscalTests {
     void acceptsAWellFormedReceipt() {
         PaymeFiscalAdapter adapter = new PaymeFiscalAdapter(intents, clock);
 
-        FiscalSubmission submission = adapter.submit(saleWith(
-                line("Лагман", 2, 25_000, List.of())), binding);
+        FiscalSubmission submission = adapter.submit(saleWith(line("Лагман", 2, 25_000, List.of())), binding);
 
         assertThat(submission.classification()).isEqualTo(ProviderOutcome.Classification.SUCCESS);
         assertThat(submission.status()).isEqualTo(FiscalStatus.SUBMITTED);
@@ -272,8 +296,8 @@ class PaymeFiscalTests {
     void rejectsAMarkedGood() {
         PaymeFiscalAdapter adapter = new PaymeFiscalAdapter(intents, clock);
 
-        FiscalSubmission submission = adapter.submit(saleWith(
-                line("Вода", 2, 25_000, List.of("0104870123456789"))), binding);
+        FiscalSubmission submission =
+                adapter.submit(saleWith(line("Вода", 2, 25_000, List.of("0104870123456789"))), binding);
 
         assertThat(submission.classification()).isEqualTo(ProviderOutcome.Classification.REJECTED);
         assertThat(submission.providerStatusCode()).isEqualTo("MARKING_CODES_UNSUPPORTED");
@@ -285,8 +309,7 @@ class PaymeFiscalTests {
     void rejectsAMismatchedReceipt() {
         PaymeFiscalAdapter adapter = new PaymeFiscalAdapter(intents, clock);
 
-        FiscalSubmission submission = adapter.submit(saleWith(
-                line("Лагман", 1, 25_000, List.of())), binding);
+        FiscalSubmission submission = adapter.submit(saleWith(line("Лагман", 1, 25_000, List.of())), binding);
 
         assertThat(submission.classification()).isEqualTo(ProviderOutcome.Classification.REJECTED);
         assertThat(submission.providerStatusCode()).isEqualTo("RECEIPT_DOES_NOT_MATCH_CHARGE");
@@ -297,49 +320,124 @@ class PaymeFiscalTests {
     // -----------------------------------------------------------------------
 
     private FiscalDocument sale() {
-        return new FiscalDocument(saleDocumentId, tenantId, orderId, UUID.randomUUID(), intentId,
-                null, PaymentProviderType.PAYME, FiscalDocumentType.SALE, null,
-                FiscalStatus.SUBMITTED, FiscalReason.AWAITING_PROVIDER, "awaiting Payme",
-                List.of(), null, 1, now.minus(Duration.ofHours(1)));
+        return new FiscalDocument(
+                saleDocumentId,
+                tenantId,
+                orderId,
+                UUID.randomUUID(),
+                intentId,
+                null,
+                PaymentProviderType.PAYME,
+                FiscalDocumentType.SALE,
+                null,
+                FiscalStatus.SUBMITTED,
+                FiscalReason.AWAITING_PROVIDER,
+                "awaiting Payme",
+                List.of(),
+                null,
+                1,
+                now.minus(Duration.ofHours(1)));
     }
 
     private FiscalDocument saleWith(FiscalReceiptLine line) {
-        return new FiscalDocument(saleDocumentId, tenantId, orderId, UUID.randomUUID(), intentId,
-                null, PaymentProviderType.PAYME, FiscalDocumentType.SALE, null,
-                FiscalStatus.PENDING, FiscalReason.AWAITING_CAPTURE, "awaiting capture",
-                List.of(line), null, 1, now.minus(Duration.ofHours(1)));
+        return new FiscalDocument(
+                saleDocumentId,
+                tenantId,
+                orderId,
+                UUID.randomUUID(),
+                intentId,
+                null,
+                PaymentProviderType.PAYME,
+                FiscalDocumentType.SALE,
+                null,
+                FiscalStatus.PENDING,
+                FiscalReason.AWAITING_CAPTURE,
+                "awaiting capture",
+                List.of(line),
+                null,
+                1,
+                now.minus(Duration.ofHours(1)));
     }
 
-    private static FiscalReceiptLine line(String name, int quantity, long unitPriceSom,
-            List<String> markingCodes) {
-        return new FiscalReceiptLine(name, "00702001001000001", "1234", 241092L, quantity,
-                new SomAmount(unitPriceSom, UZS), new SomAmount(unitPriceSom / 10, UZS), 12,
-                null, null, markingCodes, "123456789", null);
+    private static FiscalReceiptLine line(String name, int quantity, long unitPriceSom, List<String> markingCodes) {
+        return new FiscalReceiptLine(
+                name,
+                "00702001001000001",
+                "1234",
+                241092L,
+                quantity,
+                new SomAmount(unitPriceSom, UZS),
+                new SomAmount(unitPriceSom / 10, UZS),
+                12,
+                null,
+                null,
+                markingCodes,
+                "123456789",
+                null);
     }
 
     private PaymentAttempt attempt() {
-        return new PaymentAttempt(attemptId, tenantId, intentId, PaymentProviderType.PAYME,
-                bindingId, ORDER_REFERENCE, LocalDate.of(2026, 8, 22), PAYME_ID, null,
-                new SomAmount(AMOUNT_SOM, UZS), PaymentAttemptStatus.CAPTURED,
-                PresentationKind.PAYMENT_LINK, null, now.minus(Duration.ofHours(2)),
-                now.plus(Duration.ofHours(10)), null, null, 1, now.minus(Duration.ofHours(2)),
+        return new PaymentAttempt(
+                attemptId,
+                tenantId,
+                intentId,
+                PaymentProviderType.PAYME,
+                bindingId,
+                ORDER_REFERENCE,
+                LocalDate.of(2026, 8, 22),
+                PAYME_ID,
+                null,
+                new SomAmount(AMOUNT_SOM, UZS),
+                PaymentAttemptStatus.CAPTURED,
+                PresentationKind.PAYMENT_LINK,
+                null,
+                now.minus(Duration.ofHours(2)),
+                now.plus(Duration.ofHours(10)),
+                null,
+                null,
+                1,
+                now.minus(Duration.ofHours(2)),
                 now);
     }
 
     private PaymentIntent intent() {
-        return new PaymentIntent(intentId, tenantId, orderId, UUID.randomUUID(), UUID.randomUUID(),
-                null, UUID.randomUUID(), PaymentTender.PROVIDER, PaymentMethod.PAYME,
-                PaymentProviderType.PAYME, new SomAmount(AMOUNT_SOM, UZS),
-                PaymentIntentStatus.PAID, CaptureTiming.BEFORE_CONFIRMATION, "idem-" + intentId,
-                1, now.minus(Duration.ofHours(2)), now);
+        return new PaymentIntent(
+                intentId,
+                tenantId,
+                orderId,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                null,
+                UUID.randomUUID(),
+                PaymentTender.PROVIDER,
+                PaymentMethod.PAYME,
+                PaymentProviderType.PAYME,
+                new SomAmount(AMOUNT_SOM, UZS),
+                PaymentIntentStatus.PAID,
+                CaptureTiming.BEFORE_CONFIRMATION,
+                "idem-" + intentId,
+                1,
+                now.minus(Duration.ofHours(2)),
+                now);
     }
 
     private ProviderBinding binding() {
-        return new ProviderBinding(bindingId, tenantId, UUID.randomUUID(),
-                PaymentProviderType.PAYME, UUID.randomUUID(), UUID.randomUUID(),
-                "587f72c72cac0d162c722ae2", null, null,
+        return new ProviderBinding(
+                bindingId,
+                tenantId,
+                UUID.randomUUID(),
+                PaymentProviderType.PAYME,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "587f72c72cac0d162c722ae2",
+                null,
+                null,
                 new SecretReference("test", SecretCategory.PROVIDER_PAYMENT, "payme", "cashbox"),
-                "payme-cashbox-one", false, true, LocalDate.of(2026, 1, 1), null);
+                "payme-cashbox-one",
+                false,
+                true,
+                LocalDate.of(2026, 1, 1),
+                null);
     }
 
     /** The docs' own {@code SetFiscalData} example, with the status code varied. */
@@ -349,8 +447,7 @@ class PaymeFiscalTests {
                  "fiscal_data":{"receipt_id":121,"status_code":%d,"message":"%s",
                                 "terminal_id":"EP000000000025","fiscal_sign":"800031554082",
                                 "qr_code_url":"https://ofd.soliq.uz/check?t=EP000000000025",
-                                "date":"20220706221021"}}"""
-                .formatted(PAYME_ID, type, statusCode, message));
+                                "date":"20220706221021"}}""".formatted(PAYME_ID, type, statusCode, message));
     }
 
     private static JsonNode params(String json) {

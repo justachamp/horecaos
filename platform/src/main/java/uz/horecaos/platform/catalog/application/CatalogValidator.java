@@ -7,9 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Category;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Fee;
@@ -44,8 +42,11 @@ public class CatalogValidator {
             // Surfaced on every report rather than only in a startup log, so an
             // operator reading "publication succeeded" also reads that one of
             // its checks did not actually run.
-            findings.add(ValidationFinding.warning("PRICING_VALIDATION_NOT_WIRED",
-                    EntityType.CATALOG, null, null,
+            findings.add(ValidationFinding.warning(
+                    "PRICING_VALIDATION_NOT_WIRED",
+                    EntityType.CATALOG,
+                    null,
+                    null,
                     "No pricing module is wired; variants were not checked for an active price"));
         }
 
@@ -96,34 +97,39 @@ public class CatalogValidator {
             FiscalClassification fiscal = snapshot.effectiveClassification(variant);
             if (!fiscal.isComplete()) {
                 incomplete++;
-                findings.add(ValidationFinding.warning("FISCAL_CLASSIFICATION_MISSING",
-                        EntityType.VARIANT, variant.id(), variant.sku(),
+                findings.add(ValidationFinding.warning(
+                        "FISCAL_CLASSIFICATION_MISSING",
+                        EntityType.VARIANT,
+                        variant.id(),
+                        variant.sku(),
                         describeGap(fiscal, "this variant")));
             }
-            reportUnknownCode(snapshot, findings, fiscal,
-                    EntityType.VARIANT, variant.id(), variant.sku());
+            reportUnknownCode(snapshot, findings, fiscal, EntityType.VARIANT, variant.id(), variant.sku());
         }
 
         for (ModifierGroup group : snapshot.modifierGroups()) {
             if (group.status() != Status.ACTIVE) {
                 continue;
             }
-            for (ModifierOption option : snapshot.optionsByGroup()
-                    .getOrDefault(group.id(), List.of())) {
+            for (ModifierOption option : snapshot.optionsByGroup().getOrDefault(group.id(), List.of())) {
                 if (option.status() != Status.ACTIVE) {
                     continue;
                 }
                 FiscalClassification fiscal = snapshot.effectiveClassification(option);
                 if (!fiscal.isComplete()) {
                     incomplete++;
-                    findings.add(ValidationFinding.warning("FISCAL_CLASSIFICATION_MISSING",
-                            EntityType.MODIFIER_OPTION, option.id(), option.code(),
-                            describeGap(fiscal, option.linkedVariantId() == null
-                                    ? "this modifier option"
-                                    : "this modifier option or the variant it links to")));
+                    findings.add(ValidationFinding.warning(
+                            "FISCAL_CLASSIFICATION_MISSING",
+                            EntityType.MODIFIER_OPTION,
+                            option.id(),
+                            option.code(),
+                            describeGap(
+                                    fiscal,
+                                    option.linkedVariantId() == null
+                                            ? "this modifier option"
+                                            : "this modifier option or the variant it links to")));
                 }
-                reportUnknownCode(snapshot, findings, fiscal,
-                        EntityType.MODIFIER_OPTION, option.id(), option.code());
+                reportUnknownCode(snapshot, findings, fiscal, EntityType.MODIFIER_OPTION, option.id(), option.code());
             }
         }
 
@@ -133,15 +139,19 @@ public class CatalogValidator {
             // One catalog-level finding naming the whole gap, so an operator
             // reading a report full of per-node warnings also reads why none of
             // them stopped the publication.
-            findings.add(ValidationFinding.warning("FISCAL_CLASSIFICATION_NOT_ENFORCED",
-                    EntityType.CATALOG, null, null,
+            findings.add(ValidationFinding.warning(
+                    "FISCAL_CLASSIFICATION_NOT_ENFORCED",
+                    EntityType.CATALOG,
+                    null,
+                    null,
                     ("%d priceable nodes cannot yet produce a conformant receipt line. "
-                            + "ADR 0038 makes this a publication blocker at rollout stage 3, "
-                            + "once bulk classification tooling and the ИКПУ/MXIK reference "
-                            + "import exist; until then it is reported and not enforced. "
-                            + "Aggregators already reject menus without these codes, and on "
-                            + "the Payme path there is no later checkpoint — the line data is "
-                            + "fixed before the customer pays.").formatted(incomplete)));
+                                    + "ADR 0038 makes this a publication blocker at rollout stage 3, "
+                                    + "once bulk classification tooling and the ИКПУ/MXIK reference "
+                                    + "import exist; until then it is reported and not enforced. "
+                                    + "Aggregators already reject menus without these codes, and on "
+                                    + "the Payme path there is no later checkpoint — the line data is "
+                                    + "fixed before the customer pays.")
+                            .formatted(incomplete)));
         }
     }
 
@@ -173,20 +183,26 @@ public class CatalogValidator {
         if (delivery == null) {
             // V0028 seeds one per brand and the authoring service creates one on
             // demand, so this is a brand created between the two.
-            findings.add(ValidationFinding.warning("FISCAL_DELIVERY_FEE_UNCLASSIFIED",
-                    EntityType.FEE, null, Fee.DELIVERY,
+            findings.add(ValidationFinding.warning(
+                    "FISCAL_DELIVERY_FEE_UNCLASSIFIED",
+                    EntityType.FEE,
+                    null,
+                    Fee.DELIVERY,
                     "This brand delivers but has no delivery fee node to classify"));
             return 1;
         }
 
-        FiscalClassification fiscal = snapshot.fiscal().byNode()
-                .getOrDefault(delivery.id(), FiscalClassification.unclassified());
+        FiscalClassification fiscal =
+                snapshot.fiscal().byNode().getOrDefault(delivery.id(), FiscalClassification.unclassified());
         if (fiscal.isComplete()) {
             return 0;
         }
 
-        findings.add(ValidationFinding.warning("FISCAL_DELIVERY_FEE_UNCLASSIFIED",
-                EntityType.FEE, delivery.id(), delivery.code(),
+        findings.add(ValidationFinding.warning(
+                "FISCAL_DELIVERY_FEE_UNCLASSIFIED",
+                EntityType.FEE,
+                delivery.id(),
+                delivery.code(),
                 describeGap(fiscal, "the delivery fee")));
         return 1;
     }
@@ -199,17 +215,24 @@ public class CatalogValidator {
      * catalog unknown would bury the findings that mean something under one that
      * means the import is outstanding.
      */
-    private void reportUnknownCode(Snapshot snapshot, List<ValidationFinding> findings,
-            FiscalClassification fiscal, EntityType type, UUID entityId, String entityCode) {
+    private void reportUnknownCode(
+            Snapshot snapshot,
+            List<ValidationFinding> findings,
+            FiscalClassification fiscal,
+            EntityType type,
+            UUID entityId,
+            String entityCode) {
 
         if (!snapshot.fiscal().referenceLoaded() || fiscal.mxikCode() == null) {
             return;
         }
         if (!snapshot.fiscal().referenceCodes().contains(fiscal.mxikCode())) {
-            findings.add(ValidationFinding.warning("FISCAL_MXIK_CODE_UNKNOWN",
-                    type, entityId, entityCode,
-                    "ИКПУ/MXIK %s is not in the imported reference list. A code the tax "
-                            .formatted(fiscal.mxikCode())
+            findings.add(ValidationFinding.warning(
+                    "FISCAL_MXIK_CODE_UNKNOWN",
+                    type,
+                    entityId,
+                    entityCode,
+                    "ИКПУ/MXIK %s is not in the imported reference list. A code the tax ".formatted(fiscal.mxikCode())
                             + "authority does not recognise is a classification error on a "
                             + "legal document, and it is most often a transcription slip"));
         }
@@ -218,27 +241,32 @@ public class CatalogValidator {
     /** Names the missing fields rather than the fact that some are missing. */
     private static String describeGap(FiscalClassification fiscal, String subject) {
         if (fiscal.isEmpty()) {
-            return "Nothing is classified on %s: it needs %s".formatted(
-                    subject,
-                    String.join(", ", FiscalClassification.unclassified().missingFields()));
+            return "Nothing is classified on %s: it needs %s"
+                    .formatted(
+                            subject,
+                            String.join(
+                                    ", ", FiscalClassification.unclassified().missingFields()));
         }
-        return "%s is missing %s".formatted(
-                Character.toUpperCase(subject.charAt(0)) + subject.substring(1),
-                String.join(", ", fiscal.missingFields()));
+        return "%s is missing %s"
+                .formatted(
+                        Character.toUpperCase(subject.charAt(0)) + subject.substring(1),
+                        String.join(", ", fiscal.missingFields()));
     }
 
     private void validateProducts(Snapshot snapshot, List<ValidationFinding> findings) {
         for (Product product : snapshot.products()) {
-            List<Variant> variants = snapshot.variantsByProduct()
-                    .getOrDefault(product.id(), List.of()).stream()
+            List<Variant> variants = snapshot.variantsByProduct().getOrDefault(product.id(), List.of()).stream()
                     .filter(variant -> variant.status() == Status.ACTIVE)
                     .toList();
 
             if (variants.isEmpty()) {
                 // A product with no sellable variant renders as a menu entry that
                 // cannot be added to a basket.
-                findings.add(ValidationFinding.blocker("PRODUCT_HAS_NO_ACTIVE_VARIANT",
-                        EntityType.PRODUCT, product.id(), product.code(),
+                findings.add(ValidationFinding.blocker(
+                        "PRODUCT_HAS_NO_ACTIVE_VARIANT",
+                        EntityType.PRODUCT,
+                        product.id(),
+                        product.code(),
                         "A product must have at least one active variant to be published"));
                 continue;
             }
@@ -247,8 +275,11 @@ public class CatalogValidator {
             if (defaults == 0 && variants.size() > 1) {
                 // With several variants and no default, the storefront has no
                 // basis for choosing what a single tap adds.
-                findings.add(ValidationFinding.blocker("PRODUCT_HAS_NO_DEFAULT_VARIANT",
-                        EntityType.PRODUCT, product.id(), product.code(),
+                findings.add(ValidationFinding.blocker(
+                        "PRODUCT_HAS_NO_DEFAULT_VARIANT",
+                        EntityType.PRODUCT,
+                        product.id(),
+                        product.code(),
                         "A product with several variants must mark one as the default"));
             }
         }
@@ -262,8 +293,11 @@ public class CatalogValidator {
             // Pricing owns money, but a variant with no price cannot be sold, so
             // the absence is a catalog blocker even though the fact is not ours.
             if (!snapshot.pricedVariantIds().contains(variant.id())) {
-                findings.add(ValidationFinding.blocker("VARIANT_HAS_NO_ACTIVE_PRICE",
-                        EntityType.VARIANT, variant.id(), variant.sku(),
+                findings.add(ValidationFinding.blocker(
+                        "VARIANT_HAS_NO_ACTIVE_PRICE",
+                        EntityType.VARIANT,
+                        variant.id(),
+                        variant.sku(),
                         "No active price exists for this variant"));
             }
         }
@@ -274,14 +308,16 @@ public class CatalogValidator {
             if (group.status() != Status.ACTIVE) {
                 continue;
             }
-            List<ModifierOption> options = snapshot.optionsByGroup()
-                    .getOrDefault(group.id(), List.of()).stream()
+            List<ModifierOption> options = snapshot.optionsByGroup().getOrDefault(group.id(), List.of()).stream()
                     .filter(option -> option.status() == Status.ACTIVE)
                     .toList();
 
             if (options.isEmpty()) {
-                findings.add(ValidationFinding.blocker("MODIFIER_GROUP_HAS_NO_OPTIONS",
-                        EntityType.MODIFIER_GROUP, group.id(), group.code(),
+                findings.add(ValidationFinding.blocker(
+                        "MODIFIER_GROUP_HAS_NO_OPTIONS",
+                        EntityType.MODIFIER_GROUP,
+                        group.id(),
+                        group.code(),
                         "An active modifier group must offer at least one active option"));
                 continue;
             }
@@ -294,8 +330,11 @@ public class CatalogValidator {
                     : options.size();
 
             if (group.minimumSelections() > selectableCapacity) {
-                findings.add(ValidationFinding.blocker("MODIFIER_GROUP_MINIMUM_UNSATISFIABLE",
-                        EntityType.MODIFIER_GROUP, group.id(), group.code(),
+                findings.add(ValidationFinding.blocker(
+                        "MODIFIER_GROUP_MINIMUM_UNSATISFIABLE",
+                        EntityType.MODIFIER_GROUP,
+                        group.id(),
+                        group.code(),
                         "Requires %d selections but only %d are available"
                                 .formatted(group.minimumSelections(), selectableCapacity)));
             }
@@ -305,8 +344,11 @@ public class CatalogValidator {
                 if (linked != null && !snapshot.activeVariantIds().contains(linked)) {
                     // A modifier pointing at an archived variant adds an item to
                     // the basket that no longer exists.
-                    findings.add(ValidationFinding.blocker("MODIFIER_OPTION_LINKS_INACTIVE_VARIANT",
-                            EntityType.MODIFIER_OPTION, option.id(), option.code(),
+                    findings.add(ValidationFinding.blocker(
+                            "MODIFIER_OPTION_LINKS_INACTIVE_VARIANT",
+                            EntityType.MODIFIER_OPTION,
+                            option.id(),
+                            option.code(),
                             "Linked variant " + linked + " is not active"));
                 }
             }
@@ -329,15 +371,21 @@ public class CatalogValidator {
 
             while (current != null) {
                 if (!seen.add(current)) {
-                    findings.add(ValidationFinding.blocker("CATEGORY_TREE_HAS_CYCLE",
-                            EntityType.CATEGORY, category.id(), category.code(),
+                    findings.add(ValidationFinding.blocker(
+                            "CATEGORY_TREE_HAS_CYCLE",
+                            EntityType.CATEGORY,
+                            category.id(),
+                            category.code(),
                             "Category ancestry forms a cycle: " + seen));
                     break;
                 }
                 Category node = byId.get(current);
                 if (node == null) {
-                    findings.add(ValidationFinding.blocker("CATEGORY_PARENT_MISSING",
-                            EntityType.CATEGORY, category.id(), category.code(),
+                    findings.add(ValidationFinding.blocker(
+                            "CATEGORY_PARENT_MISSING",
+                            EntityType.CATEGORY,
+                            category.id(),
+                            category.code(),
                             "Ancestor " + current + " is not in this catalog"));
                     break;
                 }
@@ -358,24 +406,33 @@ public class CatalogValidator {
         for (Product product : snapshot.products()) {
             if (product.status() == Status.ACTIVE
                     && !snapshot.hasTranslation(EntityType.PRODUCT, product.id(), locale)) {
-                findings.add(ValidationFinding.blocker("MISSING_TRANSLATION",
-                        EntityType.PRODUCT, product.id(), product.code(),
+                findings.add(ValidationFinding.blocker(
+                        "MISSING_TRANSLATION",
+                        EntityType.PRODUCT,
+                        product.id(),
+                        product.code(),
                         "No name in the brand default locale " + locale));
             }
         }
         for (Category category : snapshot.categories()) {
             if (category.status() == Status.ACTIVE
                     && !snapshot.hasTranslation(EntityType.CATEGORY, category.id(), locale)) {
-                findings.add(ValidationFinding.blocker("MISSING_TRANSLATION",
-                        EntityType.CATEGORY, category.id(), category.code(),
+                findings.add(ValidationFinding.blocker(
+                        "MISSING_TRANSLATION",
+                        EntityType.CATEGORY,
+                        category.id(),
+                        category.code(),
                         "No name in the brand default locale " + locale));
             }
         }
         for (ModifierGroup group : snapshot.modifierGroups()) {
             if (group.status() == Status.ACTIVE
                     && !snapshot.hasTranslation(EntityType.MODIFIER_GROUP, group.id(), locale)) {
-                findings.add(ValidationFinding.blocker("MISSING_TRANSLATION",
-                        EntityType.MODIFIER_GROUP, group.id(), group.code(),
+                findings.add(ValidationFinding.blocker(
+                        "MISSING_TRANSLATION",
+                        EntityType.MODIFIER_GROUP,
+                        group.id(),
+                        group.code(),
                         "No name in the brand default locale " + locale));
             }
         }
@@ -389,10 +446,14 @@ public class CatalogValidator {
      * itself when the upload finishes.
      */
     private void validateMedia(Snapshot snapshot, List<ValidationFinding> findings) {
-        for (Map.Entry<MediaAssetId, Set<UUID>> entry : snapshot.mediaReferences().entrySet()) {
+        for (Map.Entry<MediaAssetId, Set<UUID>> entry :
+                snapshot.mediaReferences().entrySet()) {
             if (!snapshot.displayableMedia().contains(entry.getKey())) {
-                findings.add(ValidationFinding.blocker("MEDIA_NOT_AVAILABLE",
-                        EntityType.PRODUCT, entry.getValue().iterator().next(), null,
+                findings.add(ValidationFinding.blocker(
+                        "MEDIA_NOT_AVAILABLE",
+                        EntityType.PRODUCT,
+                        entry.getValue().iterator().next(),
+                        null,
                         "Media asset %s is not available".formatted(entry.getKey())));
             }
         }
@@ -411,7 +472,9 @@ public class CatalogValidator {
                 .filter(variantId -> !known.contains(variantId))
                 .forEach(variantId -> findings.add(ValidationFinding.blocker(
                         "OFFERING_REFERENCES_UNKNOWN_VARIANT",
-                        EntityType.VARIANT, variantId, null,
+                        EntityType.VARIANT,
+                        variantId,
+                        null,
                         "A location offers a variant that is not active in this brand")));
     }
 
@@ -453,8 +516,7 @@ public class CatalogValidator {
          * a thing lived somewhere other than on the thing.
          */
         public FiscalClassification effectiveClassification(Variant variant) {
-            return fiscal.byNode().getOrDefault(variant.id(),
-                    FiscalClassification.unclassified());
+            return fiscal.byNode().getOrDefault(variant.id(), FiscalClassification.unclassified());
         }
 
         /**
@@ -467,8 +529,7 @@ public class CatalogValidator {
          * independently and then disagree.
          */
         public FiscalClassification effectiveClassification(ModifierOption option) {
-            FiscalClassification own = fiscal.byNode().getOrDefault(option.id(),
-                    FiscalClassification.unclassified());
+            FiscalClassification own = fiscal.byNode().getOrDefault(option.id(), FiscalClassification.unclassified());
             if (option.linkedVariantId() == null) {
                 return own;
             }
@@ -493,9 +554,7 @@ public class CatalogValidator {
          */
         public LocalizedText text(EntityType type, UUID entityId, String locale) {
             LocalizedText requested = translations.get(translationKey(type, entityId, locale));
-            return requested != null
-                    ? requested
-                    : translations.get(translationKey(type, entityId, defaultLocale));
+            return requested != null ? requested : translations.get(translationKey(type, entityId, defaultLocale));
         }
 
         public static String translationKey(EntityType type, UUID entityId, String locale) {
@@ -504,7 +563,7 @@ public class CatalogValidator {
     }
 
     /** A name and optional description in one locale. */
-    public record LocalizedText(String locale, String name, String description) { }
+    public record LocalizedText(String locale, String name, String description) {}
 
     /**
      * Everything the fiscal rules need, loaded with the rest of the snapshot

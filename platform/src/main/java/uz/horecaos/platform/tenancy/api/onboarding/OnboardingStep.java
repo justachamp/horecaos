@@ -13,7 +13,6 @@ import java.util.Optional;
  * no catalogue check, not wonder whether one ran.
  */
 public enum OnboardingStep {
-
     KEYCLOAK_ORGANIZATION_RECONCILE(1, Phase.PROVISIONING, true, null),
     TENANT_OWNER_LINK_OR_INVITE(2, Phase.PROVISIONING, true, null),
     DEFAULT_CONFIGURATION_APPLY(3, Phase.CONFIGURING, true, null),

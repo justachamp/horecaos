@@ -4,10 +4,8 @@ import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -46,8 +44,15 @@ public class CourierRateCardService {
     @Transactional
     public UUID author(NewRateCard command) {
         UUID cardId = UUID.randomUUID();
-        cards.insertCard(cardId, command.tenantId(), command.brandId(), command.locationId(),
-                command.courierTypeId(), command.code(), command.cardVersion(), command.currency());
+        cards.insertCard(
+                cardId,
+                command.tenantId(),
+                command.brandId(),
+                command.locationId(),
+                command.courierTypeId(),
+                command.code(),
+                command.cardVersion(),
+                command.currency());
         for (RateComponent component : command.components()) {
             cards.insertComponent(UUID.randomUUID(), command.tenantId(), cardId, component);
         }
@@ -61,8 +66,7 @@ public class CourierRateCardService {
     @Transactional
     public RateCard activate(UUID tenantId, UUID cardId, ActorRef actor, String reason) {
         RateCard card = cards.findCard(tenantId, cardId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No such rate card: " + cardId));
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such rate card: " + cardId));
         try {
             RateCardValidator.validateForActivation(card);
         } catch (RateCardValidator.InvalidRateCardException invalid) {
@@ -70,8 +74,7 @@ public class CourierRateCardService {
         }
 
         if (!cards.activate(tenantId, cardId, actor.subject(), clock.instant())) {
-            throw new ApiException(ErrorCode.UNPROCESSABLE_STATE,
-                    "Only a DRAFT card can be activated");
+            throw new ApiException(ErrorCode.UNPROCESSABLE_STATE, "Only a DRAFT card can be activated");
         }
 
         audit.record(AuditFact.of("courier.ratecard.activated", AuditClass.BUSINESS)
@@ -79,8 +82,11 @@ public class CourierRateCardService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("courier_rate_card", cardId)
                 .because(reason)
-                .changed(Map.of("cardVersion", card.version(),
-                        "componentCount", card.components().size()))
+                .changed(Map.of(
+                        "cardVersion",
+                        card.version(),
+                        "componentCount",
+                        card.components().size()))
                 .usingCapability("courier.ratecard.manage")
                 .correlatedBy("courier-rate-card")
                 .occurredAt(clock.instant())
@@ -89,6 +95,13 @@ public class CourierRateCardService {
         return card;
     }
 
-    public record NewRateCard(UUID tenantId, UUID brandId, UUID locationId, UUID courierTypeId,
-            String code, int cardVersion, String currency, List<RateComponent> components) { }
+    public record NewRateCard(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID courierTypeId,
+            String code,
+            int cardVersion,
+            String currency,
+            List<RateComponent> components) {}
 }

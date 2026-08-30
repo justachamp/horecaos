@@ -2,7 +2,6 @@ package uz.horecaos.platform.migration.web;
 
 import java.time.Instant;
 import java.util.UUID;
-
 import uz.horecaos.platform.iam.api.protection.Classified;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.migration.application.MigrationRunStore.Counters;
@@ -59,21 +58,38 @@ public record RunView(
      *                    idempotency record could be encrypted under.
      */
     public record RunCountersView(
-            long scanned, long created, long updated, long skipped,
+            long scanned,
+            long created,
+            long updated,
+            long skipped,
+
             @Classified(value = DataClass.INTERNAL, reason = "a count of rows, not a tax number")
             long quarantined) {
 
         static RunCountersView of(Counters counters) {
-            return new RunCountersView(counters.scanned(), counters.created(), counters.updated(),
-                    counters.skipped(), counters.quarantined());
+            return new RunCountersView(
+                    counters.scanned(),
+                    counters.created(),
+                    counters.updated(),
+                    counters.skipped(),
+                    counters.quarantined());
         }
     }
 
     static RunView of(RunRow row) {
         return new RunView(
-                row.id(), row.scopeId(), row.runType(), row.status(),
-                row.sourceWatermark(), row.targetWatermark(), row.transformationVersion(),
-                RunCountersView.of(row.counters()), row.checksum(), row.startedBy(),
-                row.version(), row.startedAt(), row.finishedAt());
+                row.id(),
+                row.scopeId(),
+                row.runType(),
+                row.status(),
+                row.sourceWatermark(),
+                row.targetWatermark(),
+                row.transformationVersion(),
+                RunCountersView.of(row.counters()),
+                row.checksum(),
+                row.startedBy(),
+                row.version(),
+                row.startedAt(),
+                row.finishedAt());
     }
 }

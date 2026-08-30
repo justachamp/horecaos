@@ -2,7 +2,6 @@ package uz.horecaos.platform.fulfillment.domain.sourcing;
 
 import java.util.Objects;
 import java.util.UUID;
-
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.Waypoint;
 
 /**
@@ -58,8 +57,7 @@ public record SourcingRequest(
         Objects.requireNonNull(dropoff, "A dropoff waypoint is required");
         Objects.requireNonNull(currency, "A currency is required");
         if (distanceMeters < 0) {
-            throw new IllegalArgumentException(
-                    "A delivery distance cannot be negative, was " + distanceMeters);
+            throw new IllegalArgumentException("A delivery distance cannot be negative, was " + distanceMeters);
         }
     }
 

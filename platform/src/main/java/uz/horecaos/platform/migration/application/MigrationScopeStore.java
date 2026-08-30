@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.domain.OwnershipModes;
 import uz.horecaos.platform.migration.domain.ScopeState;
@@ -51,8 +50,7 @@ public interface MigrationScopeStore {
      */
     Optional<ScopeRow> lockClaim(UUID tenantId, UUID scopeId);
 
-    Optional<ScopeRow> findClaim(UUID tenantId, MigrationCapability capability,
-            UUID brandId, UUID locationId);
+    Optional<ScopeRow> findClaim(UUID tenantId, MigrationCapability capability, UUID brandId, UUID locationId);
 
     void insert(ScopeRow scope, Instant now);
 
@@ -68,8 +66,15 @@ public interface MigrationScopeStore {
      *
      * @return the new version, or empty when the row no longer matches
      */
-    Optional<Integer> transition(UUID tenantId, UUID scopeId, ScopeState from, ScopeState to,
-            OwnershipModes modes, Map<String, Object> checkpoint, int expectedVersion, Instant now);
+    Optional<Integer> transition(
+            UUID tenantId,
+            UUID scopeId,
+            ScopeState from,
+            ScopeState to,
+            OwnershipModes modes,
+            Map<String, Object> checkpoint,
+            int expectedVersion,
+            Instant now);
 
     /**
      * Replaces the scope's checkpoint without moving it.
@@ -82,8 +87,8 @@ public interface MigrationScopeStore {
      *
      * @return the new version, or empty when another writer moved first
      */
-    Optional<Integer> updateCheckpoint(UUID tenantId, UUID scopeId,
-            Map<String, Object> checkpoint, int expectedVersion, Instant now);
+    Optional<Integer> updateCheckpoint(
+            UUID tenantId, UUID scopeId, Map<String, Object> checkpoint, int expectedVersion, Instant now);
 
     /**
      * The scopes of a program, oldest first, after {@code afterScopeId}.
@@ -129,5 +134,5 @@ public interface MigrationScopeStore {
             ScopeState state,
             Instant stateEnteredAt,
             Map<String, Object> checkpoint,
-            int version) { }
+            int version) {}
 }

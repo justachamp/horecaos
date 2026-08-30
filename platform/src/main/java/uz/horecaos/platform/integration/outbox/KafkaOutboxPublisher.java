@@ -5,13 +5,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
-
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -77,5 +75,5 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
             String causationId,
             Instant occurredAt,
             JsonNode trace,
-            JsonNode payload) { }
+            JsonNode payload) {}
 }

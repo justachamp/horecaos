@@ -2,19 +2,16 @@ package uz.horecaos.platform.media.infrastructure.storage;
 
 import java.net.URI;
 import java.time.Duration;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
-import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
-
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
@@ -32,7 +29,8 @@ import uz.horecaos.platform.iam.api.secrets.SecretResolver;
 public class ObjectStorageConfiguration {
 
     @Bean
-    S3Client s3Client(SecretResolver secrets,
+    S3Client s3Client(
+            SecretResolver secrets,
             @Value("${horecaos.media.endpoint:http://localhost:9000}") String endpoint,
             @Value("${horecaos.media.region:us-east-1}") String region,
             @Value("${horecaos.media.access-key-reference}") String accessKeyReference,
@@ -59,12 +57,14 @@ public class ObjectStorageConfiguration {
                         .build())
                 // MinIO serves path-style addressing; virtual-host style would
                 // require per-bucket DNS that does not exist locally.
-                .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+                .serviceConfiguration(
+                        S3Configuration.builder().pathStyleAccessEnabled(true).build())
                 .build();
     }
 
     @Bean
-    S3Presigner s3Presigner(SecretResolver secrets,
+    S3Presigner s3Presigner(
+            SecretResolver secrets,
             @Value("${horecaos.media.endpoint:http://localhost:9000}") String endpoint,
             @Value("${horecaos.media.region:us-east-1}") String region,
             @Value("${horecaos.media.access-key-reference}") String accessKeyReference,
@@ -79,7 +79,8 @@ public class ObjectStorageConfiguration {
                 // No call timeouts here, and none are missing: presigning is
                 // local arithmetic over the credential and the request, and this
                 // client never opens a socket.
-                .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+                .serviceConfiguration(
+                        S3Configuration.builder().pathStyleAccessEnabled(true).build())
                 .build();
     }
 

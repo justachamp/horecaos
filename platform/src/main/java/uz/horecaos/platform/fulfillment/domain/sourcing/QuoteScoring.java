@@ -8,7 +8,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
-
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.PartnerOption;
 
 /**
@@ -75,8 +74,7 @@ public final class QuoteScoring {
 
     public static final String QUOTED = "QUOTED";
 
-    private QuoteScoring() {
-    }
+    private QuoteScoring() {}
 
     /**
      * @param partners the branch's bindings in the order ADR 0026 resolved them,
@@ -86,12 +84,12 @@ public final class QuoteScoring {
      *                 caller bug rather than a case to resolve here, and the last
      *                 one wins so the newest answer is the one scored
      */
-    public static List<ScoredPartner> rank(List<PartnerOption> partners,
-            List<DeliveryQuote> quotes, PickupPlan plan, Instant now) {
+    public static List<ScoredPartner> rank(
+            List<PartnerOption> partners, List<DeliveryQuote> quotes, PickupPlan plan, Instant now) {
 
-        Map<UUID, DeliveryQuote> byBinding = quotes.stream().collect(
-                java.util.stream.Collectors.toMap(DeliveryQuote::bindingId,
-                        Function.identity(), (first, second) -> second));
+        Map<UUID, DeliveryQuote> byBinding = quotes.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        DeliveryQuote::bindingId, Function.identity(), (first, second) -> second));
 
         List<ScoredPartner> scored = new ArrayList<>(partners.size());
         for (int position = 0; position < partners.size(); position++) {
@@ -116,11 +114,14 @@ public final class QuoteScoring {
 
     /** The partners that may actually be booked, cheapest first. */
     public static List<PartnerOption> order(List<ScoredPartner> scored) {
-        return scored.stream().filter(ScoredPartner::eligible).map(ScoredPartner::partner).toList();
+        return scored.stream()
+                .filter(ScoredPartner::eligible)
+                .map(ScoredPartner::partner)
+                .toList();
     }
 
-    private static ScoredPartner score(PartnerOption partner, DeliveryQuote quote,
-            PickupPlan plan, Instant now, int configuredPosition) {
+    private static ScoredPartner score(
+            PartnerOption partner, DeliveryQuote quote, PickupPlan plan, Instant now, int configuredPosition) {
 
         if (quote == null) {
             return new ScoredPartner(partner, null, true, NOT_QUOTED, configuredPosition);
@@ -133,8 +134,7 @@ public final class QuoteScoring {
         }
         if (quote.pickupEtaSeconds() != null
                 && now.plusSeconds(quote.pickupEtaSeconds()).isAfter(plan.pickupWindowEnd())) {
-            return new ScoredPartner(partner, quote, false, PICKUP_ETA_MISSES_WINDOW,
-                    configuredPosition);
+            return new ScoredPartner(partner, quote, false, PICKUP_ETA_MISSES_WINDOW, configuredPosition);
         }
         return new ScoredPartner(partner, quote, true, QUOTED, configuredPosition);
     }
@@ -148,13 +148,13 @@ public final class QuoteScoring {
      * whatever order the rows arrived in, and a selection that depends on that is
      * one nobody can reproduce.
      */
-    private static final Comparator<ScoredPartner> RANKING =
-            Comparator.comparing((ScoredPartner scored) -> !scored.eligible())
-                    .thenComparing(scored -> scored.quote() == null || !scored.quote().priced())
-                    .thenComparing(ScoredPartner::priceOrMax)
-                    .thenComparing(ScoredPartner::pickupEtaOrMax)
-                    .thenComparingInt(ScoredPartner::configuredPosition)
-                    .thenComparing(scored -> scored.partner().bindingId());
+    private static final Comparator<ScoredPartner> RANKING = Comparator.comparing(
+                    (ScoredPartner scored) -> !scored.eligible())
+            .thenComparing(scored -> scored.quote() == null || !scored.quote().priced())
+            .thenComparing(ScoredPartner::priceOrMax)
+            .thenComparing(ScoredPartner::pickupEtaOrMax)
+            .thenComparingInt(ScoredPartner::configuredPosition)
+            .thenComparing(scored -> scored.partner().bindingId());
 
     /**
      * One partner, its quote, and why it did or did not make the cut.
@@ -166,11 +166,7 @@ public final class QuoteScoring {
      *                 question asked from two ends
      */
     public record ScoredPartner(
-            PartnerOption partner,
-            DeliveryQuote quote,
-            boolean eligible,
-            String reason,
-            int configuredPosition) {
+            PartnerOption partner, DeliveryQuote quote, boolean eligible, String reason, int configuredPosition) {
 
         public ScoredPartner {
             Objects.requireNonNull(partner, "A partner option is required");
@@ -182,8 +178,7 @@ public final class QuoteScoring {
         }
 
         long pickupEtaOrMax() {
-            return quote == null || quote.pickupEtaSeconds() == null
-                    ? Long.MAX_VALUE : quote.pickupEtaSeconds();
+            return quote == null || quote.pickupEtaSeconds() == null ? Long.MAX_VALUE : quote.pickupEtaSeconds();
         }
     }
 }

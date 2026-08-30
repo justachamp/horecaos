@@ -2,9 +2,7 @@ package uz.horecaos.platform.ordering.application;
 
 import java.util.Set;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
-
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.ordering.domain.OrderAcceptancePolicy;
@@ -49,8 +47,7 @@ public class OrderAcceptancePolicyService {
         ResourceScope scope = ResourceScope.location(tenantId, brandId, locationId);
 
         return policies.resolve(ACCEPTANCE, scope)
-                .map(resolved -> new Effective(
-                        resolved.document(), resolved.policyId(), resolved.policyVersion()))
+                .map(resolved -> new Effective(resolved.document(), resolved.policyId(), resolved.policyVersion()))
                 .orElseGet(() -> new Effective(OrderAcceptancePolicy.platformDefault(), null, 0));
     }
 
@@ -65,8 +62,7 @@ public class OrderAcceptancePolicyService {
         return policies.pinned(ACCEPTANCE, policyId, policyVersion)
                 .map(ResolvedPolicy::document)
                 .orElseThrow(() -> new IllegalStateException(
-                        "Order references policy %s v%d, which no longer exists"
-                                .formatted(policyId, policyVersion)));
+                        "Order references policy %s v%d, which no longer exists".formatted(policyId, policyVersion)));
     }
 
     /**

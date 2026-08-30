@@ -2,7 +2,6 @@ package uz.horecaos.platform.integration.camel.notification;
 
 import java.util.Objects;
 import java.util.UUID;
-
 import uz.horecaos.platform.notifications.api.NotificationDispatch;
 
 /**
@@ -26,7 +25,10 @@ public record NotificationSendOperation(
         NotificationDispatch dispatch,
         String providerIdempotencyKey) {
 
-    public enum Kind { SEND, QUERY_STATUS }
+    public enum Kind {
+        SEND,
+        QUERY_STATUS
+    }
 
     public NotificationSendOperation {
         Objects.requireNonNull(kind, "A kind is required");
@@ -45,15 +47,20 @@ public record NotificationSendOperation(
     }
 
     public static NotificationSendOperation send(NotificationDispatch dispatch) {
-        return new NotificationSendOperation(Kind.SEND, dispatch.tenantId(), dispatch.brandId(),
-                dispatch.locationId(), dispatch.channel(), dispatch,
+        return new NotificationSendOperation(
+                Kind.SEND,
+                dispatch.tenantId(),
+                dispatch.brandId(),
+                dispatch.locationId(),
+                dispatch.channel(),
+                dispatch,
                 dispatch.providerIdempotencyKey());
     }
 
-    public static NotificationSendOperation queryStatus(UUID tenantId, UUID brandId,
-            UUID locationId, String channel, String providerIdempotencyKey) {
-        return new NotificationSendOperation(Kind.QUERY_STATUS, tenantId, brandId, locationId,
-                channel, null, providerIdempotencyKey);
+    public static NotificationSendOperation queryStatus(
+            UUID tenantId, UUID brandId, UUID locationId, String channel, String providerIdempotencyKey) {
+        return new NotificationSendOperation(
+                Kind.QUERY_STATUS, tenantId, brandId, locationId, channel, null, providerIdempotencyKey);
     }
 
     @Override

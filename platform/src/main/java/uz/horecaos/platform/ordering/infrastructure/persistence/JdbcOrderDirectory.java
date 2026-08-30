@@ -2,10 +2,8 @@ package uz.horecaos.platform.ordering.infrastructure.persistence;
 
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 
 /**

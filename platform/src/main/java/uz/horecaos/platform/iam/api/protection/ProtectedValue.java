@@ -32,19 +32,27 @@ public record ProtectedValue(String keyId, String algorithm, byte[] nonce, byte[
     /** Compact storage form for a single column. */
     public String serialize() {
         Base64.Encoder encoder = Base64.getEncoder();
-        return String.join("$",
-                "v" + aadVersion, keyId, algorithm,
-                encoder.encodeToString(nonce), encoder.encodeToString(ciphertext));
+        return String.join(
+                "$",
+                "v" + aadVersion,
+                keyId,
+                algorithm,
+                encoder.encodeToString(nonce),
+                encoder.encodeToString(ciphertext));
     }
 
     public static ProtectedValue deserialize(String stored) {
-        String[] parts = Objects.requireNonNull(stored, "A stored value is required").split("\\$");
+        String[] parts =
+                Objects.requireNonNull(stored, "A stored value is required").split("\\$");
         if (parts.length != 5 || !parts[0].startsWith("v")) {
             throw new IllegalArgumentException("Malformed protected value");
         }
         Base64.Decoder decoder = Base64.getDecoder();
         return new ProtectedValue(
-                parts[1], parts[2], decoder.decode(parts[3]), decoder.decode(parts[4]),
+                parts[1],
+                parts[2],
+                decoder.decode(parts[3]),
+                decoder.decode(parts[4]),
                 Integer.parseInt(parts[0].substring(1)));
     }
 

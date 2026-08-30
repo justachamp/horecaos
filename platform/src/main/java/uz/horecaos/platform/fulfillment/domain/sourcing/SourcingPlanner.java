@@ -4,7 +4,6 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-
 import uz.horecaos.platform.fulfillment.api.InternalFleetPort.FleetCandidate;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.BookingIntent;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.PartnerOption;
@@ -83,15 +82,12 @@ public final class SourcingPlanner {
      * an absent coordinate as a zero distance would send every order to whoever
      * the telemetry had lost.
      */
-    private static final Comparator<FleetCandidate> RANKING =
-            Comparator.comparingInt(FleetCandidate::activeAssignments)
-                    .thenComparing(FleetCandidate::metresFromBranch,
-                            Comparator.nullsLast(Comparator.naturalOrder()))
-                    .thenComparingInt(FleetCandidate::deliveriesThisShift)
-                    .thenComparing(FleetCandidate::courierId);
+    private static final Comparator<FleetCandidate> RANKING = Comparator.comparingInt(FleetCandidate::activeAssignments)
+            .thenComparing(FleetCandidate::metresFromBranch, Comparator.nullsLast(Comparator.naturalOrder()))
+            .thenComparingInt(FleetCandidate::deliveriesThisShift)
+            .thenComparing(FleetCandidate::courierId);
 
-    private SourcingPlanner() {
-    }
+    private SourcingPlanner() {}
 
     /**
      * @param candidates couriers ADR 0042's dispatch gate has already allowed.
@@ -100,9 +96,14 @@ public final class SourcingPlanner {
      *                   belongs to the module that owns shifts
      * @param partners   the branch's delivery bindings, narrowest first
      */
-    public static SourcingDecision decide(PickupPlan plan, DeliverySourcingPolicy policy,
-            SourcingMode mode, List<FleetCandidate> candidates, List<PartnerOption> partners,
-            SourcingProgress progress, Instant now) {
+    public static SourcingDecision decide(
+            PickupPlan plan,
+            DeliverySourcingPolicy policy,
+            SourcingMode mode,
+            List<FleetCandidate> candidates,
+            List<PartnerOption> partners,
+            SourcingProgress progress,
+            Instant now) {
 
         if (!now.isBefore(plan.latestAssignmentAt())) {
             // The promise is already unreachable, so every remaining automated
@@ -118,12 +119,11 @@ public final class SourcingPlanner {
             // delivery.reconcile.v1 is for — so an uncertain attempt arriving
             // here is one the query could not settle either. Trying the next
             // partner now is precisely how a plan ends up with two couriers.
-            return new SourcingDecision.EscalateToOperations(
-                    SourcingDecision.AWAITING_RECONCILIATION);
+            return new SourcingDecision.EscalateToOperations(SourcingDecision.AWAITING_RECONCILIATION);
         }
         if (progress.hasLiveOffer(now)) {
-            return new SourcingDecision.WaitForInternal(progress.outstandingOffer(),
-                    progress.offerExpiresAt(), SourcingDecision.OFFER_OUTSTANDING);
+            return new SourcingDecision.WaitForInternal(
+                    progress.outstandingOffer(), progress.offerExpiresAt(), SourcingDecision.OFFER_OUTSTANDING);
         }
 
         Instant handoverDeadline = handoverDeadline(plan, policy, mode);
@@ -144,8 +144,8 @@ public final class SourcingPlanner {
                 // still have been called. An offer expiring after the handover
                 // deadline is a fleet lane that has quietly become the only lane.
                 Instant clamped = expiry.isAfter(handoverDeadline) ? handoverDeadline : expiry;
-                return new SourcingDecision.OfferInternal(courier.courierId(), clamped,
-                        SourcingDecision.FLEET_AVAILABLE);
+                return new SourcingDecision.OfferInternal(
+                        courier.courierId(), clamped, SourcingDecision.FLEET_AVAILABLE);
             }
         }
 
@@ -158,14 +158,11 @@ public final class SourcingPlanner {
                 .filter(option -> !progress.attemptedPartners().contains(option.bindingId()))
                 .findFirst();
         if (partner.isEmpty()) {
-            return new SourcingDecision.EscalateToOperations(partners.isEmpty()
-                    ? SourcingDecision.NO_PARTNER_CONFIGURED
-                    : SourcingDecision.PARTNERS_EXHAUSTED);
+            return new SourcingDecision.EscalateToOperations(
+                    partners.isEmpty() ? SourcingDecision.NO_PARTNER_CONFIGURED : SourcingDecision.PARTNERS_EXHAUSTED);
         }
 
-        String reason = mode == SourcingMode.PARTNER_ONLY
-                ? SourcingDecision.PARTNER_ONLY_MODE
-                : fleetReason;
+        String reason = mode == SourcingMode.PARTNER_ONLY ? SourcingDecision.PARTNER_ONLY_MODE : fleetReason;
         return bookWith(partner.get(), plan, policy, now, reason);
     }
 
@@ -177,9 +174,13 @@ public final class SourcingPlanner {
      * is a rate-card problem, and running out of clock is a preparation-estimate
      * problem.
      */
-    private static String fleetRefusal(List<FleetCandidate> candidates,
-            Optional<FleetCandidate> next, SourcingProgress progress,
-            DeliverySourcingPolicy policy, Instant now, Instant handoverDeadline) {
+    private static String fleetRefusal(
+            List<FleetCandidate> candidates,
+            Optional<FleetCandidate> next,
+            SourcingProgress progress,
+            DeliverySourcingPolicy policy,
+            Instant now,
+            Instant handoverDeadline) {
 
         if (candidates.stream().noneMatch(FleetCandidate::hasCapacity)) {
             // Nobody could be asked. Not a refusal by the fleet, and spending
@@ -208,8 +209,7 @@ public final class SourcingPlanner {
      * use the whole assignment window; the stop that ends the lane there is the
      * offer rounds and, ultimately, {@code latest_assignment_at}.
      */
-    private static Instant handoverDeadline(PickupPlan plan, DeliverySourcingPolicy policy,
-            SourcingMode mode) {
+    private static Instant handoverDeadline(PickupPlan plan, DeliverySourcingPolicy policy, SourcingMode mode) {
 
         if (!mode.usesPartners()) {
             return plan.latestAssignmentAt();
@@ -222,8 +222,8 @@ public final class SourcingPlanner {
         return deadline.isBefore(plan.confirmedAt()) ? plan.confirmedAt() : deadline;
     }
 
-    private static SourcingDecision bookWith(PartnerOption partner, PickupPlan plan,
-            DeliverySourcingPolicy policy, Instant now, String reason) {
+    private static SourcingDecision bookWith(
+            PartnerOption partner, PickupPlan plan, DeliverySourcingPolicy policy, Instant now, String reason) {
 
         Instant earliestUseful = now.plusSeconds(policy.partnerLeadSeconds());
         boolean aheadOfWindow = earliestUseful.isBefore(plan.pickupWindowStart());
@@ -232,8 +232,8 @@ public final class SourcingPlanner {
             // Both verified partners take a future pickup time, and giving them
             // one is the difference between a courier waiting unpaid at the
             // counter and one arriving as the bag is sealed.
-            return new SourcingDecision.BookPartner(partner,
-                    BookingIntent.BOOK_FOR_PICKUP_WINDOW, plan.pickupWindowStart(), reason);
+            return new SourcingDecision.BookPartner(
+                    partner, BookingIntent.BOOK_FOR_PICKUP_WINDOW, plan.pickupWindowStart(), reason);
         }
         return new SourcingDecision.BookPartner(partner, BookingIntent.BOOK_NOW, null, reason);
     }

@@ -1,12 +1,10 @@
 package uz.horecaos.platform.pos;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.UUID;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -16,9 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -68,15 +64,20 @@ class PosSchemaTests {
         jdbc = JdbcClient.create(dataSource);
 
         jdbc.sql("DELETE FROM integration.binding_capabilities WHERE tenant_id = :tenantId")
-                .param("tenantId", TENANT).update();
+                .param("tenantId", TENANT)
+                .update();
         jdbc.sql("DELETE FROM integration.bindings WHERE tenant_id = :tenantId")
-                .param("tenantId", TENANT).update();
+                .param("tenantId", TENANT)
+                .update();
         jdbc.sql("DELETE FROM integration.installations WHERE tenant_id = :tenantId")
-                .param("tenantId", TENANT).update();
+                .param("tenantId", TENANT)
+                .update();
         jdbc.sql("DELETE FROM tenant.brands WHERE tenant_id = :tenantId")
-                .param("tenantId", TENANT).update();
+                .param("tenantId", TENANT)
+                .update();
         jdbc.sql("DELETE FROM tenant.tenants WHERE id = :tenantId")
-                .param("tenantId", TENANT).update();
+                .param("tenantId", TENANT)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO tenant.tenants
@@ -101,8 +102,10 @@ class PosSchemaTests {
                     (id, tenant_id, installation_id, brand_id, status)
                 VALUES (:id, :tenantId, :installationId, :brandId, 'SUSPENDED')
                 """)
-                .param("id", BINDING).param("tenantId", TENANT)
-                .param("installationId", INSTALLATION).param("brandId", BRAND)
+                .param("id", BINDING)
+                .param("tenantId", TENANT)
+                .param("installationId", INSTALLATION)
+                .param("brandId", BRAND)
                 .update();
     }
 
@@ -143,7 +146,10 @@ class PosSchemaTests {
         assertThat(jdbc.sql("""
                 SELECT count(*) FROM integration.binding_capabilities
                  WHERE binding_id = :bindingId AND capability_code = 'ORDER_EXPORT'
-                """).param("bindingId", BINDING).query(Integer.class).single())
+                """)
+                        .param("bindingId", BINDING)
+                        .query(Integer.class)
+                        .single())
                 .isEqualTo(1);
     }
 
@@ -155,7 +161,10 @@ class PosSchemaTests {
         assertThat(jdbc.sql("""
                 SELECT count(*) FROM integration.binding_capabilities
                  WHERE binding_id = :bindingId AND capability_code = 'ORDER_CANCELLATION'
-                """).param("bindingId", BINDING).query(Integer.class).single())
+                """)
+                        .param("bindingId", BINDING)
+                        .query(Integer.class)
+                        .single())
                 .isEqualTo(1);
     }
 
@@ -182,8 +191,10 @@ class PosSchemaTests {
                     (id, tenant_id, installation_id, brand_id, status)
                 VALUES (:id, :tenantId, :installationId, :brandId, 'SUSPENDED')
                 """)
-                .param("id", paymentBinding).param("tenantId", TENANT)
-                .param("installationId", paymentInstallation).param("brandId", BRAND)
+                .param("id", paymentBinding)
+                .param("tenantId", TENANT)
+                .param("installationId", paymentInstallation)
+                .param("brandId", BRAND)
                 .update();
 
         jdbc.sql("""
@@ -191,21 +202,29 @@ class PosSchemaTests {
                     (binding_id, tenant_id, capability_code, enabled, is_primary)
                 VALUES (:bindingId, :tenantId, 'CollectPayment', true, false)
                 """)
-                .param("bindingId", paymentBinding).param("tenantId", TENANT)
+                .param("bindingId", paymentBinding)
+                .param("tenantId", TENANT)
                 .update();
 
         assertThat(jdbc.sql("""
                 SELECT count(*) FROM integration.binding_capabilities WHERE binding_id = :bindingId
-                """).param("bindingId", paymentBinding).query(Integer.class).single())
+                """)
+                        .param("bindingId", paymentBinding)
+                        .query(Integer.class)
+                        .single())
                 .as("the generic ADR 0026 table carries delivery and payment codes too, and the "
                         + "POS rule must let every one of them through")
                 .isEqualTo(1);
 
         jdbc.sql("DELETE FROM integration.binding_capabilities WHERE binding_id = :id")
-                .param("id", paymentBinding).update();
-        jdbc.sql("DELETE FROM integration.bindings WHERE id = :id").param("id", paymentBinding).update();
+                .param("id", paymentBinding)
+                .update();
+        jdbc.sql("DELETE FROM integration.bindings WHERE id = :id")
+                .param("id", paymentBinding)
+                .update();
         jdbc.sql("DELETE FROM integration.installations WHERE id = :id")
-                .param("id", paymentInstallation).update();
+                .param("id", paymentInstallation)
+                .update();
     }
 
     @Test

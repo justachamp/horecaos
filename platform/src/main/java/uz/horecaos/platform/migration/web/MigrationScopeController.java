@@ -1,10 +1,8 @@
 package uz.horecaos.platform.migration.web;
 
-import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.UUID;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -12,7 +10,10 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
-
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,11 +23,6 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
@@ -76,7 +72,8 @@ public class MigrationScopeController {
 
     @GetMapping("/{scopeId}")
     @RequiresCapability(value = Capability.MIGRATION_READ, scope = ScopeType.PLATFORM)
-    @Operation(summary = "Get a capability scope",
+    @Operation(
+            summary = "Get a capability scope",
             description = "The ETag carries the scope version, which every transition below "
                     + "requires back as expectedVersion.")
     ResponseEntity<ScopeView> get(@PathVariable UUID scopeId, @RequestParam UUID tenantId) {
@@ -97,7 +94,8 @@ public class MigrationScopeController {
      */
     @PostMapping("/{scopeId}/transitions")
     @RequiresCapability(value = Capability.MIGRATION_SCOPE_MANAGE, scope = ScopeType.PLATFORM, mutating = true)
-    @Operation(summary = "Advance a scope to its next state",
+    @Operation(
+            summary = "Advance a scope to its next state",
             description = "TARGET_OWNED is not reachable here. Taking target ownership goes through "
                     + "the cutover endpoint, which records who approved it and on what evidence "
                     + "before the write mode moves.")
@@ -107,8 +105,11 @@ public class MigrationScopeController {
             @RequestHeader(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
             @Valid @RequestBody AdvanceScopeRequest body) {
 
-        ScopeRow scope = scopes.advance(tenantId, scopeId, new MigrationScopeService.AdvanceCommand(
-                body.targetState(), body.expectedVersion(), body.reason(), idempotencyKey));
+        ScopeRow scope = scopes.advance(
+                tenantId,
+                scopeId,
+                new MigrationScopeService.AdvanceCommand(
+                        body.targetState(), body.expectedVersion(), body.reason(), idempotencyKey));
         return versioned(scope);
     }
 
@@ -124,7 +125,8 @@ public class MigrationScopeController {
      */
     @PostMapping("/{scopeId}/rollbacks")
     @RequiresCapability(value = Capability.MIGRATION_CUTOVER_APPROVE, scope = ScopeType.PLATFORM, mutating = true)
-    @Operation(summary = "Reverse a cutover, returning the writer to legacy",
+    @Operation(
+            summary = "Reverse a cutover, returning the writer to legacy",
             description = "Reachable from TARGET_OWNED and CANARY. Not gated on reconciliation: a "
                     + "critical difference is the reason to roll back, so requiring a clear one "
                     + "would remove the escape exactly when it is needed.")
@@ -134,8 +136,10 @@ public class MigrationScopeController {
             @RequestHeader(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
             @Valid @RequestBody RollbackScopeRequest body) {
 
-        ScopeRow scope = scopes.rollBack(tenantId, scopeId, new MigrationScopeService.RollbackCommand(
-                body.expectedVersion(), body.reason(), idempotencyKey));
+        ScopeRow scope = scopes.rollBack(
+                tenantId,
+                scopeId,
+                new MigrationScopeService.RollbackCommand(body.expectedVersion(), body.reason(), idempotencyKey));
         return versioned(scope);
     }
 
@@ -149,7 +153,8 @@ public class MigrationScopeController {
      */
     @PostMapping("/{scopeId}/suspensions")
     @RequiresCapability(value = Capability.MIGRATION_SCOPE_MANAGE, scope = ScopeType.PLATFORM, mutating = true)
-    @Operation(summary = "Pause a scope, or block it on reconciliation",
+    @Operation(
+            summary = "Pause a scope, or block it on reconciliation",
             description = "PAUSED is a decision somebody made and BLOCKED_RECONCILIATION is one "
                     + "evidence forced. The operator resuming it needs to know which.")
     ResponseEntity<ScopeView> suspend(
@@ -158,8 +163,11 @@ public class MigrationScopeController {
             @RequestHeader(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
             @Valid @RequestBody SuspendScopeRequest body) {
 
-        ScopeRow scope = scopes.suspend(tenantId, scopeId, new MigrationScopeService.SuspendCommand(
-                body.holdingState(), body.expectedVersion(), body.reason(), idempotencyKey));
+        ScopeRow scope = scopes.suspend(
+                tenantId,
+                scopeId,
+                new MigrationScopeService.SuspendCommand(
+                        body.holdingState(), body.expectedVersion(), body.reason(), idempotencyKey));
         return versioned(scope);
     }
 
@@ -179,8 +187,10 @@ public class MigrationScopeController {
             @RequestHeader(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
             @Valid @RequestBody ResumeScopeRequest body) {
 
-        ScopeRow scope = scopes.resume(tenantId, scopeId, new MigrationScopeService.ResumeCommand(
-                body.expectedVersion(), body.reason(), idempotencyKey));
+        ScopeRow scope = scopes.resume(
+                tenantId,
+                scopeId,
+                new MigrationScopeService.ResumeCommand(body.expectedVersion(), body.reason(), idempotencyKey));
         return versioned(scope);
     }
 
@@ -196,12 +206,10 @@ public class MigrationScopeController {
     @RequiresCapability(value = Capability.MIGRATION_SCOPE_MANAGE, scope = ScopeType.PLATFORM, mutating = true)
     @Operation(summary = "Republish the scope's undecided-source count")
     ResponseEntity<ScopeView> republishCoverage(
-            @PathVariable UUID scopeId,
-            @RequestParam UUID tenantId,
-            @Valid @RequestBody CoverageRequest body) {
+            @PathVariable UUID scopeId, @RequestParam UUID tenantId, @Valid @RequestBody CoverageRequest body) {
 
-        ScopeRow scope = scopes.republishCoverage(tenantId, scopeId, body.undecidedSources(),
-                body.expectedVersion(), body.reason());
+        ScopeRow scope = scopes.republishCoverage(
+                tenantId, scopeId, body.undecidedSources(), body.expectedVersion(), body.reason());
         return versioned(scope);
     }
 
@@ -219,7 +227,8 @@ public class MigrationScopeController {
      */
     @PostMapping("/{scopeId}/cutover")
     @RequiresCapability(value = Capability.MIGRATION_CUTOVER_APPROVE, scope = ScopeType.PLATFORM, mutating = true)
-    @Operation(summary = "Approve a cutover and transfer ownership to the target",
+    @Operation(
+            summary = "Approve a cutover and transfer ownership to the target",
             description = "The gates are re-evaluated in this transaction rather than trusted from "
                     + "whenever the scope reached CUTOVER_READY: a critical difference found "
                     + "overnight stops a window approved yesterday evening.")
@@ -249,8 +258,7 @@ public class MigrationScopeController {
             @RequestHeader(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
             @Valid @RequestBody CutoverDecisionRequest body) {
 
-        DecisionRow decision =
-                scopes.refuseCutover(tenantId, scopeId, body.toCommand(decider(), idempotencyKey));
+        DecisionRow decision = scopes.refuseCutover(tenantId, scopeId, body.toCommand(decider(), idempotencyKey));
         return CutoverDecisionView.of(decision);
     }
 
@@ -268,27 +276,27 @@ public class MigrationScopeController {
     record AdvanceScopeRequest(
             @NotNull ScopeState targetState,
             @Positive int expectedVersion,
-            @NotBlank @Size(max = 1000) String reason) { }
+            @NotBlank @Size(max = 1000) String reason) {}
 
     /** @param reason mandatory: a writer taken back from the target is an incident */
     record RollbackScopeRequest(
             @Positive int expectedVersion,
-            @NotBlank @Size(max = 1000) String reason) { }
+            @NotBlank @Size(max = 1000) String reason) {}
 
     /** @param holdingState PAUSED for a decision, BLOCKED_RECONCILIATION for evidence */
     record SuspendScopeRequest(
             @NotNull ScopeState holdingState,
             @Positive int expectedVersion,
-            @NotBlank @Size(max = 1000) String reason) { }
+            @NotBlank @Size(max = 1000) String reason) {}
 
     record ResumeScopeRequest(
             @Positive int expectedVersion,
-            @NotBlank @Size(max = 1000) String reason) { }
+            @NotBlank @Size(max = 1000) String reason) {}
 
     record CoverageRequest(
             @PositiveOrZero int undecidedSources,
             @Positive int expectedVersion,
-            @NotBlank @Size(max = 1000) String reason) { }
+            @NotBlank @Size(max = 1000) String reason) {}
 
     /**
      * @param evidence    the aggregate figures the decision rests on — watermarks,
@@ -308,17 +316,25 @@ public class MigrationScopeController {
             @NotNull ScopeState targetState,
             @Positive int expectedVersion,
             @NotBlank @Size(max = 1000) String reason,
-            @NotEmpty @Size(max = 32) Map<@NotBlank @Size(max = 64) String,
-                    @NotBlank @Size(max = 512) String> evidence,
+            @NotEmpty @Size(max = 32) Map<@NotBlank @Size(max = 64) String, @NotBlank @Size(max = 512) String> evidence,
             @NotBlank @Size(max = 255) String requestedBy,
+
             @Schema(description = "The ADR 0027 maker-checker request this decision discharges")
             UUID approvalRequestId,
+
             Instant requestedAt) {
 
         MigrationScopeService.CutoverCommand toCommand(String decidedBy, String idempotencyKey) {
             return new MigrationScopeService.CutoverCommand(
-                    targetState, expectedVersion, reason, new LinkedHashMap<String, Object>(evidence),
-                    requestedBy, decidedBy, approvalRequestId, requestedAt, idempotencyKey);
+                    targetState,
+                    expectedVersion,
+                    reason,
+                    new LinkedHashMap<String, Object>(evidence),
+                    requestedBy,
+                    decidedBy,
+                    approvalRequestId,
+                    requestedAt,
+                    idempotencyKey);
         }
     }
 }

@@ -44,8 +44,7 @@ public interface CourierShiftPort {
      *                               so the check that was made is evidence rather
      *                               than a claim.
      */
-    record OpenShift(UUID shiftId, UUID locationId, UUID brandId, LocalDate registrationValidUntil) {
-    }
+    record OpenShift(UUID shiftId, UUID locationId, UUID brandId, LocalDate registrationValidUntil) {}
 
     /** Whether a real implementation is present. */
     default boolean isWired() {

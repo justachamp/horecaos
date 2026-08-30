@@ -1,7 +1,6 @@
 package uz.horecaos.platform.courier.application;
 
 import java.util.Set;
-
 import uz.horecaos.platform.courier.domain.CourierCompensationPolicy;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
@@ -24,6 +23,5 @@ public final class CourierPolicies {
                     + "ceiling, penalty approval threshold, shift enforcement mode, on-time "
                     + "grace, and the post-settlement retention of confirmation coordinates.");
 
-    private CourierPolicies() {
-    }
+    private CourierPolicies() {}
 }

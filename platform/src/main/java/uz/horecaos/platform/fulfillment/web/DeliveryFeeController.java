@@ -1,21 +1,18 @@
 package uz.horecaos.platform.fulfillment.web;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeQuery;
 import uz.horecaos.platform.fulfillment.api.PricingAuthority;
 import uz.horecaos.platform.fulfillment.application.DeliveryFeeResolver;
@@ -50,8 +47,8 @@ public class DeliveryFeeController {
     private final JdbcDeliveryFeeResolutionStore resolutions;
     private final Clock clock;
 
-    public DeliveryFeeController(DeliveryFeeResolver resolver,
-            JdbcDeliveryFeeResolutionStore resolutions, Clock clock) {
+    public DeliveryFeeController(
+            DeliveryFeeResolver resolver, JdbcDeliveryFeeResolutionStore resolutions, Clock clock) {
         this.resolver = resolver;
         this.resolutions = resolutions;
         this.clock = clock;
@@ -69,22 +66,32 @@ public class DeliveryFeeController {
      * transaction, because a zone retired five minutes ago must not still be
      * selling.
      */
-    @GetMapping("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}"
-            + "/locations/{locationId}/delivery-fee")
-    @Operation(summary = "Resolve the delivery fee for one point",
+    @GetMapping("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}" + "/locations/{locationId}/delivery-fee")
+    @Operation(
+            summary = "Resolve the delivery fee for one point",
             description = "Returns one fee, or one stable refusal code and no fee. An address "
                     + "outside every zone of this branch is refused here and never re-homed to a "
                     + "branch that does cover it: substituting one changes the menu, the prices, "
                     + "the preparation time and eventually the legal entity on the receipt.")
     public ResponseEntity<DeliveryFeeView> quote(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId,
-            @RequestParam double lat, @RequestParam double lon,
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @RequestParam double lat,
+            @RequestParam double lon,
             @RequestParam String currency,
             @RequestParam(defaultValue = "0") long subtotalMinor) {
 
         DeliveryFeeResolution resolution = resolver.simulate(new DeliveryFeeQuery(
-                tenantId, brandId, locationId, null, new GeoPoint(lat, lon), currency,
-                subtotalMinor, PricingAuthority.HORECAOS, clock.instant()));
+                tenantId,
+                brandId,
+                locationId,
+                null,
+                new GeoPoint(lat, lon),
+                currency,
+                subtotalMinor,
+                PricingAuthority.HORECAOS,
+                clock.instant()));
 
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.maxAge(Duration.ofSeconds(30)).cachePublic())
@@ -101,21 +108,31 @@ public class DeliveryFeeController {
      */
     @GetMapping("/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery/simulations")
     @RequiresCapability(value = Capability.DELIVERY_ZONE_READ, scope = ScopeType.BRAND)
-    @Operation(summary = "Simulate a fee at a point, a basket, and an instant",
+    @Operation(
+            summary = "Simulate a fee at a point, a basket, and an instant",
             description = "Runs the full resolver with a fixed clock and writes nothing. The "
                     + "returned evidence is the same shape the stored evidence takes, so what is "
                     + "seen before activation is what will be recorded after it.")
     public SimulationView simulate(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId,
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
             @RequestParam UUID locationId,
-            @RequestParam double lat, @RequestParam double lon,
+            @RequestParam double lat,
+            @RequestParam double lon,
             @RequestParam String currency,
             @RequestParam(defaultValue = "0") long subtotalMinor,
             @RequestParam(required = false) Instant at) {
 
         DeliveryFeeResolution resolution = resolver.simulate(new DeliveryFeeQuery(
-                tenantId, brandId, locationId, null, new GeoPoint(lat, lon), currency,
-                subtotalMinor, PricingAuthority.HORECAOS, at == null ? clock.instant() : at));
+                tenantId,
+                brandId,
+                locationId,
+                null,
+                new GeoPoint(lat, lon),
+                currency,
+                subtotalMinor,
+                PricingAuthority.HORECAOS,
+                at == null ? clock.instant() : at));
 
         return new SimulationView(DeliveryFeeView.of(resolution), resolution.evidence());
     }
@@ -129,12 +146,15 @@ public class DeliveryFeeController {
      */
     @GetMapping("/api/v1/operations/tenants/{tenantId}/quotes/{quoteId}/delivery-fee-evidence")
     @RequiresCapability(Capability.DELIVERY_FEE_EVIDENCE_READ)
-    @Operation(summary = "Every fee resolution recorded against one quote",
+    @Operation(
+            summary = "Every fee resolution recorded against one quote",
             description = "Zone version, tariff version, band, time rule, distance, distance "
                     + "source, and the zones that contained the address and lost the ranking. "
                     + "Carries no address and no coordinates (ADR 0029).")
     public List<EvidenceView> evidence(@PathVariable UUID tenantId, @PathVariable UUID quoteId) {
-        return resolutions.forQuote(tenantId, quoteId).stream().map(EvidenceView::of).toList();
+        return resolutions.forQuote(tenantId, quoteId).stream()
+                .map(EvidenceView::of)
+                .toList();
     }
 
     /**
@@ -144,39 +164,76 @@ public class DeliveryFeeController {
      * it to wording, which is what lets the wording change without a release here.
      */
     public record DeliveryFeeView(
-            String outcome, String reasonCode, boolean available,
-            Long feeMinor, String currency,
-            Long minBasketMinor, Long freeDeliveryFromMinor,
-            Integer distanceMeters, String distanceSource) {
+            String outcome,
+            String reasonCode,
+            boolean available,
+            Long feeMinor,
+            String currency,
+            Long minBasketMinor,
+            Long freeDeliveryFromMinor,
+            Integer distanceMeters,
+            String distanceSource) {
 
         static DeliveryFeeView of(DeliveryFeeResolution resolution) {
             return new DeliveryFeeView(
-                    resolution.outcome().name(), resolution.reasonCode(),
+                    resolution.outcome().name(),
+                    resolution.reasonCode(),
                     !resolution.outcome().isRefusal(),
-                    resolution.finalFeeMinor(), resolution.currency(),
-                    resolution.minBasketMinor(), resolution.freeDeliveryFromMinor(),
+                    resolution.finalFeeMinor(),
+                    resolution.currency(),
+                    resolution.minBasketMinor(),
+                    resolution.freeDeliveryFromMinor(),
                     resolution.distanceMeters(),
-                    resolution.distanceSource() == null ? null : resolution.distanceSource().name());
+                    resolution.distanceSource() == null
+                            ? null
+                            : resolution.distanceSource().name());
         }
     }
 
-    public record SimulationView(DeliveryFeeView fee, java.util.Map<String, Object> evidence) { }
+    public record SimulationView(DeliveryFeeView fee, java.util.Map<String, Object> evidence) {}
 
     public record EvidenceView(
-            UUID resolutionId, int resolutionVersion, String outcome, String reasonCode,
-            UUID zoneId, Integer zoneVersion, UUID tariffId, Integer tariffVersion,
-            Integer bandSequence, Integer timeRuleSequence,
-            Integer distanceMeters, String distanceMode, String distanceSource,
-            String routingProvider, Long computedFeeMinor, Long finalFeeMinor, String currency,
-            List<UUID> losingZoneIds, Instant createdAt) {
+            UUID resolutionId,
+            int resolutionVersion,
+            String outcome,
+            String reasonCode,
+            UUID zoneId,
+            Integer zoneVersion,
+            UUID tariffId,
+            Integer tariffVersion,
+            Integer bandSequence,
+            Integer timeRuleSequence,
+            Integer distanceMeters,
+            String distanceMode,
+            String distanceSource,
+            String routingProvider,
+            Long computedFeeMinor,
+            Long finalFeeMinor,
+            String currency,
+            List<UUID> losingZoneIds,
+            Instant createdAt) {
 
         static EvidenceView of(JdbcDeliveryFeeResolutionStore.ResolutionRow row) {
-            return new EvidenceView(row.id(), row.resolutionVersion(), row.outcome().name(),
-                    row.reasonCode(), row.zoneId(), row.zoneVersion(), row.tariffId(),
-                    row.tariffVersion(), row.bandSequence(), row.timeRuleSequence(),
-                    row.distanceMeters(), row.distanceMode(), row.distanceSource(),
-                    row.routingProvider(), row.computedFeeMinor(), row.finalFeeMinor(),
-                    row.currency(), row.losingZoneIds(), row.createdAt());
+            return new EvidenceView(
+                    row.id(),
+                    row.resolutionVersion(),
+                    row.outcome().name(),
+                    row.reasonCode(),
+                    row.zoneId(),
+                    row.zoneVersion(),
+                    row.tariffId(),
+                    row.tariffVersion(),
+                    row.bandSequence(),
+                    row.timeRuleSequence(),
+                    row.distanceMeters(),
+                    row.distanceMode(),
+                    row.distanceSource(),
+                    row.routingProvider(),
+                    row.computedFeeMinor(),
+                    row.finalFeeMinor(),
+                    row.currency(),
+                    row.losingZoneIds(),
+                    row.createdAt());
         }
     }
 }

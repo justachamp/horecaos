@@ -10,10 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.loyalty.domain.AccountStatus;
 import uz.horecaos.platform.loyalty.domain.EntryType;
 import uz.horecaos.platform.loyalty.domain.LotConsumption;
@@ -56,10 +54,16 @@ public class JdbcLoyaltyStore {
 
     // ------------------------------------------------------------- accounts
 
-    public record AccountRow(UUID id, UUID tenantId, UUID brandId, UUID customerAccountId,
-            String currency, AccountStatus status, long balanceMinor, long reservedMinor,
-            int version) {
-    }
+    public record AccountRow(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID customerAccountId,
+            String currency,
+            AccountStatus status,
+            long balanceMinor,
+            long reservedMinor,
+            int version) {}
 
     /**
      * The account for one customer at one brand, creating it if this is their
@@ -73,8 +77,8 @@ public class JdbcLoyaltyStore {
      * rule in its entirety: there is no row a tenant-wide pool could occupy, so
      * points earned at one brand cannot be spent at another by any code path.
      */
-    public AccountRow openAccount(UUID id, UUID tenantId, UUID brandId, UUID customerAccountId,
-            String currency, Instant now) {
+    public AccountRow openAccount(
+            UUID id, UUID tenantId, UUID brandId, UUID customerAccountId, String currency, Instant now) {
 
         jdbc.sql("""
                 INSERT INTO loyalty.accounts (
@@ -85,13 +89,16 @@ public class JdbcLoyaltyStore {
                     'ACTIVE', 0, 0, 1, :now, :now)
                 ON CONFLICT ON CONSTRAINT uq_loyalty_account_scope DO NOTHING
                 """)
-                .param("id", id).param("tenantId", tenantId).param("brandId", brandId)
-                .param("customerAccountId", customerAccountId).param("currency", currency)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("customerAccountId", customerAccountId)
+                .param("currency", currency)
                 .param("now", utc(now))
                 .update();
 
-        return findAccount(tenantId, brandId, customerAccountId).orElseThrow(
-                () -> new IllegalStateException("The account was neither inserted nor found"));
+        return findAccount(tenantId, brandId, customerAccountId)
+                .orElseThrow(() -> new IllegalStateException("The account was neither inserted nor found"));
     }
 
     public Optional<AccountRow> findAccount(UUID tenantId, UUID brandId, UUID customerAccountId) {
@@ -100,7 +107,8 @@ public class JdbcLoyaltyStore {
                 WHERE tenant_id = :tenantId AND brand_id = :brandId
                   AND customer_account_id = :customerAccountId
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("customerAccountId", customerAccountId)
                 .query(JdbcLoyaltyStore::toAccount)
                 .optional();
@@ -127,7 +135,8 @@ public class JdbcLoyaltyStore {
 
     public Optional<AccountRow> findAccountById(UUID tenantId, UUID accountId) {
         return jdbc.sql("SELECT * FROM loyalty.accounts WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", accountId)
+                .param("tenantId", tenantId)
+                .param("id", accountId)
                 .query(JdbcLoyaltyStore::toAccount)
                 .optional();
     }
@@ -139,7 +148,8 @@ public class JdbcLoyaltyStore {
                 WHERE tenant_id = :tenantId AND customer_account_id = :customerAccountId
                 ORDER BY brand_id
                 """)
-                .param("tenantId", tenantId).param("customerAccountId", customerAccountId)
+                .param("tenantId", tenantId)
+                .param("customerAccountId", customerAccountId)
                 .query(JdbcLoyaltyStore::toAccount)
                 .list();
     }
@@ -164,9 +174,12 @@ public class JdbcLoyaltyStore {
                    AND status = 'ACTIVE'
                    AND balance_minor >= :amount
                 """)
-                .param("tenantId", tenantId).param("id", accountId)
-                .param("amount", amountMinor).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", accountId)
+                        .param("amount", amountMinor)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -189,14 +202,16 @@ public class JdbcLoyaltyStore {
                  WHERE tenant_id = :tenantId AND id = :id
                    AND balance_minor >= :amount
                 """)
-                .param("tenantId", tenantId).param("id", accountId)
-                .param("amount", amountMinor).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", accountId)
+                        .param("amount", amountMinor)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /** Puts points back. Used by RELEASE, REVERSAL, ACCRUAL, and a positive ADJUSTMENT. */
-    public void creditBalance(UUID tenantId, UUID accountId, long amountMinor, long releasedHold,
-            Instant now) {
+    public void creditBalance(UUID tenantId, UUID accountId, long amountMinor, long releasedHold, Instant now) {
         jdbc.sql("""
                 UPDATE loyalty.accounts
                    SET balance_minor = balance_minor + :amount,
@@ -205,8 +220,10 @@ public class JdbcLoyaltyStore {
                        updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("id", accountId)
-                .param("amount", amountMinor).param("released", releasedHold)
+                .param("tenantId", tenantId)
+                .param("id", accountId)
+                .param("amount", amountMinor)
+                .param("released", releasedHold)
                 .param("now", utc(now))
                 .update();
     }
@@ -220,8 +237,10 @@ public class JdbcLoyaltyStore {
                        updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("id", accountId)
-                .param("amount", amountMinor).param("now", utc(now))
+                .param("tenantId", tenantId)
+                .param("id", accountId)
+                .param("amount", amountMinor)
+                .param("now", utc(now))
                 .update();
     }
 
@@ -231,8 +250,10 @@ public class JdbcLoyaltyStore {
                    SET status = :status, version = version + 1, updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("id", accountId)
-                .param("status", status.name()).param("now", utc(now))
+                .param("tenantId", tenantId)
+                .param("id", accountId)
+                .param("status", status.name())
+                .param("now", utc(now))
                 .update();
     }
 
@@ -244,11 +265,23 @@ public class JdbcLoyaltyStore {
      * @param balanceAfterMinor the account balance after this entry, so a past
      *                          balance is a stored row rather than a replay
      */
-    public record NewEntry(UUID id, UUID tenantId, UUID accountId, EntryType entryType,
-            long amountMinor, long balanceAfterMinor, UUID lotId, UUID orderId, UUID tenderId,
-            UUID ruleId, Integer ruleVersion, String reasonCode, String actor, UUID approvalId,
-            String idempotencyKey, Instant occurredAt) {
-    }
+    public record NewEntry(
+            UUID id,
+            UUID tenantId,
+            UUID accountId,
+            EntryType entryType,
+            long amountMinor,
+            long balanceAfterMinor,
+            UUID lotId,
+            UUID orderId,
+            UUID tenderId,
+            UUID ruleId,
+            Integer ruleVersion,
+            String reasonCode,
+            String actor,
+            UUID approvalId,
+            String idempotencyKey,
+            Instant occurredAt) {}
 
     /**
      * Appends a movement.
@@ -290,9 +323,7 @@ public class JdbcLoyaltyStore {
                     :lotId, :orderId, :tenderId, :ruleId, :ruleVersion,
                     :reasonCode, :actor, :approvalId, :idempotencyKey, :occurredAt, :recordedAt)
                 ON CONFLICT ON CONSTRAINT uq_loyalty_entry_idempotency DO NOTHING
-                """)
-                .params(parameters)
-                .update() == 1;
+                """).params(parameters).update() == 1;
     }
 
     /**
@@ -320,9 +351,16 @@ public class JdbcLoyaltyStore {
         }
     }
 
-    public record EntryRow(UUID id, EntryType entryType, long amountMinor, long balanceAfterMinor,
-            UUID lotId, UUID orderId, UUID tenderId, String reasonCode, Instant occurredAt) {
-    }
+    public record EntryRow(
+            UUID id,
+            EntryType entryType,
+            long amountMinor,
+            long balanceAfterMinor,
+            UUID lotId,
+            UUID orderId,
+            UUID tenderId,
+            String reasonCode,
+            Instant occurredAt) {}
 
     public List<EntryRow> entries(UUID tenantId, UUID accountId, int limit) {
         return jdbc.sql("""
@@ -333,7 +371,9 @@ public class JdbcLoyaltyStore {
                  ORDER BY occurred_at DESC, recorded_at DESC
                  LIMIT :limit
                 """)
-                .param("tenantId", tenantId).param("accountId", accountId).param("limit", limit)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("limit", limit)
                 .query((row, number) -> new EntryRow(
                         row.getObject("id", UUID.class),
                         EntryType.valueOf(row.getString("entry_type")),
@@ -356,7 +396,8 @@ public class JdbcLoyaltyStore {
                  WHERE tenant_id = :tenantId AND tender_id = :tenderId
                  ORDER BY recorded_at
                 """)
-                .param("tenantId", tenantId).param("tenderId", tenderId)
+                .param("tenantId", tenantId)
+                .param("tenderId", tenderId)
                 .query((row, number) -> new EntryRow(
                         row.getObject("id", UUID.class),
                         EntryType.valueOf(row.getString("entry_type")),
@@ -382,8 +423,10 @@ public class JdbcLoyaltyStore {
                 SELECT COALESCE(SUM(amount_minor), 0) FROM loyalty.entries
                  WHERE tenant_id = :tenantId AND account_id = :accountId
                 """)
-                .param("tenantId", tenantId).param("accountId", accountId)
-                .query(Long.class).single();
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .query(Long.class)
+                .single();
         return total == null ? 0L : total;
     }
 
@@ -399,10 +442,18 @@ public class JdbcLoyaltyStore {
      *                        move, and an entry that moves no balance is what
      *                        made {@code balance_minor = SUM(amount_minor)} false
      */
-    public record ClawbackRow(UUID id, UUID tenantId, UUID brandId, UUID accountId, UUID orderId,
-            long requestedMinor, long recoveredMinor, long writtenOffMinor, String reasonCode,
-            String actor, Instant occurredAt) {
-    }
+    public record ClawbackRow(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID accountId,
+            UUID orderId,
+            long requestedMinor,
+            long recoveredMinor,
+            long writtenOffMinor,
+            String reasonCode,
+            String actor,
+            Instant occurredAt) {}
 
     /**
      * Records a clawback, once per order.
@@ -440,9 +491,7 @@ public class JdbcLoyaltyStore {
                     :requested, :recovered, :writtenOff,
                     :reasonCode, :actor, :occurredAt, :recordedAt)
                 ON CONFLICT ON CONSTRAINT uq_loyalty_clawback_order DO NOTHING
-                """)
-                .params(parameters)
-                .update() == 1;
+                """).params(parameters).update() == 1;
     }
 
     /** What a redelivered clawback answers with, rather than recomputing it. */
@@ -451,7 +500,8 @@ public class JdbcLoyaltyStore {
                 SELECT * FROM loyalty.clawbacks
                  WHERE tenant_id = :tenantId AND order_id = :orderId
                 """)
-                .param("tenantId", tenantId).param("orderId", orderId)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
                 .query((row, number) -> new ClawbackRow(
                         row.getObject("id", UUID.class),
                         row.getObject("tenant_id", UUID.class),
@@ -474,9 +524,7 @@ public class JdbcLoyaltyStore {
      *                   explain. Positive is a balance with no entry behind it;
      *                   negative is an entry with no movement behind it
      */
-    public record LedgerDrift(UUID tenantId, UUID accountId, long balanceMinor, long ledgerMinor,
-            long driftMinor) {
-    }
+    public record LedgerDrift(UUID tenantId, UUID accountId, long balanceMinor, long ledgerMinor, long driftMinor) {}
 
     /**
      * Every account whose cached balance is not the sum of its own movements.
@@ -519,19 +567,34 @@ public class JdbcLoyaltyStore {
                     return new LedgerDrift(
                             row.getObject("tenant_id", UUID.class),
                             row.getObject("id", UUID.class),
-                            balance, ledger, Math.subtractExact(balance, ledger));
+                            balance,
+                            ledger,
+                            Math.subtractExact(balance, ledger));
                 })
                 .list();
     }
 
     // ----------------------------------------------------------------- lots
 
-    public record LotRow(UUID id, UUID accountId, long grantedMinor, long remainingMinor,
-            Instant earnsAt, Instant expiresAt, LotStatus status) {
-    }
+    public record LotRow(
+            UUID id,
+            UUID accountId,
+            long grantedMinor,
+            long remainingMinor,
+            Instant earnsAt,
+            Instant expiresAt,
+            LotStatus status) {}
 
-    public void insertLot(UUID id, UUID tenantId, UUID accountId, UUID sourceEntryId,
-            long grantedMinor, Instant earnsAt, Instant expiresAt, LotStatus status, Instant now) {
+    public void insertLot(
+            UUID id,
+            UUID tenantId,
+            UUID accountId,
+            UUID sourceEntryId,
+            long grantedMinor,
+            Instant earnsAt,
+            Instant expiresAt,
+            LotStatus status,
+            Instant now) {
         jdbc.sql("""
                 INSERT INTO loyalty.lots (
                     id, tenant_id, account_id, source_entry_id, granted_minor, remaining_minor,
@@ -540,10 +603,15 @@ public class JdbcLoyaltyStore {
                     :id, :tenantId, :accountId, :sourceEntryId, :granted, :granted,
                     :earnsAt, :expiresAt, :status, 1, :now, :now)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("accountId", accountId)
-                .param("sourceEntryId", sourceEntryId).param("granted", grantedMinor)
-                .param("earnsAt", utc(earnsAt)).param("expiresAt", utc(expiresAt))
-                .param("status", status.name()).param("now", utc(now))
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("sourceEntryId", sourceEntryId)
+                .param("granted", grantedMinor)
+                .param("earnsAt", utc(earnsAt))
+                .param("expiresAt", utc(expiresAt))
+                .param("status", status.name())
+                .param("now", utc(now))
                 .update();
     }
 
@@ -555,8 +623,7 @@ public class JdbcLoyaltyStore {
      * about to change. The account debit is the real gate; this stops two winners
      * of two different accounts' races from interleaving lot writes.
      */
-    public List<LotConsumption.AvailableLot> availableLots(UUID tenantId, UUID accountId,
-            Instant asOf) {
+    public List<LotConsumption.AvailableLot> availableLots(UUID tenantId, UUID accountId, Instant asOf) {
         return jdbc.sql("""
                 SELECT id, remaining_minor, expires_at, earns_at
                   FROM loyalty.lots
@@ -568,7 +635,9 @@ public class JdbcLoyaltyStore {
                  ORDER BY expires_at, earns_at, id
                  FOR UPDATE
                 """)
-                .param("tenantId", tenantId).param("accountId", accountId).param("asOf", utc(asOf))
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("asOf", utc(asOf))
                 .query((row, number) -> new LotConsumption.AvailableLot(
                         row.getObject("id", UUID.class),
                         row.getLong("remaining_minor"),
@@ -591,14 +660,18 @@ public class JdbcLoyaltyStore {
                  WHERE tenant_id = :tenantId AND account_id = :accountId
                    AND status = 'ACTIVE' AND earns_at <= :asOf AND expires_at > :asOf
                 """)
-                .param("tenantId", tenantId).param("accountId", accountId).param("asOf", utc(asOf))
-                .query(Long.class).single();
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("asOf", utc(asOf))
+                .query(Long.class)
+                .single();
         return total == null ? 0L : total;
     }
 
     public Optional<LotRow> findLot(UUID tenantId, UUID lotId) {
         return jdbc.sql("SELECT * FROM loyalty.lots WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", lotId)
+                .param("tenantId", tenantId)
+                .param("id", lotId)
                 .query(JdbcLoyaltyStore::toLot)
                 .optional();
     }
@@ -619,9 +692,12 @@ public class JdbcLoyaltyStore {
                  WHERE tenant_id = :tenantId AND id = :id
                    AND remaining_minor >= :amount
                 """)
-                .param("tenantId", tenantId).param("id", lotId)
-                .param("amount", amountMinor).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", lotId)
+                        .param("amount", amountMinor)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -714,14 +790,14 @@ public class JdbcLoyaltyStore {
                  WHERE tenant_id = :tenantId AND id = :id
                 RETURNING status, remaining_minor
                 """)
-                .param("tenantId", tenantId).param("id", lotId)
-                .param("amount", amountMinor).param("now", utc(now))
-                .query((row, number) -> new RestoredLot(
-                        LotStatus.valueOf(row.getString("status")),
-                        row.getLong("remaining_minor")))
+                .param("tenantId", tenantId)
+                .param("id", lotId)
+                .param("amount", amountMinor)
+                .param("now", utc(now))
+                .query((row, number) ->
+                        new RestoredLot(LotStatus.valueOf(row.getString("status")), row.getLong("remaining_minor")))
                 .optional()
-                .orElseThrow(() -> new IllegalStateException(
-                        "No such lot to restore points to: " + lotId));
+                .orElseThrow(() -> new IllegalStateException("No such lot to restore points to: " + lotId));
     }
 
     /** Lots whose earn delay has elapsed. The sweep that makes deferred accrual spendable. */
@@ -732,7 +808,8 @@ public class JdbcLoyaltyStore {
                  ORDER BY earns_at
                  LIMIT :limit
                 """)
-                .param("asOf", utc(asOf)).param("limit", limit)
+                .param("asOf", utc(asOf))
+                .param("limit", limit)
                 .query(JdbcLoyaltyStore::toLot)
                 .list();
     }
@@ -743,7 +820,9 @@ public class JdbcLoyaltyStore {
                    SET status = 'ACTIVE', version = version + 1, updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id AND status = 'PENDING'
                 """)
-                .param("tenantId", tenantId).param("id", lotId).param("now", utc(now))
+                .param("tenantId", tenantId)
+                .param("id", lotId)
+                .param("now", utc(now))
                 .update();
     }
 
@@ -792,7 +871,8 @@ public class JdbcLoyaltyStore {
                  ORDER BY expires_at
                  LIMIT :limit
                 """)
-                .param("asOf", utc(asOf)).param("limit", limit)
+                .param("asOf", utc(asOf))
+                .param("limit", limit)
                 .query(JdbcLoyaltyStore::toLot)
                 .list();
     }
@@ -824,9 +904,12 @@ public class JdbcLoyaltyStore {
                    AND remaining_minor = :expected
                    AND status <> 'FORFEITED'
                 """)
-                .param("tenantId", tenantId).param("id", lotId)
-                .param("expected", expectedRemainingMinor).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", lotId)
+                        .param("expected", expectedRemainingMinor)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -855,9 +938,12 @@ public class JdbcLoyaltyStore {
                  WHERE tenant_id = :tenantId AND id = :id
                    AND remaining_minor = :expected
                 """)
-                .param("tenantId", tenantId).param("id", lotId)
-                .param("expected", expectedRemainingMinor).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", lotId)
+                        .param("expected", expectedRemainingMinor)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -886,8 +972,10 @@ public class JdbcLoyaltyStore {
                    AND status NOT IN ('PENDING', 'ACTIVE')
                    AND remaining_minor > 0
                 """)
-                .param("tenantId", tenantId).param("accountId", accountId)
-                .query(Long.class).single();
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .query(Long.class)
+                .single();
         return total == null ? 0L : total;
     }
 
@@ -899,9 +987,12 @@ public class JdbcLoyaltyStore {
                  WHERE tenant_id = :tenantId AND id = :id
                    AND status IN ('PENDING', 'ACTIVE')
                 """)
-                .param("tenantId", tenantId).param("id", lotId)
-                .param("status", status.name()).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", lotId)
+                        .param("status", status.name())
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /** Every lot with value left, for closure forfeiture and for the liability report. */
@@ -912,17 +1003,24 @@ public class JdbcLoyaltyStore {
                    AND status IN ('PENDING', 'ACTIVE') AND remaining_minor > 0
                  ORDER BY expires_at, earns_at, id
                 """)
-                .param("tenantId", tenantId).param("accountId", accountId)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
                 .query(JdbcLoyaltyStore::toLot)
                 .list();
     }
 
     // --------------------------------------------------------- reservations
 
-    public record ReservationRow(UUID id, UUID tenantId, UUID accountId, UUID orderId,
-            UUID tenderId, long amountMinor, ReservationStatus status, Instant expiresAt,
-            int version) {
-    }
+    public record ReservationRow(
+            UUID id,
+            UUID tenantId,
+            UUID accountId,
+            UUID orderId,
+            UUID tenderId,
+            long amountMinor,
+            ReservationStatus status,
+            Instant expiresAt,
+            int version) {}
 
     public void insertReservation(ReservationRow reservation, String idempotencyKey, Instant now) {
         jdbc.sql("""
@@ -933,24 +1031,28 @@ public class JdbcLoyaltyStore {
                     :id, :tenantId, :accountId, :orderId, :tenderId, :amount,
                     :status, :expiresAt, :idempotencyKey, 1, :now, :now)
                 """)
-                .param("id", reservation.id()).param("tenantId", reservation.tenantId())
-                .param("accountId", reservation.accountId()).param("orderId", reservation.orderId())
+                .param("id", reservation.id())
+                .param("tenantId", reservation.tenantId())
+                .param("accountId", reservation.accountId())
+                .param("orderId", reservation.orderId())
                 .param("tenderId", reservation.tenderId())
                 .param("amount", reservation.amountMinor())
                 .param("status", reservation.status().name())
                 .param("expiresAt", utc(reservation.expiresAt()))
-                .param("idempotencyKey", idempotencyKey).param("now", utc(now))
+                .param("idempotencyKey", idempotencyKey)
+                .param("now", utc(now))
                 .update();
     }
 
-    public void recordReservationLot(UUID reservationId, UUID lotId, UUID tenantId,
-            long amountMinor) {
+    public void recordReservationLot(UUID reservationId, UUID lotId, UUID tenantId, long amountMinor) {
         jdbc.sql("""
                 INSERT INTO loyalty.reservation_lots (reservation_id, lot_id, tenant_id, amount_minor)
                 VALUES (:reservationId, :lotId, :tenantId, :amount)
                 """)
-                .param("reservationId", reservationId).param("lotId", lotId)
-                .param("tenantId", tenantId).param("amount", amountMinor)
+                .param("reservationId", reservationId)
+                .param("lotId", lotId)
+                .param("tenantId", tenantId)
+                .param("amount", amountMinor)
                 .update();
     }
 
@@ -959,7 +1061,8 @@ public class JdbcLoyaltyStore {
                 SELECT * FROM loyalty.reservations
                  WHERE tenant_id = :tenantId AND tender_id = :tenderId
                 """)
-                .param("tenantId", tenantId).param("tenderId", tenderId)
+                .param("tenantId", tenantId)
+                .param("tenderId", tenderId)
                 .query(JdbcLoyaltyStore::toReservation)
                 .optional();
     }
@@ -973,11 +1076,10 @@ public class JdbcLoyaltyStore {
                  WHERE rl.tenant_id = :tenantId AND rl.reservation_id = :reservationId
                  ORDER BY l.expires_at, l.earns_at, l.id
                 """)
-                .param("tenantId", tenantId).param("reservationId", reservationId)
+                .param("tenantId", tenantId)
+                .param("reservationId", reservationId)
                 .query((row, number) -> new LotConsumption(
-                        row.getObject("lot_id", UUID.class),
-                        row.getLong("amount_minor"),
-                        instant(row, "expires_at")))
+                        row.getObject("lot_id", UUID.class), row.getLong("amount_minor"), instant(row, "expires_at")))
                 .list();
     }
 
@@ -987,16 +1089,20 @@ public class JdbcLoyaltyStore {
      * @return true when this call made the transition, so a repeated release or a
      *         release racing a settlement moves the points exactly once
      */
-    public boolean transitionReservation(UUID tenantId, UUID reservationId,
-            ReservationStatus from, ReservationStatus to, Instant now) {
+    public boolean transitionReservation(
+            UUID tenantId, UUID reservationId, ReservationStatus from, ReservationStatus to, Instant now) {
         return jdbc.sql("""
                 UPDATE loyalty.reservations
                    SET status = :to, version = version + 1, updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id AND status = :from
                 """)
-                .param("tenantId", tenantId).param("id", reservationId)
-                .param("from", from.name()).param("to", to.name()).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", reservationId)
+                        .param("from", from.name())
+                        .param("to", to.name())
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -1022,7 +1128,8 @@ public class JdbcLoyaltyStore {
                  ORDER BY expires_at
                  LIMIT :limit
                 """)
-                .param("asOf", utc(asOf)).param("limit", limit)
+                .param("asOf", utc(asOf))
+                .param("limit", limit)
                 .query(JdbcLoyaltyStore::toReservation)
                 .list();
     }
@@ -1042,16 +1149,24 @@ public class JdbcLoyaltyStore {
                    SET expires_at = :expiresAt, version = version + 1, updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id AND status = 'HELD'
                 """)
-                .param("tenantId", tenantId).param("id", reservationId)
-                .param("expiresAt", utc(expiresAt)).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", reservationId)
+                        .param("expiresAt", utc(expiresAt))
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     // ---------------------------------------------------- rules and policies
 
-    public record AccrualRuleRow(UUID id, int version, int rateBasisPoints, Long maxAccrualMinor,
-            int earnDelayHours, int lotLifetimeDays, int expiryWarningDays) {
-    }
+    public record AccrualRuleRow(
+            UUID id,
+            int version,
+            int rateBasisPoints,
+            Long maxAccrualMinor,
+            int earnDelayHours,
+            int lotLifetimeDays,
+            int expiryWarningDays) {}
 
     /**
      * The accrual rule in force for a brand at an instant.
@@ -1060,8 +1175,8 @@ public class JdbcLoyaltyStore {
      * brand's. Ordered rather than filtered in Java so that the rule an entry
      * snapshots is decided by one query a report can repeat.
      */
-    public Optional<AccrualRuleRow> accrualRule(UUID tenantId, UUID brandId, UUID locationId,
-            UUID channelId, Instant asOf) {
+    public Optional<AccrualRuleRow> accrualRule(
+            UUID tenantId, UUID brandId, UUID locationId, UUID channelId, Instant asOf) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
         parameters.put("brandId", brandId);
@@ -1096,12 +1211,15 @@ public class JdbcLoyaltyStore {
                 .optional();
     }
 
-    public record RedemptionPolicyRow(UUID id, int version, int maxShareBasisPoints,
-            long minOrderMinor, boolean excludesDeliveryFee, List<String> allowedChannels) {
-    }
+    public record RedemptionPolicyRow(
+            UUID id,
+            int version,
+            int maxShareBasisPoints,
+            long minOrderMinor,
+            boolean excludesDeliveryFee,
+            List<String> allowedChannels) {}
 
-    public Optional<RedemptionPolicyRow> redemptionPolicy(UUID tenantId, UUID brandId,
-            Instant asOf) {
+    public Optional<RedemptionPolicyRow> redemptionPolicy(UUID tenantId, UUID brandId, Instant asOf) {
         return jdbc.sql("""
                 SELECT id, version, max_share_basis_points, min_order_minor,
                        excludes_delivery_fee, allowed_channels
@@ -1113,7 +1231,9 @@ public class JdbcLoyaltyStore {
                  ORDER BY valid_from DESC
                  LIMIT 1
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId).param("asOf", utc(asOf))
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("asOf", utc(asOf))
                 .query((row, number) -> new RedemptionPolicyRow(
                         row.getObject("id", UUID.class),
                         row.getInt("version"),
@@ -1134,9 +1254,13 @@ public class JdbcLoyaltyStore {
      * checked against a value the caller supplied is a rule the caller can lie
      * about.
      */
-    public record OrderFacts(UUID brandId, UUID customerAccountId, String channelCode,
-            String currency, long totalMinor, long feeMinor) {
-    }
+    public record OrderFacts(
+            UUID brandId,
+            UUID customerAccountId,
+            String channelCode,
+            String currency,
+            long totalMinor,
+            long feeMinor) {}
 
     public Optional<OrderFacts> orderFacts(UUID tenantId, UUID orderId) {
         return jdbc.sql("""
@@ -1145,7 +1269,8 @@ public class JdbcLoyaltyStore {
                   FROM ordering.orders
                  WHERE tenant_id = :tenantId AND id = :orderId
                 """)
-                .param("tenantId", tenantId).param("orderId", orderId)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
                 .query((row, number) -> new OrderFacts(
                         row.getObject("brand_id", UUID.class),
                         row.getObject("customer_account_id", UUID.class),
@@ -1162,9 +1287,8 @@ public class JdbcLoyaltyStore {
      * @param outstandingMinor what the tenant would owe if every point were spent
      * @param heldMinor        the part currently held by an unsettled tender
      */
-    public record LiabilityRow(UUID brandId, String currency, long outstandingMinor,
-            long heldMinor, long accountCount) {
-    }
+    public record LiabilityRow(
+            UUID brandId, String currency, long outstandingMinor, long heldMinor, long accountCount) {}
 
     /**
      * What the brand owes, per brand and never pooled.

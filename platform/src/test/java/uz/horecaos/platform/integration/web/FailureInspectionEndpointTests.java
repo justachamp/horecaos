@@ -8,7 +8,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,7 +26,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.support.TestDatabase;
@@ -64,6 +62,7 @@ class FailureInspectionEndpointTests {
      * name.
      */
     private static final String SENTINEL_NAME = "PII-SENTINEL-DO-NOT-DISCLOSE";
+
     private static final String SENTINEL_PHONE = "+998900000000";
 
     /**
@@ -139,7 +138,8 @@ class FailureInspectionEndpointTests {
     void anOperatorCanInspectOneOutboxEventWithoutFilteringAList() throws Exception {
         UUID eventId = deadLetteredOutboxEvent(TENANT);
 
-        MvcResult read = mvc.perform(get(FAILURES + "/outbox/" + eventId).with(tokenFor(OPERATOR))).andReturn();
+        MvcResult read = mvc.perform(get(FAILURES + "/outbox/" + eventId).with(tokenFor(OPERATOR)))
+                .andReturn();
 
         assertThat(read.getResponse().getStatus()).isEqualTo(200);
         assertThat(read.getResponse().getContentAsString())
@@ -161,7 +161,9 @@ class FailureInspectionEndpointTests {
         UUID eventId = deadLetteredOutboxEvent(TENANT);
 
         String body = mvc.perform(get(FAILURES + "/outbox/" + eventId).with(tokenFor(OPERATOR)))
-                .andReturn().getResponse().getContentAsString();
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
 
         assertThat(body)
                 .as("a single-item read is exactly where somebody renders the whole row 'to help debugging'")
@@ -182,8 +184,11 @@ class FailureInspectionEndpointTests {
         // through HorecaOS's own classification.
         UUID eventId = deadLetteredInboxMessage("orders-consumer", UUID.randomUUID(), TENANT, 3);
 
-        String body = mvc.perform(get(FAILURES + "/inbox/orders-consumer/" + eventId).with(tokenFor(OPERATOR)))
-                .andReturn().getResponse().getContentAsString();
+        String body = mvc.perform(
+                        get(FAILURES + "/inbox/orders-consumer/" + eventId).with(tokenFor(OPERATOR)))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
 
         assertThat(body)
                 .doesNotContain(SENTINEL_NAME)
@@ -205,15 +210,13 @@ class FailureInspectionEndpointTests {
         // The same correlation id on both, because ADR 0031 stamps a fresh one
         // into every problem body and two random ones would make the comparison
         // below fail for a reason that has nothing to do with what it tests.
-        MvcResult crossTenant = mvc.perform(
-                        get(FAILURES + "/outbox/" + theirs + "?tenantId=" + TENANT)
-                                .header(CorrelationIdFilter.HEADER_NAME, "failure-inspection-oracle")
-                                .with(tokenFor(OPERATOR)))
+        MvcResult crossTenant = mvc.perform(get(FAILURES + "/outbox/" + theirs + "?tenantId=" + TENANT)
+                        .header(CorrelationIdFilter.HEADER_NAME, "failure-inspection-oracle")
+                        .with(tokenFor(OPERATOR)))
                 .andReturn();
-        MvcResult neverExisted = mvc.perform(
-                        get(FAILURES + "/outbox/" + UUID.randomUUID() + "?tenantId=" + TENANT)
-                                .header(CorrelationIdFilter.HEADER_NAME, "failure-inspection-oracle")
-                                .with(tokenFor(OPERATOR)))
+        MvcResult neverExisted = mvc.perform(get(FAILURES + "/outbox/" + UUID.randomUUID() + "?tenantId=" + TENANT)
+                        .header(CorrelationIdFilter.HEADER_NAME, "failure-inspection-oracle")
+                        .with(tokenFor(OPERATOR)))
                 .andReturn();
 
         assertThat(crossTenant.getResponse().getStatus())
@@ -237,8 +240,10 @@ class FailureInspectionEndpointTests {
         UUID theirs = deadLetteredInboxMessage("orders-consumer", UUID.randomUUID(), OTHER_TENANT, 3);
 
         assertThat(mvc.perform(get(FAILURES + "/inbox/orders-consumer/" + theirs + "?tenantId=" + TENANT)
-                        .with(tokenFor(OPERATOR)))
-                .andReturn().getResponse().getStatus())
+                                .with(tokenFor(OPERATOR)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
                 .isEqualTo(404);
     }
 
@@ -252,15 +257,18 @@ class FailureInspectionEndpointTests {
         deadLetteredInboxMessage("orders-consumer", eventId, TENANT, 3);
         deadLetteredInboxMessage("notifications-consumer", eventId, TENANT, 7);
 
-        String orders = mvc.perform(get(FAILURES + "/inbox/orders-consumer/" + eventId).with(tokenFor(OPERATOR)))
-                .andReturn().getResponse().getContentAsString();
-        String notifications = mvc.perform(
-                        get(FAILURES + "/inbox/notifications-consumer/" + eventId).with(tokenFor(OPERATOR)))
-                .andReturn().getResponse().getContentAsString();
+        String orders = mvc.perform(
+                        get(FAILURES + "/inbox/orders-consumer/" + eventId).with(tokenFor(OPERATOR)))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String notifications = mvc.perform(get(FAILURES + "/inbox/notifications-consumer/" + eventId)
+                        .with(tokenFor(OPERATOR)))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
 
-        assertThat(orders)
-                .contains("\"consumerName\":\"orders-consumer\"")
-                .contains("\"attemptCount\":3");
+        assertThat(orders).contains("\"consumerName\":\"orders-consumer\"").contains("\"attemptCount\":3");
         assertThat(notifications)
                 .contains("\"consumerName\":\"notifications-consumer\"")
                 .contains("\"attemptCount\":7");
@@ -270,8 +278,11 @@ class FailureInspectionEndpointTests {
     void aConsumerThatNeverSawTheEventIsNotFound() throws Exception {
         UUID eventId = deadLetteredInboxMessage("orders-consumer", UUID.randomUUID(), TENANT, 3);
 
-        assertThat(mvc.perform(get(FAILURES + "/inbox/notifications-consumer/" + eventId).with(tokenFor(OPERATOR)))
-                .andReturn().getResponse().getStatus())
+        assertThat(mvc.perform(get(FAILURES + "/inbox/notifications-consumer/" + eventId)
+                                .with(tokenFor(OPERATOR)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
                 .as("the pair is the key, so a real event id under the wrong consumer is simply absent")
                 .isEqualTo(404);
     }
@@ -284,7 +295,9 @@ class FailureInspectionEndpointTests {
         UUID eventId = deadLetteredOutboxEvent(TENANT);
 
         assertThat(mvc.perform(get(FAILURES + "/outbox/" + eventId).with(tokenFor(OUTSIDER)))
-                .andReturn().getResponse().getStatus())
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
                 .isEqualTo(403);
     }
 
@@ -341,8 +354,8 @@ class FailureInspectionEndpointTests {
     }
 
     private static String personalPayload() {
-        return "{\"orderNumber\":\"A-17\",\"customerName\":\"" + SENTINEL_NAME
-                + "\",\"customerPhone\":\"" + SENTINEL_PHONE + "\"}";
+        return "{\"orderNumber\":\"A-17\",\"customerName\":\"" + SENTINEL_NAME + "\",\"customerPhone\":\""
+                + SENTINEL_PHONE + "\"}";
     }
 
     private void insertTenant(UUID id, String slug) {
@@ -367,8 +380,7 @@ class FailureInspectionEndpointTests {
                         'ACTIVE', 'test-fixture', 'failure inspection endpoint test')
                 ON CONFLICT DO NOTHING
                 """)
-                .param("id", UUID.nameUUIDFromBytes(
-                        (subject + PlatformRole.PLATFORM_SUPPORT.code()).getBytes(UTF_8)))
+                .param("id", UUID.nameUUIDFromBytes((subject + PlatformRole.PLATFORM_SUPPORT.code()).getBytes(UTF_8)))
                 .param("subject", subject)
                 .param("roleId", RoleRegistrySynchronizer.platformRoleId(PlatformRole.PLATFORM_SUPPORT))
                 .update();
@@ -380,9 +392,8 @@ class FailureInspectionEndpointTests {
      * holding that role would make the refusal above prove nothing.
      */
     private static RequestPostProcessor tokenFor(String subject) {
-        return jwt().jwt(builder -> builder
-                .subject(subject)
-                .claim("resource_access", Map.of("horecaos-api", Map.of("roles", List.of()))));
+        return jwt().jwt(builder ->
+                builder.subject(subject).claim("resource_access", Map.of("horecaos-api", Map.of("roles", List.of()))));
     }
 
     @TestConfiguration(proxyBeanMethods = false)
@@ -390,7 +401,10 @@ class FailureInspectionEndpointTests {
 
         @Bean
         JwtDecoder jwtDecoder() {
-            return token -> Jwt.withTokenValue(token).header("alg", "none").claim("sub", "unused").build();
+            return token -> Jwt.withTokenValue(token)
+                    .header("alg", "none")
+                    .claim("sub", "unused")
+                    .build();
         }
     }
 }

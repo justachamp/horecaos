@@ -1,7 +1,5 @@
 package uz.horecaos.platform.marketing;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -13,7 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -21,12 +19,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
@@ -122,8 +117,8 @@ class MarketingCampaignTests {
 
     @BeforeAll
     static void startDatabase() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
-                "Docker is required for marketing campaign tests");
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(), "Docker is required for marketing campaign tests");
         db = TestDatabase.migrated();
         jdbcUrl = db.jdbcUrl();
         username = db.username();
@@ -144,8 +139,8 @@ class MarketingCampaignTests {
         truncate();
 
         objectMapper = JsonMapper.builder().build();
-        SecretResolver secrets = new EnvironmentSecretResolver(Map.of(
-                "horecaos.secrets.data_encryption.platform.kek", "a-test-key-encryption-key")::get,
+        SecretResolver secrets = new EnvironmentSecretResolver(
+                Map.of("horecaos.secrets.data_encryption.platform.kek", "a-test-key-encryption-key")::get,
                 Clock.fixed(NOW, ZoneOffset.UTC));
         protection = new EnvelopeFieldProtection(new DataEncryptionKeyProvider(secrets, "local"));
 
@@ -181,17 +176,14 @@ class MarketingCampaignTests {
                     .withBody("en", "A discount for you, {{name}}!");
         }
 
-        MarketingEligibility eligibility =
-                new MarketingEligibility(consent, contacts, engagementStore);
+        MarketingEligibility eligibility = new MarketingEligibility(consent, contacts, engagementStore);
         CampaignCostEstimator estimator = new CampaignCostEstimator();
 
         projection = new CustomerMetricProjectionService(metricStore, clock);
-        audiences = new AudienceService(audienceStore, metricStore, engagementStore, eligibility,
-                audit, clock);
-        campaigns = new CampaignService(campaignStore, engagementStore, audiences, estimator,
-                port, audit, clock);
-        sends = new CampaignSendService(campaignStore, audienceStore, engagementStore, eligibility,
-                estimator, port, clock, 100);
+        audiences = new AudienceService(audienceStore, metricStore, engagementStore, eligibility, audit, clock);
+        campaigns = new CampaignService(campaignStore, engagementStore, audiences, estimator, port, audit, clock);
+        sends = new CampaignSendService(
+                campaignStore, audienceStore, engagementStore, eligibility, estimator, port, clock, 100);
         suppressions = new MarketingSuppressionService(engagementStore, audit, clock);
     }
 
@@ -209,8 +201,7 @@ class MarketingCampaignTests {
 
         // The decision changes after the approver signed. ADR 0015 is append-only,
         // so this is a new decision rather than an edit of the old one.
-        consent.record(TENANT, account, BRAND, PURPOSE, "SMS", Decision.WITHDRAWN, "v1",
-                Source.STOREFRONT, null, NOW);
+        consent.record(TENANT, account, BRAND, PURPOSE, "SMS", Decision.WITHDRAWN, "v1", Source.STOREFRONT, null, NOW);
 
         sends.expandNextBatch(TENANT, campaign);
 
@@ -230,14 +221,21 @@ class MarketingCampaignTests {
     void suppressionBeatsConsent() {
         UUID account = customer("+998902222222", "ru", true);
         grantConsent(account);
-        suppressions.suppress(TENANT, BRAND, account, MarketingChannel.SMS,
-                SuppressionReason.HARD_BOUNCE, MarketingSuppressionService.ACTOR_PROVIDER, null,
-                ActorRef.service("sms-gateway"), "The operator reported an invalid number", "corr");
+        suppressions.suppress(
+                TENANT,
+                BRAND,
+                account,
+                MarketingChannel.SMS,
+                SuppressionReason.HARD_BOUNCE,
+                MarketingSuppressionService.ACTOR_PROVIDER,
+                null,
+                ActorRef.service("sms-gateway"),
+                "The operator reported an invalid number",
+                "corr");
         projection.backfill(TENANT, BRAND);
 
         UUID audience = everybodyRegistered();
-        var snapshot = audiences.buildSnapshot(TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE,
-                author, "corr");
+        var snapshot = audiences.buildSnapshot(TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE, author, "corr");
 
         assertThat(snapshot.candidateCount()).isEqualTo(1);
         assertThat(snapshot.memberCount()).isZero();
@@ -251,8 +249,7 @@ class MarketingCampaignTests {
         projection.backfill(TENANT, BRAND);
 
         UUID audience = everybodyRegistered();
-        var snapshot = audiences.buildSnapshot(TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE,
-                author, "corr");
+        var snapshot = audiences.buildSnapshot(TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE, author, "corr");
 
         // The migrated base carries no marketing consent, because no legacy table
         // records one. The first post-cutover campaign reaching a small fraction of
@@ -269,11 +266,9 @@ class MarketingCampaignTests {
         projection.backfill(TENANT, BRAND);
 
         UUID audience = everybodyRegistered();
-        var snapshot = audiences.buildSnapshot(TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE,
-                author, "corr");
+        var snapshot = audiences.buildSnapshot(TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE, author, "corr");
 
-        assertThat(exclusionReason(snapshot.snapshotId(), account))
-                .isEqualTo("NO_VERIFIED_ENDPOINT");
+        assertThat(exclusionReason(snapshot.snapshotId(), account)).isEqualTo("NO_VERIFIED_ENDPOINT");
     }
 
     // ------------------------------------------------------- cost and replay
@@ -316,9 +311,14 @@ class MarketingCampaignTests {
 
         // The same worker, or another, replaying the same sequence. The batch row's
         // primary key refuses the claim and nothing else happens.
-        var replay = campaignStore.claimBatch(TENANT, campaign,
+        var replay = campaignStore.claimBatch(
+                TENANT,
+                campaign,
                 campaignStore.find(TENANT, campaign).orElseThrow().snapshotId(),
-                0, 1, 100L, NOW);
+                0,
+                1,
+                100L,
+                NOW);
         assertThat(replay).isEqualTo(JdbcCampaignStore.BatchClaim.ALREADY_CLAIMED);
 
         assertThat(port.distinctMessages()).isEqualTo(1);
@@ -343,7 +343,8 @@ class MarketingCampaignTests {
         var outcome = sends.expandNextBatch(TENANT, campaign);
 
         assertThat(outcome.deferred()).isTrue();
-        assertThat(campaignStore.recipients(TENANT, campaign, 10)).singleElement()
+        assertThat(campaignStore.recipients(TENANT, campaign, 10))
+                .singleElement()
                 .satisfies(row -> {
                     assertThat(row.status()).isEqualTo("DEFERRED");
                     assertThat(row.notificationId()).isNotNull();
@@ -360,22 +361,20 @@ class MarketingCampaignTests {
         grantConsent(account);
         projection.backfill(TENANT, BRAND);
 
-        engagementStore.recordSend(TENANT, BRAND, account, "SMS", "CAMPAIGN",
-                UUID.randomUUID(), null, NOW.minusSeconds(3600));
-        engagementStore.recordSend(TENANT, BRAND, account, "PUSH", "TRIGGER",
-                UUID.randomUUID(), null, NOW.minusSeconds(7200));
-        engagementStore.recordSend(TENANT, BRAND, account, "MESSAGING_APP", "CAMPAIGN",
-                UUID.randomUUID(), null, NOW.minusSeconds(10800));
+        engagementStore.recordSend(
+                TENANT, BRAND, account, "SMS", "CAMPAIGN", UUID.randomUUID(), null, NOW.minusSeconds(3600));
+        engagementStore.recordSend(
+                TENANT, BRAND, account, "PUSH", "TRIGGER", UUID.randomUUID(), null, NOW.minusSeconds(7200));
+        engagementStore.recordSend(
+                TENANT, BRAND, account, "MESSAGING_APP", "CAMPAIGN", UUID.randomUUID(), null, NOW.minusSeconds(10800));
 
         UUID audience = everybodyRegistered();
-        var snapshot = audiences.buildSnapshot(TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE,
-                author, "corr");
+        var snapshot = audiences.buildSnapshot(TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE, author, "corr");
 
         // Three against a cap of three. The customer experiences one brand rather
         // than three transports, and enabling another channel substitutes for reach
         // rather than adding to it.
-        assertThat(exclusionReason(snapshot.snapshotId(), account))
-                .isEqualTo("FREQUENCY_CAP_REACHED");
+        assertThat(exclusionReason(snapshot.snapshotId(), account)).isEqualTo("FREQUENCY_CAP_REACHED");
     }
 
     // ---------------------------------------------------------- the boundary
@@ -383,8 +382,7 @@ class MarketingCampaignTests {
     @Test
     @DisplayName("a tenant override may tighten the cap and is refused when it loosens")
     void overridesTightenOnly() {
-        engagementStore.saveOverride(TENANT, BRAND,
-                new EngagementOverride(null, null, null, 1, 4, 500L, "UZS"), NOW);
+        engagementStore.saveOverride(TENANT, BRAND, new EngagementOverride(null, null, null, 1, 4, 500L, "UZS"), NOW);
 
         var policy = engagementStore.resolvePolicy(TENANT, BRAND);
         assertThat(policy.messagesPer7Days()).isEqualTo(1);
@@ -396,7 +394,9 @@ class MarketingCampaignTests {
                 UPDATE marketing.engagement_policies SET marketing_messages_per_7d = 20
                  WHERE tenant_id = :tenantId AND brand_id = :brandId
                 """)
-                .param("tenantId", TENANT).param("brandId", BRAND).update())
+                        .param("tenantId", TENANT)
+                        .param("brandId", BRAND)
+                        .update())
                 .hasMessageContaining("ck_engagement_cap_tighten_only");
     }
 
@@ -408,13 +408,13 @@ class MarketingCampaignTests {
         projection.backfill(TENANT, BRAND);
 
         UUID audience = everybodyRegistered();
-        var snapshot = audiences.buildSnapshot(TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE,
-                author, "corr");
+        var snapshot = audiences.buildSnapshot(TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE, author, "corr");
 
         assertThat(audienceStore.findAudience(OTHER_TENANT, audience)).isEmpty();
-        assertThat(audienceStore.findSnapshot(OTHER_TENANT, snapshot.snapshotId())).isEmpty();
-        assertThat(audienceStore.includedMembersAfter(OTHER_TENANT, snapshot.snapshotId(),
-                null, 100)).isEmpty();
+        assertThat(audienceStore.findSnapshot(OTHER_TENANT, snapshot.snapshotId()))
+                .isEmpty();
+        assertThat(audienceStore.includedMembersAfter(OTHER_TENANT, snapshot.snapshotId(), null, 100))
+                .isEmpty();
     }
 
     // ------------------------------------------------- retention and erasure
@@ -427,8 +427,7 @@ class MarketingCampaignTests {
         projection.backfill(TENANT, BRAND);
 
         UUID audience = everybodyRegistered();
-        var snapshot = audiences.buildSnapshot(TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE,
-                author, "corr");
+        var snapshot = audiences.buildSnapshot(TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE, author, "corr");
 
         audienceStore.purgeMembers(TENANT, snapshot.snapshotId(), NOW);
 
@@ -436,12 +435,11 @@ class MarketingCampaignTests {
                 .isEmpty();
         // Somebody will eventually want the list, and the answer will be that it
         // was deliberately not kept. The counts and the predicate version stay.
-        assertThat(audienceStore.findSnapshot(TENANT, snapshot.snapshotId()))
-                .hasValueSatisfying(header -> {
-                    assertThat(header.memberCount()).isEqualTo(1);
-                    assertThat(header.candidateCount()).isEqualTo(1);
-                    assertThat(header.membersPurgedAt()).isNotNull();
-                });
+        assertThat(audienceStore.findSnapshot(TENANT, snapshot.snapshotId())).hasValueSatisfying(header -> {
+            assertThat(header.memberCount()).isEqualTo(1);
+            assertThat(header.candidateCount()).isEqualTo(1);
+            assertThat(header.membersPurgedAt()).isNotNull();
+        });
     }
 
     @Test
@@ -479,10 +477,8 @@ class MarketingCampaignTests {
         projection.backfill(TENANT, BRAND);
 
         UUID audience = everybodyRegistered();
-        var first = audiences.buildSnapshot(TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE,
-                author, "corr");
-        var second = audiences.buildSnapshot(TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE,
-                author, "corr");
+        var first = audiences.buildSnapshot(TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE, author, "corr");
+        var second = audiences.buildSnapshot(TENANT, BRAND, audience, MarketingChannel.SMS, PURPOSE, author, "corr");
 
         // Two snapshots and two customers is the fixture that separates the delete
         // that scans the member table from the one driven through the snapshot
@@ -507,10 +503,8 @@ class MarketingCampaignTests {
         projection.backfill(TENANT, BRAND);
 
         corruptProjection(account);
-        int driftedInTwoStatements =
-                metricStore.observeDrift(TENANT, BRAND, NOW, MetricDefinitions.CURRENT_VERSION);
-        int rowsInTwoStatements =
-                metricStore.recompute(TENANT, BRAND, NOW, MetricDefinitions.CURRENT_VERSION);
+        int driftedInTwoStatements = metricStore.observeDrift(TENANT, BRAND, NOW, MetricDefinitions.CURRENT_VERSION);
+        int rowsInTwoStatements = metricStore.recompute(TENANT, BRAND, NOW, MetricDefinitions.CURRENT_VERSION);
         List<String> driftFromTwoStatements = driftSignature();
         var rowFromTwoStatements = metricStore.find(TENANT, BRAND, account).orElseThrow();
 
@@ -538,8 +532,7 @@ class MarketingCampaignTests {
                 UPDATE marketing.customer_metrics
                    SET order_count = 7, completed_order_count = 7, net_spend_minor = 99
                  WHERE tenant_id = :tenantId AND customer_account_id = :accountId
-                """)
-                .param("tenantId", TENANT).param("accountId", account).update();
+                """).param("tenantId", TENANT).param("accountId", account).update();
 
         var result = projection.sweep(TENANT, BRAND);
 
@@ -550,8 +543,8 @@ class MarketingCampaignTests {
         // The row is a bug report about the projection. The recompute that follows
         // it fixes the number; the observation is what stops the fix from hiding
         // the fault.
-        assertThat(metricStore.find(TENANT, BRAND, account)).hasValueSatisfying(row ->
-                assertThat(row.completedOrderCount()).isZero());
+        assertThat(metricStore.find(TENANT, BRAND, account))
+                .hasValueSatisfying(row -> assertThat(row.completedOrderCount()).isZero());
     }
 
     @Test
@@ -584,16 +577,27 @@ class MarketingCampaignTests {
         campaigns.prepare(TENANT, campaign, author, "corr");
         campaigns.submitForReview(TENANT, campaign);
 
-        boolean selfApproved = campaigns.approve(TENANT, campaign,
-                UUID.fromString(author.subject()), UUID.randomUUID(), author,
-                "Approving my own work", "corr");
+        boolean selfApproved = campaigns.approve(
+                TENANT,
+                campaign,
+                UUID.fromString(author.subject()),
+                UUID.randomUUID(),
+                author,
+                "Approving my own work",
+                "corr");
 
         assertThat(selfApproved).isFalse();
-        assertThat(campaignStore.find(TENANT, campaign).orElseThrow().status())
-                .isEqualTo(CampaignStatus.IN_REVIEW);
+        assertThat(campaignStore.find(TENANT, campaign).orElseThrow().status()).isEqualTo(CampaignStatus.IN_REVIEW);
 
-        assertThat(campaigns.approve(TENANT, campaign, UUID.fromString(approver.subject()),
-                UUID.randomUUID(), approver, "Reviewed the copy and the reach", "corr")).isTrue();
+        assertThat(campaigns.approve(
+                        TENANT,
+                        campaign,
+                        UUID.fromString(approver.subject()),
+                        UUID.randomUUID(),
+                        approver,
+                        "Reviewed the copy and the reach",
+                        "corr"))
+                .isTrue();
     }
 
     // ------------------------------------------------------------- fixtures
@@ -602,17 +606,34 @@ class MarketingCampaignTests {
         UUID campaign = draftCampaign(ceilingMinor);
         campaigns.prepare(TENANT, campaign, author, "corr");
         campaigns.submitForReview(TENANT, campaign);
-        campaigns.approve(TENANT, campaign, UUID.fromString(approver.subject()),
-                UUID.randomUUID(), approver, "Reviewed the copy and the reach", "corr");
+        campaigns.approve(
+                TENANT,
+                campaign,
+                UUID.fromString(approver.subject()),
+                UUID.randomUUID(),
+                approver,
+                "Reviewed the copy and the reach",
+                "corr");
         campaigns.start(TENANT, campaign);
         return campaign;
     }
 
     private UUID draftCampaign(long ceilingMinor) {
         UUID audience = everybodyRegistered();
-        return campaigns.create(TENANT, BRAND, "Autumn promotion " + UUID.randomUUID(),
-                MarketingChannel.SMS, PURPOSE, audience, "MARKETING_PROMOTION", 100,
-                ceilingMinor, "UZS", null, null, UUID.fromString(author.subject()));
+        return campaigns.create(
+                TENANT,
+                BRAND,
+                "Autumn promotion " + UUID.randomUUID(),
+                MarketingChannel.SMS,
+                PURPOSE,
+                audience,
+                "MARKETING_PROMOTION",
+                100,
+                ceilingMinor,
+                "UZS",
+                null,
+                null,
+                UUID.fromString(author.subject()));
     }
 
     /**
@@ -624,10 +645,15 @@ class MarketingCampaignTests {
      * precisely so nobody gets it by leaving a form empty.
      */
     private UUID everybodyRegistered() {
-        return audiences.define(TENANT, BRAND, "Everybody " + UUID.randomUUID(), null,
-                List.of(AudiencePredicate.numeric(PredicateType.ORDER_COUNT,
-                        PredicateOperator.AT_MOST, 1_000_000L, null)),
-                UUID.fromString(author.subject()), "corr");
+        return audiences.define(
+                TENANT,
+                BRAND,
+                "Everybody " + UUID.randomUUID(),
+                null,
+                List.of(AudiencePredicate.numeric(
+                        PredicateType.ORDER_COUNT, PredicateOperator.AT_MOST, 1_000_000L, null)),
+                UUID.fromString(author.subject()),
+                "corr");
     }
 
     private int snapshotMembers(UUID campaignId) {
@@ -640,7 +666,8 @@ class MarketingCampaignTests {
                 SELECT exclusion_reason FROM marketing.audience_snapshot_members
                  WHERE snapshot_id = :snapshotId AND customer_account_id = :accountId
                 """)
-                .param("snapshotId", snapshotId).param("accountId", accountId)
+                .param("snapshotId", snapshotId)
+                .param("accountId", accountId)
                 .query(String.class)
                 .single();
     }
@@ -650,8 +677,10 @@ class MarketingCampaignTests {
                 SELECT count(*) FROM marketing.audience_snapshot_members
                  WHERE tenant_id = :tenantId AND customer_account_id = :accountId
                 """)
-                .param("tenantId", TENANT).param("accountId", accountId)
-                .query(Integer.class).single();
+                .param("tenantId", TENANT)
+                .param("accountId", accountId)
+                .query(Integer.class)
+                .single();
     }
 
     /** Corrupts the projection the way a bad incremental fold would. */
@@ -660,27 +689,34 @@ class MarketingCampaignTests {
                 UPDATE marketing.customer_metrics
                    SET order_count = 7, completed_order_count = 7, net_spend_minor = 99
                  WHERE tenant_id = :tenantId AND customer_account_id = :accountId
-                """)
-                .param("tenantId", TENANT).param("accountId", accountId).update();
+                """).param("tenantId", TENANT).param("accountId", accountId).update();
     }
 
     /** The drift rows as values, so two runs can be compared without their ids. */
     private List<String> driftSignature() {
         return projection.drift(TENANT, BRAND).stream()
-                .map(row -> "%s=%s/%s".formatted(row.metricName(), row.projectedValue(),
-                        row.recomputedValue()))
+                .map(row -> "%s=%s/%s".formatted(row.metricName(), row.projectedValue(), row.recomputedValue()))
                 .sorted()
                 .toList();
     }
 
     private void priceSegmentsAt(long minorPerSegment) {
-        engagementStore.saveOverride(TENANT, BRAND,
-                new EngagementOverride(null, null, null, null, null, minorPerSegment, "UZS"), NOW);
+        engagementStore.saveOverride(
+                TENANT, BRAND, new EngagementOverride(null, null, null, null, null, minorPerSegment, "UZS"), NOW);
     }
 
     private void grantConsent(UUID accountId) {
-        consent.record(TENANT, accountId, BRAND, PURPOSE, "SMS", Decision.GRANTED, "v1",
-                Source.STOREFRONT, "storefront-checkbox", NOW.minusSeconds(86_400));
+        consent.record(
+                TENANT,
+                accountId,
+                BRAND,
+                PURPOSE,
+                "SMS",
+                Decision.GRANTED,
+                "v1",
+                Source.STOREFRONT,
+                "storefront-checkbox",
+                NOW.minusSeconds(86_400));
     }
 
     private UUID customer(String phone, String locale, boolean verified) {
@@ -690,7 +726,9 @@ class MarketingCampaignTests {
                     created_at)
                 VALUES (:id, :tenantId, 'ACTIVE', :locale, :now)
                 """)
-                .param("id", accountId).param("tenantId", TENANT).param("locale", locale)
+                .param("id", accountId)
+                .param("tenantId", TENANT)
+                .param("locale", locale)
                 .param("now", OffsetDateTime.ofInstant(NOW.minusSeconds(172_800), ZoneOffset.UTC))
                 .update();
 
@@ -698,8 +736,10 @@ class MarketingCampaignTests {
                 INSERT INTO customer.brand_profiles (id, tenant_id, brand_id, customer_account_id)
                 VALUES (:id, :tenantId, :brandId, :accountId)
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", TENANT)
-                .param("brandId", BRAND).param("accountId", accountId)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("accountId", accountId)
                 .update();
 
         UUID contactId = profiles.addContactPoint(TENANT, accountId, ContactType.PHONE, phone, true);
@@ -722,26 +762,26 @@ class MarketingCampaignTests {
                     id, slug, legal_name, display_name, default_currency, default_timezone,
                     status, version)
                 VALUES (:id, 'pilot', 'Legal', 'Pilot', 'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
-                """)
-                .param("id", TENANT).update();
+                """).param("id", TENANT).update();
 
         jdbc.sql("""
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status)
                 VALUES (:id, :tenantId, 'PILOT', 'pilot-brand', 'Pilot brand', 'ACTIVE')
-                """)
-                .param("id", BRAND).param("tenantId", TENANT).update();
+                """).param("id", BRAND).param("tenantId", TENANT).update();
     }
 
     private void truncate() {
         jdbc.sql("TRUNCATE TABLE marketing.campaign_recipients, marketing.campaign_batches, "
-                + "marketing.campaigns, marketing.audience_snapshot_members, "
-                + "marketing.audience_snapshots, marketing.audience_predicates, "
-                + "marketing.audiences, marketing.marketing_sends, marketing.suppressions, "
-                + "marketing.metric_drift_observations, marketing.customer_metrics, "
-                + "marketing.engagement_policies CASCADE").update();
+                        + "marketing.campaigns, marketing.audience_snapshot_members, "
+                        + "marketing.audience_snapshots, marketing.audience_predicates, "
+                        + "marketing.audiences, marketing.marketing_sends, marketing.suppressions, "
+                        + "marketing.metric_drift_observations, marketing.customer_metrics, "
+                        + "marketing.engagement_policies CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE customer.consent_decisions, customer.contact_points, "
-                + "customer.brand_profiles, customer.principal_links, "
-                + "customer.customer_accounts CASCADE").update();
+                        + "customer.brand_profiles, customer.principal_links, "
+                        + "customer.customer_accounts CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         port = null;
     }

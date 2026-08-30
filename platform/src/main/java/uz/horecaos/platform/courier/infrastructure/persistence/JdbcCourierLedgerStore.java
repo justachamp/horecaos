@@ -10,11 +10,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.courier.domain.AdjustmentOrigin;
 import uz.horecaos.platform.courier.domain.DistanceSource;
 import uz.horecaos.platform.courier.domain.LedgerEntryType;
@@ -64,14 +62,13 @@ public class JdbcCourierLedgerStore {
                     status, currency, version, created_at, updated_at)
                 VALUES (:id, :tenantId, :courierId, :engagementId, :start, :end,
                     'OPEN', :currency, 1, :now, :now)
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     public Optional<PeriodRow> findPeriod(UUID tenantId, UUID periodId) {
         return jdbc.sql(SELECT_PERIOD + " WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", periodId)
+                .param("tenantId", tenantId)
+                .param("id", periodId)
                 .query(JdbcCourierLedgerStore::mapPeriod)
                 .optional();
     }
@@ -80,7 +77,8 @@ public class JdbcCourierLedgerStore {
         return jdbc.sql(SELECT_PERIOD + """
                  WHERE tenant_id = :tenantId AND courier_id = :courierId AND status = 'OPEN'
                 """)
-                .param("tenantId", tenantId).param("courierId", courierId)
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
                 .query(JdbcCourierLedgerStore::mapPeriod)
                 .optional();
     }
@@ -99,7 +97,8 @@ public class JdbcCourierLedgerStore {
                   FROM fulfillment.courier_settlement_periods
                  WHERE tenant_id = :tenantId AND courier_id = :courierId
                 """)
-                .param("tenantId", tenantId).param("courierId", courierId)
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
                 .query(LocalDate.class)
                 .optional();
     }
@@ -109,14 +108,22 @@ public class JdbcCourierLedgerStore {
                  WHERE tenant_id = :tenantId AND courier_id = :courierId
                  ORDER BY period_start DESC
                 """)
-                .param("tenantId", tenantId).param("courierId", courierId)
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
                 .query(JdbcCourierLedgerStore::mapPeriod)
                 .list();
     }
 
     /** Closes a period with the totals computed from its entries, once. */
-    public boolean closePeriod(UUID tenantId, UUID periodId, int expectedVersion, PeriodTotals totals,
-            boolean complianceFlag, String statementHash, String closedBy, Instant closedAt) {
+    public boolean closePeriod(
+            UUID tenantId,
+            UUID periodId,
+            int expectedVersion,
+            PeriodTotals totals,
+            boolean complianceFlag,
+            String statementHash,
+            String closedBy,
+            Instant closedAt) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
@@ -156,9 +163,7 @@ public class JdbcCourierLedgerStore {
                        updated_at = :closedAt
                  WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
                    AND status = 'OPEN'
-                """)
-                .params(params)
-                .update() == 1;
+                """).params(params).update() == 1;
     }
 
     public boolean markSettled(UUID tenantId, UUID periodId, Instant settledAt) {
@@ -168,9 +173,11 @@ public class JdbcCourierLedgerStore {
                        version = version + 1, updated_at = :settledAt
                  WHERE tenant_id = :tenantId AND id = :id AND status = 'CLOSED'
                 """)
-                .param("tenantId", tenantId).param("id", periodId)
-                .param("settledAt", JdbcCourierStore.utc(settledAt))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", periodId)
+                        .param("settledAt", JdbcCourierStore.utc(settledAt))
+                        .update()
+                == 1;
     }
 
     /**
@@ -193,7 +200,8 @@ public class JdbcCourierLedgerStore {
                   FROM fulfillment.courier_ledger_entries
                  WHERE tenant_id = :tenantId AND settlement_period_id = :periodId
                 """)
-                .param("tenantId", tenantId).param("periodId", periodId)
+                .param("tenantId", tenantId)
+                .param("periodId", periodId)
                 .query()
                 .singleRow();
 
@@ -204,7 +212,8 @@ public class JdbcCourierLedgerStore {
                   FROM fulfillment.courier_assignment_earnings
                  WHERE tenant_id = :tenantId AND settlement_period_id = :periodId
                 """)
-                .param("tenantId", tenantId).param("periodId", periodId)
+                .param("tenantId", tenantId)
+                .param("periodId", periodId)
                 .query()
                 .singleRow();
 
@@ -215,7 +224,8 @@ public class JdbcCourierLedgerStore {
                  WHERE tenant_id = :tenantId AND settlement_period_id = :periodId
                    AND status IN ('CLOSED', 'AUTO_CLOSED', 'SETTLED')
                 """)
-                .param("tenantId", tenantId).param("periodId", periodId)
+                .param("tenantId", tenantId)
+                .param("periodId", periodId)
                 .query()
                 .singleRow();
 
@@ -223,7 +233,10 @@ public class JdbcCourierLedgerStore {
         long adjustments = ((Number) sums.get("adjustments")).longValue();
         long cashHeld = ((Number) sums.get("cash_held")).longValue();
 
-        return new PeriodTotals(gross, adjustments, cashHeld,
+        return new PeriodTotals(
+                gross,
+                adjustments,
+                cashHeld,
                 gross + adjustments - cashHeld,
                 ((Number) counts.get("delivered")).intValue(),
                 ((Number) counts.get("on_time")).intValue(),
@@ -274,9 +287,7 @@ public class JdbcCourierLedgerStore {
                         :origin, :reasonCode, :occurredAt, now(), :idempotencyKey,
                         :approvalId, :adjustsEntryId, :createdBy)
                     ON CONFLICT ON CONSTRAINT uq_ledger_idempotency DO NOTHING
-                    """)
-                    .params(params)
-                    .update() == 1;
+                    """).params(params).update() == 1;
         } catch (DuplicateKeyException alreadyWritten) {
             return false;
         }
@@ -287,7 +298,8 @@ public class JdbcCourierLedgerStore {
                  WHERE tenant_id = :tenantId AND settlement_period_id = :periodId
                  ORDER BY occurred_at, recorded_at
                 """)
-                .param("tenantId", tenantId).param("periodId", periodId)
+                .param("tenantId", tenantId)
+                .param("periodId", periodId)
                 .query(JdbcCourierLedgerStore::mapEntry)
                 .list();
     }
@@ -303,14 +315,17 @@ public class JdbcCourierLedgerStore {
                  ORDER BY occurred_at DESC
                  LIMIT :limit
                 """)
-                .param("tenantId", tenantId).param("courierId", courierId).param("limit", limit)
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
+                .param("limit", limit)
                 .query(JdbcCourierLedgerStore::mapEntry)
                 .list();
     }
 
     public Optional<LedgerEntryRow> findEntry(UUID tenantId, UUID entryId) {
         return jdbc.sql(SELECT_ENTRY + " WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", entryId)
+                .param("tenantId", tenantId)
+                .param("id", entryId)
                 .query(JdbcCourierLedgerStore::mapEntry)
                 .optional();
     }
@@ -334,7 +349,8 @@ public class JdbcCourierLedgerStore {
                    AND entry.entry_type = 'CASH_COLLECTED'
                    AND earning.shift_id = :shiftId
                 """)
-                .param("tenantId", tenantId).param("shiftId", shiftId)
+                .param("tenantId", tenantId)
+                .param("shiftId", shiftId)
                 .query(Long.class)
                 .single();
         return collected == null ? 0L : collected;
@@ -347,7 +363,8 @@ public class JdbcCourierLedgerStore {
                   FROM fulfillment.courier_ledger_entries
                  WHERE tenant_id = :tenantId AND courier_id = :courierId
                 """)
-                .param("tenantId", tenantId).param("courierId", courierId)
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
                 .query(Long.class)
                 .single();
         return balance == null ? 0L : balance;
@@ -412,15 +429,13 @@ public class JdbcCourierLedgerStore {
                     :pickupPoint, :deliveryPoint,
                     :periodId, now())
                 ON CONFLICT ON CONSTRAINT uq_earning_attempt DO NOTHING
-                """)
-                .params(params)
-                .update() == 1;
+                """).params(params).update() == 1;
     }
 
     public Optional<EarningRow> findEarningByAttempt(UUID tenantId, UUID assignmentAttemptId) {
-        return jdbc.sql(SELECT_EARNING
-                + " WHERE tenant_id = :tenantId AND assignment_attempt_id = :attemptId")
-                .param("tenantId", tenantId).param("attemptId", assignmentAttemptId)
+        return jdbc.sql(SELECT_EARNING + " WHERE tenant_id = :tenantId AND assignment_attempt_id = :attemptId")
+                .param("tenantId", tenantId)
+                .param("attemptId", assignmentAttemptId)
                 .query(JdbcCourierLedgerStore::mapEarning)
                 .optional();
     }
@@ -430,7 +445,8 @@ public class JdbcCourierLedgerStore {
                  WHERE tenant_id = :tenantId AND settlement_period_id = :periodId
                  ORDER BY delivered_at
                 """)
-                .param("tenantId", tenantId).param("periodId", periodId)
+                .param("tenantId", tenantId)
+                .param("periodId", periodId)
                 .query(JdbcCourierLedgerStore::mapEarning)
                 .list();
     }
@@ -463,8 +479,8 @@ public class JdbcCourierLedgerStore {
 
     // ----------------------------------------------------------- statements
 
-    public void insertStatement(UUID id, UUID tenantId, UUID periodId, String statementHash,
-            String documentJson, String generatedBy) {
+    public void insertStatement(
+            UUID id, UUID tenantId, UUID periodId, String statementHash, String documentJson, String generatedBy) {
 
         jdbc.sql("""
                 INSERT INTO fulfillment.courier_settlement_statements (
@@ -473,8 +489,11 @@ public class JdbcCourierLedgerStore {
                 VALUES (:id, :tenantId, :periodId, :hash, CAST(:document AS jsonb),
                     now(), :generatedBy)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("periodId", periodId)
-                .param("hash", statementHash).param("document", documentJson)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("periodId", periodId)
+                .param("hash", statementHash)
+                .param("document", documentJson)
                 .param("generatedBy", generatedBy)
                 .update();
     }
@@ -486,7 +505,8 @@ public class JdbcCourierLedgerStore {
                   FROM fulfillment.courier_settlement_statements
                  WHERE tenant_id = :tenantId AND settlement_period_id = :periodId
                 """)
-                .param("tenantId", tenantId).param("periodId", periodId)
+                .param("tenantId", tenantId)
+                .param("periodId", periodId)
                 .query((ResultSet rs, int rowNumber) -> new StatementRow(
                         rs.getObject("id", UUID.class),
                         rs.getObject("settlement_period_id", UUID.class),
@@ -499,8 +519,15 @@ public class JdbcCourierLedgerStore {
 
     // -------------------------------------------------------------- payouts
 
-    public void insertPayout(UUID id, UUID tenantId, UUID courierId, UUID periodId,
-            long amountMinor, String currency, PayoutMethod method, String authorisedBy,
+    public void insertPayout(
+            UUID id,
+            UUID tenantId,
+            UUID courierId,
+            UUID periodId,
+            long amountMinor,
+            String currency,
+            PayoutMethod method,
+            String authorisedBy,
             UUID approvalRequestId) {
 
         Map<String, Object> params = new HashMap<>();
@@ -520,9 +547,7 @@ public class JdbcCourierLedgerStore {
                     method, status, authorised_by, authorised_at, approval_request_id)
                 VALUES (:id, :tenantId, :courierId, :periodId, :amount, :currency,
                     :method, 'AUTHORISED', :authorisedBy, now(), :approvalId)
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     public Optional<PayoutRow> findPayout(UUID tenantId, UUID periodId) {
@@ -532,7 +557,8 @@ public class JdbcCourierLedgerStore {
                   FROM fulfillment.courier_payouts
                  WHERE tenant_id = :tenantId AND settlement_period_id = :periodId
                 """)
-                .param("tenantId", tenantId).param("periodId", periodId)
+                .param("tenantId", tenantId)
+                .param("periodId", periodId)
                 .query((ResultSet rs, int rowNumber) -> new PayoutRow(
                         rs.getObject("id", UUID.class),
                         rs.getObject("courier_id", UUID.class),
@@ -554,45 +580,123 @@ public class JdbcCourierLedgerStore {
                    SET settlement_period_id = :periodId, version = version + 1, updated_at = now()
                  WHERE tenant_id = :tenantId AND id = :id AND settlement_period_id IS NULL
                 """)
-                .param("tenantId", tenantId).param("id", shiftId).param("periodId", periodId)
+                .param("tenantId", tenantId)
+                .param("id", shiftId)
+                .param("periodId", periodId)
                 .update();
     }
 
     // -------------------------------------------------------------------- rows
 
-    public record PeriodRow(UUID id, UUID tenantId, UUID courierId, UUID engagementId,
-            LocalDate periodStart, LocalDate periodEnd, SettlementPeriodStatus status,
-            String currency, long grossEarningsMinor, long adjustmentsMinor, long cashHeldMinor,
-            long amountPayableMinor, int deliveredCount, int onTimeCount, long distanceMeters,
-            long paidSeconds, int shiftCount, boolean complianceFlag, String statementHash,
-            String closedBy, Instant closedAt, Instant settledAt, int version) { }
+    public record PeriodRow(
+            UUID id,
+            UUID tenantId,
+            UUID courierId,
+            UUID engagementId,
+            LocalDate periodStart,
+            LocalDate periodEnd,
+            SettlementPeriodStatus status,
+            String currency,
+            long grossEarningsMinor,
+            long adjustmentsMinor,
+            long cashHeldMinor,
+            long amountPayableMinor,
+            int deliveredCount,
+            int onTimeCount,
+            long distanceMeters,
+            long paidSeconds,
+            int shiftCount,
+            boolean complianceFlag,
+            String statementHash,
+            String closedBy,
+            Instant closedAt,
+            Instant settledAt,
+            int version) {}
 
-    public record PeriodTotals(long grossEarningsMinor, long adjustmentsMinor, long cashHeldMinor,
-            long amountPayableMinor, int deliveredCount, int onTimeCount, long distanceMeters,
-            long paidSeconds, int shiftCount) { }
+    public record PeriodTotals(
+            long grossEarningsMinor,
+            long adjustmentsMinor,
+            long cashHeldMinor,
+            long amountPayableMinor,
+            int deliveredCount,
+            int onTimeCount,
+            long distanceMeters,
+            long paidSeconds,
+            int shiftCount) {}
 
-    public record LedgerEntryRow(UUID id, UUID tenantId, UUID courierId, UUID settlementPeriodId,
-            UUID legalEntityId, LedgerEntryType entryType, long amountMinor, String currency,
-            String sourceType, UUID sourceId, AdjustmentOrigin origin, String reasonCode,
-            Instant occurredAt, Instant recordedAt, String idempotencyKey, UUID approvalRequestId,
-            UUID adjustsEntryId, String createdBy) { }
+    public record LedgerEntryRow(
+            UUID id,
+            UUID tenantId,
+            UUID courierId,
+            UUID settlementPeriodId,
+            UUID legalEntityId,
+            LedgerEntryType entryType,
+            long amountMinor,
+            String currency,
+            String sourceType,
+            UUID sourceId,
+            AdjustmentOrigin origin,
+            String reasonCode,
+            Instant occurredAt,
+            Instant recordedAt,
+            String idempotencyKey,
+            UUID approvalRequestId,
+            UUID adjustsEntryId,
+            String createdBy) {}
 
-    public record EarningRow(UUID id, UUID tenantId, UUID courierId, UUID shiftId, UUID shipmentId,
-            UUID assignmentAttemptId, UUID legalEntityId, UUID locationId, LocalDate businessDate,
-            UUID rateCardId, int rateCardVersion, UUID courierTypeId, int distanceMeters,
-            DistanceSource distanceSource, OnTimeOutcome onTimeOutcome, Instant promisedDeliveryEnd,
-            int graceSeconds, int onTimePolicyVersion, Instant deliveredAt, Instant kitchenHandoverAt,
-            Instant pickupWindowEnd, long fixedMinor, long perOrderMinor, long perKmMinor,
-            long minimumTopUpMinor, long totalMinor, String currency, boolean geoUnverified,
-            String protectedPickupPoint, String protectedDeliveryPoint, Instant pointsPurgedAt,
-            UUID settlementPeriodId) { }
+    public record EarningRow(
+            UUID id,
+            UUID tenantId,
+            UUID courierId,
+            UUID shiftId,
+            UUID shipmentId,
+            UUID assignmentAttemptId,
+            UUID legalEntityId,
+            UUID locationId,
+            LocalDate businessDate,
+            UUID rateCardId,
+            int rateCardVersion,
+            UUID courierTypeId,
+            int distanceMeters,
+            DistanceSource distanceSource,
+            OnTimeOutcome onTimeOutcome,
+            Instant promisedDeliveryEnd,
+            int graceSeconds,
+            int onTimePolicyVersion,
+            Instant deliveredAt,
+            Instant kitchenHandoverAt,
+            Instant pickupWindowEnd,
+            long fixedMinor,
+            long perOrderMinor,
+            long perKmMinor,
+            long minimumTopUpMinor,
+            long totalMinor,
+            String currency,
+            boolean geoUnverified,
+            String protectedPickupPoint,
+            String protectedDeliveryPoint,
+            Instant pointsPurgedAt,
+            UUID settlementPeriodId) {}
 
-    public record StatementRow(UUID id, UUID settlementPeriodId, String statementHash,
-            String document, Instant generatedAt, String generatedBy) { }
+    public record StatementRow(
+            UUID id,
+            UUID settlementPeriodId,
+            String statementHash,
+            String document,
+            Instant generatedAt,
+            String generatedBy) {}
 
-    public record PayoutRow(UUID id, UUID courierId, UUID settlementPeriodId, long amountMinor,
-            String currency, PayoutMethod method, String status, String authorisedBy,
-            UUID approvalRequestId, Instant paidAt) { }
+    public record PayoutRow(
+            UUID id,
+            UUID courierId,
+            UUID settlementPeriodId,
+            long amountMinor,
+            String currency,
+            PayoutMethod method,
+            String status,
+            String authorisedBy,
+            UUID approvalRequestId,
+            Instant paidAt) {}
 
     // ----------------------------------------------------------------- mapping
 

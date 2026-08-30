@@ -2,7 +2,6 @@ package uz.horecaos.platform.payments.web.click;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-
 import uz.horecaos.platform.payments.infrastructure.click.ClickShopApiError;
 
 /**
@@ -33,16 +32,24 @@ public record ClickShopApiResponse(
         @JsonProperty("error") int error,
         @JsonProperty("error_note") String errorNote) {
 
-    public static ClickShopApiResponse prepared(String clickTransId, String merchantTransId,
-            int merchantPrepareId) {
-        return new ClickShopApiResponse(clickTransId, merchantTransId, merchantPrepareId, null,
-                ClickShopApiError.SUCCESS.code(), ClickShopApiError.SUCCESS.note());
+    public static ClickShopApiResponse prepared(String clickTransId, String merchantTransId, int merchantPrepareId) {
+        return new ClickShopApiResponse(
+                clickTransId,
+                merchantTransId,
+                merchantPrepareId,
+                null,
+                ClickShopApiError.SUCCESS.code(),
+                ClickShopApiError.SUCCESS.note());
     }
 
-    public static ClickShopApiResponse confirmed(String clickTransId, String merchantTransId,
-            int merchantConfirmId) {
-        return new ClickShopApiResponse(clickTransId, merchantTransId, null, merchantConfirmId,
-                ClickShopApiError.SUCCESS.code(), ClickShopApiError.SUCCESS.note());
+    public static ClickShopApiResponse confirmed(String clickTransId, String merchantTransId, int merchantConfirmId) {
+        return new ClickShopApiResponse(
+                clickTransId,
+                merchantTransId,
+                null,
+                merchantConfirmId,
+                ClickShopApiError.SUCCESS.code(),
+                ClickShopApiError.SUCCESS.note());
     }
 
     /**
@@ -53,15 +60,13 @@ public record ClickShopApiResponse(
      * was given the first time keeps a replayed Complete indistinguishable from the
      * original as far as Click's records are concerned.
      */
-    public static ClickShopApiResponse settled(String clickTransId, String merchantTransId,
-            int merchantConfirmId, ClickShopApiError error) {
-        return new ClickShopApiResponse(clickTransId, merchantTransId, null, merchantConfirmId,
-                error.code(), error.note());
+    public static ClickShopApiResponse settled(
+            String clickTransId, String merchantTransId, int merchantConfirmId, ClickShopApiError error) {
+        return new ClickShopApiResponse(
+                clickTransId, merchantTransId, null, merchantConfirmId, error.code(), error.note());
     }
 
-    public static ClickShopApiResponse failed(String clickTransId, String merchantTransId,
-            ClickShopApiError error) {
-        return new ClickShopApiResponse(clickTransId, merchantTransId, null, null,
-                error.code(), error.note());
+    public static ClickShopApiResponse failed(String clickTransId, String merchantTransId, ClickShopApiError error) {
+        return new ClickShopApiResponse(clickTransId, merchantTransId, null, null, error.code(), error.note());
     }
 }

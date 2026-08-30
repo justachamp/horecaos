@@ -52,12 +52,12 @@ public final class RetryBackoff {
 
     /** The production policy, drawing from the calling thread's generator. */
     public static RetryBackoff of(Duration initialDelay, Duration maximumDelay) {
-        return new RetryBackoff(initialDelay, maximumDelay, () -> ThreadLocalRandom.current().nextDouble());
+        return new RetryBackoff(
+                initialDelay, maximumDelay, () -> ThreadLocalRandom.current().nextDouble());
     }
 
     /** The same policy with a caller-supplied generator, so a test can seed it. */
-    public static RetryBackoff randomisedBy(
-            Duration initialDelay, Duration maximumDelay, RandomGenerator random) {
+    public static RetryBackoff randomisedBy(Duration initialDelay, Duration maximumDelay, RandomGenerator random) {
         return new RetryBackoff(initialDelay, maximumDelay, random::nextDouble);
     }
 

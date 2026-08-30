@@ -5,10 +5,8 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.customers.application.VerificationChallengeStore;
 import uz.horecaos.platform.customers.domain.ChallengeStatus;
 
@@ -90,8 +88,7 @@ public class JdbcVerificationChallengeStore implements VerificationChallengeStor
     }
 
     @Override
-    public int supersedePending(UUID tenantId, String contactType, String destinationHash,
-            Instant now) {
+    public int supersedePending(UUID tenantId, String contactType, String destinationHash, Instant now) {
         return jdbc.sql("""
                 UPDATE customer.verification_challenges
                 SET status = 'SUPERSEDED', settled_at = :now, updated_at = :now
@@ -127,14 +124,13 @@ public class JdbcVerificationChallengeStore implements VerificationChallengeStor
                 .param("id", challengeId)
                 .param("tenantId", tenantId)
                 .param("now", utc(now))
-                .query((row, number) -> new Attempt(
-                        row.getString("code_hash"), row.getInt("attempts_remaining")))
+                .query((row, number) -> new Attempt(row.getString("code_hash"), row.getInt("attempts_remaining")))
                 .optional();
     }
 
     @Override
-    public boolean markVerified(UUID tenantId, UUID challengeId, String grantHash,
-            Instant grantExpiresAt, Instant now) {
+    public boolean markVerified(
+            UUID tenantId, UUID challengeId, String grantHash, Instant grantExpiresAt, Instant now) {
         return jdbc.sql("""
                 UPDATE customer.verification_challenges
                 SET status = 'VERIFIED', settled_at = :now, updated_at = :now,
@@ -142,12 +138,13 @@ public class JdbcVerificationChallengeStore implements VerificationChallengeStor
                 WHERE id = :id AND tenant_id = :tenantId AND status = 'PENDING'
                   AND expires_at > :now
                 """)
-                .param("id", challengeId)
-                .param("tenantId", tenantId)
-                .param("grantHash", grantHash)
-                .param("grantExpiresAt", utc(grantExpiresAt))
-                .param("now", utc(now))
-                .update() == 1;
+                        .param("id", challengeId)
+                        .param("tenantId", tenantId)
+                        .param("grantHash", grantHash)
+                        .param("grantExpiresAt", utc(grantExpiresAt))
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     @Override
@@ -170,9 +167,10 @@ public class JdbcVerificationChallengeStore implements VerificationChallengeStor
                 WHERE id = :id AND tenant_id = :tenantId AND status = 'PENDING'
                   AND attempts_used = 0
                 """)
-                .param("id", challengeId)
-                .param("tenantId", tenantId)
-                .update() == 1;
+                        .param("id", challengeId)
+                        .param("tenantId", tenantId)
+                        .update()
+                == 1;
     }
 
     @Override
@@ -212,10 +210,7 @@ public class JdbcVerificationChallengeStore implements VerificationChallengeStor
                     ORDER BY expires_at
                     LIMIT :limit
                 )
-                """)
-                .param("now", utc(now))
-                .param("limit", limit)
-                .update();
+                """).param("now", utc(now)).param("limit", limit).update();
     }
 
     /**

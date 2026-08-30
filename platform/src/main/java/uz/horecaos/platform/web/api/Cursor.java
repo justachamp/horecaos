@@ -4,7 +4,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Objects;
 import java.util.Optional;
-
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -35,8 +34,7 @@ public record Cursor(String sortKey, String filterHash) {
 
     public String encode(CursorSigner signer) {
         String payload = sortKey + SEPARATOR + filterHash;
-        return ENCODER.encodeToString((payload + SEPARATOR + signer.sign(payload))
-                .getBytes(StandardCharsets.UTF_8));
+        return ENCODER.encodeToString((payload + SEPARATOR + signer.sign(payload)).getBytes(StandardCharsets.UTF_8));
     }
 
     /**
@@ -77,8 +75,7 @@ public record Cursor(String sortKey, String filterHash) {
 
         default boolean verify(String payload, String signature) {
             return java.security.MessageDigest.isEqual(
-                    sign(payload).getBytes(StandardCharsets.UTF_8),
-                    signature.getBytes(StandardCharsets.UTF_8));
+                    sign(payload).getBytes(StandardCharsets.UTF_8), signature.getBytes(StandardCharsets.UTF_8));
         }
 
         static CursorSigner hmacSha256(byte[] key) {

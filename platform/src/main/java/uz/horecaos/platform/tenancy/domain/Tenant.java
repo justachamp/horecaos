@@ -4,7 +4,6 @@ import java.time.ZoneId;
 import java.util.Currency;
 import java.util.Objects;
 import java.util.Optional;
-
 import uz.horecaos.platform.tenancy.api.TenantId;
 
 public final class Tenant {
@@ -45,14 +44,7 @@ public final class Tenant {
             Currency defaultCurrency,
             ZoneId defaultTimezone) {
         return new Tenant(
-                id,
-                slug,
-                legalName,
-                displayName,
-                defaultCurrency,
-                defaultTimezone,
-                null,
-                TenantStatus.PROVISIONING);
+                id, slug, legalName, displayName, defaultCurrency, defaultTimezone, null, TenantStatus.PROVISIONING);
     }
 
     public static Tenant reconstitute(
@@ -65,14 +57,7 @@ public final class Tenant {
             String keycloakOrganizationId,
             TenantStatus status) {
         return new Tenant(
-                id,
-                slug,
-                legalName,
-                displayName,
-                defaultCurrency,
-                defaultTimezone,
-                keycloakOrganizationId,
-                status);
+                id, slug, legalName, displayName, defaultCurrency, defaultTimezone, keycloakOrganizationId, status);
     }
 
     public void linkKeycloakOrganization(String organizationId) {
@@ -163,8 +148,7 @@ public final class Tenant {
         }
         String normalized = value.strip();
         if (normalized.isEmpty() || normalized.length() > 64) {
-            throw new IllegalArgumentException(
-                    "Keycloak organization ID must contain 1-64 characters");
+            throw new IllegalArgumentException("Keycloak organization ID must contain 1-64 characters");
         }
         return normalized;
     }

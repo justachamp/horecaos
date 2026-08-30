@@ -1,18 +1,16 @@
 package uz.horecaos.platform.payments.payme;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import java.util.List;
 import java.util.Map;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.payments.domain.FiscalReceiptLine;
 import uz.horecaos.platform.payments.domain.SomAmount;
 import uz.horecaos.platform.payments.domain.TiyinAmount;
 import uz.horecaos.platform.payments.infrastructure.payme.PaymeReceiptDetail;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Payme's {@code detail} object, and the trap in the middle of it.
@@ -32,8 +30,7 @@ class PaymeReceiptDetailTests {
     void priceIsTheUnitPrice() {
         FiscalReceiptLine line = line("Лагман", 3, 25_000, null);
 
-        Map<String, Object> detail = PaymeReceiptDetail.of(List.of(line),
-                TiyinAmount.of(new SomAmount(75_000, UZS)));
+        Map<String, Object> detail = PaymeReceiptDetail.of(List.of(line), TiyinAmount.of(new SomAmount(75_000, UZS)));
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> items = (List<Map<String, Object>>) detail.get("items");
@@ -57,14 +54,11 @@ class PaymeReceiptDetailTests {
     void discountIsForTheWholeLine() {
         FiscalReceiptLine line = line("Лагман", 3, 25_000, new SomAmount(5_000, UZS));
 
-        Map<String, Object> detail = PaymeReceiptDetail.of(List.of(line),
-                TiyinAmount.of(new SomAmount(70_000, UZS)));
+        Map<String, Object> detail = PaymeReceiptDetail.of(List.of(line), TiyinAmount.of(new SomAmount(70_000, UZS)));
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> items = (List<Map<String, Object>>) detail.get("items");
-        assertThat(items.getFirst())
-                .containsEntry("price", 2_500_000L)
-                .containsEntry("discount", 500_000L);
+        assertThat(items.getFirst()).containsEntry("price", 2_500_000L).containsEntry("discount", 500_000L);
     }
 
     /**
@@ -78,8 +72,7 @@ class PaymeReceiptDetailTests {
     void refusesAReceiptThatDoesNotMatchTheCharge() {
         FiscalReceiptLine line = line("Лагман", 2, 25_000, null);
 
-        assertThatThrownBy(() -> PaymeReceiptDetail.of(List.of(line),
-                TiyinAmount.of(new SomAmount(49_000, UZS))))
+        assertThatThrownBy(() -> PaymeReceiptDetail.of(List.of(line), TiyinAmount.of(new SomAmount(49_000, UZS))))
                 .isInstanceOf(PaymeReceiptDetail.PaymeReceiptRefused.class)
                 .hasMessageContaining("5000000")
                 .hasMessageContaining("4900000");
@@ -96,12 +89,22 @@ class PaymeReceiptDetailTests {
     @Test
     @DisplayName("a marked good is refused rather than fiscalized without its marking code")
     void refusesAMarkedGood() {
-        FiscalReceiptLine marked = new FiscalReceiptLine("Вода", "00702001001000001", "1234",
-                241092L, 1, new SomAmount(10_000, UZS), new SomAmount(1_200, UZS), 12,
-                null, null, List.of("0104870123456789"), "123456789", null);
+        FiscalReceiptLine marked = new FiscalReceiptLine(
+                "Вода",
+                "00702001001000001",
+                "1234",
+                241092L,
+                1,
+                new SomAmount(10_000, UZS),
+                new SomAmount(1_200, UZS),
+                12,
+                null,
+                null,
+                List.of("0104870123456789"),
+                "123456789",
+                null);
 
-        assertThatThrownBy(() -> PaymeReceiptDetail.of(List.of(marked),
-                TiyinAmount.of(new SomAmount(10_000, UZS))))
+        assertThatThrownBy(() -> PaymeReceiptDetail.of(List.of(marked), TiyinAmount.of(new SomAmount(10_000, UZS))))
                 .isInstanceOf(PaymeReceiptDetail.PaymeReceiptRefused.class)
                 .extracting(refused -> ((PaymeReceiptDetail.PaymeReceiptRefused) refused).code())
                 .isEqualTo("MARKING_CODES_UNSUPPORTED");
@@ -130,17 +133,26 @@ class PaymeReceiptDetailTests {
     @Test
     @DisplayName("a fiscalised cashbox with no lines is refused")
     void refusesAnEmptyReceipt() {
-        assertThatThrownBy(() -> PaymeReceiptDetail.of(List.of(),
-                TiyinAmount.of(new SomAmount(1, UZS))))
+        assertThatThrownBy(() -> PaymeReceiptDetail.of(List.of(), TiyinAmount.of(new SomAmount(1, UZS))))
                 .isInstanceOf(PaymeReceiptDetail.PaymeReceiptRefused.class)
                 .extracting(refused -> ((PaymeReceiptDetail.PaymeReceiptRefused) refused).code())
                 .isEqualTo("NO_RECEIPT_LINES");
     }
 
-    private static FiscalReceiptLine line(String name, int quantity, long unitPriceSom,
-            SomAmount discount) {
-        return new FiscalReceiptLine(name, "00702001001000001", "1234", 241092L, quantity,
-                new SomAmount(unitPriceSom, UZS), new SomAmount(unitPriceSom / 10, UZS), 12,
-                discount, null, List.of(), "123456789", null);
+    private static FiscalReceiptLine line(String name, int quantity, long unitPriceSom, SomAmount discount) {
+        return new FiscalReceiptLine(
+                name,
+                "00702001001000001",
+                "1234",
+                241092L,
+                quantity,
+                new SomAmount(unitPriceSom, UZS),
+                new SomAmount(unitPriceSom / 10, UZS),
+                12,
+                discount,
+                null,
+                List.of(),
+                "123456789",
+                null);
     }
 }

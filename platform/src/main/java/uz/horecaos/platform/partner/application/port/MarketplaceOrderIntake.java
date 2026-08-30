@@ -3,7 +3,6 @@ package uz.horecaos.platform.partner.application.port;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-
 import uz.horecaos.platform.partner.domain.DiscountFunding;
 import uz.horecaos.platform.partner.domain.ExternalReference;
 import uz.horecaos.platform.partner.domain.ExternalTotals;
@@ -37,7 +36,7 @@ public interface MarketplaceOrderIntake {
      */
     Created create(NewMarketplaceOrder order);
 
-    record Created(UUID orderId, String publicOrderNumber, UUID handoverChallengeId) { }
+    record Created(UUID orderId, String publicOrderNumber, UUID handoverChallengeId) {}
 
     /**
      * @param guestReferenceHash a keyed hash of {@code (binding, external order

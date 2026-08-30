@@ -1,14 +1,14 @@
 package uz.horecaos.platform.iam.web;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
-
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,10 +17,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CapabilityView;
@@ -40,9 +36,7 @@ public class GrantController {
     private final CurrentActor currentActor;
 
     public GrantController(
-            GrantManagementService grants,
-            AuthorizationService authorization,
-            CurrentActor currentActor) {
+            GrantManagementService grants, AuthorizationService authorization, CurrentActor currentActor) {
         this.grants = grants;
         this.authorization = authorization;
         this.currentActor = currentActor;
@@ -71,11 +65,11 @@ public class GrantController {
 
     @PostMapping("/control-plane/tenants/{tenantId}/grants")
     @RequiresCapability(value = Capability.IAM_GRANT_MANAGE, mutating = true)
-    @Operation(summary = "Grant a role at a scope",
+    @Operation(
+            summary = "Grant a role at a scope",
             description = "A granter may confer only capabilities it already holds, "
                     + "at a scope it already covers. platform-admin is never grantable here.")
-    ResponseEntity<Map<String, Object>> grant(
-            @PathVariable UUID tenantId, @Valid @RequestBody GrantRequest request) {
+    ResponseEntity<Map<String, Object>> grant(@PathVariable UUID tenantId, @Valid @RequestBody GrantRequest request) {
 
         UUID grantId = grants.grant(
                 new GrantManagementService.GrantCommand(
@@ -91,17 +85,14 @@ public class GrantController {
 
     @DeleteMapping("/control-plane/tenants/{tenantId}/grants/{grantId}")
     @RequiresCapability(value = Capability.IAM_GRANT_MANAGE, mutating = true)
-    @Operation(summary = "Revoke a grant",
+    @Operation(
+            summary = "Revoke a grant",
             description = "Takes effect immediately; the cached grant is evicted rather than left to expire.")
     ResponseEntity<Map<String, Object>> revoke(
-            @PathVariable UUID tenantId,
-            @PathVariable UUID grantId,
-            @Valid @RequestBody ReasonRequest request) {
+            @PathVariable UUID tenantId, @PathVariable UUID grantId, @Valid @RequestBody ReasonRequest request) {
 
         boolean revoked = grants.revoke(tenantId, grantId, currentActor.get().subject(), request.reason());
-        return ResponseEntity.ok(Map.of(
-                "changed", revoked,
-                "outcome", revoked ? "revoked" : "no_change"));
+        return ResponseEntity.ok(Map.of("changed", revoked, "outcome", revoked ? "revoked" : "no_change"));
     }
 
     private static ResourceScope scopeOf(UUID tenantId, GrantRequest request) {
@@ -124,7 +115,7 @@ public class GrantController {
             UUID brandId,
             UUID locationId,
             @NotBlank @Size(max = 1000) String reason,
-            Instant validUntil) { }
+            Instant validUntil) {}
 
-    public record ReasonRequest(@NotBlank @Size(max = 1000) String reason) { }
+    public record ReasonRequest(@NotBlank @Size(max = 1000) String reason) {}
 }

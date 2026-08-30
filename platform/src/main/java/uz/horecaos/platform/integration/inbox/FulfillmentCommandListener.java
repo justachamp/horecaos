@@ -1,7 +1,6 @@
 package uz.horecaos.platform.integration.inbox;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;

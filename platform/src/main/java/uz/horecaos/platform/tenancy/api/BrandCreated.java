@@ -12,7 +12,8 @@ public record BrandCreated(
         String code,
         String slug,
         String displayName,
-        String status) implements TenancyEvent {
+        String status)
+        implements TenancyEvent {
 
     public BrandCreated {
         Objects.requireNonNull(eventId, "Event ID is required");
@@ -47,10 +48,5 @@ public record BrandCreated(
         return new Payload(brandId.value(), code, slug, displayName, status);
     }
 
-    public record Payload(
-            UUID brandId,
-            String code,
-            String slug,
-            String displayName,
-            String status) { }
+    public record Payload(UUID brandId, String code, String slug, String displayName, String status) {}
 }

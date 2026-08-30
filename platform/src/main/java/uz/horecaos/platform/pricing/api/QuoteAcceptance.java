@@ -13,7 +13,6 @@ package uz.horecaos.platform.pricing.api;
 public record QuoteAcceptance(Outcome outcome, long totalMinor, String currency) {
 
     public enum Outcome {
-
         ACCEPTED,
 
         /**

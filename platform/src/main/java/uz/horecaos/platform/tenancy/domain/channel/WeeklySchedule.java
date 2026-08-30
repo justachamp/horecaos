@@ -19,10 +19,7 @@ import java.util.Optional;
  * exception, the first opening thirteen days away — be tested without a database
  * and without waiting for the clock.
  */
-public record WeeklySchedule(
-        List<Rule> rules,
-        Map<LocalDate, Exception> exceptions,
-        boolean acceptsScheduledOrders) {
+public record WeeklySchedule(List<Rule> rules, Map<LocalDate, Exception> exceptions, boolean acceptsScheduledOrders) {
 
     /**
      * How far forward {@link #nextOpeningAtOrAfter} will look.
@@ -61,7 +58,8 @@ public record WeeklySchedule(
         }
 
         public static Exception open(LocalTime opensAt, LocalTime closesAt) {
-            return new Exception(false,
+            return new Exception(
+                    false,
                     Objects.requireNonNull(opensAt, "An open exception needs an opening time"),
                     Objects.requireNonNull(closesAt, "An open exception needs a closing time"));
         }

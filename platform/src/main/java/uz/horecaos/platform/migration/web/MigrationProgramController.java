@@ -1,16 +1,17 @@
 package uz.horecaos.platform.migration.web;
 
-import java.net.URI;
-import java.util.List;
-import java.util.UUID;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
-
+import java.net.URI;
+import java.util.List;
+import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,11 +21,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.migration.api.MigrationCapability;
@@ -71,14 +67,14 @@ public class MigrationProgramController {
 
     @PostMapping
     @RequiresCapability(value = Capability.MIGRATION_SCOPE_MANAGE, scope = ScopeType.PLATFORM, mutating = true)
-    @Operation(summary = "Register a migration program",
+    @Operation(
+            summary = "Register a migration program",
             description = "The program pins the approved mapping and quarantine policy version it "
                     + "executes, so a later revision cannot retroactively change what an "
                     + "already-running migration was allowed to do.")
     ResponseEntity<ProgramView> create(@Valid @RequestBody CreateProgramRequest body) {
         ProgramRow program = programs.create(new MigrationProgramService.CreateProgramCommand(
-                body.name(), body.sourceEnvironment(), body.targetEnvironment(),
-                body.policyVersion(), body.reason()));
+                body.name(), body.sourceEnvironment(), body.targetEnvironment(), body.policyVersion(), body.reason()));
 
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{programId}")
@@ -113,23 +109,24 @@ public class MigrationProgramController {
      */
     @PostMapping("/{programId}/status")
     @RequiresCapability(value = Capability.MIGRATION_SCOPE_MANAGE, scope = ScopeType.PLATFORM, mutating = true)
-    @Operation(summary = "Start, complete, or abandon a program",
+    @Operation(
+            summary = "Start, complete, or abandon a program",
             description = "Completing is refused while any scope the program opened is short of "
                     + "RETIRED: a completed program reads as \"this estate is off the legacy "
                     + "system\", and saying that while a capability still has a legacy writer is "
                     + "what gets an old database decommissioned with live traffic on it.")
     ResponseEntity<ProgramView> changeStatus(
-            @PathVariable UUID programId,
-            @Valid @RequestBody ChangeProgramStatusRequest body) {
+            @PathVariable UUID programId, @Valid @RequestBody ChangeProgramStatusRequest body) {
 
-        ProgramRow program = switch (body.status()) {
-            case ACTIVE -> programs.start(programId, body.expectedVersion(), body.reason());
-            case COMPLETED -> programs.complete(programId, body.expectedVersion(), body.reason());
-            case ABANDONED -> programs.abandon(programId, body.expectedVersion(), body.reason());
-            case PLANNING -> throw new ApiException(
-                    ErrorCode.INVALID_REQUEST,
-                    "A program cannot return to PLANNING once it has started");
-        };
+        ProgramRow program =
+                switch (body.status()) {
+                    case ACTIVE -> programs.start(programId, body.expectedVersion(), body.reason());
+                    case COMPLETED -> programs.complete(programId, body.expectedVersion(), body.reason());
+                    case ABANDONED -> programs.abandon(programId, body.expectedVersion(), body.reason());
+                    case PLANNING ->
+                        throw new ApiException(
+                                ErrorCode.INVALID_REQUEST, "A program cannot return to PLANNING once it has started");
+                };
         return ResponseEntity.ok()
                 .eTag(AggregateVersion.toETag(program.version()))
                 .body(ProgramView.of(program));
@@ -146,17 +143,23 @@ public class MigrationProgramController {
      */
     @PostMapping("/{programId}/scopes")
     @RequiresCapability(value = Capability.MIGRATION_SCOPE_MANAGE, scope = ScopeType.PLATFORM, mutating = true)
-    @Operation(summary = "Open a capability scope under a program",
+    @Operation(
+            summary = "Open a capability scope under a program",
             description = "Retrying with the same claim returns the scope it already opened: the "
                     + "three claim indexes make a second row at one specificity unrepresentable, "
                     + "and two rows answering one ownership question is two writers.")
-    ResponseEntity<ScopeView> openScope(
-            @PathVariable UUID programId,
-            @Valid @RequestBody OpenScopeRequest body) {
+    ResponseEntity<ScopeView> openScope(@PathVariable UUID programId, @Valid @RequestBody OpenScopeRequest body) {
 
-        ScopeRow scope = programs.openScope(programId, new MigrationProgramService.OpenScopeCommand(
-                body.tenantId(), body.brandId(), body.locationId(), body.capability(),
-                body.sourceOwner(), body.targetOwner(), body.reason()));
+        ScopeRow scope = programs.openScope(
+                programId,
+                new MigrationProgramService.OpenScopeCommand(
+                        body.tenantId(),
+                        body.brandId(),
+                        body.locationId(),
+                        body.capability(),
+                        body.sourceOwner(),
+                        body.targetOwner(),
+                        body.reason()));
 
         URI location = ServletUriComponentsBuilder.fromCurrentContextPath()
                 .path("/api/v1/platform-admin/migration/scopes/{scopeId}")
@@ -187,8 +190,7 @@ public class MigrationProgramController {
     @Operation(summary = "List the scopes of a program, oldest first")
     Page<ScopeView> listScopes(
             @PathVariable UUID programId,
-            @RequestParam(required = false) @Schema(description = "The nextCursor of the previous page")
-            UUID cursor,
+            @RequestParam(required = false) @Schema(description = "The nextCursor of the previous page") UUID cursor,
             @RequestParam(required = false) Integer limit) {
 
         int pageSize = Page.limitOrDefault(limit);
@@ -214,17 +216,20 @@ public class MigrationProgramController {
      */
     record CreateProgramRequest(
             @NotBlank @Size(max = 200) String name,
-            @NotBlank @Size(max = 64)
-            @Schema(example = "delever-production") String sourceEnvironment,
-            @NotBlank @Size(max = 64)
-            @Schema(example = "horecaos-production") String targetEnvironment,
+
+            @NotBlank @Size(max = 64) @Schema(example = "delever-production")
+            String sourceEnvironment,
+
+            @NotBlank @Size(max = 64) @Schema(example = "horecaos-production")
+            String targetEnvironment,
+
             @Positive int policyVersion,
-            @NotBlank @Size(max = 1000) String reason) { }
+            @NotBlank @Size(max = 1000) String reason) {}
 
     record ChangeProgramStatusRequest(
             @NotNull ProgramStatus status,
             @Positive int expectedVersion,
-            @NotBlank @Size(max = 1000) String reason) { }
+            @NotBlank @Size(max = 1000) String reason) {}
 
     /**
      * @param brandId     omit for a scope covering the whole tenant
@@ -240,9 +245,12 @@ public class MigrationProgramController {
             UUID brandId,
             UUID locationId,
             @NotNull MigrationCapability capability,
-            @NotBlank @Pattern(regexp = "[A-Z0-9][A-Z0-9_]{0,31}")
-            @Schema(example = "DELEVER") String sourceOwner,
-            @NotBlank @Pattern(regexp = "[A-Z0-9][A-Z0-9_]{0,31}")
-            @Schema(example = "HORECAOS_ORDERING") String targetOwner,
-            @NotBlank @Size(max = 1000) String reason) { }
+
+            @NotBlank @Pattern(regexp = "[A-Z0-9][A-Z0-9_]{0,31}") @Schema(example = "DELEVER")
+            String sourceOwner,
+
+            @NotBlank @Pattern(regexp = "[A-Z0-9][A-Z0-9_]{0,31}") @Schema(example = "HORECAOS_ORDERING")
+            String targetOwner,
+
+            @NotBlank @Size(max = 1000) String reason) {}
 }

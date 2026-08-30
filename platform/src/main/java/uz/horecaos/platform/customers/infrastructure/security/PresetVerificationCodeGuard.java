@@ -2,7 +2,6 @@ package uz.horecaos.platform.customers.infrastructure.security;
 
 import java.util.List;
 import java.util.Set;
-
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.env.Environment;
@@ -73,9 +72,8 @@ public class PresetVerificationCodeGuard implements ApplicationRunner {
                 That is a complete authentication bypass: one code would sign anybody in as
                 the holder of that number, and the number is in configuration. It exists for
                 local development only (ADR 0051).
-                Unset both properties, or run a local profile."""
-                .formatted(active, PresetVerificationCodeSource.PHONE_PROPERTY,
-                        PresetVerificationCodeSource.CODE_PROPERTY));
+                Unset both properties, or run a local profile.""".formatted(
+                active, PresetVerificationCodeSource.PHONE_PROPERTY, PresetVerificationCodeSource.CODE_PROPERTY));
     }
 
     private static boolean isSet(Environment environment, String property) {

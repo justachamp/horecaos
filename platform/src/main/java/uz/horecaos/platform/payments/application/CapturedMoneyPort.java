@@ -45,6 +45,5 @@ public interface CapturedMoneyPort {
     void recordCapture(UUID tenantId, UUID orderId, String actor);
 
     /** The assembly with nothing to tell. */
-    CapturedMoneyPort NONE = (tenantId, orderId, actor) -> {
-    };
+    CapturedMoneyPort NONE = (tenantId, orderId, actor) -> {};
 }

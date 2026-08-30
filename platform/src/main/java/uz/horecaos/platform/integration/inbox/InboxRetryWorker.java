@@ -2,7 +2,6 @@ package uz.horecaos.platform.integration.inbox;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -97,8 +96,7 @@ public class InboxRetryWorker {
         } catch (RuntimeException failure) {
             // One poisonous row must not stop the pass, or the whole backlog
             // stalls behind it. The row keeps its state and comes round again.
-            log.error("Inbox retry failed to drive item {} for {}",
-                    item.id(), item.consumerName(), failure);
+            log.error("Inbox retry failed to drive item {} for {}", item.id(), item.consumerName(), failure);
             return false;
         }
     }

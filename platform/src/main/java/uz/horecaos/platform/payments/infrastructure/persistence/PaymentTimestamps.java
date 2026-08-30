@@ -17,8 +17,7 @@ import java.time.ZoneOffset;
  */
 final class PaymentTimestamps {
 
-    private PaymentTimestamps() {
-    }
+    private PaymentTimestamps() {}
 
     static OffsetDateTime utc(Instant instant) {
         return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);

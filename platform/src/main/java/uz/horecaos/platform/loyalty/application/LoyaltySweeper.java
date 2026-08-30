@@ -25,8 +25,7 @@ import org.springframework.stereotype.Component;
  * as a side effect of being started.
  */
 @Component
-@ConditionalOnProperty(name = "horecaos.loyalty.sweeper.enabled", havingValue = "true",
-        matchIfMissing = true)
+@ConditionalOnProperty(name = "horecaos.loyalty.sweeper.enabled", havingValue = "true", matchIfMissing = true)
 public class LoyaltySweeper {
 
     private static final Logger log = LoggerFactory.getLogger(LoyaltySweeper.class);
@@ -94,8 +93,10 @@ public class LoyaltySweeper {
         try {
             int drifting = maintenance.reconcileLedger();
             if (drifting > 0) {
-                log.error("Loyalty ledger reconciliation found {} points accounts whose balance is "
-                        + "not the sum of their own movements", drifting);
+                log.error(
+                        "Loyalty ledger reconciliation found {} points accounts whose balance is "
+                                + "not the sum of their own movements",
+                        drifting);
             }
         } catch (RuntimeException failure) {
             log.error("Loyalty ledger reconciliation failed", failure);

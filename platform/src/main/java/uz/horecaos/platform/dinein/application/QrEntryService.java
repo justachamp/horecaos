@@ -5,10 +5,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.dinein.domain.BearerToken;
 import uz.horecaos.platform.dinein.domain.QrMode;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore;
@@ -53,8 +51,7 @@ public class QrEntryService {
      * that catches volumetric abuse belongs to the edge, per ADR 0033's own
      * division of labour.
      */
-    private static final RateLimiter.Policy EXCHANGE_LIMIT =
-            RateLimiter.Policy.strictPerMinute(20);
+    private static final RateLimiter.Policy EXCHANGE_LIMIT = RateLimiter.Policy.strictPerMinute(20);
 
     private static final String EXCHANGE_OPERATION = "dinein.qr.exchange";
 
@@ -63,8 +60,7 @@ public class QrEntryService {
     private final RateLimiter rateLimiter;
     private final Clock clock;
 
-    public QrEntryService(JdbcDineInStore store, FloorPlanService floorPlan,
-            RateLimiter rateLimiter, Clock clock) {
+    public QrEntryService(JdbcDineInStore store, FloorPlanService floorPlan, RateLimiter rateLimiter, Clock clock) {
         this.store = store;
         this.floorPlan = floorPlan;
         this.rateLimiter = rateLimiter;
@@ -75,15 +71,20 @@ public class QrEntryService {
      * @param guestToken returned once and never again. The client holds it for the
      *                   evening and presents it on every subsequent call
      */
-    public record GuestAdmission(String guestToken, Instant expiresAt, QrMode mode,
-            UUID tenantId, UUID brandId, UUID locationId, UUID tableId, String tableCode,
-            UUID openSessionId) {
-    }
+    public record GuestAdmission(
+            String guestToken,
+            Instant expiresAt,
+            QrMode mode,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID tableId,
+            String tableCode,
+            UUID openSessionId) {}
 
     /** What a resolved guest token is allowed to see, with no token in it. */
-    public record GuestContext(UUID tenantId, UUID brandId, UUID locationId, UUID tableId,
-            QrMode mode, Instant expiresAt) {
-    }
+    public record GuestContext(
+            UUID tenantId, UUID brandId, UUID locationId, UUID tableId, QrMode mode, Instant expiresAt) {}
 
     /**
      * Exchanges a printed table token for a guest token.
@@ -99,17 +100,15 @@ public class QrEntryService {
     public GuestAdmission exchange(String printedToken) {
         String hash = BearerToken.hash(requireToken(printedToken));
 
-        RateLimiter.Decision decision = rateLimiter.check(
-                new RateLimiter.Key(EXCHANGE_OPERATION, null, hash), EXCHANGE_LIMIT);
+        RateLimiter.Decision decision =
+                rateLimiter.check(new RateLimiter.Key(EXCHANGE_OPERATION, null, hash), EXCHANGE_LIMIT);
         if (!decision.allowed()) {
-            throw new ApiException(ErrorCode.RATE_LIMIT_EXCEEDED,
-                    "Too many scans of this code. Try again shortly.");
+            throw new ApiException(ErrorCode.RATE_LIMIT_EXCEEDED, "Too many scans of this code. Try again shortly.");
         }
 
         TableRow table = store.findTableByQrToken(hash).orElseThrow(QrEntryService::refuse);
 
-        SettingsRow settings = floorPlan.settings(
-                table.tenantId(), table.brandId(), table.locationId());
+        SettingsRow settings = floorPlan.settings(table.tenantId(), table.brandId(), table.locationId());
 
         if (settings.qrMode() == null || !settings.qrMode().selectable()) {
             throw refuse();
@@ -119,9 +118,18 @@ public class QrEntryService {
         BearerToken.Issued guest = BearerToken.issue();
         Instant expiresAt = now.plus(Duration.ofMinutes(settings.guestSessionTtlMinutes()));
 
-        store.insertGuestSession(new GuestSessionRow(UUID.randomUUID(), table.tenantId(),
-                table.brandId(), table.locationId(), table.id(), guest.hash(),
-                settings.qrMode(), now, expiresAt, null, null));
+        store.insertGuestSession(new GuestSessionRow(
+                UUID.randomUUID(),
+                table.tenantId(),
+                table.brandId(),
+                table.locationId(),
+                table.id(),
+                guest.hash(),
+                settings.qrMode(),
+                now,
+                expiresAt,
+                null,
+                null));
 
         // The live session at this table, if any, so the guest sees the running
         // bill their own party has already built rather than starting an evening
@@ -129,12 +137,20 @@ public class QrEntryService {
         // creates nothing at all.
         UUID openSession = settings.qrMode() == QrMode.ORDER_AND_PAY
                 ? store.findLiveSessionAtTable(table.tenantId(), table.id())
-                        .map(SessionRow::id).orElse(null)
+                        .map(SessionRow::id)
+                        .orElse(null)
                 : null;
 
-        return new GuestAdmission(guest.plaintext(), expiresAt, settings.qrMode(),
-                table.tenantId(), table.brandId(), table.locationId(), table.id(),
-                table.code(), openSession);
+        return new GuestAdmission(
+                guest.plaintext(),
+                expiresAt,
+                settings.qrMode(),
+                table.tenantId(),
+                table.brandId(),
+                table.locationId(),
+                table.id(),
+                table.code(),
+                openSession);
     }
 
     /**
@@ -147,12 +163,16 @@ public class QrEntryService {
      */
     public GuestContext resolve(String guestToken) {
         Instant now = clock.instant();
-        GuestSessionRow guest = store
-                .findLiveGuestSession(BearerToken.hash(requireToken(guestToken)), now)
+        GuestSessionRow guest = store.findLiveGuestSession(BearerToken.hash(requireToken(guestToken)), now)
                 .orElseThrow(QrEntryService::refuseGuest);
 
-        return new GuestContext(guest.tenantId(), guest.brandId(), guest.locationId(),
-                guest.tableId(), guest.qrMode(), guest.expiresAt());
+        return new GuestContext(
+                guest.tenantId(),
+                guest.brandId(),
+                guest.locationId(),
+                guest.tableId(),
+                guest.qrMode(),
+                guest.expiresAt());
     }
 
     /**
@@ -164,12 +184,10 @@ public class QrEntryService {
      * plausible — is how a guest reaches a neighbouring party's bill.
      */
     public SessionRow requireSessionAtTable(GuestContext guest, UUID sessionId) {
-        Optional<SessionRow> live = store.findLiveSessionAtTable(guest.tenantId(),
-                guest.tableId());
+        Optional<SessionRow> live = store.findLiveSessionAtTable(guest.tenantId(), guest.tableId());
 
         return live.filter(session -> session.id().equals(sessionId))
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No open bill at this table"));
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No open bill at this table"));
     }
 
     private static String requireToken(String token) {
@@ -188,12 +206,10 @@ public class QrEntryService {
      * confirmation oracle on a value printed in a public room.
      */
     private static ApiException refuse() {
-        return new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                "This code is not in service. Ask a member of staff.");
+        return new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "This code is not in service. Ask a member of staff.");
     }
 
     private static ApiException refuseGuest() {
-        return new ApiException(ErrorCode.UNAUTHENTICATED,
-                "This table session has ended. Scan the code again.");
+        return new ApiException(ErrorCode.UNAUTHENTICATED, "This table session has ended. Scan the code again.");
     }
 }

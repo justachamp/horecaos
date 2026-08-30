@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 
 class LocationPlaceTests {
@@ -27,11 +26,11 @@ class LocationPlaceTests {
      */
     @Test
     void refusesASourceThatDisagreesWithThePoint() {
-        assertThatIllegalArgumentException().isThrownBy(() ->
-                new LocationPlace(null, null, null, null, null, null, CoordinateSource.GEOCODER));
-        assertThatIllegalArgumentException().isThrownBy(() ->
-                new LocationPlace(null, null, null, null, null, TASHKENT,
-                        CoordinateSource.NOT_GEOCODED));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new LocationPlace(null, null, null, null, null, null, CoordinateSource.GEOCODER));
+        assertThatIllegalArgumentException()
+                .isThrownBy(
+                        () -> new LocationPlace(null, null, null, null, null, TASHKENT, CoordinateSource.NOT_GEOCODED));
     }
 
     @Test
@@ -51,8 +50,7 @@ class LocationPlaceTests {
     void refusesACoordinateThatIsNotAFiniteNumber() {
         assertThatIllegalArgumentException().isThrownBy(() -> new GeoPoint(Double.NaN, 0));
         assertThatIllegalArgumentException().isThrownBy(() -> new GeoPoint(0, Double.NaN));
-        assertThatIllegalArgumentException().isThrownBy(() ->
-                new GeoPoint(Double.POSITIVE_INFINITY, 0));
+        assertThatIllegalArgumentException().isThrownBy(() -> new GeoPoint(Double.POSITIVE_INFINITY, 0));
     }
 
     @Test
@@ -71,8 +69,7 @@ class LocationPlaceTests {
      */
     @Test
     void treatsBlankFieldsAsAbsentRatherThanStoringThem() {
-        LocationPlace place = new LocationPlace("   ", "", null, "  \t ", null, null,
-                CoordinateSource.NOT_GEOCODED);
+        LocationPlace place = new LocationPlace("   ", "", null, "  \t ", null, null, CoordinateSource.NOT_GEOCODED);
 
         assertThat(place.addressLine()).isNull();
         assertThat(place.district()).isNull();
@@ -81,8 +78,13 @@ class LocationPlaceTests {
 
     @Test
     void stripsSurroundingWhitespaceFromWhatItKeeps() {
-        LocationPlace place = new LocationPlace("  Amir Temur ko'chasi 12  ", null,
-                "  Toshkent ", " Metro Bodomzor yonida ", null, null,
+        LocationPlace place = new LocationPlace(
+                "  Amir Temur ko'chasi 12  ",
+                null,
+                "  Toshkent ",
+                " Metro Bodomzor yonida ",
+                null,
+                null,
                 CoordinateSource.NOT_GEOCODED);
 
         assertThat(place.addressLine()).isEqualTo("Amir Temur ko'chasi 12");
@@ -92,8 +94,13 @@ class LocationPlaceTests {
 
     @Test
     void aPinnedBranchCanOriginateADeliveryZone() {
-        LocationPlace place = new LocationPlace("Amir Temur ko'chasi 12", "Yunusobod",
-                "Toshkent", "Metro Bodomzor yonida", "+998712000000", TASHKENT,
+        LocationPlace place = new LocationPlace(
+                "Amir Temur ko'chasi 12",
+                "Yunusobod",
+                "Toshkent",
+                "Metro Bodomzor yonida",
+                "+998712000000",
+                TASHKENT,
                 CoordinateSource.MERCHANT_PIN);
 
         assertThat(place.isLocatable()).isTrue();
@@ -102,7 +109,6 @@ class LocationPlaceTests {
     }
 
     private static LocationPlace place(String phone) {
-        return new LocationPlace(null, null, null, null, phone, null,
-                CoordinateSource.NOT_GEOCODED);
+        return new LocationPlace(null, null, null, null, phone, null, CoordinateSource.NOT_GEOCODED);
     }
 }

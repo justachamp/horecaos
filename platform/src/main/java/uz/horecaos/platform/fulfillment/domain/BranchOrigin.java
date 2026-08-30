@@ -1,7 +1,6 @@
 package uz.horecaos.platform.fulfillment.domain;
 
 import java.util.UUID;
-
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 
 /**
@@ -46,17 +45,18 @@ public record BranchOrigin(UUID locationId, GeoPoint point, String source) {
      * @throws UnlocatedBranchException when the branch cannot originate a zone or
      *                                  a measurement
      */
-    public static BranchOrigin of(UUID locationId, Double latitude, Double longitude,
-            String coordinateSource) {
+    public static BranchOrigin of(UUID locationId, Double latitude, Double longitude, String coordinateSource) {
 
         if (latitude == null || longitude == null || NOT_GEOCODED.equals(coordinateSource)) {
-            throw new UnlocatedBranchException(locationId,
+            throw new UnlocatedBranchException(
+                    locationId,
                     "This branch has no coordinate (%s), so no delivery zone can be drawn around "
                             + "it and no distance can be measured from it. Place its pin before "
                             + "configuring delivery.".formatted(coordinateSource));
         }
         if (latitude == 0.0 && longitude == 0.0) {
-            throw new UnlocatedBranchException(locationId,
+            throw new UnlocatedBranchException(
+                    locationId,
                     "This branch is recorded at (0, 0), which is a point in the Gulf of Guinea "
                             + "rather than a missing value. Every distance and containment test "
                             + "accepts it, so it would serve nothing while reporting as located. "

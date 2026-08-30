@@ -6,12 +6,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.ordering.application.CartMenuRules;
 
 /**
@@ -43,15 +40,15 @@ public class JdbcCartMenuRules implements CartMenuRules {
     }
 
     @Override
-    public Optional<ProductRules> forVariant(UUID tenantId, UUID brandId, String channelCode,
-            UUID variantId) {
+    public Optional<ProductRules> forVariant(UUID tenantId, UUID brandId, String channelCode, UUID variantId) {
 
         Optional<UUID> publicationId = jdbc.sql("""
                 SELECT id FROM catalog.publications
                 WHERE tenant_id = :tenantId AND brand_id = :brandId
                   AND channel = :channel AND status = 'PUBLISHED'
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("channel", channelCode)
                 .query(UUID.class)
                 .optional();
@@ -72,9 +69,8 @@ public class JdbcCartMenuRules implements CartMenuRules {
                 """)
                 .param("publicationId", publicationId.get())
                 .param("variantMatch", "[{\"variantId\":\"" + variantId + "\"}]")
-                .query((row, number) -> new ProductItem(
-                        row.getObject("entity_id", UUID.class),
-                        readJson(row.getString("content"))))
+                .query((row, number) ->
+                        new ProductItem(row.getObject("entity_id", UUID.class), readJson(row.getString("content"))))
                 .optional();
         if (product.isEmpty()) {
             return Optional.empty();
@@ -84,8 +80,7 @@ public class JdbcCartMenuRules implements CartMenuRules {
         if (groupIds.isEmpty()) {
             return Optional.of(new ProductRules(product.get().entityId(), List.of()));
         }
-        return Optional.of(new ProductRules(product.get().entityId(),
-                groups(publicationId.get(), groupIds)));
+        return Optional.of(new ProductRules(product.get().entityId(), groups(publicationId.get(), groupIds)));
     }
 
     private List<GroupRules> groups(UUID publicationId, List<UUID> groupIds) {
@@ -98,9 +93,8 @@ public class JdbcCartMenuRules implements CartMenuRules {
                 """)
                 .param("publicationId", publicationId)
                 .param("ids", groupIds.toArray(UUID[]::new))
-                .query((row, number) -> toGroup(
-                        row.getObject("entity_id", UUID.class),
-                        readJson(row.getString("content"))))
+                .query((row, number) ->
+                        toGroup(row.getObject("entity_id", UUID.class), readJson(row.getString("content"))))
                 .list();
     }
 
@@ -109,7 +103,8 @@ public class JdbcCartMenuRules implements CartMenuRules {
         if (content.get("options") instanceof List<?> published) {
             for (Object element : published) {
                 if (element instanceof Map<?, ?> option) {
-                    options.put(UUID.fromString(String.valueOf(option.get("optionId"))),
+                    options.put(
+                            UUID.fromString(String.valueOf(option.get("optionId"))),
                             // Absent reads as one rather than zero: a cap of zero
                             // would make an option nobody can choose out of one the
                             // menu offers.
@@ -117,7 +112,8 @@ public class JdbcCartMenuRules implements CartMenuRules {
                 }
             }
         }
-        return new GroupRules(groupId,
+        return new GroupRules(
+                groupId,
                 String.valueOf(content.get("code")),
                 Boolean.TRUE.equals(content.get("required")),
                 intOf(content.get("minimumSelections"), 0),
@@ -154,5 +150,5 @@ public class JdbcCartMenuRules implements CartMenuRules {
         return json == null ? Map.of() : objectMapper.readValue(json, Map.class);
     }
 
-    private record ProductItem(UUID entityId, Map<String, Object> content) { }
+    private record ProductItem(UUID entityId, Map<String, Object> content) {}
 }

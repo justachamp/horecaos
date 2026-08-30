@@ -20,17 +20,13 @@ import java.util.UUID;
  *                              inbox. Null when the request never got as far as
  *                              naming one, which is every signature failure
  */
-public record ClickCallbackDecision(
-        ClickShopApiError error,
-        Integer merchantTransactionId,
-        UUID attemptId) {
+public record ClickCallbackDecision(ClickShopApiError error, Integer merchantTransactionId, UUID attemptId) {
 
     static ClickCallbackDecision failed(ClickShopApiError error) {
         return new ClickCallbackDecision(error, null, null);
     }
 
-    static ClickCallbackDecision answered(ClickShopApiError error, UUID attemptId,
-            int merchantTransactionId) {
+    static ClickCallbackDecision answered(ClickShopApiError error, UUID attemptId, int merchantTransactionId) {
         return new ClickCallbackDecision(error, merchantTransactionId, attemptId);
     }
 

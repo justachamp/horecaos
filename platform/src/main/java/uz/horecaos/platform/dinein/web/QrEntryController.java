@@ -1,13 +1,13 @@
 package uz.horecaos.platform.dinein.web;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -16,10 +16,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.dinein.application.QrEntryService;
 import uz.horecaos.platform.dinein.application.QrEntryService.GuestAdmission;
 import uz.horecaos.platform.dinein.application.QrEntryService.GuestContext;
@@ -76,7 +72,8 @@ public class QrEntryController {
     }
 
     @PostMapping("/qr/token-exchanges")
-    @Operation(summary = "Exchange a scanned table code for a guest token",
+    @Operation(
+            summary = "Exchange a scanned table code for a guest token",
             description = "Scanning authorises nothing by itself. The printed token is exchanged "
                     + "once for a short-lived, table-scoped token, and that is what every "
                     + "subsequent call carries. Rotating the table's code revokes every token "
@@ -87,18 +84,23 @@ public class QrEntryController {
         GuestAdmission admission = qr.exchange(body.tableToken());
 
         return ResponseEntity.ok(new AdmissionResponse(
-                admission.guestToken(), admission.expiresAt(), admission.mode().name(),
-                admission.tenantId(), admission.brandId(), admission.locationId(),
-                admission.tableCode(), admission.openSessionId()));
+                admission.guestToken(),
+                admission.expiresAt(),
+                admission.mode().name(),
+                admission.tenantId(),
+                admission.brandId(),
+                admission.locationId(),
+                admission.tableCode(),
+                admission.openSessionId()));
     }
 
     @GetMapping("/sessions/{sessionId}")
-    @Operation(summary = "The running bill at the guest's own table",
+    @Operation(
+            summary = "The running bill at the guest's own table",
             description = "The session id is checked against the table the guest's token was "
                     + "minted for, not merely parsed. A guest who edits it reaches nothing.")
     public ResponseEntity<GuestBillResponse> bill(
-            @PathVariable UUID sessionId,
-            @RequestHeader(GUEST_TOKEN_HEADER) String guestToken) {
+            @PathVariable UUID sessionId, @RequestHeader(GUEST_TOKEN_HEADER) String guestToken) {
 
         GuestContext guest = qr.resolve(guestToken);
         requireOrdering(guest);
@@ -106,20 +108,23 @@ public class QrEntryController {
         SessionRow session = qr.requireSessionAtTable(guest, sessionId);
         SessionBill bill = sessions.bill(guest.tenantId(), sessionId);
 
-        return ResponseEntity.ok(new GuestBillResponse(session.id(), session.status().name(),
+        return ResponseEntity.ok(new GuestBillResponse(
+                session.id(),
+                session.status().name(),
                 bill.currency() == null ? session.currency() : bill.currency(),
-                bill.totalMinor(), bill.roundCount(),
+                bill.totalMinor(),
+                bill.roundCount(),
                 sessions.rounds(guest.tenantId(), sessionId)));
     }
 
     @PostMapping("/sessions/{sessionId}/bill-requests")
-    @Operation(summary = "Ask for the bill",
+    @Operation(
+            summary = "Ask for the bill",
             description = "Moves the session to BILL_REQUESTED, which is a request rather than a "
                     + "payment: nothing is captured here, and a party that then orders one more "
                     + "round moves it back.")
     public ResponseEntity<GuestBillResponse> requestBill(
-            @PathVariable UUID sessionId,
-            @RequestHeader(GUEST_TOKEN_HEADER) String guestToken) {
+            @PathVariable UUID sessionId, @RequestHeader(GUEST_TOKEN_HEADER) String guestToken) {
 
         GuestContext guest = qr.resolve(guestToken);
         requireOrdering(guest);
@@ -132,18 +137,26 @@ public class QrEntryController {
             return ResponseEntity.ok(billResponse(guest, session));
         }
 
-        SessionRow moved = sessions.move(guest.tenantId(), sessionId,
-                SessionStatus.BILL_REQUESTED, session.version(), null,
-                "guest:" + guest.tableId(), "Requested from the table");
+        SessionRow moved = sessions.move(
+                guest.tenantId(),
+                sessionId,
+                SessionStatus.BILL_REQUESTED,
+                session.version(),
+                null,
+                "guest:" + guest.tableId(),
+                "Requested from the table");
 
         return ResponseEntity.ok(billResponse(guest, moved));
     }
 
     private GuestBillResponse billResponse(GuestContext guest, SessionRow session) {
         SessionBill bill = sessions.bill(guest.tenantId(), session.id());
-        return new GuestBillResponse(session.id(), session.status().name(),
+        return new GuestBillResponse(
+                session.id(),
+                session.status().name(),
                 bill.currency() == null ? session.currency() : bill.currency(),
-                bill.totalMinor(), bill.roundCount(),
+                bill.totalMinor(),
+                bill.roundCount(),
                 sessions.rounds(guest.tenantId(), session.id()));
     }
 
@@ -156,22 +169,28 @@ public class QrEntryController {
      */
     private static void requireOrdering(GuestContext guest) {
         if (guest.mode() != QrMode.ORDER_AND_PAY) {
-            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                    "This code is not in service. Ask a member of staff.");
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "This code is not in service. Ask a member of staff.");
         }
     }
 
     // -------------------------------------------------------------- contracts
 
-    record ExchangeRequest(@NotBlank @Size(max = 64) String tableToken) { }
+    record ExchangeRequest(@NotBlank @Size(max = 64) String tableToken) {}
 
     /**
      * @param guestToken returned once. There is no endpoint that reissues it: the
      *                   guest scans again
      */
-    record AdmissionResponse(String guestToken, Instant expiresAt, String mode, UUID tenantId,
-            UUID brandId, UUID locationId, String tableCode, UUID openSessionId) { }
+    record AdmissionResponse(
+            String guestToken,
+            Instant expiresAt,
+            String mode,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            String tableCode,
+            UUID openSessionId) {}
 
-    record GuestBillResponse(UUID sessionId, String status, String currency, long totalMinor,
-            int roundCount, List<UUID> orderIds) { }
+    record GuestBillResponse(
+            UUID sessionId, String status, String currency, long totalMinor, int roundCount, List<UUID> orderIds) {}
 }

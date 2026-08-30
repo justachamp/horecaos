@@ -4,12 +4,10 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.loyalty.api.HeldTenderPort;
 import uz.horecaos.platform.loyalty.domain.EntryType;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore;
@@ -56,8 +54,8 @@ public class LoyaltyMaintenanceService {
     private final HeldTenderPort tenders;
     private final Clock clock;
 
-    public LoyaltyMaintenanceService(JdbcLoyaltyStore store, PointsRedemptionService redemption,
-            HeldTenderPort tenders, Clock clock) {
+    public LoyaltyMaintenanceService(
+            JdbcLoyaltyStore store, PointsRedemptionService redemption, HeldTenderPort tenders, Clock clock) {
         this.store = store;
         this.redemption = redemption;
         this.tenders = tenders;
@@ -130,8 +128,7 @@ public class LoyaltyMaintenanceService {
             // other order would let a refused debit leave an entry claiming a
             // balance the account never had.
             if (!store.destroyBalance(account.tenantId(), account.id(), remaining, now)) {
-                throw new IllegalStateException(
-                        "A lot holds more than its account's balance: " + lot.id());
+                throw new IllegalStateException("A lot holds more than its account's balance: " + lot.id());
             }
             // Read back rather than arithmetic on the balance this loop started
             // with, for the same reason the amount is: a redemption that landed in
@@ -139,8 +136,7 @@ public class LoyaltyMaintenanceService {
             // held is worse than no entry at all.
             long balanceAfter = store.findAccountById(account.tenantId(), account.id())
                     .map(AccountRow::balanceMinor)
-                    .orElseThrow(() -> new IllegalStateException(
-                            "A lot exists without an account: " + lot.id()));
+                    .orElseThrow(() -> new IllegalStateException("A lot exists without an account: " + lot.id()));
             // The key names the expiry rather than the lot, and the balance
             // movement above is why the answer is not discarded. A lot reaches
             // this loop twice as a matter of design — the repair arm of
@@ -148,11 +144,25 @@ public class LoyaltyMaintenanceService {
             // value again — and under the old EXPIRY:<lot> key the second
             // destruction was refused as a duplicate, silently, after the balance
             // had already come down. See LedgerKeys.expiry.
-            store.requireEntry(new JdbcLoyaltyStore.NewEntry(UUID.randomUUID(), account.tenantId(),
-                    account.id(), EntryType.EXPIRY, -remaining,
-                    balanceAfter, lot.id(), null, null, null, null,
-                    "LOT_EXPIRED", "loyalty-expiry-sweep", null,
-                    LedgerKeys.expiry(lot.id(), now), now), now);
+            store.requireEntry(
+                    new JdbcLoyaltyStore.NewEntry(
+                            UUID.randomUUID(),
+                            account.tenantId(),
+                            account.id(),
+                            EntryType.EXPIRY,
+                            -remaining,
+                            balanceAfter,
+                            lot.id(),
+                            null,
+                            null,
+                            null,
+                            null,
+                            "LOT_EXPIRED",
+                            "loyalty-expiry-sweep",
+                            null,
+                            LedgerKeys.expiry(lot.id(), now),
+                            now),
+                    now);
             destroyed++;
         }
         return destroyed;
@@ -202,19 +212,17 @@ public class LoyaltyMaintenanceService {
         int renewed = 0;
         for (ReservationRow reservation : stale) {
             if (tenders.stillAwaitingSettlement(reservation.tenantId(), reservation.tenderId())) {
-                store.renewHold(reservation.tenantId(), reservation.id(),
-                        now.plus(PointsRedemptionService.HOLD_LIFETIME), now);
+                store.renewHold(
+                        reservation.tenantId(), reservation.id(), now.plus(PointsRedemptionService.HOLD_LIFETIME), now);
                 renewed++;
                 continue;
             }
-            redemption.release(reservation.tenantId(), reservation.tenderId(), "HOLD_EXPIRED",
-                    "loyalty-hold-sweep");
+            redemption.release(reservation.tenantId(), reservation.tenderId(), "HOLD_EXPIRED", "loyalty-hold-sweep");
             released++;
         }
 
         if (renewed > 0) {
-            log.debug("Loyalty hold sweep renewed {} holds whose tenders are still outstanding",
-                    renewed);
+            log.debug("Loyalty hold sweep renewed {} holds whose tenders are still outstanding", renewed);
         }
         return released;
     }
@@ -249,11 +257,15 @@ public class LoyaltyMaintenanceService {
     public int reconcileLedger() {
         List<JdbcLoyaltyStore.LedgerDrift> drifting = store.driftingAccounts(BATCH);
         for (JdbcLoyaltyStore.LedgerDrift drift : drifting) {
-            log.error("Points account {} of tenant {} carries a balance of {} against movements "
+            log.error(
+                    "Points account {} of tenant {} carries a balance of {} against movements "
                             + "summing to {}: a drift of {}. A balance is the sum of its own "
                             + "entries; one of the two is a movement that was not recorded or an "
                             + "entry that did not move.",
-                    drift.accountId(), drift.tenantId(), drift.balanceMinor(), drift.ledgerMinor(),
+                    drift.accountId(),
+                    drift.tenantId(),
+                    drift.balanceMinor(),
+                    drift.ledgerMinor(),
                     drift.driftMinor());
         }
         return drifting.size();
@@ -264,7 +276,6 @@ public class LoyaltyMaintenanceService {
         // every following statement carries a tenant predicate that was read
         // rather than assumed.
         return store.findAccountByLot(lot.id())
-                .orElseThrow(() -> new IllegalStateException(
-                        "A lot exists without an account: " + lot.id()));
+                .orElseThrow(() -> new IllegalStateException("A lot exists without an account: " + lot.id()));
     }
 }

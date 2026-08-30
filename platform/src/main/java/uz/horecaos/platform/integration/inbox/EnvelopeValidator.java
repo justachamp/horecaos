@@ -1,7 +1,5 @@
 package uz.horecaos.platform.integration.inbox;
 
-import uz.horecaos.platform.integration.api.ExternalEventEnvelope;
-
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -9,12 +7,11 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import uz.horecaos.platform.integration.api.ExternalEventEnvelope;
 
 /**
  * Validates an inbound record before any handler sees it (ADR 0005).
@@ -87,11 +84,20 @@ public class EnvelopeValidator {
         requireHeaderMatch(headers, "horecaos-tenant-id", tenantId.toString());
         requireHeaderMatch(headers, "horecaos-correlation-id", correlationId);
 
-        String causationId = root.hasNonNull("causationId") ? root.get("causationId").asString() : null;
+        String causationId =
+                root.hasNonNull("causationId") ? root.get("causationId").asString() : null;
 
         return new ExternalEventEnvelope<>(
-                eventId, eventType, eventVersion, tenantId, aggregateType, aggregateId,
-                correlationId, causationId, occurredAt, payload,
+                eventId,
+                eventType,
+                eventVersion,
+                tenantId,
+                aggregateType,
+                aggregateId,
+                correlationId,
+                causationId,
+                occurredAt,
+                payload,
                 sha256(objectMapper.writeValueAsString(payload)),
                 new ExternalEventEnvelope.TransportContext(topic, partition, offset, recordKey));
     }
@@ -116,8 +122,7 @@ public class EnvelopeValidator {
             return; // Headers are diagnostics; absence is tolerated, disagreement is not.
         }
         if (!actual.equals(expected)) {
-            throw new InvalidEnvelopeException(
-                    "Header %s disagrees with the event body".formatted(header));
+            throw new InvalidEnvelopeException("Header %s disagrees with the event body".formatted(header));
         }
     }
 

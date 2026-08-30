@@ -6,9 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
-
 import javax.sql.DataSource;
-
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.Assumptions;
@@ -17,7 +15,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -27,22 +24,23 @@ import uz.horecaos.platform.support.TestDatabase;
 class ApprovalPolicyScopeMigrationTests {
 
     private static final String ACTION = "payments.remedy.record";
-    private static final OffsetDateTime AUTHORED_AT =
-            OffsetDateTime.of(2026, 8, 20, 10, 0, 0, 0, ZoneOffset.UTC);
+    private static final OffsetDateTime AUTHORED_AT = OffsetDateTime.of(2026, 8, 20, 10, 0, 0, 0, ZoneOffset.UTC);
 
     @BeforeAll
     static void requireDocker() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
-                "Docker is required for migration tests");
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(), "Docker is required for migration tests");
     }
 
     @Test
     void legacyScopedRowsRemainExplicitWideFallbacksAndNewRowsMustNameAResource() {
         try (TestDatabase.Handle db = TestDatabase.empty()) {
             DataSource dataSource = db.dataSource();
-            Flyway.configure().dataSource(dataSource)
+            Flyway.configure()
+                    .dataSource(dataSource)
                     .target(MigrationVersion.fromVersion("0081"))
-                    .load().migrate();
+                    .load()
+                    .migrate();
             JdbcClient jdbc = JdbcClient.create(dataSource);
 
             UUID tenantId = UUID.randomUUID();
@@ -67,11 +65,11 @@ class ApprovalPolicyScopeMigrationTests {
                             jsonb_build_object('description', 'Unscoped new brand policy'),
                             'refund.approve', :validFrom, 2, 'owner')
                     """)
-                    .param("id", UUID.randomUUID())
-                    .param("tenantId", tenantId)
-                    .param("actionCode", ACTION)
-                    .param("validFrom", AUTHORED_AT)
-                    .update())
+                            .param("id", UUID.randomUUID())
+                            .param("tenantId", tenantId)
+                            .param("actionCode", ACTION)
+                            .param("validFrom", AUTHORED_AT)
+                            .update())
                     .isInstanceOf(DataIntegrityViolationException.class);
 
             UUID brandId = UUID.randomUUID();
@@ -87,12 +85,12 @@ class ApprovalPolicyScopeMigrationTests {
                             jsonb_build_object('description', 'Exact new brand policy'),
                             'refund.approve', :validFrom, 1, 'owner')
                     """)
-                    .param("id", UUID.randomUUID())
-                    .param("tenantId", tenantId)
-                    .param("brandId", brandId)
-                    .param("actionCode", ACTION)
-                    .param("validFrom", AUTHORED_AT)
-                    .update())
+                            .param("id", UUID.randomUUID())
+                            .param("tenantId", tenantId)
+                            .param("brandId", brandId)
+                            .param("actionCode", ACTION)
+                            .param("validFrom", AUTHORED_AT)
+                            .update())
                     .as("an exact row can coexist with the legacy fallback at the same level")
                     .isEqualTo(1);
         }

@@ -61,7 +61,7 @@ public record CatalogSnapshot(
             int sortOrder,
             boolean active,
             Integer depth,
-            Map<String, Object> raw) { }
+            Map<String, Object> raw) {}
 
     /**
      * @param comparable  false for kinds that are inventory rather than menu —
@@ -94,7 +94,7 @@ public record CatalogSnapshot(
             boolean active,
             boolean hidden,
             String governmentCode,
-            Map<String, Object> raw) { }
+            Map<String, Object> raw) {}
 
     /**
      * @param externalUnitReference the provider's unit identifier, unresolved.
@@ -111,7 +111,7 @@ public record CatalogSnapshot(
             String currency,
             boolean active,
             String externalUnitReference,
-            Map<String, Object> raw) { }
+            Map<String, Object> raw) {}
 
     public record ModifierGroup(
             String externalId,
@@ -120,7 +120,7 @@ public record CatalogSnapshot(
             int minimumSelections,
             int maximumSelections,
             boolean required,
-            Map<String, Object> raw) { }
+            Map<String, Object> raw) {}
 
     public record Modifier(
             String externalId,
@@ -129,7 +129,7 @@ public record CatalogSnapshot(
             Long priceMinor,
             String currency,
             boolean active,
-            Map<String, Object> raw) { }
+            Map<String, Object> raw) {}
 
     /**
      * @param stockLimit null when the provider named no limit for this entity.
@@ -137,8 +137,5 @@ public record CatalogSnapshot(
      *                   unavailable, and inverting that reading empties a menu
      */
     public record Availability(
-            String externalId,
-            java.math.BigDecimal stockLimit,
-            Instant observedAt,
-            Map<String, Object> raw) { }
+            String externalId, java.math.BigDecimal stockLimit, Instant observedAt, Map<String, Object> raw) {}
 }

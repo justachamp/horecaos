@@ -4,9 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.charset.StandardCharsets;
-
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.web.api.Cursor.CursorSigner;
 
 /** ADR 0031: cursors are opaque, signed, and bound to their filter set. */
@@ -69,8 +67,7 @@ class CursorTests {
 
     @Test
     void rejectsASortKeyContainingTheSeparator() {
-        assertThatThrownBy(() -> new Cursor("has|separator", FILTERS))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new Cursor("has|separator", FILTERS)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

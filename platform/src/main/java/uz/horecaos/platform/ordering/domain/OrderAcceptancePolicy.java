@@ -38,10 +38,8 @@ public record OrderAcceptancePolicy(
             if (approvalChannel == ApprovalChannel.NONE) {
                 throw new IllegalArgumentException("Restaurant approval requires an approval channel");
             }
-            if (approvalTimeoutSeconds < MIN_TIMEOUT_SECONDS
-                    || approvalTimeoutSeconds > MAX_TIMEOUT_SECONDS) {
-                throw new IllegalArgumentException(
-                        "Approval timeout must be between 30 seconds and 30 minutes");
+            if (approvalTimeoutSeconds < MIN_TIMEOUT_SECONDS || approvalTimeoutSeconds > MAX_TIMEOUT_SECONDS) {
+                throw new IllegalArgumentException("Approval timeout must be between 30 seconds and 30 minutes");
             }
         }
     }
@@ -57,11 +55,6 @@ public record OrderAcceptancePolicy(
      */
     public static OrderAcceptancePolicy platformDefault() {
         return new OrderAcceptancePolicy(
-                AcceptanceMode.AUTO_CONFIRM,
-                ApprovalChannel.NONE,
-                0,
-                ApprovalTimeoutAction.AUTO_REJECT,
-                false,
-                false);
+                AcceptanceMode.AUTO_CONFIRM, ApprovalChannel.NONE, 0, ApprovalTimeoutAction.AUTO_REJECT, false, false);
     }
 }

@@ -2,7 +2,6 @@ package uz.horecaos.platform.loyalty.domain;
 
 /** The lifecycle of a points account (ADR 0046). */
 public enum AccountStatus {
-
     ACTIVE,
 
     /** Earns and holds its balance; cannot redeem. A support hold, not a closure. */

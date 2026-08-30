@@ -44,8 +44,7 @@ public final class MarketplaceOrderLifecycle {
     public static final String REJECTED = "REJECTED";
 
     /** The happy path, in order. */
-    public static final List<String> PATH =
-            List.of(RECEIVED, CONFIRMED, PREPARING, READY, COMPLETED);
+    public static final List<String> PATH = List.of(RECEIVED, CONFIRMED, PREPARING, READY, COMPLETED);
 
     /**
      * The one exception granted knowingly: a partner may cancel an order HorecaOS
@@ -64,8 +63,7 @@ public final class MarketplaceOrderLifecycle {
             CANCELLED, Set.of(),
             REJECTED, Set.of());
 
-    private MarketplaceOrderLifecycle() {
-    }
+    private MarketplaceOrderLifecycle() {}
 
     public static boolean permits(String from, String to) {
         return TRANSITIONS.getOrDefault(from, Set.of()).contains(to);

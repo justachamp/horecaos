@@ -3,7 +3,6 @@ package uz.horecaos.platform.migration.application;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;

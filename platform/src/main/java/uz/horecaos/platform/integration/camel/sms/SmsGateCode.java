@@ -38,7 +38,6 @@ import java.util.stream.Stream;
  * even that is not retried automatically here — see {@code SmsRouteBuilder}.
  */
 enum SmsGateCode {
-
     SUCCESS(0, Effect.ACCEPTED, "SMS_ACCEPTED"),
 
     /**
@@ -102,7 +101,12 @@ enum SmsGateCode {
     UNDOCUMENTED(Integer.MIN_VALUE, Effect.UNCERTAIN, "SMS_RESPONSE_UNREADABLE");
 
     /** What the platform does about a code, in ADR 0007's vocabulary. */
-    enum Effect { ACCEPTED, REFUSED, RETRYABLE, UNCERTAIN }
+    enum Effect {
+        ACCEPTED,
+        REFUSED,
+        RETRYABLE,
+        UNCERTAIN
+    }
 
     private static final Map<Integer, SmsGateCode> BY_WIRE_VALUE = Stream.of(values())
             .filter(code -> code != UNDOCUMENTED)

@@ -1,18 +1,16 @@
 package uz.horecaos.platform.commercial.web;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
+import uz.horecaos.platform.commercial.api.EntitlementService;
 import uz.horecaos.platform.commercial.api.EntitlementSnapshot;
 import uz.horecaos.platform.commercial.api.EntitlementValue;
 import uz.horecaos.platform.commercial.application.PlanCatalogService;
@@ -22,7 +20,6 @@ import uz.horecaos.platform.commercial.domain.PlanEntitlement;
 import uz.horecaos.platform.commercial.domain.PlanVersion;
 import uz.horecaos.platform.commercial.domain.Subscription;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcUsageStore;
-import uz.horecaos.platform.commercial.api.EntitlementService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.web.api.AggregateVersion;
@@ -55,8 +52,10 @@ public class CommercialControlPlaneController {
     private final EntitlementService entitlements;
     private final UsageMeteringService usage;
 
-    public CommercialControlPlaneController(PlanCatalogService plans,
-            SubscriptionService subscriptions, EntitlementService entitlements,
+    public CommercialControlPlaneController(
+            PlanCatalogService plans,
+            SubscriptionService subscriptions,
+            EntitlementService entitlements,
             UsageMeteringService usage) {
         this.plans = plans;
         this.subscriptions = subscriptions;
@@ -66,7 +65,8 @@ public class CommercialControlPlaneController {
 
     @GetMapping("/plans")
     @RequiresCapability(value = Capability.COMMERCIAL_PLAN_READ, scope = ScopeType.PLATFORM)
-    @Operation(summary = "The activated plan catalogue",
+    @Operation(
+            summary = "The activated plan catalogue",
             description = "Only activated versions. A draft is an unfinished commercial "
                     + "decision and showing one invites somebody to quote it.")
     public ResponseEntity<List<PlanVersionResponse>> planCatalogue() {
@@ -79,18 +79,18 @@ public class CommercialControlPlaneController {
     @RequiresCapability(value = Capability.COMMERCIAL_PLAN_READ, scope = ScopeType.TENANT)
     @Operation(summary = "The tenant's live subscription")
     public ResponseEntity<SubscriptionResponse> subscription(@PathVariable UUID tenantId) {
-        Subscription live = subscriptions.live(tenantId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "The tenant has no live subscription"));
+        Subscription live = subscriptions
+                .live(tenantId)
+                .orElseThrow(
+                        () -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "The tenant has no live subscription"));
 
-        return ResponseEntity.ok()
-                .eTag(AggregateVersion.toETag(live.version()))
-                .body(SubscriptionResponse.of(live));
+        return ResponseEntity.ok().eTag(AggregateVersion.toETag(live.version())).body(SubscriptionResponse.of(live));
     }
 
     @GetMapping("/tenants/{tenantId}/entitlements")
     @RequiresCapability(value = Capability.COMMERCIAL_PLAN_READ, scope = ScopeType.TENANT)
-    @Operation(summary = "Everything the tenant is entitled to, and why",
+    @Operation(
+            summary = "Everything the tenant is entitled to, and why",
             description = "Each entry names the source its value came from — an override, the "
                     + "plan version, a suspension policy, or the code default — and the mode "
                     + "actually in force after the tenant's enforcement ceiling. Support reads "
@@ -101,14 +101,14 @@ public class CommercialControlPlaneController {
 
     @GetMapping("/tenants/{tenantId}/usage")
     @RequiresCapability(value = Capability.COMMERCIAL_USAGE_READ, scope = ScopeType.TENANT)
-    @Operation(summary = "Metered usage per key and period",
+    @Operation(
+            summary = "Metered usage per key and period",
             description = "Measured and adjusted quantities stay apart. A single consumed total "
                     + "cannot answer how much of a figure a person decided, and that is the first "
                     + "question asked about a disputed one.")
     public ResponseEntity<List<UsageResponse>> usage(@PathVariable UUID tenantId) {
-        return ResponseEntity.ok(usage.totals(tenantId).stream()
-                .map(UsageResponse::of)
-                .toList());
+        return ResponseEntity.ok(
+                usage.totals(tenantId).stream().map(UsageResponse::of).toList());
     }
 
     // ---------------------------------------------------------- wire records
@@ -124,7 +124,9 @@ public class CommercialControlPlaneController {
 
         static PlanVersionResponse of(PlanVersion version, Map<String, PlanEntitlement> entitlements) {
             return new PlanVersionResponse(
-                    version.id(), version.planCode(), version.versionNumber(),
+                    version.id(),
+                    version.planCode(),
+                    version.versionNumber(),
                     ApiMoney.of(version.priceMinor(), version.currency()),
                     version.billingPeriod(),
                     entitlements.values().stream()
@@ -152,7 +154,8 @@ public class CommercialControlPlaneController {
                     entitlement.resetPeriod().name(),
                     entitlement.warnThresholdBasisPoints(),
                     entitlement.overageUnitPriceMinor() == null
-                            ? null : ApiMoney.of(entitlement.overageUnitPriceMinor(), currency));
+                            ? null
+                            : ApiMoney.of(entitlement.overageUnitPriceMinor(), currency));
         }
     }
 
@@ -170,10 +173,15 @@ public class CommercialControlPlaneController {
 
         static SubscriptionResponse of(Subscription subscription) {
             return new SubscriptionResponse(
-                    subscription.id(), subscription.planVersionId(), subscription.status().name(),
-                    text(subscription.startAt()), text(subscription.trialEndAt()),
-                    text(subscription.currentPeriodStart()), text(subscription.currentPeriodEnd()),
-                    subscription.suspensionReason(), subscription.version());
+                    subscription.id(),
+                    subscription.planVersionId(),
+                    subscription.status().name(),
+                    text(subscription.startAt()),
+                    text(subscription.trialEndAt()),
+                    text(subscription.currentPeriodStart()),
+                    text(subscription.currentPeriodEnd()),
+                    subscription.suspensionReason(),
+                    subscription.version());
         }
 
         private static String text(java.time.Instant instant) {
@@ -191,7 +199,9 @@ public class CommercialControlPlaneController {
 
         static EntitlementSnapshotResponse of(EntitlementSnapshot snapshot) {
             return new EntitlementSnapshotResponse(
-                    snapshot.tenantId(), snapshot.subscriptionId(), snapshot.hash(),
+                    snapshot.tenantId(),
+                    snapshot.subscriptionId(),
+                    snapshot.hash(),
                     snapshot.resolvedAt().toString(),
                     snapshot.values().values().stream()
                             .map(ResolvedEntitlement::of)
@@ -213,11 +223,15 @@ public class CommercialControlPlaneController {
 
         static ResolvedEntitlement of(EntitlementValue value) {
             return new ResolvedEntitlement(
-                    value.key().code(), value.limit(), value.featureEnabled(),
-                    value.declaredMode().name(), value.effectiveMode().name(),
+                    value.key().code(),
+                    value.limit(),
+                    value.featureEnabled(),
+                    value.declaredMode().name(),
+                    value.effectiveMode().name(),
                     value.resetPeriod().name(),
                     value.overageUnitPriceMinor() == null
-                            ? null : ApiMoney.of(value.overageUnitPriceMinor(), value.currency()),
+                            ? null
+                            : ApiMoney.of(value.overageUnitPriceMinor(), value.currency()),
                     value.source().name());
         }
     }
@@ -236,9 +250,13 @@ public class CommercialControlPlaneController {
 
         static UsageResponse of(JdbcUsageStore.StoredPeriodTotal total) {
             return new UsageResponse(
-                    total.entitlementKey(), total.periodKey(),
-                    total.periodStart().toString(), total.periodEnd().toString(),
-                    total.eventQuantity(), total.adjustmentQuantity(), total.consumedQuantity(),
+                    total.entitlementKey(),
+                    total.periodKey(),
+                    total.periodStart().toString(),
+                    total.periodEnd().toString(),
+                    total.eventQuantity(),
+                    total.adjustmentQuantity(),
+                    total.consumedQuantity(),
                     total.eventCount(),
                     total.lastEventAt() == null ? null : total.lastEventAt().toString());
         }

@@ -1,14 +1,14 @@
 package uz.horecaos.platform.tenancy.web;
 
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,10 +17,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
@@ -44,8 +40,7 @@ public class OnboardingController {
     private final JdbcClient jdbc;
     private final CurrentActor currentActor;
 
-    public OnboardingController(
-            OnboardingService onboarding, JdbcClient jdbc, CurrentActor currentActor) {
+    public OnboardingController(OnboardingService onboarding, JdbcClient jdbc, CurrentActor currentActor) {
         this.onboarding = onboarding;
         this.jdbc = jdbc;
         this.currentActor = currentActor;
@@ -54,11 +49,12 @@ public class OnboardingController {
     @PostMapping
     @RequiresCapability(value = Capability.TENANT_ONBOARDING_MANAGE, mutating = true)
     @Operation(summary = "Start an onboarding run")
-    ResponseEntity<Map<String, Object>> start(
-            @PathVariable UUID tenantId, @Valid @RequestBody StartRequest request) {
+    ResponseEntity<Map<String, Object>> start(@PathVariable UUID tenantId, @Valid @RequestBody StartRequest request) {
 
         UUID runId = onboarding.startRun(
-                tenantId, request.templateId(), request.templateVersion(),
+                tenantId,
+                request.templateId(),
+                request.templateVersion(),
                 Map.of(
                         "ownerEmail", request.ownerEmail() == null ? "" : request.ownerEmail(),
                         "ownerSubjectId", request.ownerSubjectId() == null ? "" : request.ownerSubjectId(),
@@ -80,14 +76,14 @@ public class OnboardingController {
                 .param("tenantId", tenantId)
                 .query(UUID.class)
                 .optional()
-                .orElseThrow(() -> new ApiException(
-                        ErrorCode.RESOURCE_NOT_FOUND, "This tenant has no onboarding run"));
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "This tenant has no onboarding run"));
         return view(tenantId, runId);
     }
 
     @GetMapping("/{runId}")
     @RequiresCapability(Capability.TENANT_READ)
-    @Operation(summary = "One onboarding run with every step",
+    @Operation(
+            summary = "One onboarding run with every step",
             description = "Blocked steps are listed with the decision that would unblock them, "
                     + "so a tenant that is live without a check is visible rather than implied.")
     RunView get(@PathVariable UUID tenantId, @PathVariable UUID runId) {
@@ -96,11 +92,11 @@ public class OnboardingController {
 
     @PostMapping("/{runId}/resume")
     @RequiresCapability(value = Capability.TENANT_ONBOARDING_MANAGE, mutating = true)
-    @Operation(summary = "Reopen failed steps",
+    @Operation(
+            summary = "Reopen failed steps",
             description = "Completed steps are never reset; a retry reconciles external work.")
     ResponseEntity<Map<String, Object>> resume(
-            @PathVariable UUID tenantId, @PathVariable UUID runId,
-            @Valid @RequestBody ReasonRequest request) {
+            @PathVariable UUID tenantId, @PathVariable UUID runId, @Valid @RequestBody ReasonRequest request) {
 
         int reopened = onboarding.resume(runId, actor(), request.reason());
         return ResponseEntity.ok(Map.of("reopenedSteps", reopened));
@@ -108,12 +104,12 @@ public class OnboardingController {
 
     @PostMapping("/{runId}/activate")
     @RequiresCapability(value = Capability.TENANT_WRITE, mutating = true)
-    @Operation(summary = "Activate the tenant",
+    @Operation(
+            summary = "Activate the tenant",
             description = "Requires every required step to have completed, plus platform approval "
                     + "where a policy demands it. Activating twice produces one transition.")
     ResponseEntity<OnboardingService.ActivationOutcome> activate(
-            @PathVariable UUID tenantId, @PathVariable UUID runId,
-            @Valid @RequestBody ReasonRequest request) {
+            @PathVariable UUID tenantId, @PathVariable UUID runId, @Valid @RequestBody ReasonRequest request) {
 
         var outcome = onboarding.activate(runId, actor(), request.reason());
         return ResponseEntity.ok(outcome);
@@ -124,7 +120,8 @@ public class OnboardingController {
                 SELECT id, tenant_id, status, current_phase, started_by, last_error
                   FROM tenant.onboarding_runs WHERE id = :runId AND tenant_id = :tenantId
                 """)
-                .param("runId", runId).param("tenantId", tenantId)
+                .param("runId", runId)
+                .param("tenantId", tenantId)
                 .query((rs, n) -> new RunSummary(
                         rs.getObject("id", UUID.class),
                         rs.getString("status"),
@@ -163,17 +160,22 @@ public class OnboardingController {
             @NotNull UUID templateId,
             int templateVersion,
             @Size(max = 320) String ownerEmail,
-            @Size(max = 255) String ownerSubjectId) { }
+            @Size(max = 255) String ownerSubjectId) {}
 
-    public record ReasonRequest(@NotBlank @Size(max = 1000) String reason) { }
+    public record ReasonRequest(@NotBlank @Size(max = 1000) String reason) {}
 
-    public record RunSummary(
-            UUID id, String status, String currentPhase, String startedBy, String lastError) { }
+    public record RunSummary(UUID id, String status, String currentPhase, String startedBy, String lastError) {}
 
     /** @param outstandingRequired what still blocks activation, named rather than implied */
-    public record RunView(RunSummary run, List<StepView> steps, List<String> outstandingRequired) { }
+    public record RunView(RunSummary run, List<StepView> steps, List<String> outstandingRequired) {}
 
     public record StepView(
-            String stepKey, String phase, String status, boolean required, int attemptCount,
-            String errorCode, String detail, String externalReference) { }
+            String stepKey,
+            String phase,
+            String status,
+            boolean required,
+            int attemptCount,
+            String errorCode,
+            String detail,
+            String externalReference) {}
 }

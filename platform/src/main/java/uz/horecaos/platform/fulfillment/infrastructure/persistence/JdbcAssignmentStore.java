@@ -1,5 +1,8 @@
 package uz.horecaos.platform.fulfillment.infrastructure.persistence;
 
+import static uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore.instant;
+import static uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore.utc;
+
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -7,19 +10,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.fulfillment.domain.sourcing.AttemptStatus;
 import uz.horecaos.platform.fulfillment.domain.sourcing.ShipmentStatus;
 import uz.horecaos.platform.fulfillment.domain.sourcing.SourceType;
 import uz.horecaos.platform.fulfillment.domain.sourcing.SourcingProgress;
-
-import static uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore.instant;
-import static uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore.utc;
 
 /**
  * {@code fulfillment.assignment_attempts} and {@code fulfillment.shipments}
@@ -141,9 +139,8 @@ public class JdbcAssignmentStore {
                         AttemptStatus.valueOf(row.getString("status")),
                         false))
                 .optional()
-                .orElseThrow(() -> new IllegalStateException(
-                        "Attempt " + attempt.idempotencyKey()
-                                + " neither inserted nor found; the plan is unsafe to source"));
+                .orElseThrow(() -> new IllegalStateException("Attempt " + attempt.idempotencyKey()
+                        + " neither inserted nor found; the plan is unsafe to source"));
     }
 
     /**
@@ -206,17 +203,14 @@ public class JdbcAssignmentStore {
                     external_assignment_id = coalesce(:externalReference, external_assignment_id),
                     version = version + 1
                 WHERE tenant_id = :tenantId AND id = :attemptId AND status = :fromStatus
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
 
         if (accepted != 1) {
             // The shipment was created from this attempt one statement ago, so the
             // attempt cannot have moved without the row being rewritten underneath
             // a held lease. Fail loudly rather than leave a shipment nothing
             // explains: the transaction rolls both back.
-            throw new IllegalStateException(
-                    "Attempt " + winner.attemptId() + " changed under its own winning update");
+            throw new IllegalStateException("Attempt " + winner.attemptId() + " changed under its own winning update");
         }
         return created;
     }
@@ -229,9 +223,13 @@ public class JdbcAssignmentStore {
                 WHERE tenant_id = :tenantId AND id = :attemptId AND courier_id = :courierId
                   AND status = 'OFFERED' AND expires_at > :now
                 """)
-                .param("tenantId", tenantId).param("attemptId", attemptId)
-                .param("courierId", courierId).param("now", utc(now))
-                .query(Integer.class).optional().isPresent();
+                .param("tenantId", tenantId)
+                .param("attemptId", attemptId)
+                .param("courierId", courierId)
+                .param("now", utc(now))
+                .query(Integer.class)
+                .optional()
+                .isPresent();
 
         // Not the invariant — the invariant is the unique index inside win(). This
         // is ownership and liveness: whose offer it is, and whether it has lapsed.
@@ -240,8 +238,8 @@ public class JdbcAssignmentStore {
         if (!holdsOffer) {
             return Optional.empty();
         }
-        Optional<UUID> shipment = win(new WinningAttempt(tenantId, attemptId, SourceType.INTERNAL,
-                AttemptStatus.OFFERED, null, null, now));
+        Optional<UUID> shipment = win(
+                new WinningAttempt(tenantId, attemptId, SourceType.INTERNAL, AttemptStatus.OFFERED, null, null, now));
         if (shipment.isEmpty()) {
             // Somebody else is already carrying this order. The offer is closed
             // rather than left OFFERED, because an offer that goes on holding
@@ -253,8 +251,14 @@ public class JdbcAssignmentStore {
     }
 
     /** The attempt ended without a shipment. */
-    public boolean close(UUID tenantId, UUID attemptId, AttemptStatus to, String failureCode,
-            String externalReference, boolean uncertain, Instant now) {
+    public boolean close(
+            UUID tenantId,
+            UUID attemptId,
+            AttemptStatus to,
+            String failureCode,
+            String externalReference,
+            boolean uncertain,
+            Instant now) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
@@ -281,9 +285,7 @@ public class JdbcAssignmentStore {
                     version = version + 1
                 WHERE tenant_id = :tenantId AND id = :attemptId
                   AND status IN ('REQUESTED', 'OFFERED')
-                """)
-                .params(params)
-                .update() == 1;
+                """).params(params).update() == 1;
     }
 
     /**
@@ -301,7 +303,9 @@ public class JdbcAssignmentStore {
                 WHERE tenant_id = :tenantId AND delivery_plan_id = :planId
                   AND status = 'OFFERED' AND expires_at <= :now
                 """)
-                .param("tenantId", tenantId).param("planId", planId).param("now", utc(now))
+                .param("tenantId", tenantId)
+                .param("planId", planId)
+                .param("now", utc(now))
                 .update();
     }
 
@@ -330,7 +334,8 @@ public class JdbcAssignmentStore {
                 WHERE tenant_id = :tenantId AND delivery_plan_id = :planId
                 ORDER BY sequence_number
                 """)
-                .param("tenantId", tenantId).param("planId", planId)
+                .param("tenantId", tenantId)
+                .param("planId", planId)
                 .query((row, number) -> new AttemptRow(
                         SourceType.valueOf(row.getString("source_type")),
                         AttemptStatus.valueOf(row.getString("status")),
@@ -353,8 +358,8 @@ public class JdbcAssignmentStore {
             }
         }
 
-        return new SourcingProgress(startedAt, offeredCouriers, outstandingOffer, offerExpiresAt,
-                attemptedPartners, uncertain);
+        return new SourcingProgress(
+                startedAt, offeredCouriers, outstandingOffer, offerExpiresAt, attemptedPartners, uncertain);
     }
 
     public Optional<Shipment> findShipment(UUID tenantId, UUID planId) {
@@ -364,7 +369,8 @@ public class JdbcAssignmentStore {
                 FROM fulfillment.shipments
                 WHERE tenant_id = :tenantId AND delivery_plan_id = :planId AND status <> 'CANCELLED'
                 """)
-                .param("tenantId", tenantId).param("planId", planId)
+                .param("tenantId", tenantId)
+                .param("planId", planId)
                 .query((row, number) -> new Shipment(
                         row.getObject("id", UUID.class),
                         row.getObject("order_id", UUID.class),
@@ -397,7 +403,7 @@ public class JdbcAssignmentStore {
             UUID policyId,
             Integer policyVersion,
             Instant expiresAt,
-            Instant now) { }
+            Instant now) {}
 
     /**
      * @param fromStatus the status the attempt must still be in. REQUESTED for a
@@ -410,9 +416,9 @@ public class JdbcAssignmentStore {
             AttemptStatus fromStatus,
             String providerType,
             String externalReference,
-            Instant now) { }
+            Instant now) {}
 
-    public record Opened(UUID attemptId, int sequenceNumber, AttemptStatus status, boolean fresh) { }
+    public record Opened(UUID attemptId, int sequenceNumber, AttemptStatus status, boolean fresh) {}
 
     public record Shipment(
             UUID id,
@@ -422,7 +428,7 @@ public class JdbcAssignmentStore {
             UUID courierId,
             UUID providerBindingId,
             String providerType,
-            String externalShipmentId) { }
+            String externalShipmentId) {}
 
     private record AttemptRow(
             SourceType sourceType,
@@ -430,5 +436,5 @@ public class JdbcAssignmentStore {
             UUID courierId,
             UUID bindingId,
             Instant expiresAt,
-            boolean uncertain) { }
+            boolean uncertain) {}
 }

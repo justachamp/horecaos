@@ -11,7 +11,6 @@ package uz.horecaos.platform.courier.domain;
  * ledger is how such an arrangement appears without a decision.
  */
 public enum LedgerEntryType {
-
     DELIVERY_EARNING(Sign.POSITIVE),
     SHIFT_EARNING(Sign.POSITIVE),
     BONUS(Sign.POSITIVE),
@@ -29,7 +28,11 @@ public enum LedgerEntryType {
     PRIOR_PERIOD_ADJUSTMENT(Sign.EITHER),
     CORRECTION(Sign.EITHER);
 
-    public enum Sign { POSITIVE, NEGATIVE, EITHER }
+    public enum Sign {
+        POSITIVE,
+        NEGATIVE,
+        EITHER
+    }
 
     private final Sign sign;
 
@@ -56,8 +59,7 @@ public enum LedgerEntryType {
     }
 
     public boolean isAdjustment() {
-        return this == BONUS || this == PENALTY
-                || this == PRIOR_PERIOD_ADJUSTMENT || this == CORRECTION;
+        return this == BONUS || this == PENALTY || this == PRIOR_PERIOD_ADJUSTMENT || this == CORRECTION;
     }
 
     public boolean isCash() {

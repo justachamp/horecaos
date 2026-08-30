@@ -7,11 +7,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.payments.application.FiscalReceiptPort;
 import uz.horecaos.platform.payments.domain.FiscalDocument;
 import uz.horecaos.platform.payments.domain.FiscalReceiptLine;
@@ -63,8 +61,7 @@ public class ClickFiscalAdapter implements FiscalReceiptPort {
     private final JdbcPaymentAttemptStore attempts;
     private final Clock clock;
 
-    public ClickFiscalAdapter(ClickMerchantApi click, JdbcPaymentAttemptStore attempts,
-            Clock clock) {
+    public ClickFiscalAdapter(ClickMerchantApi click, JdbcPaymentAttemptStore attempts, Clock clock) {
         this.click = click;
         this.attempts = attempts;
         this.clock = clock;
@@ -83,8 +80,7 @@ public class ClickFiscalAdapter implements FiscalReceiptPort {
             // Click requires at least one line, and a receipt with none would be
             // evidence of nothing. Refused here rather than by Click, so the reason
             // recorded against the document is the real one.
-            return FiscalSubmission.rejected("NO_LINES",
-                    "A fiscal receipt needs at least one line", now);
+            return FiscalSubmission.rejected("NO_LINES", "A fiscal receipt needs at least one line", now);
         }
 
         Optional<String> paymentId = capturedPaymentId(document, binding);
@@ -93,10 +89,8 @@ public class ClickFiscalAdapter implements FiscalReceiptPort {
             // argument to be called with until Click has settled the payment.
             // Reported uncertain rather than failed: a failure would be read as
             // "the provider refused", and the provider has not been asked.
-            log.info("Fiscal document {} has no CLICK payment_id yet; submission deferred",
-                    document.id());
-            return FiscalSubmission.uncertain(
-                    "No CLICK payment_id yet; submit_items cannot precede capture", now);
+            log.info("Fiscal document {} has no CLICK payment_id yet; submission deferred", document.id());
+            return FiscalSubmission.uncertain("No CLICK payment_id yet; submit_items cannot precede capture", now);
         }
 
         // A resubmission reads back first. On a first submission this would be a
@@ -105,8 +99,7 @@ public class ClickFiscalAdapter implements FiscalReceiptPort {
         if (document.status() != FiscalStatus.PENDING) {
             Optional<FiscalSubmission> alreadyIssued = readBack(binding, paymentId.get(), now);
             if (alreadyIssued.isPresent()) {
-                log.info("Click already holds a receipt for payment {}; not resubmitting",
-                        paymentId.get());
+                log.info("Click already holds a receipt for payment {}; not resubmitting", paymentId.get());
                 return alreadyIssued.get();
             }
         }
@@ -121,8 +114,8 @@ public class ClickFiscalAdapter implements FiscalReceiptPort {
                 // and with legal, recorded in ADR 0013's open inputs. Refusing is
                 // the only honest answer while it is open: a receipt filed against
                 // the wrong taxpayer is worse than a receipt not filed.
-                return FiscalSubmission.rejected("NO_COMMISSION_PARTY",
-                        "A Click receipt line needs a TIN or a PINFL in CommissionInfo", now);
+                return FiscalSubmission.rejected(
+                        "NO_COMMISSION_PARTY", "A Click receipt line needs a TIN or a PINFL in CommissionInfo", now);
             }
             items.add(item(line));
             total = total == null ? line.lineTotal() : total.plus(line.lineTotal());
@@ -134,20 +127,19 @@ public class ClickFiscalAdapter implements FiscalReceiptPort {
         // not stated anywhere and is an open question with CLICK; sending the sum
         // is the reading its own worked example supports.
         TiyinAmount zero = new TiyinAmount(0, total.currency());
-        ClickResponse submitted = click.submitItems(binding, paymentId.get(), items,
-                TiyinAmount.of(total), zero, zero);
+        ClickResponse submitted = click.submitItems(binding, paymentId.get(), items, TiyinAmount.of(total), zero, zero);
 
         if (submitted.uncertain()) {
             Optional<FiscalSubmission> issued = readBack(binding, paymentId.get(), now);
-            return issued.orElseGet(() -> FiscalSubmission.uncertain(
-                    "submit_items did not answer; read back before any resubmission", now));
+            return issued.orElseGet(() ->
+                    FiscalSubmission.uncertain("submit_items did not answer; read back before any resubmission", now));
         }
         if (!submitted.successful()) {
             // A non-zero status is the evidence that there is no receipt. Which
             // non-zero one cannot be said: the error_code enumeration is
             // unpublished, so the code travels verbatim for a human.
-            return FiscalSubmission.rejected(String.valueOf(submitted.body().get("error_code")),
-                    submitted.describe(), now);
+            return FiscalSubmission.rejected(
+                    String.valueOf(submitted.body().get("error_code")), submitted.describe(), now);
         }
 
         // Accepted. The receipt itself comes from the OFD, and Click does not say
@@ -163,8 +155,7 @@ public class ClickFiscalAdapter implements FiscalReceiptPort {
      * settles a document left in {@code SUBMITTED} — the state that is reachable
      * indefinitely on both providers and that somebody watches.
      */
-    public Optional<FiscalSubmission> readBack(ProviderBinding binding, String paymentId,
-            Instant at) {
+    public Optional<FiscalSubmission> readBack(ProviderBinding binding, String paymentId, Instant at) {
         ClickResponse evidence = click.ofdData(binding, paymentId);
         if (!evidence.successful()) {
             return Optional.empty();
@@ -174,8 +165,7 @@ public class ClickFiscalAdapter implements FiscalReceiptPort {
         if (!ClickReceiptUrl.issued(qrCodeUrl)) {
             return Optional.empty();
         }
-        return Optional.of(FiscalSubmission.issued(
-                ClickReceiptUrl.parse(qrCodeUrl, paymentId, at), at));
+        return Optional.of(FiscalSubmission.issued(ClickReceiptUrl.parse(qrCodeUrl, paymentId, at), at));
     }
 
     /**

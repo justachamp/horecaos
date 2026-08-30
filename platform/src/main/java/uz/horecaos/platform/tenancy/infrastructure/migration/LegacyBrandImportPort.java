@@ -4,9 +4,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.migration.api.ExtractionSpec;
 import uz.horecaos.platform.migration.api.ImportPort;
 import uz.horecaos.platform.migration.api.LegacyRecord;
@@ -69,9 +67,7 @@ public class LegacyBrandImportPort implements ImportPort<LegacyBrandImportPort.B
         // 0010 with its own scan and verification, and a column nothing maps is a
         // column somebody maps by accident.
         return new ExtractionSpec(
-                "BRAND", "companies", "id", "updated",
-                List.of("id", "slug", "name", "updated"),
-                null);
+                "BRAND", "companies", "id", "updated", List.of("id", "slug", "name", "updated"), null);
     }
 
     @Override
@@ -103,13 +99,13 @@ public class LegacyBrandImportPort implements ImportPort<LegacyBrandImportPort.B
             return ImportResult.unchanged(existing.get().id(), null);
         }
 
-        BrandView created = tenancy.createBrand(tenantId,
-                new CreateBrandCommand(command.code(), command.slug(), command.displayName()));
+        BrandView created = tenancy.createBrand(
+                tenantId, new CreateBrandCommand(command.code(), command.slug(), command.displayName()));
         return ImportResult.created(created.id(), null);
     }
 
     /** What one legacy company says about the brand it becomes. */
-    public record BrandCommand(String code, String slug, String displayName) { }
+    public record BrandCommand(String code, String slug, String displayName) {}
 
     /**
      * The mapping, version 1.
@@ -168,10 +164,8 @@ public class LegacyBrandImportPort implements ImportPort<LegacyBrandImportPort.B
             // locale's value as the brand's display name is a product decision. The
             // slug is at least the string the legacy application itself matches
             // customers on.
-            return TransformationOutcome.of(new BrandCommand(
-                    normalized.toUpperCase(Locale.ROOT).replace('-', '_'),
-                    normalized,
-                    normalized));
+            return TransformationOutcome.of(
+                    new BrandCommand(normalized.toUpperCase(Locale.ROOT).replace('-', '_'), normalized, normalized));
         }
     }
 }

@@ -6,12 +6,10 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.media.api.MediaAssetId;
 
 /**
@@ -61,11 +59,12 @@ public class JdbcDerivativeJobStore {
                 ON CONFLICT (tenant_id, asset_id) WHERE status IN ('PENDING', 'LEASED')
                 DO NOTHING
                 """)
-                .param("jobId", jobId)
-                .param("tenantId", tenantId)
-                .param("assetId", assetId.value())
-                .param("dueAt", utc(dueAt))
-                .update() == 1;
+                        .param("jobId", jobId)
+                        .param("tenantId", tenantId)
+                        .param("assetId", assetId.value())
+                        .param("dueAt", utc(dueAt))
+                        .update()
+                == 1;
     }
 
     /**
@@ -141,8 +140,11 @@ public class JdbcDerivativeJobStore {
                     updated_at = :now
                 WHERE job_id = :jobId AND lease_token = :leaseToken
                 """)
-                .param("jobId", jobId).param("leaseToken", leaseToken).param("now", utc(now))
-                .update() == 1;
+                        .param("jobId", jobId)
+                        .param("leaseToken", leaseToken)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -152,8 +154,7 @@ public class JdbcDerivativeJobStore {
      *                  carries the uploaded filename often enough that ADR 0029
      *                  will not have it in a column nobody is watching
      */
-    public boolean reschedule(UUID jobId, UUID leaseToken, Instant dueAt, String errorCode,
-            Instant now) {
+    public boolean reschedule(UUID jobId, UUID leaseToken, Instant dueAt, String errorCode, Instant now) {
         return jdbc.sql("""
                 UPDATE media.derivative_jobs
                 SET status = 'PENDING', due_at = :dueAt,
@@ -164,9 +165,13 @@ public class JdbcDerivativeJobStore {
                     updated_at = :now
                 WHERE job_id = :jobId AND lease_token = :leaseToken
                 """)
-                .param("jobId", jobId).param("leaseToken", leaseToken)
-                .param("dueAt", utc(dueAt)).param("errorCode", errorCode).param("now", utc(now))
-                .update() == 1;
+                        .param("jobId", jobId)
+                        .param("leaseToken", leaseToken)
+                        .param("dueAt", utc(dueAt))
+                        .param("errorCode", errorCode)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -205,9 +210,12 @@ public class JdbcDerivativeJobStore {
                     updated_at = :now
                 WHERE job_id = :jobId AND lease_token = :leaseToken
                 """)
-                .param("jobId", jobId).param("leaseToken", leaseToken)
-                .param("dueAt", utc(dueAt)).param("now", utc(now))
-                .update() == 1;
+                        .param("jobId", jobId)
+                        .param("leaseToken", leaseToken)
+                        .param("dueAt", utc(dueAt))
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -229,14 +237,16 @@ public class JdbcDerivativeJobStore {
                     updated_at = :now
                 WHERE job_id = :jobId AND lease_token = :leaseToken
                 """)
-                .param("jobId", jobId).param("leaseToken", leaseToken)
-                .param("errorCode", errorCode).param("now", utc(now))
-                .update() == 1;
+                        .param("jobId", jobId)
+                        .param("leaseToken", leaseToken)
+                        .param("errorCode", errorCode)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /** @param attemptCount including this one, because the claim incremented it */
-    public record ClaimedJob(UUID jobId, UUID tenantId, MediaAssetId assetId, int attemptCount,
-            UUID leaseToken) { }
+    public record ClaimedJob(UUID jobId, UUID tenantId, MediaAssetId assetId, int attemptCount, UUID leaseToken) {}
 
     private static OffsetDateTime utc(Instant instant) {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);

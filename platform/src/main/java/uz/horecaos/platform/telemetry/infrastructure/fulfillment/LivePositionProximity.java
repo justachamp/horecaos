@@ -6,9 +6,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.telemetry.api.CourierProximityPort;
 import uz.horecaos.platform.telemetry.domain.LivePositionRules;
 import uz.horecaos.platform.telemetry.infrastructure.persistence.JdbcTelemetryStore;
@@ -49,8 +47,7 @@ public class LivePositionProximity implements CourierProximityPort {
     }
 
     @Override
-    public Map<UUID, Integer> metresFromBranch(UUID tenantId, UUID locationId,
-            Collection<UUID> courierIds) {
+    public Map<UUID, Integer> metresFromBranch(UUID tenantId, UUID locationId, Collection<UUID> courierIds) {
 
         Instant now = clock.instant();
         Map<UUID, Integer> metres = new HashMap<>();

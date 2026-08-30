@@ -2,21 +2,19 @@ package uz.horecaos.platform.integration.outbox;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
-
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.integration.events.EventCatalog;
 import uz.horecaos.platform.integration.events.EventContract;
 import uz.horecaos.platform.migration.api.ExternalEffect;
 import uz.horecaos.platform.migration.api.ImportSuppression;
 import uz.horecaos.platform.tenancy.api.TenancyEvent;
+
 @Component
 public class TenancyOutboxEventListener {
 
@@ -45,8 +43,7 @@ public class TenancyOutboxEventListener {
         // consumes tenancy.events — provisioning, storefront seeding, analytics —
         // for brands that have existed for years. See the ordering listener for why
         // the suppression is here rather than in the relay.
-        if (ImportSuppression.suppress(ExternalEffect.OUTBOX_PUBLICATION,
-                event.aggregateType(), event.aggregateId())) {
+        if (ImportSuppression.suppress(ExternalEffect.OUTBOX_PUBLICATION, event.aggregateType(), event.aggregateId())) {
             return;
         }
 

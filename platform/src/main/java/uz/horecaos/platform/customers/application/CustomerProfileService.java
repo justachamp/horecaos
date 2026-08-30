@@ -1,19 +1,14 @@
 package uz.horecaos.platform.customers.application;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.Clock;
-import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.customers.domain.PhoneNumber;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
 import uz.horecaos.platform.iam.api.protection.DataClass;
@@ -42,8 +37,8 @@ public class CustomerProfileService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
-    public CustomerProfileService(JdbcCustomerStore store, FieldProtection protection,
-            ObjectMapper objectMapper, Clock clock) {
+    public CustomerProfileService(
+            JdbcCustomerStore store, FieldProtection protection, ObjectMapper objectMapper, Clock clock) {
         this.store = store;
         this.protection = protection;
         this.objectMapper = objectMapper;
@@ -58,19 +53,24 @@ public class CustomerProfileService {
      * changes owner, so refusing — or worse, merging — would be wrong.
      */
     @Transactional
-    public UUID addContactPoint(UUID tenantId, UUID accountId, ContactType type,
-            String rawValue, boolean primary) {
+    public UUID addContactPoint(UUID tenantId, UUID accountId, ContactType type, String rawValue, boolean primary) {
 
         requireAccount(tenantId, accountId);
         String normalized = normalize(type, rawValue);
         UUID contactId = UUID.randomUUID();
 
-        ProtectedValue encrypted = protection.protect(tenantId, DataClass.PERSONAL,
-                new RecordRef(CONTACT_TABLE, "encrypted_value", contactId), normalized);
+        ProtectedValue encrypted = protection.protect(
+                tenantId, DataClass.PERSONAL, new RecordRef(CONTACT_TABLE, "encrypted_value", contactId), normalized);
 
-        store.insertContactPoint(contactId, tenantId, accountId, type.name(),
+        store.insertContactPoint(
+                contactId,
+                tenantId,
+                accountId,
+                type.name(),
                 protection.lookupHash(tenantId, type.lookupDomain(), normalized),
-                encrypted.serialize(), primary, clock.instant());
+                encrypted.serialize(),
+                primary,
+                clock.instant());
 
         return contactId;
     }
@@ -84,8 +84,8 @@ public class CustomerProfileService {
      */
     @Transactional(readOnly = true)
     public List<UUID> findAccountsByContact(UUID tenantId, ContactType type, String rawValue) {
-        return store.accountsWithContact(tenantId, type.name(),
-                protection.lookupHash(tenantId, type.lookupDomain(), normalize(type, rawValue)));
+        return store.accountsWithContact(
+                tenantId, type.name(), protection.lookupHash(tenantId, type.lookupDomain(), normalize(type, rawValue)));
     }
 
     /**
@@ -101,8 +101,11 @@ public class CustomerProfileService {
                 .map(row -> new RevealedContact(
                         row.id(),
                         ContactType.valueOf(row.type()),
-                        protection.reveal(tenantId, ProtectedValue.deserialize(row.encryptedValue()),
-                                new RecordRef(CONTACT_TABLE, "encrypted_value", row.id()), purpose),
+                        protection.reveal(
+                                tenantId,
+                                ProtectedValue.deserialize(row.encryptedValue()),
+                                new RecordRef(CONTACT_TABLE, "encrypted_value", row.id()),
+                                purpose),
                         row.verificationStatus(),
                         row.isPrimary()))
                 .toList();
@@ -121,8 +124,8 @@ public class CustomerProfileService {
     @Transactional(readOnly = true)
     public List<ContactPointSummary> contactPointSummaries(UUID tenantId, UUID accountId) {
         return store.contactPoints(tenantId, accountId).stream()
-                .map(row -> new ContactPointSummary(row.id(), ContactType.valueOf(row.type()),
-                        row.verificationStatus(), row.isPrimary()))
+                .map(row -> new ContactPointSummary(
+                        row.id(), ContactType.valueOf(row.type()), row.verificationStatus(), row.isPrimary()))
                 .toList();
     }
 
@@ -144,8 +147,14 @@ public class CustomerProfileService {
      * distinction this parameter exists to keep.
      */
     @Transactional
-    public UUID addAddress(UUID tenantId, UUID accountId, String label, AddressFields fields,
-            String deliveryInstructions, Double latitude, Double longitude,
+    public UUID addAddress(
+            UUID tenantId,
+            UUID accountId,
+            String label,
+            AddressFields fields,
+            String deliveryInstructions,
+            Double latitude,
+            Double longitude,
             CoordinateSource coordinateSource) {
 
         requireAccount(tenantId, accountId);
@@ -153,16 +162,29 @@ public class CustomerProfileService {
         UUID addressId = UUID.randomUUID();
 
         String document = objectMapper.writeValueAsString(fields);
-        ProtectedValue encryptedFields = protection.protect(tenantId, DataClass.PERSONAL,
-                new RecordRef(ADDRESS_TABLE, "encrypted_fields", addressId), document);
+        ProtectedValue encryptedFields = protection.protect(
+                tenantId, DataClass.PERSONAL, new RecordRef(ADDRESS_TABLE, "encrypted_fields", addressId), document);
 
-        String encryptedInstructions = deliveryInstructions == null ? null
-                : protection.protect(tenantId, DataClass.PERSONAL,
-                        new RecordRef(ADDRESS_TABLE, "delivery_instructions_encrypted", addressId),
-                        deliveryInstructions).serialize();
+        String encryptedInstructions = deliveryInstructions == null
+                ? null
+                : protection
+                        .protect(
+                                tenantId,
+                                DataClass.PERSONAL,
+                                new RecordRef(ADDRESS_TABLE, "delivery_instructions_encrypted", addressId),
+                                deliveryInstructions)
+                        .serialize();
 
-        store.insertAddress(addressId, tenantId, accountId, label, encryptedFields.serialize(),
-                encryptedInstructions, latitude, longitude, coordinateSource.name(),
+        store.insertAddress(
+                addressId,
+                tenantId,
+                accountId,
+                label,
+                encryptedFields.serialize(),
+                encryptedInstructions,
+                latitude,
+                longitude,
+                coordinateSource.name(),
                 clock.instant());
 
         return addressId;
@@ -176,8 +198,7 @@ public class CustomerProfileService {
      * tells an operator nothing, while a claimed GEOCODER result with no point
      * is a specific mistake with a specific fix.
      */
-    private static void requireCoordinatesMatchSource(CoordinateSource source,
-            Double latitude, Double longitude) {
+    private static void requireCoordinatesMatchSource(CoordinateSource source, Double latitude, Double longitude) {
 
         if (source == null) {
             throw new IllegalArgumentException("A coordinate source is required");
@@ -186,19 +207,16 @@ public class CustomerProfileService {
             // Only a migration may claim an unknown origin. Allowing it here
             // would let new rows opt out of recording where their point came
             // from, and the column would stop meaning anything.
-            throw new IllegalArgumentException(
-                    "LEGACY_UNSOURCED describes rows written before the source was recorded "
-                            + "and cannot be chosen for a new address");
+            throw new IllegalArgumentException("LEGACY_UNSOURCED describes rows written before the source was recorded "
+                    + "and cannot be chosen for a new address");
         }
         boolean hasPoint = latitude != null && longitude != null;
         if (latitude != null ^ longitude != null) {
             // Half a coordinate points at the equator or the prime meridian.
-            throw new IllegalArgumentException(
-                    "A latitude without a longitude, or the reverse, is not a location");
+            throw new IllegalArgumentException("A latitude without a longitude, or the reverse, is not a location");
         }
         if (source.requiresPoint() && !hasPoint) {
-            throw new IllegalArgumentException(
-                    "Coordinate source " + source + " claims a point but none was supplied");
+            throw new IllegalArgumentException("Coordinate source " + source + " claims a point but none was supplied");
         }
         if (!source.requiresPoint() && hasPoint) {
             throw new IllegalArgumentException(
@@ -222,10 +240,8 @@ public class CustomerProfileService {
      * recorded against a purpose for a row the caller had no business reading.
      */
     @Transactional(readOnly = true)
-    public Optional<RevealedAddress> revealAddress(UUID tenantId, UUID accountId, UUID addressId,
-            String purpose) {
-        return store.address(tenantId, accountId, addressId)
-                .map(row -> reveal(tenantId, row, purpose));
+    public Optional<RevealedAddress> revealAddress(UUID tenantId, UUID accountId, UUID addressId, String purpose) {
+        return store.address(tenantId, accountId, addressId).map(row -> reveal(tenantId, row, purpose));
     }
 
     /**
@@ -246,26 +262,52 @@ public class CustomerProfileService {
      *                                  {@code expectedVersion}
      */
     @Transactional
-    public int updateAddress(UUID tenantId, UUID accountId, UUID addressId, int expectedVersion,
-            String label, AddressFields fields, String deliveryInstructions,
-            Double latitude, Double longitude, CoordinateSource coordinateSource) {
+    public int updateAddress(
+            UUID tenantId,
+            UUID accountId,
+            UUID addressId,
+            int expectedVersion,
+            String label,
+            AddressFields fields,
+            String deliveryInstructions,
+            Double latitude,
+            Double longitude,
+            CoordinateSource coordinateSource) {
 
         requireCoordinatesMatchSource(coordinateSource, latitude, longitude);
-        var current = store.address(tenantId, accountId, addressId)
-                .orElseThrow(AddressNotFoundException::new);
+        var current = store.address(tenantId, accountId, addressId).orElseThrow(AddressNotFoundException::new);
 
         String document = objectMapper.writeValueAsString(fields);
-        String encryptedFields = protection.protect(tenantId, DataClass.PERSONAL,
-                new RecordRef(ADDRESS_TABLE, "encrypted_fields", addressId), document).serialize();
+        String encryptedFields = protection
+                .protect(
+                        tenantId,
+                        DataClass.PERSONAL,
+                        new RecordRef(ADDRESS_TABLE, "encrypted_fields", addressId),
+                        document)
+                .serialize();
 
-        String encryptedInstructions = deliveryInstructions == null ? null
-                : protection.protect(tenantId, DataClass.PERSONAL,
-                        new RecordRef(ADDRESS_TABLE, "delivery_instructions_encrypted", addressId),
-                        deliveryInstructions).serialize();
+        String encryptedInstructions = deliveryInstructions == null
+                ? null
+                : protection
+                        .protect(
+                                tenantId,
+                                DataClass.PERSONAL,
+                                new RecordRef(ADDRESS_TABLE, "delivery_instructions_encrypted", addressId),
+                                deliveryInstructions)
+                        .serialize();
 
-        int written = store.updateAddress(tenantId, accountId, addressId, expectedVersion, label,
-                encryptedFields, encryptedInstructions, latitude, longitude,
-                coordinateSource.name(), clock.instant());
+        int written = store.updateAddress(
+                tenantId,
+                accountId,
+                addressId,
+                expectedVersion,
+                label,
+                encryptedFields,
+                encryptedInstructions,
+                latitude,
+                longitude,
+                coordinateSource.name(),
+                clock.instant());
         if (written == 0) {
             // The row was there a statement ago, so this is a version disagreement
             // rather than an absence: either the caller read an older copy, or a
@@ -287,10 +329,8 @@ public class CustomerProfileService {
      */
     @Transactional
     public int archiveAddress(UUID tenantId, UUID accountId, UUID addressId, int expectedVersion) {
-        var current = store.address(tenantId, accountId, addressId)
-                .orElseThrow(AddressNotFoundException::new);
-        if (store.archiveAddress(tenantId, accountId, addressId, expectedVersion, clock.instant())
-                == 0) {
+        var current = store.address(tenantId, accountId, addressId).orElseThrow(AddressNotFoundException::new);
+        if (store.archiveAddress(tenantId, accountId, addressId, expectedVersion, clock.instant()) == 0) {
             throw new StaleRecordException(expectedVersion, current.version());
         }
         return expectedVersion + 1;
@@ -319,12 +359,24 @@ public class CustomerProfileService {
      * @return the stored version after the write
      */
     @Transactional
-    public int updateProfile(UUID tenantId, UUID accountId, int expectedVersion,
-            String displayName, String preferredLocale, String preferredTimezone) {
+    public int updateProfile(
+            UUID tenantId,
+            UUID accountId,
+            int expectedVersion,
+            String displayName,
+            String preferredLocale,
+            String preferredTimezone) {
 
         var current = store.account(tenantId, accountId).orElseThrow(AccountNotFoundException::new);
-        if (store.updateAccountProfile(tenantId, accountId, expectedVersion, blankToNull(displayName),
-                blankToNull(preferredLocale), blankToNull(preferredTimezone), clock.instant()) == 0) {
+        if (store.updateAccountProfile(
+                        tenantId,
+                        accountId,
+                        expectedVersion,
+                        blankToNull(displayName),
+                        blankToNull(preferredLocale),
+                        blankToNull(preferredTimezone),
+                        clock.instant())
+                == 0) {
             throw new StaleRecordException(expectedVersion, current.version());
         }
         return expectedVersion + 1;
@@ -339,16 +391,18 @@ public class CustomerProfileService {
                 row.id(),
                 row.label(),
                 objectMapper.readValue(
-                        protection.reveal(tenantId,
+                        protection.reveal(
+                                tenantId,
                                 ProtectedValue.deserialize(row.encryptedFields()),
                                 new RecordRef(ADDRESS_TABLE, "encrypted_fields", row.id()),
                                 purpose),
                         AddressFields.class),
-                row.encryptedInstructions() == null ? null
-                        : protection.reveal(tenantId,
+                row.encryptedInstructions() == null
+                        ? null
+                        : protection.reveal(
+                                tenantId,
                                 ProtectedValue.deserialize(row.encryptedInstructions()),
-                                new RecordRef(ADDRESS_TABLE,
-                                        "delivery_instructions_encrypted", row.id()),
+                                new RecordRef(ADDRESS_TABLE, "delivery_instructions_encrypted", row.id()),
                                 purpose),
                 row.latitude(),
                 row.longitude(),
@@ -419,7 +473,8 @@ public class CustomerProfileService {
     }
 
     public enum ContactType {
-        PHONE, EMAIL;
+        PHONE,
+        EMAIL;
 
         /** Separates hash domains so a phone and an email cannot collide. */
         String lookupDomain() {
@@ -506,21 +561,26 @@ public class CustomerProfileService {
             @jakarta.validation.constraints.Size(max = 32) String entrance,
             @jakarta.validation.constraints.Size(max = 32) String floor,
             @jakarta.validation.constraints.Size(max = 32) String apartment,
-            @jakarta.validation.constraints.Size(max = 300) String landmark) { }
+            @jakarta.validation.constraints.Size(max = 300) String landmark) {}
 
-    public record RevealedContact(UUID id, ContactType type, String value,
-            String verificationStatus, boolean isPrimary) { }
+    public record RevealedContact(
+            UUID id, ContactType type, String value, String verificationStatus, boolean isPrimary) {}
 
     /** A contact point named by kind and state, with no value and therefore no decrypt. */
-    public record ContactPointSummary(UUID id, ContactType type, String verificationStatus,
-            boolean isPrimary) { }
+    public record ContactPointSummary(UUID id, ContactType type, String verificationStatus, boolean isPrimary) {}
 
     /**
      * @param version the row's optimistic-concurrency version, so a customer
      *                editing their own address can present it as an
      *                {@code If-Match} precondition and lose loudly to a second tab
      */
-    public record RevealedAddress(UUID id, String label, AddressFields fields,
-            String deliveryInstructions, Double latitude, Double longitude,
-            CoordinateSource coordinateSource, int version) { }
+    public record RevealedAddress(
+            UUID id,
+            String label,
+            AddressFields fields,
+            String deliveryInstructions,
+            Double latitude,
+            Double longitude,
+            CoordinateSource coordinateSource,
+            int version) {}
 }

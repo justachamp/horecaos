@@ -30,7 +30,6 @@ import java.util.Optional;
  * interpret.
  */
 public enum SalesChannelSystemType {
-
     WEB,
     IOS,
     ANDROID,
@@ -52,8 +51,9 @@ public enum SalesChannelSystemType {
     }
 
     public static SalesChannelSystemType require(String name) {
-        return find(name).orElseThrow(() -> new IllegalArgumentException(
-                "Unknown sales channel system type \"%s\". The set is closed and owned by ADR 0036: %s"
-                        .formatted(name, Arrays.toString(values()))));
+        return find(name)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Unknown sales channel system type \"%s\". The set is closed and owned by ADR 0036: %s"
+                                .formatted(name, Arrays.toString(values()))));
     }
 }

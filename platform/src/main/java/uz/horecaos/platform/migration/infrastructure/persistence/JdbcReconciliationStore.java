@@ -1,5 +1,9 @@
 package uz.horecaos.platform.migration.infrastructure.persistence;
 
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.exactIntegerOrNull;
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.instantOrNull;
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.utc;
+
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.ResultSet;
@@ -12,17 +16,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.migration.application.MigrationReconciliationStore;
 import uz.horecaos.platform.migration.domain.ReconciliationSeverity;
 import uz.horecaos.platform.migration.domain.ReconciliationStatus;
-
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.exactIntegerOrNull;
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.instantOrNull;
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.utc;
 
 /**
  * Reconciliation persistence (ADR 0024).
@@ -108,9 +106,12 @@ public class JdbcReconciliationStore implements MigrationReconciliationStore {
                   AND migration.reconciliation_results.status = 'OPEN'
                 RETURNING id
                 """)
-                .param("id", result.resultId()).param("tenantId", result.tenantId())
-                .param("runId", result.runId()).param("scopeId", result.scopeId())
-                .param("ruleCode", result.ruleCode()).param("ruleVersion", result.ruleVersion())
+                .param("id", result.resultId())
+                .param("tenantId", result.tenantId())
+                .param("runId", result.runId())
+                .param("scopeId", result.scopeId())
+                .param("ruleCode", result.ruleCode())
+                .param("ruleVersion", result.ruleVersion())
                 .param("dimensionKey", result.dimensionKey())
                 .param("severity", result.severity().name())
                 .params(measure)
@@ -142,7 +143,8 @@ public class JdbcReconciliationStore implements MigrationReconciliationStore {
                     WHERE tenant_id = :tenantId AND scope_id = :scopeId
                       AND severity = 'CRITICAL' AND status = 'OPEN')
                 """)
-                .param("tenantId", tenantId).param("scopeId", scopeId)
+                .param("tenantId", tenantId)
+                .param("scopeId", scopeId)
                 .query(Boolean.class)
                 .single();
     }
@@ -168,7 +170,9 @@ public class JdbcReconciliationStore implements MigrationReconciliationStore {
                 ORDER BY created_at, id
                 LIMIT :limit
                 """)
-                .param("tenantId", tenantId).param("scopeId", scopeId).param("limit", limit)
+                .param("tenantId", tenantId)
+                .param("scopeId", scopeId)
+                .param("limit", limit)
                 .query((row, number) -> new BlockingResult(
                         row.getObject("id", UUID.class),
                         row.getString("rule_code"),
@@ -184,7 +188,8 @@ public class JdbcReconciliationStore implements MigrationReconciliationStore {
 
     public Optional<ReconciliationResultRow> find(UUID tenantId, UUID resultId) {
         return jdbc.sql(SELECT_RESULT + " WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", resultId)
+                .param("tenantId", tenantId)
+                .param("id", resultId)
                 .query(JdbcReconciliationStore::mapResult)
                 .optional();
     }
@@ -203,9 +208,12 @@ public class JdbcReconciliationStore implements MigrationReconciliationStore {
                     updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :id AND status = 'OPEN'
                 """)
-                .param("tenantId", tenantId).param("id", resultId)
-                .param("approvedBy", approvedBy).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", resultId)
+                        .param("approvedBy", approvedBy)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -229,13 +237,15 @@ public class JdbcReconciliationStore implements MigrationReconciliationStore {
                     updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :id AND status = 'OPEN'
                 """)
-                .param("tenantId", tenantId).param("id", resultId).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", resultId)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /** Everything one reconciliation run found, most severe first. */
-    public List<ReconciliationResultRow> listForRun(UUID tenantId, UUID runId,
-            MigrationPageCursor after, int limit) {
+    public List<ReconciliationResultRow> listForRun(UUID tenantId, UUID runId, MigrationPageCursor after, int limit) {
         return jdbc.sql(SELECT_RESULT + """
                  WHERE tenant_id = :tenantId AND run_id = :runId
                    AND (CAST(:afterId AS uuid) IS NULL
@@ -243,7 +253,8 @@ public class JdbcReconciliationStore implements MigrationReconciliationStore {
                  ORDER BY created_at, id
                  LIMIT :limit
                 """)
-                .param("tenantId", tenantId).param("runId", runId)
+                .param("tenantId", tenantId)
+                .param("runId", runId)
                 .params(MigrationPageCursor.params(after))
                 .param("limit", limit)
                 .query(JdbcReconciliationStore::mapResult)
@@ -282,18 +293,17 @@ public class JdbcReconciliationStore implements MigrationReconciliationStore {
     private static ReconciliationMeasure mapMeasure(ResultSet row) throws SQLException {
         String kind = row.getString("measure_kind");
         return switch (kind) {
-            case "COUNT" -> ReconciliationMeasure.count(
-                    exactIntegerOrNull(row, "expected_value"),
-                    exactIntegerOrNull(row, "actual_value"));
-            case "AMOUNT" -> ReconciliationMeasure.amount(
-                    exactIntegerOrNull(row, "expected_value"),
-                    exactIntegerOrNull(row, "actual_value"),
-                    Currency.getInstance(row.getString("currency")));
-            case "CHECKSUM" -> ReconciliationMeasure.checksum(
-                    row.getString("expected_checksum"),
-                    row.getString("actual_checksum"));
-            default -> throw new IllegalStateException(
-                    "Unknown reconciliation measure kind " + kind);
+            case "COUNT" ->
+                ReconciliationMeasure.count(
+                        exactIntegerOrNull(row, "expected_value"), exactIntegerOrNull(row, "actual_value"));
+            case "AMOUNT" ->
+                ReconciliationMeasure.amount(
+                        exactIntegerOrNull(row, "expected_value"),
+                        exactIntegerOrNull(row, "actual_value"),
+                        Currency.getInstance(row.getString("currency")));
+            case "CHECKSUM" ->
+                ReconciliationMeasure.checksum(row.getString("expected_checksum"), row.getString("actual_checksum"));
+            default -> throw new IllegalStateException("Unknown reconciliation measure kind " + kind);
         };
     }
 
@@ -312,8 +322,13 @@ public class JdbcReconciliationStore implements MigrationReconciliationStore {
      * {@code numeric(38, 0)} and a platform-wide total in minor units has more
      * headroom than anyone wants to discover during a cutover window.
      */
-    public record ReconciliationMeasure(String kind, BigInteger expected, BigInteger actual,
-            Currency currency, String expectedChecksum, String actualChecksum) {
+    public record ReconciliationMeasure(
+            String kind,
+            BigInteger expected,
+            BigInteger actual,
+            Currency currency,
+            String expectedChecksum,
+            String actualChecksum) {
 
         public static ReconciliationMeasure count(BigInteger expected, BigInteger actual) {
             Objects.requireNonNull(expected, "A count rule compares an expected value");
@@ -321,13 +336,12 @@ public class JdbcReconciliationStore implements MigrationReconciliationStore {
             return new ReconciliationMeasure("COUNT", expected, actual, null, null, null);
         }
 
-        public static ReconciliationMeasure amount(BigInteger expectedMinor, BigInteger actualMinor,
-                Currency currency) {
+        public static ReconciliationMeasure amount(
+                BigInteger expectedMinor, BigInteger actualMinor, Currency currency) {
             Objects.requireNonNull(expectedMinor, "An amount rule compares an expected value");
             Objects.requireNonNull(actualMinor, "An amount rule compares an actual value");
             Objects.requireNonNull(currency, "An amount is meaningless without its currency");
-            return new ReconciliationMeasure("AMOUNT", expectedMinor, actualMinor, currency,
-                    null, null);
+            return new ReconciliationMeasure("AMOUNT", expectedMinor, actualMinor, currency, null, null);
         }
 
         public static ReconciliationMeasure checksum(String expected, String actual) {
@@ -338,9 +352,7 @@ public class JdbcReconciliationStore implements MigrationReconciliationStore {
 
         /** Whether the two sides agreed, whichever way this rule compares them. */
         public boolean matched() {
-            return "CHECKSUM".equals(kind)
-                    ? expectedChecksum.equals(actualChecksum)
-                    : expected.equals(actual);
+            return "CHECKSUM".equals(kind) ? expectedChecksum.equals(actualChecksum) : expected.equals(actual);
         }
 
         // A HashMap: whichever kind this is, four of the six columns are null by
@@ -372,19 +384,40 @@ public class JdbcReconciliationStore implements MigrationReconciliationStore {
      *                    null, because null would not compare equal and the
      *                    deduplicating key would stop deduplicating
      */
-    public record ReconciliationResult(UUID resultId, UUID tenantId, UUID runId, UUID scopeId,
-            String ruleCode, int ruleVersion, String dimensionKey,
-            ReconciliationSeverity severity, ReconciliationMeasure measure, String sampleReference,
-            Instant evaluatedAt) { }
+    public record ReconciliationResult(
+            UUID resultId,
+            UUID tenantId,
+            UUID runId,
+            UUID scopeId,
+            String ruleCode,
+            int ruleVersion,
+            String dimensionKey,
+            ReconciliationSeverity severity,
+            ReconciliationMeasure measure,
+            String sampleReference,
+            Instant evaluatedAt) {}
 
     /**
      * @param difference the stored difference, read back rather than recomputed,
      *                   because it is the figure the approval was given against.
      *                   Null for a checksum rule, which has no numeric sides
      */
-    public record ReconciliationResultRow(UUID resultId, UUID tenantId, UUID runId, UUID scopeId,
-            String ruleCode, int ruleVersion, String dimensionKey,
-            ReconciliationSeverity severity, ReconciliationMeasure measure, BigInteger difference,
-            String sampleReference, ReconciliationStatus status, String approvedBy,
-            Instant approvedAt, Instant resolvedAt, Instant createdAt, Instant updatedAt) { }
+    public record ReconciliationResultRow(
+            UUID resultId,
+            UUID tenantId,
+            UUID runId,
+            UUID scopeId,
+            String ruleCode,
+            int ruleVersion,
+            String dimensionKey,
+            ReconciliationSeverity severity,
+            ReconciliationMeasure measure,
+            BigInteger difference,
+            String sampleReference,
+            ReconciliationStatus status,
+            String approvedBy,
+            Instant approvedAt,
+            Instant resolvedAt,
+            Instant createdAt,
+            Instant updatedAt) {}
 }

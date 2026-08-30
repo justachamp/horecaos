@@ -5,7 +5,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
 import uz.horecaos.platform.integration.events.EventContract.Classification;
 import uz.horecaos.platform.integration.events.EventContract.Retention;
 
@@ -80,7 +79,8 @@ public final class EventCatalog {
 
     private static final Map<String, EventContract> CONTRACTS = index(List.of(
             new EventContract(
-                    "TenantCreated", 1,
+                    "TenantCreated",
+                    1,
                     "tenancy",
                     TENANCY_EVENTS_TOPIC,
                     "tenantId",
@@ -89,7 +89,8 @@ public final class EventCatalog {
                     Classification.INTERNAL,
                     "A tenant was created in the control plane."),
             new EventContract(
-                    "BrandCreated", 1,
+                    "BrandCreated",
+                    1,
                     "tenancy",
                     TENANCY_EVENTS_TOPIC,
                     "brandId",
@@ -98,7 +99,8 @@ public final class EventCatalog {
                     Classification.INTERNAL,
                     "A brand was created under a tenant."),
             new EventContract(
-                    "LocationCreated", 1,
+                    "LocationCreated",
+                    1,
                     "tenancy",
                     TENANCY_EVENTS_TOPIC,
                     "locationId",
@@ -110,7 +112,8 @@ public final class EventCatalog {
             // the run, because onboarding order is tenant-scoped: a consumer must
             // not see an activation before the start that produced it.
             new EventContract(
-                    "TenantOnboardingStarted", 1,
+                    "TenantOnboardingStarted",
+                    1,
                     "tenancy",
                     TENANCY_EVENTS_TOPIC,
                     "tenantId",
@@ -119,7 +122,8 @@ public final class EventCatalog {
                     Classification.INTERNAL,
                     "A resumable tenant onboarding run was created."),
             new EventContract(
-                    "TenantOnboardingStepCompleted", 1,
+                    "TenantOnboardingStepCompleted",
+                    1,
                     "tenancy",
                     TENANCY_EVENTS_TOPIC,
                     "tenantId",
@@ -128,7 +132,8 @@ public final class EventCatalog {
                     Classification.INTERNAL,
                     "One onboarding step completed. Names the step, never what it produced."),
             new EventContract(
-                    "TenantOnboardingFailed", 1,
+                    "TenantOnboardingFailed",
+                    1,
                     "tenancy",
                     TENANCY_EVENTS_TOPIC,
                     "tenantId",
@@ -137,7 +142,8 @@ public final class EventCatalog {
                     Classification.INTERNAL,
                     "A run stopped on a required step. Error code only, never the detail."),
             new EventContract(
-                    "TenantReady", 1,
+                    "TenantReady",
+                    1,
                     "tenancy",
                     TENANCY_EVENTS_TOPIC,
                     "tenantId",
@@ -146,7 +152,8 @@ public final class EventCatalog {
                     Classification.INTERNAL,
                     "Every required readiness step passed. Ready is not live."),
             new EventContract(
-                    "TenantActivated", 1,
+                    "TenantActivated",
+                    1,
                     "tenancy",
                     TENANCY_EVENTS_TOPIC,
                     "tenantId",
@@ -155,7 +162,8 @@ public final class EventCatalog {
                     Classification.INTERNAL,
                     "The tenant is live after a platform-approved activation."),
             new EventContract(
-                    "OrderReceived", 1,
+                    "OrderReceived",
+                    1,
                     "ordering",
                     ORDERING_EVENTS_TOPIC,
                     "orderId",
@@ -164,7 +172,8 @@ public final class EventCatalog {
                     Classification.INTERNAL,
                     "An order was created and is durable. Nothing external has happened yet."),
             new EventContract(
-                    "OrderAwaitingApproval", 1,
+                    "OrderAwaitingApproval",
+                    1,
                     "ordering",
                     ORDERING_EVENTS_TOPIC,
                     "orderId",
@@ -173,7 +182,8 @@ public final class EventCatalog {
                     Classification.INTERNAL,
                     "An order is waiting for a restaurant decision, with its deadline."),
             new EventContract(
-                    "OrderConfirmed", 1,
+                    "OrderConfirmed",
+                    1,
                     "ordering",
                     ORDERING_EVENTS_TOPIC,
                     "orderId",
@@ -182,7 +192,8 @@ public final class EventCatalog {
                     Classification.INTERNAL,
                     "The commercial commitment. POS export never gates this."),
             new EventContract(
-                    "OrderRejected", 1,
+                    "OrderRejected",
+                    1,
                     "ordering",
                     ORDERING_EVENTS_TOPIC,
                     "orderId",
@@ -191,7 +202,8 @@ public final class EventCatalog {
                     Classification.INTERNAL,
                     "The restaurant declined the order."),
             new EventContract(
-                    "OrderExpired", 1,
+                    "OrderExpired",
+                    1,
                     "ordering",
                     ORDERING_EVENTS_TOPIC,
                     "orderId",
@@ -200,7 +212,8 @@ public final class EventCatalog {
                     Classification.INTERNAL,
                     "Nobody decided before the approval deadline."),
             new EventContract(
-                    "OrderCancelled", 1,
+                    "OrderCancelled",
+                    1,
                     "ordering",
                     ORDERING_EVENTS_TOPIC,
                     "orderId",
@@ -214,7 +227,8 @@ public final class EventCatalog {
             // overtake each other, and the inbox parks the second behind the
             // first for exactly that reason.
             new EventContract(
-                    "ShipmentReconciliationRequested", 1,
+                    "ShipmentReconciliationRequested",
+                    1,
                     "integration",
                     FULFILLMENT_COMMANDS_TOPIC,
                     "operationCommandId",
@@ -224,7 +238,8 @@ public final class EventCatalog {
                     "A courier call's outcome is unknown and could not be settled in the route. "
                             + "Identifiers only; never an address, a name, or a phone number."),
             new EventContract(
-                    "ShipmentOutcomeReconciled", 1,
+                    "ShipmentOutcomeReconciled",
+                    1,
                     "integration",
                     FULFILLMENT_EVENTS_TOPIC,
                     "operationCommandId",
@@ -234,7 +249,8 @@ public final class EventCatalog {
                     "What the partner says actually happened to a shipment whose outcome was "
                             + "uncertain, or that nobody could establish it."),
             new EventContract(
-                    "MediaAssetAvailable", 1,
+                    "MediaAssetAvailable",
+                    1,
                     "media",
                     MEDIA_EVENTS_TOPIC,
                     "assetId",
@@ -245,7 +261,8 @@ public final class EventCatalog {
                             + "Identifiers and verified technical facts only — never the "
                             + "object key, a signed URL, or the uploaded filename."),
             new EventContract(
-                    "RealtimeSignal", 1,
+                    "RealtimeSignal",
+                    1,
                     "telemetry",
                     REALTIME_SIGNALS_TOPIC,
                     "scope",
@@ -255,8 +272,7 @@ public final class EventCatalog {
                     "Something in a scope changed; the reader re-reads it through the authorized "
                             + "API. Identifiers only, never state.")));
 
-    private EventCatalog() {
-    }
+    private EventCatalog() {}
 
     private static Map<String, EventContract> index(List<EventContract> contracts) {
         Map<String, EventContract> byKey = new LinkedHashMap<>();
@@ -285,10 +301,11 @@ public final class EventCatalog {
      * attributable error rather than an undocumented contract in production.
      */
     public static EventContract require(String eventType, int eventVersion) {
-        return find(eventType, eventVersion).orElseThrow(() -> new UnregisteredEventException(
-                "No ADR 0032 catalogue entry for %s v%d. Add the contract to EventCatalog, "
-                        .formatted(eventType, eventVersion)
-                        + "add its JSON Schema, and document it in docs/domains/events.md."));
+        return find(eventType, eventVersion)
+                .orElseThrow(() -> new UnregisteredEventException(
+                        "No ADR 0032 catalogue entry for %s v%d. Add the contract to EventCatalog, "
+                                        .formatted(eventType, eventVersion)
+                                + "add its JSON Schema, and document it in docs/domains/events.md."));
     }
 
     /** Thrown when a producer attempts to emit an event that has no registered contract. */

@@ -28,8 +28,7 @@ public interface OrganizationProvisioner {
     /** Links an existing verified subject, or creates and invites one. */
     MembershipRef ensureMembership(EnsureMembership command);
 
-    record EnsureOrganization(
-            UUID tenantId, String alias, String displayName, String existingOrganizationId) {
+    record EnsureOrganization(UUID tenantId, String alias, String displayName, String existingOrganizationId) {
 
         public EnsureOrganization {
             Objects.requireNonNull(tenantId, "A tenant id is required");
@@ -45,11 +44,11 @@ public interface OrganizationProvisioner {
     }
 
     /** The immutable identifier, which is the only safe join key (ADR 0003). */
-    record OrganizationRef(String organizationId, String alias, boolean created) { }
+    record OrganizationRef(String organizationId, String alias, boolean created) {}
 
-    record OrganizationSnapshot(String organizationId, String alias, String name, boolean enabled) { }
+    record OrganizationSnapshot(String organizationId, String alias, String name, boolean enabled) {}
 
-    record MembershipRef(String organizationId, String subjectId, boolean created) { }
+    record MembershipRef(String organizationId, String subjectId, boolean created) {}
 
     /**
      * Something about the external state needs a human. Deliberately not a

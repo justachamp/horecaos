@@ -2,11 +2,9 @@ package uz.horecaos.platform.ordering.web;
 
 import java.util.HashMap;
 import java.util.Map;
-
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-
 import uz.horecaos.platform.migration.api.TargetWritesFencedException;
 import uz.horecaos.platform.web.api.ApiProblem;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -19,10 +17,7 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * {@code GlobalApiErrorHandler}. Only failures this module alone can raise belong
  * here.
  */
-@RestControllerAdvice(assignableTypes = {
-        StorefrontOrderingController.class,
-        OperationsOrderController.class
-})
+@RestControllerAdvice(assignableTypes = {StorefrontOrderingController.class, OperationsOrderController.class})
 public class OrderingApiErrorHandler {
 
     /**
@@ -53,7 +48,6 @@ public class OrderingApiErrorHandler {
         Map<String, Object> properties = new HashMap<>();
         properties.put("capability", exception.capability().name());
         properties.put("migrationScopeId", exception.scopeId());
-        return ApiProblem.withProperties(ErrorCode.RESOURCE_CONFLICT, exception.getMessage(),
-                properties);
+        return ApiProblem.withProperties(ErrorCode.RESOURCE_CONFLICT, exception.getMessage(), properties);
     }
 }

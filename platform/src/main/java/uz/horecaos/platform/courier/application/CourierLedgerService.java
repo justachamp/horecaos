@@ -7,10 +7,8 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.courier.application.port.LegalEntityResolver;
 import uz.horecaos.platform.courier.domain.AdjustmentOrigin;
 import uz.horecaos.platform.courier.domain.CourierCompensationPolicy;
@@ -49,8 +47,12 @@ public class CourierLedgerService {
     private final LegalEntityResolver legalEntities;
     private final Clock clock;
 
-    public CourierLedgerService(JdbcCourierLedgerStore ledger, JdbcCourierStore couriers,
-            CourierPolicyResolver policies, LegalEntityResolver legalEntities, Clock clock) {
+    public CourierLedgerService(
+            JdbcCourierLedgerStore ledger,
+            JdbcCourierStore couriers,
+            CourierPolicyResolver policies,
+            LegalEntityResolver legalEntities,
+            Clock clock) {
         this.ledger = ledger;
         this.couriers = couriers;
         this.policies = policies;
@@ -66,8 +68,7 @@ public class CourierLedgerService {
      * opened would leave the entry with nowhere to be stamped.
      */
     @Transactional
-    public PeriodRow currentPeriod(UUID tenantId, UUID courierId, String currency,
-            LocalDate businessDate) {
+    public PeriodRow currentPeriod(UUID tenantId, UUID courierId, String currency, LocalDate businessDate) {
 
         Optional<PeriodRow> open = ledger.findOpenPeriod(tenantId, courierId);
         if (open.isPresent()) {
@@ -75,7 +76,8 @@ public class CourierLedgerService {
         }
 
         EngagementRow engagement = couriers.findLiveEngagement(tenantId, courierId)
-                .orElseThrow(() -> new ApiException(ErrorCode.UNPROCESSABLE_STATE,
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.UNPROCESSABLE_STATE,
                         "This courier has no live engagement, so nothing can be owed against one"));
 
         CourierCompensationPolicy policy = policies.resolve(ResourceScope.tenant(tenantId));
@@ -86,14 +88,34 @@ public class CourierLedgerService {
         // inside a period that has already closed; the new one starts the day
         // after the last one ended.
         LocalDate previousEnd = ledger.latestPeriodEnd(tenantId, courierId).orElse(null);
-        LocalDate start = previousEnd != null && !businessDate.isAfter(previousEnd)
-                ? previousEnd.plusDays(1)
-                : businessDate;
+        LocalDate start =
+                previousEnd != null && !businessDate.isAfter(previousEnd) ? previousEnd.plusDays(1) : businessDate;
         LocalDate end = start.plusDays(policy.settlementPeriodDays() - 1L);
 
-        ledger.insertPeriod(new PeriodRow(periodId, tenantId, courierId, engagement.id(),
-                start, end, uz.horecaos.platform.courier.domain.SettlementPeriodStatus.OPEN, currency,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, false, null, null, null, null, 1));
+        ledger.insertPeriod(new PeriodRow(
+                periodId,
+                tenantId,
+                courierId,
+                engagement.id(),
+                start,
+                end,
+                uz.horecaos.platform.courier.domain.SettlementPeriodStatus.OPEN,
+                currency,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                false,
+                null,
+                null,
+                null,
+                null,
+                1));
 
         return ledger.findPeriod(tenantId, periodId).orElseThrow();
     }
@@ -108,7 +130,8 @@ public class CourierLedgerService {
     @Transactional
     public LedgerEntryRow append(NewEntry entry) {
         if (!entry.entryType().accepts(entry.amountMinor())) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
                     "%s cannot carry %d: the sign is fixed per entry type"
                             .formatted(entry.entryType(), entry.amountMinor()));
         }
@@ -117,24 +140,39 @@ public class CourierLedgerService {
                 && entry.approvalRequestId() == null) {
             // Also a database constraint. Refused here as well so the caller
             // gets ADR 0031's vocabulary rather than a constraint violation.
-            throw new ApiException(ErrorCode.UNPROCESSABLE_STATE,
-                    "A manual penalty requires ADR 0027 approval before it is written");
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE, "A manual penalty requires ADR 0027 approval before it is written");
         }
 
         LocalDate businessDate = LocalDate.ofInstant(entry.occurredAt(), ZoneOffset.UTC);
-        PeriodRow period = currentPeriod(entry.tenantId(), entry.courierId(), entry.currency(),
-                businessDate);
+        PeriodRow period = currentPeriod(entry.tenantId(), entry.courierId(), entry.currency(), businessDate);
 
-        UUID legalEntityId = entry.locationId() == null ? null
-                : legalEntities.resolve(entry.tenantId(), entry.locationId(), businessDate)
+        UUID legalEntityId = entry.locationId() == null
+                ? null
+                : legalEntities
+                        .resolve(entry.tenantId(), entry.locationId(), businessDate)
                         .orElse(null);
 
         UUID id = UUID.randomUUID();
-        boolean written = ledger.append(new LedgerEntryRow(id, entry.tenantId(), entry.courierId(),
-                period.id(), legalEntityId, entry.entryType(), entry.amountMinor(),
-                entry.currency(), entry.sourceType(), entry.sourceId(), entry.origin(),
-                entry.reasonCode(), entry.occurredAt(), clock.instant(), entry.idempotencyKey(),
-                entry.approvalRequestId(), entry.adjustsEntryId(), entry.createdBy()));
+        boolean written = ledger.append(new LedgerEntryRow(
+                id,
+                entry.tenantId(),
+                entry.courierId(),
+                period.id(),
+                legalEntityId,
+                entry.entryType(),
+                entry.amountMinor(),
+                entry.currency(),
+                entry.sourceType(),
+                entry.sourceId(),
+                entry.origin(),
+                entry.reasonCode(),
+                entry.occurredAt(),
+                clock.instant(),
+                entry.idempotencyKey(),
+                entry.approvalRequestId(),
+                entry.adjustsEntryId(),
+                entry.createdBy()));
 
         if (written) {
             return ledger.findEntry(entry.tenantId(), id).orElseThrow();
@@ -142,7 +180,8 @@ public class CourierLedgerService {
         return ledger.entriesOf(entry.tenantId(), period.id()).stream()
                 .filter(existing -> existing.idempotencyKey().equals(entry.idempotencyKey()))
                 .findFirst()
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_CONFLICT,
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.RESOURCE_CONFLICT,
                         "This idempotency key already wrote an entry into another period"));
     }
 
@@ -154,17 +193,34 @@ public class CourierLedgerService {
      * money moves in the period that can still accept it.
      */
     @Transactional
-    public LedgerEntryRow appendPriorPeriodAdjustment(UUID tenantId, UUID originalEntryId,
-            long amountMinor, String reasonCode, String createdBy, String idempotencyKey) {
+    public LedgerEntryRow appendPriorPeriodAdjustment(
+            UUID tenantId,
+            UUID originalEntryId,
+            long amountMinor,
+            String reasonCode,
+            String createdBy,
+            String idempotencyKey) {
 
         LedgerEntryRow original = ledger.findEntry(tenantId, originalEntryId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No such ledger entry: " + originalEntryId));
+                .orElseThrow(() ->
+                        new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such ledger entry: " + originalEntryId));
 
-        return append(new NewEntry(tenantId, original.courierId(), null,
-                LedgerEntryType.PRIOR_PERIOD_ADJUSTMENT, amountMinor, original.currency(),
-                "courier_ledger_entry", originalEntryId, AdjustmentOrigin.SYSTEM, reasonCode,
-                original.occurredAt(), idempotencyKey, null, originalEntryId, createdBy));
+        return append(new NewEntry(
+                tenantId,
+                original.courierId(),
+                null,
+                LedgerEntryType.PRIOR_PERIOD_ADJUSTMENT,
+                amountMinor,
+                original.currency(),
+                "courier_ledger_entry",
+                originalEntryId,
+                AdjustmentOrigin.SYSTEM,
+                reasonCode,
+                original.occurredAt(),
+                idempotencyKey,
+                null,
+                originalEntryId,
+                createdBy));
     }
 
     public List<LedgerEntryRow> entriesOfPeriod(UUID tenantId, UUID periodId) {
@@ -181,8 +237,20 @@ public class CourierLedgerService {
      * @param occurredAt  when the fact happened, which a prior-period adjustment
      *                    keeps from the entry it corrects
      */
-    public record NewEntry(UUID tenantId, UUID courierId, UUID locationId,
-            LedgerEntryType entryType, long amountMinor, String currency, String sourceType,
-            UUID sourceId, AdjustmentOrigin origin, String reasonCode, Instant occurredAt,
-            String idempotencyKey, UUID approvalRequestId, UUID adjustsEntryId, String createdBy) { }
+    public record NewEntry(
+            UUID tenantId,
+            UUID courierId,
+            UUID locationId,
+            LedgerEntryType entryType,
+            long amountMinor,
+            String currency,
+            String sourceType,
+            UUID sourceId,
+            AdjustmentOrigin origin,
+            String reasonCode,
+            Instant occurredAt,
+            String idempotencyKey,
+            UUID approvalRequestId,
+            UUID adjustsEntryId,
+            String createdBy) {}
 }

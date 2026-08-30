@@ -13,8 +13,7 @@ import java.time.Instant;
  */
 public final class OnTimeEvaluator {
 
-    private OnTimeEvaluator() {
-    }
+    private OnTimeEvaluator() {}
 
     /**
      * @param promisedDeliveryEnd the ADR 0014 plan's promise as it stood when the
@@ -36,8 +35,7 @@ public final class OnTimeEvaluator {
         if (!deliveredAt.isAfter(deadline)) {
             return OnTimeOutcome.ON_TIME;
         }
-        if (kitchenHandoverAt != null && pickupWindowEnd != null
-                && kitchenHandoverAt.isAfter(pickupWindowEnd)) {
+        if (kitchenHandoverAt != null && pickupWindowEnd != null && kitchenHandoverAt.isAfter(pickupWindowEnd)) {
             return OnTimeOutcome.LATE_EXCUSED;
         }
         return OnTimeOutcome.LATE;

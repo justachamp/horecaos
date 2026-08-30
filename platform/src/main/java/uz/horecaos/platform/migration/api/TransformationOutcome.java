@@ -35,8 +35,7 @@ public sealed interface TransformationOutcome<T> {
      *                    null while the diagnosis is only a reason code. Never the
      *                    evidence itself (ADR 0029)
      */
-    record Quarantined<T>(String reasonCode, String evidenceReference)
-            implements TransformationOutcome<T> {
+    record Quarantined<T>(String reasonCode, String evidenceReference) implements TransformationOutcome<T> {
 
         private static final Pattern CODE = Pattern.compile("^[A-Z][A-Z0-9_]{0,63}$");
 

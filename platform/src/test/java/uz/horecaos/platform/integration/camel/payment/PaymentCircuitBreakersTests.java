@@ -1,20 +1,17 @@
 package uz.horecaos.platform.integration.camel.payment;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.concurrent.TimeUnit;
-
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * What has to be true of a payment breaker beyond "it counts failures" (ADR 0007).
@@ -28,8 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PaymentCircuitBreakersTests {
 
     private final PaymentCircuitBreakers breakers = new PaymentCircuitBreakers(
-            new SimpleMeterRegistry(),
-            Clock.fixed(Instant.parse("2026-08-24T09:00:00Z"), ZoneOffset.UTC));
+            new SimpleMeterRegistry(), Clock.fixed(Instant.parse("2026-08-24T09:00:00Z"), ZoneOffset.UTC));
 
     @Test
     @DisplayName("a provider that answers every call but slowly opens the circuit")
@@ -69,8 +65,11 @@ class PaymentCircuitBreakersTests {
         // the status queries that resolve it. The slow dimension must not have
         // smuggled a second way to trip on one, so these are recorded fast.
         for (int call = 0; call < 20; call++) {
-            breaker.onError(1, TimeUnit.MILLISECONDS, new PaymentCircuitBreakers.PaymentCallFailed(
-                    ProviderOutcome.uncertain("READ_TIMEOUT", "no answer")));
+            breaker.onError(
+                    1,
+                    TimeUnit.MILLISECONDS,
+                    new PaymentCircuitBreakers.PaymentCallFailed(
+                            ProviderOutcome.uncertain("READ_TIMEOUT", "no answer")));
         }
 
         assertThat(breaker.getState()).isEqualTo(CircuitBreaker.State.CLOSED);

@@ -1,28 +1,23 @@
 package uz.horecaos.platform.ordering.application;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.UUID;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.json.JsonMapper;
-
-import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.ordering.domain.AcceptanceMode;
 import uz.horecaos.platform.ordering.domain.ApprovalChannel;
 import uz.horecaos.platform.ordering.domain.ApprovalTimeoutAction;
 import uz.horecaos.platform.ordering.domain.OrderAcceptancePolicy;
+import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyResolver;
 
 /**
@@ -132,7 +127,7 @@ class OrderAcceptancePolicyServiceTests {
                 .as("new orders use the new policy")
                 .isEqualTo(60);
         assertThat(service.pinned(atAcceptance.policyId(), atAcceptance.policyVersion())
-                .approvalTimeoutSeconds())
+                        .approvalTimeoutSeconds())
                 .as("an accepted order stays explainable under the policy that governed it")
                 .isEqualTo(600);
     }
@@ -141,20 +136,29 @@ class OrderAcceptancePolicyServiceTests {
     void anOrderOnThePlatformDefaultPinsToTheDefault() {
         OrderAcceptancePolicyService.Effective effective = service.resolve(TENANT, BRAND, LOCATION);
 
-        assertThat(service.pinned(effective.policyId(), effective.policyVersion()).mode())
+        assertThat(service.pinned(effective.policyId(), effective.policyVersion())
+                        .mode())
                 .isEqualTo(AcceptanceMode.AUTO_CONFIRM);
     }
 
     @Test
     void theDomainInvariantsSurvivedTheMigration() {
         assertThatThrownBy(() -> new OrderAcceptancePolicy(
-                AcceptanceMode.AUTO_CONFIRM, ApprovalChannel.POS, 0,
-                ApprovalTimeoutAction.AUTO_REJECT, false, false))
+                        AcceptanceMode.AUTO_CONFIRM,
+                        ApprovalChannel.POS,
+                        0,
+                        ApprovalTimeoutAction.AUTO_REJECT,
+                        false,
+                        false))
                 .hasMessageContaining("Auto-confirm policies cannot have an approval channel");
 
         assertThatThrownBy(() -> new OrderAcceptancePolicy(
-                AcceptanceMode.RESTAURANT_APPROVAL, ApprovalChannel.EITHER, 5,
-                ApprovalTimeoutAction.AUTO_REJECT, false, false))
+                        AcceptanceMode.RESTAURANT_APPROVAL,
+                        ApprovalChannel.EITHER,
+                        5,
+                        ApprovalTimeoutAction.AUTO_REJECT,
+                        false,
+                        false))
                 .hasMessageContaining("between 30 seconds and 30 minutes");
     }
 
@@ -170,23 +174,29 @@ class OrderAcceptancePolicyServiceTests {
 
     private static OrderAcceptancePolicy approval(int timeoutSeconds) {
         return new OrderAcceptancePolicy(
-                AcceptanceMode.RESTAURANT_APPROVAL, ApprovalChannel.EITHER, timeoutSeconds,
-                ApprovalTimeoutAction.AUTO_REJECT, true, true);
+                AcceptanceMode.RESTAURANT_APPROVAL,
+                ApprovalChannel.EITHER,
+                timeoutSeconds,
+                ApprovalTimeoutAction.AUTO_REJECT,
+                true,
+                true);
     }
 
     private void activate(String scopeType, UUID brandId, UUID locationId, OrderAcceptancePolicy policy) {
         activate(scopeType, brandId, locationId, policy, 1);
     }
 
-    private void activate(
-            String scopeType, UUID brandId, UUID locationId, OrderAcceptancePolicy policy, int version) {
+    private void activate(String scopeType, UUID brandId, UUID locationId, OrderAcceptancePolicy policy, int version) {
 
         UUID id = UUID.randomUUID();
         String document = """
                 {"mode":"%s","approvalChannel":"%s","approvalTimeoutSeconds":%d,
-                 "timeoutAction":"%s","rejectionReasonRequired":%b,"notifyCustomerWhilePending":%b}"""
-                .formatted(policy.mode(), policy.approvalChannel(), policy.approvalTimeoutSeconds(),
-                        policy.timeoutAction(), policy.rejectionReasonRequired(),
+                 "timeoutAction":"%s","rejectionReasonRequired":%b,"notifyCustomerWhilePending":%b}""".formatted(
+                        policy.mode(),
+                        policy.approvalChannel(),
+                        policy.approvalTimeoutSeconds(),
+                        policy.timeoutAction(),
+                        policy.rejectionReasonRequired(),
                         policy.notifyCustomerWhilePending());
 
         jdbc.sql("""
@@ -239,7 +249,8 @@ class OrderAcceptancePolicyServiceTests {
                     INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
                     VALUES (:id, :tenantId, :code, :slug, 'Brand', 'ACTIVE', 0)
                     """)
-                    .param("id", brand).param("tenantId", TENANT)
+                    .param("id", brand)
+                    .param("tenantId", TENANT)
                     .param("code", "B" + suffix(brand).toUpperCase())
                     .param("slug", "b-" + suffix(brand))
                     .update();
@@ -250,7 +261,9 @@ class OrderAcceptancePolicyServiceTests {
                         (id, tenant_id, brand_id, code, slug, display_name, timezone, status, version)
                     VALUES (:id, :tenantId, :brandId, :code, :slug, 'Location', 'Asia/Tashkent', 'ACTIVE', 0)
                     """)
-                    .param("id", location).param("tenantId", TENANT).param("brandId", BRAND)
+                    .param("id", location)
+                    .param("tenantId", TENANT)
+                    .param("brandId", BRAND)
                     .param("code", "L" + suffix(location).toUpperCase())
                     .param("slug", "l-" + suffix(location))
                     .update();

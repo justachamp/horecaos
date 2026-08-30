@@ -1,5 +1,8 @@
 package uz.horecaos.platform.telemetry.infrastructure.realtime;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -12,20 +15,12 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.Gauge;
-import io.micrometer.core.instrument.MeterRegistry;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.telemetry.api.RealtimeSignal;
 import uz.horecaos.platform.telemetry.api.RealtimeSignal.Subscription;
-import uz.horecaos.platform.telemetry.api.ScopeKey;
 import uz.horecaos.platform.telemetry.api.StreamChannel;
 
 /**
@@ -111,8 +106,7 @@ public class SseStreamRegistry {
     private final Counter refusedTenantShare;
     private final Counter coalescedSignals;
 
-    public SseStreamRegistry(ObjectMapper json, Clock clock, MeterRegistry meters,
-            List<SnapshotSource> sources) {
+    public SseStreamRegistry(ObjectMapper json, Clock clock, MeterRegistry meters, List<SnapshotSource> sources) {
         this.json = json;
         this.clock = clock;
         sources.forEach(source -> snapshotSources.put(source.channel(), source));
@@ -120,8 +114,7 @@ public class SseStreamRegistry {
         Gauge.builder("horecaos.realtime.streams.open", connections, Map::size)
                 .description("ADR 0045 open Server-Sent Event streams held by this replica")
                 .register(meters);
-        Gauge.builder("horecaos.realtime.streams.headroom", connections,
-                        open -> (double) MAXIMUM_STREAMS - open.size())
+        Gauge.builder("horecaos.realtime.streams.headroom", connections, open -> (double) MAXIMUM_STREAMS - open.size())
                 .description("Streams remaining before the ADR 0045 cap refuses connects")
                 .register(meters);
         this.refusedConnects = Counter.builder("horecaos.realtime.streams.refused")
@@ -150,48 +143,75 @@ public class SseStreamRegistry {
      *                     receiving three stale frames in order.
      * @param tokenExpiry  when the access token dies, and with it this stream
      */
-    public Connection open(UUID tenantId, String principalSubject, Set<Subscription> subscriptions,
-            StreamSink sink, Instant tokenExpiry, String lastEventId) {
+    public Connection open(
+            UUID tenantId,
+            String principalSubject,
+            Set<Subscription> subscriptions,
+            StreamSink sink,
+            Instant tokenExpiry,
+            String lastEventId) {
 
         if (connections.size() >= MAXIMUM_STREAMS) {
             refusedConnects.increment();
             throw new StreamCapReachedException(
                     ("This replica already holds %d streams (ADR 0045). Poll instead; every live "
-                            + "surface has a polling path that works.").formatted(MAXIMUM_STREAMS));
+                                    + "surface has a polling path that works.")
+                            .formatted(MAXIMUM_STREAMS));
         }
 
         long held = streamsHeldBy(tenantId);
-        if (held >= TENANT_GUARANTEED_STREAMS
-                && connections.size() >= MAXIMUM_STREAMS - RESERVED_FOR_OTHER_TENANTS) {
+        if (held >= TENANT_GUARANTEED_STREAMS && connections.size() >= MAXIMUM_STREAMS - RESERVED_FOR_OTHER_TENANTS) {
             refusedConnects.increment();
             refusedTenantShare.increment();
             // At warn and naming the tenant: this one is actionable in a way the
             // replica simply being full is not, because the tenant that is being
             // held back and the tenant that filled the box are different people.
-            log.warn("Refusing a stream for tenant {}: it holds {} of this replica's {} and the "
+            log.warn(
+                    "Refusing a stream for tenant {}: it holds {} of this replica's {} and the "
                             + "last {} are reserved for other tenants (ADR 0045)",
-                    tenantId, held, MAXIMUM_STREAMS, RESERVED_FOR_OTHER_TENANTS);
+                    tenantId,
+                    held,
+                    MAXIMUM_STREAMS,
+                    RESERVED_FOR_OTHER_TENANTS);
             throw new StreamCapReachedException(
                     ("This tenant already holds %d of this replica's %d streams and the last %d are "
-                            + "kept for other tenants (ADR 0045). Poll instead; every live surface "
-                            + "has a polling path that works.")
+                                    + "kept for other tenants (ADR 0045). Poll instead; every live surface "
+                                    + "has a polling path that works.")
                             .formatted(held, MAXIMUM_STREAMS, RESERVED_FOR_OTHER_TENANTS));
         }
 
-        Connection connection = new Connection(UUID.randomUUID().toString(), tenantId,
-                principalSubject, Set.copyOf(subscriptions), sink, tokenExpiry, clock.instant());
+        Connection connection = new Connection(
+                UUID.randomUUID().toString(),
+                tenantId,
+                principalSubject,
+                Set.copyOf(subscriptions),
+                sink,
+                tokenExpiry,
+                clock.instant());
         connections.put(connection.id(), connection);
 
         if (connections.size() >= WARNING_THRESHOLD) {
-            log.warn("{} open streams on this replica, past the {} dashboard threshold and "
-                    + "approaching the {} cap (ADR 0045)",
-                    connections.size(), WARNING_THRESHOLD, MAXIMUM_STREAMS);
+            log.warn(
+                    "{} open streams on this replica, past the {} dashboard threshold and "
+                            + "approaching the {} cap (ADR 0045)",
+                    connections.size(),
+                    WARNING_THRESHOLD,
+                    MAXIMUM_STREAMS);
         }
 
         if (lastEventId != null && !lastEventId.isBlank()) {
-            write(connection, "resync", UUID.randomUUID().toString(), Map.of(
-                    "reason", "NO_REPLAY_BUFFER",
-                    "channels", subscriptions.stream().map(s -> s.channel().code()).sorted().toList()));
+            write(
+                    connection,
+                    "resync",
+                    UUID.randomUUID().toString(),
+                    Map.of(
+                            "reason",
+                            "NO_REPLAY_BUFFER",
+                            "channels",
+                            subscriptions.stream()
+                                    .map(s -> s.channel().code())
+                                    .sorted()
+                                    .toList()));
         }
         return connection;
     }
@@ -218,8 +238,9 @@ public class SseStreamRegistry {
                 continue;
             }
             synchronized (connection.pending()) {
-                Pending replaced = connection.pending().put(subscription,
-                        new Pending(signal, connection.pendingSince(subscription, clock.instant())));
+                Pending replaced = connection
+                        .pending()
+                        .put(subscription, new Pending(signal, connection.pendingSince(subscription, clock.instant())));
                 if (replaced != null) {
                     coalescedSignals.increment();
                 }
@@ -302,12 +323,20 @@ public class SseStreamRegistry {
     private void closeWith(Connection connection, String reason) {
         connections.remove(connection.id());
         try {
-            write(connection, "closing", UUID.randomUUID().toString(),
-                    Map.of("reason", reason,
+            write(
+                    connection,
+                    "closing",
+                    UUID.randomUUID().toString(),
+                    Map.of(
+                            "reason",
+                            reason,
                             // Jittered so a deploy's herd does not arrive together.
                             // ADR 0034 has no rolling deploy, so every stream on the
                             // box dies at once and every client resyncs at once.
-                            "reconnectAfterSecondsMin", 1, "reconnectAfterSecondsMax", 10));
+                            "reconnectAfterSecondsMin",
+                            1,
+                            "reconnectAfterSecondsMax",
+                            10));
         } catch (RuntimeException ignored) {
             // The socket is already gone, which is the common case here.
         }
@@ -332,8 +361,7 @@ public class SseStreamRegistry {
         }
     }
 
-    private void emit(Connection connection, Subscription subscription,
-            RealtimeSignal signal, Instant now) {
+    private void emit(Connection connection, Subscription subscription, RealtimeSignal signal, Instant now) {
 
         StreamChannel channel = subscription.channel();
         if (channel.frameClass() == StreamChannel.FrameClass.SNAPSHOT) {
@@ -367,7 +395,9 @@ public class SseStreamRegistry {
         frame.put("channel", signal.channel().code());
         frame.put("scope", signal.scopeKey().canonical());
         frame.put("resourceType", signal.resourceType());
-        frame.put("resourceId", signal.resourceId() == null ? null : signal.resourceId().toString());
+        frame.put(
+                "resourceId",
+                signal.resourceId() == null ? null : signal.resourceId().toString());
         frame.put("version", signal.version());
         frame.put("occurredAt", signal.occurredAt().toString());
         write(connection, "signal", signal.signalId().toString(), frame);
@@ -391,8 +421,14 @@ public class SseStreamRegistry {
         private final Map<Subscription, Pending> pending = new LinkedHashMap<>();
         private volatile Instant lastWriteAt;
 
-        Connection(String id, UUID tenantId, String principalSubject, Set<Subscription> subscriptions,
-                StreamSink sink, Instant tokenExpiry, Instant openedAt) {
+        Connection(
+                String id,
+                UUID tenantId,
+                String principalSubject,
+                Set<Subscription> subscriptions,
+                StreamSink sink,
+                Instant tokenExpiry,
+                Instant openedAt) {
             this.id = id;
             this.tenantId = tenantId;
             this.principalSubject = principalSubject;
@@ -449,8 +485,7 @@ public class SseStreamRegistry {
         }
     }
 
-    private record Pending(RealtimeSignal signal, Instant firstQueuedAt) {
-    }
+    private record Pending(RealtimeSignal signal, Instant firstQueuedAt) {}
 
     /** Thrown when this replica is already holding as many streams as it will. */
     public static final class StreamCapReachedException extends RuntimeException {

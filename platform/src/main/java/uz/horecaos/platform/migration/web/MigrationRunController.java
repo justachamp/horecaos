@@ -1,15 +1,16 @@
 package uz.horecaos.platform.migration.web;
 
-import java.net.URI;
-import java.util.UUID;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
-
+import java.net.URI;
+import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,11 +21,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.migration.application.MigrationRunService;
@@ -76,7 +72,8 @@ public class MigrationRunController {
      */
     @PostMapping("/scopes/{scopeId}/runs")
     @RequiresCapability(value = Capability.MIGRATION_RUN_EXECUTE, scope = ScopeType.PLATFORM, mutating = true)
-    @Operation(summary = "Start a run over a scope",
+    @Operation(
+            summary = "Start a run over a scope",
             description = "A new run of a type that already has a live one is refused rather than "
                     + "queued, and the refusal names the run that is already going.")
     ResponseEntity<RunView> start(
@@ -85,9 +82,11 @@ public class MigrationRunController {
             @RequestHeader(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
             @Valid @RequestBody StartRunRequest body) {
 
-        RunRow run = runs.start(tenantId, scopeId, new MigrationRunService.StartRunCommand(
-                body.runType(), body.transformationVersion(), body.startedBy(), body.reason(),
-                idempotencyKey));
+        RunRow run = runs.start(
+                tenantId,
+                scopeId,
+                new MigrationRunService.StartRunCommand(
+                        body.runType(), body.transformationVersion(), body.startedBy(), body.reason(), idempotencyKey));
 
         URI location = ServletUriComponentsBuilder.fromCurrentContextPath()
                 .path("/api/v1/platform-admin/migration/runs/{runId}")
@@ -104,9 +103,7 @@ public class MigrationRunController {
     @Operation(summary = "Get a run and its counters")
     ResponseEntity<RunView> get(@PathVariable UUID runId, @RequestParam UUID tenantId) {
         RunRow run = runs.get(tenantId, runId);
-        return ResponseEntity.ok()
-                .eTag(AggregateVersion.toETag(run.version()))
-                .body(RunView.of(run));
+        return ResponseEntity.ok().eTag(AggregateVersion.toETag(run.version())).body(RunView.of(run));
     }
 
     /**
@@ -127,15 +124,14 @@ public class MigrationRunController {
     @RequiresCapability(value = Capability.MIGRATION_RUN_EXECUTE, scope = ScopeType.PLATFORM, mutating = true)
     @Operation(summary = "Complete, fail, or cancel a run")
     ResponseEntity<RunView> finish(
-            @PathVariable UUID runId,
-            @RequestParam UUID tenantId,
-            @Valid @RequestBody FinishRunRequest body) {
+            @PathVariable UUID runId, @RequestParam UUID tenantId, @Valid @RequestBody FinishRunRequest body) {
 
-        RunRow run = runs.finish(tenantId, runId, new MigrationRunService.FinishRunCommand(
-                body.status(), body.checksum(), body.expectedVersion(), body.reason()));
-        return ResponseEntity.ok()
-                .eTag(AggregateVersion.toETag(run.version()))
-                .body(RunView.of(run));
+        RunRow run = runs.finish(
+                tenantId,
+                runId,
+                new MigrationRunService.FinishRunCommand(
+                        body.status(), body.checksum(), body.expectedVersion(), body.reason()));
+        return ResponseEntity.ok().eTag(AggregateVersion.toETag(run.version())).body(RunView.of(run));
     }
 
     /**
@@ -151,7 +147,7 @@ public class MigrationRunController {
             @NotNull RunType runType,
             @Positive int transformationVersion,
             @NotBlank @Size(max = 255) String startedBy,
-            @NotBlank @Size(max = 1000) String reason) { }
+            @NotBlank @Size(max = 1000) String reason) {}
 
     /**
      * @param status   COMPLETED, FAILED, or CANCELLED. RUNNING is not an outcome
@@ -159,9 +155,11 @@ public class MigrationRunController {
      */
     record FinishRunRequest(
             @NotNull RunStatus status,
+
             @Pattern(regexp = "[0-9a-f]{64}")
             @Schema(example = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
             String checksum,
+
             @Positive int expectedVersion,
-            @NotBlank @Size(max = 1000) String reason) { }
+            @NotBlank @Size(max = 1000) String reason) {}
 }

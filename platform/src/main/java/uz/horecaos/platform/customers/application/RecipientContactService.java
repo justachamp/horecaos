@@ -2,10 +2,8 @@ package uz.horecaos.platform.customers.application;
 
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.customers.api.RecipientContactDirectory;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore.ContactPointRow;
@@ -37,8 +35,7 @@ public class RecipientContactService implements RecipientContactDirectory {
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<ContactEndpoint> primaryContact(UUID tenantId, UUID accountId,
-            ContactMethod method) {
+    public Optional<ContactEndpoint> primaryContact(UUID tenantId, UUID accountId, ContactMethod method) {
 
         // The store already orders primary first, then oldest, so the first match
         // is the answer. Ordering in SQL rather than here keeps "which number do
@@ -46,22 +43,19 @@ public class RecipientContactService implements RecipientContactDirectory {
         return store.contactPoints(tenantId, accountId).stream()
                 .filter(row -> row.type().equals(method.name()))
                 .findFirst()
-                .map(row -> new ContactEndpoint(row.id(), method, row.normalizedHash(),
-                        row.verificationStatus()));
+                .map(row -> new ContactEndpoint(row.id(), method, row.normalizedHash(), row.verificationStatus()));
     }
 
     @Override
     @Transactional(readOnly = true)
     public Optional<String> resolveValue(UUID tenantId, UUID contactPointId, String purpose) {
-        return store.contactPoint(tenantId, contactPointId)
-                .map(row -> reveal(tenantId, row, purpose));
+        return store.contactPoint(tenantId, contactPointId).map(row -> reveal(tenantId, row, purpose));
     }
 
     @Override
     @Transactional(readOnly = true)
     public Optional<String> preferredLocale(UUID tenantId, UUID accountId) {
-        return store.preferredLocale(tenantId, accountId)
-                .filter(locale -> !locale.isBlank());
+        return store.preferredLocale(tenantId, accountId).filter(locale -> !locale.isBlank());
     }
 
     private String reveal(UUID tenantId, ContactPointRow row, String purpose) {
@@ -69,7 +63,10 @@ public class RecipientContactService implements RecipientContactDirectory {
         // the caller. It is bound into the AEAD associated data, so a ciphertext
         // that was copied from another row or another tenant fails here instead of
         // quietly addressing the message to the wrong person.
-        return protection.reveal(tenantId, ProtectedValue.deserialize(row.encryptedValue()),
-                new RecordRef(CONTACT_TABLE, "encrypted_value", row.id()), purpose);
+        return protection.reveal(
+                tenantId,
+                ProtectedValue.deserialize(row.encryptedValue()),
+                new RecordRef(CONTACT_TABLE, "encrypted_value", row.id()),
+                purpose);
     }
 }

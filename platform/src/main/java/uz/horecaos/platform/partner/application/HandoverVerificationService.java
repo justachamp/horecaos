@@ -4,10 +4,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -49,8 +47,8 @@ public class HandoverVerificationService {
     private final AuditRecorder audit;
     private final Clock clock;
 
-    public HandoverVerificationService(JdbcPartnerStore store, HandoverCodeHasher hasher,
-            AuditRecorder audit, Clock clock) {
+    public HandoverVerificationService(
+            JdbcPartnerStore store, HandoverCodeHasher hasher, AuditRecorder audit, Clock clock) {
         this.store = store;
         this.hasher = hasher;
         this.audit = audit;
@@ -70,33 +68,34 @@ public class HandoverVerificationService {
     @Transactional
     public Verification verify(UUID tenantId, UUID orderId, String attempt, String actorSubject) {
         JdbcPartnerStore.Challenge challenge = store.findOpenChallenge(tenantId, orderId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No open handover challenge for this order"));
+                .orElseThrow(() ->
+                        new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No open handover challenge for this order"));
 
         if (challenge.type() == HandoverChallengeType.NONE) {
             // Configured in advance as needing no proof. Settled rather than
             // skipped, so "was this handover verified" has an answer either way
             // and the absence of a challenge never doubles as a pass.
-            store.settleChallenge(tenantId, challenge.id(), HandoverChallengeStatus.VERIFIED,
-                    actorSubject, null, clock.instant());
+            store.settleChallenge(
+                    tenantId, challenge.id(), HandoverChallengeStatus.VERIFIED, actorSubject, null, clock.instant());
             return new Verification(true, HandoverChallengeStatus.VERIFIED, 0);
         }
 
         int consumed = store.consumeAttempt(tenantId, challenge.id(), challenge.attempts())
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_CONFLICT,
-                        "The handover challenge moved while this attempt was being made"));
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.RESOURCE_CONFLICT, "The handover challenge moved while this attempt was being made"));
 
         if (!hasher.matches(orderId, challenge.expectedValueHash(), attempt)) {
             boolean exhausted = consumed >= challenge.maxAttempts();
-            return new Verification(false,
+            return new Verification(
+                    false,
                     exhausted ? HandoverChallengeStatus.FAILED : HandoverChallengeStatus.PENDING,
                     Math.max(0, challenge.maxAttempts() - consumed));
         }
 
-        store.settleChallenge(tenantId, challenge.id(), HandoverChallengeStatus.VERIFIED,
-                actorSubject, null, clock.instant());
-        return new Verification(true, HandoverChallengeStatus.VERIFIED,
-                Math.max(0, challenge.maxAttempts() - consumed));
+        store.settleChallenge(
+                tenantId, challenge.id(), HandoverChallengeStatus.VERIFIED, actorSubject, null, clock.instant());
+        return new Verification(
+                true, HandoverChallengeStatus.VERIFIED, Math.max(0, challenge.maxAttempts() - consumed));
     }
 
     /**
@@ -109,24 +108,28 @@ public class HandoverVerificationService {
      * somebody can be asked about rather than a gap in the record.
      */
     @Transactional
-    public void bypass(UUID tenantId, ResourceScope scope, UUID orderId, String reasonCode,
-            String actorSubject, String actorName, String correlationId) {
+    public void bypass(
+            UUID tenantId,
+            ResourceScope scope,
+            UUID orderId,
+            String reasonCode,
+            String actorSubject,
+            String actorName,
+            String correlationId) {
 
         if (reasonCode == null || reasonCode.isBlank()) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A bypass requires a reason code");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A bypass requires a reason code");
         }
 
         JdbcPartnerStore.Challenge challenge = store.findChallengeForOrder(tenantId, orderId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No handover challenge for this order"));
+                .orElseThrow(
+                        () -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No handover challenge for this order"));
 
         Instant now = clock.instant();
-        boolean settled = store.settleChallenge(tenantId, challenge.id(),
-                HandoverChallengeStatus.BYPASSED, actorSubject, reasonCode, now);
+        boolean settled = store.settleChallenge(
+                tenantId, challenge.id(), HandoverChallengeStatus.BYPASSED, actorSubject, reasonCode, now);
         if (!settled) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
-                    "The handover challenge is already settled");
+            throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "The handover challenge is already settled");
         }
 
         // ADR 0027, in the same transaction as the override it describes. An
@@ -152,6 +155,5 @@ public class HandoverVerificationService {
      * @param attemptsRemaining what the branch is told. Never how close the guess
      *                          was, and never the expected value.
      */
-    public record Verification(boolean verified, HandoverChallengeStatus status,
-            int attemptsRemaining) { }
+    public record Verification(boolean verified, HandoverChallengeStatus status, int attemptsRemaining) {}
 }

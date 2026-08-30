@@ -8,9 +8,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Currency;
 import java.util.UUID;
-
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.tenancy.api.TenantId;
 
 class TenantDomainTests {
@@ -53,12 +51,9 @@ class TenantDomainTests {
                 CustomerIdentityMode.TENANT_SHARED,
                 now);
 
-        assertThatIllegalStateException().isThrownBy(() -> policy.supersede(
-                UUID.randomUUID(),
-                CustomerIdentityMode.BRAND_ISOLATED,
-                now.plusSeconds(60),
-                true,
-                false));
+        assertThatIllegalStateException()
+                .isThrownBy(() -> policy.supersede(
+                        UUID.randomUUID(), CustomerIdentityMode.BRAND_ISOLATED, now.plusSeconds(60), true, false));
 
         CustomerIdentityPolicy replacement = policy.supersede(
                 UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120011"),

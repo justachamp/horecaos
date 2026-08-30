@@ -60,10 +60,5 @@ public interface KitchenOrderSource {
      *                  cope with a line that names only a variant rather than
      *                  assuming a product level exists to fall back to
      */
-    record OrderLineForKitchen(
-            UUID orderLineId,
-            int lineNumber,
-            UUID productId,
-            UUID variantId,
-            int quantity) { }
+    record OrderLineForKitchen(UUID orderLineId, int lineNumber, UUID productId, UUID variantId, int quantity) {}
 }

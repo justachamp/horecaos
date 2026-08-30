@@ -18,4 +18,4 @@ record ClaimedOutboxEvent(
         String payloadJson,
         String traceContextJson,
         int attemptCount,
-        UUID claimToken) { }
+        UUID claimToken) {}

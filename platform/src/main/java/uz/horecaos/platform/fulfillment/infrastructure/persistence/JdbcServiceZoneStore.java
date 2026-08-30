@@ -9,10 +9,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.fulfillment.domain.BranchOrigin;
 import uz.horecaos.platform.fulfillment.domain.VersionStatus;
 import uz.horecaos.platform.fulfillment.domain.zone.ZoneCandidate;
@@ -60,7 +58,8 @@ public class JdbcServiceZoneStore {
                 FROM tenant.locations
                 WHERE tenant_id = :tenantId AND id = :locationId
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
                 .query((row, number) -> new Branch(
                         row.getObject("id", UUID.class),
                         // getDouble answers 0 for SQL NULL, and 0 is a real
@@ -89,8 +88,7 @@ public class JdbcServiceZoneStore {
      * shared border belongs to the zone, and a boundary that excludes its own edge
      * leaves a hairline of unserviceable addresses nobody can find.
      */
-    public List<ZoneCandidate> containingDeliveryZones(UUID tenantId, UUID locationId,
-            GeoPoint point, Instant at) {
+    public List<ZoneCandidate> containingDeliveryZones(UUID tenantId, UUID locationId, GeoPoint point, Instant at) {
         return jdbc.sql("""
                 SELECT v.zone_id, v.version, v.priority, v.area_sq_meters, v.currency,
                        v.delivery_tariff_id, v.free_delivery_from_minor, v.min_basket_minor
@@ -107,8 +105,10 @@ public class JdbcServiceZoneStore {
                         ST_SetSRID(ST_MakePoint(:longitude, :latitude), 4326)::geography)
                 ORDER BY v.priority DESC, v.area_sq_meters, v.zone_id
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
-                .param("longitude", point.longitude()).param("latitude", point.latitude())
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("longitude", point.longitude())
+                .param("latitude", point.latitude())
                 .param("at", timestamp(at))
                 .query((row, number) -> new ZoneCandidate(
                         row.getObject("zone_id", UUID.class),
@@ -150,11 +150,12 @@ public class JdbcServiceZoneStore {
                   AND b.valid_from <= :at
                   AND (b.valid_until IS NULL OR b.valid_until > :at)
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
-                .param("longitude", point.longitude()).param("latitude", point.latitude())
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("longitude", point.longitude())
+                .param("latitude", point.latitude())
                 .param("at", timestamp(at))
-                .query((row, number) -> new CatchmentCheck(
-                        row.getLong("bound"), row.getLong("covering")))
+                .query((row, number) -> new CatchmentCheck(row.getLong("bound"), row.getLong("covering")))
                 .single();
     }
 
@@ -176,7 +177,9 @@ public class JdbcServiceZoneStore {
                 LEFT JOIN fulfillment.regions r ON r.id = v.region_id
                 WHERE v.tenant_id = :tenantId AND v.zone_id = :zoneId AND v.version = :version
                 """)
-                .param("tenantId", tenantId).param("zoneId", zoneId).param("version", version)
+                .param("tenantId", tenantId)
+                .param("zoneId", zoneId)
+                .param("version", version)
                 .query((row, number) -> new GeometryFacts(
                         row.getBoolean("valid_rings"),
                         row.getString("invalid_reason"),
@@ -215,7 +218,8 @@ public class JdbcServiceZoneStore {
                    AND (tenant_id IS NULL OR tenant_id = :tenantId)
                    AND status = 'ACTIVE'
                 """)
-                .param("regionId", regionId).param("tenantId", tenantId)
+                .param("regionId", regionId)
+                .param("tenantId", tenantId)
                 .query(Boolean.class)
                 .optional();
     }
@@ -225,7 +229,9 @@ public class JdbcServiceZoneStore {
                 SELECT zone_role FROM fulfillment.service_zones
                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :zoneId
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId).param("zoneId", zoneId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("zoneId", zoneId)
                 .query(String.class)
                 .optional()
                 .map(ZoneRole::valueOf);
@@ -236,8 +242,10 @@ public class JdbcServiceZoneStore {
                 SELECT coalesce(max(version), 0) + 1 FROM fulfillment.service_zone_versions
                 WHERE tenant_id = :tenantId AND zone_id = :zoneId
                 """)
-                .param("tenantId", tenantId).param("zoneId", zoneId)
-                .query(Integer.class).single();
+                .param("tenantId", tenantId)
+                .param("zoneId", zoneId)
+                .query(Integer.class)
+                .single();
     }
 
     public Optional<VersionStatus> versionStatus(UUID tenantId, UUID zoneId, int version) {
@@ -245,7 +253,9 @@ public class JdbcServiceZoneStore {
                 SELECT status FROM fulfillment.service_zone_versions
                 WHERE tenant_id = :tenantId AND zone_id = :zoneId AND version = :version
                 """)
-                .param("tenantId", tenantId).param("zoneId", zoneId).param("version", version)
+                .param("tenantId", tenantId)
+                .param("zoneId", zoneId)
+                .param("version", version)
                 .query(String.class)
                 .optional()
                 .map(VersionStatus::valueOf);
@@ -253,8 +263,16 @@ public class JdbcServiceZoneStore {
 
     // ------------------------------------------------------------------ writes
 
-    public void insertZone(UUID id, UUID tenantId, UUID brandId, ZoneRole role, String code,
-            String nameRu, String nameUz, String nameEn, Instant now) {
+    public void insertZone(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            ZoneRole role,
+            String code,
+            String nameRu,
+            String nameUz,
+            String nameEn,
+            Instant now) {
         jdbc.sql("""
                 INSERT INTO fulfillment.service_zones (
                     id, tenant_id, brand_id, zone_role, code,
@@ -262,9 +280,14 @@ public class JdbcServiceZoneStore {
                 VALUES (:id, :tenantId, :brandId, :role, :code,
                     :nameRu, :nameUz, :nameEn, :now, :now)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("brandId", brandId)
-                .param("role", role.name()).param("code", code)
-                .param("nameRu", nameRu).param("nameUz", nameUz).param("nameEn", nameEn)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("role", role.name())
+                .param("code", code)
+                .param("nameRu", nameRu)
+                .param("nameUz", nameUz)
+                .param("nameEn", nameEn)
                 .param("now", timestamp(now))
                 .update();
     }
@@ -282,8 +305,7 @@ public class JdbcServiceZoneStore {
      * <p>{@code area_sq_meters} is computed by the same statement rather than
      * supplied, so the ranking key can never disagree with the geometry it ranks.
      */
-    public void insertCircleVersion(DraftVersion draft, GeoPoint centre, int radiusMeters,
-            String authoringShapeJson) {
+    public void insertCircleVersion(DraftVersion draft, GeoPoint centre, int radiusMeters, String authoringShapeJson) {
         Map<String, Object> params = commonDraftParams(draft);
         params.put("longitude", centre.longitude());
         params.put("latitude", centre.latitude());
@@ -308,9 +330,7 @@ public class JdbcServiceZoneStore {
                     ST_Area(shape.area), :currency, :tariffId, :freeFrom, :minBasket,
                     :createdBy, :now
                 FROM shape
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     /** A hand-drawn polygon, supplied as GeoJSON exactly as the map editor emits it. */
@@ -335,9 +355,7 @@ public class JdbcServiceZoneStore {
                     ST_Area(shape.area), :currency, :tariffId, :freeFrom, :minBasket,
                     :createdBy, :now
                 FROM shape
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     /**
@@ -355,8 +373,10 @@ public class JdbcServiceZoneStore {
                 WHERE tenant_id = :tenantId AND zone_id = :zoneId AND status = 'ACTIVE'
                   AND version <> :version
                 """)
-                .param("tenantId", tenantId).param("zoneId", zoneId)
-                .param("version", version).param("now", timestamp(now))
+                .param("tenantId", tenantId)
+                .param("zoneId", zoneId)
+                .param("version", version)
+                .param("now", timestamp(now))
                 .update();
 
         return jdbc.sql("""
@@ -365,8 +385,11 @@ public class JdbcServiceZoneStore {
                 WHERE tenant_id = :tenantId AND zone_id = :zoneId AND version = :version
                   AND status = 'DRAFT'
                 """)
-                .param("tenantId", tenantId).param("zoneId", zoneId).param("version", version)
-                .param("actorId", actorId).param("now", timestamp(now))
+                .param("tenantId", tenantId)
+                .param("zoneId", zoneId)
+                .param("version", version)
+                .param("actorId", actorId)
+                .param("now", timestamp(now))
                 .update();
     }
 
@@ -377,8 +400,11 @@ public class JdbcServiceZoneStore {
                 VALUES (:tenantId, :brandId, :zoneId, :locationId, :from)
                 ON CONFLICT (zone_id, location_id, valid_from) DO NOTHING
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId).param("zoneId", zoneId)
-                .param("locationId", locationId).param("from", timestamp(from))
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("zoneId", zoneId)
+                .param("locationId", locationId)
+                .param("from", timestamp(from))
                 .update();
     }
 
@@ -392,8 +418,7 @@ public class JdbcServiceZoneStore {
      * branch" from "a branch with no pin". Those two send an operator to two
      * different screens.
      */
-    public record Branch(UUID locationId, Double latitude, Double longitude,
-            String coordinateSource, ZoneId timezone) {
+    public record Branch(UUID locationId, Double latitude, Double longitude, String coordinateSource, ZoneId timezone) {
 
         public BranchOrigin origin() {
             return BranchOrigin.of(locationId, latitude, longitude, coordinateSource);
@@ -412,8 +437,12 @@ public class JdbcServiceZoneStore {
         }
     }
 
-    public record GeometryFacts(boolean validRings, String invalidReason, double areaSquareMeters,
-            boolean hasRegion, boolean withinRegion) { }
+    public record GeometryFacts(
+            boolean validRings,
+            String invalidReason,
+            double areaSquareMeters,
+            boolean hasRegion,
+            boolean withinRegion) {}
 
     /**
      * The fields both draft shapes share, so neither insert can quietly omit one.
@@ -428,10 +457,21 @@ public class JdbcServiceZoneStore {
      *                         declaration
      */
     public record DraftVersion(
-            UUID id, UUID tenantId, UUID zoneId, ZoneRole role, int version,
-            UUID originLocationId, UUID regionId, Boolean regionIsPlatform, int priority,
-            String currency, UUID deliveryTariffId, Long freeDeliveryFromMinor,
-            Long minBasketMinor, UUID createdBy, Instant createdAt) {
+            UUID id,
+            UUID tenantId,
+            UUID zoneId,
+            ZoneRole role,
+            int version,
+            UUID originLocationId,
+            UUID regionId,
+            Boolean regionIsPlatform,
+            int priority,
+            String currency,
+            UUID deliveryTariffId,
+            Long freeDeliveryFromMinor,
+            Long minBasketMinor,
+            UUID createdBy,
+            Instant createdAt) {
 
         public DraftVersion {
             if ((regionId == null) != (regionIsPlatform == null)) {

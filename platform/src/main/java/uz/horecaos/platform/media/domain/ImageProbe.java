@@ -42,12 +42,9 @@ public final class ImageProbe {
      */
     public static final int PROBE_BYTES = 128 * 1024;
 
-    private static final byte[] PNG_SIGNATURE = {
-        (byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A
-    };
+    private static final byte[] PNG_SIGNATURE = {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A};
 
-    private ImageProbe() {
-    }
+    private ImageProbe() {}
 
     /**
      * @param prefix the leading bytes of the object; a short or empty prefix is
@@ -95,14 +92,15 @@ public final class ImageProbe {
         // entry per pixel on screen, but the JDK's reader hands back an
         // IndexColorModel raster of one byte per pixel, which is what a
         // derivative render actually holds.
-        int channels = switch (colourType) {
-            case 0 -> 1;  // greyscale
-            case 2 -> 3;  // truecolour
-            case 3 -> 1;  // indexed
-            case 4 -> 2;  // greyscale + alpha
-            case 6 -> 4;  // truecolour + alpha
-            default -> -1;
-        };
+        int channels =
+                switch (colourType) {
+                    case 0 -> 1; // greyscale
+                    case 2 -> 3; // truecolour
+                    case 3 -> 1; // indexed
+                    case 4 -> 2; // greyscale + alpha
+                    case 6 -> 4; // truecolour + alpha
+                    default -> -1;
+                };
         if (channels < 0 || !isLegalPngDepth(colourType, bitDepth)) {
             // Not a header this parser understood. Refused rather than guessed
             // at, because a guess here is a guess about how much memory the
@@ -189,8 +187,7 @@ public final class ImageProbe {
 
     /** SOF0 through SOF15, less the three markers that share the range but frame nothing. */
     private static boolean isStartOfFrame(int marker) {
-        return marker >= 0xC0 && marker <= 0xCF
-                && marker != 0xC4 && marker != 0xC8 && marker != 0xCC;
+        return marker >= 0xC0 && marker <= 0xCF && marker != 0xC4 && marker != 0xC8 && marker != 0xCC;
     }
 
     /** SOF2, SOF6, SOF10, SOF14 — the four progressive frame types. */
@@ -218,20 +215,17 @@ public final class ImageProbe {
             if ((data[23] & 0xFF) != 0x9D || (data[24] & 0xFF) != 0x01 || (data[25] & 0xFF) != 0x2A) {
                 return Optional.empty();
             }
-            return probed("image/webp",
-                    little16(data, 26) & 0x3FFF, little16(data, 28) & 0x3FFF, bytesPerPixel);
+            return probed("image/webp", little16(data, 26) & 0x3FFF, little16(data, 28) & 0x3FFF, bytesPerPixel);
         }
         if (ascii(data, 12, "VP8L")) {
             if ((data[20] & 0xFF) != 0x2F) {
                 return Optional.empty();
             }
             int packed = little32(data, 21);
-            return probed("image/webp",
-                    (packed & 0x3FFF) + 1, ((packed >>> 14) & 0x3FFF) + 1, bytesPerPixel);
+            return probed("image/webp", (packed & 0x3FFF) + 1, ((packed >>> 14) & 0x3FFF) + 1, bytesPerPixel);
         }
         if (ascii(data, 12, "VP8X")) {
-            return probed("image/webp",
-                    little24(data, 24) + 1, little24(data, 27) + 1, bytesPerPixel);
+            return probed("image/webp", little24(data, 24) + 1, little24(data, 27) + 1, bytesPerPixel);
         }
         return Optional.empty();
     }
@@ -248,8 +242,7 @@ public final class ImageProbe {
         if (ispe < 0 || ispe + 12 > data.length) {
             return Optional.empty();
         }
-        return probed("image/avif", int32(data, ispe + 8), int32(data, ispe + 12),
-                avifBytesPerPixel(data));
+        return probed("image/avif", int32(data, ispe + 8), int32(data, ispe + 12), avifBytesPerPixel(data));
     }
 
     /**
@@ -283,8 +276,7 @@ public final class ImageProbe {
      * zero-pixel image; a non-positive cost means this parser failed to work
      * out what a pixel costs, which is not something to shrug at.
      */
-    private static Optional<ProbedImage> probed(String contentType, int width, int height,
-            int decodedBytesPerPixel) {
+    private static Optional<ProbedImage> probed(String contentType, int width, int height, int decodedBytesPerPixel) {
         if (width <= 0 || height <= 0 || decodedBytesPerPixel <= 0) {
             return Optional.empty();
         }
@@ -332,8 +324,10 @@ public final class ImageProbe {
         if (offset + 4 > data.length) {
             return -1;
         }
-        return ((data[offset] & 0xFF) << 24) | ((data[offset + 1] & 0xFF) << 16)
-                | ((data[offset + 2] & 0xFF) << 8) | (data[offset + 3] & 0xFF);
+        return ((data[offset] & 0xFF) << 24)
+                | ((data[offset + 1] & 0xFF) << 16)
+                | ((data[offset + 2] & 0xFF) << 8)
+                | (data[offset + 3] & 0xFF);
     }
 
     private static int little16(byte[] data, int offset) {
@@ -341,8 +335,7 @@ public final class ImageProbe {
     }
 
     private static int little24(byte[] data, int offset) {
-        return (data[offset] & 0xFF) | ((data[offset + 1] & 0xFF) << 8)
-                | ((data[offset + 2] & 0xFF) << 16);
+        return (data[offset] & 0xFF) | ((data[offset + 1] & 0xFF) << 8) | ((data[offset + 2] & 0xFF) << 16);
     }
 
     private static int little32(byte[] data, int offset) {

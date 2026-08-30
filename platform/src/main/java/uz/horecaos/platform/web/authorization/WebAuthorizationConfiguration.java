@@ -1,10 +1,9 @@
 package uz.horecaos.platform.web.authorization;
 
 import org.springframework.context.annotation.Configuration;
-
-import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
 
 /** Registers the ADR 0025 and ADR 0031 cross-cutting interceptors. */
 @Configuration(proxyBeanMethods = false)
@@ -14,8 +13,7 @@ public class WebAuthorizationConfiguration implements WebMvcConfigurer {
     private final IdempotencyInterceptor idempotencyInterceptor;
 
     public WebAuthorizationConfiguration(
-            CapabilityEnforcementInterceptor capabilityInterceptor,
-            IdempotencyInterceptor idempotencyInterceptor) {
+            CapabilityEnforcementInterceptor capabilityInterceptor, IdempotencyInterceptor idempotencyInterceptor) {
         this.capabilityInterceptor = capabilityInterceptor;
         this.idempotencyInterceptor = idempotencyInterceptor;
     }

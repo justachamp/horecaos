@@ -15,7 +15,6 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
-
 import org.junit.jupiter.api.Test;
 
 /**
@@ -60,8 +59,10 @@ class RouteDescriptorTests {
 
         for (RouteDescriptor descriptor : RouteDescriptor.loadAll(ROUTES)) {
             assertThat(descriptor.routeIds())
-                    .as("%s describes routes that are not in the code; a stale descriptor is "
-                            + "worse than none, because it is read and believed", descriptor.name())
+                    .as(
+                            "%s describes routes that are not in the code; a stale descriptor is "
+                                    + "worse than none, because it is read and believed",
+                            descriptor.name())
                     .isNotEmpty()
                     .isSubsetOf(declared);
         }
@@ -71,11 +72,15 @@ class RouteDescriptorTests {
     void everyRouteIsClaimedByExactlyOneDescriptor() {
         Map<String, List<String>> owners = new LinkedHashMap<>();
         for (RouteDescriptor descriptor : RouteDescriptor.loadAll(ROUTES)) {
-            descriptor.routeIds().forEach(routeId ->
-                    owners.computeIfAbsent(routeId, key -> new ArrayList<>()).add(descriptor.name()));
+            descriptor
+                    .routeIds()
+                    .forEach(routeId -> owners.computeIfAbsent(routeId, key -> new ArrayList<>())
+                            .add(descriptor.name()));
         }
 
-        assertThat(owners.entrySet().stream().filter(entry -> entry.getValue().size() > 1).toList())
+        assertThat(owners.entrySet().stream()
+                        .filter(entry -> entry.getValue().size() > 1)
+                        .toList())
                 .as("two descriptors for one route means two answers to every question about it")
                 .isEmpty();
     }
@@ -84,9 +89,11 @@ class RouteDescriptorTests {
     void everyDescriptorAnswersEveryRequiredField() {
         for (RouteDescriptor descriptor : RouteDescriptor.loadAll(ROUTES)) {
             assertThat(descriptor.unansweredFields())
-                    .as("%s leaves required ADR 0007 fields blank or placeholder. 'None' alone is "
-                            + "not an answer either: 'no retry' and 'nobody considered retry' look "
-                            + "identical in code and are opposite facts about a route", descriptor.name())
+                    .as(
+                            "%s leaves required ADR 0007 fields blank or placeholder. 'None' alone is "
+                                    + "not an answer either: 'no retry' and 'nobody considered retry' look "
+                                    + "identical in code and are opposite facts about a route",
+                            descriptor.name())
                     .isEmpty();
         }
     }
@@ -98,8 +105,9 @@ class RouteDescriptorTests {
             Path target = Path.of(runbook.split("#", 2)[0].trim());
 
             assertThat(Files.exists(target))
-                    .as("%s links a runbook at %s that does not exist; an alert pointing at a "
-                            + "missing page is found at 3am by the person least able to fix it",
+                    .as(
+                            "%s links a runbook at %s that does not exist; an alert pointing at a "
+                                    + "missing page is found at 3am by the person least able to fix it",
                             descriptor.name(), target)
                     .isTrue();
         }
@@ -108,7 +116,8 @@ class RouteDescriptorTests {
     private static Set<String> declaredRouteIds() {
         Set<String> ids = new LinkedHashSet<>();
         try (Stream<Path> sources = Files.walk(CAMEL_SOURCES)) {
-            for (Path source : sources.filter(path -> path.toString().endsWith(".java")).toList()) {
+            for (Path source :
+                    sources.filter(path -> path.toString().endsWith(".java")).toList()) {
                 Matcher matcher = ROUTE_ID.matcher(Files.readString(source));
                 while (matcher.find()) {
                     ids.add(matcher.group(1));

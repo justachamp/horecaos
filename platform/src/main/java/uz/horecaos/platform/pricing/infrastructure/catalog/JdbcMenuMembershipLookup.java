@@ -5,10 +5,8 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.pricing.application.MenuMembershipLookup;
 
 /**
@@ -71,8 +69,8 @@ public class JdbcMenuMembershipLookup implements MenuMembershipLookup {
                 .list();
 
         Map<UUID, Membership> membership = new HashMap<>();
-        productByVariant.forEach((variantId, productId) -> membership.put(variantId,
-                new Membership(productId, categoriesByProduct.getOrDefault(productId, Set.of()))));
+        productByVariant.forEach((variantId, productId) -> membership.put(
+                variantId, new Membership(productId, categoriesByProduct.getOrDefault(productId, Set.of()))));
         return Map.copyOf(membership);
     }
 }

@@ -5,7 +5,6 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -35,8 +34,14 @@ public class JdbcCheckoutAttemptStore {
      * @return true when this caller claimed it; false when a record already
      *         exists, in which case {@link #findForUpdate} returns the outcome
      */
-    public boolean claim(UUID attemptId, UUID tenantId, String idempotencyKey, UUID cartId,
-            UUID quoteId, String requestFingerprint, Instant now) {
+    public boolean claim(
+            UUID attemptId,
+            UUID tenantId,
+            String idempotencyKey,
+            UUID cartId,
+            UUID quoteId,
+            String requestFingerprint,
+            Instant now) {
         return jdbc.sql("""
                 INSERT INTO ordering.checkout_attempts (
                     id, tenant_id, idempotency_key, cart_id, quote_id,
@@ -45,10 +50,15 @@ public class JdbcCheckoutAttemptStore {
                     'IN_PROGRESS', :now)
                 ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
                 """)
-                .param("id", attemptId).param("tenantId", tenantId).param("key", idempotencyKey)
-                .param("cartId", cartId).param("quoteId", quoteId)
-                .param("fingerprint", requestFingerprint).param("now", utc(now))
-                .update() == 1;
+                        .param("id", attemptId)
+                        .param("tenantId", tenantId)
+                        .param("key", idempotencyKey)
+                        .param("cartId", cartId)
+                        .param("quoteId", quoteId)
+                        .param("fingerprint", requestFingerprint)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -67,7 +77,8 @@ public class JdbcCheckoutAttemptStore {
                 WHERE tenant_id = :tenantId AND idempotency_key = :key
                 FOR UPDATE
                 """)
-                .param("tenantId", tenantId).param("key", idempotencyKey)
+                .param("tenantId", tenantId)
+                .param("key", idempotencyKey)
                 .query((row, number) -> new AttemptRow(
                         row.getObject("id", UUID.class),
                         row.getObject("cart_id", UUID.class),
@@ -89,16 +100,18 @@ public class JdbcCheckoutAttemptStore {
      * unsettled, and that happens by the transaction rolling back rather than by
      * anything written here.
      */
-    public void complete(UUID attemptId, UUID orderId, String outcomeCode, String outcomeDetail,
-            Instant now) {
+    public void complete(UUID attemptId, UUID orderId, String outcomeCode, String outcomeDetail, Instant now) {
         jdbc.sql("""
                 UPDATE ordering.checkout_attempts
                 SET status = 'COMPLETED', order_id = :orderId, outcome_code = :code,
                     outcome_detail = :detail, completed_at = :now
                 WHERE id = :id
                 """)
-                .param("id", attemptId).param("orderId", orderId).param("code", outcomeCode)
-                .param("detail", outcomeDetail).param("now", utc(now))
+                .param("id", attemptId)
+                .param("orderId", orderId)
+                .param("code", outcomeCode)
+                .param("detail", outcomeDetail)
+                .param("now", utc(now))
                 .update();
     }
 
@@ -106,6 +119,13 @@ public class JdbcCheckoutAttemptStore {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
-    public record AttemptRow(UUID attemptId, UUID cartId, UUID quoteId, String requestFingerprint,
-            String status, UUID orderId, String outcomeCode, String outcomeDetail) { }
+    public record AttemptRow(
+            UUID attemptId,
+            UUID cartId,
+            UUID quoteId,
+            String requestFingerprint,
+            String status,
+            UUID orderId,
+            String outcomeCode,
+            String outcomeDetail) {}
 }

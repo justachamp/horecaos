@@ -52,10 +52,16 @@ public record RealtimeSignal(
         }
     }
 
-    public static RealtimeSignal of(UUID tenantId, StreamChannel channel, ScopeKey scopeKey,
-            String resourceType, UUID resourceId, Long version, Instant occurredAt) {
-        return new RealtimeSignal(UUID.randomUUID(), tenantId, channel, scopeKey,
-                resourceType, resourceId, version, occurredAt);
+    public static RealtimeSignal of(
+            UUID tenantId,
+            StreamChannel channel,
+            ScopeKey scopeKey,
+            String resourceType,
+            UUID resourceId,
+            Long version,
+            Instant occurredAt) {
+        return new RealtimeSignal(
+                UUID.randomUUID(), tenantId, channel, scopeKey, resourceType, resourceId, version, occurredAt);
     }
 
     /** What a subscription is matched on: one channel at one scope. */

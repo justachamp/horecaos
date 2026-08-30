@@ -13,12 +13,8 @@ import java.util.UUID;
  * {@code TenantOnboardingStarted} would have to reconstruct the order itself.
  */
 public record TenantOnboardingStarted(
-        UUID eventId,
-        TenantId tenantId,
-        UUID runId,
-        UUID templateId,
-        int templateVersion,
-        Instant occurredAt) implements TenancyEvent {
+        UUID eventId, TenantId tenantId, UUID runId, UUID templateId, int templateVersion, Instant occurredAt)
+        implements TenancyEvent {
 
     public TenantOnboardingStarted {
         Objects.requireNonNull(eventId, "Event ID is required");
@@ -52,5 +48,5 @@ public record TenantOnboardingStarted(
         return new Payload(tenantId.value(), runId, templateId, templateVersion);
     }
 
-    public record Payload(UUID tenantId, UUID runId, UUID templateId, int templateVersion) { }
+    public record Payload(UUID tenantId, UUID runId, UUID templateId, int templateVersion) {}
 }

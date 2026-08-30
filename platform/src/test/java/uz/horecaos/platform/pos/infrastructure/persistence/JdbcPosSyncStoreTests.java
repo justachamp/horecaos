@@ -13,9 +13,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import javax.sql.DataSource;
-
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -24,9 +22,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.pos.domain.CatalogSnapshot;
 import uz.horecaos.platform.pos.domain.SourceKind;
 import uz.horecaos.platform.pos.domain.SyncConflict;
@@ -93,14 +89,20 @@ class JdbcPosSyncStoreTests {
         store = new JdbcPosSyncStore(jdbc, JsonMapper.builder().build());
 
         jdbc.sql("DELETE FROM integration.pos_absence_observations WHERE tenant_id = :t")
-                .param("t", TENANT).update();
+                .param("t", TENANT)
+                .update();
         jdbc.sql("DELETE FROM integration.pos_sync_runs WHERE tenant_id = :t")
-                .param("t", TENANT).update();
+                .param("t", TENANT)
+                .update();
         jdbc.sql("DELETE FROM integration.bindings WHERE tenant_id = :t")
-                .param("t", TENANT).update();
+                .param("t", TENANT)
+                .update();
         jdbc.sql("DELETE FROM integration.installations WHERE tenant_id = :t")
-                .param("t", TENANT).update();
-        jdbc.sql("DELETE FROM tenant.brands WHERE tenant_id = :t").param("t", TENANT).update();
+                .param("t", TENANT)
+                .update();
+        jdbc.sql("DELETE FROM tenant.brands WHERE tenant_id = :t")
+                .param("t", TENANT)
+                .update();
         jdbc.sql("DELETE FROM tenant.tenants WHERE id = :t").param("t", TENANT).update();
 
         jdbc.sql("""
@@ -125,8 +127,10 @@ class JdbcPosSyncStoreTests {
                 INSERT INTO integration.bindings (id, tenant_id, installation_id, brand_id, status)
                 VALUES (:id, :t, :installationId, :brandId, 'ACTIVE')
                 """)
-                .param("id", BINDING).param("t", TENANT)
-                .param("installationId", INSTALLATION).param("brandId", BRAND)
+                .param("id", BINDING)
+                .param("t", TENANT)
+                .param("installationId", INSTALLATION)
+                .param("brandId", BRAND)
                 .update();
 
         runId = store.openRun(TENANT, BINDING, "SCHEDULED", true, "clopos-1", 1, NOW);
@@ -152,8 +156,10 @@ class JdbcPosSyncStoreTests {
                         SELECT name FROM integration.pos_staged_products
                          WHERE run_id = :runId AND external_entity_id = :id
                         """)
-                .param("runId", runId).param("id", "P-600")
-                .query(String.class).single())
+                        .param("runId", runId)
+                        .param("id", "P-600")
+                        .query(String.class)
+                        .single())
                 .isEqualTo("Product 600");
     }
 
@@ -185,10 +191,18 @@ class JdbcPosSyncStoreTests {
     @Test
     @DisplayName("a provider that sent one id twice keeps the first row, as it did per statement")
     void aDuplicateInsideOneChunkIsSkippedAndNotAppliedOverTheFirst() {
-        CatalogSnapshot snapshot = new CatalogSnapshot(NOW, true, 1, List.of(), List.of(
-                product("P-1", "The row the walk saw first"),
-                product("P-1", "The row the same walk saw again")),
-                List.of(), List.of(), List.of(), List.of());
+        CatalogSnapshot snapshot = new CatalogSnapshot(
+                NOW,
+                true,
+                1,
+                List.of(),
+                List.of(
+                        product("P-1", "The row the walk saw first"),
+                        product("P-1", "The row the same walk saw again")),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of());
 
         store.stage(TENANT, runId, snapshot);
 
@@ -198,8 +212,7 @@ class JdbcPosSyncStoreTests {
         assertThat(staged("pos_staged_products")).isOne();
         assertThat(jdbc.sql("""
                         SELECT name FROM integration.pos_staged_products WHERE run_id = :runId
-                        """)
-                .param("runId", runId).query(String.class).single())
+                        """).param("runId", runId).query(String.class).single())
                 .isEqualTo("The row the walk saw first");
     }
 
@@ -209,21 +222,32 @@ class JdbcPosSyncStoreTests {
     @DisplayName("a streak grows for what is missing and is cleared for what came back")
     void absencesAreRecordedInBulkWithoutChangingTheQuorumRule() {
         Set<String> mapped = ids("P-", 3);
-        store.recordAbsences(TENANT, BINDING, runId, Map.of(EntityType.PRODUCT, mapped),
-                Map.of(EntityType.PRODUCT, Set.of("P-0")), false, NOW);
+        store.recordAbsences(
+                TENANT,
+                BINDING,
+                runId,
+                Map.of(EntityType.PRODUCT, mapped),
+                Map.of(EntityType.PRODUCT, Set.of("P-0")),
+                false,
+                NOW);
 
         UUID second = store.openRun(TENANT, BINDING, "SCHEDULED", true, "clopos-1", 1, NOW);
-        var history = store.recordAbsences(TENANT, BINDING, second,
+        var history = store.recordAbsences(
+                TENANT,
+                BINDING,
+                second,
                 Map.of(EntityType.PRODUCT, mapped),
-                Map.of(EntityType.PRODUCT, Set.of("P-0")), true, NOW);
+                Map.of(EntityType.PRODUCT, Set.of("P-0")),
+                true,
+                NOW);
 
         // The engine is handed the streak before this run, and adds the current
         // absence itself.
         assertThat(history.byType().get(EntityType.PRODUCT))
-                .containsEntry("P-1", new uz.horecaos.platform.pos.domain.DifferenceEngine
-                        .AbsenceHistory.Streak(1, false))
-                .containsEntry("P-2", new uz.horecaos.platform.pos.domain.DifferenceEngine
-                        .AbsenceHistory.Streak(1, false))
+                .containsEntry(
+                        "P-1", new uz.horecaos.platform.pos.domain.DifferenceEngine.AbsenceHistory.Streak(1, false))
+                .containsEntry(
+                        "P-2", new uz.horecaos.platform.pos.domain.DifferenceEngine.AbsenceHistory.Streak(1, false))
                 .doesNotContainKey("P-0");
 
         // One unstable walk in the streak makes the whole streak unstable, and
@@ -232,7 +256,10 @@ class JdbcPosSyncStoreTests {
                         SELECT bool_and(all_walks_stable) FROM integration.pos_absence_observations
                          WHERE tenant_id = :t AND binding_id = :b
                         """)
-                .param("t", TENANT).param("b", BINDING).query(Boolean.class).single())
+                        .param("t", TENANT)
+                        .param("b", BINDING)
+                        .query(Boolean.class)
+                        .single())
                 .isFalse();
     }
 
@@ -243,8 +270,14 @@ class JdbcPosSyncStoreTests {
         Set<String> present = ids("P-", 200);
 
         statements.set(0);
-        store.recordAbsences(TENANT, BINDING, runId, Map.of(EntityType.PRODUCT, mapped),
-                Map.of(EntityType.PRODUCT, present), true, NOW);
+        store.recordAbsences(
+                TENANT,
+                BINDING,
+                runId,
+                Map.of(EntityType.PRODUCT, mapped),
+                Map.of(EntityType.PRODUCT, present),
+                true,
+                NOW);
 
         // One delete for the reappeared, one chunk per five hundred absent, and
         // the read back.
@@ -253,7 +286,10 @@ class JdbcPosSyncStoreTests {
                         SELECT count(*) FROM integration.pos_absence_observations
                          WHERE tenant_id = :t AND binding_id = :b
                         """)
-                .param("t", TENANT).param("b", BINDING).query(Integer.class).single())
+                        .param("t", TENANT)
+                        .param("b", BINDING)
+                        .query(Integer.class)
+                        .single())
                 .isEqualTo(OVER_ONE_CHUNK - 200);
     }
 
@@ -265,12 +301,24 @@ class JdbcPosSyncStoreTests {
         List<SyncDifference> differences = new ArrayList<>();
         List<SyncConflict> conflicts = new ArrayList<>();
         for (int index = 0; index < OVER_ONE_CHUNK; index++) {
-            differences.add(new SyncDifference(EntityType.PRODUCT, "P-" + index, null,
-                    SyncDifference.DifferenceCategory.ADDITION, null, null, "imported",
-                    SyncDifference.FieldAuthority.PROVIDER, SyncDifference.Severity.INFO,
-                    SyncDifference.RecommendedAction.REVIEW, null));
-            conflicts.add(new SyncConflict(EntityType.PRODUCT, "P-" + index,
-                    SyncConflict.Kind.DUPLICATE_EXTERNAL_ID, "seen twice in one walk", List.of()));
+            differences.add(new SyncDifference(
+                    EntityType.PRODUCT,
+                    "P-" + index,
+                    null,
+                    SyncDifference.DifferenceCategory.ADDITION,
+                    null,
+                    null,
+                    "imported",
+                    SyncDifference.FieldAuthority.PROVIDER,
+                    SyncDifference.Severity.INFO,
+                    SyncDifference.RecommendedAction.REVIEW,
+                    null));
+            conflicts.add(new SyncConflict(
+                    EntityType.PRODUCT,
+                    "P-" + index,
+                    SyncConflict.Kind.DUPLICATE_EXTERNAL_ID,
+                    "seen twice in one walk",
+                    List.of()));
         }
 
         statements.set(0);
@@ -296,25 +344,42 @@ class JdbcPosSyncStoreTests {
         List<CatalogSnapshot.Availability> availability = new ArrayList<>();
 
         for (int index = 0; index < each; index++) {
-            categories.add(new CatalogSnapshot.Category("C-" + index, null, "Category " + index,
-                    index, true, 1, Map.of("id", index)));
+            categories.add(new CatalogSnapshot.Category(
+                    "C-" + index, null, "Category " + index, index, true, 1, Map.of("id", index)));
             products.add(product("P-" + index, "Product " + index));
-            variants.add(new CatalogSnapshot.Variant("V-" + index, "P-" + index, "Variant " + index,
-                    12_000L, "UZS", true, "unit-" + index, Map.of("id", index)));
-            groups.add(new CatalogSnapshot.ModifierGroup("G-" + index, "P-" + index,
-                    "Group " + index, 0, 1, false, Map.of("id", index)));
-            modifiers.add(new CatalogSnapshot.Modifier("M-" + index, "G-" + index,
-                    "Modifier " + index, null, null, true, Map.of("id", index)));
-            availability.add(new CatalogSnapshot.Availability("P-" + index,
-                    java.math.BigDecimal.valueOf(index), NOW, Map.of("id", index)));
+            variants.add(new CatalogSnapshot.Variant(
+                    "V-" + index,
+                    "P-" + index,
+                    "Variant " + index,
+                    12_000L,
+                    "UZS",
+                    true,
+                    "unit-" + index,
+                    Map.of("id", index)));
+            groups.add(new CatalogSnapshot.ModifierGroup(
+                    "G-" + index, "P-" + index, "Group " + index, 0, 1, false, Map.of("id", index)));
+            modifiers.add(new CatalogSnapshot.Modifier(
+                    "M-" + index, "G-" + index, "Modifier " + index, null, null, true, Map.of("id", index)));
+            availability.add(new CatalogSnapshot.Availability(
+                    "P-" + index, java.math.BigDecimal.valueOf(index), NOW, Map.of("id", index)));
         }
-        return new CatalogSnapshot(NOW, true, 3, categories, products, variants, groups, modifiers,
-                availability);
+        return new CatalogSnapshot(NOW, true, 3, categories, products, variants, groups, modifiers, availability);
     }
 
     private static CatalogSnapshot.Product product(String externalId, String name) {
-        return new CatalogSnapshot.Product(externalId, name, null, SourceKind.DISH, true, false,
-                45_000L, "UZS", true, false, null, Map.of("name", name));
+        return new CatalogSnapshot.Product(
+                externalId,
+                name,
+                null,
+                SourceKind.DISH,
+                true,
+                false,
+                45_000L,
+                "UZS",
+                true,
+                false,
+                null,
+                Map.of("name", name));
     }
 
     private static Set<String> ids(String prefix, int count) {
@@ -327,12 +392,16 @@ class JdbcPosSyncStoreTests {
 
     private int staged(String table) {
         return jdbc.sql("SELECT count(*) FROM integration.%s WHERE run_id = :runId".formatted(table))
-                .param("runId", runId).query(Integer.class).single();
+                .param("runId", runId)
+                .query(Integer.class)
+                .single();
     }
 
     private int count(String table) {
         return jdbc.sql("SELECT count(*) FROM integration.%s WHERE run_id = :runId".formatted(table))
-                .param("runId", runId).query(Integer.class).single();
+                .param("runId", runId)
+                .query(Integer.class)
+                .single();
     }
 
     /**
@@ -345,13 +414,15 @@ class JdbcPosSyncStoreTests {
      */
     private static DataSource counting(DataSource delegate, AtomicInteger prepared) {
         ClassLoader loader = JdbcPosSyncStoreTests.class.getClassLoader();
-        return (DataSource) Proxy.newProxyInstance(loader, new Class<?>[] {DataSource.class},
-                (proxy, method, arguments) -> {
+        return (DataSource) Proxy.newProxyInstance(
+                loader, new Class<?>[] {DataSource.class}, (proxy, method, arguments) -> {
                     Object result = invoke(method, delegate, arguments);
                     if (!(result instanceof Connection connection)) {
                         return result;
                     }
-                    return Proxy.newProxyInstance(loader, new Class<?>[] {Connection.class},
+                    return Proxy.newProxyInstance(
+                            loader,
+                            new Class<?>[] {Connection.class},
                             (connectionProxy, connectionMethod, connectionArguments) -> {
                                 if (connectionMethod.getName().startsWith("prepare")) {
                                     prepared.incrementAndGet();
@@ -361,8 +432,7 @@ class JdbcPosSyncStoreTests {
                 });
     }
 
-    private static Object invoke(java.lang.reflect.Method method, Object target, Object[] arguments)
-            throws Throwable {
+    private static Object invoke(java.lang.reflect.Method method, Object target, Object[] arguments) throws Throwable {
         try {
             return method.invoke(target, arguments);
         } catch (InvocationTargetException wrapped) {

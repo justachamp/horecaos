@@ -55,8 +55,7 @@ public final class CustomerSessionToken {
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
-    private CustomerSessionToken() {
-    }
+    private CustomerSessionToken() {}
 
     /** A freshly minted token and the digest to store for it. */
     public record Issued(String plaintext, String hash) {
@@ -84,15 +83,14 @@ public final class CustomerSessionToken {
      * own shape rather than on whether a database query happened to miss.
      */
     public static boolean looksLikeOne(String presented) {
-        return presented != null && presented.startsWith(PREFIX)
-                && presented.length() > PREFIX.length();
+        return presented != null && presented.startsWith(PREFIX) && presented.length() > PREFIX.length();
     }
 
     /** The stored form of a presented token: lower-case hex, sixty-four characters. */
     public static String hash(String plaintext) {
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(plaintext.getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256").digest(plaintext.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException impossible) {
             // SHA-256 is mandatory in every JRE. If it is genuinely absent, no
             // customer can be authenticated and the platform must not continue as

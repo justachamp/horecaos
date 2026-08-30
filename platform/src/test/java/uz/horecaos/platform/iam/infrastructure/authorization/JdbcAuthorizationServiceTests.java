@@ -8,7 +8,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.UUID;
-
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -16,15 +15,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
-import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CapabilityView;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.support.TestDatabase;
 
 /**
  * ADR 0025 at the SQL boundary.
@@ -98,8 +95,7 @@ class JdbcAuthorizationServiceTests {
         private uz.horecaos.platform.iam.api.AuthenticatedActor value;
 
         void set(String subject, java.util.Set<String> globalRoles) {
-            value = new uz.horecaos.platform.iam.api.AuthenticatedActor(
-                    subject, globalRoles, java.util.Map.of());
+            value = new uz.horecaos.platform.iam.api.AuthenticatedActor(subject, globalRoles, java.util.Map.of());
         }
 
         @Override
@@ -122,16 +118,20 @@ class JdbcAuthorizationServiceTests {
     void aTenantGrantReachesEveryBrandAndLocationBeneathIt() {
         grant("owner-1", PlatformRole.TENANT_OWNER, "TENANT", TENANT, TENANT);
 
-        assertThat(authorization.has("owner-1", Capability.ORDER_APPROVE, locationScope())).isTrue();
-        assertThat(authorization.has("owner-1", Capability.ORDER_APPROVE, brandScope())).isTrue();
-        assertThat(authorization.has("owner-1", Capability.ORDER_APPROVE, ResourceScope.tenant(TENANT))).isTrue();
+        assertThat(authorization.has("owner-1", Capability.ORDER_APPROVE, locationScope()))
+                .isTrue();
+        assertThat(authorization.has("owner-1", Capability.ORDER_APPROVE, brandScope()))
+                .isTrue();
+        assertThat(authorization.has("owner-1", Capability.ORDER_APPROVE, ResourceScope.tenant(TENANT)))
+                .isTrue();
     }
 
     @Test
     void aLocationGrantReachesOnlyThatLocation() {
         grant("staff-1", PlatformRole.LOCATION_STAFF, "LOCATION", LOCATION, TENANT);
 
-        assertThat(authorization.has("staff-1", Capability.ORDER_APPROVE, locationScope())).isTrue();
+        assertThat(authorization.has("staff-1", Capability.ORDER_APPROVE, locationScope()))
+                .isTrue();
         assertThat(authorization.has("staff-1", Capability.ORDER_APPROVE, siblingLocationScope()))
                 .as("a grant at one location must never reach a sibling location")
                 .isFalse();
@@ -144,9 +144,10 @@ class JdbcAuthorizationServiceTests {
     void aBrandGrantNeverReachesASiblingBrand() {
         grant("manager-1", PlatformRole.BRAND_MANAGER, "BRAND", BRAND, TENANT);
 
-        assertThat(authorization.has("manager-1", Capability.CATALOG_PUBLISH, brandScope())).isTrue();
-        assertThat(authorization.has("manager-1", Capability.CATALOG_PUBLISH,
-                ResourceScope.brand(TENANT, OTHER_BRAND))).isFalse();
+        assertThat(authorization.has("manager-1", Capability.CATALOG_PUBLISH, brandScope()))
+                .isTrue();
+        assertThat(authorization.has("manager-1", Capability.CATALOG_PUBLISH, ResourceScope.brand(TENANT, OTHER_BRAND)))
+                .isFalse();
     }
 
     @Test
@@ -162,17 +163,19 @@ class JdbcAuthorizationServiceTests {
     void aRoleGrantsOnlyItsOwnCapabilities() {
         grant("staff-1", PlatformRole.LOCATION_STAFF, "LOCATION", LOCATION, TENANT);
 
-        assertThat(authorization.has("staff-1", Capability.ORDER_APPROVE, locationScope())).isTrue();
-        assertThat(authorization.has("staff-1", Capability.REFUND_EXECUTE, locationScope())).isFalse();
-        assertThat(authorization.has("staff-1", Capability.CATALOG_PUBLISH, locationScope())).isFalse();
+        assertThat(authorization.has("staff-1", Capability.ORDER_APPROVE, locationScope()))
+                .isTrue();
+        assertThat(authorization.has("staff-1", Capability.REFUND_EXECUTE, locationScope()))
+                .isFalse();
+        assertThat(authorization.has("staff-1", Capability.CATALOG_PUBLISH, locationScope()))
+                .isFalse();
     }
 
     @Test
     void requireThrowsNamingTheCapabilityAndScopeOnly() {
         grant("staff-1", PlatformRole.LOCATION_STAFF, "LOCATION", LOCATION, TENANT);
 
-        assertThatThrownBy(() ->
-                authorization.require("staff-1", Capability.REFUND_EXECUTE, locationScope()))
+        assertThatThrownBy(() -> authorization.require("staff-1", Capability.REFUND_EXECUTE, locationScope()))
                 .isInstanceOf(AuthorizationService.AccessDeniedException.class)
                 .hasMessageContaining("refund.execute")
                 .hasMessageContaining("LOCATION")
@@ -188,8 +191,7 @@ class JdbcAuthorizationServiceTests {
         // shut until somebody inserts a row by hand.
         actor.set("founder-1", java.util.Set.of("platform-admin"));
 
-        assertThat(authorization.has("founder-1", Capability.IAM_GRANT_MANAGE,
-                ResourceScope.tenant(TENANT)))
+        assertThat(authorization.has("founder-1", Capability.IAM_GRANT_MANAGE, ResourceScope.tenant(TENANT)))
                 .as("a platform admin can issue the first grant")
                 .isTrue();
     }
@@ -202,8 +204,7 @@ class JdbcAuthorizationServiceTests {
         // the platform makes on anyone's behalf.
         actor.set("founder-1", java.util.Set.of("platform-admin"));
 
-        assertThat(authorization.has("someone-else", Capability.IAM_GRANT_MANAGE,
-                ResourceScope.tenant(TENANT)))
+        assertThat(authorization.has("someone-else", Capability.IAM_GRANT_MANAGE, ResourceScope.tenant(TENANT)))
                 .as("the admin's role must not vouch for a different subject")
                 .isFalse();
     }
@@ -218,11 +219,10 @@ class JdbcAuthorizationServiceTests {
         // decided nothing.
         actor.set("founder-1", java.util.Set.of("platform-admin"));
 
-        assertThat(authorization.has("founder-1", Capability.IAM_GRANT_MANAGE,
-                ResourceScope.tenant(TENANT))).isTrue();
+        assertThat(authorization.has("founder-1", Capability.IAM_GRANT_MANAGE, ResourceScope.tenant(TENANT)))
+                .isTrue();
 
-        assertThat(authorization.has("founder-1", Capability.TENANT_WRITE,
-                ResourceScope.tenant(TENANT)))
+        assertThat(authorization.has("founder-1", Capability.TENANT_WRITE, ResourceScope.tenant(TENANT)))
                 .as("everything other than grant management still needs a grant")
                 .isFalse();
     }
@@ -231,8 +231,7 @@ class JdbcAuthorizationServiceTests {
     void anOrdinaryPrincipalIsUnaffectedByTheBypass() {
         actor.set("staff-1", java.util.Set.of("tenant-admin"));
 
-        assertThat(authorization.has("staff-1", Capability.IAM_GRANT_MANAGE,
-                ResourceScope.tenant(TENANT)))
+        assertThat(authorization.has("staff-1", Capability.IAM_GRANT_MANAGE, ResourceScope.tenant(TENANT)))
                 .as("a realm role that is not platform-admin grants nothing")
                 .isFalse();
     }
@@ -252,15 +251,18 @@ class JdbcAuthorizationServiceTests {
 
     @Test
     void aPrincipalWithNoGrantsHasNothing() {
-        assertThat(authorization.has("stranger", Capability.ORDER_READ, locationScope())).isFalse();
+        assertThat(authorization.has("stranger", Capability.ORDER_READ, locationScope()))
+                .isFalse();
     }
 
     @Test
     void aRevokedGrantStopsApplyingImmediately() {
         grant("staff-1", PlatformRole.LOCATION_STAFF, "LOCATION", LOCATION, TENANT);
-        jdbc.sql("UPDATE iam.grants SET status = 'REVOKED' WHERE principal_subject = 'staff-1'").update();
+        jdbc.sql("UPDATE iam.grants SET status = 'REVOKED' WHERE principal_subject = 'staff-1'")
+                .update();
 
-        assertThat(authorization.has("staff-1", Capability.ORDER_APPROVE, locationScope())).isFalse();
+        assertThat(authorization.has("staff-1", Capability.ORDER_APPROVE, locationScope()))
+                .isFalse();
     }
 
     @Test
@@ -271,7 +273,8 @@ class JdbcAuthorizationServiceTests {
                 .param("id", grantId)
                 .update();
 
-        assertThat(authorization.has("temp-1", Capability.ORDER_READ, ResourceScope.tenant(TENANT))).isTrue();
+        assertThat(authorization.has("temp-1", Capability.ORDER_READ, ResourceScope.tenant(TENANT)))
+                .isTrue();
 
         clock.advance(Duration.ofHours(3));
 
@@ -307,10 +310,10 @@ class JdbcAuthorizationServiceTests {
                     (id, tenant_id, principal_subject, role_id, role_is_platform, scope_type, scope_id, status, granted_by, reason)
                 VALUES (:id, :tenantId, 'x', :roleId, true, 'PLATFORM', NULL, 'ACTIVE', 'test', 'test')
                 """)
-                .param("id", UUID.randomUUID())
-                .param("tenantId", TENANT)
-                .param("roleId", RoleRegistrySynchronizer.platformRoleId(PlatformRole.PLATFORM_ADMIN))
-                .update())
+                        .param("id", UUID.randomUUID())
+                        .param("tenantId", TENANT)
+                        .param("roleId", RoleRegistrySynchronizer.platformRoleId(PlatformRole.PLATFORM_ADMIN))
+                        .update())
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -325,7 +328,8 @@ class JdbcAuthorizationServiceTests {
     @Test
     void everyCodeOwnedCapabilityIsProjectedForReporting() {
         assertThat(jdbc.sql("SELECT count(*) FROM iam.capability_registry_snapshot")
-                .query(Long.class).single())
+                        .query(Long.class)
+                        .single())
                 .isEqualTo(Capability.values().length);
     }
 
@@ -338,7 +342,8 @@ class JdbcAuthorizationServiceTests {
                 """)
                 .param("roleId", RoleRegistrySynchronizer.platformRoleId(PlatformRole.LOCATION_STAFF))
                 .update();
-        assertThat(authorization.has("staff-1", Capability.REFUND_EXECUTE, locationScope())).isTrue();
+        assertThat(authorization.has("staff-1", Capability.REFUND_EXECUTE, locationScope()))
+                .isTrue();
 
         new RoleRegistrySynchronizer(jdbc).synchronize();
 
@@ -362,7 +367,10 @@ class JdbcAuthorizationServiceTests {
     private UUID grant(String subject, PlatformRole role, String scopeType, UUID scopeId, UUID tenantId) {
         if ("LOCATION".equals(scopeType)) {
             Long owned = jdbc.sql("SELECT count(*) FROM tenant.locations WHERE tenant_id = :t AND id = :id")
-                    .param("t", tenantId).param("id", scopeId).query(Long.class).single();
+                    .param("t", tenantId)
+                    .param("id", scopeId)
+                    .query(Long.class)
+                    .single();
             if (owned == 0) {
                 throw new IllegalStateException("Location %s is not in tenant %s".formatted(scopeId, tenantId));
             }
@@ -407,7 +415,12 @@ class JdbcAuthorizationServiceTests {
         jdbc.sql("""
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
                 VALUES (:id, :tenantId, :code, :slug, 'Brand', 'ACTIVE', 0)
-                """).param("id", id).param("tenantId", tenantId).param("code", code).param("slug", slug).update();
+                """)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("code", code)
+                .param("slug", slug)
+                .update();
     }
 
     private static void insertLocation(UUID id, UUID tenantId, UUID brandId, String code, String slug) {
@@ -415,8 +428,13 @@ class JdbcAuthorizationServiceTests {
                 INSERT INTO tenant.locations
                     (id, tenant_id, brand_id, code, slug, display_name, timezone, status, version)
                 VALUES (:id, :tenantId, :brandId, :code, :slug, 'Location', 'Asia/Tashkent', 'ACTIVE', 0)
-                """).param("id", id).param("tenantId", tenantId).param("brandId", brandId)
-                .param("code", code).param("slug", slug).update();
+                """)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("code", code)
+                .param("slug", slug)
+                .update();
     }
 
     private static final class MutableClock extends Clock {

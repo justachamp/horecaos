@@ -8,12 +8,10 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.migration.api.ImportContext;
 import uz.horecaos.platform.migration.application.MigrationRunStore.Counters;
@@ -55,8 +53,12 @@ public class MigrationRunService {
     private final MigrationAudit audit;
     private final Clock clock;
 
-    public MigrationRunService(MigrationRunStore runs, MigrationScopeStore scopes,
-            MigrationAccessPolicy access, MigrationAudit audit, Clock clock) {
+    public MigrationRunService(
+            MigrationRunStore runs,
+            MigrationScopeStore scopes,
+            MigrationAccessPolicy access,
+            MigrationAudit audit,
+            Clock clock) {
         this.runs = runs;
         this.scopes = scopes;
         this.access = access;
@@ -107,7 +109,7 @@ public class MigrationRunService {
         if (live.isPresent()) {
             throw new MigrationConflictException(
                     ("Run %s is already a live %s over this scope. Two of them would page the same "
-                            + "source twice and race on the crosswalk.")
+                                    + "source twice and race on the crosswalk.")
                             .formatted(live.get().id(), runType));
         }
 
@@ -119,31 +121,50 @@ public class MigrationRunService {
         // The counters are deliberately not inherited. Each run counts the rows it
         // processed, and a reconciliation rule sums the runs; copying the dead
         // run's totals into its successor would count its work twice in every sum.
-        Optional<MigrationRunStore.Resumption> resumption =
-                runs.findResumption(tenantId, scopeId, runType);
+        Optional<MigrationRunStore.Resumption> resumption = runs.findResumption(tenantId, scopeId, runType);
 
         Instant now = clock.instant();
-        RunRow run = new RunRow(UUID.randomUUID(), tenantId, scopeId, runType, RunStatus.RUNNING,
+        RunRow run = new RunRow(
+                UUID.randomUUID(),
+                tenantId,
+                scopeId,
+                runType,
+                RunStatus.RUNNING,
                 resumption.map(MigrationRunStore.Resumption::sourceWatermark).orElse(null),
                 resumption.map(MigrationRunStore.Resumption::targetWatermark).orElse(null),
                 resumption.map(MigrationRunStore.Resumption::checkpoint).orElse(Map.of()),
-                command.transformationVersion(), Counters.NONE, null,
-                requireText(command.startedBy(), "A run records who started it"), key, 1, now, null);
-
-        runs.insert(run);
-        audit.record("migration.run.started", ActorRef.user(actor, null),
-                MigrationAudit.scopeOf(scope.tenantId(), scope.brandId(), scope.locationId()),
-                "migration.run", run.id(), run.version(), command.reason(),
-                Map.of("scopeId", scopeId,
-                        "capability", scope.capability().name(),
-                        "runType", runType.name(),
-                        "transformationVersion", run.transformationVersion(),
-                        "resumedFromWatermark", run.sourceWatermark() == null
-                                ? "start" : run.sourceWatermark()),
+                command.transformationVersion(),
+                Counters.NONE,
+                null,
+                requireText(command.startedBy(), "A run records who started it"),
+                key,
+                1,
+                now,
                 null);
 
-        log.info("Opened {} run {} over scope {} from watermark {}", runType, run.id(), scopeId,
-                run.sourceWatermark());
+        runs.insert(run);
+        audit.record(
+                "migration.run.started",
+                ActorRef.user(actor, null),
+                MigrationAudit.scopeOf(scope.tenantId(), scope.brandId(), scope.locationId()),
+                "migration.run",
+                run.id(),
+                run.version(),
+                command.reason(),
+                Map.of(
+                        "scopeId",
+                        scopeId,
+                        "capability",
+                        scope.capability().name(),
+                        "runType",
+                        runType.name(),
+                        "transformationVersion",
+                        run.transformationVersion(),
+                        "resumedFromWatermark",
+                        run.sourceWatermark() == null ? "start" : run.sourceWatermark()),
+                null);
+
+        log.info("Opened {} run {} over scope {} from watermark {}", runType, run.id(), scopeId, run.sourceWatermark());
         return run;
     }
 
@@ -169,11 +190,14 @@ public class MigrationRunService {
         RunRow run = requireRun(tenantId, runId);
         if (run.status().terminal()) {
             throw new MigrationConflictException(
-                    ("Run %s finished at %s and is evidence, not state. A correction is a "
-                            + "remediation run.").formatted(runId, run.finishedAt()));
+                    ("Run %s finished at %s and is evidence, not state. A correction is a " + "remediation run.")
+                            .formatted(runId, run.finishedAt()));
         }
 
-        boolean applied = runs.checkpoint(tenantId, runId, command.sourceWatermark(),
+        boolean applied = runs.checkpoint(
+                tenantId,
+                runId,
+                command.sourceWatermark(),
                 command.targetWatermark(),
                 command.checkpoint() == null ? Map.of() : command.checkpoint(),
                 command.totals() == null ? Counters.NONE : command.totals());
@@ -206,9 +230,8 @@ public class MigrationRunService {
     public RunRow resume(UUID tenantId, UUID runId) {
         RunRow run = requireRun(tenantId, runId);
         if (run.status().terminal()) {
-            throw new MigrationConflictException(
-                    "Run %s ended %s; start a new run rather than resuming a finished one"
-                            .formatted(runId, run.status()));
+            throw new MigrationConflictException("Run %s ended %s; start a new run rather than resuming a finished one"
+                    .formatted(runId, run.status()));
         }
         return run;
     }
@@ -236,8 +259,7 @@ public class MigrationRunService {
             if (run.status() == terminal) {
                 return run;
             }
-            throw new MigrationConflictException(
-                    "Run %s already ended %s".formatted(runId, run.status()));
+            throw new MigrationConflictException("Run %s already ended %s".formatted(runId, run.status()));
         }
         if (run.version() != command.expectedVersion()) {
             throw MigrationConflictException.staleVersion("run", command.expectedVersion(), run.version());
@@ -248,7 +270,8 @@ public class MigrationRunService {
             if (terminal != RunStatus.COMPLETED) {
                 throw new IllegalArgumentException(
                         ("A checksum states what a finished pass produced; a run that ended %s did "
-                                + "not produce one.").formatted(terminal));
+                                        + "not produce one.")
+                                .formatted(terminal));
             }
             if (!CHECKSUM.matcher(checksum).matches()) {
                 throw new IllegalArgumentException(
@@ -259,22 +282,37 @@ public class MigrationRunService {
 
         Instant now = clock.instant();
         int version = runs.finish(tenantId, runId, terminal, checksum, command.expectedVersion(), now)
-                .orElseThrow(() -> MigrationConflictException.staleVersion(
-                        "run", command.expectedVersion(), run.version()));
+                .orElseThrow(
+                        () -> MigrationConflictException.staleVersion("run", command.expectedVersion(), run.version()));
 
         ScopeRow scope = requireScope(tenantId, run.scopeId());
-        audit.record("migration.run.finished", ActorRef.user(actor, null),
+        audit.record(
+                "migration.run.finished",
+                ActorRef.user(actor, null),
                 MigrationAudit.scopeOf(scope.tenantId(), scope.brandId(), scope.locationId()),
-                "migration.run", runId, version, command.reason(),
-                Map.of("scopeId", run.scopeId(),
-                        "runType", run.runType().name(),
-                        "status", terminal.name(),
-                        "sourceWatermark", run.sourceWatermark() == null ? "" : run.sourceWatermark(),
-                        "scanned", run.counters().scanned(),
-                        "created", run.counters().created(),
-                        "updated", run.counters().updated(),
-                        "skipped", run.counters().skipped(),
-                        "quarantined", run.counters().quarantined()),
+                "migration.run",
+                runId,
+                version,
+                command.reason(),
+                Map.of(
+                        "scopeId",
+                        run.scopeId(),
+                        "runType",
+                        run.runType().name(),
+                        "status",
+                        terminal.name(),
+                        "sourceWatermark",
+                        run.sourceWatermark() == null ? "" : run.sourceWatermark(),
+                        "scanned",
+                        run.counters().scanned(),
+                        "created",
+                        run.counters().created(),
+                        "updated",
+                        run.counters().updated(),
+                        "skipped",
+                        run.counters().skipped(),
+                        "quarantined",
+                        run.counters().quarantined()),
                 null);
         return requireRun(tenantId, runId);
     }
@@ -330,12 +368,12 @@ public class MigrationRunService {
         if (!run.runType().writesTarget()) {
             throw new IllegalArgumentException(
                     ("A %s run writes nothing to the target, so there are no effects to suppress. "
-                            + "Running it under the import flag would silence a real caller's "
-                            + "notification if the flag ever leaked.").formatted(run.runType()));
+                                    + "Running it under the import flag would silence a real caller's "
+                                    + "notification if the flag ever leaked.")
+                            .formatted(run.runType()));
         }
         if (run.status().terminal()) {
-            throw new MigrationConflictException(
-                    "Run %s ended %s and cannot import".formatted(run.id(), run.status()));
+            throw new MigrationConflictException("Run %s ended %s and cannot import".formatted(run.id(), run.status()));
         }
         // The scope is re-read on every page, not trusted from when the run
         // started. A catch-up is the ordinary state of a scope on the way to
@@ -389,26 +427,26 @@ public class MigrationRunService {
         if (!runType.writesTarget()) {
             return;
         }
-        if (scope.state().holding() || scope.state().terminal()
-                || scope.state() == ScopeState.ROLLING_BACK) {
+        if (scope.state().holding() || scope.state().terminal() || scope.state() == ScopeState.ROLLING_BACK) {
             throw new MigrationPreconditionException(
                     MigrationPreconditionException.SCOPE_NOT_READY_FOR_RUN,
                     ("Scope %s is %s. A %s run would keep writing the target through a state that "
-                            + "exists to stop it.").formatted(scope.id(), scope.state(), runType));
+                                    + "exists to stop it.")
+                            .formatted(scope.id(), scope.state(), runType));
         }
         if (!scope.modes().writeMode().importMayWrite()) {
             throw new MigrationPreconditionException(
                     MigrationPreconditionException.SCOPE_NOT_READY_FOR_RUN,
                     ("Scope %s is %s with write mode %s, so nothing is maintaining a target copy "
-                            + "yet. Move it to BACKFILLING before a %s run.")
+                                    + "yet. Move it to BACKFILLING before a %s run.")
                             .formatted(scope.id(), scope.state(), scope.modes().writeMode(), runType));
         }
     }
 
     private RunRow requireRun(UUID tenantId, UUID runId) {
         return runs.findById(tenantId, runId)
-                .orElseThrow(() -> new MigrationResourceNotFoundException(
-                        "No migration run %s for this tenant".formatted(runId)));
+                .orElseThrow(() ->
+                        new MigrationResourceNotFoundException("No migration run %s for this tenant".formatted(runId)));
     }
 
     private ScopeRow requireScope(UUID tenantId, UUID scopeId) {
@@ -431,11 +469,7 @@ public class MigrationRunService {
      *                              mixing of two semantics in one entity family
      */
     public record StartRunCommand(
-            RunType runType,
-            int transformationVersion,
-            String startedBy,
-            String reason,
-            String idempotencyKey) { }
+            RunType runType, int transformationVersion, String startedBy, String reason, String idempotencyKey) {}
 
     /**
      * @param sourceWatermark how far into the source the run has committed, which
@@ -444,12 +478,8 @@ public class MigrationRunService {
      *                        a retried checkpoint restates them and changes nothing
      */
     public record CheckpointCommand(
-            String sourceWatermark,
-            String targetWatermark,
-            Map<String, Object> checkpoint,
-            Counters totals) { }
+            String sourceWatermark, String targetWatermark, Map<String, Object> checkpoint, Counters totals) {}
 
     /** @param checksum hex sha-256 of what the pass produced, and only on a completed run */
-    public record FinishRunCommand(RunStatus status, String checksum, int expectedVersion,
-            String reason) { }
+    public record FinishRunCommand(RunStatus status, String checksum, int expectedVersion, String reason) {}
 }

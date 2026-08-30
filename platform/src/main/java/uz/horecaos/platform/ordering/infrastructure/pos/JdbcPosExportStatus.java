@@ -2,10 +2,8 @@ package uz.horecaos.platform.ordering.infrastructure.pos;
 
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.ordering.application.PosExportStatus;
 
 /**
@@ -36,7 +34,8 @@ public class JdbcPosExportStatus implements PosExportStatus {
                  ORDER BY requested_at DESC
                  LIMIT 1
                 """)
-                .param("tenantId", tenantId).param("orderId", orderId)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
                 .query(String.class)
                 .optional();
     }

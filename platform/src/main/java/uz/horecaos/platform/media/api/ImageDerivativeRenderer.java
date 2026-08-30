@@ -2,7 +2,6 @@ package uz.horecaos.platform.media.api;
 
 import java.util.List;
 import java.util.Map;
-
 import uz.horecaos.platform.media.domain.DerivativeVariant;
 
 /**
@@ -47,8 +46,7 @@ public interface ImageDerivativeRenderer {
      * one behaviour for both: recording the second as a settled success, or
      * retrying the first forever. The first is what shipped.
      */
-    sealed interface RenderOutcome permits Rendered, Unsupported, Failed {
-    }
+    sealed interface RenderOutcome permits Rendered, Unsupported, Failed {}
 
     /**
      * Every requested variant, produced.
@@ -59,8 +57,7 @@ public interface ImageDerivativeRenderer {
      * failed reports {@link Failed}, and the retry renders only what the store
      * still lacks.
      */
-    record Rendered(Map<DerivativeVariant, Rendition> renditions) implements RenderOutcome {
-    }
+    record Rendered(Map<DerivativeVariant, Rendition> renditions) implements RenderOutcome {}
 
     /**
      * Settled. These bytes will not become renderable by being tried again.
@@ -69,17 +66,14 @@ public interface ImageDerivativeRenderer {
      *               the bytes it choked on and, often enough, the filename a
      *               customer typed (ADR 0029)
      */
-    record Unsupported(String reason) implements RenderOutcome {
-    }
+    record Unsupported(String reason) implements RenderOutcome {}
 
     /**
      * Not settled. This attempt failed and another might not.
      *
      * @param errorCode a stable code, for the job row's {@code last_error_code}
      */
-    record Failed(String errorCode) implements RenderOutcome {
-    }
+    record Failed(String errorCode) implements RenderOutcome {}
 
-    record Rendition(byte[] content, String contentType, int widthPx, int heightPx) {
-    }
+    record Rendition(byte[] content, String contentType, int widthPx, int heightPx) {}
 }

@@ -17,14 +17,15 @@ package uz.horecaos.platform.payments.infrastructure.payme;
  */
 public final class PaymeErrors {
 
-    private PaymeErrors() {
-    }
+    private PaymeErrors() {}
 
     public static PaymeRpcException insufficientPrivilege() {
-        return new PaymeRpcException(PaymeErrorCode.INSUFFICIENT_PRIVILEGE, new PaymeMessage(
-                "Недостаточно привилегий для выполнения метода.",
-                "Metodni bajarish uchun huquqlar yetarli emas.",
-                "Insufficient privilege to perform this method."));
+        return new PaymeRpcException(
+                PaymeErrorCode.INSUFFICIENT_PRIVILEGE,
+                new PaymeMessage(
+                        "Недостаточно привилегий для выполнения метода.",
+                        "Metodni bajarish uchun huquqlar yetarli emas.",
+                        "Insufficient privilege to perform this method."));
     }
 
     /**
@@ -36,40 +37,42 @@ public final class PaymeErrors {
      * wrong verb" and "the merchant's database is down".
      */
     public static PaymeRpcException methodNotPost() {
-        return new PaymeRpcException(PaymeErrorCode.METHOD_NOT_POST, new PaymeMessage(
-                "Запрос должен быть отправлен методом POST.",
-                "So'rov POST metodi bilan yuborilishi kerak.",
-                "The request must be sent by POST."));
+        return new PaymeRpcException(
+                PaymeErrorCode.METHOD_NOT_POST,
+                new PaymeMessage(
+                        "Запрос должен быть отправлен методом POST.",
+                        "So'rov POST metodi bilan yuborilishi kerak.",
+                        "The request must be sent by POST."));
     }
 
     public static PaymeRpcException parseError() {
-        return new PaymeRpcException(PaymeErrorCode.PARSE_ERROR, new PaymeMessage(
-                "Не удалось разобрать JSON.",
-                "JSON o'qib bo'lmadi.",
-                "Could not parse JSON."));
+        return new PaymeRpcException(
+                PaymeErrorCode.PARSE_ERROR,
+                new PaymeMessage("Не удалось разобрать JSON.", "JSON o'qib bo'lmadi.", "Could not parse JSON."));
     }
 
     public static PaymeRpcException invalidRequest(String detail) {
-        return new PaymeRpcException(PaymeErrorCode.INVALID_REQUEST, new PaymeMessage(
-                "Неверный запрос: " + detail,
-                "Noto'g'ri so'rov: " + detail,
-                "Invalid request: " + detail));
+        return new PaymeRpcException(
+                PaymeErrorCode.INVALID_REQUEST,
+                new PaymeMessage(
+                        "Неверный запрос: " + detail, "Noto'g'ri so'rov: " + detail, "Invalid request: " + detail));
     }
 
     /** The method name goes in {@code data}, which is what the docs specify for -32601. */
     public static PaymeRpcException methodNotFound(String method) {
-        return new PaymeRpcException(PaymeErrorCode.METHOD_NOT_FOUND, new PaymeMessage(
-                "Запрошенный метод не найден.",
-                "So'ralgan metod topilmadi.",
-                "Requested method was not found."),
+        return new PaymeRpcException(
+                PaymeErrorCode.METHOD_NOT_FOUND,
+                new PaymeMessage(
+                        "Запрошенный метод не найден.",
+                        "So'ralgan metod topilmadi.",
+                        "Requested method was not found."),
                 method);
     }
 
     public static PaymeRpcException internalError() {
-        return new PaymeRpcException(PaymeErrorCode.INTERNAL_ERROR, new PaymeMessage(
-                "Внутренняя ошибка сервиса.",
-                "Xizmatning ichki xatosi.",
-                "Internal service error."));
+        return new PaymeRpcException(
+                PaymeErrorCode.INTERNAL_ERROR,
+                new PaymeMessage("Внутренняя ошибка сервиса.", "Xizmatning ichki xatosi.", "Internal service error."));
     }
 
     /**
@@ -82,33 +85,29 @@ public final class PaymeErrors {
      * reachable from the checkout page by anyone.
      */
     static PaymeRpcException orderNotFound() {
-        return new PaymeRpcException(PaymeErrorCode.ACCOUNT_RANGE_FIRST, new PaymeMessage(
-                "Неверный код заказа.",
-                "Harid kodida xatolik.",
-                "Incorrect order code."),
+        return new PaymeRpcException(
+                PaymeErrorCode.ACCOUNT_RANGE_FIRST,
+                new PaymeMessage("Неверный код заказа.", "Harid kodida xatolik.", "Incorrect order code."),
                 PaymeAccount.ORDER_FIELD);
     }
 
     static PaymeRpcException accountFieldMissing() {
-        return new PaymeRpcException(PaymeErrorCode.ACCOUNT_RANGE_FIRST, new PaymeMessage(
-                "Не указан код заказа.",
-                "Harid kodi ko'rsatilmagan.",
-                "The order code is missing."),
+        return new PaymeRpcException(
+                PaymeErrorCode.ACCOUNT_RANGE_FIRST,
+                new PaymeMessage("Не указан код заказа.", "Harid kodi ko'rsatilmagan.", "The order code is missing."),
                 PaymeAccount.ORDER_FIELD);
     }
 
     static PaymeRpcException wrongAmount() {
-        return new PaymeRpcException(PaymeErrorCode.WRONG_AMOUNT, new PaymeMessage(
-                "Неверная сумма.",
-                "Noto'g'ri summa.",
-                "Incorrect amount."));
+        return new PaymeRpcException(
+                PaymeErrorCode.WRONG_AMOUNT,
+                new PaymeMessage("Неверная сумма.", "Noto'g'ri summa.", "Incorrect amount."));
     }
 
     static PaymeRpcException transactionNotFound() {
-        return new PaymeRpcException(PaymeErrorCode.TRANSACTION_NOT_FOUND, new PaymeMessage(
-                "Транзакция не найдена.",
-                "Tranzaksiya topilmadi.",
-                "Transaction not found."));
+        return new PaymeRpcException(
+                PaymeErrorCode.TRANSACTION_NOT_FOUND,
+                new PaymeMessage("Транзакция не найдена.", "Tranzaksiya topilmadi.", "Transaction not found."));
     }
 
     /**
@@ -129,16 +128,12 @@ public final class PaymeErrors {
 
     static PaymeRpcException orderAlreadyPaid() {
         return operationNotPermitted(new PaymeMessage(
-                "Заказ уже оплачен.",
-                "Harid allaqachon to'langan.",
-                "The order has already been paid."));
+                "Заказ уже оплачен.", "Harid allaqachon to'langan.", "The order has already been paid."));
     }
 
     static PaymeRpcException orderNotPayable() {
         return operationNotPermitted(new PaymeMessage(
-                "Заказ не ожидает оплаты.",
-                "Harid to'lovni kutmayapti.",
-                "The order is not awaiting payment."));
+                "Заказ не ожидает оплаты.", "Harid to'lovni kutmayapti.", "The order is not awaiting payment."));
     }
 
     static PaymeRpcException anotherTransactionIsActive() {
@@ -163,23 +158,29 @@ public final class PaymeErrors {
     }
 
     static PaymeRpcException orderAlreadyDelivered() {
-        return new PaymeRpcException(PaymeErrorCode.ORDER_ALREADY_DELIVERED, new PaymeMessage(
-                "Заказ выполнен. Товар или услуга переданы покупателю в полном объёме.",
-                "Harid bajarilgan. Tovar yoki xizmat xaridorga to'liq topshirilgan.",
-                "The order is fulfilled. The goods or service were delivered to the buyer in full."));
+        return new PaymeRpcException(
+                PaymeErrorCode.ORDER_ALREADY_DELIVERED,
+                new PaymeMessage(
+                        "Заказ выполнен. Товар или услуга переданы покупателю в полном объёме.",
+                        "Harid bajarilgan. Tovar yoki xizmat xaridorga to'liq topshirilgan.",
+                        "The order is fulfilled. The goods or service were delivered to the buyer in full."));
     }
 
     static PaymeRpcException fiscalReceiptNotFound() {
-        return new PaymeRpcException(PaymeErrorCode.FISCAL_RECEIPT_NOT_FOUND, new PaymeMessage(
-                "Чек с таким id не найден.",
-                "Bunday id bilan chek topilmadi.",
-                "No receipt with that id was found."));
+        return new PaymeRpcException(
+                PaymeErrorCode.FISCAL_RECEIPT_NOT_FOUND,
+                new PaymeMessage(
+                        "Чек с таким id не найден.",
+                        "Bunday id bilan chek topilmadi.",
+                        "No receipt with that id was found."));
     }
 
     static PaymeRpcException fiscalInvalidParameters(String detail) {
-        return new PaymeRpcException(PaymeErrorCode.FISCAL_INVALID_PARAMETERS, new PaymeMessage(
-                "Неверные параметры: " + detail,
-                "Noto'g'ri parametrlar: " + detail,
-                "Invalid parameters: " + detail));
+        return new PaymeRpcException(
+                PaymeErrorCode.FISCAL_INVALID_PARAMETERS,
+                new PaymeMessage(
+                        "Неверные параметры: " + detail,
+                        "Noto'g'ri parametrlar: " + detail,
+                        "Invalid parameters: " + detail));
     }
 }

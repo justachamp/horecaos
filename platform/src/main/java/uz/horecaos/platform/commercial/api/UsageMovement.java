@@ -53,8 +53,13 @@ public record UsageMovement(
         }
     }
 
-    public static UsageMovement of(UUID tenantId, EntitlementKey<Long> key, long quantity,
-            String sourceType, String sourceEventId, Instant occurredAt) {
+    public static UsageMovement of(
+            UUID tenantId,
+            EntitlementKey<Long> key,
+            long quantity,
+            String sourceType,
+            String sourceEventId,
+            Instant occurredAt) {
         return new UsageMovement(tenantId, key, quantity, sourceType, sourceEventId, occurredAt, Map.of());
     }
 }

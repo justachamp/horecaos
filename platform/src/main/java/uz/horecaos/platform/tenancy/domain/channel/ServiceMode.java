@@ -16,7 +16,6 @@ package uz.horecaos.platform.tenancy.domain.channel;
  * about the clock and a manager cannot fix them by deciding to be open.
  */
 public enum ServiceMode {
-
     FOLLOW_SCHEDULE,
     FORCE_OPEN,
     FORCE_CLOSED

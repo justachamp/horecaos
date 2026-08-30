@@ -12,7 +12,6 @@ package uz.horecaos.platform.payments.domain;
  * like one provider.
  */
 public enum PaymentProviderType {
-
     CLICK,
 
     PAYME,

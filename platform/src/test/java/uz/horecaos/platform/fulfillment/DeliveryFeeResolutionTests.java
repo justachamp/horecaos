@@ -1,7 +1,9 @@
 package uz.horecaos.platform.fulfillment;
 
-import javax.sql.DataSource;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -12,9 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -22,11 +22,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeOutcome;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeQuery;
 import uz.horecaos.platform.fulfillment.api.PricingAuthority;
@@ -56,9 +53,6 @@ import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * Zones, tariffs, and the one total order that turns them into a fee (ADR 0037).
@@ -112,7 +106,8 @@ class DeliveryFeeResolutionTests {
 
     @BeforeAll
     static void startDatabase() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for delivery zone and fee tests");
         db = TestDatabase.migrated();
         jdbcUrl = db.jdbcUrl();
@@ -132,18 +127,21 @@ class DeliveryFeeResolutionTests {
         DataSource dataSource = db.dataSource();
         jdbc = JdbcClient.create(dataSource);
         jdbc.sql("TRUNCATE TABLE fulfillment.delivery_fee_resolutions, "
-                + "fulfillment.zone_location_bindings, fulfillment.service_zone_versions, "
-                + "fulfillment.service_zones, fulfillment.location_tariff_bindings, "
-                + "fulfillment.delivery_tariff_bands, fulfillment.delivery_tariff_time_rules, "
-                + "fulfillment.delivery_tariff_discounts, "
-                + "fulfillment.delivery_tariff_versions, fulfillment.delivery_tariffs, "
-                + "fulfillment.regions CASCADE").update();
+                        + "fulfillment.zone_location_bindings, fulfillment.service_zone_versions, "
+                        + "fulfillment.service_zones, fulfillment.location_tariff_bindings, "
+                        + "fulfillment.delivery_tariff_bands, fulfillment.delivery_tariff_time_rules, "
+                        + "fulfillment.delivery_tariff_discounts, "
+                        + "fulfillment.delivery_tariff_versions, fulfillment.delivery_tariffs, "
+                        + "fulfillment.regions CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE pricing.quote_adjustments, pricing.quote_lines, pricing.quotes, "
-                + "pricing.prices, pricing.price_book_assignments, pricing.price_books, "
-                + "pricing.tax_profiles CASCADE").update();
+                        + "pricing.prices, pricing.price_book_assignments, pricing.price_books, "
+                        + "pricing.tax_profiles CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE catalog.publication_items, catalog.publications, "
-                + "catalog.translations, catalog.catalog_products, catalog.variants, "
-                + "catalog.products, catalog.catalogs CASCADE").update();
+                        + "catalog.translations, catalog.catalog_products, catalog.variants, "
+                        + "catalog.products, catalog.catalogs CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
 
         Clock clock = Clock.fixed(NOON, ZoneOffset.UTC);
@@ -154,11 +152,15 @@ class DeliveryFeeResolutionTests {
         resolutionStore = new JdbcDeliveryFeeResolutionStore(jdbc, mapper);
         zones = new ServiceZoneService(zoneStore, mapper, clock);
         tariffs = new DeliveryTariffService(tariffStore, clock);
-        resolver = new DeliveryFeeResolver(zoneStore, tariffStore, resolutionStore,
-                unboundRouting(), new SimpleMeterRegistry());
-        quotes = new QuoteService(new JdbcPricingStore(jdbc, mapper), new PricingEngine(),
-                new JdbcCatalogPricingContext(jdbc, "uz"), new JdbcSalesChannelStore(jdbc),
-                resolver, clock);
+        resolver = new DeliveryFeeResolver(
+                zoneStore, tariffStore, resolutionStore, unboundRouting(), new SimpleMeterRegistry());
+        quotes = new QuoteService(
+                new JdbcPricingStore(jdbc, mapper),
+                new PricingEngine(),
+                new JdbcCatalogPricingContext(jdbc, "uz"),
+                new JdbcSalesChannelStore(jdbc),
+                resolver,
+                clock);
 
         seedTenancy();
         cityTariff = seedTashkentTariff();
@@ -209,21 +211,23 @@ class DeliveryFeeResolutionTests {
         // tiebreak the winner is whichever row the planner emitted first, and the
         // same address prices differently on consecutive requests.
         UUID first = activeCircleZone("ZONE-A", 5_000, 0, cityTariff, null, null);
-        UUID second = activeCircleZone("ZONE-B", 5_000, 0, seedFlatTariff("PREMIUM", 25_000L),
-                null, null);
+        UUID second = activeCircleZone("ZONE-B", 5_000, 0, seedFlatTariff("PREMIUM", 25_000L), null, null);
         UUID expected = first.compareTo(second) < 0 ? first : second;
 
         List<UUID> winners = new ArrayList<>();
         for (int run = 0; run < 200; run++) {
-            winners.add(resolver.simulate(query(locatedBranch, NEARBY, 0L, NOON)).zoneId());
+            winners.add(
+                    resolver.simulate(query(locatedBranch, NEARBY, 0L, NOON)).zoneId());
         }
         // Rewrite every tuple. A row updated in place moves to a new physical
         // position, which is the cheap way to reproduce what a VACUUM FULL or an
         // index rebuild does to the order rows come back in — the classic way a
         // query that "always worked" starts answering differently.
-        jdbc.sql("UPDATE fulfillment.service_zone_versions SET priority = priority").update();
+        jdbc.sql("UPDATE fulfillment.service_zone_versions SET priority = priority")
+                .update();
         for (int run = 0; run < 50; run++) {
-            winners.add(resolver.simulate(query(locatedBranch, NEARBY, 0L, NOON)).zoneId());
+            winners.add(
+                    resolver.simulate(query(locatedBranch, NEARBY, 0L, NOON)).zoneId());
         }
 
         assertThat(winners).containsOnly(expected);
@@ -233,8 +237,7 @@ class DeliveryFeeResolutionTests {
     @DisplayName("a tighter zone inside a looser one wins, and the loser is recorded")
     void theSmallerZoneWinsAndTheLoserIsEvidence() {
         UUID wide = activeCircleZone("CITY", 8_000, 0, cityTariff, null, null);
-        UUID inner = activeCircleZone("CENTRE", 3_000, 0, seedFlatTariff("CENTRE", 4_000L),
-                null, null);
+        UUID inner = activeCircleZone("CENTRE", 3_000, 0, seedFlatTariff("CENTRE", 4_000L), null, null);
 
         var resolution = resolver.simulate(query(locatedBranch, NEARBY, 0L, NOON));
 
@@ -277,19 +280,20 @@ class DeliveryFeeResolutionTests {
     @Test
     @DisplayName("a zone cannot be drawn around an unlocated branch")
     void anUnlocatedBranchCannotOriginateAZone() {
-        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "GHOST",
-                "Призрак", "Arvoh", "Ghost");
+        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "GHOST", "Призрак", "Arvoh", "Ghost");
 
         Throwable refusal = catchThrowable(() -> zones.draftCircleVersion(
-                new ServiceZoneService.NewVersion(TENANT, BRAND, zoneId, ZoneRole.DELIVERY, null,
-                        0, "UZS", cityTariff, null, null, ACTOR),
-                unlocatedBranch, 5_000));
+                new ServiceZoneService.NewVersion(
+                        TENANT, BRAND, zoneId, ZoneRole.DELIVERY, null, 0, "UZS", cityTariff, null, null, ACTOR),
+                unlocatedBranch,
+                5_000));
 
         assertThat(refusal)
                 .isInstanceOf(BranchOrigin.UnlocatedBranchException.class)
                 .hasMessageContaining("Place its pin");
         assertThat(jdbc.sql("SELECT count(*) FROM fulfillment.service_zone_versions")
-                .query(Long.class).single())
+                        .query(Long.class)
+                        .single())
                 .as("a refused draft leaves no half-made geometry behind")
                 .isZero();
     }
@@ -299,7 +303,8 @@ class DeliveryFeeResolutionTests {
     void theNullIslandIsRefusedAtTheDatabase() {
         // Three of the real legacy branches sit here. The import must fail on them
         // rather than produce three branches that look located and serve nobody.
-        Throwable failure = catchThrowable(() -> jdbc.sql("""
+        Throwable failure =
+                catchThrowable(() -> jdbc.sql("""
                 UPDATE tenant.locations
                 SET latitude = 0, longitude = 0, coordinate_source = 'MERCHANT_PIN'
                 WHERE id = :id
@@ -342,7 +347,8 @@ class DeliveryFeeResolutionTests {
     @DisplayName("the brand default is the last rung and it does answer")
     void theBrandDefaultAnswersWhenNothingElseDoes() {
         jdbc.sql("UPDATE fulfillment.delivery_tariffs SET is_brand_default = true WHERE id = :id")
-                .param("id", cityTariff).update();
+                .param("id", cityTariff)
+                .update();
         activeCircleZone("CITY", 8_000, 0, null, null, null);
 
         // The test above would pass against a resolver that never found a tariff at
@@ -355,7 +361,8 @@ class DeliveryFeeResolutionTests {
     @DisplayName("a branch tariff outranks the brand default, and a zone tariff outranks both")
     void theTariffChainIsOrdered() {
         jdbc.sql("UPDATE fulfillment.delivery_tariffs SET is_brand_default = true WHERE id = :id")
-                .param("id", cityTariff).update();
+                .param("id", cityTariff)
+                .update();
         UUID branchTariff = seedFlatTariff("BRANCH", 7_000L);
         tariffs.bindLocation(TENANT, BRAND, locatedBranch, branchTariff);
 
@@ -375,8 +382,7 @@ class DeliveryFeeResolutionTests {
         // The polygon is drawn generously at 8 km and the tariff reaches 1 km, so
         // the address is inside the zone and beyond the courier. A district drawn
         // by hand always contains a house nobody will serve at the district price.
-        UUID shortReach = seedTariff("SHORT", 1_000,
-                List.of(new TariffBand(0, 0, 1_000, 5_000L, 0L)), List.of(), null);
+        UUID shortReach = seedTariff("SHORT", 1_000, List.of(new TariffBand(0, 0, 1_000, 5_000L, 0L)), List.of(), null);
         activeCircleZone("CITY", 8_000, 0, shortReach, null, null);
 
         var resolution = resolver.simulate(query(locatedBranch, NEARBY, 0L, NOON));
@@ -406,8 +412,8 @@ class DeliveryFeeResolutionTests {
     void anExternallyPricedOrderSkipsResolutionEntirely() {
         activeCircleZone("CITY", 8_000, 0, cityTariff, null, null);
 
-        var resolution = resolver.simulate(new DeliveryFeeQuery(TENANT, BRAND, locatedBranch, null,
-                NEARBY, "UZS", 0L, PricingAuthority.EXTERNAL, NOON));
+        var resolution = resolver.simulate(new DeliveryFeeQuery(
+                TENANT, BRAND, locatedBranch, null, NEARBY, "UZS", 0L, PricingAuthority.EXTERNAL, NOON));
 
         assertThat(resolution.outcome()).isEqualTo(DeliveryFeeOutcome.EXTERNALLY_PRICED);
         // The gate is on the order and runs first. No tariff configuration can
@@ -425,10 +431,17 @@ class DeliveryFeeResolutionTests {
     void overlappingBandsAreRefusedAtInsert() {
         UUID tariffId = tariffs.createTariff(TENANT, BRAND, "OVERLAP", "Overlapping", false);
 
-        Throwable failure = catchThrowable(() -> tariffs.draftVersion(TENANT, BRAND,
-                draft(tariffId, 10_000, List.of(
-                        new TariffBand(0, 0, 4_000, 10_000L, 0L),
-                        new TariffBand(1, 3_000, 10_000, 10_000L, 2_000L)), List.of(), null),
+        Throwable failure = catchThrowable(() -> tariffs.draftVersion(
+                TENANT,
+                BRAND,
+                draft(
+                        tariffId,
+                        10_000,
+                        List.of(
+                                new TariffBand(0, 0, 4_000, 10_000L, 0L),
+                                new TariffBand(1, 3_000, 10_000, 10_000L, 2_000L)),
+                        List.of(),
+                        null),
                 ACTOR));
 
         // Two bands claiming 3,500 m would let the fee depend on which row came
@@ -440,12 +453,20 @@ class DeliveryFeeResolutionTests {
     @DisplayName("a band gap is refused at activation, naming the metres nobody could order from")
     void aBandGapIsRefusedAtActivation() {
         UUID tariffId = tariffs.createTariff(TENANT, BRAND, "GAPPED", "Gapped", false);
-        var drafted = tariffs.draftVersion(TENANT, BRAND, draft(tariffId, 10_000, List.of(
-                new TariffBand(0, 0, 4_600, 10_000L, 0L),
-                new TariffBand(1, 4_800, 10_000, 10_000L, 2_000L)), List.of(), null), ACTOR);
+        var drafted = tariffs.draftVersion(
+                TENANT,
+                BRAND,
+                draft(
+                        tariffId,
+                        10_000,
+                        List.of(
+                                new TariffBand(0, 0, 4_600, 10_000L, 0L),
+                                new TariffBand(1, 4_800, 10_000, 10_000L, 2_000L)),
+                        List.of(),
+                        null),
+                ACTOR);
 
-        Throwable refusal = catchThrowable(
-                () -> tariffs.activate(TENANT, BRAND, tariffId, drafted.version(), ACTOR));
+        Throwable refusal = catchThrowable(() -> tariffs.activate(TENANT, BRAND, tariffId, drafted.version(), ACTOR));
 
         assertThat(refusal)
                 .isInstanceOf(DeliveryTariffService.TariffActivationRefusedException.class)
@@ -455,13 +476,11 @@ class DeliveryFeeResolutionTests {
     @Test
     @DisplayName("a zone cannot be bound to another brand's branch")
     void crossBrandBindingsFailAtTheDatabase() {
-        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "CITY2",
-                "Город", "Shahar", "City");
+        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "CITY2", "Город", "Shahar", "City");
         UUID otherBrand = UUID.randomUUID();
         UUID otherLocation = seedBrandAndLocation(TENANT, otherBrand, "OTHER", BRANCH_POINT);
 
-        Throwable failure = catchThrowable(
-                () -> zones.bindLocation(TENANT, BRAND, zoneId, otherLocation));
+        Throwable failure = catchThrowable(() -> zones.bindLocation(TENANT, BRAND, zoneId, otherLocation));
 
         // Composite foreign keys carrying brand ancestry are what make this fail at
         // the database rather than in whichever service happened to write the row.
@@ -471,11 +490,9 @@ class DeliveryFeeResolutionTests {
     @Test
     @DisplayName("a cross-tenant zone binding fails at the database")
     void crossTenantBindingsFailAtTheDatabase() {
-        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "CITY3",
-                "Город", "Shahar", "City");
+        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "CITY3", "Город", "Shahar", "City");
         UUID foreignBrand = UUID.randomUUID();
-        UUID foreignLocation = seedBrandAndLocation(OTHER_TENANT, foreignBrand, "FOREIGN",
-                BRANCH_POINT);
+        UUID foreignLocation = seedBrandAndLocation(OTHER_TENANT, foreignBrand, "FOREIGN", BRANCH_POINT);
 
         assertThat(catchThrowable(() -> zones.bindLocation(TENANT, BRAND, zoneId, foreignLocation)))
                 .hasMessageContaining("fk_zone_binding_location");
@@ -496,40 +513,78 @@ class DeliveryFeeResolutionTests {
     @Test
     @DisplayName("a zone version may name a platform region or its own, and no other tenant's")
     void aZoneVersionResolvesItsRegionInItsOwnTenant() {
-        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "REGIONED",
-                "Регион", "Hudud", "Region");
+        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "REGIONED", "Регион", "Hudud", "Region");
         UUID platformRegion = seedRegion(null, "TASHKENT_SHARED");
         UUID ownRegion = seedRegion(TENANT, "OWN_REGION");
         UUID foreignRegion = seedRegion(OTHER_TENANT, "FOREIGN_REGION");
 
         assertThat(catchThrowable(() -> zones.draftCircleVersion(
-                new ServiceZoneService.NewVersion(TENANT, BRAND, zoneId, ZoneRole.DELIVERY,
-                        foreignRegion, 0, "UZS", cityTariff, null, null, ACTOR),
-                locatedBranch, 4_000)))
+                        new ServiceZoneService.NewVersion(
+                                TENANT,
+                                BRAND,
+                                zoneId,
+                                ZoneRole.DELIVERY,
+                                foreignRegion,
+                                0,
+                                "UZS",
+                                cityTariff,
+                                null,
+                                null,
+                                ACTOR),
+                        locatedBranch,
+                        4_000)))
                 .isInstanceOf(ServiceZoneService.DeliveryResourceNotFoundException.class)
                 .as("and it reads the same as an id that names nothing, so the endpoint is "
                         + "not an existence oracle for region ids across the platform")
                 .hasMessageContaining("this tenant may use");
 
-        assertThat(jdbc.sql("SELECT count(*) FROM fulfillment.service_zone_versions "
-                        + "WHERE zone_id = :id").param("id", zoneId).query(Long.class).single())
+        assertThat(jdbc.sql("SELECT count(*) FROM fulfillment.service_zone_versions " + "WHERE zone_id = :id")
+                        .param("id", zoneId)
+                        .query(Long.class)
+                        .single())
                 .as("a refused draft leaves no half-made geometry behind")
                 .isZero();
 
         assertThat(zones.draftCircleVersion(
-                new ServiceZoneService.NewVersion(TENANT, BRAND, zoneId, ZoneRole.DELIVERY,
-                        platformRegion, 0, "UZS", cityTariff, null, null, ACTOR),
-                locatedBranch, 4_000).version())
+                                new ServiceZoneService.NewVersion(
+                                        TENANT,
+                                        BRAND,
+                                        zoneId,
+                                        ZoneRole.DELIVERY,
+                                        platformRegion,
+                                        0,
+                                        "UZS",
+                                        cityTariff,
+                                        null,
+                                        null,
+                                        ACTOR),
+                                locatedBranch,
+                                4_000)
+                        .version())
                 .isEqualTo(1);
         assertThat(zones.draftCircleVersion(
-                new ServiceZoneService.NewVersion(TENANT, BRAND, zoneId, ZoneRole.DELIVERY,
-                        ownRegion, 0, "UZS", cityTariff, null, null, ACTOR),
-                locatedBranch, 4_000).version())
+                                new ServiceZoneService.NewVersion(
+                                        TENANT,
+                                        BRAND,
+                                        zoneId,
+                                        ZoneRole.DELIVERY,
+                                        ownRegion,
+                                        0,
+                                        "UZS",
+                                        cityTariff,
+                                        null,
+                                        null,
+                                        ACTOR),
+                                locatedBranch,
+                                4_000)
+                        .version())
                 .isEqualTo(2);
 
         assertThat(jdbc.sql("SELECT region_is_platform FROM fulfillment.service_zone_versions "
-                        + "WHERE zone_id = :id ORDER BY version")
-                .param("id", zoneId).query(Boolean.class).list())
+                                + "WHERE zone_id = :id ORDER BY version")
+                        .param("id", zoneId)
+                        .query(Boolean.class)
+                        .list())
                 .as("the version records which of the two owners it named, and V0088's key "
                         + "is what makes the record true")
                 .containsExactly(true, false);
@@ -539,20 +594,26 @@ class DeliveryFeeResolutionTests {
     @DisplayName("only one version of a zone can be live at a time")
     void oneLiveVersionPerZone() {
         UUID zoneId = activeCircleZone("CITY", 8_000, 0, cityTariff, null, null);
-        var second = zones.draftCircleVersion(new ServiceZoneService.NewVersion(TENANT, BRAND,
-                zoneId, ZoneRole.DELIVERY, null, 0, "UZS", cityTariff, null, null, ACTOR),
-                locatedBranch, 4_000);
+        var second = zones.draftCircleVersion(
+                new ServiceZoneService.NewVersion(
+                        TENANT, BRAND, zoneId, ZoneRole.DELIVERY, null, 0, "UZS", cityTariff, null, null, ACTOR),
+                locatedBranch,
+                4_000);
         zones.activate(TENANT, BRAND, zoneId, second.version(), ACTOR);
 
         assertThat(jdbc.sql("SELECT version FROM fulfillment.service_zone_versions "
-                        + "WHERE zone_id = :id AND status = 'ACTIVE'")
-                .param("id", zoneId).query(Integer.class).list())
+                                + "WHERE zone_id = :id AND status = 'ACTIVE'")
+                        .param("id", zoneId)
+                        .query(Integer.class)
+                        .list())
                 .containsExactly(2);
         // Retired and never deleted: an accepted quote pins version 1, and a
         // deleted row turns that quote's evidence into a dangling id.
         assertThat(jdbc.sql("SELECT status FROM fulfillment.service_zone_versions "
-                        + "WHERE zone_id = :id AND version = 1")
-                .param("id", zoneId).query(String.class).single())
+                                + "WHERE zone_id = :id AND version = 1")
+                        .param("id", zoneId)
+                        .query(String.class)
+                        .single())
                 .isEqualTo("RETIRED");
     }
 
@@ -570,19 +631,24 @@ class DeliveryFeeResolutionTests {
         assertThat(quote.fees().minor()).isEqualTo(10_000L);
         assertThat(quote.total().minor()).isEqualTo(110_000L);
 
-        assertThat(jdbc.sql("SELECT line_type FROM pricing.quote_lines WHERE quote_id = :id "
-                        + "ORDER BY line_type")
-                .param("id", quote.quoteId()).query(String.class).list())
+        assertThat(jdbc.sql("SELECT line_type FROM pricing.quote_lines WHERE quote_id = :id " + "ORDER BY line_type")
+                        .param("id", quote.quoteId())
+                        .query(String.class)
+                        .list())
                 .containsExactly("DELIVERY_FEE", "ITEM");
         assertThat(jdbc.sql("SELECT source_variant_id FROM pricing.quote_lines "
-                        + "WHERE quote_id = :id AND line_type = 'DELIVERY_FEE'")
-                .param("id", quote.quoteId()).query(UUID.class).optional())
+                                + "WHERE quote_id = :id AND line_type = 'DELIVERY_FEE'")
+                        .param("id", quote.quoteId())
+                        .query(UUID.class)
+                        .optional())
                 .as("a fee line carries no catalogue variant")
                 .isEmpty();
 
         assertThat(jdbc.sql("SELECT adjustment_type FROM pricing.quote_adjustments "
-                        + "WHERE quote_id = :id ORDER BY sequence")
-                .param("id", quote.quoteId()).query(String.class).list())
+                                + "WHERE quote_id = :id ORDER BY sequence")
+                        .param("id", quote.quoteId())
+                        .query(String.class)
+                        .list())
                 .contains("FEE");
     }
 
@@ -611,8 +677,13 @@ class DeliveryFeeResolutionTests {
         seedCatalogAndPrices();
 
         Quote delivered = quotes.quote(deliveredCart(1));
-        Quote collected = quotes.quote(new QuoteRequest(TENANT, BRAND, locatedBranch, null,
-                "STOREFRONT", List.of(new QuoteRequest.Line("a", burgerVariant, 1, List.of())),
+        Quote collected = quotes.quote(new QuoteRequest(
+                TENANT,
+                BRAND,
+                locatedBranch,
+                null,
+                "STOREFRONT",
+                List.of(new QuoteRequest.Line("a", burgerVariant, 1, List.of())),
                 null));
 
         // Same basket, same branch, same prices, different delivery: if the charge
@@ -635,8 +706,10 @@ class DeliveryFeeResolutionTests {
         // A waiver rather than a fee computed as zero: a zero with no adjustment
         // beside it cannot be told apart from a broken tariff lookup.
         assertThat(jdbc.sql("SELECT count(*) FROM pricing.quote_adjustments "
-                        + "WHERE quote_id = :id AND adjustment_type = 'DELIVERY_FEE_WAIVER'")
-                .param("id", quote.quoteId()).query(Long.class).single())
+                                + "WHERE quote_id = :id AND adjustment_type = 'DELIVERY_FEE_WAIVER'")
+                        .param("id", quote.quoteId())
+                        .query(Long.class)
+                        .single())
                 .isEqualTo(1L);
     }
 
@@ -670,8 +743,10 @@ class DeliveryFeeResolutionTests {
         // "add 30,000 more" is actionable, "something is wrong" is not.
         assertThat(quote.total().minor()).isEqualTo(60_000L);
         assertThat(jdbc.sql("SELECT calculation_document ->> 'deliveryShortfallMinor' "
-                        + "FROM pricing.quotes WHERE id = :id")
-                .param("id", quote.quoteId()).query(String.class).single())
+                                + "FROM pricing.quotes WHERE id = :id")
+                        .param("id", quote.quoteId())
+                        .query(String.class)
+                        .single())
                 .isEqualTo("30000");
     }
 
@@ -688,10 +763,15 @@ class DeliveryFeeResolutionTests {
         assertThat(quote.fees().minor()).isZero();
         assertThat(quote.total().minor()).isEqualTo(50_000L);
         assertThat(jdbc.sql("SELECT count(*) FROM pricing.quote_lines "
-                        + "WHERE quote_id = :id AND line_type = 'DELIVERY_FEE'")
-                .param("id", quote.quoteId()).query(Long.class).single())
+                                + "WHERE quote_id = :id AND line_type = 'DELIVERY_FEE'")
+                        .param("id", quote.quoteId())
+                        .query(Long.class)
+                        .single())
                 .isZero();
-        assertThat(resolutionStore.latestForQuote(TENANT, quote.quoteId()).orElseThrow().outcome())
+        assertThat(resolutionStore
+                        .latestForQuote(TENANT, quote.quoteId())
+                        .orElseThrow()
+                        .outcome())
                 .isEqualTo(DeliveryFeeOutcome.OUT_OF_ZONE);
     }
 
@@ -701,11 +781,18 @@ class DeliveryFeeResolutionTests {
         activeCircleZone("CITY", 8_000, 0, cityTariff, null, null);
         seedCatalogAndPrices();
 
-        quotes.quote(new QuoteRequest(TENANT, BRAND, locatedBranch, null, "STOREFRONT",
-                List.of(new QuoteRequest.Line("a", burgerVariant, 1, List.of())), null));
+        quotes.quote(new QuoteRequest(
+                TENANT,
+                BRAND,
+                locatedBranch,
+                null,
+                "STOREFRONT",
+                List.of(new QuoteRequest.Line("a", burgerVariant, 1, List.of())),
+                null));
 
         assertThat(jdbc.sql("SELECT count(*) FROM fulfillment.delivery_fee_resolutions")
-                .query(Long.class).single())
+                        .query(Long.class)
+                        .single())
                 .isZero();
     }
 
@@ -715,8 +802,8 @@ class DeliveryFeeResolutionTests {
     @DisplayName("ROAD mode without a routing answer falls back and records that it did")
     void roadModeFallsBackVisibly() {
         UUID installation = seedRoutingInstallation();
-        UUID roadTariff = seedTariff("ROAD", 15_000,
-                List.of(new TariffBand(0, 0, 15_000, 0L, 2_000L)), List.of(), installation);
+        UUID roadTariff =
+                seedTariff("ROAD", 15_000, List.of(new TariffBand(0, 0, 15_000, 0L, 2_000L)), List.of(), installation);
         jdbc.sql("""
                 UPDATE fulfillment.delivery_tariff_versions
                 SET distance_mode = 'ROAD' WHERE tariff_id = :id
@@ -758,8 +845,7 @@ class DeliveryFeeResolutionTests {
             assertThat(resolution.outcome()).isEqualTo(DeliveryFeeOutcome.RESOLVED);
             LocalDateTime local = LocalDateTime.ofInstant(at, ZoneId.of("Asia/Tashkent"));
             long expectedFee = LegacyDeliveryOracle.price(legacy, resolution.distanceMeters(), local);
-            long expectedDiscount =
-                    LegacyDeliveryOracle.discount(legacy, resolution.distanceMeters(), local);
+            long expectedDiscount = LegacyDeliveryOracle.discount(legacy, resolution.distanceMeters(), local);
 
             assertThat(resolution.finalFeeMinor()).isEqualTo(expectedFee);
             assertThat(resolution.tariffDiscountMinor()).isEqualTo(expectedDiscount);
@@ -801,8 +887,8 @@ class DeliveryFeeResolutionTests {
         assertThat(reloaded.feeRoundingRule().name()).isEqualTo("HALF_EVEN");
         assertThat(reloaded.discounts()).hasSize(1);
         assertThat(reloaded.bandsOf("PEAK_0")).isNotEmpty();
-        assertThat(reloaded.timeRules()).allSatisfy(
-                rule -> assertThat(rule.bandSet()).isEqualTo("PEAK_0"));
+        assertThat(reloaded.timeRules())
+                .allSatisfy(rule -> assertThat(rule.bandSet()).isEqualTo("PEAK_0"));
     }
 
     @Test
@@ -826,27 +912,29 @@ class DeliveryFeeResolutionTests {
                 SELECT adjustment_type, amount_minor FROM pricing.quote_adjustments
                 WHERE quote_id = :id AND adjustment_type <> 'BASE_PRICE'
                 ORDER BY sequence
-                """).param("id", quote.quoteId())
-                .query((row, number) -> row.getString("adjustment_type")
-                        + "=" + row.getLong("amount_minor"))
+                """)
+                .param("id", quote.quoteId())
+                .query((row, number) -> row.getString("adjustment_type") + "=" + row.getLong("amount_minor"))
                 .list();
 
         // The discount is named separately from the waiver. Collapsing the two into
         // one type would make them indistinguishable in every report that groups by
         // adjustment type, and they answer to different owners — one to a rate
         // table, the other to a zone.
-        assertThat(reductions).anySatisfy(
-                entry -> assertThat(entry).startsWith("DELIVERY_TARIFF_DISCOUNT="));
-        assertThat(reductions).anySatisfy(
-                entry -> assertThat(entry).startsWith("DELIVERY_FEE_WAIVER="));
+        assertThat(reductions).anySatisfy(entry -> assertThat(entry).startsWith("DELIVERY_TARIFF_DISCOUNT="));
+        assertThat(reductions).anySatisfy(entry -> assertThat(entry).startsWith("DELIVERY_FEE_WAIVER="));
 
         long fee = jdbc.sql("SELECT amount_minor FROM pricing.quote_adjustments "
                         + "WHERE quote_id = :id AND adjustment_type = 'FEE'")
-                .param("id", quote.quoteId()).query(Long.class).single();
+                .param("id", quote.quoteId())
+                .query(Long.class)
+                .single();
         long reduced = jdbc.sql("SELECT coalesce(sum(amount_minor), 0) "
                         + "FROM pricing.quote_adjustments WHERE quote_id = :id "
                         + "AND adjustment_type IN ('DELIVERY_TARIFF_DISCOUNT', 'DELIVERY_FEE_WAIVER')")
-                .param("id", quote.quoteId()).query(Long.class).single();
+                .param("id", quote.quoteId())
+                .query(Long.class)
+                .single();
 
         // Exactly the fee, never more. Two waivers that each know only the gross
         // charge would sum past it and hand the customer money for delivering food
@@ -862,35 +950,51 @@ class DeliveryFeeResolutionTests {
      */
     private static LegacyTariffImport.LegacyDeliveryConfig legacyBranchConfig() {
         return new LegacyTariffImport.LegacyDeliveryConfig(
-                3_000, 12_000, 12_000L, 30_000L,
-                new LegacyTariffImport.LegacyDiscount(5_000L, "amount", 25_000L,
-                        List.of(new LegacyTariffImport.LegacyWindow(
-                                LocalTime.of(10, 0), LocalTime.of(14, 0)))),
-                List.of(new LegacyTariffImport.LegacyStep(2_000, 1_500L),
+                3_000,
+                12_000,
+                12_000L,
+                30_000L,
+                new LegacyTariffImport.LegacyDiscount(
+                        5_000L,
+                        "amount",
+                        25_000L,
+                        List.of(new LegacyTariffImport.LegacyWindow(LocalTime.of(10, 0), LocalTime.of(14, 0)))),
+                List.of(
+                        new LegacyTariffImport.LegacyStep(2_000, 1_500L),
                         new LegacyTariffImport.LegacyStep(5_000, 2_000L)),
                 List.of(new LegacyTariffImport.LegacyPeak(
-                        LocalTime.of(18, 0), LocalTime.of(22, 0), 2_000, 15_000L,
-                        List.of(new LegacyTariffImport.LegacyStep(3_000, 2_500L),
+                        LocalTime.of(18, 0),
+                        LocalTime.of(22, 0),
+                        2_000,
+                        15_000L,
+                        List.of(
+                                new LegacyTariffImport.LegacyStep(3_000, 2_500L),
                                 new LegacyTariffImport.LegacyStep(6_000, 3_000L)))));
     }
 
     private UUID importLegacyBranch(String code, LegacyTariffImport.LegacyDeliveryConfig legacy) {
         UUID installation = seedRoutingInstallation();
         UUID tariffId = tariffs.createTariff(TENANT, BRAND, code, code, false);
-        var drafted = tariffs.draftVersion(TENANT, BRAND,
-                LegacyTariffImport.toTariff(tariffId, legacy, "UZS", installation), ACTOR);
+        var drafted = tariffs.draftVersion(
+                TENANT, BRAND, LegacyTariffImport.toTariff(tariffId, legacy, "UZS", installation), ACTOR);
         tariffs.activate(TENANT, BRAND, tariffId, drafted.version(), ACTOR);
         return tariffId;
     }
 
     private DeliveryFeeQuery query(UUID locationId, GeoPoint destination, long subtotal, Instant at) {
-        return new DeliveryFeeQuery(TENANT, BRAND, locationId, null, destination, "UZS",
-                subtotal, PricingAuthority.HORECAOS, at);
+        return new DeliveryFeeQuery(
+                TENANT, BRAND, locationId, null, destination, "UZS", subtotal, PricingAuthority.HORECAOS, at);
     }
 
     private QuoteRequest deliveredCart(int quantity) {
-        return new QuoteRequest(TENANT, BRAND, locatedBranch, null, "STOREFRONT",
-                List.of(new QuoteRequest.Line("a", burgerVariant, quantity, List.of())), null,
+        return new QuoteRequest(
+                TENANT,
+                BRAND,
+                locatedBranch,
+                null,
+                "STOREFRONT",
+                List.of(new QuoteRequest.Line("a", burgerVariant, quantity, List.of())),
+                null,
                 new QuoteRequest.Delivery(NEARBY, PricingAuthority.HORECAOS));
     }
 
@@ -901,18 +1005,19 @@ class DeliveryFeeResolutionTests {
         return (origin, destination, installationId) -> Optional.empty();
     }
 
-    private UUID activeCircleZone(String code, int radiusMeters, int priority, UUID tariffId,
-            Long freeFrom, Long minBasket) {
-        return activeZone(code, ZoneRole.DELIVERY, radiusMeters, priority, tariffId, freeFrom,
-                minBasket);
+    private UUID activeCircleZone(
+            String code, int radiusMeters, int priority, UUID tariffId, Long freeFrom, Long minBasket) {
+        return activeZone(code, ZoneRole.DELIVERY, radiusMeters, priority, tariffId, freeFrom, minBasket);
     }
 
-    private UUID activeZone(String code, ZoneRole role, int radiusMeters, int priority,
-            UUID tariffId, Long freeFrom, Long minBasket) {
+    private UUID activeZone(
+            String code, ZoneRole role, int radiusMeters, int priority, UUID tariffId, Long freeFrom, Long minBasket) {
         UUID zoneId = zones.createZone(TENANT, BRAND, role, code, code, code, code);
-        var drafted = zones.draftCircleVersion(new ServiceZoneService.NewVersion(TENANT, BRAND,
-                zoneId, role, null, priority, "UZS", tariffId, freeFrom, minBasket, ACTOR),
-                locatedBranch, radiusMeters);
+        var drafted = zones.draftCircleVersion(
+                new ServiceZoneService.NewVersion(
+                        TENANT, BRAND, zoneId, role, null, priority, "UZS", tariffId, freeFrom, minBasket, ACTOR),
+                locatedBranch,
+                radiusMeters);
         zones.activate(TENANT, BRAND, zoneId, drafted.version(), ACTOR);
         zones.bindLocation(TENANT, BRAND, zoneId, locatedBranch);
         return zoneId;
@@ -920,35 +1025,55 @@ class DeliveryFeeResolutionTests {
 
     /** ADR 0037's illustrative Tashkent tariff, activated. */
     private UUID seedTashkentTariff() {
-        return seedTariff("CITY", 15_000,
-                List.of(new TariffBand(0, 0, 3_000, 10_000L, 0L),
+        return seedTariff(
+                "CITY",
+                15_000,
+                List.of(
+                        new TariffBand(0, 0, 3_000, 10_000L, 0L),
                         // Base zero: bands accumulate, so the ten thousand on the
                         // band below is already counted (V0032).
                         new TariffBand(1, 3_000, 15_000, 0L, 2_000L)),
-                List.of(new TariffTimeRule(0, 10, WEEKDAYS, LocalTime.of(18, 0),
-                        LocalTime.of(22, 0), 10_000, 5_000L)),
+                List.of(new TariffTimeRule(0, 10, WEEKDAYS, LocalTime.of(18, 0), LocalTime.of(22, 0), 10_000, 5_000L)),
                 null);
     }
 
     private UUID seedFlatTariff(String code, long feeMinor) {
-        return seedTariff(code, 15_000,
-                List.of(new TariffBand(0, 0, 15_000, feeMinor, 0L)), List.of(), null);
+        return seedTariff(code, 15_000, List.of(new TariffBand(0, 0, 15_000, feeMinor, 0L)), List.of(), null);
     }
 
-    private UUID seedTariff(String code, int maxDistanceMeters, List<TariffBand> bands,
-            List<TariffTimeRule> rules, UUID routingInstallationId) {
+    private UUID seedTariff(
+            String code,
+            int maxDistanceMeters,
+            List<TariffBand> bands,
+            List<TariffTimeRule> rules,
+            UUID routingInstallationId) {
         UUID tariffId = tariffs.createTariff(TENANT, BRAND, code, code, false);
-        var drafted = tariffs.draftVersion(TENANT, BRAND,
-                draft(tariffId, maxDistanceMeters, bands, rules, routingInstallationId), ACTOR);
+        var drafted = tariffs.draftVersion(
+                TENANT, BRAND, draft(tariffId, maxDistanceMeters, bands, rules, routingInstallationId), ACTOR);
         tariffs.activate(TENANT, BRAND, tariffId, drafted.version(), ACTOR);
         return tariffId;
     }
 
-    private static DeliveryTariff draft(UUID tariffId, int maxDistanceMeters,
-            List<TariffBand> bands, List<TariffTimeRule> rules, UUID routingInstallationId) {
-        return new DeliveryTariff(tariffId, 0, VersionStatus.DRAFT, "UZS", FeeSource.TARIFF,
-                DistanceMode.RADIUS, 13_000, routingInstallationId, maxDistanceMeters,
-                0L, 40_000L, bands, rules);
+    private static DeliveryTariff draft(
+            UUID tariffId,
+            int maxDistanceMeters,
+            List<TariffBand> bands,
+            List<TariffTimeRule> rules,
+            UUID routingInstallationId) {
+        return new DeliveryTariff(
+                tariffId,
+                0,
+                VersionStatus.DRAFT,
+                "UZS",
+                FeeSource.TARIFF,
+                DistanceMode.RADIUS,
+                13_000,
+                routingInstallationId,
+                maxDistanceMeters,
+                0L,
+                40_000L,
+                bands,
+                rules);
     }
 
     private void seedTenancy() {
@@ -966,8 +1091,11 @@ class DeliveryFeeResolutionTests {
                 VALUES (:id, :tenantId, :brandId, 'CENTRE', 'centre', 'Centre',
                         'Asia/Tashkent', 'ACTIVE', 0, :lat, :lon, 'MERCHANT_PIN')
                 """)
-                .param("id", locatedBranch).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("lat", BRANCH_POINT.latitude()).param("lon", BRANCH_POINT.longitude())
+                .param("id", locatedBranch)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("lat", BRANCH_POINT.latitude())
+                .param("lon", BRANCH_POINT.longitude())
                 .update();
 
         unlocatedBranch = UUID.randomUUID();
@@ -977,7 +1105,9 @@ class DeliveryFeeResolutionTests {
                 VALUES (:id, :tenantId, :brandId, 'GHOST', 'ghost', 'Unplaced',
                         'Asia/Tashkent', 'ACTIVE', 0)
                 """)
-                .param("id", unlocatedBranch).param("tenantId", TENANT).param("brandId", BRAND)
+                .param("id", unlocatedBranch)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
                 .update();
 
         jdbc.sql("""
@@ -997,7 +1127,9 @@ class DeliveryFeeResolutionTests {
                 VALUES (:id, :tenantId, :code, 'RU', 'UZ', 'EN',
                     41.31, 69.24, 40.5, 68.5, 42.0, 70.0)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("code", code)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("code", code)
                 .update();
         return id;
     }
@@ -1014,8 +1146,12 @@ class DeliveryFeeResolutionTests {
         jdbc.sql("""
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
                 VALUES (:id, :tenantId, :code, :slug, 'Brand', 'ACTIVE', 0)
-                """).param("id", brandId).param("tenantId", tenantId)
-                .param("code", code).param("slug", code.toLowerCase(java.util.Locale.ROOT)).update();
+                """)
+                .param("id", brandId)
+                .param("tenantId", tenantId)
+                .param("code", code)
+                .param("slug", code.toLowerCase(java.util.Locale.ROOT))
+                .update();
 
         UUID locationId = UUID.randomUUID();
         jdbc.sql("""
@@ -1024,9 +1160,13 @@ class DeliveryFeeResolutionTests {
                 VALUES (:id, :tenantId, :brandId, :code, :slug, 'Branch',
                         'Asia/Tashkent', 'ACTIVE', 0, :lat, :lon, 'MERCHANT_PIN')
                 """)
-                .param("id", locationId).param("tenantId", tenantId).param("brandId", brandId)
-                .param("code", code).param("slug", code.toLowerCase(java.util.Locale.ROOT))
-                .param("lat", point.latitude()).param("lon", point.longitude())
+                .param("id", locationId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("code", code)
+                .param("slug", code.toLowerCase(java.util.Locale.ROOT))
+                .param("lat", point.latitude())
+                .param("lon", point.longitude())
                 .update();
         return locationId;
     }
@@ -1053,7 +1193,10 @@ class DeliveryFeeResolutionTests {
         jdbc.sql("""
                 INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
                 VALUES (:id, :tenantId, :brandId, 'MAIN', 'Main menu', 'ACTIVE')
-                """).param("id", catalogId).param("tenantId", TENANT).param("brandId", BRAND)
+                """)
+                .param("id", catalogId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
                 .update();
 
         UUID productId = UUID.randomUUID();
@@ -1061,62 +1204,93 @@ class DeliveryFeeResolutionTests {
         jdbc.sql("""
                 INSERT INTO catalog.products (id, tenant_id, brand_id, code, status)
                 VALUES (:id, :tenantId, :brandId, 'BURGER', 'ACTIVE')
-                """).param("id", productId).param("tenantId", TENANT).param("brandId", BRAND)
+                """)
+                .param("id", productId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
                 .update();
         jdbc.sql("""
                 INSERT INTO catalog.variants (id, tenant_id, brand_id, product_id, sku, status)
                 VALUES (:id, :tenantId, :brandId, :productId, 'SKU-BURGER', 'ACTIVE')
-                """).param("id", burgerVariant).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("productId", productId).update();
+                """)
+                .param("id", burgerVariant)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("productId", productId)
+                .update();
         jdbc.sql("""
                 INSERT INTO catalog.catalog_products (tenant_id, brand_id, catalog_id, product_id)
                 VALUES (:tenantId, :brandId, :catalogId, :productId)
-                """).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("catalogId", catalogId).param("productId", productId).update();
+                """)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("catalogId", catalogId)
+                .param("productId", productId)
+                .update();
         jdbc.sql("""
                 INSERT INTO catalog.translations (tenant_id, brand_id, entity_type, entity_id,
                     locale, name)
                 VALUES (:tenantId, :brandId, 'PRODUCT', :productId, 'uz', 'Burger')
-                """).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("productId", productId).update();
+                """)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("productId", productId)
+                .update();
         jdbc.sql("""
                 INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel,
                     status, content_hash, activated_at)
                 VALUES (:id, :tenantId, :brandId, :catalogId, 'STOREFRONT', 'PUBLISHED',
                         'hash', now())
-                """).param("id", UUID.randomUUID()).param("tenantId", TENANT)
-                .param("brandId", BRAND).param("catalogId", catalogId).update();
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("catalogId", catalogId)
+                .update();
 
         UUID priceBook = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO pricing.price_books (id, tenant_id, brand_id, name, currency, status,
                     valid_from, priority)
                 VALUES (:id, :tenantId, :brandId, 'BRAND_MENU', 'UZS', 'ACTIVE', :from, 0)
-                """).param("id", priceBook).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("from", java.time.OffsetDateTime.ofInstant(
-                        NOON.minusSeconds(86_400), ZoneOffset.UTC)).update();
+                """)
+                .param("id", priceBook)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("from", java.time.OffsetDateTime.ofInstant(NOON.minusSeconds(86_400), ZoneOffset.UTC))
+                .update();
         jdbc.sql("""
                 INSERT INTO pricing.price_book_assignments (id, tenant_id, brand_id, price_book_id,
                     scope_type, scope_id, valid_from, priority)
                 VALUES (:id, :tenantId, :brandId, :priceBookId, 'BRAND', NULL, :from, 0)
-                """).param("id", UUID.randomUUID()).param("tenantId", TENANT).param("brandId", BRAND)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
                 .param("priceBookId", priceBook)
-                .param("from", java.time.OffsetDateTime.ofInstant(
-                        NOON.minusSeconds(86_400), ZoneOffset.UTC)).update();
+                .param("from", java.time.OffsetDateTime.ofInstant(NOON.minusSeconds(86_400), ZoneOffset.UTC))
+                .update();
         jdbc.sql("""
                 INSERT INTO pricing.prices (id, tenant_id, brand_id, price_book_id,
                     priceable_type, priceable_id, amount_minor, valid_from)
                 VALUES (:id, :tenantId, :brandId, :priceBookId, 'VARIANT', :variantId, 50000, :from)
-                """).param("id", UUID.randomUUID()).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("priceBookId", priceBook).param("variantId", burgerVariant)
-                .param("from", java.time.OffsetDateTime.ofInstant(
-                        NOON.minusSeconds(86_400), ZoneOffset.UTC)).update();
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("priceBookId", priceBook)
+                .param("variantId", burgerVariant)
+                .param("from", java.time.OffsetDateTime.ofInstant(NOON.minusSeconds(86_400), ZoneOffset.UTC))
+                .update();
         jdbc.sql("""
                 INSERT INTO pricing.tax_profiles (id, tenant_id, brand_id, jurisdiction_code,
                     mode, rate_basis_points, valid_from)
                 VALUES (:id, :tenantId, :brandId, 'UZ', 'INCLUSIVE', 1200, :from)
-                """).param("id", UUID.randomUUID()).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("from", java.time.OffsetDateTime.ofInstant(
-                        NOON.minusSeconds(86_400), ZoneOffset.UTC)).update();
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("from", java.time.OffsetDateTime.ofInstant(NOON.minusSeconds(86_400), ZoneOffset.UTC))
+                .update();
     }
 }

@@ -2,6 +2,7 @@ package uz.horecaos.platform.tenancy.application.identity;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -10,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -19,18 +19,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.iam.api.organizations.OrganizationDirectory;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner.OrganizationSnapshot;
+import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.application.identity.IdentityDriftReporter.DriftCode;
 import uz.horecaos.platform.tenancy.application.identity.IdentityDriftReporter.DriftFinding;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcTenantOrganizationLinkStore;
-import uz.horecaos.platform.support.TestDatabase;
 
 /**
  * ADR 0009 drift reporting.
@@ -62,8 +58,7 @@ class IdentityDriftReporterTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        dataSource = new DriverManagerDataSource(
-                db.jdbcUrl(), db.username(), db.password());
+        dataSource = new DriverManagerDataSource(db.jdbcUrl(), db.username(), db.password());
     }
 
     @AfterAll
@@ -105,12 +100,10 @@ class IdentityDriftReporterTests {
 
         var report = reporter.scan();
 
-        assertThat(report.findings())
-                .singleElement()
-                .satisfies(finding -> {
-                    assertThat(finding.tenantId()).isEqualTo(TENANT_A);
-                    assertThat(finding.code()).isEqualTo(DriftCode.ORGANIZATION_MISSING);
-                });
+        assertThat(report.findings()).singleElement().satisfies(finding -> {
+            assertThat(finding.tenantId()).isEqualTo(TENANT_A);
+            assertThat(finding.code()).isEqualTo(DriftCode.ORGANIZATION_MISSING);
+        });
         assertThat(keycloak.writes)
                 .as("ADR 0009 rejected automatic correction: a report never writes")
                 .isZero();
@@ -180,9 +173,7 @@ class IdentityDriftReporterTests {
         var report = reporter.scan();
 
         assertThat(report.checked()).isEqualTo(2);
-        assertThat(report.findings())
-                .extracting(DriftFinding::tenantId)
-                .containsExactly(TENANT_A);
+        assertThat(report.findings()).extracting(DriftFinding::tenantId).containsExactly(TENANT_A);
         assertThat(auditedTenantScopes())
                 .as("the audit fact is scoped to the tenant that is actually wrong")
                 .containsExactly(TENANT_A);
@@ -196,14 +187,10 @@ class IdentityDriftReporterTests {
         // healthy because some organization in the realm happens to be fine.
         keycloak.holds("org-b", "beta", true);
 
-        assertThat(reporter.scan().findings())
-                .singleElement()
-                .satisfies(finding -> {
-                    assertThat(finding.tenantId()).isEqualTo(TENANT_A);
-                    assertThat(finding.detail())
-                            .contains("org-a")
-                            .doesNotContain("org-b");
-                });
+        assertThat(reporter.scan().findings()).singleElement().satisfies(finding -> {
+            assertThat(finding.tenantId()).isEqualTo(TENANT_A);
+            assertThat(finding.detail()).contains("org-a").doesNotContain("org-b");
+        });
     }
 
     @Test
@@ -218,8 +205,11 @@ class IdentityDriftReporterTests {
                 .as("an unreachable realm would otherwise raise a finding for every tenant at once")
                 .isEmpty();
         assertThat(report.unreachable()).isEqualTo(2);
-        assertThat(meters.find("horecaos.iam.identity.drift.scans").tag("outcome", "partial")
-                .counter().count()).isEqualTo(1);
+        assertThat(meters.find("horecaos.iam.identity.drift.scans")
+                        .tag("outcome", "partial")
+                        .counter()
+                        .count())
+                .isEqualTo(1);
     }
 
     @Test
@@ -233,8 +223,10 @@ class IdentityDriftReporterTests {
                  WHERE action_code = 'iam.identity_drift_detected' AND audit_class = 'SECURITY'
                 """).query(Long.class).single()).isEqualTo(1L);
         assertThat(meters.find("horecaos.iam.identity.drift.detected")
-                .tag("code", DriftCode.ORGANIZATION_MISSING.name())
-                .counter().count()).isEqualTo(1);
+                        .tag("code", DriftCode.ORGANIZATION_MISSING.name())
+                        .counter()
+                        .count())
+                .isEqualTo(1);
     }
 
     /**
@@ -243,13 +235,17 @@ class IdentityDriftReporterTests {
      */
     @Test
     void theReportPublishesItsOwnAgeSoASilentReportIsVisible() {
-        assertThat(meters.find("horecaos.iam.identity.drift.report.age.seconds").gauge().value())
+        assertThat(meters.find("horecaos.iam.identity.drift.report.age.seconds")
+                        .gauge()
+                        .value())
                 .as("negative until the first pass completes, so an absent report is not zero")
                 .isNegative();
 
         reporter.scan();
 
-        assertThat(meters.find("horecaos.iam.identity.drift.report.age.seconds").gauge().value())
+        assertThat(meters.find("horecaos.iam.identity.drift.report.age.seconds")
+                        .gauge()
+                        .value())
                 .isZero();
     }
 
@@ -292,8 +288,7 @@ class IdentityDriftReporterTests {
         private int writes;
 
         void holds(String organizationId, String alias, boolean enabled) {
-            organizations.put(organizationId,
-                    new OrganizationSnapshot(organizationId, alias, alias, enabled));
+            organizations.put(organizationId, new OrganizationSnapshot(organizationId, alias, alias, enabled));
         }
 
         @Override

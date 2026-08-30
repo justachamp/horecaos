@@ -1,9 +1,7 @@
 package uz.horecaos.platform.reporting.application;
 
 import java.util.UUID;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 
 /**
@@ -39,8 +37,6 @@ public class SubjectPseudonym {
 
     /** @return null for an order with no customer account, which is not an error */
     public String of(UUID tenantId, UUID customerAccountId) {
-        return customerAccountId == null
-                ? null
-                : protection.lookupHash(tenantId, DOMAIN, customerAccountId.toString());
+        return customerAccountId == null ? null : protection.lookupHash(tenantId, DOMAIN, customerAccountId.toString());
     }
 }

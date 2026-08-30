@@ -8,11 +8,9 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.integration.api.pos.PosApiCall;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.pos.RecordingPosTransport;
@@ -64,12 +62,10 @@ class CloposAdapterTests {
 
         CapabilitySnapshot snapshot = adapter.discoverCapabilities(context());
 
-        assertThat(snapshot.entry(PosCapability.PREPARATION_STATUS))
-                .get()
-                .satisfies(entry -> {
-                    assertThat(entry.support()).isEqualTo(CapabilitySupport.UNSUPPORTED);
-                    assertThat(entry.evidence()).contains("we write");
-                });
+        assertThat(snapshot.entry(PosCapability.PREPARATION_STATUS)).get().satisfies(entry -> {
+            assertThat(entry.support()).isEqualTo(CapabilitySupport.UNSUPPORTED);
+            assertThat(entry.evidence()).contains("we write");
+        });
         assertThat(snapshot.usable(PosCapability.PREPARATION_STATUS)).isFalse();
     }
 
@@ -80,19 +76,16 @@ class CloposAdapterTests {
 
         CapabilitySnapshot snapshot = adapter.discoverCapabilities(context());
 
-        assertThat(snapshot.entry(PosCapability.CUSTOMER_UPSERT))
-                .get()
-                .satisfies(entry -> {
-                    assertThat(entry.support())
-                            .as("UNSUPPORTED means the provider cannot; Clopos can, and it is the "
-                                    + "ADR 0029 consent basis we are missing")
-                            .isEqualTo(CapabilitySupport.PARTIAL);
-                    assertThat(entry.evidence())
-                            .as("PARTIAL is only honest if the rationale says which part is missing")
-                            .contains("consent basis");
-                    assertThat(entry.idempotency())
-                            .isEqualTo(CapabilitySnapshot.IdempotencyBehaviour.NONE);
-                });
+        assertThat(snapshot.entry(PosCapability.CUSTOMER_UPSERT)).get().satisfies(entry -> {
+            assertThat(entry.support())
+                    .as("UNSUPPORTED means the provider cannot; Clopos can, and it is the "
+                            + "ADR 0029 consent basis we are missing")
+                    .isEqualTo(CapabilitySupport.PARTIAL);
+            assertThat(entry.evidence())
+                    .as("PARTIAL is only honest if the rationale says which part is missing")
+                    .contains("consent basis");
+            assertThat(entry.idempotency()).isEqualTo(CapabilitySnapshot.IdempotencyBehaviour.NONE);
+        });
         // The consequence that made the wrong value more than a wording problem:
         // UNSUPPORTED is the one answer a binding can never override, so encoding
         // our own policy as it made a reversible decision look permanent. The
@@ -111,17 +104,15 @@ class CloposAdapterTests {
 
         assertThat(snapshot.entry(PosCapability.ORDER_EXPORT))
                 .get()
-                .satisfies(entry -> assertThat(entry.idempotency())
-                        .isEqualTo(CapabilitySnapshot.IdempotencyBehaviour.NONE));
+                .satisfies(entry ->
+                        assertThat(entry.idempotency()).isEqualTo(CapabilitySnapshot.IdempotencyBehaviour.NONE));
     }
 
     @Test
     @DisplayName("the export is classified as an unkeyed create, which is what makes a lost "
             + "response uncertain rather than retryable")
     void theExportDeclaresItsEffect() {
-        transport
-                .enqueue(authOk())
-                .enqueue(RecordingPosTransport.object(Map.of("id", 771, "status", "PENDING")));
+        transport.enqueue(authOk()).enqueue(RecordingPosTransport.object(Map.of("id", 771, "status", "PENDING")));
 
         adapter.exportOrder(context(), order());
 
@@ -152,9 +143,7 @@ class CloposAdapterTests {
     @Test
     @DisplayName("the clerk is asked by default, so a failure leaves an order rather than food")
     void autoAcceptIsOffUnlessConfigured() {
-        transport
-                .enqueue(authOk())
-                .enqueue(RecordingPosTransport.object(Map.of("id", 771, "status", "PENDING")));
+        transport.enqueue(authOk()).enqueue(RecordingPosTransport.object(Map.of("id", 771, "status", "PENDING")));
 
         ExportResult result = adapter.exportOrder(context(), order());
 
@@ -170,24 +159,19 @@ class CloposAdapterTests {
     @Test
     @DisplayName("the correlation reference is sent even though the schema omits the field")
     void theCorrelationReferenceIsSentAnyway() {
-        transport
-                .enqueue(authOk())
-                .enqueue(RecordingPosTransport.object(Map.of("id", 771, "status", "PENDING")));
+        transport.enqueue(authOk()).enqueue(RecordingPosTransport.object(Map.of("id", 771, "status", "PENDING")));
 
         adapter.exportOrder(context(), order());
 
         assertThat(transport.bodies().getLast())
-                .as("if it is honoured the recovery read is deterministic, and if it is dropped "
-                        + "nothing is lost")
+                .as("if it is honoured the recovery read is deterministic, and if it is dropped " + "nothing is lost")
                 .containsEntry("order_number", "A-1024");
     }
 
     @Test
     @DisplayName("the recovery read does not filter by status")
     void filteringOnPendingWouldMissAnOrderTheClerkJustAccepted() {
-        transport
-                .enqueue(authOk())
-                .answerWith(RecordingPosTransport.list(List.of()));
+        transport.enqueue(authOk()).answerWith(RecordingPosTransport.list(List.of()));
 
         adapter.findExportedOrder(context(), probe());
 
@@ -204,9 +188,7 @@ class CloposAdapterTests {
     @DisplayName("a candidate is returned with its evidence, and echoed correlation is false "
             + "when the provider carried nothing back")
     void theRecoveryReadReturnsEvidenceRatherThanAVerdict() {
-        transport
-                .enqueue(authOk())
-                .enqueue(RecordingPosTransport.list(List.of(cloposOrder())));
+        transport.enqueue(authOk()).enqueue(RecordingPosTransport.list(List.of(cloposOrder())));
 
         RecoveryRead read = adapter.findExportedOrder(context(), probe());
 
@@ -236,8 +218,7 @@ class CloposAdapterTests {
         assertThat(transport.lastCall().path()).isEqualTo("/orders/771");
         assertThat(transport.bodies().getLast()).containsEntry("status", "IGNORE");
         assertThat(transport.lastCall().effect())
-                .as("setting a terminal state converges, so a lost response really is safe "
-                        + "to send again")
+                .as("setting a terminal state converges, so a lost response really is safe " + "to send again")
                 .isEqualTo(PosApiCall.Effect.IDEMPOTENT_WRITE);
     }
 
@@ -289,9 +270,7 @@ class CloposAdapterTests {
     @Test
     @DisplayName("a truncated catalog read is refused rather than staged")
     void aFailedPageStopsTheWholeRead() {
-        transport
-                .enqueue(authOk())
-                .answerWith(ProviderOutcome.retryable("PROVIDER_UNAVAILABLE", "500", null));
+        transport.enqueue(authOk()).answerWith(ProviderOutcome.retryable("PROVIDER_UNAVAILABLE", "500", null));
 
         var read = adapter.readCatalog(context());
 
@@ -313,40 +292,59 @@ class CloposAdapterTests {
         row.put("created_at", "2026-08-23 12:00:05");
         row.put("integration_uuid", null);
         row.put("integration_id", null);
-        row.put("payload", Map.of(
-                "customer", Map.of("phone", "+998 90 123 45 67"),
-                "products", List.of(Map.of("product_id", 41, "count", 2, "price", 32000))));
+        row.put(
+                "payload",
+                Map.of(
+                        "customer", Map.of("phone", "+998 90 123 45 67"),
+                        "products", List.of(Map.of("product_id", 41, "count", 2, "price", 32000))));
         return row;
     }
 
     private static ProviderOutcome authOk() {
-        return ProviderOutcome.success(Map.of(
-                "success", true,
-                "token", "eyJhbGciOiJIUzI1NiJ9.test",
-                "token_type", "Bearer",
-                "expires_at", NOW.plusSeconds(3600).getEpochSecond()), null);
+        return ProviderOutcome.success(
+                Map.of(
+                        "success",
+                        true,
+                        "token",
+                        "eyJhbGciOiJIUzI1NiJ9.test",
+                        "token_type",
+                        "Bearer",
+                        "expires_at",
+                        NOW.plusSeconds(3600).getEpochSecond()),
+                null);
     }
 
     private static PosContext context() {
-        return new PosContext(TENANT, INSTALLATION, BINDING, "3", Map.of(
-                CloposConfig.BRAND, "openapitest",
-                CloposConfig.CLIENT_ID, "client-1",
-                CloposConfig.INTEGRATOR_ID, "horecaos-test",
-                CloposConfig.SALE_TYPE_ID, "2",
-                CloposConfig.CURRENCY, "UZS"), "correlation-1");
+        return new PosContext(
+                TENANT,
+                INSTALLATION,
+                BINDING,
+                "3",
+                Map.of(
+                        CloposConfig.BRAND, "openapitest",
+                        CloposConfig.CLIENT_ID, "client-1",
+                        CloposConfig.INTEGRATOR_ID, "horecaos-test",
+                        CloposConfig.SALE_TYPE_ID, "2",
+                        CloposConfig.CURRENCY, "UZS"),
+                "correlation-1");
     }
 
     private static OrderExport order() {
-        return new OrderExport(ORDER, "A-1024", "A-1024",
+        return new OrderExport(
+                ORDER,
+                "A-1024",
+                "A-1024",
                 new OrderExport.Customer("55", "Anvar", "+998901234567", "Amir Temur 1"),
                 List.of(new OrderExport.Line("41", "Lagman", 2, 32000L, List.of())),
-                64000L, "UZS", "DELIVERY", true, NOW);
+                64000L,
+                "UZS",
+                "DELIVERY",
+                true,
+                NOW);
     }
 
     private static ExportProbe probe() {
-        List<LineFingerprint.Line> lines =
-                List.of(new LineFingerprint.Line("41", 2, 32000L));
-        return new ExportProbe("A-1024", "+998901234567", LineFingerprint.of(lines), lines,
-                NOW, NOW.plusSeconds(1800));
+        List<LineFingerprint.Line> lines = List.of(new LineFingerprint.Line("41", 2, 32000L));
+        return new ExportProbe("A-1024", "+998901234567", LineFingerprint.of(lines), lines, NOW, NOW.plusSeconds(1800));
     }
 }

@@ -1,19 +1,17 @@
 package uz.horecaos.platform.migration.infrastructure.persistence;
 
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.instantOrNull;
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.utc;
+
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.migration.application.MigrationQuarantineStore;
 import uz.horecaos.platform.migration.domain.MappingStatus;
-
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.instantOrNull;
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.utc;
 
 /**
  * Quarantine persistence (ADR 0024, ADR 0029).
@@ -42,14 +40,15 @@ public class JdbcQuarantineStore implements MigrationQuarantineStore {
 
     /** The item this run already filed for this legacy identity, per {@code uq_quarantine_item}. */
     @Override
-    public Optional<QuarantineItemRow> findByKey(UUID tenantId, UUID runId, String entityType,
-            String legacyId) {
+    public Optional<QuarantineItemRow> findByKey(UUID tenantId, UUID runId, String entityType, String legacyId) {
         return jdbc.sql(SELECT_ITEM + """
                  WHERE tenant_id = :tenantId AND run_id = :runId
                    AND entity_type = :entityType AND legacy_id = :legacyId
                 """)
-                .param("tenantId", tenantId).param("runId", runId)
-                .param("entityType", entityType).param("legacyId", legacyId)
+                .param("tenantId", tenantId)
+                .param("runId", runId)
+                .param("entityType", entityType)
+                .param("legacyId", legacyId)
                 .query(JdbcQuarantineStore::mapItem)
                 .optional();
     }
@@ -76,9 +75,12 @@ public class JdbcQuarantineStore implements MigrationQuarantineStore {
                     :evidenceReference, :status, :resolutionCode, :resolvedBy,
                     :resolvedAt, :now, :now)
                 """)
-                .param("id", item.id()).param("tenantId", item.tenantId())
-                .param("runId", item.runId()).param("entityType", item.entityType())
-                .param("legacyId", item.legacyId()).param("reasonCode", item.reasonCode())
+                .param("id", item.id())
+                .param("tenantId", item.tenantId())
+                .param("runId", item.runId())
+                .param("entityType", item.entityType())
+                .param("legacyId", item.legacyId())
+                .param("reasonCode", item.reasonCode())
                 .param("evidenceReference", item.sanitizedEvidenceReference())
                 .param("status", item.status())
                 .param("resolutionCode", item.resolutionCode())
@@ -110,8 +112,15 @@ public class JdbcQuarantineStore implements MigrationQuarantineStore {
      * The predicate turns that into a refusal the caller has to handle.
      */
     @Override
-    public boolean upsertQuarantinedMapping(UUID mappingId, UUID tenantId, UUID scopeId, UUID runId,
-            String entityType, String legacyId, int transformationVersion, Instant now) {
+    public boolean upsertQuarantinedMapping(
+            UUID mappingId,
+            UUID tenantId,
+            UUID scopeId,
+            UUID runId,
+            String entityType,
+            String legacyId,
+            int transformationVersion,
+            Instant now) {
 
         return jdbc.sql("""
                 INSERT INTO migration.entity_mappings (
@@ -129,23 +138,28 @@ public class JdbcQuarantineStore implements MigrationQuarantineStore {
                     updated_at = EXCLUDED.updated_at
                 WHERE migration.entity_mappings.mapping_status <> 'MAPPED'
                 """)
-                .param("id", mappingId).param("tenantId", tenantId).param("scopeId", scopeId)
-                .param("entityType", entityType).param("legacyId", legacyId)
-                .param("transformationVersion", transformationVersion)
-                .param("status", MappingStatus.QUARANTINED.name())
-                .param("runId", runId)
-                .param("now", utc(now))
-                // Zero rows means, and can only mean, that the conflicting row was
-                // MAPPED: an insert answers one, and so does an update to any other
-                // status. The count is therefore a reliable signal rather than a
-                // guess about why nothing happened.
-                .update() == 1;
+                        .param("id", mappingId)
+                        .param("tenantId", tenantId)
+                        .param("scopeId", scopeId)
+                        .param("entityType", entityType)
+                        .param("legacyId", legacyId)
+                        .param("transformationVersion", transformationVersion)
+                        .param("status", MappingStatus.QUARANTINED.name())
+                        .param("runId", runId)
+                        .param("now", utc(now))
+                        // Zero rows means, and can only mean, that the conflicting row was
+                        // MAPPED: an insert answers one, and so does an update to any other
+                        // status. The count is therefore a reliable signal rather than a
+                        // guess about why nothing happened.
+                        .update()
+                == 1;
     }
 
     @Override
     public Optional<QuarantineItemRow> findById(UUID tenantId, UUID itemId) {
         return jdbc.sql(SELECT_ITEM + " WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", itemId)
+                .param("tenantId", tenantId)
+                .param("id", itemId)
                 .query(JdbcQuarantineStore::mapItem)
                 .optional();
     }
@@ -160,8 +174,7 @@ public class JdbcQuarantineStore implements MigrationQuarantineStore {
      * false rather than a second, different account of how the item was closed.
      */
     @Override
-    public boolean resolve(UUID tenantId, UUID itemId, String resolutionCode, String resolvedBy,
-            Instant resolvedAt) {
+    public boolean resolve(UUID tenantId, UUID itemId, String resolutionCode, String resolvedBy, Instant resolvedAt) {
         return jdbc.sql("""
                 UPDATE migration.quarantine_items
                 SET status = 'RESOLVED',
@@ -171,10 +184,13 @@ public class JdbcQuarantineStore implements MigrationQuarantineStore {
                     updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :id AND status = 'OPEN'
                 """)
-                .param("tenantId", tenantId).param("id", itemId)
-                .param("resolutionCode", resolutionCode).param("resolvedBy", resolvedBy)
-                .param("now", utc(resolvedAt))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", itemId)
+                        .param("resolutionCode", resolutionCode)
+                        .param("resolvedBy", resolvedBy)
+                        .param("now", utc(resolvedAt))
+                        .update()
+                == 1;
     }
 
     /**
@@ -197,7 +213,8 @@ public class JdbcQuarantineStore implements MigrationQuarantineStore {
                 WHERE item.tenant_id = :tenantId AND run.scope_id = :scopeId
                   AND item.status = 'OPEN'
                 """)
-                .param("tenantId", tenantId).param("scopeId", scopeId)
+                .param("tenantId", tenantId)
+                .param("scopeId", scopeId)
                 .query(Integer.class)
                 .single();
     }

@@ -62,14 +62,13 @@ public record PickupPlan(
      * starting the whole plan early enough for the slowest lane — which would
      * source every order at the pace of the partner we hope not to use.
      */
-    public static PickupPlan forOrder(Instant confirmedAt, Duration preparation,
-            ZoneId branchZone, DeliverySourcingPolicy policy) {
+    public static PickupPlan forOrder(
+            Instant confirmedAt, Duration preparation, ZoneId branchZone, DeliverySourcingPolicy policy) {
 
         Instant readyAt = confirmedAt.plus(preparation);
         Instant windowEnd = readyAt.plusSeconds(policy.pickupToleranceSeconds());
-        Instant sourceAt = readyAt
-                .minusSeconds(policy.preparationLeadSeconds())
-                .minusSeconds(policy.safetyBufferSeconds());
+        Instant sourceAt =
+                readyAt.minusSeconds(policy.preparationLeadSeconds()).minusSeconds(policy.safetyBufferSeconds());
 
         return new PickupPlan(
                 confirmedAt,

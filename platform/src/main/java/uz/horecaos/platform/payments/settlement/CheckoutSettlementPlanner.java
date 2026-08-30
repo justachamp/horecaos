@@ -6,12 +6,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.ordering.api.OrderSettlementPort;
 import uz.horecaos.platform.payments.application.CapturedMoneyPort;
 import uz.horecaos.platform.payments.domain.CaptureTiming;
@@ -123,8 +121,7 @@ public class CheckoutSettlementPlanner implements OrderSettlementPort, CapturedM
     private final OrderSettlementService settlements;
     private final Clock clock;
 
-    public CheckoutSettlementPlanner(JdbcSettlementStore store, OrderSettlementService settlements,
-            Clock clock) {
+    public CheckoutSettlementPlanner(JdbcSettlementStore store, OrderSettlementService settlements, Clock clock) {
         this.store = store;
         this.settlements = settlements;
         this.clock = clock;
@@ -145,8 +142,7 @@ public class CheckoutSettlementPlanner implements OrderSettlementPort, CapturedM
         // exists, read from its rows. It has to: the caller creates the payment
         // intent from this answer, and a replay that answered with a figure
         // recomputed from the request would be the second authority all over again.
-        Optional<SettlementRow> existing = store.findSettlement(request.tenantId(),
-                request.orderId());
+        Optional<SettlementRow> existing = store.findSettlement(request.tenantId(), request.orderId());
         if (existing.isPresent()) {
             return Optional.of(plannedFrom(request.tenantId(), existing.get()));
         }
@@ -161,15 +157,16 @@ public class CheckoutSettlementPlanner implements OrderSettlementPort, CapturedM
             // code: no row, and a warning where somebody looks. Fabricating a cash
             // tender for an order nobody said would be paid in cash would put a
             // figure in front of a courier that no customer ever agreed to.
-            log.warn("Order {} planned no settlement: payment method {} is not one this build "
-                    + "can tender against.", request.orderId(), request.paymentMethodCode());
+            log.warn(
+                    "Order {} planned no settlement: payment method {} is not one this build " + "can tender against.",
+                    request.orderId(),
+                    request.paymentMethodCode());
             return Optional.empty();
         }
 
         long redeemed = request.redeemFromBalanceMinor();
         if (redeemed < 0) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A redemption settles a positive amount, or none");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A redemption settles a positive amount, or none");
         }
 
         List<OrderSettlementService.PlannedTender> tenders = new ArrayList<>();
@@ -178,22 +175,32 @@ public class CheckoutSettlementPlanner implements OrderSettlementPort, CapturedM
             // settles_from_balance so the reservation is taken before anything
             // external is initiated whatever order a caller passes.
             tenders.add(new OrderSettlementService.PlannedTender(
-                    registryIdOf(request.tenantId(), POINTS_METHOD_CODE, POINTS_DISPLAY_NAME,
-                            OPERATOR_RESPONSIBILITY, true),
+                    registryIdOf(
+                            request.tenantId(), POINTS_METHOD_CODE, POINTS_DISPLAY_NAME, OPERATOR_RESPONSIBILITY, true),
                     redeemed));
         }
         // Exactly the remainder, so the tenders sum to the order total. plan()
         // refuses anything else, and the refusal is the point: it happens before a
         // provider is called, so a settlement cannot be half-executed against Click.
         tenders.add(new OrderSettlementService.PlannedTender(
-                registryIdOf(request.tenantId(), method.get().code(), method.get().code(),
-                        responsibilityOf(method.get()), false),
+                registryIdOf(
+                        request.tenantId(),
+                        method.get().code(),
+                        method.get().code(),
+                        responsibilityOf(method.get()),
+                        false),
                 Math.subtractExact(request.totalMinor(), redeemed)));
 
         SettlementRow settlement = settlements.plan(new OrderSettlementService.SettlementPlan(
-                request.tenantId(), request.brandId(), request.orderId(),
-                request.customerAccountId(), request.currency(), request.totalMinor(), tenders,
-                request.idempotencyKey(), request.actor()));
+                request.tenantId(),
+                request.brandId(),
+                request.orderId(),
+                request.customerAccountId(),
+                request.currency(),
+                request.totalMinor(),
+                tenders,
+                request.idempotencyKey(),
+                request.actor()));
 
         return Optional.of(plannedFrom(request.tenantId(), settlement));
     }
@@ -256,8 +263,7 @@ public class CheckoutSettlementPlanner implements OrderSettlementPort, CapturedM
      */
     @Override
     @Transactional
-    public void recordTerminalOutcome(UUID tenantId, UUID orderId, String reasonCode,
-            String actor) {
+    public void recordTerminalOutcome(UUID tenantId, UUID orderId, String reasonCode, String actor) {
 
         Optional<SettlementRow> found = store.findSettlement(tenantId, orderId);
         if (found.isEmpty()) {
@@ -266,14 +272,19 @@ public class CheckoutSettlementPlanner implements OrderSettlementPort, CapturedM
         }
         SettlementStatus status = found.get().status();
         if (status != SettlementStatus.PLANNED && status != SettlementStatus.PARTIALLY_SETTLED) {
-            log.debug("Order {} ended with its settlement already {}; leaving it to the remedy "
-                    + "path", orderId, status);
+            log.debug(
+                    "Order {} ended with its settlement already {}; leaving it to the remedy " + "path",
+                    orderId,
+                    status);
             return;
         }
         if (found.get().settledMinor() > 0) {
-            log.warn("Order {} ended while its settlement had {} of {} settled; leaving it to "
-                    + "the remedy path rather than failing money that was collected",
-                    orderId, found.get().settledMinor(), found.get().totalDueMinor());
+            log.warn(
+                    "Order {} ended while its settlement had {} of {} settled; leaving it to "
+                            + "the remedy path rather than failing money that was collected",
+                    orderId,
+                    found.get().settledMinor(),
+                    found.get().totalDueMinor());
             return;
         }
         settlements.fail(tenantId, orderId, reasonCode, actor);
@@ -355,8 +366,7 @@ public class CheckoutSettlementPlanner implements OrderSettlementPort, CapturedM
      * {@link JdbcSettlementStore#settlementsRestingPartiallySettled} lists for an
      * operator to resolve with the customer.
      */
-    private void settleWhenMoneyArrives(UUID tenantId, UUID orderId, CaptureTiming arrivesAt,
-            String actor) {
+    private void settleWhenMoneyArrives(UUID tenantId, UUID orderId, CaptureTiming arrivesAt, String actor) {
 
         Optional<SettlementRow> found = store.findSettlement(tenantId, orderId);
         if (found.isEmpty()) {
@@ -370,10 +380,9 @@ public class CheckoutSettlementPlanner implements OrderSettlementPort, CapturedM
         SettlementRow settlement = found.get();
         List<TenderRow> tenders = store.tendersOf(tenantId, settlement.id());
 
-        List<TenderRow> money = tenders.stream().filter(tender -> !tender.settlesFromBalance())
-                .toList();
-        if (money.isEmpty() || !money.stream().allMatch(tender ->
-                arrivesAt == timingOf(tenantId, tender))) {
+        List<TenderRow> money =
+                tenders.stream().filter(tender -> !tender.settlesFromBalance()).toList();
+        if (money.isEmpty() || !money.stream().allMatch(tender -> arrivesAt == timingOf(tenantId, tender))) {
             return;
         }
 
@@ -433,10 +442,12 @@ public class CheckoutSettlementPlanner implements OrderSettlementPort, CapturedM
                                 + "tender's hold was resolved before its money arrived; this "
                                 + "order needs an operator, and its refund ceiling is the "
                                 + "settled figure.",
-                        orderId, arrivesAt, settlement.settledMinor(),
-                        settlement.totalDueMinor(), settlement.currency(),
-                        Math.subtractExact(settlement.totalDueMinor(),
-                                settlement.settledMinor())));
+                        orderId,
+                        arrivesAt,
+                        settlement.settledMinor(),
+                        settlement.totalDueMinor(),
+                        settlement.currency(),
+                        Math.subtractExact(settlement.totalDueMinor(), settlement.settledMinor())));
     }
 
     /**
@@ -449,8 +460,7 @@ public class CheckoutSettlementPlanner implements OrderSettlementPort, CapturedM
      */
     private CaptureTiming timingOf(UUID tenantId, TenderRow tender) {
         return store.findMethod(tenantId, tender.paymentMethodId())
-                .flatMap(row -> PaymentMethod.fromCode(row.code())
-                        .map(PaymentMethod::captureTiming))
+                .flatMap(row -> PaymentMethod.fromCode(row.code()).map(PaymentMethod::captureTiming))
                 .orElse(null);
     }
 
@@ -495,27 +505,27 @@ public class CheckoutSettlementPlanner implements OrderSettlementPort, CapturedM
      * The tenant's registry row for this code, registering it the first time it is
      * tendered against.
      */
-    private UUID registryIdOf(UUID tenantId, String code, String displayName,
-            String responsibility, boolean settlesFromBalance) {
+    private UUID registryIdOf(
+            UUID tenantId, String code, String displayName, String responsibility, boolean settlesFromBalance) {
 
         Optional<MethodRow> registered = store.findMethodByCode(tenantId, code);
         if (registered.isPresent()) {
             MethodRow row = registered.get();
             if (!"ACTIVE".equals(row.status())) {
-                throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                        "This tenant has disabled the payment method " + code);
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED, "This tenant has disabled the payment method " + code);
             }
             if (row.settlesFromBalance() != settlesFromBalance) {
                 // The tender's snapshot of the flag is tied to the registry row by
                 // composite foreign key, so a disagreement here is a registry that
                 // has been edited into a shape the platform's rules do not hold for.
-                throw new ApiException(ErrorCode.VALIDATION_FAILED,
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED,
                         "The registered payment method " + code + " does not settle the way this "
                                 + "platform tenders it");
             }
             return row.id();
         }
-        return store.registerMethod(tenantId, code, displayName, responsibility,
-                settlesFromBalance, clock.instant());
+        return store.registerMethod(tenantId, code, displayName, responsibility, settlesFromBalance, clock.instant());
     }
 }

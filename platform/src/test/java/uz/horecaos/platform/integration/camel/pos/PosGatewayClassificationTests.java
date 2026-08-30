@@ -5,10 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.integration.api.pos.PosApiCall;
 import uz.horecaos.platform.integration.api.pos.PosApiCall.Effect;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
@@ -41,8 +39,7 @@ class PosGatewayClassificationTests {
     @DisplayName("a read keeps the shared answer, because repeating it cooks nothing")
     void readsStayRetryable() {
         ProviderOutcome corrected = PosGateway.classifyForPos(
-                call(Effect.READ),
-                ProviderOutcome.retryable("PROVIDER_UNAVAILABLE", "500", null));
+                call(Effect.READ), ProviderOutcome.retryable("PROVIDER_UNAVAILABLE", "500", null));
 
         assertThat(corrected.mayRetryDirectly()).isTrue();
     }
@@ -51,8 +48,7 @@ class PosGatewayClassificationTests {
     @DisplayName("a value-setting write keeps the shared answer too")
     void idempotentWritesStayRetryable() {
         ProviderOutcome corrected = PosGateway.classifyForPos(
-                call(Effect.IDEMPOTENT_WRITE),
-                ProviderOutcome.retryable("PROVIDER_UNAVAILABLE", "500", null));
+                call(Effect.IDEMPOTENT_WRITE), ProviderOutcome.retryable("PROVIDER_UNAVAILABLE", "500", null));
 
         assertThat(corrected.status())
                 .as("writing a fiscal identifier sets one field to one value, so a lost "
@@ -64,12 +60,10 @@ class PosGatewayClassificationTests {
     @DisplayName("an open circuit stays retryable even on a create")
     void nothingWasSentSoThereIsNothingToDiscover() {
         ProviderOutcome corrected = PosGateway.classifyForPos(
-                call(Effect.UNKEYED_CREATE),
-                ProviderOutcome.retryable("CIRCUIT_OPEN", "open", Duration.ofSeconds(30)));
+                call(Effect.UNKEYED_CREATE), ProviderOutcome.retryable("CIRCUIT_OPEN", "open", Duration.ofSeconds(30)));
 
         assertThat(corrected.status())
-                .as("the breaker refused before anything left this process, so the till "
-                        + "provably did not act")
+                .as("the breaker refused before anything left this process, so the till " + "provably did not act")
                 .isEqualTo(ProviderOutcome.Status.RETRYABLE);
     }
 
@@ -77,8 +71,7 @@ class PosGatewayClassificationTests {
     @DisplayName("a business rejection is not turned into an uncertainty")
     void aRefusalStaysARefusal() {
         ProviderOutcome corrected = PosGateway.classifyForPos(
-                call(Effect.UNKEYED_CREATE),
-                ProviderOutcome.rejected("PROVIDER_REJECTED", "validation_failed"));
+                call(Effect.UNKEYED_CREATE), ProviderOutcome.rejected("PROVIDER_REJECTED", "validation_failed"));
 
         assertThat(corrected.status())
                 .as("sending a malformed export to a human queue would hide our own bug")
@@ -98,11 +91,17 @@ class PosGatewayClassificationTests {
     }
 
     private static PosApiCall call(Effect effect) {
-        return new PosApiCall(UUID.randomUUID(), UUID.randomUUID(), "clopos",
-                "order.create", "POST", "/orders",
+        return new PosApiCall(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "clopos",
+                "order.create",
+                "POST",
+                "/orders",
                 PosApiCall.fixedBody(Map.of("customer", Map.of("phone", "+998901234567"))),
                 effect,
                 PosApiCall.fixedHeaders(Map.of("x-token", "secret-token")),
-                "correlation-1", null);
+                "correlation-1",
+                null);
     }
 }

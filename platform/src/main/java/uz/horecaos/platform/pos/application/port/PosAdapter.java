@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.pos.api.CapabilitySnapshot;
 import uz.horecaos.platform.pos.api.PosCapability;
@@ -131,7 +130,7 @@ public interface PosAdapter {
      *                 a catalog: staging half a menu and diffing it would report
      *                 the unread half as removals
      */
-    record CatalogRead(ProviderOutcome outcome, CatalogSnapshot snapshot) { }
+    record CatalogRead(ProviderOutcome outcome, CatalogSnapshot snapshot) {}
 
     record AvailabilityRead(ProviderOutcome outcome, List<CatalogSnapshot.Availability> entries) {
 
@@ -149,7 +148,7 @@ public interface PosAdapter {
      *                        while an order auto-accepted and auto-sent to a
      *                        station is already food
      */
-    record ExportResult(ProviderOutcome outcome, String externalOrderId, boolean approvalPending) { }
+    record ExportResult(ProviderOutcome outcome, String externalOrderId, boolean approvalPending) {}
 
     /**
      * What to look for when discovering whether an uncertain export landed.
@@ -224,8 +223,7 @@ public interface PosAdapter {
             return "OrderExport[order=" + orderId + ", lines=" + lines.size() + "]";
         }
 
-        public record Customer(
-                String externalCustomerId, String name, String phone, String address) {
+        public record Customer(String externalCustomerId, String name, String phone, String address) {
 
             @Override
             public String toString() {
@@ -248,8 +246,7 @@ public interface PosAdapter {
                 List<String> externalModifierIds) {
 
             public Line {
-                externalModifierIds = List.copyOf(
-                        externalModifierIds == null ? List.of() : externalModifierIds);
+                externalModifierIds = List.copyOf(externalModifierIds == null ? List.of() : externalModifierIds);
             }
         }
     }

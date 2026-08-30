@@ -2,11 +2,9 @@ package uz.horecaos.platform.courier.infrastructure.notification;
 
 import java.time.LocalDate;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.courier.application.port.CourierNotificationPort;
 
 /**
@@ -26,18 +24,25 @@ public class LoggingCourierNotificationPort implements CourierNotificationPort {
     private static final Logger log = LoggerFactory.getLogger(LoggingCourierNotificationPort.class);
 
     @Override
-    public void registrationExpiring(UUID tenantId, UUID courierId, LocalDate validUntil,
-            int daysRemaining, Audience audience) {
+    public void registrationExpiring(
+            UUID tenantId, UUID courierId, LocalDate validUntil, int daysRemaining, Audience audience) {
 
-        log.info("Courier registration expiring: tenant={} courier={} validUntil={} "
-                        + "daysRemaining={} audience={}",
-                tenantId, courierId, validUntil, daysRemaining, audience);
+        log.info(
+                "Courier registration expiring: tenant={} courier={} validUntil={} " + "daysRemaining={} audience={}",
+                tenantId,
+                courierId,
+                validUntil,
+                daysRemaining,
+                audience);
     }
 
     @Override
     public void registrationLapsed(UUID tenantId, UUID courierId, LocalDate validUntil) {
-        log.warn("Courier registration lapsed, dispatch suspended: tenant={} courier={} "
+        log.warn(
+                "Courier registration lapsed, dispatch suspended: tenant={} courier={} "
                         + "validUntil={}. Accrued earnings are unaffected.",
-                tenantId, courierId, validUntil);
+                tenantId,
+                courierId,
+                validUntil);
     }
 }

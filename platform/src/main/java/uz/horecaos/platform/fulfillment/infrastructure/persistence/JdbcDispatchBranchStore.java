@@ -3,10 +3,8 @@ package uz.horecaos.platform.fulfillment.infrastructure.persistence;
 import java.time.ZoneId;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.Waypoint;
 import uz.horecaos.platform.fulfillment.domain.BranchOrigin;
 
@@ -47,7 +45,8 @@ public class JdbcDispatchBranchStore {
                 FROM tenant.locations
                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :locationId
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("locationId", locationId)
                 .query((row, number) -> new DispatchBranch(
                         row.getObject("id", UUID.class),
@@ -99,8 +98,16 @@ public class JdbcDispatchBranchStore {
          */
         public Waypoint asWaypoint() {
             BranchOrigin origin = origin();
-            return new Waypoint(origin.point().latitude(), origin.point().longitude(),
-                    address(), displayName, contactPhone, landmark, null, null, null);
+            return new Waypoint(
+                    origin.point().latitude(),
+                    origin.point().longitude(),
+                    address(),
+                    displayName,
+                    contactPhone,
+                    landmark,
+                    null,
+                    null,
+                    null);
         }
 
         private String address() {

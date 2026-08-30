@@ -1,0 +1,38 @@
+name: Security audit
+
+# ADR 0054. OWASP dependency-check pulls NVD data that changes daily, not per
+# commit, so it runs here on a schedule instead of in the per-commit CI path.
+on:
+  schedule:
+    - cron: "0 3 * * 1" # Monday 03:00 UTC
+  workflow_dispatch:
+
+jobs:
+  dependency-check:
+    name: OWASP dependency-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: platform
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: "25"
+          distribution: temurin
+          cache: maven
+
+      - name: Dependency check
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: ./mvnw --batch-mode -Psecurity-audit dependency-check:check
+
+      - name: Publish dependency-check report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: platform/target/dependency-check-report.*
+          if-no-files-found: ignore

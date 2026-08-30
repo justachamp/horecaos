@@ -2,7 +2,6 @@ package uz.horecaos.platform.ordering.application;
 
 import java.util.Optional;
 import java.util.UUID;
-
 import uz.horecaos.platform.ordering.domain.DeliveryDestination;
 
 /**
@@ -38,8 +37,7 @@ public interface CustomerAddressBook {
      *         not exist. All three are one answer to a caller, because telling
      *         them apart is how an id becomes probeable
      */
-    Optional<SavedDestination> destination(UUID tenantId, UUID customerAccountId, UUID addressId,
-            String purpose);
+    Optional<SavedDestination> destination(UUID tenantId, UUID customerAccountId, UUID addressId, String purpose);
 
     /**
      * A revealed address, with the label that names it and nothing else.
@@ -56,10 +54,7 @@ public interface CustomerAddressBook {
      *                             column and re-encrypted into its own column
      */
     record SavedDestination(
-            UUID addressId,
-            String label,
-            DeliveryDestination destination,
-            String deliveryInstructions) {
+            UUID addressId, String label, DeliveryDestination destination, String deliveryInstructions) {
 
         /** Whether this address can be routed to at all. */
         public boolean located() {

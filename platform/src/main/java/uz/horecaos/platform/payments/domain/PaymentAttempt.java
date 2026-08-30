@@ -64,11 +64,7 @@ public record PaymentAttempt(
      * pair-completeness CHECKs make in the schema.
      */
     public record Uncertainty(
-            Instant since,
-            UncertaintyResolver resolver,
-            Instant deadline,
-            int resolutionAttempts,
-            Instant resolvedAt) {
+            Instant since, UncertaintyResolver resolver, Instant deadline, int resolutionAttempts, Instant resolvedAt) {
 
         public Uncertainty {
             Objects.requireNonNull(since, "An uncertainty needs the moment it was first observed");
@@ -94,16 +90,14 @@ public record PaymentAttempt(
         Objects.requireNonNull(intentId, "An intent id is required");
         Objects.requireNonNull(providerType, "A provider type is required");
         Objects.requireNonNull(merchantBindingId, "A merchant binding is required");
-        Objects.requireNonNull(merchantTransId,
-                "A merchant transaction id must exist before any mutating provider call");
-        Objects.requireNonNull(businessDate,
-                "A business date must be snapshotted before any mutating provider call");
+        Objects.requireNonNull(
+                merchantTransId, "A merchant transaction id must exist before any mutating provider call");
+        Objects.requireNonNull(businessDate, "A business date must be snapshotted before any mutating provider call");
         Objects.requireNonNull(amount, "An amount is required");
         Objects.requireNonNull(status, "A status is required");
 
         if (status == PaymentAttemptStatus.UNCERTAIN && uncertainty == null) {
-            throw new IllegalArgumentException(
-                    "An uncertain attempt must carry its resolver and its deadline");
+            throw new IllegalArgumentException("An uncertain attempt must carry its resolver and its deadline");
         }
     }
 

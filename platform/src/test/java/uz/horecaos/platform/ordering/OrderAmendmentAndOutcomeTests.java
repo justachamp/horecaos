@@ -1,5 +1,10 @@
 package uz.horecaos.platform.ordering;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -8,11 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import javax.sql.DataSource;
-
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -24,10 +25,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.infrastructure.protection.DataEncryptionKeyProvider;
@@ -45,7 +44,6 @@ import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
 import uz.horecaos.platform.ordering.application.OrderAcceptancePolicyService;
 import uz.horecaos.platform.ordering.application.OrderAmendmentService;
-import uz.horecaos.platform.ordering.infrastructure.pos.JdbcPosExportStatus;
 import uz.horecaos.platform.ordering.application.OrderInventoryProcess;
 import uz.horecaos.platform.ordering.application.OrderOutcomeReasonService;
 import uz.horecaos.platform.ordering.application.OrderOutcomeService;
@@ -66,6 +64,7 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderAmendme
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderProcessStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOutcomeReasonStore;
+import uz.horecaos.platform.ordering.infrastructure.pos.JdbcPosExportStatus;
 import uz.horecaos.platform.ordering.infrastructure.tenancy.JdbcOrderingTenantContext;
 import uz.horecaos.platform.pricing.application.PricingEngine;
 import uz.horecaos.platform.pricing.application.QuoteService;
@@ -77,10 +76,6 @@ import uz.horecaos.platform.tenancy.application.ServiceabilityService;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyResolver;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcServiceabilityStore;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * ADR 0039: amendment, revisions, and terminal outcome accounting.
@@ -128,6 +123,7 @@ class OrderAmendmentAndOutcomeTests {
     private OrderInventoryProcess inventoryProcess;
     /** One factory, so a test can substitute the store and change nothing else. */
     private java.util.function.Function<JdbcOrderStore, OrderStateService> orderStateWith;
+
     private InventoryService inventory;
     private JdbcOrderStore orderStore;
     private JdbcOrderAmendmentStore amendmentStore;
@@ -139,7 +135,8 @@ class OrderAmendmentAndOutcomeTests {
 
     @BeforeAll
     static void startDatabase() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for amendment and outcome tests");
         db = TestDatabase.migrated();
         jdbcUrl = db.jdbcUrl();
@@ -208,8 +205,13 @@ class OrderAmendmentAndOutcomeTests {
                 (origin, destination, installationId) -> java.util.Optional.empty(),
                 new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
 
-        var quotes = new QuoteService(pricingStore, new PricingEngine(),
-                new JdbcCatalogPricingContext(jdbc, "uz"), channelStore, deliveryFees, clock);
+        var quotes = new QuoteService(
+                pricingStore,
+                new PricingEngine(),
+                new JdbcCatalogPricingContext(jdbc, "uz"),
+                channelStore,
+                deliveryFees,
+                clock);
         var serviceability = new ServiceabilityService(serviceabilityStore, clock);
 
         cartStore = new JdbcCartStore(jdbc);
@@ -221,14 +223,12 @@ class OrderAmendmentAndOutcomeTests {
 
         FieldProtection protection = new EnvelopeFieldProtection(new DataEncryptionKeyProvider(
                 new EnvironmentSecretResolver(
-                        Map.of("horecaos.secrets.data_encryption.platform.kek", "a-test-kek")::get,
-                        clock),
+                        Map.of("horecaos.secrets.data_encryption.platform.kek", "a-test-kek")::get, clock),
                 "local"));
 
         var tenantContext = new JdbcOrderingTenantContext(jdbc);
         var catalogSnapshot = new JdbcOrderCatalogSnapshot(jdbc, "uz");
-        var policies = new OrderAcceptancePolicyService(
-                new JdbcPolicyResolver(jdbc, objectMapper));
+        var policies = new OrderAcceptancePolicyService(new JdbcPolicyResolver(jdbc, objectMapper));
         var auditRecorder = new JdbcAuditRecorder(jdbc, objectMapper);
 
         // ADR 0046's real planner. No checkout in this suite names a payment
@@ -244,34 +244,61 @@ class OrderAmendmentAndOutcomeTests {
                         settlementStore, NO_REDEMPTION, clock),
                 clock);
 
-        carts = new CartService(cartStore, channelStore,
-                new uz.horecaos.platform.ordering.infrastructure.catalog.JdbcCartMenuRules(
-                        jdbc, objectMapper),
-                serviceability, tenantContext, quotes,
+        carts = new CartService(
+                cartStore,
+                channelStore,
+                new uz.horecaos.platform.ordering.infrastructure.catalog.JdbcCartMenuRules(jdbc, objectMapper),
+                serviceability,
+                tenantContext,
+                quotes,
                 new uz.horecaos.platform.ordering.infrastructure.customer.JdbcCustomerAddressBook(
                         jdbc, protection, objectMapper),
-                protection, objectMapper, clock);
+                protection,
+                objectMapper,
+                clock);
         inventoryProcess = new OrderInventoryProcess(processStore, inventory, objectMapper, clock);
-        orderStateWith = store -> new OrderStateService(store, serviceability, inventoryProcess,
-                policies, settlementPlanner, auditRecorder, published, clock);
+        orderStateWith = store -> new OrderStateService(
+                store, serviceability, inventoryProcess, policies, settlementPlanner, auditRecorder, published, clock);
         orderState = orderStateWith.apply(orderStore);
         orderQuery = new OrderQueryService(orderStore, processStore, UNWIRED_PAYMENTS, protection);
         reasons = new OrderOutcomeReasonService(reasonStore, clock);
-        outcomes = new OrderOutcomeService(orderState, reasons, orderStore, protection,
-                objectMapper);
+        outcomes = new OrderOutcomeService(orderState, reasons, orderStore, protection, objectMapper);
         // The real adapter, against the same database: the export guard is only
         // meaningful if it reads the table the export actually writes, and a stub
         // here would reproduce exactly the failure this port was built to end.
-        amendments = new OrderAmendmentService(orderStore, amendmentStore, processStore,
-                auditRecorder, objectMapper, clock, new JdbcPosExportStatus(jdbc));
+        amendments = new OrderAmendmentService(
+                orderStore,
+                amendmentStore,
+                processStore,
+                auditRecorder,
+                objectMapper,
+                clock,
+                new JdbcPosExportStatus(jdbc));
 
         var migrationOwnership = new MigrationOwnershipService(
                 new JdbcMigrationScopeStore(jdbc, objectMapper), new SimpleMeterRegistry());
 
-        checkout = new CheckoutService(cartStore, orderStore, attemptStore, carts, channelStore,
-                serviceability, serviceability, quotes, inventory, catalogSnapshot, tenantContext,
-                policies, inventoryProcess, migrationOwnership, UNWIRED_PAYMENTS,
-                settlementPlanner, protection, objectMapper, published, clock);
+        checkout = new CheckoutService(
+                cartStore,
+                orderStore,
+                attemptStore,
+                carts,
+                channelStore,
+                serviceability,
+                serviceability,
+                quotes,
+                inventory,
+                catalogSnapshot,
+                tenantContext,
+                policies,
+                inventoryProcess,
+                migrationOwnership,
+                UNWIRED_PAYMENTS,
+                settlementPlanner,
+                protection,
+                objectMapper,
+                published,
+                clock);
 
         seedTenancyAndCatalog();
         seedPricingAndStock();
@@ -303,7 +330,8 @@ class OrderAmendmentAndOutcomeTests {
                 VALUES (:orderId, 2, :tenantId, 'CHECKOUT', :quoteId, 'hash', 'UZS',
                     100, 0, 0, 0, 100)
                 """)
-                .param("orderId", orderId).param("tenantId", TENANT)
+                .param("orderId", orderId)
+                .param("tenantId", TENANT)
                 .param("quoteId", orderStore.find(TENANT, orderId).orElseThrow().pricingQuoteId())
                 .update());
 
@@ -372,9 +400,9 @@ class OrderAmendmentAndOutcomeTests {
                 .isEqualTo(before);
 
         assertThat(java.util.Arrays.stream(AmendmentCommandType.values())
-                .filter(AmendmentCommandType::built)
-                .filter(AmendmentCommandType::financial)
-                .toList())
+                        .filter(AmendmentCommandType::built)
+                        .filter(AmendmentCommandType::financial)
+                        .toList())
                 .as("the moment a financial command becomes buildable, a settlement planned at "
                         + "checkout stops being the whole of what the customer owes, and "
                         + "OrderSettlementPort needs a re-plan before that ships")
@@ -387,14 +415,16 @@ class OrderAmendmentAndOutcomeTests {
         UUID orderId = placeOrder("idem-1").orderId();
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
-        tx(() -> amendments.propose(TENANT, orderId, propose("k-1", version,
-                OrderAmendmentService.AmendmentCommand.callback(true))));
+        tx(() -> amendments.propose(
+                TENANT, orderId, propose("k-1", version, OrderAmendmentService.AmendmentCommand.callback(true))));
 
         // The second operator read the same version and is now working from a
         // basket that has moved. Being told so is the point; applying underneath
         // would give one order two revisions for one change.
-        assertThatThrownBy(() -> tx(() -> amendments.propose(TENANT, orderId, propose("k-2",
-                version, OrderAmendmentService.AmendmentCommand.callback(false)))))
+        assertThatThrownBy(() -> tx(() -> amendments.propose(
+                        TENANT,
+                        orderId,
+                        propose("k-2", version, OrderAmendmentService.AmendmentCommand.callback(false)))))
                 .isInstanceOf(OrderStateService.StaleOrderException.class);
 
         assertThat(orderQuery.revisions(TENANT, orderId)).hasSize(2);
@@ -420,16 +450,15 @@ class OrderAmendmentAndOutcomeTests {
 
         OrderStateService racing = orderStateWith.apply(new AmendedMidFlightOrderStore(jdbc));
 
-        assertThatThrownBy(() -> tx(() -> racing.advance(TENANT, orderId, OrderStatus.PREPARING,
-                version, "KITCHEN", "USER", "sharif", null)))
+        assertThatThrownBy(() -> tx(() -> racing.advance(
+                        TENANT, orderId, OrderStatus.PREPARING, version, "KITCHEN", "USER", "sharif", null)))
                 .isInstanceOf(OrderStateService.StaleOrderException.class);
 
         var order = orderStore.find(TENANT, orderId).orElseThrow();
         assertThat(order.status())
                 .as("the losing transition is rolled back with the transaction, not half-applied")
                 .isEqualTo(OrderStatus.CONFIRMED);
-        assertThat(orderQuery.timeline(TENANT, orderId).stream()
-                .anyMatch(row -> "PREPARING".equals(row.toStatus())))
+        assertThat(orderQuery.timeline(TENANT, orderId).stream().anyMatch(row -> "PREPARING".equals(row.toStatus())))
                 .as("and leaves no history saying it happened")
                 .isFalse();
     }
@@ -445,13 +474,14 @@ class OrderAmendmentAndOutcomeTests {
         }
 
         @Override
-        public Optional<Integer> transition(UUID tenantId, UUID orderId, OrderStatus from,
-                OrderStatus to, java.time.Instant now) {
+        public Optional<Integer> transition(
+                UUID tenantId, UUID orderId, OrderStatus from, OrderStatus to, java.time.Instant now) {
             // Stands in for the amendment that committed while this caller was
             // deciding. Only the version moves: the status is the one the caller
             // read, which is what makes the status predicate no defence.
             jdbc.sql("UPDATE ordering.orders SET version = version + 1 WHERE id = :id")
-                    .param("id", orderId).update();
+                    .param("id", orderId)
+                    .update();
             return super.transition(tenantId, orderId, from, to, now);
         }
     }
@@ -463,14 +493,31 @@ class OrderAmendmentAndOutcomeTests {
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
         // Proposed without applying, so it stays open and holds the order.
-        tx(() -> amendments.propose(TENANT, orderId, new OrderAmendmentService.ProposeCommand(
-                version, List.of(OrderAmendmentService.AmendmentCommand.callback(true)), false,
-                "k-1", "OPERATOR_EDIT", "USER", "sharif", null)));
+        tx(() -> amendments.propose(
+                TENANT,
+                orderId,
+                new OrderAmendmentService.ProposeCommand(
+                        version,
+                        List.of(OrderAmendmentService.AmendmentCommand.callback(true)),
+                        false,
+                        "k-1",
+                        "OPERATOR_EDIT",
+                        "USER",
+                        "sharif",
+                        null)));
 
-        assertThatThrownBy(() -> tx(() -> amendments.propose(TENANT, orderId,
-                new OrderAmendmentService.ProposeCommand(version,
-                        List.of(OrderAmendmentService.AmendmentCommand.callback(false)), false,
-                        "k-2", "OPERATOR_EDIT", "USER", "dilnoza", null))))
+        assertThatThrownBy(() -> tx(() -> amendments.propose(
+                        TENANT,
+                        orderId,
+                        new OrderAmendmentService.ProposeCommand(
+                                version,
+                                List.of(OrderAmendmentService.AmendmentCommand.callback(false)),
+                                false,
+                                "k-2",
+                                "OPERATOR_EDIT",
+                                "USER",
+                                "dilnoza",
+                                null))))
                 .isInstanceOf(OrderAmendmentService.AmendmentInProgressException.class)
                 .hasMessageContaining("sharif");
     }
@@ -481,15 +528,23 @@ class OrderAmendmentAndOutcomeTests {
         UUID orderId = placeOrder("idem-1").orderId();
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
-        var proposed = tx(() -> amendments.propose(TENANT, orderId,
-                new OrderAmendmentService.ProposeCommand(version,
+        var proposed = tx(() -> amendments.propose(
+                TENANT,
+                orderId,
+                new OrderAmendmentService.ProposeCommand(
+                        version,
                         List.of(OrderAmendmentService.AmendmentCommand.cashTendered(200_000L)),
-                        false, "k-1", "OPERATOR_EDIT", "USER", "sharif", null)));
+                        false,
+                        "k-1",
+                        "OPERATOR_EDIT",
+                        "USER",
+                        "sharif",
+                        null)));
 
         clock.advance(OrderAmendmentService.TTL.plus(Duration.ofMinutes(1)));
 
-        assertThatThrownBy(() -> tx(() -> amendments.apply(TENANT, orderId,
-                proposed.amendment().id(), version, "USER", "sharif", "OPERATOR_EDIT", null)))
+        assertThatThrownBy(() -> tx(() -> amendments.apply(
+                        TENANT, orderId, proposed.amendment().id(), version, "USER", "sharif", "OPERATOR_EDIT", null)))
                 .isInstanceOf(OrderAmendmentService.AmendmentExpiredException.class);
 
         assertThat(orderQuery.revisions(TENANT, orderId))
@@ -505,9 +560,18 @@ class OrderAmendmentAndOutcomeTests {
         UUID orderId = placeOrder("idem-1").orderId();
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
-        tx(() -> amendments.propose(TENANT, orderId, new OrderAmendmentService.ProposeCommand(
-                version, List.of(OrderAmendmentService.AmendmentCommand.callback(true)), false,
-                "k-1", "OPERATOR_EDIT", "USER", "sharif", null)));
+        tx(() -> amendments.propose(
+                TENANT,
+                orderId,
+                new OrderAmendmentService.ProposeCommand(
+                        version,
+                        List.of(OrderAmendmentService.AmendmentCommand.callback(true)),
+                        false,
+                        "k-1",
+                        "OPERATOR_EDIT",
+                        "USER",
+                        "sharif",
+                        null)));
 
         clock.advance(OrderAmendmentService.TTL.plus(Duration.ofMinutes(1)));
         assertThat(tx(() -> amendments.expireOverdue(50))).isEqualTo(1);
@@ -525,11 +589,19 @@ class OrderAmendmentAndOutcomeTests {
         UUID orderId = placeOrder("idem-1").orderId();
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
-        assertThatThrownBy(() -> tx(() -> amendments.propose(TENANT, orderId,
-                new OrderAmendmentService.ProposeCommand(version,
-                        List.of(new OrderAmendmentService.AmendmentCommand(
-                                AmendmentCommandType.ADD_LINES, Map.of())),
-                        true, "k-1", "OPERATOR_EDIT", "USER", "sharif", null))))
+        assertThatThrownBy(() -> tx(() -> amendments.propose(
+                        TENANT,
+                        orderId,
+                        new OrderAmendmentService.ProposeCommand(
+                                version,
+                                List.of(new OrderAmendmentService.AmendmentCommand(
+                                        AmendmentCommandType.ADD_LINES, Map.of())),
+                                true,
+                                "k-1",
+                                "OPERATOR_EDIT",
+                                "USER",
+                                "sharif",
+                                null))))
                 .isInstanceOf(OrderAmendmentService.AmendmentNotPermittedException.class)
                 .hasMessageContaining("ADD_LINES");
 
@@ -545,8 +617,7 @@ class OrderAmendmentAndOutcomeTests {
         UUID orderId = placeOrder("idem-1").orderId();
         long total = orderStore.find(TENANT, orderId).orElseThrow().totalMinor();
 
-        var result = amend("k-1",
-                OrderAmendmentService.AmendmentCommand.cashTendered(total - 1_000));
+        var result = amend("k-1", OrderAmendmentService.AmendmentCommand.cashTendered(total - 1_000));
 
         // ADR 0039: the customer can hand over more. Refusing here would stop an
         // order over a figure that is a hint and not money.
@@ -562,7 +633,8 @@ class OrderAmendmentAndOutcomeTests {
         UUID orderId = placeOrder("idem-1").orderId();
 
         amend("k-1", OrderAmendmentService.AmendmentCommand.callback(true));
-        assertThat(orderStore.find(TENANT, orderId).orElseThrow().callbackRequested()).isTrue();
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().callbackRequested())
+                .isTrue();
 
         amend("k-2", OrderAmendmentService.AmendmentCommand.callback(false));
 
@@ -581,10 +653,14 @@ class OrderAmendmentAndOutcomeTests {
         UUID orderId = placeOrder("idem-1").orderId();
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
-        tx(() -> amendments.propose(TENANT, orderId, propose("k-1", version,
-                OrderAmendmentService.AmendmentCommand.kitchenNote("Позвонить на входе"))));
-        var replay = tx(() -> amendments.propose(TENANT, orderId, propose("k-1", version,
-                OrderAmendmentService.AmendmentCommand.kitchenNote("Позвонить на входе"))));
+        tx(() -> amendments.propose(
+                TENANT,
+                orderId,
+                propose("k-1", version, OrderAmendmentService.AmendmentCommand.kitchenNote("Позвонить на входе"))));
+        var replay = tx(() -> amendments.propose(
+                TENANT,
+                orderId,
+                propose("k-1", version, OrderAmendmentService.AmendmentCommand.kitchenNote("Позвонить на входе"))));
 
         assertThat(replay.replayed()).isTrue();
         assertThat(orderQuery.revisions(TENANT, orderId)).hasSize(2);
@@ -605,8 +681,10 @@ class OrderAmendmentAndOutcomeTests {
         // ticket and cooking it while the order changes underneath.
         exportRow(orderId, "SENT");
 
-        assertThatThrownBy(() -> tx(() -> amendments.propose(TENANT, orderId, propose("k-1",
-                version, OrderAmendmentService.AmendmentCommand.callback(true)))))
+        assertThatThrownBy(() -> tx(() -> amendments.propose(
+                        TENANT,
+                        orderId,
+                        propose("k-1", version, OrderAmendmentService.AmendmentCommand.callback(true)))))
                 .isInstanceOf(OrderAmendmentService.PosExportUnacknowledgedException.class);
 
         assertThat(orderQuery.revisions(TENANT, orderId)).hasSize(1);
@@ -623,8 +701,10 @@ class OrderAmendmentAndOutcomeTests {
         // screen, and "we do not know" must not read as "it is safe".
         exportRow(orderId, "UNCERTAIN");
 
-        assertThatThrownBy(() -> tx(() -> amendments.propose(TENANT, orderId, propose("k-unc",
-                version, OrderAmendmentService.AmendmentCommand.callback(true)))))
+        assertThatThrownBy(() -> tx(() -> amendments.propose(
+                        TENANT,
+                        orderId,
+                        propose("k-unc", version, OrderAmendmentService.AmendmentCommand.callback(true)))))
                 .isInstanceOf(OrderAmendmentService.PosExportUnacknowledgedException.class);
     }
 
@@ -637,8 +717,8 @@ class OrderAmendmentAndOutcomeTests {
         // A location with no till exports nothing, and that is the ordinary case
         // rather than an edge. Failing closed here would trade a guard nobody
         // needed for an amendment path nobody could use.
-        tx(() -> amendments.propose(TENANT, orderId, propose("k-none",
-                version, OrderAmendmentService.AmendmentCommand.callback(true))));
+        tx(() -> amendments.propose(
+                TENANT, orderId, propose("k-none", version, OrderAmendmentService.AmendmentCommand.callback(true))));
 
         assertThat(orderQuery.revisions(TENANT, orderId)).hasSize(2);
     }
@@ -659,15 +739,17 @@ class OrderAmendmentAndOutcomeTests {
                     provider_type, environment_code, display_name, status, secret_reference)
                 VALUES (:id, :tenantId, 'POS', 'clopos', 'clopos-open-api-v2', 'Till',
                     'ACTIVE', 'horecaos:local:pos:till:token')
-                """)
-                .param("id", installationId).param("tenantId", TENANT).update();
+                """).param("id", installationId).param("tenantId", TENANT).update();
 
         jdbc.sql("""
                 INSERT INTO integration.bindings (id, tenant_id, installation_id, brand_id, status)
                 VALUES (:id, :tenantId, :installationId, :brandId, 'ACTIVE')
                 """)
-                .param("id", bindingId).param("tenantId", TENANT)
-                .param("installationId", installationId).param("brandId", BRAND).update();
+                .param("id", bindingId)
+                .param("tenantId", TENANT)
+                .param("installationId", installationId)
+                .param("brandId", BRAND)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO integration.pos_order_exports (
@@ -677,9 +759,12 @@ class OrderAmendmentAndOutcomeTests {
                 VALUES (:id, :tenantId, :orderId, :bindingId, :installationId, :state,
                     'fingerprint', 'hash', 'venue-1', now())
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", TENANT)
-                .param("orderId", orderId).param("bindingId", bindingId)
-                .param("installationId", installationId).param("state", state)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("orderId", orderId)
+                .param("bindingId", bindingId)
+                .param("installationId", installationId)
+                .param("state", state)
                 .update();
     }
 
@@ -701,7 +786,9 @@ class OrderAmendmentAndOutcomeTests {
                 VALUES (:id, :tenantId, :orderId, 'APPLIED', 1, 2, 18000, 'by-hand',
                     now() + interval '15 minutes', 'USER', now())
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", TENANT).param("orderId", orderId)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("orderId", orderId)
                 .update());
 
         assertThat(refused).isNotNull();
@@ -716,8 +803,7 @@ class OrderAmendmentAndOutcomeTests {
         requireApproval();
 
         UUID rejected = placeOrder("idem-1").orderId();
-        tx(() -> orderState.decide(TENANT, rejected, decision("d-1",
-                OrderStateService.DecisionAction.REJECT)));
+        tx(() -> orderState.decide(TENANT, rejected, decision("d-1", OrderStateService.DecisionAction.REJECT)));
 
         UUID expired = placeOrder("idem-2").orderId();
         clock.advance(Duration.ofMinutes(6));
@@ -725,8 +811,7 @@ class OrderAmendmentAndOutcomeTests {
 
         UUID cancelled = placeOrder("idem-3").orderId();
         int version = orderStore.find(TENANT, cancelled).orElseThrow().version();
-        tx(() -> orderState.cancel(TENANT, cancelled, version, "CUSTOMER_CALLED", "USER",
-                "sharif", null));
+        tx(() -> orderState.cancel(TENANT, cancelled, version, "CUSTOMER_CALLED", "USER", "sharif", null));
 
         assertThat(orderQuery.outcome(TENANT, rejected).orElseThrow())
                 .extracting("kind", "systemCategory")
@@ -761,23 +846,29 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("a completion reason is refused on a fulfilment mode it is not valid for")
     void aCompletionReasonIsValidatedAgainstTheMode() {
-        UUID reasonId = tx(() -> reasons.create(TENANT, new OrderOutcomeReasonService.CreateReason(
-                OutcomeReasonKind.COMPLETION, OutcomeSystemCategory.DELIVERED_PARTNER_COURIER,
-                "Доставлен сторонней службой", null, null, null,
-                List.of(FulfillmentMode.DELIVERY), texts("Доставлено"))));
+        UUID reasonId = tx(() -> reasons.create(
+                TENANT,
+                new OrderOutcomeReasonService.CreateReason(
+                        OutcomeReasonKind.COMPLETION,
+                        OutcomeSystemCategory.DELIVERED_PARTNER_COURIER,
+                        "Доставлен сторонней службой",
+                        null,
+                        null,
+                        null,
+                        List.of(FulfillmentMode.DELIVERY),
+                        texts("Доставлено"))));
 
         UUID orderId = placeOrder("idem-1").orderId();
         advance(orderId, OrderStatus.PREPARING);
         advance(orderId, OrderStatus.READY);
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
-        assertThatThrownBy(() -> tx(() -> outcomes.complete(TENANT, orderId, version, reasonId,
-                "USER", "sharif", null)))
+        assertThatThrownBy(
+                        () -> tx(() -> outcomes.complete(TENANT, orderId, version, reasonId, "USER", "sharif", null)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("PICKUP");
 
-        assertThat(orderStore.find(TENANT, orderId).orElseThrow().status())
-                .isEqualTo(OrderStatus.READY);
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().status()).isEqualTo(OrderStatus.READY);
     }
 
     @Test
@@ -789,9 +880,11 @@ class OrderAmendmentAndOutcomeTests {
         UUID orderId = placeOrder("idem-1").orderId();
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
-        tx(() -> outcomes.cancel(TENANT, orderId, version,
-                new OrderOutcomeService.CancelCommand(writeOff, "клиент передумал", "USER",
-                        "sharif", null)));
+        tx(() -> outcomes.cancel(
+                TENANT,
+                orderId,
+                version,
+                new OrderOutcomeService.CancelCommand(writeOff, "клиент передумал", "USER", "sharif", null)));
 
         var outcome = orderQuery.outcome(TENANT, orderId).orElseThrow();
         assertThat(outcome.reservationCommitted()).isFalse();
@@ -815,7 +908,10 @@ class OrderAmendmentAndOutcomeTests {
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
         long movementsBefore = movementCount();
-        tx(() -> outcomes.cancel(TENANT, orderId, version,
+        tx(() -> outcomes.cancel(
+                TENANT,
+                orderId,
+                version,
                 new OrderOutcomeService.CancelCommand(writeOff, null, "USER", "sharif", null)));
 
         var outcome = orderQuery.outcome(TENANT, orderId).orElseThrow();
@@ -839,8 +935,8 @@ class OrderAmendmentAndOutcomeTests {
         UUID orderId = placeOrder("idem-1").orderId();
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
-        assertThatThrownBy(() -> tx(() -> orderState.cancel(TENANT, orderId, version, "BECAUSE",
-                "USER", "sharif", null)))
+        assertThatThrownBy(
+                        () -> tx(() -> orderState.cancel(TENANT, orderId, version, "BECAUSE", "USER", "sharif", null)))
                 .isInstanceOf(OrderStateService.CancellationNotPermittedException.class);
 
         assertThat(orderQuery.outcome(TENANT, orderId)).isEmpty();
@@ -853,7 +949,10 @@ class OrderAmendmentAndOutcomeTests {
         UUID orderId = placeOrder("idem-1").orderId();
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
-        tx(() -> outcomes.cancel(TENANT, orderId, version,
+        tx(() -> outcomes.cancel(
+                TENANT,
+                orderId,
+                version,
                 new OrderOutcomeService.CancelCommand(writeOff, null, "USER", "sharif", null)));
 
         OrderCancelled event = published.events.stream()
@@ -875,16 +974,21 @@ class OrderAmendmentAndOutcomeTests {
     void anOrderHasExactlyOneOutcome() {
         UUID orderId = placeOrder("idem-1").orderId();
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
-        tx(() -> outcomes.cancel(TENANT, orderId, version,
-                new OrderOutcomeService.CancelCommand(writeOffReason(), null, "USER", "sharif",
-                        null)));
+        tx(() -> outcomes.cancel(
+                TENANT,
+                orderId,
+                version,
+                new OrderOutcomeService.CancelCommand(writeOffReason(), null, "USER", "sharif", null)));
 
         Throwable second = catchThrowable(() -> jdbc.sql("""
                 INSERT INTO ordering.order_outcomes (order_id, tenant_id, kind, system_category,
                     actor_type, stock_disposition, reservation_committed, occurred_at)
                 VALUES (:orderId, :tenantId, 'COMPLETED', 'COLLECTED_BY_CUSTOMER', 'USER',
                     'NO_EFFECT', true, now())
-                """).param("orderId", orderId).param("tenantId", TENANT).update());
+                """)
+                .param("orderId", orderId)
+                .param("tenantId", TENANT)
+                .update());
 
         assertThat(second).isNotNull();
     }
@@ -894,11 +998,17 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("a reason without wording in every locale is refused")
     void aReasonNeedsEveryLocale() {
-        assertThatThrownBy(() -> tx(() -> reasons.create(TENANT,
-                new OrderOutcomeReasonService.CreateReason(OutcomeReasonKind.CANCELLATION,
-                        OutcomeSystemCategory.CUSTOMER_UNREACHABLE, "Не дозвонились",
-                        StockDisposition.RETURN_TO_STOCK, LiabilityParty.CUSTOMER,
-                        CustomerRefund.FULL, null, Map.of("ru", "Мы не смогли до вас дозвониться")))))
+        assertThatThrownBy(() -> tx(() -> reasons.create(
+                        TENANT,
+                        new OrderOutcomeReasonService.CreateReason(
+                                OutcomeReasonKind.CANCELLATION,
+                                OutcomeSystemCategory.CUSTOMER_UNREACHABLE,
+                                "Не дозвонились",
+                                StockDisposition.RETURN_TO_STOCK,
+                                LiabilityParty.CUSTOMER,
+                                CustomerRefund.FULL,
+                                null,
+                                Map.of("ru", "Мы не смогли до вас дозвониться")))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("uz-Latn");
     }
@@ -906,10 +1016,17 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("a cancellation reason cannot omit the three consequences it exists to carry")
     void aCancellationReasonCarriesItsConsequences() {
-        assertThatThrownBy(() -> tx(() -> reasons.create(TENANT,
-                new OrderOutcomeReasonService.CreateReason(OutcomeReasonKind.CANCELLATION,
-                        OutcomeSystemCategory.CUSTOMER_UNREACHABLE, "Не дозвонились",
-                        null, null, null, null, texts("Не дозвонились")))))
+        assertThatThrownBy(() -> tx(() -> reasons.create(
+                        TENANT,
+                        new OrderOutcomeReasonService.CreateReason(
+                                OutcomeReasonKind.CANCELLATION,
+                                OutcomeSystemCategory.CUSTOMER_UNREACHABLE,
+                                "Не дозвонились",
+                                null,
+                                null,
+                                null,
+                                null,
+                                texts("Не дозвонились")))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("safe default");
     }
@@ -917,16 +1034,19 @@ class OrderAmendmentAndOutcomeTests {
     @Test
     @DisplayName("the customer text and the internal name are different statements, in different rows")
     void theTwoTextsAreSeparate() {
-        UUID reasonId = tx(() -> reasons.create(TENANT,
-                new OrderOutcomeReasonService.CreateReason(OutcomeReasonKind.CANCELLATION,
-                        OutcomeSystemCategory.CUSTOMER_UNREACHABLE, "Не дозвонились",
-                        StockDisposition.RETURN_TO_STOCK, LiabilityParty.CUSTOMER,
-                        CustomerRefund.FULL, null,
+        UUID reasonId = tx(() -> reasons.create(
+                TENANT,
+                new OrderOutcomeReasonService.CreateReason(
+                        OutcomeReasonKind.CANCELLATION,
+                        OutcomeSystemCategory.CUSTOMER_UNREACHABLE,
+                        "Не дозвонились",
+                        StockDisposition.RETURN_TO_STOCK,
+                        LiabilityParty.CUSTOMER,
+                        CustomerRefund.FULL,
+                        null,
                         texts("К сожалению, мы не смогли связаться с вами"))));
 
-        assertThat(reasons.texts(reasonId))
-                .containsKeys("ru", "uz-Latn", "en")
-                .doesNotContainValue("Не дозвонились");
+        assertThat(reasons.texts(reasonId)).containsKeys("ru", "uz-Latn", "en").doesNotContainValue("Не дозвонились");
     }
 
     @Test
@@ -938,8 +1058,11 @@ class OrderAmendmentAndOutcomeTests {
         UUID orderId = placeOrder("idem-1").orderId();
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
-        assertThatThrownBy(() -> tx(() -> outcomes.cancel(TENANT, orderId, version,
-                new OrderOutcomeService.CancelCommand(reasonId, null, "USER", "sharif", null))))
+        assertThatThrownBy(() -> tx(() -> outcomes.cancel(
+                        TENANT,
+                        orderId,
+                        version,
+                        new OrderOutcomeService.CancelCommand(reasonId, null, "USER", "sharif", null))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("archived");
     }
@@ -950,13 +1073,25 @@ class OrderAmendmentAndOutcomeTests {
         UUID reasonId = writeOffReason();
         UUID orderId = placeOrder("idem-1").orderId();
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
-        tx(() -> outcomes.cancel(TENANT, orderId, version,
+        tx(() -> outcomes.cancel(
+                TENANT,
+                orderId,
+                version,
                 new OrderOutcomeService.CancelCommand(reasonId, null, "USER", "sharif", null)));
 
-        tx(() -> reasons.update(TENANT, reasonId, 1, new OrderOutcomeReasonService.CreateReason(
-                OutcomeReasonKind.CANCELLATION, OutcomeSystemCategory.ITEM_UNAVAILABLE,
-                "Продукт закончился", StockDisposition.RETURN_TO_STOCK, LiabilityParty.PLATFORM,
-                CustomerRefund.NONE, null, texts("Извините"))));
+        tx(() -> reasons.update(
+                TENANT,
+                reasonId,
+                1,
+                new OrderOutcomeReasonService.CreateReason(
+                        OutcomeReasonKind.CANCELLATION,
+                        OutcomeSystemCategory.ITEM_UNAVAILABLE,
+                        "Продукт закончился",
+                        StockDisposition.RETURN_TO_STOCK,
+                        LiabilityParty.PLATFORM,
+                        CustomerRefund.NONE,
+                        null,
+                        texts("Извините"))));
 
         var outcome = orderQuery.outcome(TENANT, orderId).orElseThrow();
         assertThat(outcome.reasonVersion()).isEqualTo(1);
@@ -981,8 +1116,7 @@ class OrderAmendmentAndOutcomeTests {
                 .as("nobody has accepted an order that is still awaiting approval")
                 .isNull();
 
-        tx(() -> orderState.decide(TENANT, orderId, decision("d-1",
-                OrderStateService.DecisionAction.APPROVE)));
+        tx(() -> orderState.decide(TENANT, orderId, decision("d-1", OrderStateService.DecisionAction.APPROVE)));
 
         var confirmed = orderStore.find(TENANT, orderId).orElseThrow();
         assertThat(confirmed.createdByActorId()).isEqualTo(CUSTOMER.toString());
@@ -997,7 +1131,8 @@ class OrderAmendmentAndOutcomeTests {
 
         // A leaderboard a later action can rewrite measures nothing, so the rule
         // is enforced where a support "fix" cannot bypass it.
-        Throwable rewritten = catchThrowable(() -> jdbc.sql("""
+        Throwable rewritten =
+                catchThrowable(() -> jdbc.sql("""
                 UPDATE ordering.orders SET created_by_actor_id = 'someone-else' WHERE id = :id
                 """).param("id", orderId).update());
 
@@ -1024,43 +1159,60 @@ class OrderAmendmentAndOutcomeTests {
 
     /** «Нет товара»: committed stock is written off and the restaurant carries it. */
     private UUID writeOffReason() {
-        return tx(() -> reasons.create(TENANT, new OrderOutcomeReasonService.CreateReason(
-                OutcomeReasonKind.CANCELLATION, OutcomeSystemCategory.ITEM_UNAVAILABLE,
-                "Нет товара", StockDisposition.WRITE_OFF, LiabilityParty.TENANT,
-                CustomerRefund.FULL, null, texts("Извините, блюдо закончилось"))));
+        return tx(() -> reasons.create(
+                TENANT,
+                new OrderOutcomeReasonService.CreateReason(
+                        OutcomeReasonKind.CANCELLATION,
+                        OutcomeSystemCategory.ITEM_UNAVAILABLE,
+                        "Нет товара",
+                        StockDisposition.WRITE_OFF,
+                        LiabilityParty.TENANT,
+                        CustomerRefund.FULL,
+                        null,
+                        texts("Извините, блюдо закончилось"))));
     }
 
-    private OrderAmendmentService.ProposeCommand propose(String key, int version,
-            OrderAmendmentService.AmendmentCommand command) {
-        return new OrderAmendmentService.ProposeCommand(version, List.of(command), true, key,
-                "OPERATOR_EDIT", "USER", "sharif", null);
+    private OrderAmendmentService.ProposeCommand propose(
+            String key, int version, OrderAmendmentService.AmendmentCommand command) {
+        return new OrderAmendmentService.ProposeCommand(
+                version, List.of(command), true, key, "OPERATOR_EDIT", "USER", "sharif", null);
     }
 
-    private OrderAmendmentService.AmendmentResult amend(String key,
-            OrderAmendmentService.AmendmentCommand command) {
+    private OrderAmendmentService.AmendmentResult amend(String key, OrderAmendmentService.AmendmentCommand command) {
         UUID orderId = jdbc.sql("SELECT id FROM ordering.orders LIMIT 1")
-                .query(UUID.class).single();
+                .query(UUID.class)
+                .single();
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
         return tx(() -> amendments.propose(TENANT, orderId, propose(key, version, command)));
     }
 
     private UUID openCart() {
-        return tx(() -> carts.create(TENANT, BRAND, LOCATION, "STOREFRONT",
-                FulfillmentMode.PICKUP, CUSTOMER, null)).cartId();
+        return tx(() -> carts.create(TENANT, BRAND, LOCATION, "STOREFRONT", FulfillmentMode.PICKUP, CUSTOMER, null))
+                .cartId();
     }
 
     private CheckoutService.CheckoutResult placeOrder(String idempotencyKey) {
         UUID cart = openCart();
-        tx(() -> carts.putLine(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "a", burgerVariant, 2,
-                List.of(), null));
+        tx(() -> carts.putLine(
+                TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "a", burgerVariant, 2, List.of(), null));
         tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
 
         var row = cartStore.find(TENANT, BRAND, cart).orElseThrow();
-        return tx(() -> checkout.checkout(new CheckoutService.CheckoutCommand(TENANT, BRAND, cart,
-                row.version(), row.pricingQuoteId(), row.pricingContextHash(), idempotencyKey,
+        return tx(() -> checkout.checkout(new CheckoutService.CheckoutCommand(
+                TENANT,
+                BRAND,
+                cart,
+                row.version(),
+                row.pricingQuoteId(),
+                row.pricingContextHash(),
+                idempotencyKey,
                 // Naming a method is a precondition of checkout now: an order that
                 // names none plans no settlement and can never be refunded.
-                "CASH", 0L, "CUSTOMER", CUSTOMER.toString(), null)));
+                "CASH",
+                0L,
+                "CUSTOMER",
+                CUSTOMER.toString(),
+                null)));
     }
 
     private int cartVersion(UUID cartId) {
@@ -1069,26 +1221,36 @@ class OrderAmendmentAndOutcomeTests {
 
     private void advance(UUID orderId, OrderStatus target) {
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
-        tx(() -> orderState.advance(TENANT, orderId, target, version, "KITCHEN", "USER",
-                "sharif", null));
+        tx(() -> orderState.advance(TENANT, orderId, target, version, "KITCHEN", "USER", "sharif", null));
     }
 
-    private OrderStateService.DecisionCommand decision(String decisionId,
-            OrderStateService.DecisionAction action) {
-        return new OrderStateService.DecisionCommand(decisionId, action, "HORECAOS_OPERATIONS",
-                "USER", "operator", "OPERATOR_DECISION", clock.instant(), null);
+    private OrderStateService.DecisionCommand decision(String decisionId, OrderStateService.DecisionAction action) {
+        return new OrderStateService.DecisionCommand(
+                decisionId,
+                action,
+                "HORECAOS_OPERATIONS",
+                "USER",
+                "operator",
+                "OPERATOR_DECISION",
+                clock.instant(),
+                null);
     }
 
     private long movementCount() {
-        return jdbc.sql("SELECT count(*) FROM inventory.movements").query(Long.class).single();
+        return jdbc.sql("SELECT count(*) FROM inventory.movements")
+                .query(Long.class)
+                .single();
     }
 
     /** Switches the location to RESTAURANT_APPROVAL with a five-minute deadline. */
     private void requireApproval() {
         var policy = new uz.horecaos.platform.ordering.domain.OrderAcceptancePolicy(
                 uz.horecaos.platform.ordering.domain.AcceptanceMode.RESTAURANT_APPROVAL,
-                uz.horecaos.platform.ordering.domain.ApprovalChannel.HORECAOS_OPERATIONS, 300,
-                uz.horecaos.platform.ordering.domain.ApprovalTimeoutAction.AUTO_REJECT, true, true);
+                uz.horecaos.platform.ordering.domain.ApprovalChannel.HORECAOS_OPERATIONS,
+                300,
+                uz.horecaos.platform.ordering.domain.ApprovalTimeoutAction.AUTO_REJECT,
+                true,
+                true);
         UUID policyId = UUID.randomUUID();
         var from = java.time.OffsetDateTime.ofInstant(NOW.minus(Duration.ofDays(1)), ZoneOffset.UTC);
 
@@ -1098,7 +1260,9 @@ class OrderAmendmentAndOutcomeTests {
                 VALUES (:id, 'ordering.acceptance', 'LOCATION', :tenantId, :brandId, :locationId,
                     1, 'ACTIVE', CAST(:document AS jsonb), :hash, :from, 'test')
                 """)
-                .param("id", policyId).param("tenantId", TENANT).param("brandId", BRAND)
+                .param("id", policyId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
                 .param("locationId", LOCATION)
                 .param("document", JsonMapper.builder().build().writeValueAsString(policy))
                 .param("hash", "0".repeat(64))
@@ -1110,14 +1274,15 @@ class OrderAmendmentAndOutcomeTests {
                 VALUES ('ordering.acceptance', 'LOCATION', :tenantId, :brandId, :locationId,
                     :policyId, 1, 'test')
                 """)
-                .param("tenantId", TENANT).param("brandId", BRAND).param("locationId", LOCATION)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", LOCATION)
                 .param("policyId", policyId)
                 .update();
     }
 
     private <T> T tx(java.util.function.Supplier<T> work) {
-        return new TransactionTemplate(new DataSourceTransactionManager(dataSource))
-                .execute(status -> work.get());
+        return new TransactionTemplate(new DataSourceTransactionManager(dataSource)).execute(status -> work.get());
     }
 
     private void tx(Runnable work) {
@@ -1141,7 +1306,10 @@ class OrderAmendmentAndOutcomeTests {
                     timezone, status, version)
                 VALUES (:id, :tenantId, :brandId, 'MAIN01', 'main-01', 'Branch', 'Asia/Tashkent',
                     'ACTIVE', 0)
-                """).param("id", LOCATION).param("tenantId", TENANT).param("brandId", BRAND)
+                """)
+                .param("id", LOCATION)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
                 .update();
         jdbc.sql("""
                 INSERT INTO customer.customer_accounts (id, tenant_id, status, display_name,
@@ -1159,20 +1327,29 @@ class OrderAmendmentAndOutcomeTests {
                 INSERT INTO tenant.sales_channel_locations (tenant_id, channel_id, location_id,
                     status)
                 VALUES (:tenantId, :channelId, :locationId, 'ACTIVE')
-                """).param("tenantId", TENANT).param("channelId", storefrontChannel)
-                .param("locationId", LOCATION).update();
+                """)
+                .param("tenantId", TENANT)
+                .param("channelId", storefrontChannel)
+                .param("locationId", LOCATION)
+                .update();
         jdbc.sql("""
                 INSERT INTO tenant.location_service_state (location_id, tenant_id, brand_id, mode)
                 VALUES (:locationId, :tenantId, :brandId, 'FOLLOW_SCHEDULE')
-                """).param("locationId", LOCATION).param("tenantId", TENANT)
-                .param("brandId", BRAND).update();
+                """)
+                .param("locationId", LOCATION)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
         for (FulfillmentMode mode : List.of(FulfillmentMode.PICKUP, FulfillmentMode.DELIVERY)) {
             jdbc.sql("""
                     INSERT INTO tenant.channel_fulfillment_modes (tenant_id, channel_id,
                         fulfillment_mode, enabled)
                     VALUES (:tenantId, :channelId, :mode, true)
-                    """).param("tenantId", TENANT).param("channelId", storefrontChannel)
-                    .param("mode", mode.name()).update();
+                    """)
+                    .param("tenantId", TENANT)
+                    .param("channelId", storefrontChannel)
+                    .param("mode", mode.name())
+                    .update();
         }
 
         UUID scheduleId = UUID.randomUUID();
@@ -1180,15 +1357,22 @@ class OrderAmendmentAndOutcomeTests {
                 INSERT INTO tenant.service_schedules (id, tenant_id, brand_id, name,
                     accepts_scheduled_orders)
                 VALUES (:id, :tenantId, :brandId, 'Standard hours', true)
-                """).param("id", scheduleId).param("tenantId", TENANT).param("brandId", BRAND)
+                """)
+                .param("id", scheduleId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
                 .update();
         for (int day = 1; day <= 7; day++) {
             jdbc.sql("""
                     INSERT INTO tenant.service_schedule_rules (schedule_id, sequence, day_of_week,
                         opens_at, closes_at)
                     VALUES (:scheduleId, :sequence, :day, :opens, :closes)
-                    """).param("scheduleId", scheduleId).param("sequence", day).param("day", day)
-                    .param("opens", LocalTime.of(9, 0)).param("closes", LocalTime.of(23, 0))
+                    """)
+                    .param("scheduleId", scheduleId)
+                    .param("sequence", day)
+                    .param("day", day)
+                    .param("opens", LocalTime.of(9, 0))
+                    .param("closes", LocalTime.of(23, 0))
                     .update();
         }
         for (FulfillmentMode mode : List.of(FulfillmentMode.PICKUP, FulfillmentMode.DELIVERY)) {
@@ -1196,16 +1380,23 @@ class OrderAmendmentAndOutcomeTests {
                     INSERT INTO tenant.location_service_bindings (tenant_id, brand_id,
                         location_id, fulfillment_mode, schedule_id)
                     VALUES (:tenantId, :brandId, :locationId, :mode, :scheduleId)
-                    """).param("tenantId", TENANT).param("brandId", BRAND)
-                    .param("locationId", LOCATION).param("mode", mode.name())
-                    .param("scheduleId", scheduleId).update();
+                    """)
+                    .param("tenantId", TENANT)
+                    .param("brandId", BRAND)
+                    .param("locationId", LOCATION)
+                    .param("mode", mode.name())
+                    .param("scheduleId", scheduleId)
+                    .update();
         }
 
         catalogId = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
                 VALUES (:id, :tenantId, :brandId, 'MAIN', 'Main menu', 'ACTIVE')
-                """).param("id", catalogId).param("tenantId", TENANT).param("brandId", BRAND)
+                """)
+                .param("id", catalogId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
                 .update();
 
         UUID productId = UUID.randomUUID();
@@ -1213,66 +1404,100 @@ class OrderAmendmentAndOutcomeTests {
         jdbc.sql("""
                 INSERT INTO catalog.products (id, tenant_id, brand_id, code, status)
                 VALUES (:id, :tenantId, :brandId, 'BURGER', 'ACTIVE')
-                """).param("id", productId).param("tenantId", TENANT).param("brandId", BRAND)
+                """)
+                .param("id", productId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
                 .update();
         jdbc.sql("""
                 INSERT INTO catalog.variants (id, tenant_id, brand_id, product_id, sku, status)
                 VALUES (:id, :tenantId, :brandId, :productId, 'SKU-BURGER', 'ACTIVE')
-                """).param("id", burgerVariant).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("productId", productId).update();
+                """)
+                .param("id", burgerVariant)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("productId", productId)
+                .update();
         jdbc.sql("""
                 INSERT INTO catalog.catalog_products (tenant_id, brand_id, catalog_id, product_id)
                 VALUES (:tenantId, :brandId, :catalogId, :productId)
-                """).param("tenantId", TENANT).param("brandId", BRAND).param("catalogId", catalogId)
-                .param("productId", productId).update();
+                """)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("catalogId", catalogId)
+                .param("productId", productId)
+                .update();
         jdbc.sql("""
                 INSERT INTO catalog.translations (tenant_id, brand_id, entity_type, entity_id,
                     locale, name)
                 VALUES (:tenantId, :brandId, 'PRODUCT', :productId, 'uz', 'Qo''y burger')
-                """).param("tenantId", TENANT).param("brandId", BRAND).param("productId", productId)
+                """)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("productId", productId)
                 .update();
         jdbc.sql("""
                 INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel,
                     status, content_hash, activated_at)
                 VALUES (:id, :tenantId, :brandId, :catalogId, 'STOREFRONT', 'PUBLISHED', 'hash',
                     now())
-                """).param("id", UUID.randomUUID()).param("tenantId", TENANT)
-                .param("brandId", BRAND).param("catalogId", catalogId).update();
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("catalogId", catalogId)
+                .update();
     }
 
     private void seedPricingAndStock() {
         UUID priceBook = UUID.randomUUID();
-        var validFrom = java.time.OffsetDateTime.ofInstant(
-                NOW.minus(Duration.ofDays(1)), ZoneOffset.UTC);
+        var validFrom = java.time.OffsetDateTime.ofInstant(NOW.minus(Duration.ofDays(1)), ZoneOffset.UTC);
 
         jdbc.sql("""
                 INSERT INTO pricing.price_books (id, tenant_id, brand_id, name, currency, status,
                     valid_from, priority)
                 VALUES (:id, :tenantId, :brandId, 'BRAND_MENU', 'UZS', 'ACTIVE', :from, 0)
-                """).param("id", priceBook).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("from", validFrom).update();
+                """)
+                .param("id", priceBook)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("from", validFrom)
+                .update();
         jdbc.sql("""
                 INSERT INTO pricing.price_book_assignments (id, tenant_id, brand_id, price_book_id,
                     scope_type, scope_id, valid_from, priority)
                 VALUES (:id, :tenantId, :brandId, :priceBookId, 'BRAND', NULL, :from, 0)
-                """).param("id", UUID.randomUUID()).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("priceBookId", priceBook).param("from", validFrom).update();
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("priceBookId", priceBook)
+                .param("from", validFrom)
+                .update();
         jdbc.sql("""
                 INSERT INTO pricing.prices (id, tenant_id, brand_id, price_book_id, priceable_type,
                     priceable_id, amount_minor, valid_from)
                 VALUES (:id, :tenantId, :brandId, :priceBookId, 'VARIANT', :variantId, 50000, :from)
-                """).param("id", UUID.randomUUID()).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("priceBookId", priceBook).param("variantId", burgerVariant)
-                .param("from", validFrom).update();
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("priceBookId", priceBook)
+                .param("variantId", burgerVariant)
+                .param("from", validFrom)
+                .update();
         jdbc.sql("""
                 INSERT INTO pricing.tax_profiles (id, tenant_id, brand_id, jurisdiction_code, mode,
                     rate_basis_points, valid_from)
                 VALUES (:id, :tenantId, :brandId, 'UZ', 'INCLUSIVE', 1200, :from)
-                """).param("id", UUID.randomUUID()).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("from", validFrom).update();
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("from", validFrom)
+                .update();
 
-        inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, burgerVariant,
-                TrackingMode.BINARY);
+        inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, burgerVariant, TrackingMode.BINARY);
     }
 
     /** The unwired payments port, which is a stand-in in production too. */
@@ -1307,22 +1532,25 @@ class OrderAmendmentAndOutcomeTests {
                 }
 
                 @Override
-                public void reverse(UUID tenantId, UUID tenderId, long amountMinor,
-                        String reasonCode, String actor) {
+                public void reverse(UUID tenantId, UUID tenderId, long amountMinor, String reasonCode, String actor) {
                     throw new UnsupportedOperationException("No order here redeems points");
                 }
             };
 
     private static final PaymentIntentPort UNWIRED_PAYMENTS = new PaymentIntentPort() {
         @Override
-        public UUID createIntent(UUID tenantId, UUID orderId, long amountMinor, String currency,
-                String paymentMethodCode, String idempotencyKey) {
+        public UUID createIntent(
+                UUID tenantId,
+                UUID orderId,
+                long amountMinor,
+                String currency,
+                String paymentMethodCode,
+                String idempotencyKey) {
             return null;
         }
 
         @Override
-        public boolean paymentRequiredBeforeConfirmation(UUID tenantId, UUID orderId,
-                String paymentMethodCode) {
+        public boolean paymentRequiredBeforeConfirmation(UUID tenantId, UUID orderId, String paymentMethodCode) {
             return false;
         }
 
@@ -1335,8 +1563,7 @@ class OrderAmendmentAndOutcomeTests {
     /** Collects the ordering facts a transaction publishes, in order. */
     private static final class RecordingEventPublisher implements ApplicationEventPublisher {
 
-        private final List<OrderingEvent> events =
-                java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+        private final List<OrderingEvent> events = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
 
         @Override
         public void publishEvent(Object event) {

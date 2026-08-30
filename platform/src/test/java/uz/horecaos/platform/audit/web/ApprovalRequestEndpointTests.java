@@ -12,7 +12,6 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,7 +32,6 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
@@ -172,8 +170,7 @@ class ApprovalRequestEndpointTests {
                 .andReturn();
 
         assertThat(refused.getResponse().getStatus()).isEqualTo(403);
-        assertThat(refused.getResponse().getContentAsString())
-                .contains(Capability.COURIER_PAYOUT_AUTHORISE.code());
+        assertThat(refused.getResponse().getContentAsString()).contains(Capability.COURIER_PAYOUT_AUTHORISE.code());
         assertThat(status(requestId)).isEqualTo("PENDING");
     }
 
@@ -219,9 +216,8 @@ class ApprovalRequestEndpointTests {
     void aRequestFromAnotherTenantIsNotFound() throws Exception {
         UUID requestId = pendingRequest(OTHER_TENANT, OWNER, Capability.REFUND_APPROVE);
 
-        MvcResult refused = mvc.perform(post(
-                        "/api/v1/control-plane/tenants/" + TENANT
-                                + "/approval-requests/" + requestId + "/decision")
+        MvcResult refused = mvc.perform(post("/api/v1/control-plane/tenants/" + TENANT + "/approval-requests/"
+                                + requestId + "/decision")
                         .with(tokenFor(FINANCE))
                         .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "decide-5")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -258,7 +254,10 @@ class ApprovalRequestEndpointTests {
         pendingRequest(TENANT, OWNER, Capability.REFUND_APPROVE);
         String queue = "/api/v1/control-plane/tenants/" + TENANT + "/approval-requests";
 
-        assertThat(mvc.perform(get(queue).with(tokenFor(STAFF))).andReturn().getResponse().getStatus())
+        assertThat(mvc.perform(get(queue).with(tokenFor(STAFF)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
                 .as("a support agent who cannot sign has no business reading what is waiting")
                 .isEqualTo(403);
 
@@ -275,8 +274,7 @@ class ApprovalRequestEndpointTests {
     // --- fixtures ---------------------------------------------------------
 
     private static MockHttpServletRequestBuilder decision(UUID requestId) {
-        return post("/api/v1/control-plane/tenants/" + TENANT
-                + "/approval-requests/" + requestId + "/decision");
+        return post("/api/v1/control-plane/tenants/" + TENANT + "/approval-requests/" + requestId + "/decision");
     }
 
     private static String approveBody() {
@@ -286,7 +284,9 @@ class ApprovalRequestEndpointTests {
 
     private String status(UUID requestId) {
         return jdbc.sql("SELECT status FROM audit.approval_requests WHERE id = :id")
-                .param("id", requestId).query(String.class).single();
+                .param("id", requestId)
+                .query(String.class)
+                .single();
     }
 
     /**
@@ -363,9 +363,8 @@ class ApprovalRequestEndpointTests {
     }
 
     private static RequestPostProcessor tokenFor(String subject) {
-        return jwt().jwt(builder -> builder
-                .subject(subject)
-                .claim("resource_access", Map.of("horecaos-api", Map.of("roles", List.of()))));
+        return jwt().jwt(builder ->
+                builder.subject(subject).claim("resource_access", Map.of("horecaos-api", Map.of("roles", List.of()))));
     }
 
     @TestConfiguration(proxyBeanMethods = false)
@@ -373,8 +372,10 @@ class ApprovalRequestEndpointTests {
 
         @Bean
         JwtDecoder jwtDecoder() {
-            return token -> Jwt.withTokenValue(token).header("alg", "none")
-                    .claim("sub", "unused").build();
+            return token -> Jwt.withTokenValue(token)
+                    .header("alg", "none")
+                    .claim("sub", "unused")
+                    .build();
         }
     }
 }

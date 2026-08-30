@@ -28,8 +28,7 @@ final class MonetaryTopics {
 
     private static final Set<String> MONETARY_DOMAINS = Set.of("ordering", "payments");
 
-    private MonetaryTopics() {
-    }
+    private MonetaryTopics() {}
 
     static boolean isMonetary(String topicDomain) {
         return topicDomain != null && MONETARY_DOMAINS.contains(topicDomain);

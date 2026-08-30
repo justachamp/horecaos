@@ -2,10 +2,8 @@ package uz.horecaos.platform.catalog.application;
 
 import java.util.Set;
 import java.util.UUID;
-
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.catalog.api.FiscalNodeFacts;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 

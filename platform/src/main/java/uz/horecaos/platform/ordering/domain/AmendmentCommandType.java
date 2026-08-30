@@ -21,7 +21,6 @@ package uz.horecaos.platform.ordering.domain;
  * and forget in the fiscal receipt.
  */
 public enum AmendmentCommandType {
-
     ADD_LINES(true, false),
     CHANGE_LINE_QUANTITY(true, false),
     REMOVE_LINES(true, false),

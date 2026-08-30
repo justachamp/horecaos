@@ -1,27 +1,21 @@
 package uz.horecaos.platform.integration.outbox;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.integration.retry.RetryBackoff;
 
 @Component
-@ConditionalOnProperty(
-        name = "horecaos.messaging.outbox.enabled",
-        havingValue = "true",
-        matchIfMissing = true)
+@ConditionalOnProperty(name = "horecaos.messaging.outbox.enabled", havingValue = "true", matchIfMissing = true)
 public class OutboxRelay {
 
     private static final Logger logger = LoggerFactory.getLogger(OutboxRelay.class);
@@ -64,8 +58,7 @@ public class OutboxRelay {
         }
         Duration worstCaseBatch = publishTimeout.multipliedBy(batchSize).plusSeconds(5);
         if (leaseDuration.compareTo(worstCaseBatch) < 0) {
-            throw new IllegalArgumentException(
-                    "Outbox lease duration must exceed the batch's worst-case publish time");
+            throw new IllegalArgumentException("Outbox lease duration must exceed the batch's worst-case publish time");
         }
         this.outbox = outbox;
         this.publisher = publisher;
@@ -115,12 +108,7 @@ public class OutboxRelay {
             boolean deadLetter = event.attemptCount() >= maxAttempts;
             Instant nextAttempt = deadLetter ? failedAt : failedAt.plus(backoff.delayAfter(event.attemptCount()));
             boolean updated = outbox.markFailed(
-                    event.eventId(),
-                    event.claimToken(),
-                    failedAt,
-                    nextAttempt,
-                    safeError(exception),
-                    deadLetter);
+                    event.eventId(), event.claimToken(), failedAt, nextAttempt, safeError(exception), deadLetter);
             if (!updated) {
                 logger.warn("Outbox failure lease was lost before completion eventId={}", event.eventId());
                 return;
@@ -129,12 +117,16 @@ public class OutboxRelay {
                 deadLetterCounter.increment();
                 logger.error(
                         "Outbox event exhausted its retry budget eventId={} eventType={} attempts={}",
-                        event.eventId(), event.eventType(), event.attemptCount());
+                        event.eventId(),
+                        event.eventType(),
+                        event.attemptCount());
             } else {
                 failedCounter.increment();
                 logger.warn(
                         "Outbox event publication will retry eventId={} eventType={} attempt={}",
-                        event.eventId(), event.eventType(), event.attemptCount());
+                        event.eventId(),
+                        event.eventType(),
+                        event.attemptCount());
             }
         }
     }

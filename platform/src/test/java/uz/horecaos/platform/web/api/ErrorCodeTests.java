@@ -42,8 +42,10 @@ class ErrorCodeTests {
 
     @Test
     void capabilityAndEntitlementFailuresAreDistinguishable() {
-        assertThat(ApiException.insufficientCapability("order.approve", "LOCATION").errorCode())
-                .isNotEqualTo(ApiException.entitlementRequired("pos.integrations.enabled").errorCode());
+        assertThat(ApiException.insufficientCapability("order.approve", "LOCATION")
+                        .errorCode())
+                .isNotEqualTo(ApiException.entitlementRequired("pos.integrations.enabled")
+                        .errorCode());
     }
 
     @Test

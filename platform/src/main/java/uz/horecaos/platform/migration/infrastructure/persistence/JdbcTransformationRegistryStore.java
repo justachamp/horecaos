@@ -1,18 +1,16 @@
 package uz.horecaos.platform.migration.infrastructure.persistence;
 
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.instantOrNull;
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.utc;
+
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.migration.application.importing.TransformationRegistryStore;
-
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.instantOrNull;
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.utc;
 
 /**
  * Transformation registry persistence ({@code migration.transformations}, ADR
@@ -46,7 +44,8 @@ public class JdbcTransformationRegistryStore implements TransformationRegistrySt
                  WHERE program_id = :programId AND entity_type = :entityType
                    AND retired_at IS NULL
                 """)
-                .param("programId", programId).param("entityType", entityType)
+                .param("programId", programId)
+                .param("entityType", entityType)
                 .query(this::mapDeclaration)
                 .optional();
     }
@@ -57,7 +56,8 @@ public class JdbcTransformationRegistryStore implements TransformationRegistrySt
                  WHERE program_id = :programId AND entity_type = :entityType
                    AND transformation_version = :version
                 """)
-                .param("programId", programId).param("entityType", entityType)
+                .param("programId", programId)
+                .param("entityType", entityType)
                 .param("version", transformationVersion)
                 .query(this::mapDeclaration)
                 .optional();
@@ -81,15 +81,16 @@ public class JdbcTransformationRegistryStore implements TransformationRegistrySt
                     :id, :programId, :entityType, :version, :digest, :summary, :declaredBy, :now)
                 ON CONFLICT DO NOTHING
                 """)
-                .param("id", declaration.id())
-                .param("programId", declaration.programId())
-                .param("entityType", declaration.entityType())
-                .param("version", declaration.transformationVersion())
-                .param("digest", declaration.ruleDigest())
-                .param("summary", declaration.summary())
-                .param("declaredBy", declaration.declaredBy())
-                .param("now", utc(now))
-                .update() == 1;
+                        .param("id", declaration.id())
+                        .param("programId", declaration.programId())
+                        .param("entityType", declaration.entityType())
+                        .param("version", declaration.transformationVersion())
+                        .param("digest", declaration.ruleDigest())
+                        .param("summary", declaration.summary())
+                        .param("declaredBy", declaration.declaredBy())
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     private Declaration mapDeclaration(ResultSet row, int rowNumber) throws SQLException {

@@ -1,19 +1,17 @@
 package uz.horecaos.platform.integration.camel.common;
 
-import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.ZoneOffset;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * ADR 0023 pages on a payment circuit that has been open for ten minutes, and
@@ -43,7 +41,9 @@ class ProviderCircuitMetricsTests {
         registry.circuitBreaker("payment-payme");
 
         assertThat(meters.find("horecaos.provider.circuit.state")
-                .tag("provider", "payment-payme").gauge()).isNotNull();
+                        .tag("provider", "payment-payme")
+                        .gauge())
+                .isNotNull();
     }
 
     @Test
@@ -78,12 +78,16 @@ class ProviderCircuitMetricsTests {
 
     private double openDuration() {
         return meters.get("horecaos.provider.circuit.open.duration")
-                .tag("provider", "payment-click").gauge().value();
+                .tag("provider", "payment-click")
+                .gauge()
+                .value();
     }
 
     private double state() {
         return meters.get("horecaos.provider.circuit.state")
-                .tag("provider", "payment-click").gauge().value();
+                .tag("provider", "payment-click")
+                .gauge()
+                .value();
     }
 
     /** A clock the test moves, so that eleven minutes costs no wall time. */

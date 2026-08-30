@@ -2,7 +2,6 @@ package uz.horecaos.platform.audit.api;
 
 import java.time.Duration;
 import java.util.Objects;
-
 import uz.horecaos.platform.iam.api.ResourceScope;
 
 /**

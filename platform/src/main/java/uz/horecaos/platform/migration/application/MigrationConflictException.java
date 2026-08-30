@@ -38,7 +38,6 @@ public class MigrationConflictException extends RuntimeException {
 
     static MigrationConflictException staleVersion(String subject, int expected, int actual) {
         return new MigrationConflictException(
-                "The %s has changed since version %d was read".formatted(subject, expected),
-                expected, actual);
+                "The %s has changed since version %d was read".formatted(subject, expected), expected, actual);
     }
 }

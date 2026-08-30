@@ -12,7 +12,6 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-
 import org.junit.jupiter.api.Test;
 
 /**
@@ -30,12 +29,11 @@ import org.junit.jupiter.api.Test;
  */
 class OpenOrderIndexAgreementTests {
 
-    private static final Path MIGRATION = Path.of(
-            "src/main/resources/db/migration/V0023__order_promise_and_location_place.sql");
+    private static final Path MIGRATION =
+            Path.of("src/main/resources/db/migration/V0023__order_promise_and_location_place.sql");
 
-    private static final Pattern INDEX_PREDICATE = Pattern.compile(
-            "CREATE INDEX ix_orders_open_promise.*?WHERE status IN \\((.*?)\\);",
-            Pattern.DOTALL);
+    private static final Pattern INDEX_PREDICATE =
+            Pattern.compile("CREATE INDEX ix_orders_open_promise.*?WHERE status IN \\((.*?)\\);", Pattern.DOTALL);
 
     @Test
     void theOpenOrderIndexCoversExactlyTheNonTerminalStatuses() throws IOException {
@@ -69,11 +67,12 @@ class OpenOrderIndexAgreementTests {
     @Test
     void theSchemaAcceptsExactlyThePromiseBasesTheCodeCanWrite() throws IOException {
         String sql = Files.readString(MIGRATION, StandardCharsets.UTF_8);
-        Matcher matcher = Pattern
-                .compile("ck_order_promise_basis CHECK \\(promise_basis IN \\((.*?)\\)\\);",
-                        Pattern.DOTALL)
+        Matcher matcher = Pattern.compile(
+                        "ck_order_promise_basis CHECK \\(promise_basis IN \\((.*?)\\)\\);", Pattern.DOTALL)
                 .matcher(sql);
-        assertThat(matcher.find()).as("ck_order_promise_basis still exists in V0023").isTrue();
+        assertThat(matcher.find())
+                .as("ck_order_promise_basis still exists in V0023")
+                .isTrue();
 
         // Strip the SQL comments before splitting: the constraint is documented
         // inline, and a comma inside a sentence would otherwise read as a value.
@@ -83,7 +82,8 @@ class OpenOrderIndexAgreementTests {
                 .filter(entry -> !entry.isEmpty())
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        assertThat(accepted).containsExactlyInAnyOrder(
-                Arrays.stream(PromiseBasis.values()).map(Enum::name).toArray(String[]::new));
+        assertThat(accepted)
+                .containsExactlyInAnyOrder(
+                        Arrays.stream(PromiseBasis.values()).map(Enum::name).toArray(String[]::new));
     }
 }

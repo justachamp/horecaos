@@ -1,5 +1,10 @@
 package uz.horecaos.platform.observability;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tag;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -7,11 +12,6 @@ import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Tag;
-import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
-
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -31,10 +31,7 @@ import org.testcontainers.DockerClientFactory;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-
 import uz.horecaos.platform.support.TestDatabase;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The things ADR 0023's probe design would be worthless without: that the
@@ -73,9 +70,21 @@ class HealthProbeAndMetricTests {
      * a disk with PostgreSQL.
      */
     private static final Set<String> FORBIDDEN_LABEL_KEYS = Set.of(
-            "tenant", "tenantId", "tenant_id", "brand_id", "location_id",
-            "customer", "customer_id", "phone", "email", "address",
-            "correlation_id", "order_id", "aggregate_id", "user", "user_id");
+            "tenant",
+            "tenantId",
+            "tenant_id",
+            "brand_id",
+            "location_id",
+            "customer",
+            "customer_id",
+            "phone",
+            "email",
+            "address",
+            "correlation_id",
+            "order_id",
+            "aggregate_id",
+            "user",
+            "user_id");
 
     /**
      * The one suite in the tree that still starts a container of its own, and the
@@ -202,7 +211,8 @@ class HealthProbeAndMetricTests {
         // bridge address there and is refused whatever it sets — see
         // LocalMetricsScrapeMatcherTests, which exercises that half directly
         // because a test connecting over loopback cannot produce it.
-        assertThat(get("/actuator/prometheus", Map.of("X-Forwarded-For", "203.0.113.9")).statusCode())
+        assertThat(get("/actuator/prometheus", Map.of("X-Forwarded-For", "203.0.113.9"))
+                        .statusCode())
                 .as("the header is not consulted, so it cannot grant or remove access")
                 .isEqualTo(200);
     }
@@ -234,8 +244,7 @@ class HealthProbeAndMetricTests {
      */
     private HttpResponse<String> get(String path, Map<String, String> headers) {
         try {
-            HttpRequest.Builder request = HttpRequest.newBuilder(
-                    URI.create("http://127.0.0.1:" + port + path));
+            HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path));
             headers.forEach(request::header);
             return HttpClient.newHttpClient().send(request.build(), HttpResponse.BodyHandlers.ofString());
         } catch (InterruptedException interrupted) {

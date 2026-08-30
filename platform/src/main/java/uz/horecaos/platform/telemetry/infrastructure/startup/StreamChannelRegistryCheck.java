@@ -2,13 +2,11 @@ package uz.horecaos.platform.telemetry.infrastructure.startup;
 
 import java.util.ArrayList;
 import java.util.List;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.telemetry.api.StreamChannel;
 
 /**
@@ -63,10 +61,8 @@ public class StreamChannelRegistryCheck implements ApplicationRunner {
         }
 
         if (!problems.isEmpty()) {
-            throw new IllegalStateException(
-                    "The ADR 0045 stream channel catalogue is incomplete: " + problems);
+            throw new IllegalStateException("The ADR 0045 stream channel catalogue is incomplete: " + problems);
         }
-        log.debug("{} stream channels registered, each naming a capability",
-                StreamChannel.values().length);
+        log.debug("{} stream channels registered, each naming a capability", StreamChannel.values().length);
     }
 }

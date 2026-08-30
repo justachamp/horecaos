@@ -7,10 +7,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public record AuthenticatedActor(
-        String subject,
-        Set<String> globalRoles,
-        Map<String, Set<String>> organizationRoles) {
+public record AuthenticatedActor(String subject, Set<String> globalRoles, Map<String, Set<String>> organizationRoles) {
 
     public AuthenticatedActor {
         subject = required(subject, "Keycloak subject");

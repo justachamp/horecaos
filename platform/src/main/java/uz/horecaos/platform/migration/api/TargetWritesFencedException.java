@@ -2,8 +2,6 @@ package uz.horecaos.platform.migration.api;
 
 import java.util.Objects;
 import java.util.UUID;
-
-import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.domain.ScopeState;
 import uz.horecaos.platform.migration.domain.WriteMode;
 
@@ -29,8 +27,8 @@ public class TargetWritesFencedException extends RuntimeException {
     private final ScopeState state;
     private final WriteMode writeMode;
 
-    public TargetWritesFencedException(MigrationCapability capability, UUID scopeId,
-            ScopeState state, WriteMode writeMode) {
+    public TargetWritesFencedException(
+            MigrationCapability capability, UUID scopeId, ScopeState state, WriteMode writeMode) {
         super(describe(capability, scopeId, state, writeMode));
         this.capability = Objects.requireNonNull(capability, "A capability is required");
         this.scopeId = scopeId;
@@ -40,12 +38,12 @@ public class TargetWritesFencedException extends RuntimeException {
 
     /** The gate's own answer, turned into the failure a caller sees. */
     public static TargetWritesFencedException fencedBy(CapabilityOwnership ownership) {
-        return new TargetWritesFencedException(ownership.capability(), ownership.scopeId(),
-                ownership.state(), ownership.writeMode());
+        return new TargetWritesFencedException(
+                ownership.capability(), ownership.scopeId(), ownership.state(), ownership.writeMode());
     }
 
-    private static String describe(MigrationCapability capability, UUID scopeId,
-            ScopeState state, WriteMode writeMode) {
+    private static String describe(
+            MigrationCapability capability, UUID scopeId, ScopeState state, WriteMode writeMode) {
         String scope = scopeId == null ? "no migration scope" : "scope " + scopeId;
         return "The target may not write %s: %s is in %s with write mode %s (ADR 0024)"
                 .formatted(capability, scope, state, writeMode);

@@ -66,7 +66,11 @@ public record Promotion(
      * <p>{@code ITEM} is stage 3 and lands on matching lines; {@code ORDER} and
      * {@code DELIVERY} are stage 4 and land on the cart.
      */
-    public enum Scope { ITEM, ORDER, DELIVERY }
+    public enum Scope {
+        ITEM,
+        ORDER,
+        DELIVERY
+    }
 
     /**
      * One predicate. All of a promotion's conditions must hold for it to apply,
@@ -172,8 +176,7 @@ public record Promotion(
             if (value instanceof Number number) {
                 return number.longValue();
             }
-            throw new IllegalStateException(
-                    "Operand '" + key + "' is missing or is not a number");
+            throw new IllegalStateException("Operand '" + key + "' is missing or is not a number");
         }
 
         public int requireInt(String key) {
@@ -197,19 +200,15 @@ public record Promotion(
         public java.util.Set<String> requireStrings(String key) {
             Object value = values.get(key);
             if (!(value instanceof List<?> list) || list.isEmpty()) {
-                throw new IllegalStateException(
-                        "Operand '" + key + "' is missing or is not a non-empty list");
+                throw new IllegalStateException("Operand '" + key + "' is missing or is not a non-empty list");
             }
-            return list.stream()
-                    .map(String::valueOf)
-                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
+            return list.stream().map(String::valueOf).collect(java.util.stream.Collectors.toUnmodifiableSet());
         }
 
         public java.util.Set<Integer> requireInts(String key) {
             Object value = values.get(key);
             if (!(value instanceof List<?> list) || list.isEmpty()) {
-                throw new IllegalStateException(
-                        "Operand '" + key + "' is missing or is not a non-empty list");
+                throw new IllegalStateException("Operand '" + key + "' is missing or is not a non-empty list");
             }
             return list.stream()
                     .map(entry -> ((Number) entry).intValue())

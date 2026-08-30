@@ -2,7 +2,6 @@ package uz.horecaos.platform.fulfillment.application.port;
 
 import java.util.Optional;
 import java.util.UUID;
-
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 
 /**
@@ -25,5 +24,5 @@ public interface RoadDistancePort {
     Optional<RoadDistance> distance(GeoPoint origin, GeoPoint destination, UUID installationId);
 
     /** @param provider the adapter's own name, stored so a bad calibration can be traced to it */
-    record RoadDistance(int meters, String provider) { }
+    record RoadDistance(int meters, String provider) {}
 }

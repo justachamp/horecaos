@@ -1,27 +1,22 @@
 package uz.horecaos.platform.integration.inbox;
 
-import uz.horecaos.platform.integration.api.ExternalEventEnvelope;
-import uz.horecaos.platform.integration.api.ExternalWorkInboxHandler;
-import uz.horecaos.platform.integration.api.InboxHandler;
-
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
-
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-
+import uz.horecaos.platform.integration.api.ExternalEventEnvelope;
+import uz.horecaos.platform.integration.api.ExternalWorkInboxHandler;
+import uz.horecaos.platform.integration.api.InboxHandler;
 import uz.horecaos.platform.integration.inbox.EnvelopeValidator.InvalidEnvelopeException;
 import uz.horecaos.platform.integration.retry.RetryBackoff;
 
@@ -64,8 +59,17 @@ public class InboxExecutor {
             TransactionTemplate transactions,
             MeterRegistry meters,
             int maximumAttempts) {
-        this(store, registry, validator, objectMapper, transactions, meters, maximumAttempts,
-                DEFAULT_INITIAL_BACKOFF, DEFAULT_MAXIMUM_BACKOFF, DEFAULT_BLOCKED_RECHECK);
+        this(
+                store,
+                registry,
+                validator,
+                objectMapper,
+                transactions,
+                meters,
+                maximumAttempts,
+                DEFAULT_INITIAL_BACKOFF,
+                DEFAULT_MAXIMUM_BACKOFF,
+                DEFAULT_BLOCKED_RECHECK);
     }
 
     @Autowired
@@ -100,8 +104,13 @@ public class InboxExecutor {
      * @return whether the Kafka offset may be acknowledged
      */
     public InboxResult execute(
-            String consumerName, String recordKey, String body, Map<String, String> headers,
-            String topic, int partition, long offset) {
+            String consumerName,
+            String recordKey,
+            String body,
+            Map<String, String> headers,
+            String topic,
+            int partition,
+            long offset) {
 
         ExternalEventEnvelope<JsonNode> envelope;
         try {
@@ -110,8 +119,13 @@ public class InboxExecutor {
             // Nothing about retrying an unparseable record improves it, and the
             // record cannot even be identified well enough to store as an inbox
             // row, so it is reported for operations and acknowledged.
-            log.error("Invalid envelope on {}-{}@{} for {}: {}",
-                    topic, partition, offset, consumerName, invalid.getMessage());
+            log.error(
+                    "Invalid envelope on {}-{}@{} for {}: {}",
+                    topic,
+                    partition,
+                    offset,
+                    consumerName,
+                    invalid.getMessage());
             count(consumerName, "unknown", "invalid_envelope");
             return InboxResult.INVALID_ENVELOPE;
         }
@@ -134,13 +148,15 @@ public class InboxExecutor {
                 // database lifecycle constraint enforces this, and it is right
                 // to: the collision belongs to the arriving record.
                 if (!row.isProcessed()) {
-                    store.deadLetter(row.id(), "PAYLOAD_INVALID",
-                            "The same event id arrived with a different payload hash");
+                    store.deadLetter(
+                            row.id(), "PAYLOAD_INVALID", "The same event id arrived with a different payload hash");
                 }
                 log.error(
                         "Contract collision on {}: event {} arrived with a different payload than the stored one "
                                 + "(stored status {}). A producer has violated event immutability.",
-                        consumerName, envelope.eventId(), row.status());
+                        consumerName,
+                        envelope.eventId(),
+                        row.status());
                 count(consumerName, envelope.eventType(), "contract_collision");
                 return InboxResult.CONTRACT_COLLISION;
             }
@@ -154,7 +170,8 @@ public class InboxExecutor {
             }
         }
 
-        JdbcInboxStore.InboxRow row = store.find(consumerName, envelope.eventId()).orElseThrow();
+        JdbcInboxStore.InboxRow row =
+                store.find(consumerName, envelope.eventId()).orElseThrow();
 
         return drive(consumerName, envelope, row);
     }
@@ -169,14 +186,25 @@ public class InboxExecutor {
      */
     InboxResult redrive(JdbcInboxStore.StoredInboxItem item) {
         ExternalEventEnvelope<JsonNode> envelope = new ExternalEventEnvelope<>(
-                item.eventId(), item.eventType(), item.eventVersion(), item.tenantId(),
-                item.aggregateType(), item.aggregateId(), item.correlationId(), item.causationId(),
-                item.occurredAt(), objectMapper.readTree(item.payloadJson()), item.payloadSha256(),
+                item.eventId(),
+                item.eventType(),
+                item.eventVersion(),
+                item.tenantId(),
+                item.aggregateType(),
+                item.aggregateId(),
+                item.correlationId(),
+                item.causationId(),
+                item.occurredAt(),
+                objectMapper.readTree(item.payloadJson()),
+                item.payloadSha256(),
                 new ExternalEventEnvelope.TransportContext(
-                        item.topic(), item.partition(), item.recordOffset(), item.aggregateId().toString()));
+                        item.topic(),
+                        item.partition(),
+                        item.recordOffset(),
+                        item.aggregateId().toString()));
 
-        JdbcInboxStore.InboxRow row = new JdbcInboxStore.InboxRow(
-                item.id(), item.status(), item.payloadSha256(), item.attemptCount(), null);
+        JdbcInboxStore.InboxRow row =
+                new JdbcInboxStore.InboxRow(item.id(), item.status(), item.payloadSha256(), item.attemptCount(), null);
 
         return drive(item.consumerName(), envelope, row);
     }
@@ -189,27 +217,33 @@ public class InboxExecutor {
     private InboxResult drive(
             String consumerName, ExternalEventEnvelope<JsonNode> envelope, JdbcInboxStore.InboxRow row) {
 
-        Optional<InboxHandler<?>> handler =
-                registry.find(consumerName, envelope.eventType(), envelope.eventVersion());
+        Optional<InboxHandler<?>> handler = registry.find(consumerName, envelope.eventType(), envelope.eventVersion());
 
         if (handler.isEmpty()) {
             // An unsupported type or version is a permanent contract failure.
             // Retrying it forever would hide a deployment mismatch behind a
             // growing backlog.
-            store.deadLetter(row.id(), "CONTRACT_UNSUPPORTED",
+            store.deadLetter(
+                    row.id(),
+                    "CONTRACT_UNSUPPORTED",
                     "No handler for %s v%d".formatted(envelope.eventType(), envelope.eventVersion()));
             count(consumerName, envelope.eventType(), "unsupported");
             return InboxResult.UNSUPPORTED;
         }
 
         if (store.hasEarlierUnresolvedForAggregate(
-                consumerName, envelope.transport().topic(), envelope.aggregateId(),
-                envelope.occurredAt(), envelope.eventId())) {
+                consumerName,
+                envelope.transport().topic(),
+                envelope.aggregateId(),
+                envelope.occurredAt(),
+                envelope.eventId())) {
             // Kafka orders a partition, not an aggregate's history across
             // failures: once an earlier event dead-letters, its offset is
             // acknowledged and the next event for the same aggregate would
             // otherwise apply on top of a state transition that never happened.
-            store.blockOnEarlier(row.id(), blockedRecheckDelay,
+            store.blockOnEarlier(
+                    row.id(),
+                    blockedRecheckDelay,
                     "An earlier unresolved event for aggregate %s must be settled first"
                             .formatted(envelope.aggregateId()));
             count(consumerName, envelope.eventType(), "blocked");
@@ -268,16 +302,18 @@ public class InboxExecutor {
      * derived from the command id.
      */
     @SuppressWarnings("unchecked")
-    private void run(InboxHandler<?> handler, ExternalEventEnvelope<JsonNode> envelope,
-            JdbcInboxStore.InboxRow row, UUID processingToken) {
+    private void run(
+            InboxHandler<?> handler,
+            ExternalEventEnvelope<JsonNode> envelope,
+            JdbcInboxStore.InboxRow row,
+            UUID processingToken) {
 
         ExternalEventEnvelope<Object> typed = typed(handler, envelope);
 
         if (handler instanceof ExternalWorkInboxHandler<?, ?>) {
-            ExternalWorkInboxHandler<Object, Object> external =
-                    (ExternalWorkInboxHandler<Object, Object>) handler;
-            Object work = external.perform(typed,
-                    new ExternalWorkInboxHandler.Attempt(row.attemptCount() + 1, maximumAttempts));
+            ExternalWorkInboxHandler<Object, Object> external = (ExternalWorkInboxHandler<Object, Object>) handler;
+            Object work = external.perform(
+                    typed, new ExternalWorkInboxHandler.Attempt(row.attemptCount() + 1, maximumAttempts));
 
             transactions.executeWithoutResult(status -> {
                 external.record(typed, work);
@@ -292,15 +328,22 @@ public class InboxExecutor {
         });
     }
 
-    private ExternalEventEnvelope<Object> typed(
-            InboxHandler<?> handler, ExternalEventEnvelope<JsonNode> envelope) {
+    private ExternalEventEnvelope<Object> typed(InboxHandler<?> handler, ExternalEventEnvelope<JsonNode> envelope) {
 
         Object payload = objectMapper.treeToValue(envelope.payload(), handler.payloadType());
         return new ExternalEventEnvelope<>(
-                envelope.eventId(), envelope.eventType(), envelope.eventVersion(), envelope.tenantId(),
-                envelope.aggregateType(), envelope.aggregateId(), envelope.correlationId(),
-                envelope.causationId(), envelope.occurredAt(), payload,
-                envelope.payloadSha256(), envelope.transport());
+                envelope.eventId(),
+                envelope.eventType(),
+                envelope.eventVersion(),
+                envelope.tenantId(),
+                envelope.aggregateType(),
+                envelope.aggregateId(),
+                envelope.correlationId(),
+                envelope.causationId(),
+                envelope.occurredAt(),
+                payload,
+                envelope.payloadSha256(),
+                envelope.transport());
     }
 
     private void count(String consumerName, String eventType, String outcome) {

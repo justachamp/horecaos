@@ -5,11 +5,9 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.payments.domain.PaymentAttempt;
 import uz.horecaos.platform.payments.domain.PaymentIntent;
@@ -67,9 +65,14 @@ public class PaymentCheckoutService {
     private final OrderDirectory orders;
     private final Clock clock;
 
-    public PaymentCheckoutService(JdbcPaymentIntentStore intents, JdbcPaymentAttemptStore attempts,
-            PaymentAttemptService attemptService, PaymentBindingResolver bindings,
-            PaymentBusinessCalendar calendar, OrderDirectory orders, Clock clock) {
+    public PaymentCheckoutService(
+            JdbcPaymentIntentStore intents,
+            JdbcPaymentAttemptStore attempts,
+            PaymentAttemptService attemptService,
+            PaymentBindingResolver bindings,
+            PaymentBusinessCalendar calendar,
+            OrderDirectory orders,
+            Clock clock) {
         this.intents = intents;
         this.attempts = attempts;
         this.attemptService = attemptService;
@@ -89,53 +92,48 @@ public class PaymentCheckoutService {
      *                          than as a refusal — an endpoint that distinguishes
      *                          the two lets anyone probe which order ids exist
      */
-    public PaymentSession openOrRePresent(UUID tenantId, UUID orderId, UUID customerAccountId,
-            PresentationRequest request) {
+    public PaymentSession openOrRePresent(
+            UUID tenantId, UUID orderId, UUID customerAccountId, PresentationRequest request) {
 
         OrderDirectory.OrderSummary order = orders.summary(tenantId, orderId)
-                .orElseThrow(() -> new CheckoutRefusedException("ORDER_NOT_FOUND",
-                        "No such order"));
+                .orElseThrow(() -> new CheckoutRefusedException("ORDER_NOT_FOUND", "No such order"));
 
-        if (customerAccountId != null && order.hasAccount()
-                && !customerAccountId.equals(order.customerAccountId())) {
+        if (customerAccountId != null && order.hasAccount() && !customerAccountId.equals(order.customerAccountId())) {
             throw new CheckoutRefusedException("ORDER_NOT_FOUND", "No such order");
         }
 
         PaymentIntent intent = intents.findLiveForOrder(tenantId, orderId)
-                .orElseThrow(() -> new CheckoutRefusedException("NO_PAYMENT_INTENT",
-                        "This order has no payment to present"));
+                .orElseThrow(() ->
+                        new CheckoutRefusedException("NO_PAYMENT_INTENT", "This order has no payment to present"));
 
         if (intent.tender() == PaymentTender.CASH || intent.providerType() == null) {
             // Cash is collected at handover and has no surface. Refused rather than
             // answered with an empty session, because a storefront that got an empty
             // answer would have to guess whether the order is unpayable or the
             // platform is misconfigured.
-            throw new CheckoutRefusedException("NOT_PAYABLE_ONLINE",
-                    "This order is not paid through a provider");
+            throw new CheckoutRefusedException("NOT_PAYABLE_ONLINE", "This order is not paid through a provider");
         }
         if (intent.status() == PaymentIntentStatus.PAID) {
-            throw new CheckoutRefusedException("ALREADY_PAID",
-                    "This order is already paid");
+            throw new CheckoutRefusedException("ALREADY_PAID", "This order is already paid");
         }
         if (!intent.status().open()) {
-            throw new CheckoutRefusedException("PAYMENT_CLOSED",
-                    "This order's payment is " + intent.status());
+            throw new CheckoutRefusedException("PAYMENT_CLOSED", "This order's payment is " + intent.status());
         }
 
-        UUID seller = intent.legalEntity().orElseThrow(() -> new CheckoutRefusedException(
-                // ADR 0038 resolves the seller from the location's fiscal
-                // assignment on the order's business date. Without one there is no
-                // merchant account to charge through and no name to put on a
-                // receipt, and inventing either is a tax error rather than a bug.
-                "SELLER_UNRESOLVED",
-                "No legal entity is assigned to this order's location"));
+        UUID seller = intent.legalEntity()
+                .orElseThrow(() -> new CheckoutRefusedException(
+                        // ADR 0038 resolves the seller from the location's fiscal
+                        // assignment on the order's business date. Without one there is no
+                        // merchant account to charge through and no name to put on a
+                        // receipt, and inventing either is a tax error rather than a bug.
+                        "SELLER_UNRESOLVED", "No legal entity is assigned to this order's location"));
 
         Instant now = clock.instant();
         LocalDate businessDate = calendar.businessDateFor(tenantId, intent.locationId(), now);
 
-        ProviderBinding binding = bindings
-                .resolve(tenantId, seller, intent.providerType(), businessDate)
-                .orElseThrow(() -> new CheckoutRefusedException("BINDING_UNAVAILABLE",
+        ProviderBinding binding = bindings.resolve(tenantId, seller, intent.providerType(), businessDate)
+                .orElseThrow(() -> new CheckoutRefusedException(
+                        "BINDING_UNAVAILABLE",
                         // A serviceability precondition that has changed since the
                         // order was placed: the method is not offered on a channel
                         // whose legal entity has no binding, so reaching here means
@@ -144,18 +142,21 @@ public class PaymentCheckoutService {
                         "No merchant account is configured for this order's seller"));
 
         Optional<PaymentAttempt> existing = attempts.findOpenForIntent(tenantId, intent.id());
-        PaymentAttempt attempt = existing
-                .map(open -> reuse(open, binding, request))
+        PaymentAttempt attempt = existing.map(open -> reuse(open, binding, request))
                 .orElseGet(() -> attemptService.open(intent, binding, businessDate));
 
         boolean rePresented = existing.isPresent();
 
-        ProviderInvoice invoice = attemptService.present(attempt, binding, request)
-                .orElseThrow(() -> new CheckoutRefusedException("PRESENTATION_UNAVAILABLE",
-                        "No adapter is wired for " + binding.providerType()));
+        ProviderInvoice invoice = attemptService
+                .present(attempt, binding, request)
+                .orElseThrow(() -> new CheckoutRefusedException(
+                        "PRESENTATION_UNAVAILABLE", "No adapter is wired for " + binding.providerType()));
 
-        log.info("Presented a {} checkout for order {} on {} ({})",
-                invoice.presentationKind(), orderId, binding.providerType(),
+        log.info(
+                "Presented a {} checkout for order {} on {} ({})",
+                invoice.presentationKind(),
+                orderId,
+                binding.providerType(),
                 rePresented ? "re-presented" : "first presentation");
 
         return new PaymentSession(
@@ -200,10 +201,10 @@ public class PaymentCheckoutService {
      * would arrive on the new binding's endpoint carrying an id that belongs to the
      * old one, and be answered "unknown order" after the customer had paid.
      */
-    private PaymentAttempt reuse(PaymentAttempt attempt, ProviderBinding binding,
-            PresentationRequest request) {
+    private PaymentAttempt reuse(PaymentAttempt attempt, ProviderBinding binding, PresentationRequest request) {
         if (!attempt.merchantBindingId().equals(binding.bindingId())) {
-            throw new CheckoutRefusedException("BINDING_CHANGED",
+            throw new CheckoutRefusedException(
+                    "BINDING_CHANGED",
                     "This order's payment attempt was opened against a merchant account that no "
                             + "longer resolves; it has to be settled before another surface is "
                             + "shown");
@@ -211,14 +212,14 @@ public class PaymentCheckoutService {
         if (!attempt.status().rePresentable()) {
             throw new CheckoutRefusedException(
                     attempt.status() == uz.horecaos.platform.payments.domain.PaymentAttemptStatus.CAPTURED
-                            ? "ALREADY_PAID" : "PAYMENT_IN_DOUBT",
-                    "This order's payment attempt is " + attempt.status()
-                            + " and cannot be presented again");
+                            ? "ALREADY_PAID"
+                            : "PAYMENT_IN_DOUBT",
+                    "This order's payment attempt is " + attempt.status() + " and cannot be presented again");
         }
         if (request.preferredKind().mutatesTheProvider()) {
-            throw new CheckoutRefusedException("PRESENTATION_NOT_REPEATABLE",
-                    "An invoice was already opened for this order; a second push is an "
-                            + "operator action");
+            throw new CheckoutRefusedException(
+                    "PRESENTATION_NOT_REPEATABLE",
+                    "An invoice was already opened for this order; a second push is an " + "operator action");
         }
         if (attempt.presentationKind() == PresentationKind.INVOICE_PUSH) {
             // The customer was pushed an invoice and is now asking for a link. Both
@@ -256,8 +257,7 @@ public class PaymentCheckoutService {
             long amountMinor,
             String currency,
             boolean rePresented,
-            int presentationCount) {
-    }
+            int presentationCount) {}
 
     /**
      * A settled answer that this order cannot be presented for payment.

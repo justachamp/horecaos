@@ -2,12 +2,10 @@ package uz.horecaos.platform.iam.infrastructure.secrets;
 
 import java.util.List;
 import java.util.Set;
-
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
 
 /**
@@ -43,8 +41,7 @@ public class SecretsProfileGuard implements ApplicationRunner {
         if (!localOnly) {
             throw new IllegalStateException("""
                     Profile %s is running with environment-variable secrets (ADR 0028).
-                    Configure the secrets manager for this environment, or run a local profile."""
-                    .formatted(active));
+                    Configure the secrets manager for this environment, or run a local profile.""".formatted(active));
         }
     }
 }

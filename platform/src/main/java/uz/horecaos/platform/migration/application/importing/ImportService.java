@@ -8,17 +8,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.migration.api.ExtractionSpec;
 import uz.horecaos.platform.migration.api.ImportPort;
 import uz.horecaos.platform.migration.api.LegacyRecord;
-import uz.horecaos.platform.migration.api.Transformation;
 import uz.horecaos.platform.migration.api.TransformationOutcome;
 import uz.horecaos.platform.migration.application.MigrationPreconditionException;
 import uz.horecaos.platform.migration.application.MigrationResourceNotFoundException;
@@ -70,8 +67,7 @@ import uz.horecaos.platform.migration.infrastructure.persistence.JdbcEntityMappi
 // otherwise fail to start for want of a connection to a system it is not
 // migrating. Conditional on the property rather than on the bean, because
 // @ConditionalOnBean over component-scanned beans depends on definition order.
-@ConditionalOnProperty(
-        prefix = "horecaos.migration.legacy", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(prefix = "horecaos.migration.legacy", name = "enabled", havingValue = "true")
 public class ImportService {
 
     private static final Logger log = LoggerFactory.getLogger(ImportService.class);
@@ -125,8 +121,7 @@ public class ImportService {
             if (clash != null) {
                 // Two ports for one entity type would be two mappings the crosswalk
                 // cannot tell apart, and which one ran would depend on bean order.
-                throw new IllegalStateException(
-                        "Two import ports claim entity type " + port.entityType());
+                throw new IllegalStateException("Two import ports claim entity type " + port.entityType());
             }
         }
         this.ports = Map.copyOf(byEntityType);
@@ -144,34 +139,35 @@ public class ImportService {
     @Transactional
     public PageOutcome importNextPage(UUID tenantId, UUID runId, String entityType, int pageSize) {
         if (pageSize < 1 || pageSize > MAX_PAGE_SIZE) {
-            throw new IllegalArgumentException(
-                    "A page is between 1 and %d rows".formatted(MAX_PAGE_SIZE));
+            throw new IllegalArgumentException("A page is between 1 and %d rows".formatted(MAX_PAGE_SIZE));
         }
 
         // Through the service, not the store: this is where the operator
         // authorization for the whole method comes from.
         RunRow run = runService.get(tenantId, runId);
         ScopeRow scope = scopes.findById(tenantId, run.scopeId())
-                .orElseThrow(() -> new MigrationResourceNotFoundException(
-                        "Scope %s does not exist".formatted(run.scopeId())));
+                .orElseThrow(() ->
+                        new MigrationResourceNotFoundException("Scope %s does not exist".formatted(run.scopeId())));
 
         ImportPort<?> port = ports.get(entityType);
         if (port == null) {
             throw new MigrationPreconditionException(
                     MigrationPreconditionException.NO_IMPORT_PORT,
                     ("No import port implements %s. A run cannot import an entity type nothing "
-                            + "knows how to write through a domain service.").formatted(entityType));
+                                    + "knows how to write through a domain service.")
+                            .formatted(entityType));
         }
 
         // The zone before anything else, because reading it late means the page has
         // already been transformed by the time the stop fires.
-        ZoneId sourceZone = sourceZones.find(scope.programId())
+        ZoneId sourceZone = sourceZones
+                .find(scope.programId())
                 .orElseThrow(() -> new MigrationPreconditionException(
                         MigrationPreconditionException.SOURCE_TIME_ZONE_UNKNOWN,
                         ("Program %s has no source time zone. Every legacy timestamp is naive and "
-                                + "its zone is the legacy server's; reading them as UTC shifts every "
-                                + "order across the business-date boundary the daily order number "
-                                + "depends on. Read it from the production deployment (ADR 0024).")
+                                        + "its zone is the legacy server's; reading them as UTC shifts every "
+                                        + "order across the business-date boundary the daily order number "
+                                        + "depends on. Read it from the production deployment (ADR 0024).")
                                 .formatted(scope.programId())));
 
         // Once per page, not per row. The failure it prevents is an entity type
@@ -181,9 +177,12 @@ public class ImportService {
             throw new MigrationPreconditionException(
                     MigrationPreconditionException.TRANSFORMATION_VERSION_DRIFT,
                     ("Run %s was started at transformation version %d and %s is at version %d. The "
-                            + "run's stamp is what a remediation selects on, so it cannot drift "
-                            + "mid-run.")
-                            .formatted(runId, run.transformationVersion(), entityType,
+                                    + "run's stamp is what a remediation selects on, so it cannot drift "
+                                    + "mid-run.")
+                            .formatted(
+                                    runId,
+                                    run.transformationVersion(),
+                                    entityType,
                                     port.transformation().version()));
         }
 
@@ -198,8 +197,14 @@ public class ImportService {
             // Nothing to import, and the cursor still moves: `exhausted` is what
             // distinguishes a finished backfill from one nobody has started, and
             // both otherwise look like an absent next key.
-            advance(tenantId, run, cursor, cursor.lastStableKey(), cursor.watermark(),
-                    cursor.rowsCommitted(), run.runType() != RunType.CATCH_UP);
+            advance(
+                    tenantId,
+                    run,
+                    cursor,
+                    cursor.lastStableKey(),
+                    cursor.watermark(),
+                    cursor.rowsCommitted(),
+                    run.runType() != RunType.CATCH_UP);
             return PageOutcome.exhausted(entityType);
         }
 
@@ -236,14 +241,26 @@ public class ImportService {
         // that is what being caught up means — and the flag is sticky, so a
         // catch-up that reported it would permanently mark a backfill finished
         // that may have covered a fraction of the table.
-        advance(tenantId, run, cursor, page.nextKey(), lastWatermark,
+        advance(
+                tenantId,
+                run,
+                cursor,
+                page.nextKey(),
+                lastWatermark,
                 cursor.rowsCommitted() + tally.imported,
                 run.runType() != RunType.CATCH_UP && page.exhausted());
 
         checkpointRun(tenantId, run, page.nextKey(), lastWatermark, tally);
 
-        return new PageOutcome(entityType, page.size(), tally.created, tally.updated,
-                tally.skipped, tally.quarantined, page.nextKey(), page.exhausted());
+        return new PageOutcome(
+                entityType,
+                page.size(),
+                tally.created,
+                tally.updated,
+                tally.skipped,
+                tally.quarantined,
+                page.nextKey(),
+                page.exhausted());
     }
 
     /**
@@ -254,8 +271,8 @@ public class ImportService {
      * known to match is a port and its own transformation.
      */
     @SuppressWarnings("unchecked")
-    private <T> void importRecord(ImportPort<T> port, ScopeRow scope, RunRow run,
-            LegacyRecord record, ZoneId sourceZone, Tally tally) {
+    private <T> void importRecord(
+            ImportPort<T> port, ScopeRow scope, RunRow run, LegacyRecord record, ZoneId sourceZone, Tally tally) {
 
         String entityType = port.entityType();
         Instant now = clock.instant();
@@ -267,34 +284,58 @@ public class ImportService {
                 // 0024 needs "seen and consciously not migrated" to be
                 // distinguishable from "never seen", and an absent row cannot say
                 // which of those it is.
-                quarantine.quarantine(scope.tenantId(), run.id(), new QuarantineCommand(
-                        entityType, record.stableKey(), refused.reasonCode(),
-                        refused.evidenceReference()));
+                quarantine.quarantine(
+                        scope.tenantId(),
+                        run.id(),
+                        new QuarantineCommand(
+                                entityType, record.stableKey(), refused.reasonCode(), refused.evidenceReference()));
                 mappings.upsert(new EntityMapping(
-                        UUID.randomUUID(), scope.tenantId(), scope.id(), entityType,
-                        record.stableKey(), null, record.sourceVersion(), null,
-                        run.transformationVersion(), MappingStatus.QUARANTINED, run.id(), now));
+                        UUID.randomUUID(),
+                        scope.tenantId(),
+                        scope.id(),
+                        entityType,
+                        record.stableKey(),
+                        null,
+                        record.sourceVersion(),
+                        null,
+                        run.transformationVersion(),
+                        MappingStatus.QUARANTINED,
+                        run.id(),
+                        now));
                 tally.quarantined++;
             }
             case TransformationOutcome.NotMigrated<T> skipped -> {
-                log.debug("{} {} not migrated: {}", entityType, record.stableKey(),
-                        skipped.reasonCode());
+                log.debug("{} {} not migrated: {}", entityType, record.stableKey(), skipped.reasonCode());
                 tally.skipped++;
             }
             case TransformationOutcome.Transformed<T> transformed -> {
-                Optional<EntityMappingRow> existing = mappings.find(
-                        scope.tenantId(), scope.id(), entityType, record.stableKey());
+                Optional<EntityMappingRow> existing =
+                        mappings.find(scope.tenantId(), scope.id(), entityType, record.stableKey());
                 UUID existingTargetId = existing.map(EntityMappingRow::targetId).orElse(null);
 
-                ImportPort.ImportResult result = port.importOne(new ImportPort.ImportTarget(
-                        scope.tenantId(), scope.brandId(), scope.locationId(), scope.id(),
-                        record.stableKey(), existingTargetId), transformed.command());
+                ImportPort.ImportResult result = port.importOne(
+                        new ImportPort.ImportTarget(
+                                scope.tenantId(),
+                                scope.brandId(),
+                                scope.locationId(),
+                                scope.id(),
+                                record.stableKey(),
+                                existingTargetId),
+                        transformed.command());
 
                 mappings.upsert(new EntityMapping(
                         existing.map(EntityMappingRow::mappingId).orElseGet(UUID::randomUUID),
-                        scope.tenantId(), scope.id(), entityType, record.stableKey(),
-                        result.targetId(), record.sourceVersion(), result.targetVersion(),
-                        run.transformationVersion(), MappingStatus.MAPPED, run.id(), now));
+                        scope.tenantId(),
+                        scope.id(),
+                        entityType,
+                        record.stableKey(),
+                        result.targetId(),
+                        record.sourceVersion(),
+                        result.targetVersion(),
+                        run.transformationVersion(),
+                        MappingStatus.MAPPED,
+                        run.id(),
+                        now));
 
                 tally.imported++;
                 switch (result.disposition()) {
@@ -311,24 +352,22 @@ public class ImportService {
         }
     }
 
-    private SourcePage read(RunRow run, ExtractionSpec spec, SourceCursorStore.Cursor cursor,
-            int pageSize) {
+    private SourcePage read(RunRow run, ExtractionSpec spec, SourceCursorStore.Cursor cursor, int pageSize) {
         if (run.runType() == RunType.CATCH_UP) {
             if (!spec.hasWatermark()) {
                 throw new MigrationPreconditionException(
                         MigrationPreconditionException.NO_INCREMENTAL_FEED,
                         ("%s declares no watermark column, so it has no incremental feed and can "
-                                + "only be backfilled or remediated.").formatted(spec.entityType()));
+                                        + "only be backfilled or remediated.")
+                                .formatted(spec.entityType()));
             }
             return source.readChanges(spec, cursor.watermark(), cursor.lastStableKey(), pageSize);
         }
         return source.readPage(spec, cursor.lastStableKey(), pageSize);
     }
 
-    private SourceCursorStore.Cursor cursorFor(UUID tenantId, RunRow run, ExtractionSpec spec,
-            Instant now) {
-        Optional<SourceCursorStore.Cursor> found =
-                cursors.find(tenantId, run.scopeId(), spec.entityType());
+    private SourceCursorStore.Cursor cursorFor(UUID tenantId, RunRow run, ExtractionSpec spec, Instant now) {
+        Optional<SourceCursorStore.Cursor> found = cursors.find(tenantId, run.scopeId(), spec.entityType());
         if (found.isPresent()) {
             SourceCursorStore.Cursor cursor = found.get();
             if (!cursor.stableKeyColumn().equals(spec.stableKeyColumn())) {
@@ -339,19 +378,28 @@ public class ImportService {
                 throw new MigrationPreconditionException(
                         MigrationPreconditionException.EXTRACTION_CURSOR_CONFLICT,
                         ("The %s cursor was built on %s and the extraction now pages on %s. A "
-                                + "changed stable key invalidates every bound already stored; this "
-                                + "is a remediation, not a resume.")
-                                .formatted(spec.entityType(), cursor.stableKeyColumn(),
-                                        spec.stableKeyColumn()));
+                                        + "changed stable key invalidates every bound already stored; this "
+                                        + "is a remediation, not a resume.")
+                                .formatted(spec.entityType(), cursor.stableKeyColumn(), spec.stableKeyColumn()));
             }
             return cursor;
         }
 
         SourceCursorStore.Cursor opened = new SourceCursorStore.Cursor(
-                UUID.randomUUID(), tenantId, run.scopeId(), spec.entityType(),
-                spec.stableKeyColumn(), null, null,
+                UUID.randomUUID(),
+                tenantId,
+                run.scopeId(),
+                spec.entityType(),
+                spec.stableKeyColumn(),
+                null,
+                null,
                 spec.hasWatermark() ? spec.watermarkColumn() : null,
-                run.id(), run.transformationVersion(), 0, 0, false, 1);
+                run.id(),
+                run.transformationVersion(),
+                0,
+                0,
+                false,
+                1);
         if (cursors.open(opened, now)) {
             return opened;
         }
@@ -362,14 +410,29 @@ public class ImportService {
                 .orElseThrow(() -> new IllegalStateException("Cursor vanished mid-transaction"));
     }
 
-    private void advance(UUID tenantId, RunRow run, SourceCursorStore.Cursor cursor,
-            String nextKey, String watermark, long rowsCommitted, boolean exhausted) {
+    private void advance(
+            UUID tenantId,
+            RunRow run,
+            SourceCursorStore.Cursor cursor,
+            String nextKey,
+            String watermark,
+            long rowsCommitted,
+            boolean exhausted) {
 
-        boolean moved = cursors.advance(tenantId, run.scopeId(), cursor.entityType(),
-                new SourceCursorStore.Advance(nextKey, watermark, run.id(),
-                        run.transformationVersion(), cursor.pagesCommitted() + 1, rowsCommitted,
+        boolean moved = cursors.advance(
+                tenantId,
+                run.scopeId(),
+                cursor.entityType(),
+                new SourceCursorStore.Advance(
+                        nextKey,
+                        watermark,
+                        run.id(),
+                        run.transformationVersion(),
+                        cursor.pagesCommitted() + 1,
+                        rowsCommitted,
                         exhausted),
-                cursor.version(), clock.instant());
+                cursor.version(),
+                clock.instant());
         if (!moved) {
             // Somebody else moved this cursor between the read and here, which means
             // two migrators are paging one entity type against different bounds.
@@ -378,13 +441,13 @@ public class ImportService {
             throw new MigrationPreconditionException(
                     MigrationPreconditionException.EXTRACTION_CURSOR_CONFLICT,
                     ("The %s cursor moved underneath this page. Another migrator is running the "
-                            + "same entity type on scope %s; this page is rolled back rather than "
-                            + "merged.").formatted(cursor.entityType(), run.scopeId()));
+                                    + "same entity type on scope %s; this page is rolled back rather than "
+                                    + "merged.")
+                            .formatted(cursor.entityType(), run.scopeId()));
         }
     }
 
-    private void checkpointRun(UUID tenantId, RunRow run, String nextKey, String watermark,
-            Tally tally) {
+    private void checkpointRun(UUID tenantId, RunRow run, String nextKey, String watermark, Tally tally) {
         Counters before = run.counters();
         Counters totals = new Counters(
                 before.scanned() + tally.scanned(),

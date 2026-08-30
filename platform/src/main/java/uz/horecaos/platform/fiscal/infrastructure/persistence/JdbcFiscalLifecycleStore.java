@@ -10,10 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.fiscal.domain.FiscalDocumentState;
 
 /**
@@ -78,8 +76,7 @@ public class JdbcFiscalLifecycleStore {
      *                        is applied in Java to a small set rather than guessed
      *                        at in SQL
      */
-    public List<ReportingCandidate> claimReportingCandidates(Instant submittedBefore,
-            String fallbackZone, int limit) {
+    public List<ReportingCandidate> claimReportingCandidates(Instant submittedBefore, String fallbackZone, int limit) {
         return jdbc.sql("""
                 SELECT d.id, d.tenant_id, d.order_id, d.provider_type, d.submitted_at,
                        d.reporting_deadline_at, d.version,
@@ -129,8 +126,13 @@ public class JdbcFiscalLifecycleStore {
      *
      * @return true when this call is the one that blocked it
      */
-    public boolean block(UUID tenantId, UUID documentId, String reasonCode, String reasonNote,
-            Instant appliedDeadline, Instant now) {
+    public boolean block(
+            UUID tenantId,
+            UUID documentId,
+            String reasonCode,
+            String reasonNote,
+            Instant appliedDeadline,
+            Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
         parameters.put("id", documentId);
@@ -149,9 +151,7 @@ public class JdbcFiscalLifecycleStore {
                     version = version + 1,
                     updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :id AND status = 'SUBMITTED'
-                """)
-                .params(parameters)
-                .update() == 1;
+                """).params(parameters).update() == 1;
     }
 
     /**
@@ -167,8 +167,8 @@ public class JdbcFiscalLifecycleStore {
      *
      * @return true when the version matched and this call reopened it
      */
-    public boolean reopen(UUID tenantId, UUID documentId, int expectedVersion, String reasonCode,
-            String reasonNote, Instant now) {
+    public boolean reopen(
+            UUID tenantId, UUID documentId, int expectedVersion, String reasonCode, String reasonNote, Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
         parameters.put("id", documentId);
@@ -187,9 +187,7 @@ public class JdbcFiscalLifecycleStore {
                     updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :id
                   AND status = 'BLOCKED' AND version = :expectedVersion
-                """)
-                .params(parameters)
-                .update() == 1;
+                """).params(parameters).update() == 1;
     }
 
     /**
@@ -200,8 +198,7 @@ public class JdbcFiscalLifecycleStore {
      * sale receipt, and two of those for one payment can only be corrected with
      * the tax authority, never deleted.
      */
-    public boolean recordRetryAttempt(UUID tenantId, UUID documentId, int expectedVersion,
-            Instant now) {
+    public boolean recordRetryAttempt(UUID tenantId, UUID documentId, int expectedVersion, Instant now) {
         return jdbc.sql("""
                 UPDATE fiscal.fiscal_documents
                 SET attempt_count = attempt_count + 1,
@@ -210,9 +207,12 @@ public class JdbcFiscalLifecycleStore {
                 WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
                   AND status <> 'ISSUED' AND status <> 'NOT_APPLICABLE'
                 """)
-                .param("tenantId", tenantId).param("id", documentId)
-                .param("expectedVersion", expectedVersion).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", documentId)
+                        .param("expectedVersion", expectedVersion)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     // ------------------------------------------------- opening the obligation
@@ -244,8 +244,7 @@ public class JdbcFiscalLifecycleStore {
      *                    open, and without the floor every run scans the whole
      *                    order history to find nothing
      */
-    public List<OrderOwingADocument> ordersOwingADocument(Instant closedSince, String fallbackZone,
-            int limit) {
+    public List<OrderOwingADocument> ordersOwingADocument(Instant closedSince, String fallbackZone, int limit) {
         return jdbc.sql("""
                 SELECT o.id AS order_id, o.tenant_id, o.brand_id, o.location_id,
                        o.total_minor, o.currency, o.closed_at,
@@ -315,9 +314,7 @@ public class JdbcFiscalLifecycleStore {
         parameters.put("status", document.state().name());
         parameters.put("reasonCode", document.reasonCode());
         parameters.put("reasonNote", document.reasonNote());
-        parameters.put("blockedAt", document.state() == FiscalDocumentState.BLOCKED
-                ? utc(document.openedAt())
-                : null);
+        parameters.put("blockedAt", document.state() == FiscalDocumentState.BLOCKED ? utc(document.openedAt()) : null);
         parameters.put("now", utc(document.openedAt()));
 
         return jdbc.sql("""
@@ -329,9 +326,7 @@ public class JdbcFiscalLifecycleStore {
                     'SALE', :status, :reasonCode, :reasonNote, :blockedAt, 0, 1, :now, :now)
                 ON CONFLICT (tenant_id, order_id, tender_id)
                     WHERE document_type = 'SALE' DO NOTHING
-                """)
-                .params(parameters)
-                .update() == 1;
+                """).params(parameters).update() == 1;
     }
 
     // ---------------------------------------------------------- submitting it
@@ -398,8 +393,8 @@ public class JdbcFiscalLifecycleStore {
      * carries the deadline it will be judged against, so an operator looking at a
      * blocked document can see by how much it was late and against what.
      */
-    public boolean claimForSubmission(UUID tenantId, UUID documentId, int expectedVersion,
-            Instant reportingDeadlineAt, Instant now) {
+    public boolean claimForSubmission(
+            UUID tenantId, UUID documentId, int expectedVersion, Instant reportingDeadlineAt, Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
         parameters.put("id", documentId);
@@ -419,9 +414,7 @@ public class JdbcFiscalLifecycleStore {
                     updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :id
                   AND status = 'PENDING' AND version = :expectedVersion
-                """)
-                .params(parameters)
-                .update() == 1;
+                """).params(parameters).update() == 1;
     }
 
     /**
@@ -438,8 +431,7 @@ public class JdbcFiscalLifecycleStore {
      * arrived is not a request that was not sent, and the two are the difference
      * between a document that is safe to resend and one that is not.
      */
-    public boolean releaseUnsentClaim(UUID tenantId, UUID documentId, String reasonNote,
-            Instant now) {
+    public boolean releaseUnsentClaim(UUID tenantId, UUID documentId, String reasonNote, Instant now) {
         return jdbc.sql("""
                 UPDATE fiscal.fiscal_documents
                 SET status = 'PENDING',
@@ -451,9 +443,12 @@ public class JdbcFiscalLifecycleStore {
                     updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :id AND status = 'SUBMITTED'
                 """)
-                .param("tenantId", tenantId).param("id", documentId)
-                .param("reasonNote", reasonNote).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", documentId)
+                        .param("reasonNote", reasonNote)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -465,8 +460,7 @@ public class JdbcFiscalLifecycleStore {
      * constant; these two transitions have different preconditions because they
      * mean different things, and the statement is where that should be legible.
      */
-    public boolean blockUnsent(UUID tenantId, UUID documentId, String reasonCode,
-            String reasonNote, Instant now) {
+    public boolean blockUnsent(UUID tenantId, UUID documentId, String reasonCode, String reasonNote, Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
         parameters.put("id", documentId);
@@ -484,15 +478,14 @@ public class JdbcFiscalLifecycleStore {
                     updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :id
                   AND status IN ('PENDING', 'SUBMITTED')
-                """)
-                .params(parameters)
-                .update() == 1;
+                """).params(parameters).update() == 1;
     }
 
     public Optional<FiscalDocumentRow> find(UUID tenantId, UUID documentId) {
         return jdbc.sql("SELECT " + DOCUMENT_COLUMNS
                         + " FROM fiscal.fiscal_documents WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", documentId)
+                .param("tenantId", tenantId)
+                .param("id", documentId)
                 .query(JdbcFiscalLifecycleStore::mapDocument)
                 .optional();
     }
@@ -534,7 +527,8 @@ public class JdbcFiscalLifecycleStore {
                  WHERE tenant_id = :tenantId AND order_id = :orderId
                  ORDER BY created_at
                 """)
-                .param("tenantId", tenantId).param("orderId", orderId)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
                 .query(JdbcFiscalLifecycleStore::mapDocument)
                 .list();
     }
@@ -563,10 +557,11 @@ public class JdbcFiscalLifecycleStore {
                   AND created_at >= :from AND created_at < :to
                 """)
                 .param("tenantId", tenantId)
-                .param("cashReason",
-                        uz.horecaos.platform.fiscal.domain.FiscalReasonCode
-                                .CASH_TENDER_NO_PROVIDER_FISCALIZATION)
-                .param("from", utc(from)).param("to", utc(to))
+                .param(
+                        "cashReason",
+                        uz.horecaos.platform.fiscal.domain.FiscalReasonCode.CASH_TENDER_NO_PROVIDER_FISCALIZATION)
+                .param("from", utc(from))
+                .param("to", utc(to))
                 .query((row, number) -> new CoverageCounts(
                         row.getLong("total"),
                         row.getLong("issued"),
@@ -625,8 +620,7 @@ public class JdbcFiscalLifecycleStore {
             String providerType,
             Instant createdAt,
             String businessZone,
-            int version) {
-    }
+            int version) {}
 
     /**
      * An obligation about to be opened.
@@ -647,8 +641,7 @@ public class JdbcFiscalLifecycleStore {
             FiscalDocumentState state,
             String reasonCode,
             String reasonNote,
-            Instant openedAt) {
-    }
+            Instant openedAt) {}
 
     /** A document the sweep has claimed, with everything its deadline needs. */
     public record ReportingCandidate(
@@ -659,8 +652,7 @@ public class JdbcFiscalLifecycleStore {
             Instant submittedAt,
             Instant reportingDeadlineAt,
             String businessZone,
-            int version) {
-    }
+            int version) {}
 
     /**
      * One fiscal document, as this module reads it.
@@ -713,14 +705,7 @@ public class JdbcFiscalLifecycleStore {
      * majority as a healthy number.
      */
     public record CoverageCounts(
-            long total,
-            long issued,
-            long notApplicable,
-            long cash,
-            long blocked,
-            long failed,
-            long awaiting) {
-    }
+            long total, long issued, long notApplicable, long cash, long blocked, long failed, long awaiting) {}
 
     private static FiscalDocumentRow mapDocument(ResultSet row, int rowNumber) throws SQLException {
         return new FiscalDocumentRow(

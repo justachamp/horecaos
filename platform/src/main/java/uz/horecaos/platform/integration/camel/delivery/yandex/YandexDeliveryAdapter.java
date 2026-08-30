@@ -4,9 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.integration.api.delivery.DeliveryCapability;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
@@ -69,13 +67,23 @@ public class YandexDeliveryAdapter implements DeliveryPartner {
     @Override
     public ProviderOutcome quote(DeliveryRequest request, ProviderCall call) {
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("items", List.of(Map.of(
-                "quantity", 1,
-                "size", Map.of("length", 0.3, "width", 0.3, "height", 0.3),
-                "weight", 1.0)));
-        body.put("route_points", List.of(
-                Map.of("coordinates", coordinates(request.pickup().longitude(), request.pickup().latitude())),
-                Map.of("coordinates", coordinates(request.dropoff().longitude(), request.dropoff().latitude()))));
+        body.put(
+                "items",
+                List.of(Map.of(
+                        "quantity", 1, "size", Map.of("length", 0.3, "width", 0.3, "height", 0.3), "weight", 1.0)));
+        body.put(
+                "route_points",
+                List.of(
+                        Map.of(
+                                "coordinates",
+                                coordinates(
+                                        request.pickup().longitude(),
+                                        request.pickup().latitude())),
+                        Map.of(
+                                "coordinates",
+                                coordinates(
+                                        request.dropoff().longitude(),
+                                        request.dropoff().latitude()))));
         body.put("requirements", Map.of("taxi_class", "express"));
 
         return http.post(call, "/check-price", headers(call), body, response -> {
@@ -133,12 +141,16 @@ public class YandexDeliveryAdapter implements DeliveryPartner {
         }
         Object version = current.normalized().get("version");
         if (version == null) {
-            return ProviderOutcome.uncertain("NO_VERSION",
-                    "Claim %s returned no version; cannot accept safely".formatted(externalReference));
+            return ProviderOutcome.uncertain(
+                    "NO_VERSION", "Claim %s returned no version; cannot accept safely".formatted(externalReference));
         }
 
-        return http.post(call, "/claims/accept?claim_id=" + externalReference, headers(call),
-                Map.of("version", version), response -> {
+        return http.post(
+                call,
+                "/claims/accept?claim_id=" + externalReference,
+                headers(call),
+                Map.of("version", version),
+                response -> {
                     Map<String, Object> normalized = new LinkedHashMap<>();
                     normalized.put("state", "CONFIRMED");
                     normalized.put("providerStatus", response.get("status"));
@@ -150,8 +162,8 @@ public class YandexDeliveryAdapter implements DeliveryPartner {
 
     @Override
     public ProviderOutcome cancellationCost(String externalReference, ProviderCall call) {
-        return http.post(call, "/claims/cancel-info?claim_id=" + externalReference, headers(call),
-                Map.of(), response -> {
+        return http.post(
+                call, "/claims/cancel-info?claim_id=" + externalReference, headers(call), Map.of(), response -> {
                     Map<String, Object> normalized = new LinkedHashMap<>();
                     String state = String.valueOf(response.get("cancel_state"));
                     normalized.put("cancelState", state);
@@ -174,45 +186,48 @@ public class YandexDeliveryAdapter implements DeliveryPartner {
         body.put("cancel_state", cost.normalized().get("cancelState"));
         body.put("version", cost.normalized().get("version"));
 
-        return http.post(call, "/claims/cancel?claim_id=" + externalReference, headers(call), body,
-                response -> {
-                    Map<String, Object> normalized = new LinkedHashMap<>();
-                    normalized.put("state", "CANCELLED");
-                    normalized.put("providerStatus", response.get("status"));
-                    normalized.put("paidCancellation", !Boolean.TRUE.equals(cost.normalized().get("free")));
-                    normalized.put("reason", reason);
-                    return ProviderOutcome.success(normalized, externalReference);
-                });
+        return http.post(call, "/claims/cancel?claim_id=" + externalReference, headers(call), body, response -> {
+            Map<String, Object> normalized = new LinkedHashMap<>();
+            normalized.put("state", "CANCELLED");
+            normalized.put("providerStatus", response.get("status"));
+            normalized.put(
+                    "paidCancellation", !Boolean.TRUE.equals(cost.normalized().get("free")));
+            normalized.put("reason", reason);
+            return ProviderOutcome.success(normalized, externalReference);
+        });
     }
 
     @Override
     public ProviderOutcome queryShipment(String externalReference, ProviderCall call) {
-        return http.post(call, "/claims/info?claim_id=" + externalReference, headers(call), Map.of(),
-                response -> {
-                    Map<String, Object> normalized = new LinkedHashMap<>();
-                    String providerStatus = String.valueOf(response.get("status"));
-                    normalized.put("state", YandexClaimStatus.toShipmentState(providerStatus));
-                    normalized.put("providerStatus", providerStatus);
-                    normalized.put("version", response.get("version"));
-                    normalized.put("live", YandexClaimStatus.isLive(providerStatus));
-                    return ProviderOutcome.success(normalized, externalReference);
-                });
+        return http.post(call, "/claims/info?claim_id=" + externalReference, headers(call), Map.of(), response -> {
+            Map<String, Object> normalized = new LinkedHashMap<>();
+            String providerStatus = String.valueOf(response.get("status"));
+            normalized.put("state", YandexClaimStatus.toShipmentState(providerStatus));
+            normalized.put("providerStatus", providerStatus);
+            normalized.put("version", response.get("version"));
+            normalized.put("live", YandexClaimStatus.isLive(providerStatus));
+            return ProviderOutcome.success(normalized, externalReference);
+        });
     }
 
     private Map<String, String> headers(ProviderCall call) {
-        return Map.of(
-                "Authorization", "Bearer " + call.credential(),
-                "Accept-Language", "ru");
+        return Map.of("Authorization", "Bearer " + call.credential(), "Accept-Language", "ru");
     }
 
     private Map<String, Object> claimItem(DeliveryRequest request) {
         return Map.of(
-                "title", "Order " + request.horecaosReference(),
-                "quantity", 1,
-                "cost_value", String.valueOf(request.itemValueMinor() / 100.0),
-                "cost_currency", request.currency(),
-                "size", Map.of("length", 0.3, "width", 0.3, "height", 0.3),
-                "weight", 1.0);
+                "title",
+                "Order " + request.horecaosReference(),
+                "quantity",
+                1,
+                "cost_value",
+                String.valueOf(request.itemValueMinor() / 100.0),
+                "cost_currency",
+                request.currency(),
+                "size",
+                Map.of("length", 0.3, "width", 0.3, "height", 0.3),
+                "weight",
+                1.0);
     }
 
     private Map<String, Object> pickupPoint(DeliveryRequest request) {
@@ -221,10 +236,12 @@ public class YandexDeliveryAdapter implements DeliveryPartner {
         point.put("point_id", 1);
         point.put("visit_order", 1);
         point.put("type", "source");
-        point.put("address", Map.of(
-                "fullname", pickup.address(),
-                "coordinates", coordinates(pickup.longitude(), pickup.latitude()),
-                "comment", pickup.comment() == null ? "" : pickup.comment()));
+        point.put(
+                "address",
+                Map.of(
+                        "fullname", pickup.address(),
+                        "coordinates", coordinates(pickup.longitude(), pickup.latitude()),
+                        "comment", pickup.comment() == null ? "" : pickup.comment()));
         point.put("contact", Map.of("name", pickup.contactName(), "phone", pickup.contactPhone()));
         return point;
     }

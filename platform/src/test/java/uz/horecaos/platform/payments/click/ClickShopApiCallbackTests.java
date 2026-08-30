@@ -1,5 +1,7 @@
 package uz.horecaos.platform.payments.click;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -9,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
-
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -21,7 +22,6 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
@@ -61,8 +61,6 @@ import uz.horecaos.platform.payments.web.click.ClickShopApiController;
 import uz.horecaos.platform.payments.web.click.ClickShopApiResponse;
 import uz.horecaos.platform.support.TestDatabase;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 /**
  * Click's SHOP API, end to end against the real schema (ADR 0013).
  *
@@ -96,8 +94,7 @@ class ClickShopApiCallbackTests {
     private static final UUID INSTALLATION = UUID.randomUUID();
     private static final UUID INTEGRATION_BINDING = UUID.randomUUID();
 
-    private static final Clock CLOCK =
-            Clock.fixed(Instant.parse("2026-08-22T09:03:11Z"), ZoneOffset.UTC);
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-08-22T09:03:11Z"), ZoneOffset.UTC);
     private static final LocalDate BUSINESS_DATE = LocalDate.of(2026, 8, 22);
 
     private static TestDatabase.Handle db;
@@ -120,12 +117,11 @@ class ClickShopApiCallbackTests {
 
     @BeforeAll
     static void startDatabase() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
-                "Docker is required for the payments schema");
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(), "Docker is required for the payments schema");
         db = TestDatabase.migrated();
 
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                db.jdbcUrl(), db.username(), db.password());
+        DriverManagerDataSource dataSource = new DriverManagerDataSource(db.jdbcUrl(), db.username(), db.password());
         jdbc = JdbcClient.create(dataSource);
         unitOfWork = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
 
@@ -159,14 +155,25 @@ class ClickShopApiCallbackTests {
         clickAdapter = new ClickPaymentAdapter(click, CLOCK);
         fiscalAdapter = new ClickFiscalAdapter(click, attempts, CLOCK);
 
-        PaymentAttemptService attemptService = new PaymentAttemptService(intents, attempts,
-                transactions, bindings, List.of(clickAdapter), CapturedMoneyPort.NONE,
-                unitOfWork, CLOCK);
+        PaymentAttemptService attemptService = new PaymentAttemptService(
+                intents,
+                attempts,
+                transactions,
+                bindings,
+                List.of(clickAdapter),
+                CapturedMoneyPort.NONE,
+                unitOfWork,
+                CLOCK);
 
-        controller = new ClickShopApiController(new ClickCallbackProcessor(bindings,
-                new uz.horecaos.platform.payments.infrastructure.RotationAwareSecrets(
-                        new FixedSecretResolver(), CLOCK),
-                attempts, intents, callbacks, attemptService, clickAdapter, CLOCK));
+        controller = new ClickShopApiController(new ClickCallbackProcessor(
+                bindings,
+                new uz.horecaos.platform.payments.infrastructure.RotationAwareSecrets(new FixedSecretResolver(), CLOCK),
+                attempts,
+                intents,
+                callbacks,
+                attemptService,
+                clickAdapter,
+                CLOCK));
 
         seedIntentAndAttempt();
     }
@@ -197,8 +204,9 @@ class ClickShopApiCallbackTests {
         // MD5, and treating the amount as a number anywhere before the digest is
         // taken makes every callback fail with -1 SIGN CHECK FAILED!.
         Map<String, String> form = prepareForm(AMOUNT);
-        form.put("sign_string", ClickSignature.prepare(SECRET, CLICK_TRANS_ID, SERVICE_ID,
-                merchantTransId, "1000", "0", signTime()));
+        form.put(
+                "sign_string",
+                ClickSignature.prepare(SECRET, CLICK_TRANS_ID, SERVICE_ID, merchantTransId, "1000", "0", signTime()));
 
         ClickShopApiResponse response = controller.prepare(SEGMENT, form);
 
@@ -237,8 +245,9 @@ class ClickShopApiCallbackTests {
     void lookupAndShapeFailures() {
         Map<String, String> unknownOrder = prepareForm(AMOUNT);
         unknownOrder.put("merchant_trans_id", "nothing-here");
-        unknownOrder.put("sign_string", ClickSignature.prepare(SECRET, CLICK_TRANS_ID, SERVICE_ID,
-                "nothing-here", AMOUNT, "0", signTime()));
+        unknownOrder.put(
+                "sign_string",
+                ClickSignature.prepare(SECRET, CLICK_TRANS_ID, SERVICE_ID, "nothing-here", AMOUNT, "0", signTime()));
 
         Map<String, String> missingSignTime = signedPrepare(AMOUNT);
         missingSignTime.remove("sign_time");
@@ -279,8 +288,7 @@ class ClickShopApiCallbackTests {
         assertThat(response.merchantConfirmId()).isEqualTo(ClickPrepareId.forAttempt(attemptId));
         assertThat(response.merchantPrepareId()).isNull();
         assertThat(status()).isEqualTo(PaymentAttemptStatus.CAPTURED);
-        assertThat(intents.find(TENANT, intentId).orElseThrow().status())
-                .isEqualTo(PaymentIntentStatus.PAID);
+        assertThat(intents.find(TENANT, intentId).orElseThrow().status()).isEqualTo(PaymentIntentStatus.PAID);
         // click_paydoc_id is evidence and not a payment id: nothing documents that
         // it is what the reversal and fiscalization paths want.
         assertThat(attempts.find(TENANT, attemptId).orElseThrow().externalDocumentId())
@@ -327,8 +335,17 @@ class ClickShopApiCallbackTests {
         String foreignPrepareId = Integer.toString(ClickPrepareId.forAttempt(attemptId) + 1);
         Map<String, String> form = completeForm(AMOUNT);
         form.put("merchant_prepare_id", foreignPrepareId);
-        form.put("sign_string", ClickSignature.complete(SECRET, CLICK_TRANS_ID, SERVICE_ID,
-                merchantTransId, foreignPrepareId, AMOUNT, "1", signTime()));
+        form.put(
+                "sign_string",
+                ClickSignature.complete(
+                        SECRET,
+                        CLICK_TRANS_ID,
+                        SERVICE_ID,
+                        merchantTransId,
+                        foreignPrepareId,
+                        AMOUNT,
+                        "1",
+                        signTime()));
 
         assertThat(controller.complete(SEGMENT, form).error()).isEqualTo(-6);
         assertThat(status()).isEqualTo(PaymentAttemptStatus.RESERVED);
@@ -381,8 +398,8 @@ class ClickShopApiCallbackTests {
     void businessFailureIsNeverReportedThroughComplete() {
         controller.prepare(SEGMENT, signedPrepare(AMOUNT));
         // The order was cancelled while the customer was paying.
-        intents.transition(TENANT, intentId, PaymentIntentStatus.AUTHORIZING,
-                PaymentIntentStatus.CANCELLED, 1, CLOCK.instant());
+        intents.transition(
+                TENANT, intentId, PaymentIntentStatus.AUTHORIZING, PaymentIntentStatus.CANCELLED, 1, CLOCK.instant());
         transport.answer(ProviderOutcome.success(Map.of("error_code", 0, "payment_id", 777L), null));
         transport.answer(ProviderOutcome.success(Map.of("error_code", 0), null));
 
@@ -402,8 +419,8 @@ class ClickShopApiCallbackTests {
     @DisplayName("a lost reversal leaves the attempt uncertain rather than retried")
     void aLostReversalIsUncertain() {
         controller.prepare(SEGMENT, signedPrepare(AMOUNT));
-        intents.transition(TENANT, intentId, PaymentIntentStatus.AUTHORIZING,
-                PaymentIntentStatus.CANCELLED, 1, CLOCK.instant());
+        intents.transition(
+                TENANT, intentId, PaymentIntentStatus.AUTHORIZING, PaymentIntentStatus.CANCELLED, 1, CLOCK.instant());
         transport.answer(ProviderOutcome.success(Map.of("error_code", 0, "payment_id", 777L), null));
         transport.answer(ProviderOutcome.uncertain("READ_TIMEOUT", "no response"));
 
@@ -422,9 +439,12 @@ class ClickShopApiCallbackTests {
         captureWithPaymentId("777");
         transport.answer(ProviderOutcome.success(Map.of("error_code", 0), null));
         transport.answer(ProviderOutcome.success(
-                Map.of("paymentId", 777L,
-                        "qrCodeURL", "https://ofd.soliq.uz/epi?t=EZ000000000030&r=123456789"
-                                + "&c=20221028171340&s=854971301623"), null));
+                Map.of(
+                        "paymentId",
+                        777L,
+                        "qrCodeURL",
+                        "https://ofd.soliq.uz/epi?t=EZ000000000030&r=123456789" + "&c=20221028171340&s=854971301623"),
+                null));
 
         FiscalSubmission submission = fiscalAdapter.submit(document(), binding());
 
@@ -436,18 +456,19 @@ class ClickShopApiCallbackTests {
         // Two units at 400 som: the line total is 800 som, which is 80,000 tiyin.
         // Click's Price is the line total and Payme's price is the unit price — the
         // same word, a factor of quantity apart.
-        assertThat(items.getFirst()).containsEntry("Price", 80_000L)
+        assertThat(items.getFirst())
+                .containsEntry("Price", 80_000L)
                 .containsEntry("GoodPrice", 40_000L)
                 .containsEntry("Amount", 2)
                 .containsEntry("VAT", 8_000L)
                 .containsEntry("SPIC", "01234567890123456");
         // The payment call for this same payment went out in som.
-        assertThat(submitted.body()).containsEntry("received_card", 80_000L)
+        assertThat(submitted.body())
+                .containsEntry("received_card", 80_000L)
                 .containsEntry("received_cash", 0L)
                 .containsEntry("received_ecash", 0L);
         assertThat(submission.status()).isEqualTo(FiscalStatus.ISSUED);
-        assertThat(submission.fiscalEvidence().orElseThrow().receiptReference())
-                .isEqualTo("123456789");
+        assertThat(submission.fiscalEvidence().orElseThrow().receiptReference()).isEqualTo("123456789");
     }
 
     @Test
@@ -460,12 +481,14 @@ class ClickShopApiCallbackTests {
         // the lost response would have said, and a duplicate document with a tax
         // authority cannot be withdrawn afterwards.
         transport.answer(ProviderOutcome.success(
-                Map.of("paymentId", 777L,
-                        "qrCodeURL", "https://ofd.soliq.uz/epi?t=EZ000000000030&r=123456789"
-                                + "&c=20221028171340&s=854971301623"), null));
+                Map.of(
+                        "paymentId",
+                        777L,
+                        "qrCodeURL",
+                        "https://ofd.soliq.uz/epi?t=EZ000000000030&r=123456789" + "&c=20221028171340&s=854971301623"),
+                null));
 
-        FiscalSubmission submission = fiscalAdapter.submit(
-                submittedDocument(), binding());
+        FiscalSubmission submission = fiscalAdapter.submit(submittedDocument(), binding());
 
         assertThat(transport.paths()).containsExactly("/payment/ofd_data/12345/777");
         assertThat(submission.status()).isEqualTo(FiscalStatus.ISSUED);
@@ -480,8 +503,7 @@ class ClickShopApiCallbackTests {
         FiscalSubmission submission = fiscalAdapter.submit(document(), binding());
 
         assertThat(submission.classification())
-                .isEqualTo(uz.horecaos.platform.payments.domain.ProviderOutcome
-                        .Classification.UNCERTAIN);
+                .isEqualTo(uz.horecaos.platform.payments.domain.ProviderOutcome.Classification.UNCERTAIN);
         assertThat(transport.calls()).isEmpty();
     }
 
@@ -496,7 +518,9 @@ class ClickShopApiCallbackTests {
                 UPDATE payments.payment_attempts SET external_payment_id = :paymentId
                 WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("paymentId", paymentId).param("tenantId", TENANT).param("id", attemptId)
+                .param("paymentId", paymentId)
+                .param("tenantId", TENANT)
+                .param("id", attemptId)
                 .update();
     }
 
@@ -509,14 +533,38 @@ class ClickShopApiCallbackTests {
     }
 
     private FiscalDocument fiscalDocument(FiscalStatus status) {
-        FiscalReceiptLine line = new FiscalReceiptLine("Plov, portion", "01234567890123456",
-                "1234567", 796L, 2, new SomAmount(400, "UZS"), new SomAmount(80, "UZS"), 12,
-                null, null, List.of(), "301234567", null);
+        FiscalReceiptLine line = new FiscalReceiptLine(
+                "Plov, portion",
+                "01234567890123456",
+                "1234567",
+                796L,
+                2,
+                new SomAmount(400, "UZS"),
+                new SomAmount(80, "UZS"),
+                12,
+                null,
+                null,
+                List.of(),
+                "301234567",
+                null);
 
-        return new FiscalDocument(UUID.randomUUID(), TENANT, ORDER, LEGAL_ENTITY, intentId, null,
-                PaymentProviderType.CLICK, FiscalDocumentType.SALE, null, status,
-                FiscalReason.AWAITING_PROVIDER, "Submitted to Click", List.of(line),
-                null, 1, CLOCK.instant());
+        return new FiscalDocument(
+                UUID.randomUUID(),
+                TENANT,
+                ORDER,
+                LEGAL_ENTITY,
+                intentId,
+                null,
+                PaymentProviderType.CLICK,
+                FiscalDocumentType.SALE,
+                null,
+                status,
+                FiscalReason.AWAITING_PROVIDER,
+                "Submitted to Click",
+                List.of(line),
+                null,
+                1,
+                CLOCK.instant());
     }
 
     private uz.horecaos.platform.payments.domain.ProviderBinding binding() {
@@ -525,8 +573,9 @@ class ClickShopApiCallbackTests {
 
     private Map<String, String> signedPrepare(String amount) {
         Map<String, String> form = prepareForm(amount);
-        form.put("sign_string", ClickSignature.prepare(SECRET, CLICK_TRANS_ID, SERVICE_ID,
-                merchantTransId, amount, "0", signTime()));
+        form.put(
+                "sign_string",
+                ClickSignature.prepare(SECRET, CLICK_TRANS_ID, SERVICE_ID, merchantTransId, amount, "0", signTime()));
         return form;
     }
 
@@ -575,23 +624,46 @@ class ClickShopApiCallbackTests {
                     'CLICK', 'CLICK', :amount, 'UZS', 'CANCELLED', 'BEFORE_CONFIRMATION',
                     :idempotencyKey, now())
                 """)
-                .param("id", foreignIntentId).param("tenantId", TENANT).param("orderId", ORDER)
-                .param("brandId", BRAND).param("locationId", LOCATION)
-                .param("legalEntityId", OTHER_LEGAL_ENTITY).param("amount", AMOUNT_SOM)
+                .param("id", foreignIntentId)
+                .param("tenantId", TENANT)
+                .param("orderId", ORDER)
+                .param("brandId", BRAND)
+                .param("locationId", LOCATION)
+                .param("legalEntityId", OTHER_LEGAL_ENTITY)
+                .param("amount", AMOUNT_SOM)
                 .param("idempotencyKey", UUID.randomUUID().toString())
                 .update();
 
-        attempts.insert(new PaymentAttempt(foreignAttemptId, TENANT, foreignIntentId,
-                PaymentProviderType.CLICK, OTHER_BINDING, foreignMerchantTransId, BUSINESS_DATE,
-                null, null, new SomAmount(AMOUNT_SOM, "UZS"), PaymentAttemptStatus.PRESENTED,
-                null, null, null, null, null, null, 1, CLOCK.instant(), null));
+        attempts.insert(new PaymentAttempt(
+                foreignAttemptId,
+                TENANT,
+                foreignIntentId,
+                PaymentProviderType.CLICK,
+                OTHER_BINDING,
+                foreignMerchantTransId,
+                BUSINESS_DATE,
+                null,
+                null,
+                new SomAmount(AMOUNT_SOM, "UZS"),
+                PaymentAttemptStatus.PRESENTED,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                1,
+                CLOCK.instant(),
+                null));
 
         // Signed correctly, on this binding's own segment, under this binding's own
         // secret and service id — naming the other entity's transaction.
         Map<String, String> form = baseForm(AMOUNT, "0");
         form.put("merchant_trans_id", foreignMerchantTransId);
-        form.put("sign_string", ClickSignature.prepare(SECRET, CLICK_TRANS_ID, SERVICE_ID,
-                foreignMerchantTransId, AMOUNT, "0", signTime()));
+        form.put(
+                "sign_string",
+                ClickSignature.prepare(
+                        SECRET, CLICK_TRANS_ID, SERVICE_ID, foreignMerchantTransId, AMOUNT, "0", signTime()));
 
         ClickShopApiResponse response = controller.prepare(SEGMENT, form);
 
@@ -614,8 +686,10 @@ class ClickShopApiCallbackTests {
         String prepareId = Integer.toString(ClickPrepareId.forAttempt(attemptId));
         Map<String, String> form = baseForm(amount, "1");
         form.put("merchant_prepare_id", prepareId);
-        form.put("sign_string", ClickSignature.complete(SECRET, CLICK_TRANS_ID, SERVICE_ID,
-                merchantTransId, prepareId, amount, "1", signTime()));
+        form.put(
+                "sign_string",
+                ClickSignature.complete(
+                        SECRET, CLICK_TRANS_ID, SERVICE_ID, merchantTransId, prepareId, amount, "1", signTime()));
         return form;
     }
 
@@ -646,18 +720,21 @@ class ClickShopApiCallbackTests {
                 SELECT count(*) FROM payments.payment_transactions
                 WHERE tenant_id = :tenantId AND attempt_id = :attemptId AND transaction_type = :type
                 """)
-                .param("tenantId", TENANT).param("attemptId", attemptId).param("type", type)
-                .query(Integer.class).single();
+                .param("tenantId", TENANT)
+                .param("attemptId", attemptId)
+                .param("type", type)
+                .query(Integer.class)
+                .single();
     }
 
     private int recordedCallbacks() {
         return jdbc.sql("SELECT count(*) FROM payments.provider_callbacks")
-                .query(Integer.class).single();
+                .query(Integer.class)
+                .single();
     }
 
     private int signatureFailures() {
-        return callbacks.signatureFailuresSince(TENANT, BINDING,
-                CLOCK.instant().minusSeconds(3600));
+        return callbacks.signatureFailuresSince(TENANT, BINDING, CLOCK.instant().minusSeconds(3600));
     }
 
     private void seedIntentAndAttempt() {
@@ -665,16 +742,46 @@ class ClickShopApiCallbackTests {
         attemptId = UUID.randomUUID();
         merchantTransId = UUID.randomUUID().toString().replace("-", "");
 
-        intents.insert(new PaymentIntent(intentId, TENANT, ORDER, BRAND, LOCATION, null,
-                LEGAL_ENTITY, PaymentTender.PROVIDER, PaymentMethod.CLICK,
-                PaymentProviderType.CLICK, new SomAmount(AMOUNT_SOM, "UZS"),
-                PaymentIntentStatus.AUTHORIZING, CaptureTiming.BEFORE_CONFIRMATION,
-                UUID.randomUUID().toString(), 1, CLOCK.instant(), null));
+        intents.insert(new PaymentIntent(
+                intentId,
+                TENANT,
+                ORDER,
+                BRAND,
+                LOCATION,
+                null,
+                LEGAL_ENTITY,
+                PaymentTender.PROVIDER,
+                PaymentMethod.CLICK,
+                PaymentProviderType.CLICK,
+                new SomAmount(AMOUNT_SOM, "UZS"),
+                PaymentIntentStatus.AUTHORIZING,
+                CaptureTiming.BEFORE_CONFIRMATION,
+                UUID.randomUUID().toString(),
+                1,
+                CLOCK.instant(),
+                null));
 
-        attempts.insert(new PaymentAttempt(attemptId, TENANT, intentId,
-                PaymentProviderType.CLICK, BINDING, merchantTransId, BUSINESS_DATE, null, null,
-                new SomAmount(AMOUNT_SOM, "UZS"), PaymentAttemptStatus.PRESENTED, null, null,
-                null, null, null, null, 1, CLOCK.instant(), null));
+        attempts.insert(new PaymentAttempt(
+                attemptId,
+                TENANT,
+                intentId,
+                PaymentProviderType.CLICK,
+                BINDING,
+                merchantTransId,
+                BUSINESS_DATE,
+                null,
+                null,
+                new SomAmount(AMOUNT_SOM, "UZS"),
+                PaymentAttemptStatus.PRESENTED,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                1,
+                CLOCK.instant(),
+                null));
     }
 
     private static void seedTenantAndMerchantAccount() {
@@ -703,7 +810,8 @@ class ClickShopApiCallbackTests {
                 VALUES (:id, :tenantId, 'PAYMENT', 'CLICK', 'click-sandbox', 'Click', 'ACTIVE',
                     :secretReference)
                 """)
-                .param("id", INSTALLATION).param("tenantId", TENANT)
+                .param("id", INSTALLATION)
+                .param("tenantId", TENANT)
                 .param("secretReference", secretReference().toString())
                 .update();
 
@@ -711,8 +819,10 @@ class ClickShopApiCallbackTests {
                 INSERT INTO integration.bindings (id, tenant_id, installation_id, brand_id, status)
                 VALUES (:id, :tenantId, :installationId, :brandId, 'ACTIVE')
                 """)
-                .param("id", INTEGRATION_BINDING).param("tenantId", TENANT)
-                .param("installationId", INSTALLATION).param("brandId", BRAND)
+                .param("id", INTEGRATION_BINDING)
+                .param("tenantId", TENANT)
+                .param("installationId", INSTALLATION)
+                .param("brandId", BRAND)
                 .update();
 
         // V0053 made legal_entity_id a real foreign key. The column existed before
@@ -740,11 +850,15 @@ class ClickShopApiCallbackTests {
                     :serviceId, '3333', :secretReference, :segment, true, true, 'ACTIVE',
                     :effectiveFrom)
                 """)
-                .param("id", BINDING).param("tenantId", TENANT).param("legalEntityId", LEGAL_ENTITY)
-                .param("installationId", INSTALLATION).param("bindingId", INTEGRATION_BINDING)
+                .param("id", BINDING)
+                .param("tenantId", TENANT)
+                .param("legalEntityId", LEGAL_ENTITY)
+                .param("installationId", INSTALLATION)
+                .param("bindingId", INTEGRATION_BINDING)
                 .param("serviceId", SERVICE_ID)
                 .param("secretReference", secretReference().toString())
-                .param("segment", SEGMENT).param("effectiveFrom", LocalDate.of(2026, 1, 1))
+                .param("segment", SEGMENT)
+                .param("effectiveFrom", LocalDate.of(2026, 1, 1))
                 .update();
 
         // A second legal entity under the same tenant, with its own Click service,
@@ -760,9 +874,11 @@ class ClickShopApiCallbackTests {
                     :serviceId, '4444', :secretReference, :segment, true, true, 'ACTIVE',
                     :effectiveFrom)
                 """)
-                .param("id", OTHER_BINDING).param("tenantId", TENANT)
+                .param("id", OTHER_BINDING)
+                .param("tenantId", TENANT)
                 .param("legalEntityId", OTHER_LEGAL_ENTITY)
-                .param("installationId", INSTALLATION).param("bindingId", INTEGRATION_BINDING)
+                .param("installationId", INSTALLATION)
+                .param("bindingId", INTEGRATION_BINDING)
                 .param("serviceId", "88888")
                 .param("secretReference", secretReference().toString())
                 .param("segment", "click-brandtwo")
@@ -790,20 +906,25 @@ class ClickShopApiCallbackTests {
                 VALUES (:id, :tenantId, :brandId, 'LOC1', 'location-one', 'Location One',
                     'Asia/Tashkent', 'ACTIVE')
                 """)
-                .param("id", LOCATION).param("tenantId", TENANT).param("brandId", BRAND).update();
+                .param("id", LOCATION)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name,
                     status)
                 VALUES (:id, :tenantId, 'WEB', 'WEB', 'Web', 'ACTIVE')
-                """)
-                .param("id", channel).param("tenantId", TENANT).update();
+                """).param("id", channel).param("tenantId", TENANT).update();
 
         jdbc.sql("""
                 INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
                 VALUES (:id, :tenantId, :brandId, 'MENU', 'Menu', 'ACTIVE')
                 """)
-                .param("id", catalog).param("tenantId", TENANT).param("brandId", BRAND).update();
+                .param("id", catalog)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel,
@@ -811,8 +932,11 @@ class ClickShopApiCallbackTests {
                 VALUES (:id, :tenantId, :brandId, :catalogId, 'WEB', 'PUBLISHED', 'hash',
                     now())
                 """)
-                .param("id", publication).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("catalogId", catalog).update();
+                .param("id", publication)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("catalogId", catalog)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO pricing.quotes (id, tenant_id, brand_id, location_id, currency, status,
@@ -821,8 +945,12 @@ class ClickShopApiCallbackTests {
                 VALUES (:id, :tenantId, :brandId, :locationId, 'UZS', 'ACTIVE', :publicationId,
                     1, 'hash', 1000, 0, 1000, now() + interval '1 day')
                 """)
-                .param("id", quote).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("locationId", LOCATION).param("publicationId", publication).update();
+                .param("id", quote)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", LOCATION)
+                .param("publicationId", publication)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO ordering.carts (id, tenant_id, brand_id, location_id, channel_id,
@@ -832,9 +960,14 @@ class ClickShopApiCallbackTests {
                     'DELIVERY', 'UZS', 'CHECKOUT_IN_PROGRESS', :quoteId, 'hash', :publicationId,
                     now() + interval '1 day')
                 """)
-                .param("id", cart).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("locationId", LOCATION).param("channelId", channel).param("quoteId", quote)
-                .param("publicationId", publication).update();
+                .param("id", cart)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", LOCATION)
+                .param("channelId", channel)
+                .param("quoteId", quote)
+                .param("publicationId", publication)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO ordering.orders (
@@ -848,9 +981,14 @@ class ClickShopApiCallbackTests {
                     'DELIVERY', 'AUTO_CONFIRM', 'NONE', 'PAYMENT_AUTHORIZING', 'UZS',
                     1000, 0, 1000, :quoteId, 'hash', :publicationId, :cartId, :idempotencyKey)
                 """)
-                .param("id", ORDER).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("locationId", LOCATION).param("channelId", channel)
-                .param("quoteId", quote).param("publicationId", publication).param("cartId", cart)
+                .param("id", ORDER)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", LOCATION)
+                .param("channelId", channel)
+                .param("quoteId", quote)
+                .param("publicationId", publication)
+                .param("cartId", cart)
                 .param("idempotencyKey", UUID.randomUUID().toString())
                 .update();
     }
@@ -895,7 +1033,8 @@ class ClickShopApiCallbackTests {
         public ProviderOutcome exchange(MerchantApiCall call) {
             calls.add(call);
             int index = calls.size() - 1;
-            return index < answers.size() ? answers.get(index)
+            return index < answers.size()
+                    ? answers.get(index)
                     : ProviderOutcome.uncertain("NO_ANSWER_QUEUED", "the test queued no answer");
         }
     }

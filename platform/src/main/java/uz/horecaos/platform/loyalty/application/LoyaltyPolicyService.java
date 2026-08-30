@@ -3,10 +3,8 @@ package uz.horecaos.platform.loyalty.application;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore.AccrualRuleRow;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore.RedemptionPolicyRow;
@@ -37,14 +35,13 @@ public class LoyaltyPolicyService {
     }
 
     @Transactional(readOnly = true)
-    public Optional<AccrualRuleRow> accrualRule(UUID tenantId, UUID brandId, UUID locationId,
-            UUID channelId, Instant asOf) {
+    public Optional<AccrualRuleRow> accrualRule(
+            UUID tenantId, UUID brandId, UUID locationId, UUID channelId, Instant asOf) {
         return store.accrualRule(tenantId, brandId, locationId, channelId, asOf);
     }
 
     @Transactional(readOnly = true)
-    public Optional<RedemptionPolicyRow> redemptionPolicy(UUID tenantId, UUID brandId,
-            Instant asOf) {
+    public Optional<RedemptionPolicyRow> redemptionPolicy(UUID tenantId, UUID brandId, Instant asOf) {
         return store.redemptionPolicy(tenantId, brandId, asOf);
     }
 }

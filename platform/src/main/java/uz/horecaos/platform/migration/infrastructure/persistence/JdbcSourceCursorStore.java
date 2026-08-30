@@ -1,5 +1,7 @@
 package uz.horecaos.platform.migration.infrastructure.persistence;
 
+import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.utc;
+
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -7,13 +9,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.migration.application.importing.SourceCursorStore;
-
-import static uz.horecaos.platform.migration.infrastructure.persistence.MigrationColumns.utc;
 
 /**
  * Extraction cursor persistence ({@code migration.source_cursors}, ADR 0024).
@@ -47,7 +45,8 @@ public class JdbcSourceCursorStore implements SourceCursorStore {
         return jdbc.sql(SELECT_CURSOR + """
                  WHERE tenant_id = :tenantId AND scope_id = :scopeId AND entity_type = :entityType
                 """)
-                .param("tenantId", tenantId).param("scopeId", scopeId)
+                .param("tenantId", tenantId)
+                .param("scopeId", scopeId)
                 .param("entityType", entityType)
                 .query(this::mapCursor)
                 .optional();
@@ -73,17 +72,20 @@ public class JdbcSourceCursorStore implements SourceCursorStore {
                     :pagesCommitted, :rowsCommitted, :exhausted, 1, :now, :now)
                 ON CONFLICT ON CONSTRAINT uq_source_cursor DO NOTHING
                 """)
-                .param("id", cursor.id()).param("tenantId", cursor.tenantId())
-                .param("scopeId", cursor.scopeId()).param("entityType", cursor.entityType())
-                .param("stableKeyColumn", cursor.stableKeyColumn())
-                .params(optional)
-                .param("runId", cursor.advancedByRunId())
-                .param("transformationVersion", cursor.transformationVersion())
-                .param("pagesCommitted", cursor.pagesCommitted())
-                .param("rowsCommitted", cursor.rowsCommitted())
-                .param("exhausted", cursor.exhausted())
-                .param("now", utc(now))
-                .update() == 1;
+                        .param("id", cursor.id())
+                        .param("tenantId", cursor.tenantId())
+                        .param("scopeId", cursor.scopeId())
+                        .param("entityType", cursor.entityType())
+                        .param("stableKeyColumn", cursor.stableKeyColumn())
+                        .params(optional)
+                        .param("runId", cursor.advancedByRunId())
+                        .param("transformationVersion", cursor.transformationVersion())
+                        .param("pagesCommitted", cursor.pagesCommitted())
+                        .param("rowsCommitted", cursor.rowsCommitted())
+                        .param("exhausted", cursor.exhausted())
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -95,8 +97,8 @@ public class JdbcSourceCursorStore implements SourceCursorStore {
      * would start again from the beginning of a source it had already covered.
      */
     @Override
-    public boolean advance(UUID tenantId, UUID scopeId, String entityType, Advance advance,
-            int expectedVersion, Instant now) {
+    public boolean advance(
+            UUID tenantId, UUID scopeId, String entityType, Advance advance, int expectedVersion, Instant now) {
         Map<String, Object> optional = new HashMap<>();
         optional.put("lastStableKey", advance.lastStableKey());
         optional.put("watermark", advance.watermark());
@@ -115,17 +117,19 @@ public class JdbcSourceCursorStore implements SourceCursorStore {
                 WHERE tenant_id = :tenantId AND scope_id = :scopeId
                   AND entity_type = :entityType AND version = :expectedVersion
                 """)
-                .params(optional)
-                .param("runId", advance.advancedByRunId())
-                .param("transformationVersion", advance.transformationVersion())
-                .param("pagesCommitted", advance.pagesCommitted())
-                .param("rowsCommitted", advance.rowsCommitted())
-                .param("exhausted", advance.exhausted())
-                .param("now", utc(now))
-                .param("tenantId", tenantId).param("scopeId", scopeId)
-                .param("entityType", entityType)
-                .param("expectedVersion", expectedVersion)
-                .update() == 1;
+                        .params(optional)
+                        .param("runId", advance.advancedByRunId())
+                        .param("transformationVersion", advance.transformationVersion())
+                        .param("pagesCommitted", advance.pagesCommitted())
+                        .param("rowsCommitted", advance.rowsCommitted())
+                        .param("exhausted", advance.exhausted())
+                        .param("now", utc(now))
+                        .param("tenantId", tenantId)
+                        .param("scopeId", scopeId)
+                        .param("entityType", entityType)
+                        .param("expectedVersion", expectedVersion)
+                        .update()
+                == 1;
     }
 
     private Cursor mapCursor(ResultSet row, int rowNumber) throws SQLException {

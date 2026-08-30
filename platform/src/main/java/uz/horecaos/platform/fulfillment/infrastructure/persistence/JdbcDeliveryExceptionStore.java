@@ -1,16 +1,15 @@
 package uz.horecaos.platform.fulfillment.infrastructure.persistence;
 
+import static uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore.instant;
+import static uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore.utc;
+
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
-import static uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore.instant;
-import static uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore.utc;
 
 /**
  * {@code fulfillment.delivery_exceptions} (ADR 0014, V0054).
@@ -43,8 +42,15 @@ public class JdbcDeliveryExceptionStore {
      *         already open for this plan and reason, which is the normal answer on
      *         every tick after the first
      */
-    public boolean raise(UUID tenantId, UUID brandId, UUID locationId, UUID planId,
-            String reasonCode, String detail, String raisedBy, Instant now) {
+    public boolean raise(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID planId,
+            String reasonCode,
+            String detail,
+            String raisedBy,
+            Instant now) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("id", UUID.randomUUID());
@@ -53,8 +59,7 @@ public class JdbcDeliveryExceptionStore {
         params.put("locationId", locationId);
         params.put("planId", planId);
         params.put("reasonCode", reasonCode);
-        params.put("detail", detail == null ? null
-                : detail.substring(0, Math.min(detail.length(), MAX_DETAIL)));
+        params.put("detail", detail == null ? null : detail.substring(0, Math.min(detail.length(), MAX_DETAIL)));
         params.put("raisedBy", raisedBy);
         params.put("raisedAt", utc(now));
 
@@ -67,9 +72,7 @@ public class JdbcDeliveryExceptionStore {
                     :reasonCode, 'ACTION_REQUIRED', 'OPEN', :detail, :raisedAt, :raisedBy)
                 ON CONFLICT (tenant_id, delivery_plan_id, reason_code) WHERE status <> 'RESOLVED'
                 DO NOTHING
-                """)
-                .params(params)
-                .update() == 1;
+                """).params(params).update() == 1;
     }
 
     public List<OpenException> open(UUID tenantId, UUID planId) {
@@ -79,7 +82,8 @@ public class JdbcDeliveryExceptionStore {
                 WHERE tenant_id = :tenantId AND delivery_plan_id = :planId AND status <> 'RESOLVED'
                 ORDER BY raised_at, id
                 """)
-                .param("tenantId", tenantId).param("planId", planId)
+                .param("tenantId", tenantId)
+                .param("planId", planId)
                 .query((row, number) -> new OpenException(
                         row.getObject("id", UUID.class),
                         row.getString("reason_code"),
@@ -92,18 +96,20 @@ public class JdbcDeliveryExceptionStore {
     }
 
     /** An operator picked the plan up and did something about it. */
-    public boolean resolve(UUID tenantId, UUID exceptionId, String resolutionCode,
-            String resolvedBy, Instant now) {
+    public boolean resolve(UUID tenantId, UUID exceptionId, String resolutionCode, String resolvedBy, Instant now) {
         return jdbc.sql("""
                 UPDATE fulfillment.delivery_exceptions
                 SET status = 'RESOLVED', resolved_at = :now, resolved_by = :resolvedBy,
                     resolution_code = :resolutionCode
                 WHERE tenant_id = :tenantId AND id = :exceptionId AND status <> 'RESOLVED'
                 """)
-                .param("tenantId", tenantId).param("exceptionId", exceptionId)
-                .param("resolutionCode", resolutionCode).param("resolvedBy", resolvedBy)
-                .param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("exceptionId", exceptionId)
+                        .param("resolutionCode", resolutionCode)
+                        .param("resolvedBy", resolvedBy)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     public record OpenException(
@@ -113,5 +119,5 @@ public class JdbcDeliveryExceptionStore {
             String status,
             String detail,
             Instant raisedAt,
-            String raisedBy) { }
+            String raisedBy) {}
 }

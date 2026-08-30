@@ -6,15 +6,12 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.customers.api.RecipientContactDirectory;
 import uz.horecaos.platform.notifications.api.DispatchOutcome;
 import uz.horecaos.platform.notifications.api.NotificationDispatch;
@@ -54,7 +51,7 @@ public class NotificationDispatchService {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationDispatchService.class);
 
-    private static final TypeReference<Map<String, String>> VARIABLES_TYPE = new TypeReference<>() { };
+    private static final TypeReference<Map<String, String>> VARIABLES_TYPE = new TypeReference<>() {};
 
     /** Recorded on every reveal, so a delivery sweep is distinguishable from an export. */
     private static final String REVEAL_PURPOSE = "NOTIFICATION_DELIVERY";
@@ -68,9 +65,13 @@ public class NotificationDispatchService {
     private final int maximumAttempts;
     private final Duration retryBackoff;
 
-    public NotificationDispatchService(JdbcNotificationStore notifications,
-            JdbcTemplateStore templates, RecipientContactDirectory contacts,
-            NotificationTransport transport, ObjectMapper objectMapper, Clock clock,
+    public NotificationDispatchService(
+            JdbcNotificationStore notifications,
+            JdbcTemplateStore templates,
+            RecipientContactDirectory contacts,
+            NotificationTransport transport,
+            ObjectMapper objectMapper,
+            Clock clock,
             @Value("${horecaos.notifications.max-attempts:8}") int maximumAttempts,
             @Value("${horecaos.notifications.retry-backoff:PT30S}") Duration retryBackoff) {
         this.notifications = notifications;
@@ -99,8 +100,13 @@ public class NotificationDispatchService {
             // Past this, sending is worse than not sending. A confirmation an hour
             // after the customer collected their food is noise, and a rejection the
             // next morning is an incident.
-            notifications.settle(row.tenantId(), row.id(), row.claimToken(),
-                    NotificationStatus.EXPIRED.name(), now, "The message expired before it was sent",
+            notifications.settle(
+                    row.tenantId(),
+                    row.id(),
+                    row.claimToken(),
+                    NotificationStatus.EXPIRED.name(),
+                    now,
+                    "The message expired before it was sent",
                     now);
             return;
         }
@@ -121,28 +127,39 @@ public class NotificationDispatchService {
         AttemptRow attempt = open.orElseGet(() -> openNewAttempt(row, now));
         Rendered rendered = render(row);
 
-        String recipientValue = contacts
-                .resolveValue(row.tenantId(), endpointContactPoint(row), REVEAL_PURPOSE)
+        String recipientValue = contacts.resolveValue(row.tenantId(), endpointContactPoint(row), REVEAL_PURPOSE)
                 .orElse(null);
         if (recipientValue == null) {
             // The customer removed the number between eligibility and now. Not a
             // suppression — the message was eligible when it was decided — and not
             // retryable either, because nothing will bring the contact back.
-            notifications.settleAttempt(row.tenantId(), attempt.id(), "REJECTED", null,
-                    "RECIPIENT_UNRESOLVABLE", null, null, null, now);
-            notifications.settle(row.tenantId(), row.id(), row.claimToken(),
-                    NotificationStatus.FAILED_TERMINAL.name(), now,
-                    "The recipient contact no longer exists", now);
+            notifications.settleAttempt(
+                    row.tenantId(), attempt.id(), "REJECTED", null, "RECIPIENT_UNRESOLVABLE", null, null, null, now);
+            notifications.settle(
+                    row.tenantId(),
+                    row.id(),
+                    row.claimToken(),
+                    NotificationStatus.FAILED_TERMINAL.name(),
+                    now,
+                    "The recipient contact no longer exists",
+                    now);
             return;
         }
 
-        notifications.markSending(row.tenantId(), row.id(), row.claimToken(),
-                ContentHashes.of(rendered.body()), now);
+        notifications.markSending(row.tenantId(), row.id(), row.claimToken(), ContentHashes.of(rendered.body()), now);
 
         DispatchOutcome outcome = transport.dispatch(new NotificationDispatch(
-                row.id(), attempt.id(), row.tenantId(), row.brandId(), row.locationId(),
-                row.channel(), recipientValue, rendered.subject(), rendered.body(),
-                attempt.providerIdempotencyKey(), org.slf4j.MDC.get("correlationId")));
+                row.id(),
+                attempt.id(),
+                row.tenantId(),
+                row.brandId(),
+                row.locationId(),
+                row.channel(),
+                recipientValue,
+                rendered.subject(),
+                rendered.body(),
+                attempt.providerIdempotencyKey(),
+                org.slf4j.MDC.get("correlationId")));
 
         record(row, attempt, outcome, clock.instant());
     }
@@ -160,33 +177,38 @@ public class NotificationDispatchService {
         // middle of establishing the fate of.
         notifications.markReconciling(row.tenantId(), row.id(), row.claimToken(), now);
 
-        DispatchOutcome outcome = transport.reconcile(row.tenantId(), row.brandId(),
-                row.locationId(), row.channel(), attempt.providerIdempotencyKey());
+        DispatchOutcome outcome = transport.reconcile(
+                row.tenantId(), row.brandId(), row.locationId(), row.channel(), attempt.providerIdempotencyKey());
         Instant answeredAt = clock.instant();
 
         switch (outcome.status()) {
             case UNCERTAIN ->
-                    // Still cannot tell. Backed off rather than escalated at once;
-                    // attempt_count is what eventually hands it to a person.
-                    escalateOrRetry(row, attempt, "The provider could not confirm the outcome",
-                            answeredAt.plus(retryBackoff));
+                // Still cannot tell. Backed off rather than escalated at once;
+                // attempt_count is what eventually hands it to a person.
+                escalateOrRetry(
+                        row, attempt, "The provider could not confirm the outcome", answeredAt.plus(retryBackoff));
             case RETRYABLE -> {
                 // The provider has no record of this key, so it never acted. Only
                 // now is a second send safe, and it is a genuinely new request
                 // rather than a re-transmission: this attempt is closed so the next
                 // claim opens a fresh one under a fresh key.
-                notifications.settleAttempt(row.tenantId(), attempt.id(), "RECONCILED_NOT_SENT",
-                        null, outcome.errorCode(), outcome.providerBindingId(),
-                        outcome.providerType(), null, answeredAt);
-                escalateOrRetry(row, attempt, "The provider never received the message",
+                notifications.settleAttempt(
+                        row.tenantId(),
+                        attempt.id(),
+                        "RECONCILED_NOT_SENT",
+                        null,
+                        outcome.errorCode(),
+                        outcome.providerBindingId(),
+                        outcome.providerType(),
+                        null,
                         answeredAt);
+                escalateOrRetry(row, attempt, "The provider never received the message", answeredAt);
             }
             case ACCEPTED, REJECTED -> record(row, attempt, outcome, answeredAt);
         }
     }
 
-    private void record(NotificationRow row, AttemptRow attempt, DispatchOutcome outcome,
-            Instant now) {
+    private void record(NotificationRow row, AttemptRow attempt, DispatchOutcome outcome, Instant now) {
         switch (outcome.status()) {
             case ACCEPTED -> {
                 // The attempt records how strong the provider's answer actually
@@ -196,44 +218,95 @@ public class NotificationDispatchService {
                 String normalized = normalize(outcome.providerStatus());
                 boolean confirmed = "DELIVERED".equals(normalized) || "READ".equals(normalized);
 
-                notifications.settleAttempt(row.tenantId(), attempt.id(),
-                        confirmed ? "DELIVERED" : "ACCEPTED", outcome.externalMessageId(), null,
-                        outcome.providerBindingId(), outcome.providerType(),
-                        confirmed ? now : null, now);
-                notifications.recordStatusEvent(row.tenantId(), attempt.id(),
-                        providerEventId(attempt, outcome), normalized,
-                        outcome.providerStatus(), now, now);
+                notifications.settleAttempt(
+                        row.tenantId(),
+                        attempt.id(),
+                        confirmed ? "DELIVERED" : "ACCEPTED",
+                        outcome.externalMessageId(),
+                        null,
+                        outcome.providerBindingId(),
+                        outcome.providerType(),
+                        confirmed ? now : null,
+                        now);
+                notifications.recordStatusEvent(
+                        row.tenantId(),
+                        attempt.id(),
+                        providerEventId(attempt, outcome),
+                        normalized,
+                        outcome.providerStatus(),
+                        now,
+                        now);
                 // The message is terminal either way. Which promise was actually
                 // made is on the status event, verbatim, because that is the
                 // distinction a support conversation turns on.
-                notifications.settle(row.tenantId(), row.id(), row.claimToken(),
-                        NotificationStatus.DELIVERED.name(), now, null, now);
+                notifications.settle(
+                        row.tenantId(),
+                        row.id(),
+                        row.claimToken(),
+                        NotificationStatus.DELIVERED.name(),
+                        now,
+                        null,
+                        now);
             }
             case REJECTED -> {
-                notifications.settleAttempt(row.tenantId(), attempt.id(), "REJECTED", null,
-                        outcome.errorCode(), outcome.providerBindingId(), outcome.providerType(),
-                        null, now);
+                notifications.settleAttempt(
+                        row.tenantId(),
+                        attempt.id(),
+                        "REJECTED",
+                        null,
+                        outcome.errorCode(),
+                        outcome.providerBindingId(),
+                        outcome.providerType(),
+                        null,
+                        now);
                 // Retrying a business rejection produces the same rejection forever
                 // while looking like an outage.
-                notifications.settle(row.tenantId(), row.id(), row.claimToken(),
-                        NotificationStatus.FAILED_TERMINAL.name(), now, outcome.errorCode(), now);
+                notifications.settle(
+                        row.tenantId(),
+                        row.id(),
+                        row.claimToken(),
+                        NotificationStatus.FAILED_TERMINAL.name(),
+                        now,
+                        outcome.errorCode(),
+                        now);
             }
             case RETRYABLE -> {
-                notifications.settleAttempt(row.tenantId(), attempt.id(), "RETRYABLE_FAILURE", null,
-                        outcome.errorCode(), outcome.providerBindingId(), outcome.providerType(),
-                        null, now);
-                escalateOrRetry(row, attempt, outcome.errorCode(),
+                notifications.settleAttempt(
+                        row.tenantId(),
+                        attempt.id(),
+                        "RETRYABLE_FAILURE",
+                        null,
+                        outcome.errorCode(),
+                        outcome.providerBindingId(),
+                        outcome.providerType(),
+                        null,
+                        now);
+                escalateOrRetry(
+                        row,
+                        attempt,
+                        outcome.errorCode(),
                         now.plus(outcome.retryDelay().orElse(retryBackoff)));
             }
             case UNCERTAIN -> {
-                notifications.settleAttempt(row.tenantId(), attempt.id(), "UNCERTAIN", null,
-                        outcome.errorCode(), outcome.providerBindingId(), outcome.providerType(),
-                        null, now);
-                notifications.settle(row.tenantId(), row.id(), row.claimToken(),
-                        NotificationStatus.UNCERTAIN.name(), now.plus(retryBackoff),
-                        outcome.errorCode(), now);
-                log.warn("Notification {} has an uncertain provider outcome; it will be reconciled",
-                        row.id());
+                notifications.settleAttempt(
+                        row.tenantId(),
+                        attempt.id(),
+                        "UNCERTAIN",
+                        null,
+                        outcome.errorCode(),
+                        outcome.providerBindingId(),
+                        outcome.providerType(),
+                        null,
+                        now);
+                notifications.settle(
+                        row.tenantId(),
+                        row.id(),
+                        row.claimToken(),
+                        NotificationStatus.UNCERTAIN.name(),
+                        now.plus(retryBackoff),
+                        outcome.errorCode(),
+                        now);
+                log.warn("Notification {} has an uncertain provider outcome; it will be reconciled", row.id());
             }
         }
     }
@@ -246,19 +319,28 @@ public class NotificationDispatchService {
      * do not know whether we sent it" need different handling from support, and
      * collapsing them would let somebody resend a message the customer already has.
      */
-    private void escalateOrRetry(NotificationRow row, AttemptRow attempt, String reason,
-            Instant nextAttemptAt) {
+    private void escalateOrRetry(NotificationRow row, AttemptRow attempt, String reason, Instant nextAttemptAt) {
         Instant now = clock.instant();
         if (row.attemptCount() < maximumAttempts) {
-            notifications.settle(row.tenantId(), row.id(), row.claimToken(),
-                    NotificationStatus.RETRY_PENDING.name(), nextAttemptAt, reason, now);
+            notifications.settle(
+                    row.tenantId(),
+                    row.id(),
+                    row.claimToken(),
+                    NotificationStatus.RETRY_PENDING.name(),
+                    nextAttemptAt,
+                    reason,
+                    now);
             return;
         }
         boolean uncertain = attempt.uncertainOutcome() || "UNCERTAIN".equals(attempt.status());
-        notifications.settle(row.tenantId(), row.id(), row.claimToken(),
-                uncertain ? NotificationStatus.MANUAL_REVIEW.name()
-                        : NotificationStatus.FAILED_TERMINAL.name(),
-                now, "Gave up after %d attempts: %s".formatted(row.attemptCount(), reason), now);
+        notifications.settle(
+                row.tenantId(),
+                row.id(),
+                row.claimToken(),
+                uncertain ? NotificationStatus.MANUAL_REVIEW.name() : NotificationStatus.FAILED_TERMINAL.name(),
+                now,
+                "Gave up after %d attempts: %s".formatted(row.attemptCount(), reason),
+                now);
         log.error("Notification {} exhausted {} attempts", row.id(), row.attemptCount());
     }
 
@@ -271,19 +353,30 @@ public class NotificationDispatchService {
         // a new one.
         String providerKey = attemptId.toString();
 
-        notifications.insertAttempt(attemptId, row.tenantId(), row.id(), row.channel(),
-                null, null, attemptNumber, providerKey, now);
+        notifications.insertAttempt(
+                attemptId, row.tenantId(), row.id(), row.channel(), null, null, attemptNumber, providerKey, now);
 
-        return new AttemptRow(attemptId, row.id(), row.channel(), null, null, attemptNumber,
-                providerKey, "REQUESTED", null, null, false, now, null);
+        return new AttemptRow(
+                attemptId,
+                row.id(),
+                row.channel(),
+                null,
+                null,
+                attemptNumber,
+                providerKey,
+                "REQUESTED",
+                null,
+                null,
+                false,
+                now,
+                null);
     }
 
     private Rendered render(NotificationRow row) {
         VersionRow version = templates
                 .version(row.tenantId(), row.templateId(), row.templateVersion(), row.locale())
                 .orElseThrow(() -> new IllegalStateException(
-                        "The template version frozen onto notification %s no longer exists"
-                                .formatted(row.id())));
+                        "The template version frozen onto notification %s no longer exists".formatted(row.id())));
 
         Map<String, String> variables = objectMapper.readValue(row.variablesJson(), VARIABLES_TYPE);
         return new Rendered(
@@ -292,10 +385,11 @@ public class NotificationDispatchService {
     }
 
     private UUID endpointContactPoint(NotificationRow row) {
-        return notifications.endpoint(row.tenantId(), row.recipientEndpointId())
+        return notifications
+                .endpoint(row.tenantId(), row.recipientEndpointId())
                 .map(JdbcNotificationStore.EndpointRow::contactPointId)
-                .orElseThrow(() -> new IllegalStateException(
-                        "Notification %s has no resolvable endpoint".formatted(row.id())));
+                .orElseThrow(() ->
+                        new IllegalStateException("Notification %s has no resolvable endpoint".formatted(row.id())));
     }
 
     /**
@@ -334,5 +428,5 @@ public class NotificationDispatchService {
     }
 
     /** Exists for the length of one call and is never persisted or logged. */
-    private record Rendered(String subject, String body) { }
+    private record Rendered(String subject, String body) {}
 }

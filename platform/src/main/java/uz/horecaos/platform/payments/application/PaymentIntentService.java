@@ -5,12 +5,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.migration.api.ExternalEffect;
 import uz.horecaos.platform.migration.api.ImportSuppression;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
@@ -57,9 +55,14 @@ public class PaymentIntentService implements PaymentIntentPort {
     private final PaymentFiscalService fiscal;
     private final Clock clock;
 
-    public PaymentIntentService(JdbcPaymentIntentStore intents, OrderDirectory orders,
-            PaymentLegalEntityResolver legalEntities, PaymentBindingResolver bindings,
-            PaymentBusinessCalendar calendar, PaymentFiscalService fiscal, Clock clock) {
+    public PaymentIntentService(
+            JdbcPaymentIntentStore intents,
+            OrderDirectory orders,
+            PaymentLegalEntityResolver legalEntities,
+            PaymentBindingResolver bindings,
+            PaymentBusinessCalendar calendar,
+            PaymentFiscalService fiscal,
+            Clock clock) {
         this.intents = intents;
         this.orders = orders;
         this.legalEntities = legalEntities;
@@ -83,14 +86,15 @@ public class PaymentIntentService implements PaymentIntentPort {
      * of an intent on the order.
      */
     @Override
-    public boolean paymentRequiredBeforeConfirmation(UUID tenantId, UUID orderId,
-            String paymentMethodCode) {
+    public boolean paymentRequiredBeforeConfirmation(UUID tenantId, UUID orderId, String paymentMethodCode) {
         return PaymentMethod.fromCode(paymentMethodCode)
                 .map(method -> method.captureTiming().requiredBeforeConfirmation())
                 .orElseGet(() -> {
-                    log.warn("Order {} names payment method {}, which this build does not "
-                            + "implement. Treating it as requiring no payment before confirmation.",
-                            orderId, paymentMethodCode);
+                    log.warn(
+                            "Order {} names payment method {}, which this build does not "
+                                    + "implement. Treating it as requiring no payment before confirmation.",
+                            orderId,
+                            paymentMethodCode);
                     return false;
                 });
     }
@@ -119,8 +123,13 @@ public class PaymentIntentService implements PaymentIntentPort {
      */
     @Override
     @Transactional
-    public UUID createIntent(UUID tenantId, UUID orderId, long amountMinor, String currency,
-            String paymentMethodCode, String idempotencyKey) {
+    public UUID createIntent(
+            UUID tenantId,
+            UUID orderId,
+            long amountMinor,
+            String currency,
+            String paymentMethodCode,
+            String idempotencyKey) {
         // ADR 0024. An intent is an open request for money: it moves to
         // AUTHORIZING, an attempt is opened against it, and the provider is
         // presented to a customer. A historical order was paid years ago and its
@@ -144,8 +153,10 @@ public class PaymentIntentService implements PaymentIntentPort {
 
         Optional<PaymentMethod> method = PaymentMethod.fromCode(paymentMethodCode);
         if (method.isEmpty()) {
-            log.warn("No payment intent created for order {}: payment method {} is not implemented.",
-                    orderId, paymentMethodCode);
+            log.warn(
+                    "No payment intent created for order {}: payment method {} is not implemented.",
+                    orderId,
+                    paymentMethodCode);
             return null;
         }
 
@@ -154,20 +165,22 @@ public class PaymentIntentService implements PaymentIntentPort {
             // Empty means "no such order for this tenant", which is the same answer
             // as "it does not exist" and deliberately so. Fabricating an intent for
             // it would put a payable row under an order nobody can find.
-            log.warn("No payment intent created: order {} is not readable for tenant {}.",
-                    orderId, tenantId);
+            log.warn("No payment intent created: order {} is not readable for tenant {}.", orderId, tenantId);
             return null;
         }
 
         Instant now = clock.instant();
         UUID locationId = order.get().locationId();
         LocalDate businessDate = calendar.businessDateFor(tenantId, locationId, now);
-        UUID legalEntityId = legalEntities.sellerFor(tenantId, locationId, businessDate)
-                .orElse(null);
+        UUID legalEntityId =
+                legalEntities.sellerFor(tenantId, locationId, businessDate).orElse(null);
 
         PaymentIntent intent = new PaymentIntent(
-                UUID.randomUUID(), tenantId, orderId,
-                order.get().brandId(), locationId,
+                UUID.randomUUID(),
+                tenantId,
+                orderId,
+                order.get().brandId(),
+                locationId,
                 null,
                 legalEntityId,
                 method.get().tender(),
@@ -177,7 +190,9 @@ public class PaymentIntentService implements PaymentIntentPort {
                 PaymentIntentStatus.PENDING,
                 method.get().captureTiming(),
                 idempotencyKey,
-                1, now, null);
+                1,
+                now,
+                null);
 
         intents.insert(intent);
 
@@ -198,8 +213,8 @@ public class PaymentIntentService implements PaymentIntentPort {
     @Override
     public boolean canAcceptPayment(UUID tenantId, UUID locationId, String paymentMethodCode) {
         Instant now = clock.instant();
-        return canAcceptPayment(tenantId, locationId, paymentMethodCode,
-                calendar.businessDateFor(tenantId, locationId, now));
+        return canAcceptPayment(
+                tenantId, locationId, paymentMethodCode, calendar.businessDateFor(tenantId, locationId, now));
     }
 
     /**
@@ -212,8 +227,7 @@ public class PaymentIntentService implements PaymentIntentPort {
      * fiscal terminal, rather than a failure the customer meets at the payment
      * step.
      */
-    public boolean canAcceptPayment(UUID tenantId, UUID locationId, String paymentMethodCode,
-            LocalDate businessDate) {
+    public boolean canAcceptPayment(UUID tenantId, UUID locationId, String paymentMethodCode, LocalDate businessDate) {
         Optional<PaymentMethod> method = PaymentMethod.fromCode(paymentMethodCode);
         if (method.isEmpty()) {
             return false;
@@ -239,6 +253,7 @@ public class PaymentIntentService implements PaymentIntentPort {
             // orElseThrow would raise inside a checkout.
             return false;
         }
-        return bindings.resolve(tenantId, seller.get(), provider.get(), businessDate).isPresent();
+        return bindings.resolve(tenantId, seller.get(), provider.get(), businessDate)
+                .isPresent();
     }
 }

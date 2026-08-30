@@ -1,16 +1,14 @@
 package uz.horecaos.platform.media;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.util.List;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.media.domain.LegacyPath;
 import uz.horecaos.platform.media.domain.LegacyPathMapping;
 import uz.horecaos.platform.media.domain.MediaOwner;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * What the legacy migration will and will not read (ADR 0010).
@@ -28,7 +26,8 @@ class LegacyPathTests {
     @Test
     @DisplayName("two spellings of one file normalize to the same path")
     void normalizesEquivalentSpellings() {
-        String canonical = LegacyPath.of("uploads/brand/./burger.jpg").orElseThrow().normalized();
+        String canonical =
+                LegacyPath.of("uploads/brand/./burger.jpg").orElseThrow().normalized();
 
         assertThat(canonical).isEqualTo("uploads/brand/burger.jpg");
         // Otherwise one file becomes two assets and the reconciliation counts
@@ -37,7 +36,9 @@ class LegacyPathTests {
                 .isEqualTo(canonical);
         assertThat(LegacyPath.of("uploads\\brand\\burger.jpg").orElseThrow().normalized())
                 .isEqualTo(canonical);
-        assertThat(LegacyPath.of("  uploads/brand/gallery/../burger.jpg  ").orElseThrow().normalized())
+        assertThat(LegacyPath.of("  uploads/brand/gallery/../burger.jpg  ")
+                        .orElseThrow()
+                        .normalized())
                 .isEqualTo(canonical);
     }
 
@@ -82,8 +83,8 @@ class LegacyPathTests {
         var specific = new LegacyPathMapping(TENANT, "/uploads/pizza/", MediaOwner.brand(BRAND));
 
         var resolved = LegacyPathMapping.resolve(
-                LegacyPath.of("/uploads/pizza/margherita.jpg").orElseThrow(),
-                List.of(general, specific)).orElseThrow();
+                        LegacyPath.of("/uploads/pizza/margherita.jpg").orElseThrow(), List.of(general, specific))
+                .orElseThrow();
 
         // So an exception can be carved out of a general mapping without the
         // general one having to be split into every directory it covers.
@@ -97,8 +98,8 @@ class LegacyPathTests {
         var pizzahut = new LegacyPathMapping(TENANT, "/uploads/pizzahut", MediaOwner.brand(OTHER_BRAND));
 
         var resolved = LegacyPathMapping.resolve(
-                LegacyPath.of("/uploads/pizzahut/logo.png").orElseThrow(),
-                List.of(pizza, pizzahut)).orElseThrow();
+                        LegacyPath.of("/uploads/pizzahut/logo.png").orElseThrow(), List.of(pizza, pizzahut))
+                .orElseThrow();
 
         assertThat(resolved.owner()).isEqualTo(MediaOwner.brand(OTHER_BRAND));
     }
@@ -111,7 +112,7 @@ class LegacyPathTests {
         // A file attached to the wrong tenant is a data-protection incident, not
         // a display bug, so an unmapped file waits for a human.
         assertThat(LegacyPathMapping.resolve(
-                LegacyPath.of("/uploads/unknown/photo.jpg").orElseThrow(), List.of(mapping)))
+                        LegacyPath.of("/uploads/unknown/photo.jpg").orElseThrow(), List.of(mapping)))
                 .isEmpty();
     }
 }

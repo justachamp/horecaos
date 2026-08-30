@@ -23,26 +23,26 @@ import java.util.Set;
  */
 public final class DineInStateMachine {
 
-    private static final Map<ReservationStatus, Set<ReservationStatus>> RESERVATION =
-            reservationTransitions();
+    private static final Map<ReservationStatus, Set<ReservationStatus>> RESERVATION = reservationTransitions();
     private static final Map<SessionStatus, Set<SessionStatus>> SESSION = sessionTransitions();
 
-    private DineInStateMachine() {
-    }
+    private DineInStateMachine() {}
 
     private static Map<ReservationStatus, Set<ReservationStatus>> reservationTransitions() {
-        Map<ReservationStatus, Set<ReservationStatus>> transitions =
-                new EnumMap<>(ReservationStatus.class);
+        Map<ReservationStatus, Set<ReservationStatus>> transitions = new EnumMap<>(ReservationStatus.class);
 
-        transitions.put(ReservationStatus.REQUESTED, EnumSet.of(
-                ReservationStatus.CONFIRMED, ReservationStatus.REJECTED,
-                // A guest who books and calls back ten minutes later has not been
-                // rejected by the restaurant, and reporting that reads a rejection
-                // rate would be wrong about every one of them.
-                ReservationStatus.CANCELLED));
-        transitions.put(ReservationStatus.CONFIRMED, EnumSet.of(
-                ReservationStatus.SEATED, ReservationStatus.CANCELLED,
-                ReservationStatus.NO_SHOW));
+        transitions.put(
+                ReservationStatus.REQUESTED,
+                EnumSet.of(
+                        ReservationStatus.CONFIRMED,
+                        ReservationStatus.REJECTED,
+                        // A guest who books and calls back ten minutes later has not been
+                        // rejected by the restaurant, and reporting that reads a rejection
+                        // rate would be wrong about every one of them.
+                        ReservationStatus.CANCELLED));
+        transitions.put(
+                ReservationStatus.CONFIRMED,
+                EnumSet.of(ReservationStatus.SEATED, ReservationStatus.CANCELLED, ReservationStatus.NO_SHOW));
         transitions.put(ReservationStatus.SEATED, EnumSet.of(ReservationStatus.COMPLETED));
 
         for (ReservationStatus status : ReservationStatus.values()) {
@@ -56,12 +56,15 @@ public final class DineInStateMachine {
     private static Map<SessionStatus, Set<SessionStatus>> sessionTransitions() {
         Map<SessionStatus, Set<SessionStatus>> transitions = new EnumMap<>(SessionStatus.class);
 
-        transitions.put(SessionStatus.OPEN, EnumSet.of(
-                SessionStatus.BILL_REQUESTED, SessionStatus.CLOSED, SessionStatus.FORCE_CLOSED));
-        transitions.put(SessionStatus.BILL_REQUESTED, EnumSet.of(
-                SessionStatus.SETTLING, SessionStatus.OPEN, SessionStatus.FORCE_CLOSED));
-        transitions.put(SessionStatus.SETTLING, EnumSet.of(
-                SessionStatus.CLOSED, SessionStatus.OPEN, SessionStatus.FORCE_CLOSED));
+        transitions.put(
+                SessionStatus.OPEN,
+                EnumSet.of(SessionStatus.BILL_REQUESTED, SessionStatus.CLOSED, SessionStatus.FORCE_CLOSED));
+        transitions.put(
+                SessionStatus.BILL_REQUESTED,
+                EnumSet.of(SessionStatus.SETTLING, SessionStatus.OPEN, SessionStatus.FORCE_CLOSED));
+        transitions.put(
+                SessionStatus.SETTLING,
+                EnumSet.of(SessionStatus.CLOSED, SessionStatus.OPEN, SessionStatus.FORCE_CLOSED));
 
         for (SessionStatus status : SessionStatus.values()) {
             if (status.terminal()) {

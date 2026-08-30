@@ -9,7 +9,6 @@ package uz.horecaos.platform.dinein.domain;
  * table to service rather than ending it.
  */
 public enum SessionStatus {
-
     OPEN(false),
 
     /** The party has asked to pay. Rounds may still be added; see the machine. */

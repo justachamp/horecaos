@@ -5,7 +5,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
@@ -13,7 +12,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.NonStaffPrincipal;
@@ -45,7 +43,8 @@ public class JwtCurrentActor implements CurrentActor {
         // The actor built here carries no roles of either kind, so it satisfies no
         // ADR 0003 tenant rule and holds no ADR 0025 capability. The narrowing is
         // in the construction rather than in a later check.
-        if (authentication != null && authentication.isAuthenticated()
+        if (authentication != null
+                && authentication.isAuthenticated()
                 && authentication.getPrincipal() instanceof NonStaffPrincipal nonStaff) {
             return new AuthenticatedActor(nonStaff.subject(), Set.of(), Map.of());
         }

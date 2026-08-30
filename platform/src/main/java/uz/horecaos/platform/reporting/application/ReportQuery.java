@@ -4,7 +4,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-
 import uz.horecaos.platform.reporting.domain.Grain;
 
 /**
@@ -53,8 +52,7 @@ public record ReportQuery(
         // year-over-year comparison plus a month of margin — and the same figure
         // bounds a query, so no request can be wider than the history that exists.
         if (from.plusDays(MAX_DAYS).isBefore(to)) {
-            throw new IllegalArgumentException(
-                    "A range may cover at most " + MAX_DAYS + " days");
+            throw new IllegalArgumentException("A range may cover at most " + MAX_DAYS + " days");
         }
     }
 

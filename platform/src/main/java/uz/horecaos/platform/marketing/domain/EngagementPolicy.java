@@ -37,6 +37,7 @@ public record EngagementPolicy(
      * arrives during the commute.
      */
     public static final LocalTime DEFAULT_QUIET_START = LocalTime.of(21, 0);
+
     public static final LocalTime DEFAULT_QUIET_END = LocalTime.of(10, 0);
 
     public static final int DEFAULT_MESSAGES_PER_7_DAYS = 3;
@@ -49,8 +50,14 @@ public record EngagementPolicy(
     public static final ZoneId DEFAULT_ZONE = ZoneId.of("Asia/Tashkent");
 
     public static EngagementPolicy platformDefault() {
-        return new EngagementPolicy(DEFAULT_QUIET_START, DEFAULT_QUIET_END, DEFAULT_ZONE,
-                DEFAULT_MESSAGES_PER_7_DAYS, DEFAULT_MESSAGES_PER_30_DAYS, null, null);
+        return new EngagementPolicy(
+                DEFAULT_QUIET_START,
+                DEFAULT_QUIET_END,
+                DEFAULT_ZONE,
+                DEFAULT_MESSAGES_PER_7_DAYS,
+                DEFAULT_MESSAGES_PER_30_DAYS,
+                null,
+                null);
     }
 
     /**
@@ -61,10 +68,8 @@ public record EngagementPolicy(
      *         a generic rejection of the whole override
      */
     public EngagementPolicy tightenedBy(EngagementOverride override) {
-        LocalTime start = override.quietHoursStart() == null
-                ? quietHoursStart : override.quietHoursStart();
-        LocalTime end = override.quietHoursEnd() == null
-                ? quietHoursEnd : override.quietHoursEnd();
+        LocalTime start = override.quietHoursStart() == null ? quietHoursStart : override.quietHoursStart();
+        LocalTime end = override.quietHoursEnd() == null ? quietHoursEnd : override.quietHoursEnd();
 
         // The closed window wraps midnight, so "tighter" is stated on the open
         // window it leaves behind: it must open no earlier and close no later.
@@ -79,26 +84,26 @@ public record EngagementPolicy(
                             .formatted(end, quietHoursEnd));
         }
 
-        int weekly = override.messagesPer7Days() == null
-                ? messagesPer7Days : override.messagesPer7Days();
-        int monthly = override.messagesPer30Days() == null
-                ? messagesPer30Days : override.messagesPer30Days();
+        int weekly = override.messagesPer7Days() == null ? messagesPer7Days : override.messagesPer7Days();
+        int monthly = override.messagesPer30Days() == null ? messagesPer30Days : override.messagesPer30Days();
 
         if (weekly > messagesPer7Days) {
-            throw new IllegalArgumentException(
-                    "The 7-day cap may be tightened and never loosened: %d exceeds %d"
-                            .formatted(weekly, messagesPer7Days));
+            throw new IllegalArgumentException("The 7-day cap may be tightened and never loosened: %d exceeds %d"
+                    .formatted(weekly, messagesPer7Days));
         }
         if (monthly > messagesPer30Days) {
-            throw new IllegalArgumentException(
-                    "The 30-day cap may be tightened and never loosened: %d exceeds %d"
-                            .formatted(monthly, messagesPer30Days));
+            throw new IllegalArgumentException("The 30-day cap may be tightened and never loosened: %d exceeds %d"
+                    .formatted(monthly, messagesPer30Days));
         }
 
-        return new EngagementPolicy(start, end,
+        return new EngagementPolicy(
+                start,
+                end,
                 override.timezone() == null ? timezone : override.timezone(),
-                weekly, monthly,
-                override.smsPricePerSegmentMinor(), override.currency());
+                weekly,
+                monthly,
+                override.smsPricePerSegmentMinor(),
+                override.currency());
     }
 
     /** Whether a message becoming eligible now would land inside the closed window. */
@@ -144,5 +149,5 @@ public record EngagementPolicy(
             Integer messagesPer7Days,
             Integer messagesPer30Days,
             Long smsPricePerSegmentMinor,
-            String currency) { }
+            String currency) {}
 }

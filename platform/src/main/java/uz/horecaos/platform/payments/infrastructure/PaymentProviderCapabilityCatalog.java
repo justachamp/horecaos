@@ -6,9 +6,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.integration.api.provider.ProviderCapabilityCatalog;
 import uz.horecaos.platform.integration.api.provider.ProviderCategory;
 import uz.horecaos.platform.payments.application.FiscalReceiptPort;
@@ -32,12 +30,12 @@ public class PaymentProviderCapabilityCatalog implements ProviderCapabilityCatal
     private final Map<PaymentProviderType, PaymentProviderPort> payments;
     private final Set<PaymentProviderType> fiscalProviders;
 
-    public PaymentProviderCapabilityCatalog(List<PaymentProviderPort> paymentProviders,
-            List<FiscalReceiptPort> fiscalProviders) {
-        payments = paymentProviders.stream().collect(Collectors.toUnmodifiableMap(
-                PaymentProviderPort::providerType, provider -> provider));
-        this.fiscalProviders = fiscalProviders.stream().map(FiscalReceiptPort::providerType)
-                .collect(Collectors.toUnmodifiableSet());
+    public PaymentProviderCapabilityCatalog(
+            List<PaymentProviderPort> paymentProviders, List<FiscalReceiptPort> fiscalProviders) {
+        payments = paymentProviders.stream()
+                .collect(Collectors.toUnmodifiableMap(PaymentProviderPort::providerType, provider -> provider));
+        this.fiscalProviders =
+                fiscalProviders.stream().map(FiscalReceiptPort::providerType).collect(Collectors.toUnmodifiableSet());
     }
 
     @Override

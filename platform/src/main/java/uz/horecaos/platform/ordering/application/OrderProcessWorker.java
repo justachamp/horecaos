@@ -2,14 +2,12 @@ package uz.horecaos.platform.ordering.application;
 
 import java.time.Clock;
 import java.util.List;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.DueTimerRow;
 
@@ -27,8 +25,7 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.D
  * than duplicating it.
  */
 @Component
-@ConditionalOnProperty(name = "horecaos.ordering.workers.enabled", havingValue = "true",
-        matchIfMissing = true)
+@ConditionalOnProperty(name = "horecaos.ordering.workers.enabled", havingValue = "true", matchIfMissing = true)
 public class OrderProcessWorker {
 
     private static final Logger log = LoggerFactory.getLogger(OrderProcessWorker.class);
@@ -39,8 +36,11 @@ public class OrderProcessWorker {
     private final Clock clock;
     private final int batchSize;
 
-    public OrderProcessWorker(JdbcOrderStore orders, OrderStateService state,
-            OrderInventoryProcess inventoryProcess, Clock clock,
+    public OrderProcessWorker(
+            JdbcOrderStore orders,
+            OrderStateService state,
+            OrderInventoryProcess inventoryProcess,
+            Clock clock,
             @Value("${horecaos.ordering.workers.batch-size:50}") int batchSize) {
         this.orders = orders;
         this.state = state;
@@ -70,8 +70,7 @@ public class OrderProcessWorker {
                 // One order's failure must not stop the rest of the batch: a
                 // stalled timer sweep would hold every other branch's orders open
                 // past their deadline.
-                log.error("Approval deadline for order {} could not be applied", timer.orderId(),
-                        failure);
+                log.error("Approval deadline for order {} could not be applied", timer.orderId(), failure);
             }
         }
     }

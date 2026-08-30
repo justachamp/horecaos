@@ -74,8 +74,7 @@ public interface VerificationChallengeStore {
      * @return false when somebody else already settled it, which is the losing
      *         side of two requests carrying the same correct code
      */
-    boolean markVerified(UUID tenantId, UUID challengeId, String grantHash,
-            Instant grantExpiresAt, Instant now);
+    boolean markVerified(UUID tenantId, UUID challengeId, String grantHash, Instant grantExpiresAt, Instant now);
 
     /** Settles a challenge whose last attempt was spent on a wrong code. */
     void markExhausted(UUID tenantId, UUID challengeId, Instant now);
@@ -145,22 +144,19 @@ public interface VerificationChallengeStore {
             String codeHash,
             int maxAttempts,
             Instant issuedAt,
-            Instant expiresAt) {
-    }
+            Instant expiresAt) {}
 
     /**
      * @param lastIssuedAt when this destination was last sent a code, empty if
      *                     never
      */
-    record IssuanceWindow(Optional<Instant> lastIssuedAt, int issuedInWindow) {
-    }
+    record IssuanceWindow(Optional<Instant> lastIssuedAt, int issuedInWindow) {}
 
     /**
      * @param attemptsRemaining after this attempt was spent. Zero means the wrong
      *                          answer settles the challenge
      */
-    record Attempt(String codeHash, int attemptsRemaining) {
-    }
+    record Attempt(String codeHash, int attemptsRemaining) {}
 
     record RedeemedGrant(
             UUID challengeId,
@@ -168,6 +164,5 @@ public interface VerificationChallengeStore {
             UUID brandId,
             String contactType,
             String destinationHash,
-            String destinationValue) {
-    }
+            String destinationValue) {}
 }

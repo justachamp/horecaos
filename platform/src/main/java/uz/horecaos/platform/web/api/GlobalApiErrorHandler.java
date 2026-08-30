@@ -1,7 +1,6 @@
 package uz.horecaos.platform.web.api;
 
 import java.util.List;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -13,7 +12,6 @@ import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-
 import uz.horecaos.platform.iam.api.AuthorizationService;
 
 /**
@@ -30,8 +28,7 @@ public class GlobalApiErrorHandler {
 
     @ExceptionHandler(ApiException.class)
     ProblemDetail apiException(ApiException exception) {
-        return ApiProblem.withProperties(
-                exception.errorCode(), exception.getMessage(), exception.properties());
+        return ApiProblem.withProperties(exception.errorCode(), exception.getMessage(), exception.properties());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -73,15 +70,12 @@ public class GlobalApiErrorHandler {
         // The database message can name constraints, columns, and stored values,
         // so it is logged rather than returned.
         log.warn("Data integrity violation mapped to {}", ErrorCode.RESOURCE_CONFLICT, exception);
-        return ApiProblem.of(
-                ErrorCode.RESOURCE_CONFLICT, "The requested value conflicts with an existing resource");
+        return ApiProblem.of(ErrorCode.RESOURCE_CONFLICT, "The requested value conflicts with an existing resource");
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     ProblemDetail accessDenied() {
-        return ApiProblem.of(
-                ErrorCode.TENANT_ACCESS_DENIED,
-                "The authenticated principal cannot access this resource");
+        return ApiProblem.of(ErrorCode.TENANT_ACCESS_DENIED, "The authenticated principal cannot access this resource");
     }
 
     /**
@@ -108,8 +102,7 @@ public class GlobalApiErrorHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     ProblemDetail unreadable() {
         return ApiProblem.of(
-                ErrorCode.MALFORMED_BODY,
-                "The request body is malformed or contains an unsupported value");
+                ErrorCode.MALFORMED_BODY, "The request body is malformed or contains an unsupported value");
     }
 
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)

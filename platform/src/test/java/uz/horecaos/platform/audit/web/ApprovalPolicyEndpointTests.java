@@ -9,7 +9,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,7 +28,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
@@ -55,8 +53,7 @@ class ApprovalPolicyEndpointTests {
     private static final String OWNER = "approval-policy-owner";
     private static final String ADMINISTRATOR = "approval-policy-administrator";
 
-    private static final String POLICIES =
-            "/api/v1/control-plane/tenants/" + TENANT + "/approval-policies";
+    private static final String POLICIES = "/api/v1/control-plane/tenants/" + TENANT + "/approval-policies";
 
     /**
      * A private database on the JVM's one shared PostgreSQL, handed to Spring as
@@ -186,17 +183,21 @@ class ApprovalPolicyEndpointTests {
         // Knowing where the bar is is knowing how much can be moved without
         // anybody else seeing it, so the list is not a lesser permission.
         assertThat(mvc.perform(get(POLICIES).with(tokenFor(ADMINISTRATOR)))
-                .andReturn().getResponse().getStatus())
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
                 .isEqualTo(403);
         assertThat(mvc.perform(get(POLICIES).with(tokenFor(OWNER)))
-                .andReturn().getResponse().getStatus())
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
                 .isEqualTo(200);
     }
 
     @Test
     void coverageMakesAbsentPolicyModesAndExactScopeCoverageVisible() throws Exception {
-        MvcResult coverage = mvc.perform(get(POLICIES + "/coverage").with(tokenFor(OWNER)))
-                .andReturn();
+        MvcResult coverage =
+                mvc.perform(get(POLICIES + "/coverage").with(tokenFor(OWNER))).andReturn();
 
         assertThat(coverage.getResponse().getStatus()).isEqualTo(200);
         assertThat(coverage.getResponse().getContentAsString())
@@ -223,7 +224,9 @@ class ApprovalPolicyEndpointTests {
     }
 
     private long policyCount() {
-        return jdbc.sql("SELECT count(*) FROM audit.approval_policies").query(Long.class).single();
+        return jdbc.sql("SELECT count(*) FROM audit.approval_policies")
+                .query(Long.class)
+                .single();
     }
 
     private static String policyBody() {
@@ -272,9 +275,8 @@ class ApprovalPolicyEndpointTests {
      * below prove nothing about which grant the caller has.
      */
     private static RequestPostProcessor tokenFor(String subject) {
-        return jwt().jwt(builder -> builder
-                .subject(subject)
-                .claim("resource_access", Map.of("horecaos-api", Map.of("roles", List.of()))));
+        return jwt().jwt(builder ->
+                builder.subject(subject).claim("resource_access", Map.of("horecaos-api", Map.of("roles", List.of()))));
     }
 
     @TestConfiguration(proxyBeanMethods = false)
@@ -282,7 +284,10 @@ class ApprovalPolicyEndpointTests {
 
         @Bean
         JwtDecoder jwtDecoder() {
-            return token -> Jwt.withTokenValue(token).header("alg", "none").claim("sub", "unused").build();
+            return token -> Jwt.withTokenValue(token)
+                    .header("alg", "none")
+                    .claim("sub", "unused")
+                    .build();
         }
     }
 }

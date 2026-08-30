@@ -1,18 +1,16 @@
 package uz.horecaos.platform.loyalty;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
+
 import java.util.List;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.loyalty.api.RedemptionAllocation;
 import uz.horecaos.platform.loyalty.api.RedemptionAllocation.Line;
 import uz.horecaos.platform.loyalty.api.RedemptionAllocation.LineDiscount;
 import uz.horecaos.platform.loyalty.domain.RedemptionLimit;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * What a redemption becomes on a receipt, and how much of an order it may cover
@@ -72,10 +70,8 @@ class RedemptionAllocationTests {
         // three truncated shares are one som short. ADR 0038 already puts the
         // rounding remainder on the highest-value line, so this composes with it
         // instead of fighting it for the same som.
-        List<Line> lines = List.of(
-                new Line(PLOV, 1_000L, true),
-                new Line(SALAD, 1_000L, true),
-                new Line(TEA, 1_001L, true));
+        List<Line> lines =
+                List.of(new Line(PLOV, 1_000L, true), new Line(SALAD, 1_000L, true), new Line(TEA, 1_001L, true));
 
         List<LineDiscount> allocated = RedemptionAllocation.allocate(lines, 1_000L);
 
@@ -89,8 +85,7 @@ class RedemptionAllocationTests {
     @Test
     @DisplayName("a redemption larger than the lines it applies to is refused, not clamped")
     void anOversizedRedemptionIsRefused() {
-        List<Line> lines = List.of(new Line(PLOV, 5_000L, true),
-                new Line(DELIVERY, 10_000L, false));
+        List<Line> lines = List.of(new Line(PLOV, 5_000L, true), new Line(DELIVERY, 10_000L, false));
 
         // Clamping would hide a redemption cap that was not enforced upstream and
         // would produce a receipt whose discount nobody could reconcile to a
@@ -102,14 +97,12 @@ class RedemptionAllocationTests {
     @Test
     @DisplayName("every line comes back, including the ones that carry nothing")
     void everyLineIsAnswered() {
-        List<Line> lines = List.of(new Line(PLOV, 5_000L, true),
-                new Line(DELIVERY, 10_000L, false));
+        List<Line> lines = List.of(new Line(PLOV, 5_000L, true), new Line(DELIVERY, 10_000L, false));
 
         // A caller writing discount_minor onto every fiscal_document_lines row
         // must not be able to silently skip one.
         assertThat(RedemptionAllocation.allocate(lines, 1_000L)).hasSize(2);
-        assertThat(RedemptionAllocation.allocate(lines, 0L))
-                .allMatch(discount -> discount.discountMinor() == 0L);
+        assertThat(RedemptionAllocation.allocate(lines, 0L)).allMatch(discount -> discount.discountMinor() == 0L);
     }
 
     @Test
@@ -145,7 +138,10 @@ class RedemptionAllocationTests {
     }
 
     private static long discountOf(List<LineDiscount> allocated, UUID lineId) {
-        return allocated.stream().filter(discount -> discount.lineId().equals(lineId))
-                .mapToLong(LineDiscount::discountMinor).findFirst().orElseThrow();
+        return allocated.stream()
+                .filter(discount -> discount.lineId().equals(lineId))
+                .mapToLong(LineDiscount::discountMinor)
+                .findFirst()
+                .orElseThrow();
     }
 }

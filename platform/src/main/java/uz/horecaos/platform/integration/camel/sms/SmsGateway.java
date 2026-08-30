@@ -2,12 +2,10 @@ package uz.horecaos.platform.integration.camel.sms;
 
 import java.time.Duration;
 import java.util.Optional;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
 import uz.horecaos.platform.iam.api.secrets.SecretValue;
@@ -74,8 +72,11 @@ public class SmsGateway {
      * makes two, and a container choosing between them by arity is a coin toss.
      */
     @Autowired
-    public SmsGateway(ProviderInstallationLookup installations, SmsAccountLookup accounts,
-            SecretResolver secrets, VasSmsGatewayAdapter adapter) {
+    public SmsGateway(
+            ProviderInstallationLookup installations,
+            SmsAccountLookup accounts,
+            SecretResolver secrets,
+            VasSmsGatewayAdapter adapter) {
         this(installations, accounts, secrets, adapter, DEFAULT_TIMEOUT);
     }
 
@@ -84,8 +85,12 @@ public class SmsGateway {
      * here — the gateway takes the message and never answers — without holding a
      * suite still for fifteen seconds.
      */
-    SmsGateway(ProviderInstallationLookup installations, SmsAccountLookup accounts,
-            SecretResolver secrets, VasSmsGatewayAdapter adapter, Duration timeout) {
+    SmsGateway(
+            ProviderInstallationLookup installations,
+            SmsAccountLookup accounts,
+            SecretResolver secrets,
+            VasSmsGatewayAdapter adapter,
+            Duration timeout) {
         this.installations = installations;
         this.accounts = accounts;
         this.secrets = secrets;
@@ -102,14 +107,12 @@ public class SmsGateway {
         return invoke(operation, adapter::resolve);
     }
 
-    private ProviderOutcome invoke(SmsVerificationOperation operation,
-            ProviderStep call) {
+    private ProviderOutcome invoke(SmsVerificationOperation operation, ProviderStep call) {
 
         Optional<BindingRef> binding = installations.primaryBinding(
                 operation.tenantId(), operation.brandId(), null, NotificationGateway.SEND_SMS);
         if (binding.isEmpty()) {
-            return ProviderOutcome.rejected("NO_PROVIDER_BINDING",
-                    "No SMS provider is bound for this brand");
+            return ProviderOutcome.rejected("NO_PROVIDER_BINDING", "No SMS provider is bound for this brand");
         }
 
         BindingRef resolved = binding.get();
@@ -117,27 +120,32 @@ public class SmsGateway {
             // Not a failure of this send but of the tenant's configuration, and it
             // must be loud: the alternative is speaking one provider's protocol at
             // another provider's endpoint, holding a credential.
-            log.error("Binding {} claims SEND_SMS with provider type {}, which no verification "
-                    + "adapter implements", resolved.bindingId(), resolved.providerType());
-            return ProviderOutcome.rejected("SMS_PROVIDER_UNSUPPORTED",
-                    "The bound SMS provider has no verification adapter");
+            log.error(
+                    "Binding {} claims SEND_SMS with provider type {}, which no verification " + "adapter implements",
+                    resolved.bindingId(),
+                    resolved.providerType());
+            return ProviderOutcome.rejected(
+                    "SMS_PROVIDER_UNSUPPORTED", "The bound SMS provider has no verification adapter");
         }
 
         Optional<InstallationSnapshot> snapshot =
                 installations.installation(operation.tenantId(), resolved.installationId());
         if (snapshot.isEmpty()) {
-            return ProviderOutcome.rejected("INSTALLATION_MISSING",
-                    "Installation " + resolved.installationId() + " is not available");
+            return ProviderOutcome.rejected(
+                    "INSTALLATION_MISSING", "Installation " + resolved.installationId() + " is not available");
         }
         InstallationSnapshot installation = snapshot.get();
         if (!"ACTIVE".equals(installation.status())) {
             // A suspended installation is a deliberate stop, often mid-rotation.
             // Calling anyway would earn a 13 and page somebody.
-            return ProviderOutcome.rejected("INSTALLATION_INACTIVE",
+            return ProviderOutcome.rejected(
+                    "INSTALLATION_INACTIVE",
                     "Installation " + resolved.installationId() + " is " + installation.status());
         }
-        if (installation.secretReference() == null || installation.secretReference().isBlank()) {
-            return ProviderOutcome.rejected("SMS_ACCOUNT_MISCONFIGURED",
+        if (installation.secretReference() == null
+                || installation.secretReference().isBlank()) {
+            return ProviderOutcome.rejected(
+                    "SMS_ACCOUNT_MISCONFIGURED",
                     "Installation " + resolved.installationId() + " carries no secret reference");
         }
 
@@ -146,7 +154,8 @@ public class SmsGateway {
             // Refused rather than sent with a blank. A missing sender comes back
             // as 15 and a missing login as 10, both after the credential has been
             // put on the wire for nothing.
-            return ProviderOutcome.rejected("SMS_ACCOUNT_MISCONFIGURED",
+            return ProviderOutcome.rejected(
+                    "SMS_ACCOUNT_MISCONFIGURED",
                     "Binding " + resolved.bindingId() + " has no login and sender configured");
         }
 
@@ -154,8 +163,8 @@ public class SmsGateway {
         // Not disposed: the resolver caches and hands back the same instance, so
         // clearing it here would blank the credential for every other caller.
         SecretValue credential = secrets.resolve(reference);
-        ProviderOutcome outcome = call.apply(operation, account.get(),
-                new ProviderCall(installation.baseUrl(), credential.reveal(), null, timeout));
+        ProviderOutcome outcome = call.apply(
+                operation, account.get(), new ProviderCall(installation.baseUrl(), credential.reveal(), null, timeout));
 
         if (isWrongKey(outcome)) {
             // One read past the cache, exactly as ADR 0028 prescribes. On this
@@ -169,11 +178,17 @@ public class SmsGateway {
             // stating a refusal, so it answered *instead of* sending. That is the
             // opposite of a lost response, which is never repeated and goes to
             // /search instead.
-            log.warn("The SMS gateway rejected the cached credential for installation {}; "
-                    + "refreshing once", resolved.installationId());
-            outcome = call.apply(operation, account.get(),
-                    new ProviderCall(installation.baseUrl(), secrets.resolveFresh(reference).reveal(),
-                            null, timeout));
+            log.warn(
+                    "The SMS gateway rejected the cached credential for installation {}; " + "refreshing once",
+                    resolved.installationId());
+            outcome = call.apply(
+                    operation,
+                    account.get(),
+                    new ProviderCall(
+                            installation.baseUrl(),
+                            secrets.resolveFresh(reference).reveal(),
+                            null,
+                            timeout));
         }
         return outcome;
     }
@@ -192,7 +207,6 @@ public class SmsGateway {
     /** A three-argument function, so both operations share one resolution path. */
     @FunctionalInterface
     private interface ProviderStep {
-        ProviderOutcome apply(SmsVerificationOperation operation, SmsAccount account,
-                ProviderCall call);
+        ProviderOutcome apply(SmsVerificationOperation operation, SmsAccount account, ProviderCall call);
     }
 }

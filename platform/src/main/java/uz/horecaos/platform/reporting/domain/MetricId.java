@@ -24,8 +24,7 @@ public record MetricId(String name, int version) {
     public MetricId {
         Objects.requireNonNull(name, "A metric needs a name");
         if (!NAME.matcher(name).matches()) {
-            throw new IllegalArgumentException(
-                    "A metric name is lower-case dotted segments, was \"" + name + "\"");
+            throw new IllegalArgumentException("A metric name is lower-case dotted segments, was \"" + name + "\"");
         }
         if (version < 1) {
             throw new IllegalArgumentException("A metric version starts at 1, was " + version);
@@ -49,8 +48,7 @@ public record MetricId(String name, int version) {
         Objects.requireNonNull(code, "A metric id is required");
         var matched = CODE.matcher(code);
         if (!matched.matches()) {
-            throw new IllegalArgumentException(
-                    "A metric id looks like \"revenue.gross.v1\", was \"" + code + "\"");
+            throw new IllegalArgumentException("A metric id looks like \"revenue.gross.v1\", was \"" + code + "\"");
         }
         return new MetricId(matched.group(1), Integer.parseInt(matched.group(2)));
     }

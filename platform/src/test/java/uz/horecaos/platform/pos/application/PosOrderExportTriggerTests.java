@@ -14,14 +14,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.tenancy.api.TenantId;
@@ -135,8 +133,7 @@ class PosOrderExportTriggerTests {
     @DisplayName("a send whose outcome is unknown is never sent again")
     void anUncertainExportIsNotRetried() {
         when(exports.open(TENANT, ORDER)).thenReturn(Optional.of(EXPORT));
-        when(exports.send(TENANT, EXPORT))
-                .thenReturn(ProviderOutcome.uncertain("TIMEOUT", "The till did not answer"));
+        when(exports.send(TENANT, EXPORT)).thenReturn(ProviderOutcome.uncertain("TIMEOUT", "The till did not answer"));
 
         trigger.onOrderConfirmed(confirmed(ORDER));
         commit();
@@ -239,8 +236,20 @@ class PosOrderExportTriggerTests {
     // ------------------------------------------------------------------
 
     private static OrderConfirmed confirmed(UUID orderId) {
-        return new OrderConfirmed(UUID.randomUUID(), new TenantId(TENANT), orderId, NOW,
-                BRAND, LOCATION, "AUTO_CONFIRM", null, NOW, "UZS", 82_000L, "CONFIRMED", 2);
+        return new OrderConfirmed(
+                UUID.randomUUID(),
+                new TenantId(TENANT),
+                orderId,
+                NOW,
+                BRAND,
+                LOCATION,
+                "AUTO_CONFIRM",
+                null,
+                NOW,
+                "UZS",
+                82_000L,
+                "CONFIRMED",
+                2);
     }
 
     private static ProviderOutcome success() {
@@ -259,7 +268,7 @@ class PosOrderExportTriggerTests {
         List<TransactionSynchronization> registered =
                 List.copyOf(TransactionSynchronizationManager.getSynchronizations());
         TransactionSynchronizationManager.clearSynchronization();
-        registered.forEach(synchronization ->
-                synchronization.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
+        registered.forEach(
+                synchronization -> synchronization.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
     }
 }

@@ -13,10 +13,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.ordering.domain.OutcomeReasonKind;
 
 /**
@@ -50,8 +48,11 @@ public class JdbcOutcomeReasonStore {
         params.put("disposition", reason.stockDisposition());
         params.put("liability", reason.liabilityParty());
         params.put("refund", reason.customerRefund());
-        params.put("modes", reason.allowedFulfillmentModes() == null
-                ? null : reason.allowedFulfillmentModes().toArray(String[]::new));
+        params.put(
+                "modes",
+                reason.allowedFulfillmentModes() == null
+                        ? null
+                        : reason.allowedFulfillmentModes().toArray(String[]::new));
         params.put("now", utc(reason.createdAt()));
 
         jdbc.sql("""
@@ -62,9 +63,7 @@ public class JdbcOutcomeReasonStore {
                 VALUES (:id, :tenantId, :kind, :category, :internalName, :disposition,
                     :liability, :refund, :modes::varchar[], 'ACTIVE',
                     1, :now, :now)
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     /**
@@ -74,9 +73,16 @@ public class JdbcOutcomeReasonStore {
      * makes "this order was cancelled under the reason as it read then" a
      * checkable statement rather than an assumption.
      */
-    public Optional<Integer> update(UUID tenantId, UUID reasonId, int expectedVersion,
-            String internalName, String stockDisposition, String liabilityParty,
-            String customerRefund, List<String> allowedFulfillmentModes, Instant now) {
+    public Optional<Integer> update(
+            UUID tenantId,
+            UUID reasonId,
+            int expectedVersion,
+            String internalName,
+            String stockDisposition,
+            String liabilityParty,
+            String customerRefund,
+            List<String> allowedFulfillmentModes,
+            Instant now) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
@@ -86,8 +92,7 @@ public class JdbcOutcomeReasonStore {
         params.put("disposition", stockDisposition);
         params.put("liability", liabilityParty);
         params.put("refund", customerRefund);
-        params.put("modes", allowedFulfillmentModes == null
-                ? null : allowedFulfillmentModes.toArray(String[]::new));
+        params.put("modes", allowedFulfillmentModes == null ? null : allowedFulfillmentModes.toArray(String[]::new));
         params.put("now", utc(now));
 
         return jdbc.sql("""
@@ -102,10 +107,7 @@ public class JdbcOutcomeReasonStore {
                 WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
                   AND status = 'ACTIVE'
                 RETURNING version
-                """)
-                .params(params)
-                .query(Integer.class)
-                .optional();
+                """).params(params).query(Integer.class).optional();
     }
 
     /**
@@ -122,9 +124,12 @@ public class JdbcOutcomeReasonStore {
                 WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
                   AND status = 'ACTIVE'
                 """)
-                .param("tenantId", tenantId).param("id", reasonId)
-                .param("expectedVersion", expectedVersion).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", reasonId)
+                        .param("expectedVersion", expectedVersion)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     public void replaceTexts(UUID reasonId, Map<String, String> customerTextByLocale) {
@@ -136,7 +141,9 @@ public class JdbcOutcomeReasonStore {
                 INSERT INTO ordering.order_outcome_reason_texts (reason_id, locale, customer_text)
                 VALUES (:id, :locale, :text)
                 """)
-                .param("id", reasonId).param("locale", locale).param("text", text)
+                .param("id", reasonId)
+                .param("locale", locale)
+                .param("text", text)
                 .update());
     }
 
@@ -144,7 +151,8 @@ public class JdbcOutcomeReasonStore {
         return jdbc.sql(SELECT_REASON + """
                  WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("id", reasonId)
+                .param("tenantId", tenantId)
+                .param("id", reasonId)
                 .query(JdbcOutcomeReasonStore::mapReason)
                 .optional();
     }
@@ -156,7 +164,8 @@ public class JdbcOutcomeReasonStore {
                    AND (:activeOnly = false OR status = 'ACTIVE')
                  ORDER BY system_category, internal_name
                 """)
-                .param("tenantId", tenantId).param("kind", kind.name())
+                .param("tenantId", tenantId)
+                .param("kind", kind.name())
                 .param("activeOnly", activeOnly)
                 .query(JdbcOutcomeReasonStore::mapReason)
                 .list();
@@ -170,8 +179,7 @@ public class JdbcOutcomeReasonStore {
                 WHERE reason_id = :id ORDER BY locale
                 """)
                 .param("id", reasonId)
-                .query((row, number) -> Map.entry(row.getString("locale"),
-                        row.getString("customer_text")))
+                .query((row, number) -> Map.entry(row.getString("locale"), row.getString("customer_text")))
                 .list()
                 .forEach(entry -> byLocale.put(entry.getKey(), entry.getValue()));
         return byLocale;
@@ -222,12 +230,30 @@ public class JdbcOutcomeReasonStore {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
-    public record NewReason(UUID id, UUID tenantId, OutcomeReasonKind kind, String systemCategory,
-            String internalName, String stockDisposition, String liabilityParty,
-            String customerRefund, List<String> allowedFulfillmentModes, Instant createdAt) { }
+    public record NewReason(
+            UUID id,
+            UUID tenantId,
+            OutcomeReasonKind kind,
+            String systemCategory,
+            String internalName,
+            String stockDisposition,
+            String liabilityParty,
+            String customerRefund,
+            List<String> allowedFulfillmentModes,
+            Instant createdAt) {}
 
-    public record ReasonRow(UUID id, UUID tenantId, OutcomeReasonKind kind, String systemCategory,
-            String internalName, String stockDisposition, String liabilityParty,
-            String customerRefund, List<String> allowedFulfillmentModes, String status,
-            int version, Instant createdAt, Instant updatedAt) { }
+    public record ReasonRow(
+            UUID id,
+            UUID tenantId,
+            OutcomeReasonKind kind,
+            String systemCategory,
+            String internalName,
+            String stockDisposition,
+            String liabilityParty,
+            String customerRefund,
+            List<String> allowedFulfillmentModes,
+            String status,
+            int version,
+            Instant createdAt,
+            Instant updatedAt) {}
 }

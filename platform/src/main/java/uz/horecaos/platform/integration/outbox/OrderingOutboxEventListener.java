@@ -2,16 +2,13 @@ package uz.horecaos.platform.integration.outbox;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
-
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.integration.events.EventCatalog;
 import uz.horecaos.platform.integration.events.EventContract;
 import uz.horecaos.platform.migration.api.ExternalEffect;
@@ -64,8 +61,7 @@ public class OrderingOutboxEventListener {
         // a scheduler thread where the ScopedValue binding does not exist, so by
         // the time a row reaches it there is nothing left to tell it apart from a
         // real one. A historical order that lands in the outbox is published.
-        if (ImportSuppression.suppress(ExternalEffect.OUTBOX_PUBLICATION,
-                event.aggregateType(), event.aggregateId())) {
+        if (ImportSuppression.suppress(ExternalEffect.OUTBOX_PUBLICATION, event.aggregateType(), event.aggregateId())) {
             return;
         }
 

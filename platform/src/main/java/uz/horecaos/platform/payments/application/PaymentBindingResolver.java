@@ -3,7 +3,6 @@ package uz.horecaos.platform.payments.application;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
-
 import uz.horecaos.platform.payments.domain.PaymentProviderType;
 import uz.horecaos.platform.payments.domain.ProviderBinding;
 
@@ -25,8 +24,8 @@ import uz.horecaos.platform.payments.domain.ProviderBinding;
  */
 public interface PaymentBindingResolver {
 
-    Optional<ProviderBinding> resolve(UUID tenantId, UUID legalEntityId,
-            PaymentProviderType providerType, LocalDate businessDate);
+    Optional<ProviderBinding> resolve(
+            UUID tenantId, UUID legalEntityId, PaymentProviderType providerType, LocalDate businessDate);
 
     /** The inbound path lookup: an endpoint per binding, because the credential identifies the account. */
     Optional<ProviderBinding> byCallbackSegment(String callbackPathSegment);

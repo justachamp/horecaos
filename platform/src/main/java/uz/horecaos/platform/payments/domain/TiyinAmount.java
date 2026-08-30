@@ -44,8 +44,7 @@ public record TiyinAmount(long value, String currency) {
      */
     public SomAmount toSom() {
         if (value % TIYIN_PER_SOM != 0) {
-            throw new IllegalArgumentException(
-                    "A provider amount of " + value + " tiyin is not a whole number of som");
+            throw new IllegalArgumentException("A provider amount of " + value + " tiyin is not a whole number of som");
         }
         return new SomAmount(value / TIYIN_PER_SOM, currency);
     }

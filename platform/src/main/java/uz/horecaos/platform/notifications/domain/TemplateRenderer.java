@@ -40,8 +40,7 @@ public final class TemplateRenderer {
      */
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{\\{\\s*([A-Za-z][A-Za-z0-9_]*)\\s*}}");
 
-    private TemplateRenderer() {
-    }
+    private TemplateRenderer() {}
 
     /**
      * Checks a template against its declared variables.
@@ -106,8 +105,7 @@ public final class TemplateRenderer {
             String name = matcher.group(1);
             String value = values.get(name);
             if (value == null) {
-                throw new TemplateContractException(
-                        "No value was supplied for the template variable " + name);
+                throw new TemplateContractException("No value was supplied for the template variable " + name);
             }
             rendered.append(template, cursor, matcher.start()).append(value);
             cursor = matcher.end();

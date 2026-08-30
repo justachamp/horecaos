@@ -2,13 +2,11 @@ package uz.horecaos.platform.iam.infrastructure.authorization;
 
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
-
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
 

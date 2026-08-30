@@ -1,14 +1,12 @@
 package uz.horecaos.platform.integration.camel.delivery;
 
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.camel.Exchange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
-
-import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
-import io.micrometer.core.instrument.MeterRegistry;
-
 import uz.horecaos.platform.integration.api.delivery.DeliveryCapability;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.integration.outbox.ShipmentReconciliationOutbox;
@@ -32,8 +30,11 @@ public class DeliveryProcessor {
     private final MeterRegistry meters;
     private final ShipmentReconciliationOutbox reconciliations;
 
-    public DeliveryProcessor(DeliveryGateway gateway, DeliveryCircuitBreakers breakers,
-            MeterRegistry meters, ShipmentReconciliationOutbox reconciliations) {
+    public DeliveryProcessor(
+            DeliveryGateway gateway,
+            DeliveryCircuitBreakers breakers,
+            MeterRegistry meters,
+            ShipmentReconciliationOutbox reconciliations) {
         this.gateway = gateway;
         this.breakers = breakers;
         this.meters = meters;
@@ -62,10 +63,13 @@ public class DeliveryProcessor {
             // Set as an outcome rather than thrown: an unsupported capability is
             // a sourcing answer for fulfilment, not a route failure for an
             // engineer, and throwing would dead-letter it into a human's queue.
-            exchange.getIn().setHeader(DeliveryRouteBuilder.OUTCOME_HEADER,
-                    ProviderOutcome.rejected("CAPABILITY_UNSUPPORTED",
-                            "%s does not support %s".formatted(
-                                    operation.binding().providerType(), operation.capability())));
+            exchange.getIn()
+                    .setHeader(
+                            DeliveryRouteBuilder.OUTCOME_HEADER,
+                            ProviderOutcome.rejected(
+                                    "CAPABILITY_UNSUPPORTED",
+                                    "%s does not support %s"
+                                            .formatted(operation.binding().providerType(), operation.capability())));
             exchange.setRouteStop(true);
         }
     }
@@ -98,8 +102,8 @@ public class DeliveryProcessor {
             // The breaker refused the call, so nothing was sent. That is why this
             // is RETRYABLE and not UNCERTAIN: the provider cannot have acted, and
             // there is nothing to reconcile.
-            outcome = ProviderOutcome.retryable("CIRCUIT_OPEN",
-                    "Circuit open for " + providerType, java.time.Duration.ofSeconds(30));
+            outcome = ProviderOutcome.retryable(
+                    "CIRCUIT_OPEN", "Circuit open for " + providerType, java.time.Duration.ofSeconds(30));
             count("circuit_open", operation, outcome);
             log.warn("Circuit open for {}; {} not attempted", providerType, operation.capability());
         } catch (DeliveryCircuitBreakers.ProviderCallFailed failed) {
@@ -112,24 +116,21 @@ public class DeliveryProcessor {
     private ProviderOutcome dispatch(DeliveryOperation operation) {
         String key = operation.idempotencyKey();
         return switch (operation.capability()) {
-            case QUOTE_DELIVERY ->
-                    gateway.quote(operation.binding(), operation.request(), key);
+            case QUOTE_DELIVERY -> gateway.quote(operation.binding(), operation.request(), key);
             case RESERVE_SHIPMENT, CREATE_ON_DEMAND_SHIPMENT, SCHEDULE_SHIPMENT ->
-                    gateway.createShipment(operation.binding(), operation.request(), key);
-            case CONFIRM_SHIPMENT ->
-                    gateway.confirmShipment(operation.binding(), operation.externalReference(), key);
+                gateway.createShipment(operation.binding(), operation.request(), key);
+            case CONFIRM_SHIPMENT -> gateway.confirmShipment(operation.binding(), operation.externalReference(), key);
             case QUERY_CANCELLATION_COST ->
-                    gateway.cancellationCost(operation.binding(), operation.externalReference(), key);
+                gateway.cancellationCost(operation.binding(), operation.externalReference(), key);
             case CANCEL_SHIPMENT ->
-                    gateway.cancelShipment(operation.binding(), operation.externalReference(),
-                            operation.reason(), key);
+                gateway.cancelShipment(operation.binding(), operation.externalReference(), operation.reason(), key);
             case QUERY_SHIPMENT, TRACK_SHIPMENT ->
-                    gateway.queryShipment(operation.binding(), operation.externalReference(), key);
+                gateway.queryShipment(operation.binding(), operation.externalReference(), key);
             // Neither partner reschedules, and a webhook is inbound rather than
             // a call we make. Both are rejections rather than gaps in the switch.
             case RESCHEDULE_SHIPMENT, VERIFY_DELIVERY_WEBHOOK ->
-                    ProviderOutcome.rejected("CAPABILITY_UNSUPPORTED",
-                            operation.capability() + " is not an outbound route operation");
+                ProviderOutcome.rejected(
+                        "CAPABILITY_UNSUPPORTED", operation.capability() + " is not an outbound route operation");
         };
     }
 
@@ -144,22 +145,27 @@ public class DeliveryProcessor {
     public void reconcile(Exchange exchange) {
         DeliveryOperation operation = operation(exchange);
 
-        if (operation.externalReference() == null || operation.externalReference().isBlank()) {
+        if (operation.externalReference() == null
+                || operation.externalReference().isBlank()) {
             // The uncertain call was the one that would have produced the
             // reference, so there is nothing to query by. Only a human comparing
             // our command id against the partner's records can resolve this;
             // guessing either way risks a duplicate booking or a lost order.
-            log.error("Uncertain delivery outcome with no external reference for command {}; "
-                    + "manual reconciliation required", operation.commandId());
+            log.error(
+                    "Uncertain delivery outcome with no external reference for command {}; "
+                            + "manual reconciliation required",
+                    operation.commandId());
             count("reconcile_impossible", operation, null);
-            exchange.getIn().setHeader(DeliveryRouteBuilder.OUTCOME_HEADER,
-                    ProviderOutcome.uncertain("RECONCILE_MANUAL",
-                            "No provider reference to reconcile against"));
+            exchange.getIn()
+                    .setHeader(
+                            DeliveryRouteBuilder.OUTCOME_HEADER,
+                            ProviderOutcome.uncertain(
+                                    "RECONCILE_MANUAL", "No provider reference to reconcile against"));
             return;
         }
 
-        ProviderOutcome actual = gateway.queryShipment(
-                operation.binding(), operation.externalReference(), operation.idempotencyKey());
+        ProviderOutcome actual =
+                gateway.queryShipment(operation.binding(), operation.externalReference(), operation.idempotencyKey());
         exchange.getIn().setHeader(DeliveryRouteBuilder.OUTCOME_HEADER, actual);
         count("reconciled", operation, actual);
 
@@ -196,7 +202,8 @@ public class DeliveryProcessor {
             return;
         }
 
-        reconciliations.requestReconciliation(operation.tenantId(),
+        reconciliations.requestReconciliation(
+                operation.tenantId(),
                 new ShipmentReconciliationOutbox.Command(
                         operation.commandId(),
                         operation.binding().bindingId(),
@@ -209,28 +216,32 @@ public class DeliveryProcessor {
                 operation.correlationId());
 
         count("reconcile_deferred", operation, unsettled);
-        log.warn("Delivery operation {} for command {} could not be settled in the route; "
-                + "a reconciliation command has been queued", operation.capability(),
+        log.warn(
+                "Delivery operation {} for command {} could not be settled in the route; "
+                        + "a reconciliation command has been queued",
+                operation.capability(),
                 operation.commandId());
     }
 
     /** A retryable outcome. The route's caller re-sends the same command id. */
     public void scheduleRetry(Exchange exchange) {
         DeliveryOperation operation = operation(exchange);
-        ProviderOutcome outcome = exchange.getIn()
-                .getHeader(DeliveryRouteBuilder.OUTCOME_HEADER, ProviderOutcome.class);
+        ProviderOutcome outcome =
+                exchange.getIn().getHeader(DeliveryRouteBuilder.OUTCOME_HEADER, ProviderOutcome.class);
         count("retry_scheduled", operation, outcome);
     }
 
     public void recordOutcome(Exchange exchange) {
         DeliveryOperation operation = operation(exchange);
-        ProviderOutcome outcome = exchange.getIn()
-                .getHeader(DeliveryRouteBuilder.OUTCOME_HEADER, ProviderOutcome.class);
+        ProviderOutcome outcome =
+                exchange.getIn().getHeader(DeliveryRouteBuilder.OUTCOME_HEADER, ProviderOutcome.class);
         count("completed", operation, outcome);
         // Bodies are never logged: a delivery payload carries the recipient's
         // name, phone, and address, which ADR 0029 classifies as personal data.
-        log.info("Delivery operation {} on {} finished as {}",
-                operation.capability(), operation.binding().providerType(),
+        log.info(
+                "Delivery operation {} on {} finished as {}",
+                operation.capability(),
+                operation.binding().providerType(),
                 outcome == null ? "NONE" : outcome.status());
         DeliveryRouteBuilder.clearContext();
     }
@@ -241,13 +252,19 @@ public class DeliveryProcessor {
 
         ProviderOutcome outcome = cause instanceof DeliveryCircuitBreakers.ProviderCallFailed failed
                 ? failed.outcome()
-                : ProviderOutcome.uncertain("UNCLASSIFIED",
-                        cause == null ? "Unknown route failure" : cause.getClass().getSimpleName());
+                : ProviderOutcome.uncertain(
+                        "UNCLASSIFIED",
+                        cause == null
+                                ? "Unknown route failure"
+                                : cause.getClass().getSimpleName());
 
         exchange.getIn().setHeader(DeliveryRouteBuilder.OUTCOME_HEADER, outcome);
         count("dead_lettered", operation, outcome);
-        log.error("Delivery operation {} for command {} dead-lettered as {}",
-                operation.capability(), operation.commandId(), outcome.errorCode());
+        log.error(
+                "Delivery operation {} for command {} dead-lettered as {}",
+                operation.capability(),
+                operation.commandId(),
+                outcome.errorCode());
         DeliveryRouteBuilder.clearContext();
     }
 
@@ -255,11 +272,16 @@ public class DeliveryProcessor {
         // Tags are bounded on purpose: provider type, capability, and status are
         // all small closed sets. A tenant or command id here would make the
         // metric cardinality unbounded and eventually take the registry down.
-        meters.counter("horecaos.delivery.route",
-                "event", event,
-                "provider", operation.binding().providerType(),
-                "capability", operation.capability().name(),
-                "status", outcome == null ? "NONE" : outcome.status().name())
+        meters.counter(
+                        "horecaos.delivery.route",
+                        "event",
+                        event,
+                        "provider",
+                        operation.binding().providerType(),
+                        "capability",
+                        operation.capability().name(),
+                        "status",
+                        outcome == null ? "NONE" : outcome.status().name())
                 .increment();
     }
 

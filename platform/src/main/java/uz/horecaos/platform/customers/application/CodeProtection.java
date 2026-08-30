@@ -3,9 +3,7 @@ package uz.horecaos.platform.customers.application;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.UUID;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 
 /**

@@ -5,10 +5,8 @@ import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.migration.application.reconciliation.TargetQuery;
 
 /**
@@ -30,7 +28,8 @@ public class JdbcTargetQuery implements TargetQuery {
 
     @Override
     public Optional<BigInteger> exactInteger(String sql, Map<String, Object> parameters) {
-        return jdbc.sql(sql).params(parameters)
+        return jdbc.sql(sql)
+                .params(parameters)
                 .query((row, number) -> exact(row.getObject(1)))
                 .optional();
     }
@@ -59,8 +58,7 @@ public class JdbcTargetQuery implements TargetQuery {
             case BigInteger exact -> exact;
             case BigDecimal decimal -> decimal.toBigIntegerExact();
             case Number number -> BigInteger.valueOf(number.longValue());
-            default -> throw new IllegalStateException(
-                    "A reconciliation measure came back as " + value.getClass());
+            default -> throw new IllegalStateException("A reconciliation measure came back as " + value.getClass());
         };
     }
 }

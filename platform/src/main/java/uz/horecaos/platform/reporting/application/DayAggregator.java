@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayAggregate;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayKey;
 import uz.horecaos.platform.reporting.application.ReportingFacts.OrderFact;
@@ -29,8 +28,7 @@ import uz.horecaos.platform.reporting.domain.SlaBucketSet;
  */
 public final class DayAggregator {
 
-    private DayAggregator() {
-    }
+    private DayAggregator() {}
 
     /**
      * The branch-day rows for one business date.
@@ -42,8 +40,11 @@ public final class DayAggregator {
      * refunds would belong to no branch row at all.
      */
     public static List<BranchDayAggregate> branchDay(
-            LocalDate businessDate, List<OrderFact> orders, List<RefundFact> refunds,
-            int boundaryVersion, int calculationVersion) {
+            LocalDate businessDate,
+            List<OrderFact> orders,
+            List<RefundFact> refunds,
+            int boundaryVersion,
+            int calculationVersion) {
 
         Map<BranchDayKey, Accumulator> byKey = new LinkedHashMap<>();
 
@@ -55,14 +56,13 @@ public final class DayAggregator {
         }
 
         List<BranchDayAggregate> rows = new ArrayList<>(byKey.size());
-        byKey.forEach((key, accumulated) ->
-                rows.add(accumulated.toRow(key, boundaryVersion, calculationVersion)));
+        byKey.forEach((key, accumulated) -> rows.add(accumulated.toRow(key, boundaryVersion, calculationVersion)));
 
         // Ordered so two runs over the same facts produce the same sequence of
         // rows. A stable order is what makes a diff between a close and a recut
         // readable by a human rather than a set comparison.
-        rows.sort(Comparator
-                .comparing((BranchDayAggregate row) -> row.key().locationId().toString())
+        rows.sort(Comparator.comparing(
+                        (BranchDayAggregate row) -> row.key().locationId().toString())
                 .thenComparing(row -> row.key().channelCode())
                 .thenComparing(row -> row.key().fulfilmentType())
                 .thenComparing(row -> String.valueOf(row.key().legalEntityId())));
@@ -75,8 +75,7 @@ public final class DayAggregator {
      * <p>Only orders that closed appear: an order still open has no elapsed time,
      * and counting it in the fastest bucket is the wrong answer twice over.
      */
-    public static List<SlaBucketAggregate> slaBuckets(
-            UUID tenantId, LocalDate businessDate, List<OrderFact> orders) {
+    public static List<SlaBucketAggregate> slaBuckets(UUID tenantId, LocalDate businessDate, List<OrderFact> orders) {
 
         Map<UUID, Map<String, Integer>> counts = new LinkedHashMap<>();
         for (OrderFact order : orders) {
@@ -102,9 +101,15 @@ public final class DayAggregator {
                     // missing bucket already reads as zero on every surface.
                     continue;
                 }
-                rows.add(new SlaBucketAggregate(tenantId, businessDate, "LOCATION", locationId,
-                        SlaBucketSet.VERSION, SlaBucketSet.buckets().get(index).code(),
-                        ordered.get(index), shares.get(index)));
+                rows.add(new SlaBucketAggregate(
+                        tenantId,
+                        businessDate,
+                        "LOCATION",
+                        locationId,
+                        SlaBucketSet.VERSION,
+                        SlaBucketSet.buckets().get(index).code(),
+                        ordered.get(index),
+                        shares.get(index)));
             }
         });
         return rows;
@@ -135,7 +140,8 @@ public final class DayAggregator {
         for (int index = 0; index < counts.size(); index++) {
             order.add(index);
         }
-        order.sort(Comparator.comparingLong((Integer index) -> remainders[index]).reversed());
+        order.sort(
+                Comparator.comparingLong((Integer index) -> remainders[index]).reversed());
 
         for (int position = 0; allocated < 10_000; position++, allocated++) {
             shares[order.get(position % order.size())]++;
@@ -148,13 +154,23 @@ public final class DayAggregator {
     }
 
     private static BranchDayKey keyOf(OrderFact order) {
-        return new BranchDayKey(order.tenantId(), order.businessDate(), order.locationId(),
-                order.legalEntityId(), order.channelCode(), order.fulfilmentType());
+        return new BranchDayKey(
+                order.tenantId(),
+                order.businessDate(),
+                order.locationId(),
+                order.legalEntityId(),
+                order.channelCode(),
+                order.fulfilmentType());
     }
 
     private static BranchDayKey keyOf(RefundFact refund) {
-        return new BranchDayKey(refund.tenantId(), refund.businessDate(), refund.locationId(),
-                refund.legalEntityId(), refund.channelCode(), refund.fulfilmentType());
+        return new BranchDayKey(
+                refund.tenantId(),
+                refund.businessDate(),
+                refund.locationId(),
+                refund.legalEntityId(),
+                refund.channelCode(),
+                refund.fulfilmentType());
     }
 
     /** Mutable only inside this call; nothing here escapes. */
@@ -206,12 +222,23 @@ public final class DayAggregator {
         }
 
         BranchDayAggregate toRow(BranchDayKey key, int boundaryVersion, int calculationVersion) {
-            Integer average = closedOrders == 0
-                    ? null
-                    : Math.toIntExact(Math.round((double) closedSecondsSum / closedOrders));
-            return new BranchDayAggregate(key, boundaryVersion, calculationVersion,
-                    orderCount, cancelledCount, grossSom, discountSom, netSom, refundedSom,
-                    average, promisedCount, lateCount, customers.size(), newCustomers.size());
+            Integer average =
+                    closedOrders == 0 ? null : Math.toIntExact(Math.round((double) closedSecondsSum / closedOrders));
+            return new BranchDayAggregate(
+                    key,
+                    boundaryVersion,
+                    calculationVersion,
+                    orderCount,
+                    cancelledCount,
+                    grossSom,
+                    discountSom,
+                    netSom,
+                    refundedSom,
+                    average,
+                    promisedCount,
+                    lateCount,
+                    customers.size(),
+                    newCustomers.size());
         }
     }
 }

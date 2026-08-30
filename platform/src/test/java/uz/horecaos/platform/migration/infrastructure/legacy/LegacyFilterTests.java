@@ -1,14 +1,12 @@
 package uz.horecaos.platform.migration.infrastructure.legacy;
 
-import java.util.List;
-
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-
-import uz.horecaos.platform.migration.api.ExtractionSpec;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+
+import java.util.List;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import uz.horecaos.platform.migration.api.ExtractionSpec;
 
 /**
  * The one field on an extraction spec that reaches SQL unchecked (ADR 0024).
@@ -35,17 +33,13 @@ class LegacyFilterTests {
     @Test
     @DisplayName("a filter that could end the statement or start another is refused")
     void aFilterCannotCarryASecondStatement() {
-        assertThat(catchThrowable(() ->
-                JdbcLegacySourceReader.requireSafePredicate("1=1; DROP TABLE orders")))
+        assertThat(catchThrowable(() -> JdbcLegacySourceReader.requireSafePredicate("1=1; DROP TABLE orders")))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThat(catchThrowable(() ->
-                JdbcLegacySourceReader.requireSafePredicate("1=1 -- and the ORDER BY is gone")))
+        assertThat(catchThrowable(() -> JdbcLegacySourceReader.requireSafePredicate("1=1 -- and the ORDER BY is gone")))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThat(catchThrowable(() ->
-                JdbcLegacySourceReader.requireSafePredicate("1=1 /* and so is the LIMIT */")))
+        assertThat(catchThrowable(() -> JdbcLegacySourceReader.requireSafePredicate("1=1 /* and so is the LIMIT */")))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThat(catchThrowable(() ->
-                JdbcLegacySourceReader.requireSafePredicate("id = $$x$$")))
+        assertThat(catchThrowable(() -> JdbcLegacySourceReader.requireSafePredicate("id = $$x$$")))
                 .as("a dollar-quote opens a literal the allowlist cannot see the end of")
                 .isInstanceOf(IllegalArgumentException.class);
     }
@@ -53,8 +47,7 @@ class LegacyFilterTests {
     @Test
     @DisplayName("an unterminated literal is refused rather than swallowing the ORDER BY")
     void anOpenQuoteIsRefused() {
-        assertThat(catchThrowable(() ->
-                JdbcLegacySourceReader.requireSafePredicate("status = 'DONE")))
+        assertThat(catchThrowable(() -> JdbcLegacySourceReader.requireSafePredicate("status = 'DONE")))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -67,8 +60,7 @@ class LegacyFilterTests {
     @Test
     @DisplayName("the reader refuses the spec before it opens a connection")
     void theReaderChecksTheFilterBeforeItReadsAnything() {
-        var spec = new ExtractionSpec("ORDER", "orders", "id", null, List.of("id"),
-                "1=1; DROP TABLE orders");
+        var spec = new ExtractionSpec("ORDER", "orders", "id", null, List.of("id"), "1=1; DROP TABLE orders");
 
         assertThat(catchThrowable(() -> new JdbcLegacySourceReader(null).readPage(spec, null, 100)))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -77,8 +69,7 @@ class LegacyFilterTests {
     @Test
     @DisplayName("a filter long enough to be a query of its own is refused")
     void aFilterIsAPredicateAndNotAQuery() {
-        assertThat(catchThrowable(() ->
-                JdbcLegacySourceReader.requireSafePredicate("a = 1 AND ".repeat(60) + "b = 2")))
+        assertThat(catchThrowable(() -> JdbcLegacySourceReader.requireSafePredicate("a = 1 AND ".repeat(60) + "b = 2")))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

@@ -1,9 +1,8 @@
 package uz.horecaos.platform.tenancy.application.onboarding;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -11,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -20,19 +19,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import tools.jackson.databind.json.JsonMapper;
-
-import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
+import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.TenancyEvent;
 import uz.horecaos.platform.tenancy.api.TenantActivated;
 import uz.horecaos.platform.tenancy.api.TenantOnboardingFailed;
@@ -40,7 +34,6 @@ import uz.horecaos.platform.tenancy.api.TenantOnboardingStarted;
 import uz.horecaos.platform.tenancy.api.TenantOnboardingStepCompleted;
 import uz.horecaos.platform.tenancy.api.TenantReady;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStep;
-import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcTenantControlPlaneStore;
 
 /**
@@ -142,7 +135,10 @@ class OnboardingServiceTests {
         var steps = jdbc.sql("""
                 SELECT step_key, status FROM tenant.onboarding_steps
                  WHERE run_id = :runId ORDER BY sequence_number
-                """).param("runId", runId).query((rs, n) -> rs.getString("step_key") + "=" + rs.getString("status")).list();
+                """)
+                .param("runId", runId)
+                .query((rs, n) -> rs.getString("step_key") + "=" + rs.getString("status"))
+                .list();
 
         assertThat(steps).hasSize(OnboardingStep.values().length);
         assertThat(steps)
@@ -172,7 +168,9 @@ class OnboardingServiceTests {
 
     @Test
     void aTenantWithNoLocationCannotReachReady() {
-        jdbc.sql("DELETE FROM tenant.locations WHERE id = :id").param("id", LOCATION).update();
+        jdbc.sql("DELETE FROM tenant.locations WHERE id = :id")
+                .param("id", LOCATION)
+                .update();
         UUID runId = startRun();
         drain(runId);
 
@@ -184,7 +182,9 @@ class OnboardingServiceTests {
 
     @Test
     void activationIsRefusedWhileRequiredStepsAreOutstanding() {
-        jdbc.sql("DELETE FROM tenant.locations WHERE id = :id").param("id", LOCATION).update();
+        jdbc.sql("DELETE FROM tenant.locations WHERE id = :id")
+                .param("id", LOCATION)
+                .update();
         UUID runId = startRun();
         drain(runId);
 
@@ -215,10 +215,16 @@ class OnboardingServiceTests {
         drain(runId);
 
         UUID requestId = service.activate(runId, ADMIN, "go live").approvalRequestId();
-        new JdbcApprovalService(jdbc, new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
-                clock, new SimpleMeterRegistry())
-                .decide(requestId, uz.horecaos.platform.audit.api.ApprovalService.Decision.APPROVE,
-                        APPROVER, "readiness evidence reviewed");
+        new JdbcApprovalService(
+                        jdbc,
+                        new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                        clock,
+                        new SimpleMeterRegistry())
+                .decide(
+                        requestId,
+                        uz.horecaos.platform.audit.api.ApprovalService.Decision.APPROVE,
+                        APPROVER,
+                        "readiness evidence reviewed");
 
         // Wrapped because this service is constructed rather than proxied here, so
         // its @Transactional does nothing. Activating under an approval spends the
@@ -229,7 +235,9 @@ class OnboardingServiceTests {
         assertThat(runStatus(runId)).isEqualTo("ACTIVE");
         assertThat(tenantStatus()).isEqualTo("ACTIVE");
         assertThat(jdbc.sql("SELECT status FROM audit.approval_requests WHERE id = :id")
-                .param("id", requestId).query(String.class).single())
+                        .param("id", requestId)
+                        .query(String.class)
+                        .single())
                 .as("one signature activates one tenant; the approval is spent by the activation")
                 .isEqualTo("CONSUMED");
     }
@@ -334,7 +342,9 @@ class OnboardingServiceTests {
 
     @Test
     void aFailedRunPublishesTheCodeAndNotTheDetail() {
-        jdbc.sql("DELETE FROM tenant.locations WHERE id = :id").param("id", LOCATION).update();
+        jdbc.sql("DELETE FROM tenant.locations WHERE id = :id")
+                .param("id", LOCATION)
+                .update();
         UUID runId = startRun();
         drain(runId);
 
@@ -344,7 +354,11 @@ class OnboardingServiceTests {
                     assertThat(failure.stepKey()).isEqualTo("BRANDS_AND_LOCATIONS_VALIDATE");
                     assertThat(failure.errorCode()).isEqualTo("NO_LOCATION");
                 });
-        assertThat(published.ofType(TenantOnboardingFailed.class).getFirst().payload().toString())
+        assertThat(published
+                        .ofType(TenantOnboardingFailed.class)
+                        .getFirst()
+                        .payload()
+                        .toString())
                 .as("ADR 0008 forbids a raw error on a topic; only the code travels")
                 .doesNotContain("no location", "cannot receive an order");
     }
@@ -357,12 +371,10 @@ class OnboardingServiceTests {
         service.activate(runId, ADMIN, "go live");
         service.activate(runId, ADMIN, "go live again");
 
-        assertThat(published.ofType(TenantActivated.class))
-                .singleElement()
-                .satisfies(activated -> {
-                    assertThat(activated.runId()).isEqualTo(runId);
-                    assertThat(activated.status()).isEqualTo("ACTIVE");
-                });
+        assertThat(published.ofType(TenantActivated.class)).singleElement().satisfies(activated -> {
+            assertThat(activated.runId()).isEqualTo(runId);
+            assertThat(activated.status()).isEqualTo("ACTIVE");
+        });
     }
 
     @Test
@@ -421,7 +433,9 @@ class OnboardingServiceTests {
 
     @Test
     void aRunThatFailedItsRequiredStepIsStalled() {
-        jdbc.sql("DELETE FROM tenant.locations WHERE id = :id").param("id", LOCATION).update();
+        jdbc.sql("DELETE FROM tenant.locations WHERE id = :id")
+                .param("id", LOCATION)
+                .update();
         UUID runId = startRun();
         drain(runId);
         assertThat(runStatus(runId)).isEqualTo("FAILED");
@@ -444,7 +458,10 @@ class OnboardingServiceTests {
     private double stalledAgeSeconds() {
         gaugeMeters = new SimpleMeterRegistry();
         gaugeScheduler = schedulerWithBatchSize(gaugeMeters, 4);
-        double age = gaugeMeters.get("horecaos.onboarding.runs.stalled.age.seconds").gauge().value();
+        double age = gaugeMeters
+                .get("horecaos.onboarding.runs.stalled.age.seconds")
+                .gauge()
+                .value();
         java.lang.ref.Reference.reachabilityFence(gaugeScheduler);
         return age;
     }
@@ -458,9 +475,11 @@ class OnboardingServiceTests {
     }
 
     private UUID startRun() {
-        return service.startRun(TENANT, TEMPLATE, 1,
-                Map.of("ownerEmail", "owner@acme.example",
-                        "defaultConfiguration", Map.of("locale", "uz")),
+        return service.startRun(
+                TENANT,
+                TEMPLATE,
+                1,
+                Map.of("ownerEmail", "owner@acme.example", "defaultConfiguration", Map.of("locale", "uz")),
                 ADMIN);
     }
 
@@ -482,19 +501,27 @@ class OnboardingServiceTests {
 
     private String runStatus(UUID runId) {
         return jdbc.sql("SELECT status FROM tenant.onboarding_runs WHERE id = :id")
-                .param("id", runId).query(String.class).single();
+                .param("id", runId)
+                .query(String.class)
+                .single();
     }
 
     private String tenantStatus() {
         return jdbc.sql("SELECT status FROM tenant.tenants WHERE id = :id")
-                .param("id", TENANT).query(String.class).single();
+                .param("id", TENANT)
+                .query(String.class)
+                .single();
     }
 
     private String stepCompletedAt(UUID runId, String stepKey) {
         return jdbc.sql("""
                 SELECT completed_at::text FROM tenant.onboarding_steps
                  WHERE run_id = :runId AND step_key = :stepKey
-                """).param("runId", runId).param("stepKey", stepKey).query(String.class).single();
+                """)
+                .param("runId", runId)
+                .param("stepKey", stepKey)
+                .query(String.class)
+                .single();
     }
 
     private void insertActivationApprovalPolicy() {
@@ -534,7 +561,11 @@ class OnboardingServiceTests {
                 INSERT INTO tenant.locations
                     (id, tenant_id, brand_id, code, slug, display_name, timezone, status, version)
                 VALUES (:id, :tenantId, :brandId, 'LOC', 'loc', 'Chilonzor', 'Asia/Tashkent', 'ACTIVE', 0)
-                """).param("id", LOCATION).param("tenantId", TENANT).param("brandId", BRAND).update();
+                """)
+                .param("id", LOCATION)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
     }
 
     private static final class MutableClock extends Clock {

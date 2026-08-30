@@ -2,7 +2,6 @@ package uz.horecaos.platform.media.domain;
 
 import java.time.Instant;
 import java.util.UUID;
-
 import uz.horecaos.platform.media.api.MediaAssetId;
 
 /**
@@ -30,5 +29,4 @@ public record MediaDerivative(
         int widthPx,
         int heightPx,
         String processorVersion,
-        Instant createdAt) {
-}
+        Instant createdAt) {}

@@ -1,9 +1,7 @@
 package uz.horecaos.platform.courier.application;
 
 import java.util.Optional;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.courier.domain.CourierCompensationPolicy;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.tenancy.api.PolicyResolver;
@@ -42,7 +40,11 @@ public class CourierPolicyResolver {
                 policies.resolve(CourierPolicies.COMPENSATION, scope);
         return resolved.orElseGet(() -> new ResolvedPolicy<>(
                 CourierPolicies.COMPENSATION.code(),
-                DEFAULTS_ID, 1, scope.type(), "defaults", CourierCompensationPolicy.DEFAULTS));
+                DEFAULTS_ID,
+                1,
+                scope.type(),
+                "defaults",
+                CourierCompensationPolicy.DEFAULTS));
     }
 
     /**
@@ -50,6 +52,5 @@ public class CourierPolicyResolver {
      * defaults applied". A random id per call would make two identical decisions
      * look like they ran under two different policies.
      */
-    public static final java.util.UUID DEFAULTS_ID =
-            java.util.UUID.fromString("00000000-0000-0000-0000-000000000042");
+    public static final java.util.UUID DEFAULTS_ID = java.util.UUID.fromString("00000000-0000-0000-0000-000000000042");
 }

@@ -2,7 +2,6 @@ package uz.horecaos.platform.fiscal.domain;
 
 import java.time.DateTimeException;
 import java.time.ZoneId;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,8 +24,7 @@ public final class BusinessZone {
 
     private static final Logger log = LoggerFactory.getLogger(BusinessZone.class);
 
-    private BusinessZone() {
-    }
+    private BusinessZone() {}
 
     /**
      * @param named    the branch's timezone as the row holds it, possibly null
@@ -40,8 +38,12 @@ public final class BusinessZone {
         try {
             return ZoneId.of(named);
         } catch (DateTimeException unknown) {
-            log.warn("{} resolves timezone '{}', which is not a known zone; {} is used for its "
-                    + "business date instead.", about, named, fallback);
+            log.warn(
+                    "{} resolves timezone '{}', which is not a known zone; {} is used for its "
+                            + "business date instead.",
+                    about,
+                    named,
+                    fallback);
             return fallback;
         }
     }

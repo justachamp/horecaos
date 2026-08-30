@@ -4,9 +4,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
-
 import uz.horecaos.platform.telemetry.domain.LivePositionRules;
 import uz.horecaos.platform.telemetry.infrastructure.persistence.JdbcTelemetryStore;
 import uz.horecaos.platform.telemetry.infrastructure.persistence.JdbcTelemetryStore.LivePositionRow;
@@ -47,12 +45,21 @@ public class CourierPositionQueryService {
         for (LivePositionRow row : store.livePositionsAtLocation(tenantId, locationId)) {
             boolean fresh = LivePositionRules.freshEnoughForTheMap(row.capturedAt(), now);
             if (LivePositionRules.drawable(row.accuracyMeters()) && fresh) {
-                pins.add(new CourierPin(row.courierId(), row.latitude(), row.longitude(),
-                        row.accuracyMeters(), row.headingDegrees(), row.speedMps(),
-                        row.batteryPercent(), row.deviceCharging(),
-                        row.activeAssignmentCount(), row.capturedAt()));
+                pins.add(new CourierPin(
+                        row.courierId(),
+                        row.latitude(),
+                        row.longitude(),
+                        row.accuracyMeters(),
+                        row.headingDegrees(),
+                        row.speedMps(),
+                        row.batteryPercent(),
+                        row.deviceCharging(),
+                        row.activeAssignmentCount(),
+                        row.capturedAt()));
             } else {
-                coarse.add(new CoarseCourier(row.courierId(), row.activeAssignmentCount(),
+                coarse.add(new CoarseCourier(
+                        row.courierId(),
+                        row.activeAssignmentCount(),
                         row.capturedAt(),
                         fresh ? "ACCURACY_BELOW_MAP_FLOOR" : "LAST_FIX_TOO_OLD"));
             }
@@ -77,16 +84,19 @@ public class CourierPositionQueryService {
      *                       arrives without anybody knowing where it is
      */
     public record CourierPin(
-            UUID courierId, double latitude, double longitude, double accuracyMeters,
-            Double headingDegrees, Double speedMps, Integer batteryPercent, Boolean deviceCharging,
-            int activeAssignmentCount, Instant capturedAt) {
-    }
+            UUID courierId,
+            double latitude,
+            double longitude,
+            double accuracyMeters,
+            Double headingDegrees,
+            Double speedMps,
+            Integer batteryPercent,
+            Boolean deviceCharging,
+            int activeAssignmentCount,
+            Instant capturedAt) {}
 
     /** On duty, and not drawable. Present so the board is honest about the gap. */
-    public record CoarseCourier(
-            UUID courierId, int activeAssignmentCount, Instant lastFixAt, String reason) {
-    }
+    public record CoarseCourier(UUID courierId, int activeAssignmentCount, Instant lastFixAt, String reason) {}
 
-    public record FleetView(List<CourierPin> pins, List<CoarseCourier> withoutPin) {
-    }
+    public record FleetView(List<CourierPin> pins, List<CoarseCourier> withoutPin) {}
 }

@@ -4,9 +4,7 @@ import java.time.Clock;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.telemetry.api.ScopeKey;
 import uz.horecaos.platform.telemetry.api.StreamChannel;

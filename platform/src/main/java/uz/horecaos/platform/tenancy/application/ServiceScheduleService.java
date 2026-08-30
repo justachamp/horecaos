@@ -7,10 +7,8 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -39,8 +37,8 @@ public class ServiceScheduleService {
     private final CurrentActor currentActor;
     private final Clock clock;
 
-    public ServiceScheduleService(JdbcServiceabilityStore store, AuditRecorder audit,
-            CurrentActor currentActor, Clock clock) {
+    public ServiceScheduleService(
+            JdbcServiceabilityStore store, AuditRecorder audit, CurrentActor currentActor, Clock clock) {
         this.store = store;
         this.audit = audit;
         this.currentActor = currentActor;
@@ -50,29 +48,34 @@ public class ServiceScheduleService {
     @Transactional
     public UUID createSchedule(UUID tenantId, UUID brandId, CreateScheduleCommand command) {
         UUID scheduleId = UUID.randomUUID();
-        store.insertSchedule(scheduleId, tenantId, brandId, command.name(),
-                command.acceptsScheduledOrders(), clock.instant());
+        store.insertSchedule(
+                scheduleId, tenantId, brandId, command.name(), command.acceptsScheduledOrders(), clock.instant());
         store.replaceRules(scheduleId, command.rules());
         return scheduleId;
     }
 
     @Transactional
-    public void replaceRules(UUID tenantId, UUID brandId, UUID scheduleId,
-            List<WeeklySchedule.Rule> rules) {
+    public void replaceRules(UUID tenantId, UUID brandId, UUID scheduleId, List<WeeklySchedule.Rule> rules) {
         requireOwned(tenantId, brandId, scheduleId);
         store.replaceRules(scheduleId, rules);
     }
 
     @Transactional
-    public void closeForDay(UUID tenantId, UUID brandId, UUID scheduleId, LocalDate date,
-            String label, String reason) {
+    public void closeForDay(UUID tenantId, UUID brandId, UUID scheduleId, LocalDate date, String label, String reason) {
         requireOwned(tenantId, brandId, scheduleId);
         store.upsertException(scheduleId, date, true, null, null, label, reason, actorId());
     }
 
     @Transactional
-    public void shortenDay(UUID tenantId, UUID brandId, UUID scheduleId, LocalDate date,
-            LocalTime opensAt, LocalTime closesAt, String label, String reason) {
+    public void shortenDay(
+            UUID tenantId,
+            UUID brandId,
+            UUID scheduleId,
+            LocalDate date,
+            LocalTime opensAt,
+            LocalTime closesAt,
+            String label,
+            String reason) {
         requireOwned(tenantId, brandId, scheduleId);
         store.upsertException(scheduleId, date, false, opensAt, closesAt, label, reason, actorId());
     }
@@ -90,15 +93,13 @@ public class ServiceScheduleService {
      */
     private void requireOwned(UUID tenantId, UUID brandId, UUID scheduleId) {
         if (!store.scheduleBelongsToBrand(tenantId, brandId, scheduleId)) {
-            throw new TenantResourceNotFoundException(
-                    "No service schedule %s for this brand".formatted(scheduleId));
+            throw new TenantResourceNotFoundException("No service schedule %s for this brand".formatted(scheduleId));
         }
     }
 
     /** Binds a timetable to one fulfilment mode at one location. */
     @Transactional
-    public void bind(UUID tenantId, UUID brandId, UUID locationId, FulfillmentMode mode,
-            UUID scheduleId) {
+    public void bind(UUID tenantId, UUID brandId, UUID locationId, FulfillmentMode mode, UUID scheduleId) {
         store.bindSchedule(tenantId, brandId, locationId, mode, scheduleId, clock.instant());
     }
 
@@ -114,31 +115,37 @@ public class ServiceScheduleService {
      * no record of who made it is the support conversation this table exists to end.
      */
     @Transactional
-    public void changeServiceState(UUID tenantId, UUID brandId, UUID locationId,
-            ChangeServiceStateCommand command) {
+    public void changeServiceState(UUID tenantId, UUID brandId, UUID locationId, ChangeServiceStateCommand command) {
 
         if (command.mode() != ServiceMode.FOLLOW_SCHEDULE
                 && (command.reasonCode() == null || command.reasonCode().isBlank())) {
-            throw new IllegalArgumentException(
-                    "A manual open or close requires a reason code");
+            throw new IllegalArgumentException("A manual open or close requires a reason code");
         }
         if (command.mode() == ServiceMode.FOLLOW_SCHEDULE && command.effectiveUntil() != null) {
-            throw new IllegalArgumentException(
-                    "Returning to the schedule cannot carry an expiry");
+            throw new IllegalArgumentException("Returning to the schedule cannot carry an expiry");
         }
 
         Instant now = clock.instant();
         String reasonCode = command.mode() == ServiceMode.FOLLOW_SCHEDULE ? null : command.reasonCode();
-        store.upsertServiceState(tenantId, brandId, locationId, command.mode(), reasonCode,
-                command.note(), command.effectiveUntil(), actorId(), now);
+        store.upsertServiceState(
+                tenantId,
+                brandId,
+                locationId,
+                command.mode(),
+                reasonCode,
+                command.note(),
+                command.effectiveUntil(),
+                actorId(),
+                now);
 
         audit.record(AuditFact.of("location.service_state.changed", AuditClass.BUSINESS)
                 .by(ActorRef.user(currentActor.get().subject(), null))
                 .at(ResourceScope.location(tenantId, brandId, locationId))
                 .target("Location", locationId)
-                .because(command.mode() == ServiceMode.FOLLOW_SCHEDULE
-                        ? "Returned to the published schedule"
-                        : command.reasonCode())
+                .because(
+                        command.mode() == ServiceMode.FOLLOW_SCHEDULE
+                                ? "Returned to the published schedule"
+                                : command.reasonCode())
                 .changed(changeDocument(command))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
@@ -159,8 +166,8 @@ public class ServiceScheduleService {
      * only symptom is a promised time nobody can account for.
      */
     @Transactional
-    public void replacePreparationBands(UUID tenantId, UUID brandId, UUID locationId,
-            List<JdbcServiceabilityStore.Band> bands) {
+    public void replacePreparationBands(
+            UUID tenantId, UUID brandId, UUID locationId, List<JdbcServiceabilityStore.Band> bands) {
         store.replacePreparationBands(tenantId, brandId, locationId, bands, clock.instant());
     }
 
@@ -168,8 +175,10 @@ public class ServiceScheduleService {
         return Map.of(
                 "mode", command.mode().name(),
                 "reasonCode", command.reasonCode() == null ? "" : command.reasonCode(),
-                "effectiveUntil", command.effectiveUntil() == null
-                        ? "" : command.effectiveUntil().toString());
+                "effectiveUntil",
+                        command.effectiveUntil() == null
+                                ? ""
+                                : command.effectiveUntil().toString());
     }
 
     private UUID actorId() {
@@ -189,9 +198,7 @@ public class ServiceScheduleService {
                 : correlationId;
     }
 
-    public record CreateScheduleCommand(String name, boolean acceptsScheduledOrders,
-            List<WeeklySchedule.Rule> rules) { }
+    public record CreateScheduleCommand(String name, boolean acceptsScheduledOrders, List<WeeklySchedule.Rule> rules) {}
 
-    public record ChangeServiceStateCommand(ServiceMode mode, String reasonCode, String note,
-            Instant effectiveUntil) { }
+    public record ChangeServiceStateCommand(ServiceMode mode, String reasonCode, String note, Instant effectiveUntil) {}
 }

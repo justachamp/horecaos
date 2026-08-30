@@ -7,12 +7,10 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.migration.application.MigrationQuarantineStore.QuarantineItemRow;
 import uz.horecaos.platform.migration.application.MigrationRunStore.RunRow;
@@ -59,8 +57,7 @@ public class QuarantineService {
      * becoming one. The alternative is a length check, which a broken order row
      * comfortably passes.
      */
-    private static final Pattern EVIDENCE_REFERENCE =
-            Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._:/+=@-]{0,511}$");
+    private static final Pattern EVIDENCE_REFERENCE = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._:/+=@-]{0,511}$");
 
     private static final int MAX_LEGACY_ID = 255;
 
@@ -73,8 +70,12 @@ public class QuarantineService {
     private final MigrationAudit audit;
     private final Clock clock;
 
-    public QuarantineService(MigrationQuarantineStore quarantine, MigrationRunStore runs,
-            MigrationScopeStore scopes, MigrationAccessPolicy access, MigrationAudit audit,
+    public QuarantineService(
+            MigrationQuarantineStore quarantine,
+            MigrationRunStore runs,
+            MigrationScopeStore scopes,
+            MigrationAccessPolicy access,
+            MigrationAudit audit,
             Clock clock) {
         this.quarantine = quarantine;
         this.runs = runs;
@@ -110,34 +111,48 @@ public class QuarantineService {
         if (run.status().terminal()) {
             throw new MigrationConflictException(
                     ("Run %s ended %s; a row found afterwards belongs to a remediation run, not to "
-                            + "a finished one.").formatted(runId, run.status()));
+                                    + "a finished one.")
+                            .formatted(runId, run.status()));
         }
 
-        String entityType = requireMatch(command.entityType(), ENTITY_TYPE,
+        String entityType = requireMatch(
+                command.entityType(),
+                ENTITY_TYPE,
                 "An entity type is an upper-case code such as ORDER or CUSTOMER_ADDRESS");
         String legacyId = requireLegacyId(command.legacyId());
-        String reasonCode = requireMatch(command.reasonCode(), CODE,
+        String reasonCode = requireMatch(
+                command.reasonCode(),
+                CODE,
                 "A quarantine reason comes from the approved vocabulary as an upper-case code, and "
                         + "is not free text");
         String evidence = validatedEvidenceReference(command.sanitizedEvidenceReference());
 
-        Optional<QuarantineItemRow> filed =
-                quarantine.findByKey(tenantId, runId, entityType, legacyId);
+        Optional<QuarantineItemRow> filed = quarantine.findByKey(tenantId, runId, entityType, legacyId);
         if (filed.isPresent()) {
             return filed.get();
         }
 
         ScopeRow scope = requireScope(tenantId, run.scopeId());
         Instant now = clock.instant();
-        QuarantineItemRow item = new QuarantineItemRow(UUID.randomUUID(), tenantId, runId,
-                entityType, legacyId, reasonCode, evidence, QuarantineItemRow.OPEN, null, null, null);
+        QuarantineItemRow item = new QuarantineItemRow(
+                UUID.randomUUID(),
+                tenantId,
+                runId,
+                entityType,
+                legacyId,
+                reasonCode,
+                evidence,
+                QuarantineItemRow.OPEN,
+                null,
+                null,
+                null);
 
         quarantine.insert(item, now);
         // The crosswalk keeps the transformation version the run was applying, so
         // a row quarantined under one mapping and re-imported under a corrected one
         // is visibly two different attempts rather than one changing its mind.
-        boolean crosswalkRecorded = quarantine.upsertQuarantinedMapping(UUID.randomUUID(),
-                tenantId, scope.id(), runId, entityType, legacyId, run.transformationVersion(), now);
+        boolean crosswalkRecorded = quarantine.upsertQuarantinedMapping(
+                UUID.randomUUID(), tenantId, scope.id(), runId, entityType, legacyId, run.transformationVersion(), now);
         if (!crosswalkRecorded) {
             // The row migrated successfully once, and something has now decided it
             // is broken. Recording a quarantine here would blank the crosswalk that
@@ -146,9 +161,9 @@ public class QuarantineService {
             // filing an item whose mapping could not be written.
             throw new MigrationConflictException(
                     ("%s %s in scope %s is already migrated. Quarantining it would erase the "
-                            + "crosswalk to its target entity and leave that entity orphaned; "
-                            + "supersede the mapping through a remediation run instead, which "
-                            + "says what happens to what was already written.")
+                                    + "crosswalk to its target entity and leave that entity orphaned; "
+                                    + "supersede the mapping through a remediation run instead, which "
+                                    + "says what happens to what was already written.")
                             .formatted(entityType, legacyId, scope.id()));
         }
         runs.addQuarantined(tenantId, runId, 1);
@@ -157,15 +172,27 @@ public class QuarantineService {
         // investigation that could not tell a migrator's decision from an
         // operator's would attribute every quarantined row of a five-year backfill
         // to whoever pressed start.
-        audit.record("migration.quarantine.filed", ActorRef.migration("run:" + runId),
+        audit.record(
+                "migration.quarantine.filed",
+                ActorRef.migration("run:" + runId),
                 MigrationAudit.scopeOf(scope.tenantId(), scope.brandId(), scope.locationId()),
-                "migration.quarantine_item", item.id(), null, reasonCode,
-                Map.of("scopeId", scope.id(),
-                        "runId", runId,
-                        "entityType", entityType,
-                        "legacyId", legacyId,
-                        "reasonCode", reasonCode,
-                        "transformationVersion", run.transformationVersion()),
+                "migration.quarantine_item",
+                item.id(),
+                null,
+                reasonCode,
+                Map.of(
+                        "scopeId",
+                        scope.id(),
+                        "runId",
+                        runId,
+                        "entityType",
+                        entityType,
+                        "legacyId",
+                        legacyId,
+                        "reasonCode",
+                        reasonCode,
+                        "transformationVersion",
+                        run.transformationVersion()),
                 null);
 
         log.info("Quarantined {} {} from run {}: {}", entityType, legacyId, runId, reasonCode);
@@ -187,10 +214,11 @@ public class QuarantineService {
         Objects.requireNonNull(command, "A resolve command is required");
         String actor = access.requireOperator();
 
-        String resolutionCode = requireMatch(command.resolutionCode(), CODE,
-                "A resolution code is an upper-case code from the approved vocabulary");
+        String resolutionCode = requireMatch(
+                command.resolutionCode(), CODE, "A resolution code is an upper-case code from the approved vocabulary");
 
-        QuarantineItemRow item = quarantine.findById(tenantId, itemId)
+        QuarantineItemRow item = quarantine
+                .findById(tenantId, itemId)
                 .orElseThrow(() -> new MigrationResourceNotFoundException(
                         "No quarantine item %s for this tenant".formatted(itemId)));
         if (!item.open()) {
@@ -209,19 +237,39 @@ public class QuarantineService {
 
         RunRow run = requireRun(tenantId, item.runId());
         ScopeRow scope = requireScope(tenantId, run.scopeId());
-        audit.record("migration.quarantine.resolved", ActorRef.user(actor, null),
+        audit.record(
+                "migration.quarantine.resolved",
+                ActorRef.user(actor, null),
                 MigrationAudit.scopeOf(scope.tenantId(), scope.brandId(), scope.locationId()),
-                "migration.quarantine_item", itemId, null, command.reason(),
-                Map.of("scopeId", scope.id(),
-                        "entityType", item.entityType(),
-                        "legacyId", item.legacyId(),
-                        "reasonCode", item.reasonCode(),
-                        "resolutionCode", resolutionCode),
+                "migration.quarantine_item",
+                itemId,
+                null,
+                command.reason(),
+                Map.of(
+                        "scopeId",
+                        scope.id(),
+                        "entityType",
+                        item.entityType(),
+                        "legacyId",
+                        item.legacyId(),
+                        "reasonCode",
+                        item.reasonCode(),
+                        "resolutionCode",
+                        resolutionCode),
                 null);
 
-        return new QuarantineItemRow(item.id(), item.tenantId(), item.runId(), item.entityType(),
-                item.legacyId(), item.reasonCode(), item.sanitizedEvidenceReference(),
-                QuarantineItemRow.RESOLVED, resolutionCode, actor, now);
+        return new QuarantineItemRow(
+                item.id(),
+                item.tenantId(),
+                item.runId(),
+                item.entityType(),
+                item.legacyId(),
+                item.reasonCode(),
+                item.sanitizedEvidenceReference(),
+                QuarantineItemRow.RESOLVED,
+                resolutionCode,
+                actor,
+                now);
     }
 
     /** How many items of this scope still owe somebody a decision. */
@@ -264,7 +312,8 @@ public class QuarantineService {
         if (candidate.length() > MAX_LEGACY_ID) {
             throw new IllegalArgumentException(
                     ("A legacy identifier is at most %d characters. Anything longer is not an "
-                            + "identifier, it is the row.").formatted(MAX_LEGACY_ID));
+                                    + "identifier, it is the row.")
+                            .formatted(MAX_LEGACY_ID));
         }
         return candidate;
     }
@@ -278,8 +327,8 @@ public class QuarantineService {
 
     private RunRow requireRun(UUID tenantId, UUID runId) {
         return runs.findById(tenantId, runId)
-                .orElseThrow(() -> new MigrationResourceNotFoundException(
-                        "No migration run %s for this tenant".formatted(runId)));
+                .orElseThrow(() ->
+                        new MigrationResourceNotFoundException("No migration run %s for this tenant".formatted(runId)));
     }
 
     private ScopeRow requireScope(UUID tenantId, UUID scopeId) {
@@ -297,8 +346,8 @@ public class QuarantineService {
      *                                   store, or null while the diagnosis is only
      *                                   a reason code. Never the evidence itself
      */
-    public record QuarantineCommand(String entityType, String legacyId, String reasonCode,
-            String sanitizedEvidenceReference) {
+    public record QuarantineCommand(
+            String entityType, String legacyId, String reasonCode, String sanitizedEvidenceReference) {
 
         public QuarantineCommand {
             Objects.requireNonNull(entityType, "An entity type is required");
@@ -312,5 +361,5 @@ public class QuarantineService {
      *                       fix, mapped by hand under review, or accepted as not
      *                       migratable
      */
-    public record ResolveCommand(String resolutionCode, String reason) { }
+    public record ResolveCommand(String resolutionCode, String reason) {}
 }

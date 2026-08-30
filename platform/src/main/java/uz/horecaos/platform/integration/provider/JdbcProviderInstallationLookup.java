@@ -5,10 +5,8 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.integration.api.provider.BindingRef;
 import uz.horecaos.platform.integration.api.provider.ProviderCategory;
 import uz.horecaos.platform.integration.api.provider.ProviderEntityMappingLookup;
@@ -16,8 +14,7 @@ import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
 
 /** SQL adapter for ADR 0026 binding and mapping resolution. */
 @Repository
-public class JdbcProviderInstallationLookup
-        implements ProviderInstallationLookup, ProviderEntityMappingLookup {
+public class JdbcProviderInstallationLookup implements ProviderInstallationLookup, ProviderEntityMappingLookup {
 
     private static final String SELECT_BINDINGS = """
             SELECT b.id, b.installation_id, b.tenant_id, b.brand_id, b.location_id,
@@ -49,8 +46,7 @@ public class JdbcProviderInstallationLookup
     }
 
     @Override
-    public Optional<BindingRef> primaryBinding(
-            UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
+    public Optional<BindingRef> primaryBinding(UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
 
         List<Candidate> candidates = candidates(tenantId, brandId, locationId, capabilityCode);
 
@@ -66,8 +62,7 @@ public class JdbcProviderInstallationLookup
     }
 
     @Override
-    public List<BindingRef> candidateBindings(
-            UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
+    public List<BindingRef> candidateBindings(UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
 
         return candidates(tenantId, brandId, locationId, capabilityCode).stream()
                 .sorted((left, right) -> {
@@ -129,8 +124,7 @@ public class JdbcProviderInstallationLookup
                 .optional();
     }
 
-    private List<Candidate> candidates(
-            UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
+    private List<Candidate> candidates(UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
 
         return jdbc.sql(SELECT_BINDINGS)
                 .param("tenantId", tenantId)
@@ -156,5 +150,5 @@ public class JdbcProviderInstallationLookup
         return candidate.ref().locationId() != null ? 2 : 1;
     }
 
-    private record Candidate(BindingRef ref, boolean primary, int priority) { }
+    private record Candidate(BindingRef ref, boolean primary, int priority) {}
 }

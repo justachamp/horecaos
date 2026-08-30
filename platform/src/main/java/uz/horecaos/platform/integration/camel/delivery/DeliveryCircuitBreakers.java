@@ -1,15 +1,12 @@
 package uz.horecaos.platform.integration.camel.delivery;
 
-import java.time.Clock;
-import java.time.Duration;
-
-import org.springframework.stereotype.Component;
-
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.micrometer.core.instrument.MeterRegistry;
-
+import java.time.Clock;
+import java.time.Duration;
+import org.springframework.stereotype.Component;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.integration.camel.common.ProviderCircuitMetrics;
 
@@ -47,8 +44,8 @@ public class DeliveryCircuitBreakers {
                 .automaticTransitionFromOpenToHalfOpenEnabled(true)
                 // Only outcomes that indicate the partner is unhealthy. See the
                 // class note: a business "no" is not a fault.
-                .recordException(failure -> failure instanceof ProviderCallFailed call
-                        && countsAsFailure(call.outcome()))
+                .recordException(
+                        failure -> failure instanceof ProviderCallFailed call && countsAsFailure(call.outcome()))
                 .build());
         // Published for the dashboard rather than for a page. ADR 0023's
         // stuck-circuit alert covers payment and POS breakers only: a courier

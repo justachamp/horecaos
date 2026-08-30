@@ -6,7 +6,6 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
-
 import uz.horecaos.platform.commercial.api.ResetPeriod;
 import uz.horecaos.platform.commercial.api.UsagePeriod;
 
@@ -34,8 +33,7 @@ public final class UsagePeriods {
      */
     private static final Instant NEVER = Instant.parse("9999-12-31T00:00:00Z");
 
-    private UsagePeriods() {
-    }
+    private UsagePeriods() {}
 
     /**
      * The period {@code at} falls into.
@@ -46,8 +44,7 @@ public final class UsagePeriods {
      * @param billingStart the live subscription's current period start, or null
      * @param billingEnd   the live subscription's current period end, or null
      */
-    public static UsagePeriod of(ResetPeriod reset, Instant at, ZoneId zone,
-            Instant billingStart, Instant billingEnd) {
+    public static UsagePeriod of(ResetPeriod reset, Instant at, ZoneId zone, Instant billingStart, Instant billingEnd) {
 
         return switch (reset) {
             case NONE -> new UsagePeriod(UsagePeriod.LIFETIME, Instant.EPOCH, NEVER);
@@ -66,12 +63,13 @@ public final class UsagePeriods {
                 // reproducible, and when a subscription later starts, the earlier
                 // usage stays in the period it was measured in rather than
                 // silently moving.
-                if (billingStart == null || billingEnd == null
-                        || at.isBefore(billingStart) || !at.isBefore(billingEnd)) {
+                if (billingStart == null
+                        || billingEnd == null
+                        || at.isBefore(billingStart)
+                        || !at.isBefore(billingEnd)) {
                     yield monthly(at, zone);
                 }
-                yield new UsagePeriod(DAY.format(billingStart.atZone(zone).toLocalDate()),
-                        billingStart, billingEnd);
+                yield new UsagePeriod(DAY.format(billingStart.atZone(zone).toLocalDate()), billingStart, billingEnd);
             }
         };
     }
@@ -88,8 +86,7 @@ public final class UsagePeriods {
 
     /** Whether an instant sits inside a closed period, for a late-event check. */
     public static boolean isLate(UsagePeriod period, Instant recordedAt) {
-        return recordedAt.isAfter(period.end())
-                && ChronoUnit.SECONDS.between(period.end(), recordedAt) > 0;
+        return recordedAt.isAfter(period.end()) && ChronoUnit.SECONDS.between(period.end(), recordedAt) > 0;
     }
 
     private static UsagePeriod monthly(Instant at, ZoneId zone) {

@@ -4,11 +4,9 @@ import java.net.URI;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
-
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-
 import uz.horecaos.platform.migration.application.MigrationConflictException;
 import uz.horecaos.platform.migration.application.MigrationPreconditionException;
 import uz.horecaos.platform.migration.application.MigrationResourceNotFoundException;
@@ -24,13 +22,14 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * {@code GlobalApiErrorHandler}. Only the failures this module alone can raise
  * belong here, and there are three that matter.
  */
-@RestControllerAdvice(assignableTypes = {
-        MigrationProgramController.class,
-        MigrationScopeController.class,
-        MigrationOwnershipController.class,
-        MigrationRunController.class,
-        MigrationQuarantineController.class
-})
+@RestControllerAdvice(
+        assignableTypes = {
+            MigrationProgramController.class,
+            MigrationScopeController.class,
+            MigrationOwnershipController.class,
+            MigrationRunController.class,
+            MigrationQuarantineController.class
+        })
 public class MigrationApiErrorHandler {
 
     @ExceptionHandler(MigrationResourceNotFoundException.class)
@@ -78,8 +77,7 @@ public class MigrationApiErrorHandler {
     @ExceptionHandler(MigrationPreconditionException.class)
     ProblemDetail precondition(MigrationPreconditionException exception) {
         ProblemDetail problem = ApiProblem.withProperties(
-                ErrorCode.RESOURCE_CONFLICT, exception.getMessage(),
-                Map.of("reason", exception.reasonCode()));
+                ErrorCode.RESOURCE_CONFLICT, exception.getMessage(), Map.of("reason", exception.reasonCode()));
         problem.setType(URI.create("https://docs.horecaos.uz/problems/migration/"
                 + exception.reasonCode().toLowerCase(Locale.ROOT).replace('_', '-')));
         return problem;
@@ -97,7 +95,12 @@ public class MigrationApiErrorHandler {
     @ExceptionHandler(IllegalTransitionException.class)
     ProblemDetail illegalTransition(IllegalTransitionException exception) {
         return ApiProblem.withProperties(
-                ErrorCode.RESOURCE_CONFLICT, exception.getMessage(),
-                Map.of("fromState", exception.from().name(), "toState", exception.to().name()));
+                ErrorCode.RESOURCE_CONFLICT,
+                exception.getMessage(),
+                Map.of(
+                        "fromState",
+                        exception.from().name(),
+                        "toState",
+                        exception.to().name()));
     }
 }

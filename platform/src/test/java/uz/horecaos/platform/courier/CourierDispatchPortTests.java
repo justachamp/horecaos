@@ -1,5 +1,8 @@
 package uz.horecaos.platform.courier;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
+
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -11,7 +14,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
-
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -20,7 +22,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
@@ -72,9 +73,6 @@ import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
-
 /**
  * The dispatch half of ADR 0042 — the two ports nothing implemented (ADR 0014,
  * ADR 0042, ADR 0045).
@@ -110,6 +108,7 @@ class CourierDispatchPortTests {
 
     /** The branch door: Amir Temur square, near enough. */
     private static final double BRANCH_LATITUDE = 41.311081;
+
     private static final double BRANCH_LONGITUDE = 69.240562;
 
     /** About 111 m of latitude, which is what a thousandth of a degree buys. */
@@ -146,8 +145,8 @@ class CourierDispatchPortTests {
 
     @BeforeAll
     static void startDatabase() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
-                "Docker is required for courier dispatch tests");
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(), "Docker is required for courier dispatch tests");
         db = TestDatabase.migrated();
     }
 
@@ -201,17 +200,16 @@ class CourierDispatchPortTests {
         JdbcCourierRateCardStore rateCardStore = new JdbcCourierRateCardStore(jdbc);
 
         CourierPolicyResolver policyResolver = new CourierPolicyResolver(policies);
-        CourierLedgerService ledger = new CourierLedgerService(ledgerStore, courierStore,
-                policyResolver, legalEntities, clock);
-        engagements = new CourierEngagementService(courierStore, protection, audit, policyResolver,
-                (tenantId, assetIds) -> false, clock);
-        shifts = new CourierShiftService(shiftStore, courierStore, ledgerStore, rateCardStore,
-                ledger, policyResolver, protection, audit, clock);
+        CourierLedgerService ledger =
+                new CourierLedgerService(ledgerStore, courierStore, policyResolver, legalEntities, clock);
+        engagements = new CourierEngagementService(
+                courierStore, protection, audit, policyResolver, (tenantId, assetIds) -> false, clock);
+        shifts = new CourierShiftService(
+                shiftStore, courierStore, ledgerStore, rateCardStore, ledger, policyResolver, protection, audit, clock);
 
         CourierDispatchGate gate = new CourierDispatchGate(courierStore, shiftStore, policyResolver);
         CourierProximityPort proximity = new LivePositionProximity(telemetryStore, clock);
-        fleet = new InternalFleetAdapter(shiftStore, gate, new JdbcActiveAssignments(jdbc),
-                proximity);
+        fleet = new InternalFleetAdapter(shiftStore, gate, new JdbcActiveAssignments(jdbc), proximity);
         standIn = new InternalFleetConfiguration().unwiredInternalFleetPort();
 
         shiftPort = new CourierShiftAdapter(shiftStore, courierStore);
@@ -219,8 +217,7 @@ class CourierDispatchPortTests {
 
         seedTenancy();
         scooterTypeId = seedCourierType("SCOOTER", 0, 15_000, 2, 60);
-        CourierEngagementService.Registration registration = seedCourier(scooterTypeId, "K-001",
-                "Alisher Karimov");
+        CourierEngagementService.Registration registration = seedCourier(scooterTypeId, "K-001", "Alisher Karimov");
         alisher = registration.courierId();
         alisherEngagement = registration.engagementId();
     }
@@ -263,8 +260,8 @@ class CourierDispatchPortTests {
     }
 
     @Test
-    @DisplayName("a courier with no open shift is nobody's candidate, because nothing else "
-            + "attaches him to a branch")
+    @DisplayName(
+            "a courier with no open shift is nobody's candidate, because nothing else " + "attaches him to a branch")
     void aCourierWhoHasNotSignedOnIsNotACandidate() {
         assertThat(fleet.candidates(TENANT, BRAND, branch, 4_000)).isEmpty();
         assertThat(decide(fleet.candidates(TENANT, BRAND, branch, 4_000)).reason())
@@ -306,10 +303,13 @@ class CourierDispatchPortTests {
         shifts.open(openCommand(alisher, branch));
         assertThat(fleet.candidates(TENANT, BRAND, branch, 4_000)).hasSize(1);
 
-        courierStore.suspend(TENANT, alisherEngagement,
+        courierStore.suspend(
+                TENANT,
+                alisherEngagement,
                 uz.horecaos.platform.courier.domain.EngagementStatus.SUSPENDED_COMPLIANCE,
                 "REGISTRATION_LAPSED",
-                uz.horecaos.platform.courier.domain.RegistrationWarningState.LAPSED, clock.instant());
+                uz.horecaos.platform.courier.domain.RegistrationWarningState.LAPSED,
+                clock.instant());
 
         assertThat(fleet.candidates(TENANT, BRAND, branch, 4_000)).isEmpty();
         // New work stops; the shift he is already on is untouched, because ADR
@@ -348,7 +348,8 @@ class CourierDispatchPortTests {
         shifts.open(openCommand(alisher, branch));
 
         carryingShipment(alisher, "ASSIGNED");
-        assertThat(fleet.candidates(TENANT, BRAND, branch, 4_000)).singleElement()
+        assertThat(fleet.candidates(TENANT, BRAND, branch, 4_000))
+                .singleElement()
                 .satisfies(candidate -> {
                     assertThat(candidate.activeAssignments()).isEqualTo(1);
                     assertThat(candidate.hasCapacity()).isTrue();
@@ -372,8 +373,7 @@ class CourierDispatchPortTests {
     // --------------------------------------------------- distance, and its lies
 
     @Test
-    @DisplayName("the nearer courier ranks first; a pin older than the staleness bound is not a "
-            + "distance at all")
+    @DisplayName("the nearer courier ranks first; a pin older than the staleness bound is not a " + "distance at all")
     void theNearerCourierRanksFirstAndAStalePinRanksLast() {
         UUID bobur = seedCourier(scooterTypeId, "K-002", "Bobur Rashidov").courierId();
         ShiftRow alishersShift = shifts.open(openCommand(alisher, branch));
@@ -401,8 +401,7 @@ class CourierDispatchPortTests {
         clock.set(NOON.plus(LivePositionRules.MAXIMUM_STALENESS).plusSeconds(60));
 
         List<FleetCandidate> stale = fleet.candidates(TENANT, BRAND, branch, 4_000);
-        assertThat(stale).extracting(FleetCandidate::metresFromBranch)
-                .containsOnlyNulls();
+        assertThat(stale).extracting(FleetCandidate::metresFromBranch).containsOnlyNulls();
     }
 
     @Test
@@ -420,8 +419,7 @@ class CourierDispatchPortTests {
     }
 
     @Test
-    @DisplayName("a branch nobody pinned produces no distances rather than a distance from the "
-            + "null island")
+    @DisplayName("a branch nobody pinned produces no distances rather than a distance from the " + "null island")
     void anUngeocodedBranchProducesNoDistances() {
         DutySessionRow session = openDutySession(alisherOnShift());
         pin(session, metresNorth(200), 12.0, NOON.minusSeconds(30));
@@ -443,8 +441,9 @@ class CourierDispatchPortTests {
             + "duty session could open at all")
     void aCourierOpensHisOwnShiftAndTheDutySessionFollowsIt() {
         // What the platform did until this change, on this exact fixture.
-        CourierShiftPort unwired = new uz.horecaos.platform.telemetry.infrastructure.fulfillment
-                .CourierComplianceConfiguration().unwiredCourierShiftPort();
+        CourierShiftPort unwired =
+                new uz.horecaos.platform.telemetry.infrastructure.fulfillment.CourierComplianceConfiguration()
+                        .unwiredCourierShiftPort();
         assertThat(unwired.isWired()).isFalse();
         assertThat(unwired.openShift(TENANT, alisher, branch)).isEmpty();
 
@@ -460,8 +459,7 @@ class CourierDispatchPortTests {
 
         DutySessionRow session = dutySessions.open(openSessionCommand(alisher));
         assertThat(session.shiftId()).isEqualTo(shift.id());
-        assertThat(session.registrationValidUntil())
-                .isEqualTo(open.get().registrationValidUntil());
+        assertThat(session.registrationValidUntil()).isEqualTo(open.get().registrationValidUntil());
     }
 
     @Test
@@ -469,20 +467,25 @@ class CourierDispatchPortTests {
             + "self-employed person's location")
     void aManagerCannotOpenAShiftAndThereforeCannotStartCollection() {
         Throwable refusal = catchThrowable(() -> shifts.open(new CourierShiftService.OpenShift(
-                TENANT, BRAND, branch, alisher, ShiftActor.MANAGER, manager(),
-                "the rider's phone is flat", null, UZS)));
+                TENANT,
+                BRAND,
+                branch,
+                alisher,
+                ShiftActor.MANAGER,
+                manager(),
+                "the rider's phone is flat",
+                null,
+                UZS)));
 
         assertThat(refusal).isInstanceOf(ApiException.class);
-        assertThat(((ApiException) refusal).errorCode())
-                .isEqualTo(ErrorCode.INSUFFICIENT_CAPABILITY);
+        assertThat(((ApiException) refusal).errorCode()).isEqualTo(ErrorCode.INSUFFICIENT_CAPABILITY);
 
         // And the consequence, which is the point of the rule rather than the
         // rule itself: with no shift there is no window to collect in, and the
         // duty session is refused by name.
         assertThat(shiftPort.openShift(TENANT, alisher, branch)).isEmpty();
         Throwable noSession = catchThrowable(() -> dutySessions.open(openSessionCommand(alisher)));
-        assertThat(((ApiException) noSession).properties())
-                .containsEntry("reason", "NO_OPEN_SHIFT");
+        assertThat(((ApiException) noSession).properties()).containsEntry("reason", "NO_OPEN_SHIFT");
         assertThat(openSessionCount()).isZero();
     }
 
@@ -504,7 +507,8 @@ class CourierDispatchPortTests {
         // Both couriers really are on shift, so an empty answer below is the
         // tenant predicate refusing and not a fixture that seeded nothing.
         assertThat(shiftPort.openShift(TENANT, alisher, branch)).isPresent();
-        assertThat(shiftPort.openShift(OTHER_TENANT, otherTenantCourier, theirBranch)).isPresent();
+        assertThat(shiftPort.openShift(OTHER_TENANT, otherTenantCourier, theirBranch))
+                .isPresent();
 
         assertThat(shiftPort.openShift(OTHER_TENANT, alisher, branch)).isEmpty();
         assertThat(shiftPort.openShift(TENANT, otherTenantCourier, theirBranch)).isEmpty();
@@ -524,14 +528,16 @@ class CourierDispatchPortTests {
                 UPDATE fulfillment.courier_engagements
                    SET registration_valid_until = :date, reverification_due_on = :date
                  WHERE tenant_id = :tenantId AND id = :id
-                """).param("tenantId", TENANT).param("id", alisherEngagement)
-                .param("date", expiresOn).update();
+                """)
+                .param("tenantId", TENANT)
+                .param("id", alisherEngagement)
+                .param("date", expiresOn)
+                .update();
 
         shifts.open(openCommand(alisher, branch));
         DutySessionRow tonight = dutySessions.open(openSessionCommand(alisher));
         assertThat(tonight.registrationValidUntil()).isEqualTo(expiresOn);
-        dutySessions.close(TENANT, tonight.id(), "SIGNED_OFF", courier(), "end of shift",
-                "courier.shift.open", "corr");
+        dutySessions.close(TENANT, tonight.id(), "SIGNED_OFF", courier(), "end of shift", "courier.shift.open", "corr");
 
         clock.set(NOON.plus(Duration.ofDays(2)));
 
@@ -563,21 +569,24 @@ class CourierDispatchPortTests {
         // two records are declared with no field one could be put in.
         assertThat(componentTypes(CourierShiftPort.OpenShift.class))
                 .containsExactly("UUID", "UUID", "UUID", "LocalDate");
-        assertThat(componentTypes(FleetCandidate.class))
-                .containsExactly("UUID", "int", "int", "int", "Integer", "int");
+        assertThat(componentTypes(FleetCandidate.class)).containsExactly("UUID", "int", "int", "int", "Integer", "int");
 
         // And the values that actually cross carry nothing of the person beyond
         // the identifier the caller already had.
-        CourierShiftPort.OpenShift open = shiftPort.openShift(TENANT, alisher, branch)
-                .orElseThrow();
-        FleetCandidate candidate = fleet.candidates(TENANT, BRAND, branch, 4_000).getFirst();
+        CourierShiftPort.OpenShift open =
+                shiftPort.openShift(TENANT, alisher, branch).orElseThrow();
+        FleetCandidate candidate =
+                fleet.candidates(TENANT, BRAND, branch, 4_000).getFirst();
 
         assertThat(open.toString()).doesNotContain("Alisher").doesNotContain("312345678901");
         assertThat(candidate.toString()).doesNotContain("Alisher").doesNotContain("K-001");
         // The registration number is held encrypted and unreadable by any of
         // this: the projection the adapter uses does not select the column.
-        assertThat(courierStore.findLiveEngagement(TENANT, alisher).orElseThrow()
-                .protectedRegistrationRef()).isNull();
+        assertThat(courierStore
+                        .findLiveEngagement(TENANT, alisher)
+                        .orElseThrow()
+                        .protectedRegistrationRef())
+                .isNull();
     }
 
     // ------------------------------------------------------------------- helpers
@@ -605,12 +614,18 @@ class CourierDispatchPortTests {
      */
     private SourcingDecision decide(List<FleetCandidate> candidates) {
         DeliverySourcingPolicy policy = DeliverySourcingPolicy.DEFAULTS;
-        PickupPlan plan = PickupPlan.forOrder(clock.instant(), Duration.ofMinutes(30),
-                ZoneId.of("Asia/Tashkent"), policy);
+        PickupPlan plan =
+                PickupPlan.forOrder(clock.instant(), Duration.ofMinutes(30), ZoneId.of("Asia/Tashkent"), policy);
         PartnerOption partner = new PartnerOption(UUID.randomUUID(), "YANDEX", false, true);
 
-        return SourcingPlanner.decide(plan, policy, SourcingMode.FLEET_FIRST, candidates,
-                List.of(partner), SourcingProgress.starting(clock.instant()), clock.instant());
+        return SourcingPlanner.decide(
+                plan,
+                policy,
+                SourcingMode.FLEET_FIRST,
+                candidates,
+                List.of(partner),
+                SourcingProgress.starting(clock.instant()),
+                clock.instant());
     }
 
     private UUID alisherOnShift() {
@@ -619,13 +634,21 @@ class CourierDispatchPortTests {
     }
 
     private CourierShiftService.OpenShift openCommand(UUID courierId, UUID locationId) {
-        return new CourierShiftService.OpenShift(TENANT, BRAND, locationId, courierId,
-                ShiftActor.COURIER, courier(), "opening my shift", null, UZS);
+        return new CourierShiftService.OpenShift(
+                TENANT, BRAND, locationId, courierId, ShiftActor.COURIER, courier(), "opening my shift", null, UZS);
     }
 
     private DutySessionService.OpenCommand openSessionCommand(UUID courierId) {
-        return new DutySessionService.OpenCommand(TENANT, courierId, branch, "handset-1",
-                CollectionGate.ON_DUTY, courier(), "signing on", "courier.shift.open", "corr");
+        return new DutySessionService.OpenCommand(
+                TENANT,
+                courierId,
+                branch,
+                "handset-1",
+                CollectionGate.ON_DUTY,
+                courier(),
+                "signing on",
+                "courier.shift.open",
+                "corr");
     }
 
     private DutySessionRow openDutySession(UUID courierId) {
@@ -650,8 +673,7 @@ class CourierDispatchPortTests {
      * need is a pin with a chosen accuracy and a chosen capture instant, which is
      * precisely what the ingest path derives rather than accepts.
      */
-    private void pin(DutySessionRow session, double latitude, double accuracyMeters,
-            Instant capturedAt) {
+    private void pin(DutySessionRow session, double latitude, double accuracyMeters, Instant capturedAt) {
 
         jdbc.sql("""
                 INSERT INTO fulfillment.courier_positions_live (
@@ -687,8 +709,7 @@ class CourierDispatchPortTests {
         branch = UUID.randomUUID();
         insertLocation(branch, TENANT, BRAND, "CENTRE", BRANCH_LATITUDE, BRANCH_LONGITUDE);
         otherBranch = UUID.randomUUID();
-        insertLocation(otherBranch, TENANT, BRAND, "NORTH", BRANCH_LATITUDE + 0.05,
-                BRANCH_LONGITUDE);
+        insertLocation(otherBranch, TENANT, BRAND, "NORTH", BRANCH_LATITUDE + 0.05, BRANCH_LONGITUDE);
 
         channelId = UUID.randomUUID();
         jdbc.sql("""
@@ -701,7 +722,10 @@ class CourierDispatchPortTests {
         jdbc.sql("""
                 INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
                 VALUES (:id, :tenantId, :brandId, 'MAIN', 'Main menu', 'ACTIVE')
-                """).param("id", catalogId).param("tenantId", TENANT).param("brandId", BRAND)
+                """)
+                .param("id", catalogId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
                 .update();
 
         publicationId = UUID.randomUUID();
@@ -710,8 +734,12 @@ class CourierDispatchPortTests {
                     status, content_hash, activated_at)
                 VALUES (:id, :tenantId, :brandId, :catalogId, 'STOREFRONT', 'PUBLISHED', 'hash',
                         now())
-                """).param("id", publicationId).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("catalogId", catalogId).update();
+                """)
+                .param("id", publicationId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("catalogId", catalogId)
+                .update();
     }
 
     /**
@@ -724,23 +752,42 @@ class CourierDispatchPortTests {
         insertTenant(OTHER_TENANT, "other-tenant");
         insertBrand(OTHER_BRAND, OTHER_TENANT);
         UUID theirBranch = UUID.randomUUID();
-        insertLocation(theirBranch, OTHER_TENANT, OTHER_BRAND, "CENTRE", BRANCH_LATITUDE,
-                BRANCH_LONGITUDE);
+        insertLocation(theirBranch, OTHER_TENANT, OTHER_BRAND, "CENTRE", BRANCH_LATITUDE, BRANCH_LONGITUDE);
 
         UUID theirType = UUID.randomUUID();
-        courierStore.insertType(new CourierTypeRow(theirType, OTHER_TENANT, "SCOOTER", "Scooter",
-                "SCOOTER", 0, 15_000, 2, 60, "ACTIVE"));
-        CourierEngagementService.Registration theirs = engagements.register(
-                new CourierEngagementService.NewCourier(OTHER_TENANT, theirType,
-                        "keycloak-their-courier", "K-900", "Sardor Yusupov",
-                        LocalDate.ofInstant(NOON, ZoneOffset.UTC), manager(), "onboarding", "corr"));
-        engagements.verify(new CourierEngagementService.VerifyRegistration(OTHER_TENANT,
-                theirs.engagementId(), "409999999999",
+        courierStore.insertType(new CourierTypeRow(
+                theirType, OTHER_TENANT, "SCOOTER", "Scooter", "SCOOTER", 0, 15_000, 2, 60, "ACTIVE"));
+        CourierEngagementService.Registration theirs = engagements.register(new CourierEngagementService.NewCourier(
+                OTHER_TENANT,
+                theirType,
+                "keycloak-their-courier",
+                "K-900",
+                "Sardor Yusupov",
+                LocalDate.ofInstant(NOON, ZoneOffset.UTC),
+                manager(),
+                "onboarding",
+                "corr"));
+        engagements.verify(new CourierEngagementService.VerifyRegistration(
+                OTHER_TENANT,
+                theirs.engagementId(),
+                "409999999999",
                 LocalDate.ofInstant(NOON, ZoneOffset.UTC).plusYears(1),
-                VerificationMethod.MANUAL_ATTESTATION, null, manager(), "sighted", "corr"));
+                VerificationMethod.MANUAL_ATTESTATION,
+                null,
+                manager(),
+                "sighted",
+                "corr"));
 
-        shifts.open(new CourierShiftService.OpenShift(OTHER_TENANT, OTHER_BRAND, theirBranch,
-                theirs.courierId(), ShiftActor.COURIER, courier(), "opening", null, UZS));
+        shifts.open(new CourierShiftService.OpenShift(
+                OTHER_TENANT,
+                OTHER_BRAND,
+                theirBranch,
+                theirs.courierId(),
+                ShiftActor.COURIER,
+                courier(),
+                "opening",
+                null,
+                UZS));
         otherTenantCourier = theirs.courierId();
         return theirBranch;
     }
@@ -760,8 +807,7 @@ class CourierDispatchPortTests {
                 """).param("id", id).param("tenantId", tenantId).update();
     }
 
-    private void insertLocation(UUID id, UUID tenantId, UUID brandId, String code,
-            double latitude, double longitude) {
+    private void insertLocation(UUID id, UUID tenantId, UUID brandId, String code, double latitude, double longitude) {
 
         jdbc.sql("""
                 INSERT INTO tenant.locations (id, tenant_id, brand_id, code, slug, display_name,
@@ -769,33 +815,46 @@ class CourierDispatchPortTests {
                 VALUES (:id, :tenantId, :brandId, :code, lower(:code), :code, 'Asia/Tashkent',
                         'ACTIVE', 0, :latitude, :longitude, 'MERCHANT_PIN')
                 """)
-                .param("id", id).param("tenantId", tenantId).param("brandId", brandId)
-                .param("code", code).param("latitude", latitude).param("longitude", longitude)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("code", code)
+                .param("latitude", latitude)
+                .param("longitude", longitude)
                 .update();
     }
 
-    private UUID seedCourierType(String code, int minMetres, Integer maxMetres, int ceiling,
-            int offerTtlSeconds) {
+    private UUID seedCourierType(String code, int minMetres, Integer maxMetres, int ceiling, int offerTtlSeconds) {
 
         UUID id = UUID.randomUUID();
-        courierStore.insertType(new CourierTypeRow(id, TENANT, code, code, "SCOOTER", minMetres,
-                maxMetres, ceiling, offerTtlSeconds, "ACTIVE"));
+        courierStore.insertType(new CourierTypeRow(
+                id, TENANT, code, code, "SCOOTER", minMetres, maxMetres, ceiling, offerTtlSeconds, "ACTIVE"));
         return id;
     }
 
-    private CourierEngagementService.Registration seedCourier(UUID typeId, String reference,
-            String fullName) {
+    private CourierEngagementService.Registration seedCourier(UUID typeId, String reference, String fullName) {
 
-        CourierEngagementService.Registration registration = engagements.register(
-                new CourierEngagementService.NewCourier(TENANT, typeId,
-                        "keycloak-" + reference.toLowerCase(java.util.Locale.ROOT), reference,
-                        fullName, LocalDate.ofInstant(NOON, ZoneOffset.UTC), manager(),
-                        "onboarding a rider", "corr"));
-        engagements.verify(new CourierEngagementService.VerifyRegistration(TENANT,
-                registration.engagementId(), "312345678901",
+        CourierEngagementService.Registration registration =
+                engagements.register(new CourierEngagementService.NewCourier(
+                        TENANT,
+                        typeId,
+                        "keycloak-" + reference.toLowerCase(java.util.Locale.ROOT),
+                        reference,
+                        fullName,
+                        LocalDate.ofInstant(NOON, ZoneOffset.UTC),
+                        manager(),
+                        "onboarding a rider",
+                        "corr"));
+        engagements.verify(new CourierEngagementService.VerifyRegistration(
+                TENANT,
+                registration.engagementId(),
+                "312345678901",
                 LocalDate.ofInstant(NOON, ZoneOffset.UTC).plusYears(1),
-                VerificationMethod.MANUAL_ATTESTATION, null, manager(),
-                "sighted the registration certificate", "corr"));
+                VerificationMethod.MANUAL_ATTESTATION,
+                null,
+                manager(),
+                "sighted the registration certificate",
+                "corr"));
         return registration;
     }
 
@@ -829,9 +888,13 @@ class CourierDispatchPortTests {
                        'Asia/Tashkent'
                   FROM (SELECT CAST(:anchor AS timestamptz) AS anchor) AS moment
                 """)
-                .param("id", planId).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("locationId", branch).param("orderId", orderId)
-                .param("anchor", anchor).update();
+                .param("id", planId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", branch)
+                .param("orderId", orderId)
+                .param("anchor", anchor)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO fulfillment.shipments (
@@ -846,10 +909,16 @@ class CourierDispatchPortTests {
                             THEN anchor + interval '40 minutes' END
                   FROM (SELECT CAST(:anchor AS timestamptz) AS anchor) AS moment
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("locationId", branch).param("orderId", orderId).param("planId", planId)
-                .param("status", status).param("courierId", courierId)
-                .param("anchor", anchor).update();
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", branch)
+                .param("orderId", orderId)
+                .param("planId", planId)
+                .param("status", status)
+                .param("courierId", courierId)
+                .param("anchor", anchor)
+                .update();
     }
 
     private UUID seedDeliveryOrder(int sequence) {
@@ -864,17 +933,27 @@ class CourierDispatchPortTests {
                     tax_minor, total_minor, expires_at)
                 VALUES (:id, :tenantId, :brandId, :locationId, 'UZS', :publicationId, 1, 'hash',
                         50000, 0, 50000, now() + interval '1 hour')
-                """).param("id", quoteId).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("locationId", branch).param("publicationId", publicationId).update();
+                """)
+                .param("id", quoteId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", branch)
+                .param("publicationId", publicationId)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO ordering.carts (id, tenant_id, brand_id, location_id, channel_id,
                     fulfillment_mode, currency, status, guest_reference_hash, expires_at)
                 VALUES (:id, :tenantId, :brandId, :locationId, :channelId, 'DELIVERY', 'UZS',
                         'ACTIVE', :reference, now() + interval '1 hour')
-                """).param("id", cartId).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("locationId", branch).param("channelId", channelId)
-                .param("reference", reference).update();
+                """)
+                .param("id", cartId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", branch)
+                .param("channelId", channelId)
+                .param("reference", reference)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO ordering.orders (id, public_order_number, tenant_id, brand_id,
@@ -887,11 +966,18 @@ class CourierDispatchPortTests {
                         :reference, 'DELIVERY', 'AUTO_CONFIRM', 0, 'NONE', 'CONFIRMED', 'UZS',
                         50000, 0, 50000, :quoteId, 'hash', :publicationId, :cartId, :reference,
                         1, now())
-                """).param("id", orderId).param("number", "X-" + sequence)
-                .param("tenantId", TENANT).param("brandId", BRAND).param("locationId", branch)
-                .param("channelId", channelId).param("reference", reference)
-                .param("quoteId", quoteId).param("publicationId", publicationId)
-                .param("cartId", cartId).update();
+                """)
+                .param("id", orderId)
+                .param("number", "X-" + sequence)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", branch)
+                .param("channelId", channelId)
+                .param("reference", reference)
+                .param("quoteId", quoteId)
+                .param("publicationId", publicationId)
+                .param("cartId", cartId)
+                .update();
 
         return orderId;
     }
@@ -938,17 +1024,17 @@ class CourierDispatchPortTests {
     private static final class ReversibleProtection implements FieldProtection {
 
         @Override
-        public ProtectedValue protect(UUID tenantId, DataClass dataClass, RecordRef record,
-                String plaintext) {
-            byte[] reversed = new StringBuilder(plaintext).reverse().toString()
-                    .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        public ProtectedValue protect(UUID tenantId, DataClass dataClass, RecordRef record, String plaintext) {
+            byte[] reversed =
+                    new StringBuilder(plaintext).reverse().toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
             return new ProtectedValue("test-key", "TEST", new byte[] {1}, reversed, 1);
         }
 
         @Override
         public String reveal(UUID tenantId, ProtectedValue value, RecordRef record, String purpose) {
-            return new StringBuilder(new String(value.ciphertext(),
-                    java.nio.charset.StandardCharsets.UTF_8)).reverse().toString();
+            return new StringBuilder(new String(value.ciphertext(), java.nio.charset.StandardCharsets.UTF_8))
+                    .reverse()
+                    .toString();
         }
 
         @Override
@@ -985,15 +1071,17 @@ class CourierDispatchPortTests {
                     CourierCompensationPolicy.DEFAULTS.graceSeconds(),
                     CourierCompensationPolicy.DEFAULTS.confirmationPointRetentionDays());
 
-            return Optional.of((ResolvedPolicy<P>) new ResolvedPolicy<>(key.code(),
-                    UUID.nameUUIDFromBytes("courier-policy".getBytes(
-                            java.nio.charset.StandardCharsets.UTF_8)),
-                    3, scope.type(), "test", document));
+            return Optional.of((ResolvedPolicy<P>) new ResolvedPolicy<>(
+                    key.code(),
+                    UUID.nameUUIDFromBytes("courier-policy".getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                    3,
+                    scope.type(),
+                    "test",
+                    document));
         }
 
         @Override
-        public <P> Optional<ResolvedPolicy<P>> pinned(PolicyKey<P> key, UUID policyId,
-                int policyVersion) {
+        public <P> Optional<ResolvedPolicy<P>> pinned(PolicyKey<P> key, UUID policyId, int policyVersion) {
             return resolve(key, ResourceScope.tenant(TENANT));
         }
     }

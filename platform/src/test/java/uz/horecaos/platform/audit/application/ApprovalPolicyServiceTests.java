@@ -1,11 +1,10 @@
 package uz.horecaos.platform.audit.application;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -13,20 +12,15 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.ApprovalRequestCommand;
@@ -35,7 +29,6 @@ import uz.horecaos.platform.audit.application.ApprovalPolicyService.PolicyView;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.iam.api.ResourceScope;
-import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -97,7 +90,8 @@ class ApprovalPolicyServiceTests {
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
 
         clock = new MutableClock(START);
-        JdbcAuditRecorder recorder = new JdbcAuditRecorder(jdbc, JsonMapper.builder().build());
+        JdbcAuditRecorder recorder =
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build());
         authoring = new ApprovalPolicyService(jdbc, recorder, clock);
         approvals = new JdbcApprovalService(jdbc, recorder, clock, new SimpleMeterRegistry());
 
@@ -126,8 +120,7 @@ class ApprovalPolicyServiceTests {
 
         assertThat(jdbc.sql("""
                 SELECT threshold_description FROM audit.approval_requests
-                """).query(String.class).single())
-                .isEqualTo("A refund above 1,000,000 UZS");
+                """).query(String.class).single()).isEqualTo("A refund above 1,000,000 UZS");
     }
 
     @Test
@@ -249,15 +242,19 @@ class ApprovalPolicyServiceTests {
         List<PolicyView> everything = authoring.list(TENANT, ACTION, true, 50);
         for (long day = 0; day <= 90; day++) {
             Instant instant = START.plus(Duration.ofDays(day));
-            long inForce = everything.stream().filter(version -> version.isOpenAt(instant)).count();
+            long inForce = everything.stream()
+                    .filter(version -> version.isOpenAt(instant))
+                    .count();
             if (instant.isBefore(retiredFrom)) {
                 assertThat(inForce)
                         .as("versions in force on day %d, where the control is meant to be armed", day)
                         .isEqualTo(1L);
             } else {
                 assertThat(inForce)
-                        .as("versions in force on day %d, after the operator retired the control "
-                                + "on purpose — the one operation allowed to leave a gap", day)
+                        .as(
+                                "versions in force on day %d, after the operator retired the control "
+                                        + "on purpose — the one operation allowed to leave a gap",
+                                day)
                         .isZero();
             }
         }
@@ -287,8 +284,8 @@ class ApprovalPolicyServiceTests {
                 .as("publishing the change clamps the version in force; that much is right")
                 .isEqualTo(scheduled);
 
-        Throwable refusal = catchThrowable(() ->
-                authoring.endDate(TENANT, change.id(), null, owner(), "Finance changed their mind"));
+        Throwable refusal = catchThrowable(
+                () -> authoring.endDate(TENANT, change.id(), null, owner(), "Finance changed their mind"));
 
         // Asserted first because it is the defect itself. Cancelling the scheduled
         // version used to close it at its own valid_from, and from that instant
@@ -323,11 +320,10 @@ class ApprovalPolicyServiceTests {
     @Test
     void theRefusalToCancelNamesTheVersionThatWouldBeStranded() {
         PolicyView inForce = authoring.author(newVersion("A refund above 1,000,000 UZS"));
-        PolicyView change = authoring.author(
-                newVersionFrom("A refund above 100,000 UZS", START.plus(Duration.ofDays(7))));
+        PolicyView change =
+                authoring.author(newVersionFrom("A refund above 100,000 UZS", START.plus(Duration.ofDays(7))));
 
-        assertThatThrownBy(() ->
-                authoring.endDate(TENANT, change.id(), null, owner(), "Finance changed their mind"))
+        assertThatThrownBy(() -> authoring.endDate(TENANT, change.id(), null, owner(), "Finance changed their mind"))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("version %d, which it superseded".formatted(inForce.version()));
     }
@@ -347,11 +343,10 @@ class ApprovalPolicyServiceTests {
     @Test
     void aMistakenlyScheduledFirstEverVersionIsCancelledRatherThanRefused() {
         Instant scheduled = START.plus(Duration.ofDays(7));
-        PolicyView mistake = authoring.author(
-                newVersionFrom("A refund above 10 UZS", scheduled));
+        PolicyView mistake = authoring.author(newVersionFrom("A refund above 10 UZS", scheduled));
 
-        PolicyView cancelled = authoring.endDate(
-                TENANT, mistake.id(), null, owner(), "Wrong threshold; called off before it started");
+        PolicyView cancelled =
+                authoring.endDate(TENANT, mistake.id(), null, owner(), "Wrong threshold; called off before it started");
 
         assertThat(cancelled.validUntil())
                 .as("closed at its own start: an empty window, still readable as evidence")
@@ -383,8 +378,8 @@ class ApprovalPolicyServiceTests {
         Instant scheduled = START.plus(Duration.ofDays(7));
         PolicyView mistake = authoring.author(newVersionFrom("A refund above 10 UZS", scheduled));
 
-        assertThatThrownBy(() -> authoring.endDate(TENANT, mistake.id(),
-                scheduled.plus(Duration.ofDays(3)), owner(), "Run it for three days"))
+        assertThatThrownBy(() -> authoring.endDate(
+                        TENANT, mistake.id(), scheduled.plus(Duration.ofDays(3)), owner(), "Run it for three days"))
                 .isInstanceOf(ApiException.class)
                 .extracting(failure -> ((ApiException) failure).errorCode())
                 .isEqualTo(ErrorCode.VALIDATION_FAILED);
@@ -409,8 +404,7 @@ class ApprovalPolicyServiceTests {
     void supersedingAVersionIsRecorded() {
         Instant scheduled = START.plus(Duration.ofDays(7));
         PolicyView inForce = authoring.author(newVersion("A refund above 1,000,000 UZS"));
-        PolicyView tightening = authoring.author(
-                newVersionFrom("A refund above 100,000 UZS", scheduled));
+        PolicyView tightening = authoring.author(newVersionFrom("A refund above 100,000 UZS", scheduled));
         clock.advance(Duration.ofMinutes(5));
         PolicyView replacement = authoring.author(newVersion("A refund above 500,000 UZS"));
 
@@ -425,12 +419,14 @@ class ApprovalPolicyServiceTests {
         assertThat(jdbc.sql("""
                 SELECT change_document->>'neverTookEffect' FROM audit.audit_events
                  WHERE action_code = 'approval.policy.voided' AND target_id = :id
-                """).param("id", tightening.id()).query(String.class).single())
+                """)
+                        .param("id", tightening.id())
+                        .query(String.class)
+                        .single())
                 .isEqualTo("true");
 
         assertThat(supersessionFacts("approval.policy.superseded", inForce.id(), tightening.id()))
-                .as("shortening a window that did govern something is recorded too, and "
-                        + "distinguishably")
+                .as("shortening a window that did govern something is recorded too, and " + "distinguishably")
                 .isEqualTo(1L);
         assertThat(jdbc.sql("""
                 SELECT count(*) FROM audit.audit_events
@@ -472,7 +468,9 @@ class ApprovalPolicyServiceTests {
         List<PolicyView> everything = authoring.list(TENANT, ACTION, true, 50);
         for (long day = 0; day <= 30; day++) {
             Instant instant = START.plus(Duration.ofDays(day));
-            assertThat(everything.stream().filter(version -> version.isOpenAt(instant)).count())
+            assertThat(everything.stream()
+                            .filter(version -> version.isOpenAt(instant))
+                            .count())
                     .as("versions in force on day %d", day)
                     .isEqualTo(1L);
         }
@@ -484,8 +482,7 @@ class ApprovalPolicyServiceTests {
                 .singleElement()
                 .extracting(PolicyView::thresholdDescription)
                 .isEqualTo("A refund above 1,000,000 UZS");
-        assertThat(approvals.requireApproval(refundWith("c".repeat(64))))
-                .isInstanceOf(ApprovalOutcome.Pending.class);
+        assertThat(approvals.requireApproval(refundWith("c".repeat(64)))).isInstanceOf(ApprovalOutcome.Pending.class);
     }
 
     /**
@@ -501,21 +498,20 @@ class ApprovalPolicyServiceTests {
         PolicyView first = authoring.author(newVersion("A refund above 1,000,000 UZS"));
         clock.advance(Duration.ofMinutes(5));
         PolicyView second = authoring.author(newVersion("A refund above 500,000 UZS"));
-        PolicyView scheduled = authoring.author(
-                newVersionFrom("A refund above 100,000 UZS", START.plus(Duration.ofDays(7))));
+        PolicyView scheduled =
+                authoring.author(newVersionFrom("A refund above 100,000 UZS", START.plus(Duration.ofDays(7))));
 
-        assertThat(catchThrowable(() ->
-                authoring.endDate(TENANT, first.id(), null, owner(), "Retiring the oldest")))
+        assertThat(catchThrowable(() -> authoring.endDate(TENANT, first.id(), null, owner(), "Retiring the oldest")))
                 .as("a superseded version is already closed; reopening the question is not an edit")
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("already ends at");
-        assertThat(catchThrowable(() ->
-                authoring.endDate(TENANT, second.id(), null, owner(), "Retiring the one I can see")))
+        assertThat(catchThrowable(
+                        () -> authoring.endDate(TENANT, second.id(), null, owner(), "Retiring the one I can see")))
                 .as("the version in force was clamped by the scheduled one, so it is closed too")
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("already ends at");
-        assertThat(catchThrowable(() ->
-                authoring.endDate(TENANT, scheduled.id(), null, owner(), "Cancelling the change")))
+        assertThat(catchThrowable(
+                        () -> authoring.endDate(TENANT, scheduled.id(), null, owner(), "Cancelling the change")))
                 .as("and the only open version has not started, so cancelling it is refused")
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("does not take effect until");
@@ -582,8 +578,7 @@ class ApprovalPolicyServiceTests {
         PolicyView published = authoring.author(newVersion("A refund above 1,000,000 UZS"));
         authoring.endDate(TENANT, published.id(), null, owner(), "Withdrawn");
 
-        assertThatThrownBy(() ->
-                authoring.endDate(TENANT, published.id(), null, owner(), "Withdrawn again"))
+        assertThatThrownBy(() -> authoring.endDate(TENANT, published.id(), null, owner(), "Withdrawn again"))
                 .isInstanceOf(ApiException.class)
                 .extracting(failure -> ((ApiException) failure).errorCode())
                 .isEqualTo(ErrorCode.UNPROCESSABLE_STATE);
@@ -593,8 +588,7 @@ class ApprovalPolicyServiceTests {
     void aPolicyBelongingToAnotherTenantIsNotFound() {
         PolicyView published = authoring.author(newVersion("A refund above 1,000,000 UZS"));
 
-        assertThatThrownBy(() ->
-                authoring.endDate(OTHER_TENANT, published.id(), null, owner(), "Not mine"))
+        assertThatThrownBy(() -> authoring.endDate(OTHER_TENANT, published.id(), null, owner(), "Not mine"))
                 .as("an identifier alone never authorises a write")
                 .isInstanceOf(ApiException.class)
                 .extracting(failure -> ((ApiException) failure).errorCode())
@@ -605,8 +599,13 @@ class ApprovalPolicyServiceTests {
     @Test
     void aPolicyCannotNameACapabilityNobodyCanHold() {
         assertThatThrownBy(() -> authoring.author(new NewPolicyVersion(
-                ResourceScope.tenant(TENANT), ACTION, "Above a million",
-                "refund.teleport", null, owner(), "Typo")))
+                        ResourceScope.tenant(TENANT),
+                        ACTION,
+                        "Above a million",
+                        "refund.teleport",
+                        null,
+                        owner(),
+                        "Typo")))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("refund.teleport");
     }
@@ -614,9 +613,13 @@ class ApprovalPolicyServiceTests {
     @Test
     void aPolicyCannotBeBackdated() {
         assertThatThrownBy(() -> authoring.author(new NewPolicyVersion(
-                ResourceScope.tenant(TENANT), ACTION, "Above a million",
-                "refund.approve", START.minus(Duration.ofDays(30)), owner(),
-                "Making it look as though we always required this")))
+                        ResourceScope.tenant(TENANT),
+                        ACTION,
+                        "Above a million",
+                        "refund.approve",
+                        START.minus(Duration.ofDays(30)),
+                        owner(),
+                        "Making it look as though we always required this")))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("before it was authored");
     }
@@ -624,8 +627,13 @@ class ApprovalPolicyServiceTests {
     @Test
     void aTenantCannotAuthorAPlatformPolicy() {
         assertThatThrownBy(() -> authoring.author(new NewPolicyVersion(
-                ResourceScope.platform(), ACTION, "Above a million",
-                "refund.approve", null, owner(), "Overreach")))
+                        ResourceScope.platform(),
+                        ACTION,
+                        "Above a million",
+                        "refund.approve",
+                        null,
+                        owner(),
+                        "Overreach")))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("TENANT, BRAND, or LOCATION");
     }
@@ -648,10 +656,10 @@ class ApprovalPolicyServiceTests {
         jdbc.sql("CREATE ROLE policy_app_probe LOGIN PASSWORD 'probe'").update();
         jdbc.sql("GRANT horecaos_application TO policy_app_probe").update();
         try {
-            JdbcClient asApplication = JdbcClient.create(
-                    db.dataSourceAs("policy_app_probe", "probe"));
+            JdbcClient asApplication = JdbcClient.create(db.dataSourceAs("policy_app_probe", "probe"));
 
-            assertThat(asApplication.sql("""
+            assertThat(asApplication
+                            .sql("""
                     INSERT INTO audit.approval_policies
                         (id, tenant_id, action_code, scope_type, threshold_json,
                          required_approver_capability, valid_from, version, approved_by)
@@ -659,23 +667,27 @@ class ApprovalPolicyServiceTests {
                             jsonb_build_object('description', 'Above 50,000 points'),
                             'loyalty.adjust', :validFrom, 1, 'owner-1')
                     """)
-                    .param("id", UUID.randomUUID())
-                    .param("tenantId", TENANT)
-                    .param("validFrom", clock.instant().atOffset(ZoneOffset.UTC))
-                    .update())
+                            .param("id", UUID.randomUUID())
+                            .param("tenantId", TENANT)
+                            .param("validFrom", clock.instant().atOffset(ZoneOffset.UTC))
+                            .update())
                     .as("without INSERT the control cannot be configured at all")
                     .isEqualTo(1);
 
-            assertThat(asApplication.sql("""
+            assertThat(asApplication
+                            .sql("""
                     UPDATE audit.approval_policies SET valid_until = :end WHERE id = :id
                     """)
-                    .param("id", published.id())
-                    .param("end", clock.instant().plus(Duration.ofDays(1)).atOffset(ZoneOffset.UTC))
-                    .update())
+                            .param("id", published.id())
+                            .param(
+                                    "end",
+                                    clock.instant().plus(Duration.ofDays(1)).atOffset(ZoneOffset.UTC))
+                            .update())
                     .as("closing a version's window is the only way to retire one")
                     .isEqualTo(1);
 
-            assertThatThrownBy(() -> asApplication.sql("""
+            assertThatThrownBy(() ->
+                            asApplication.sql("""
                     UPDATE audit.approval_policies
                        SET threshold_json = jsonb_build_object('description', 'Above 999,999,999 UZS')
                      WHERE id = :id
@@ -689,7 +701,8 @@ class ApprovalPolicyServiceTests {
                             org.springframework.jdbc.UncategorizedSQLException.class);
 
             assertThatThrownBy(() -> asApplication
-                    .sql("DELETE FROM audit.approval_policies").update())
+                            .sql("DELETE FROM audit.approval_policies")
+                            .update())
                     .as("a deleted policy takes the evidence for every decision it drove with it")
                     .isInstanceOfAny(
                             org.springframework.dao.PermissionDeniedDataAccessException.class,
@@ -707,8 +720,13 @@ class ApprovalPolicyServiceTests {
 
     private NewPolicyVersion newVersionFrom(String threshold, Instant validFrom) {
         return new NewPolicyVersion(
-                ResourceScope.tenant(TENANT), ACTION, threshold, "refund.approve", validFrom,
-                owner(), "Finance asked for a second signature on large refunds");
+                ResourceScope.tenant(TENANT),
+                ACTION,
+                threshold,
+                "refund.approve",
+                validFrom,
+                owner(),
+                "Finance asked for a second signature on large refunds");
     }
 
     private static ActorRef owner() {
@@ -721,7 +739,9 @@ class ApprovalPolicyServiceTests {
 
     private ApprovalRequestCommand refundWith(String parametersHash) {
         return new ApprovalRequestCommand(
-                ACTION, parametersHash, ResourceScope.tenant(TENANT),
+                ACTION,
+                parametersHash,
+                ResourceScope.tenant(TENANT),
                 ActorRef.user("agent-1", "Agent One"),
                 "Customer reported a missing item",
                 ApprovalRequestCommand.DEFAULT_VALIDITY);

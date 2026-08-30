@@ -11,12 +11,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
-
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalAction;
 import uz.horecaos.platform.audit.api.AuditClass;
@@ -111,14 +109,12 @@ public class ApprovalPolicyService {
             // valid_until against now alone would list such a row as still to come
             // when its valid_from is in the future, which is the one shape an
             // operator most needs not to be told is live.
-            sql.append(" AND (valid_until IS NULL"
-                    + " OR valid_until > GREATEST(valid_from, CAST(:now AS timestamptz)))");
+            sql.append(
+                    " AND (valid_until IS NULL" + " OR valid_until > GREATEST(valid_from, CAST(:now AS timestamptz)))");
         }
         sql.append(" ORDER BY action_code, scope_type, version DESC LIMIT :limit");
 
-        var statement = jdbc.sql(sql.toString())
-                .param("tenantId", tenantId)
-                .param("limit", limit);
+        var statement = jdbc.sql(sql.toString()).param("tenantId", tenantId).param("limit", limit);
         if (actionCode != null && !actionCode.isBlank()) {
             statement = statement.param("actionCode", actionCode);
         }
@@ -138,11 +134,11 @@ public class ApprovalPolicyService {
      * the exact missing scope instead of trusting an ambiguous green badge.
      */
     public List<PolicyCoverage> coverage(UUID tenantId) {
-        Map<String, List<PolicyView>> byAction = list(tenantId, null, false, 1_000).stream()
-                .collect(Collectors.groupingBy(PolicyView::actionCode));
+        Map<String, List<PolicyView>> byAction =
+                list(tenantId, null, false, 1_000).stream().collect(Collectors.groupingBy(PolicyView::actionCode));
         return Arrays.stream(ApprovalAction.values())
-                .map(action -> new PolicyCoverage(action.code(), action.missingPolicyMode(),
-                        byAction.getOrDefault(action.code(), List.of())))
+                .map(action -> new PolicyCoverage(
+                        action.code(), action.missingPolicyMode(), byAction.getOrDefault(action.code(), List.of())))
                 .toList();
     }
 
@@ -167,13 +163,12 @@ public class ApprovalPolicyService {
             // A backdated control change reads, later, as though the second
             // signature had been required all along for actions that never got
             // one. The start is now or in the future, never before.
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A policy version cannot take effect before it was authored");
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "A policy version cannot take effect before it was authored");
         }
 
         int version = nextVersion(scope, actionCode);
-        List<SupersededVersion> superseded =
-                closeOpenVersion(scope, actionCode, validFrom);
+        List<SupersededVersion> superseded = closeOpenVersion(scope, actionCode, validFrom);
 
         UUID policyId = UUID.randomUUID();
         try {
@@ -204,7 +199,8 @@ public class ApprovalPolicyService {
         } catch (DuplicateKeyException concurrentAuthor) {
             // uq_approval_policy_version. Two operators publishing at once would
             // otherwise silently produce one version that supersedes nothing.
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
                     "Another version of this policy was published concurrently; re-read and retry");
         }
 
@@ -245,8 +241,13 @@ public class ApprovalPolicyService {
      * does not exist until the row that carries it does. Same transaction either
      * way, so a publication that fails records neither.
      */
-    private void recordSupersessions(NewPolicyVersion command, UUID policyId, String actionCode,
-            ResourceScope scope, List<SupersededVersion> superseded, Instant now) {
+    private void recordSupersessions(
+            NewPolicyVersion command,
+            UUID policyId,
+            String actionCode,
+            ResourceScope scope,
+            List<SupersededVersion> superseded,
+            Instant now) {
 
         for (SupersededVersion previous : superseded) {
             Map<String, Object> changes = new LinkedHashMap<>();
@@ -265,9 +266,7 @@ public class ApprovalPolicyService {
             // shortened window governed something; a voided one never will.
             changes.put("neverTookEffect", previous.voided());
             audit.record(AuditFact.of(
-                            previous.voided()
-                                    ? "approval.policy.voided"
-                                    : "approval.policy.superseded",
+                            previous.voided() ? "approval.policy.voided" : "approval.policy.superseded",
                             AuditClass.SECURITY)
                     .by(command.actor())
                     .at(scope)
@@ -337,27 +336,29 @@ public class ApprovalPolicyService {
      * instant some other version was covering.
      */
     @Transactional
-    public PolicyView endDate(UUID tenantId, UUID policyId, Instant requestedEnd,
-            ActorRef actor, String reason) {
+    public PolicyView endDate(UUID tenantId, UUID policyId, Instant requestedEnd, ActorRef actor, String reason) {
 
         Instant now = clock.instant();
-        PolicyView policy = read(tenantId, policyId).orElseThrow(() -> new ApiException(
-                ErrorCode.RESOURCE_NOT_FOUND, "No approval policy %s in this tenant".formatted(policyId)));
+        PolicyView policy = read(tenantId, policyId)
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.RESOURCE_NOT_FOUND, "No approval policy %s in this tenant".formatted(policyId)));
 
         if (policy.validUntil() != null) {
-            throw new ApiException(ErrorCode.UNPROCESSABLE_STATE,
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
                     "This policy version already ends at %s; publish a new version instead"
                             .formatted(policy.validUntil()));
         }
         if (policy.validFrom().isAfter(now)) {
             Optional<Integer> clamped = versionClampedBy(tenantId, policy);
             if (clamped.isPresent()) {
-                throw new ApiException(ErrorCode.UNPROCESSABLE_STATE,
+                throw new ApiException(
+                        ErrorCode.UNPROCESSABLE_STATE,
                         ("Version %d does not take effect until %s, and cancelling it here would "
-                                + "leave version %d, which it superseded, closed with nothing to "
-                                + "follow it — from that date no policy would govern this action "
-                                + "at all. Publish the threshold you want as a new version "
-                                + "instead; it supersedes this one and takes effect straight away.")
+                                        + "leave version %d, which it superseded, closed with nothing to "
+                                        + "follow it — from that date no policy would govern this action "
+                                        + "at all. Publish the threshold you want as a new version "
+                                        + "instead; it supersedes this one and takes effect straight away.")
                                 .formatted(policy.version(), policy.validFrom(), clamped.get()));
             }
             return cancelScheduled(tenantId, policy, requestedEnd, actor, reason, now);
@@ -365,8 +366,7 @@ public class ApprovalPolicyService {
 
         Instant end = requestedEnd == null ? now : requestedEnd;
         if (end.isBefore(now)) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A policy cannot be retired retroactively");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A policy cannot be retired retroactively");
         }
         // No clamp to valid_from here any more, and none is reachable: a version
         // that has not started is refused above, so valid_from <= now <= end.
@@ -382,8 +382,7 @@ public class ApprovalPolicyService {
                 .update();
 
         if (closed != 1) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
-                    "This policy version was ended concurrently");
+            throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "This policy version was ended concurrently");
         }
 
         audit.record(AuditFact.of("approval.policy.ended", AuditClass.SECURITY)
@@ -464,16 +463,17 @@ public class ApprovalPolicyService {
      * it, and the threshold stays readable as evidence that somebody published it
      * and somebody called it off.
      */
-    private PolicyView cancelScheduled(UUID tenantId, PolicyView policy, Instant requestedEnd,
-            ActorRef actor, String reason, Instant now) {
+    private PolicyView cancelScheduled(
+            UUID tenantId, PolicyView policy, Instant requestedEnd, ActorRef actor, String reason, Instant now) {
 
         if (requestedEnd != null && requestedEnd.isAfter(policy.validFrom())) {
             // Ending it after it starts is not a cancellation; it is scheduling a
             // window for a version that is not in force, which this surface does
             // not offer because nothing would follow it either.
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
                     ("Version %d has not taken effect yet, so it can be cancelled outright but not "
-                            + "scheduled to end at %s. Omit the end date to call it off.")
+                                    + "scheduled to end at %s. Omit the end date to call it off.")
                             .formatted(policy.version(), requestedEnd));
         }
 
@@ -487,8 +487,7 @@ public class ApprovalPolicyService {
                 .update();
 
         if (cancelled != 1) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
-                    "This policy version was ended concurrently");
+            throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "This policy version was ended concurrently");
         }
 
         audit.record(AuditFact.of("approval.policy.cancelled", AuditClass.SECURITY)
@@ -572,8 +571,7 @@ public class ApprovalPolicyService {
      * update used to be issued and its row count discarded, which is how voiding
      * a scheduled version became a change nothing recorded.
      */
-    private List<SupersededVersion> closeOpenVersion(
-            ResourceScope scope, String actionCode, Instant from) {
+    private List<SupersededVersion> closeOpenVersion(ResourceScope scope, String actionCode, Instant from) {
 
         OffsetDateTime at = from.atOffset(ZoneOffset.UTC);
         List<SupersededVersion> affected = jdbc.sql("""
@@ -639,11 +637,15 @@ public class ApprovalPolicyService {
      *                  from a shortening because the two are different facts: one
      *                  threshold applied and stopped, the other never applied
      */
-    private record SupersededVersion(
-            UUID id, int version, Instant validUntil, Instant closesAt, boolean voided) { }
+    private record SupersededVersion(UUID id, int version, Instant validUntil, Instant closesAt, boolean voided) {}
 
-    private static Map<String, Object> changeDocument(String actionCode, ResourceScope scope,
-            int version, String threshold, Capability approver, Instant validFrom) {
+    private static Map<String, Object> changeDocument(
+            String actionCode,
+            ResourceScope scope,
+            int version,
+            String threshold,
+            Capability approver,
+            Instant validFrom) {
 
         Map<String, Object> document = new LinkedHashMap<>();
         document.put("actionCode", actionCode);
@@ -672,8 +674,7 @@ public class ApprovalPolicyService {
         return switch (ScopeType.valueOf(policy.scopeType())) {
             case TENANT -> ResourceScope.tenant(policy.tenantId());
             case BRAND -> ResourceScope.brand(policy.tenantId(), policy.brandId());
-            case LOCATION -> ResourceScope.location(
-                    policy.tenantId(), policy.brandId(), policy.locationId());
+            case LOCATION -> ResourceScope.location(policy.tenantId(), policy.brandId(), policy.locationId());
             case PLATFORM -> ResourceScope.platform();
         };
     }
@@ -697,10 +698,11 @@ public class ApprovalPolicyService {
     }
 
     private static String requireActionCode(String actionCode) {
-        if (actionCode == null || !actionCode.matches(ACTION_CODE_PATTERN)
+        if (actionCode == null
+                || !actionCode.matches(ACTION_CODE_PATTERN)
                 || actionCode.length() > MAXIMUM_ACTION_CODE_LENGTH) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "An action code looks like payments.remedy.record, in lower case");
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "An action code looks like payments.remedy.record, in lower case");
         }
         ApprovalAction.require(actionCode);
         return actionCode;
@@ -708,11 +710,12 @@ public class ApprovalPolicyService {
 
     private static String requireThreshold(String threshold) {
         if (threshold == null || threshold.isBlank()) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A threshold description is required: it is what the approver reads");
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "A threshold description is required: it is what the approver reads");
         }
         if (threshold.length() > MAXIMUM_THRESHOLD_LENGTH) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
                     "A threshold description is at most %d characters".formatted(MAXIMUM_THRESHOLD_LENGTH));
         }
         return threshold;
@@ -724,13 +727,14 @@ public class ApprovalPolicyService {
      */
     private static Capability requireApproverCapability(String code) {
         if (code == null || code.isBlank()) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A policy must name the capability its approver has to hold");
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "A policy must name the capability its approver has to hold");
         }
-        return Capability.find(code).orElseThrow(() -> new ApiException(
-                ErrorCode.VALIDATION_FAILED,
-                "No such capability: %s. A policy naming one nobody can hold is unapprovable."
-                        .formatted(code)));
+        return Capability.find(code)
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.VALIDATION_FAILED,
+                        "No such capability: %s. A policy naming one nobody can hold is unapprovable."
+                                .formatted(code)));
     }
 
     /**
@@ -743,8 +747,7 @@ public class ApprovalPolicyService {
      */
     private static ResourceScope requireTenantOwnedScope(ResourceScope scope) {
         if (scope == null || scope.type() == ScopeType.PLATFORM) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A tenant authors TENANT, BRAND, or LOCATION policies");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A tenant authors TENANT, BRAND, or LOCATION policies");
         }
         return scope;
     }
@@ -786,8 +789,7 @@ public class ApprovalPolicyService {
             String requiredApproverCapability,
             Instant validFrom,
             ActorRef actor,
-            String reason) {
-    }
+            String reason) {}
 
     /** One version of one policy, as an operator sees it. */
     public record PolicyView(
@@ -814,9 +816,7 @@ public class ApprovalPolicyService {
 
     /** One registered action and the non-ended policies the tenant has authored for it. */
     public record PolicyCoverage(
-            String actionCode,
-            ApprovalAction.MissingPolicyMode missingPolicyMode,
-            List<PolicyView> configuredScopes) {
+            String actionCode, ApprovalAction.MissingPolicyMode missingPolicyMode, List<PolicyView> configuredScopes) {
 
         public PolicyCoverage {
             configuredScopes = List.copyOf(configuredScopes);

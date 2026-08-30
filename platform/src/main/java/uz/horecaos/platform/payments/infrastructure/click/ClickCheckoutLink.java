@@ -5,7 +5,6 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
-
 import uz.horecaos.platform.payments.domain.SomAmount;
 
 /**
@@ -37,8 +36,7 @@ public final class ClickCheckoutLink {
 
     public static final String BASE = "https://my.click.uz/services/pay/";
 
-    private ClickCheckoutLink() {
-    }
+    private ClickCheckoutLink() {}
 
     /**
      * @param merchantId Click's {@code merchant_id}, documented as mandatory.
@@ -51,8 +49,14 @@ public final class ClickCheckoutLink {
      * @param cardType   {@code uzcard} or {@code humo}, or null to let the customer
      *                   choose
      */
-    public static String build(String merchantId, String serviceId, String merchantUserId,
-            String transactionParam, SomAmount amount, String returnUrl, String cardType) {
+    public static String build(
+            String merchantId,
+            String serviceId,
+            String merchantUserId,
+            String transactionParam,
+            SomAmount amount,
+            String returnUrl,
+            String cardType) {
 
         Map<String, String> parameters = new LinkedHashMap<>();
         putIfPresent(parameters, "merchant_id", merchantId);
@@ -69,7 +73,8 @@ public final class ClickCheckoutLink {
             if (!first) {
                 url.append('&');
             }
-            url.append(parameter.getKey()).append('=')
+            url.append(parameter.getKey())
+                    .append('=')
                     .append(URLEncoder.encode(parameter.getValue(), StandardCharsets.UTF_8));
             first = false;
         }

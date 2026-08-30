@@ -28,8 +28,7 @@ public class CustomerSessionSecurityConfiguration {
     FilterRegistrationBean<CustomerSessionAuthenticationFilter> customerSessionFilterRegistration(
             CustomerSessionAuthenticationFilter filter) {
 
-        FilterRegistrationBean<CustomerSessionAuthenticationFilter> registration =
-                new FilterRegistrationBean<>(filter);
+        FilterRegistrationBean<CustomerSessionAuthenticationFilter> registration = new FilterRegistrationBean<>(filter);
         registration.setEnabled(false);
         return registration;
     }

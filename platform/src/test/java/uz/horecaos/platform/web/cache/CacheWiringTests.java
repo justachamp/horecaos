@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Arrays;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.cache.CacheManager;
@@ -51,11 +50,9 @@ class CacheWiringTests {
             }
         }
 
-        assertThat(unregistered)
-                .as("""
+        assertThat(unregistered).as("""
                         A cache with no registry entry has no declared TTL, size bound, or
-                        invalidation source, which is how a stale answer outlives its cause.""")
-                .isEmpty();
+                        invalidation source, which is how a stale answer outlives its cause.""").isEmpty();
     }
 
     @Test
@@ -73,11 +70,9 @@ class CacheWiringTests {
             }
         }
 
-        assertThat(violations)
-                .as("""
+        assertThat(violations).as("""
                         Deduplication, idempotency, and audit decide whether an effect happens.
-                        An eviction or a restart must never be able to reopen that window.""")
-                .isEmpty();
+                        An eviction or a restart must never be able to reopen that window.""").isEmpty();
     }
 
     @Test
@@ -85,8 +80,9 @@ class CacheWiringTests {
         CacheManager manager = new CacheConfiguration().cacheManager();
 
         assertThat(manager.getCacheNames())
-                .containsExactlyInAnyOrderElementsOf(
-                        Arrays.stream(CacheRegistry.values()).map(CacheRegistry::cacheName).toList());
+                .containsExactlyInAnyOrderElementsOf(Arrays.stream(CacheRegistry.values())
+                        .map(CacheRegistry::cacheName)
+                        .toList());
         assertThat(manager.getCache("someone.invented.this"))
                 .as("a fixed cache list is what stops an unregistered cache appearing implicitly")
                 .isNull();
@@ -98,8 +94,7 @@ class CacheWiringTests {
     }
 
     private static List<Class<?>> platformClasses() {
-        ClassPathScanningCandidateComponentProvider scanner =
-                new ClassPathScanningCandidateComponentProvider(false);
+        ClassPathScanningCandidateComponentProvider scanner = new ClassPathScanningCandidateComponentProvider(false);
         scanner.addIncludeFilter(new AssignableTypeFilter(Object.class));
 
         List<Class<?>> classes = new java.util.ArrayList<>();

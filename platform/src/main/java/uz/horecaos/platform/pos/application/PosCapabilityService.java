@@ -5,12 +5,10 @@ import java.util.EnumMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.pos.api.CapabilitySnapshot;
 import uz.horecaos.platform.pos.api.CapabilitySnapshot.Entry;
 import uz.horecaos.platform.pos.api.CapabilitySupport;
@@ -49,8 +47,11 @@ public class PosCapabilityService {
     private final JdbcPosBindingConfiguration configuration;
     private final Clock clock;
 
-    public PosCapabilityService(PosAdapterRegistry adapters, JdbcPosCapabilityStore capabilities,
-            JdbcPosBindingConfiguration configuration, Clock clock) {
+    public PosCapabilityService(
+            PosAdapterRegistry adapters,
+            JdbcPosCapabilityStore capabilities,
+            JdbcPosBindingConfiguration configuration,
+            Clock clock) {
         this.adapters = adapters;
         this.capabilities = capabilities;
         this.configuration = configuration;
@@ -65,8 +66,7 @@ public class PosCapabilityService {
      *                     reason to fail
      */
     @Transactional
-    public Optional<CapabilitySnapshot> reconcile(UUID tenantId, UUID installationId,
-            String providerType) {
+    public Optional<CapabilitySnapshot> reconcile(UUID tenantId, UUID installationId, String providerType) {
 
         Optional<PosAdapter> adapter = adapters.forProvider(providerType);
         if (adapter.isEmpty()) {
@@ -74,20 +74,25 @@ public class PosCapabilityService {
             return Optional.empty();
         }
 
-        Map<String, String> config = configuration
-                .resolveInstallation(tenantId, installationId)
-                .orElse(Map.of());
+        Map<String, String> config =
+                configuration.resolveInstallation(tenantId, installationId).orElse(Map.of());
 
-        PosContext context = new PosContext(tenantId, installationId, null, null, config,
-                installationId.toString());
+        PosContext context = new PosContext(tenantId, installationId, null, null, config, installationId.toString());
 
         CapabilitySnapshot discovered = adapter.get().discoverCapabilities(context);
         CapabilitySnapshot capped = capAtCeiling(providerType, discovered);
 
-        capped.entries().forEach((capability, entry) -> capabilities.recordProbe(
-                tenantId, installationId, capability,
-                probeStatusOf(entry), null, null, entry.evidence(),
-                capped.adapterVersion(), clock.instant()));
+        capped.entries()
+                .forEach((capability, entry) -> capabilities.recordProbe(
+                        tenantId,
+                        installationId,
+                        capability,
+                        probeStatusOf(entry),
+                        null,
+                        null,
+                        entry.evidence(),
+                        capped.adapterVersion(),
+                        clock.instant()));
 
         capabilities.writeSnapshot(tenantId, installationId, capped);
         return Optional.of(capped);
@@ -126,15 +131,25 @@ public class PosCapabilityService {
             CapabilitySupport limit = ceiling.getOrDefault(capability, CapabilitySupport.UNSUPPORTED);
             CapabilitySupport effective = narrower(entry.support(), limit);
             if (effective != entry.support()) {
-                log.warn("Discovery reported {} for {} on {}, capped to {} by the provider ceiling",
-                        entry.support(), capability, providerType, effective);
+                log.warn(
+                        "Discovery reported {} for {} on {}, capped to {} by the provider ceiling",
+                        entry.support(),
+                        capability,
+                        providerType,
+                        effective);
             }
-            capped.put(capability, new Entry(effective, entry.idempotency(), entry.pushSupported(),
-                    entry.capabilityVersion(), entry.limits(),
-                    effective == entry.support()
-                            ? entry.evidence()
-                            : entry.evidence() + " (capped by the assessed provider ceiling)",
-                    entry.verifiedAt()));
+            capped.put(
+                    capability,
+                    new Entry(
+                            effective,
+                            entry.idempotency(),
+                            entry.pushSupported(),
+                            entry.capabilityVersion(),
+                            entry.limits(),
+                            effective == entry.support()
+                                    ? entry.evidence()
+                                    : entry.evidence() + " (capped by the assessed provider ceiling)",
+                            entry.verifiedAt()));
         });
 
         return new CapabilitySnapshot(capped, discovered.verifiedAt(), discovered.adapterVersion());

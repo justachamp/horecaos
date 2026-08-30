@@ -19,7 +19,6 @@ import java.util.stream.Collectors;
  * capability. Adding one is a release.
  */
 public enum Capability {
-
     TENANT_READ("tenant.read", "tenant", "read"),
     TENANT_WRITE("tenant.write", "tenant", "write"),
     TENANT_ONBOARDING_MANAGE("tenant.onboarding.manage", "tenant", "onboarding.manage"),
@@ -137,8 +136,7 @@ public enum Capability {
      * not folded into {@link #INTEGRATION_INSTALLATION_MANAGE}: installing a
      * provider and deciding which seller it sells for are different powers.
      */
-    PAYMENT_MERCHANT_BINDING_MANAGE("payment.merchant-binding.manage", "payment",
-            "merchant-binding.manage"),
+    PAYMENT_MERCHANT_BINDING_MANAGE("payment.merchant-binding.manage", "payment", "merchant-binding.manage"),
 
     /**
      * ADR 0013 and ADR 0038: reading an order's fiscal documents and the evidence
@@ -323,8 +321,7 @@ public enum Capability {
      * protecting their own kitchen's throughput number, and producing an order
      * nobody was warned about.
      */
-    KITCHEN_TICKET_RELEASE_OVERRIDE("kitchen.ticket.release.override", "kitchen",
-            "ticket.release.override"),
+    KITCHEN_TICKET_RELEASE_OVERRIDE("kitchen.ticket.release.override", "kitchen", "ticket.release.override"),
 
     /**
      * ADR 0047: authoring a branch's sections and tables, and configuring what a
@@ -424,8 +421,7 @@ public enum Capability {
      * several times a week, while republishing a menu is not, and folding the
      * first into the second would put a menu republish in every branch bundle.
      */
-    MARKETPLACE_AVAILABILITY_PUSH("marketplace.availability.push", "marketplace",
-            "availability.push"),
+    MARKETPLACE_AVAILABILITY_PUSH("marketplace.availability.push", "marketplace", "availability.push"),
 
     /**
      * ADR 0040: overriding handover verification.
@@ -449,8 +445,7 @@ public enum Capability {
      * creation is an ADR 0027 audit fact and the grant is one an administrator
      * gives deliberately.
      */
-    MARKETPLACE_ORDER_CREATE_MANUAL("marketplace.order.create.manual", "marketplace",
-            "order.create.manual"),
+    MARKETPLACE_ORDER_CREATE_MANUAL("marketplace.order.create.manual", "marketplace", "order.create.manual"),
 
     /**
      * ADR 0040: reading the liveness matrix — which branch has heard from which
@@ -932,8 +927,8 @@ public enum Capability {
      */
     PLATFORM_ADMIN("platform.admin", "platform", "admin");
 
-    private static final Map<String, Capability> BY_CODE = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(Capability::code, Function.identity()));
+    private static final Map<String, Capability> BY_CODE =
+            Arrays.stream(values()).collect(Collectors.toUnmodifiableMap(Capability::code, Function.identity()));
 
     private final String code;
     private final String resourceType;
@@ -962,8 +957,9 @@ public enum Capability {
     }
 
     public static Capability require(String code) {
-        return find(code).orElseThrow(() -> new UnknownCapabilityException(
-                "Unknown capability \"%s\". Declare it in Capability (ADR 0025).".formatted(code)));
+        return find(code)
+                .orElseThrow(() -> new UnknownCapabilityException(
+                        "Unknown capability \"%s\". Declare it in Capability (ADR 0025).".formatted(code)));
     }
 
     /** Thrown when a stored role references a capability code that code does not declare. */

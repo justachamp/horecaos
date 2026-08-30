@@ -68,8 +68,12 @@ public enum OrderStatus {
      * holding the bag is not a kitchen constraint.
      */
     public boolean occupiesCapacity() {
-        return this == RECEIVED || this == PAYMENT_AUTHORIZING || this == AWAITING_APPROVAL
-                || this == CONFIRMED || this == PREPARING || this == READY;
+        return this == RECEIVED
+                || this == PAYMENT_AUTHORIZING
+                || this == AWAITING_APPROVAL
+                || this == CONFIRMED
+                || this == PREPARING
+                || this == READY;
     }
 
     /** Whether inventory reserved for this order should be given back. */

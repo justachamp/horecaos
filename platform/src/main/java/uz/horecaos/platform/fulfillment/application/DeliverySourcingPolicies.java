@@ -1,7 +1,6 @@
 package uz.horecaos.platform.fulfillment.application;
 
 import java.util.Set;
-
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliverySourcingPolicy;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
@@ -26,6 +25,5 @@ public final class DeliverySourcingPolicies {
                     + "is called, the ceiling on an offer's lifetime, and how far past the pickup "
                     + "window an assignment may still be attempted.");
 
-    private DeliverySourcingPolicies() {
-    }
+    private DeliverySourcingPolicies() {}
 }

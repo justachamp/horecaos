@@ -10,10 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.kitchen.domain.ReleaseMode;
 import uz.horecaos.platform.kitchen.domain.RoutingLevel;
 import uz.horecaos.platform.kitchen.domain.StationRole;
@@ -61,10 +59,14 @@ public class JdbcKitchenStore {
                     :nameRu, :nameUz, :nameEn,
                     :sortOrder, :isFallback, :status, 1, :now, :now)
                 """)
-                .param("id", station.id()).param("tenantId", station.tenantId())
-                .param("brandId", station.brandId()).param("locationId", station.locationId())
-                .param("code", station.code()).param("role", station.role().name())
-                .param("nameRu", station.displayNameRu()).param("nameUz", station.displayNameUz())
+                .param("id", station.id())
+                .param("tenantId", station.tenantId())
+                .param("brandId", station.brandId())
+                .param("locationId", station.locationId())
+                .param("code", station.code())
+                .param("role", station.role().name())
+                .param("nameRu", station.displayNameRu())
+                .param("nameUz", station.displayNameUz())
                 .param("nameEn", station.displayNameEn())
                 .param("sortOrder", station.sortOrder())
                 .param("isFallback", station.fallback())
@@ -78,14 +80,16 @@ public class JdbcKitchenStore {
                  WHERE tenant_id = :tenantId AND location_id = :locationId
                  ORDER BY sort_order, code
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
                 .query(JdbcKitchenStore::mapStation)
                 .list();
     }
 
     public Optional<StationRow> findStation(UUID tenantId, UUID stationId) {
         return jdbc.sql(SELECT_STATION + " WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", stationId)
+                .param("tenantId", tenantId)
+                .param("id", stationId)
                 .query(JdbcKitchenStore::mapStation)
                 .optional();
     }
@@ -97,9 +101,17 @@ public class JdbcKitchenStore {
      * @param stationId   null for a brand rule, which names a role the location
      *                    resolves for itself
      */
-    public void insertRoutingRule(UUID id, UUID tenantId, UUID brandId, UUID locationId,
-            UUID variantId, UUID productId, UUID categoryId, StationRole stationRole,
-            UUID stationId, Instant now) {
+    public void insertRoutingRule(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID variantId,
+            UUID productId,
+            UUID categoryId,
+            StationRole stationRole,
+            UUID stationId,
+            Instant now) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("id", id);
@@ -120,9 +132,7 @@ public class JdbcKitchenStore {
                         station_role, version, created_at, updated_at)
                     VALUES (:id, :tenantId, :brandId, :variantId, :productId, :categoryId,
                         :role, 1, :now, :now)
-                    """)
-                    .params(params)
-                    .update();
+                    """).params(params).update();
         } else {
             jdbc.sql("""
                     INSERT INTO kitchen.location_routing_rules (
@@ -130,9 +140,7 @@ public class JdbcKitchenStore {
                         category_id, station_id, version, created_at, updated_at)
                     VALUES (:id, :tenantId, :brandId, :locationId, :variantId, :productId,
                         :categoryId, :stationId, 1, :now, :now)
-                    """)
-                    .params(params)
-                    .update();
+                    """).params(params).update();
         }
     }
 
@@ -160,8 +168,8 @@ public class JdbcKitchenStore {
      * @return empty when nothing matched, which the caller answers with the
      *         fallback station and {@code KitchenRoutingUnresolved}
      */
-    public Optional<ResolvedStation> resolveStation(UUID tenantId, UUID brandId, UUID locationId,
-            UUID variantId, UUID productId) {
+    public Optional<ResolvedStation> resolveStation(
+            UUID tenantId, UUID brandId, UUID locationId, UUID variantId, UUID productId) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
@@ -225,9 +233,8 @@ public class JdbcKitchenStore {
                 LIMIT 1
                 """)
                 .params(params)
-                .query((row, number) -> new ResolvedStation(
-                        row.getObject("station_id", UUID.class),
-                        levelOf(row.getInt("level"))))
+                .query((row, number) ->
+                        new ResolvedStation(row.getObject("station_id", UUID.class), levelOf(row.getInt("level"))))
                 .optional();
     }
 
@@ -252,7 +259,8 @@ public class JdbcKitchenStore {
                 SELECT id FROM kitchen.stations
                 WHERE tenant_id = :tenantId AND location_id = :locationId AND is_fallback
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
                 .query(UUID.class)
                 .optional();
     }
@@ -288,21 +296,21 @@ public class JdbcKitchenStore {
                     :mode, :channel, :status, :releaseMode, :releaseAt,
                     :releasedAt, :prepSeconds, :targetReadyAt, :routingVersion,
                     1, :now, :now)
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     public Optional<TicketRow> findTicket(UUID tenantId, UUID ticketId) {
         return jdbc.sql(SELECT_TICKET + " WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", ticketId)
+                .param("tenantId", tenantId)
+                .param("id", ticketId)
                 .query(JdbcKitchenStore::mapTicket)
                 .optional();
     }
 
     public Optional<TicketRow> findTicketByOrder(UUID tenantId, UUID orderId) {
         return jdbc.sql(SELECT_TICKET + " WHERE tenant_id = :tenantId AND order_id = :orderId")
-                .param("tenantId", tenantId).param("orderId", orderId)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
                 .query(JdbcKitchenStore::mapTicket)
                 .optional();
     }
@@ -323,8 +331,10 @@ public class JdbcKitchenStore {
                  ORDER BY target_ready_at ASC NULLS LAST, created_at ASC
                  LIMIT :limit
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
-                .param("statuses", statuses).param("limit", limit)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("statuses", statuses)
+                .param("limit", limit)
                 .query(JdbcKitchenStore::mapTicket)
                 .list();
     }
@@ -349,7 +359,8 @@ public class JdbcKitchenStore {
                  FOR UPDATE SKIP LOCKED
                  LIMIT :batchSize
                 """)
-                .param("now", utc(now)).param("batchSize", batchSize)
+                .param("now", utc(now))
+                .param("batchSize", batchSize)
                 .query(JdbcKitchenStore::mapTicket)
                 .list();
     }
@@ -359,8 +370,8 @@ public class JdbcKitchenStore {
      *
      * @return the new version, or empty when somebody else moved it first
      */
-    public Optional<Integer> transitionTicket(UUID tenantId, UUID ticketId, TicketStatus from,
-            TicketStatus to, Instant now) {
+    public Optional<Integer> transitionTicket(
+            UUID tenantId, UUID ticketId, TicketStatus from, TicketStatus to, Instant now) {
         return jdbc.sql("""
                 UPDATE kitchen.tickets
                 SET status = :to,
@@ -382,8 +393,10 @@ public class JdbcKitchenStore {
                 WHERE tenant_id = :tenantId AND id = :id AND status = :from
                 RETURNING version
                 """)
-                .param("tenantId", tenantId).param("id", ticketId)
-                .param("from", from.name()).param("to", to.name())
+                .param("tenantId", tenantId)
+                .param("id", ticketId)
+                .param("from", from.name())
+                .param("to", to.name())
                 .param("now", utc(now))
                 .query(Integer.class)
                 .optional();
@@ -395,8 +408,8 @@ public class JdbcKitchenStore {
      * <p>Conditional on {@code HELD}: re-timing a ticket the kitchen has already
      * started is a fire time for food that is already cooking.
      */
-    public Optional<Integer> rescheduleRelease(UUID tenantId, UUID ticketId, ReleaseMode mode,
-            Instant releaseAt, Instant now) {
+    public Optional<Integer> rescheduleRelease(
+            UUID tenantId, UUID ticketId, ReleaseMode mode, Instant releaseAt, Instant now) {
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
         params.put("id", ticketId);
@@ -412,10 +425,7 @@ public class JdbcKitchenStore {
                     updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :id AND status = 'HELD'
                 RETURNING version
-                """)
-                .params(params)
-                .query(Integer.class)
-                .optional();
+                """).params(params).query(Integer.class).optional();
     }
 
     // ---------------------------------------------------------------- ticket items
@@ -428,9 +438,12 @@ public class JdbcKitchenStore {
                 VALUES (:id, :tenantId, :ticketId, :locationId, :lineId, :stationId,
                     :quantity, :routedBy, :status, 1, :now, :now)
                 """)
-                .param("id", item.id()).param("tenantId", item.tenantId())
-                .param("ticketId", item.ticketId()).param("locationId", item.locationId())
-                .param("lineId", item.orderLineId()).param("stationId", item.stationId())
+                .param("id", item.id())
+                .param("tenantId", item.tenantId())
+                .param("ticketId", item.ticketId())
+                .param("locationId", item.locationId())
+                .param("lineId", item.orderLineId())
+                .param("stationId", item.stationId())
                 .param("quantity", item.quantity())
                 .param("routedBy", item.routedBy().name())
                 .param("status", item.status().name())
@@ -443,14 +456,16 @@ public class JdbcKitchenStore {
                  WHERE tenant_id = :tenantId AND ticket_id = :ticketId
                  ORDER BY created_at, id
                 """)
-                .param("tenantId", tenantId).param("ticketId", ticketId)
+                .param("tenantId", tenantId)
+                .param("ticketId", ticketId)
                 .query(JdbcKitchenStore::mapItem)
                 .list();
     }
 
     public Optional<TicketItemRow> findItem(UUID tenantId, UUID itemId) {
         return jdbc.sql(SELECT_ITEM + " WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", itemId)
+                .param("tenantId", tenantId)
+                .param("id", itemId)
                 .query(JdbcKitchenStore::mapItem)
                 .optional();
     }
@@ -463,8 +478,8 @@ public class JdbcKitchenStore {
      * row, the caller reads the settled state back, and the cook sees the item
      * ready — which is what they were asking for — rather than an error.
      */
-    public Optional<Integer> transitionItem(UUID tenantId, UUID itemId, TicketItemStatus from,
-            TicketItemStatus to, Instant now) {
+    public Optional<Integer> transitionItem(
+            UUID tenantId, UUID itemId, TicketItemStatus from, TicketItemStatus to, Instant now) {
         return jdbc.sql("""
                 UPDATE kitchen.ticket_items
                 SET status = :to,
@@ -480,8 +495,10 @@ public class JdbcKitchenStore {
                 WHERE tenant_id = :tenantId AND id = :id AND status = :from
                 RETURNING version
                 """)
-                .param("tenantId", tenantId).param("id", itemId)
-                .param("from", from.name()).param("to", to.name())
+                .param("tenantId", tenantId)
+                .param("id", itemId)
+                .param("from", from.name())
+                .param("to", to.name())
                 .param("now", utc(now))
                 .query(Integer.class)
                 .optional();
@@ -489,9 +506,18 @@ public class JdbcKitchenStore {
 
     // -------------------------------------------------------------------- events
 
-    public void recordEvent(UUID tenantId, UUID ticketId, UUID ticketItemId, String fromStatus,
-            String toStatus, String trigger, String actorType, String actorId, String reasonCode,
-            String correlationId, Instant occurredAt) {
+    public void recordEvent(
+            UUID tenantId,
+            UUID ticketId,
+            UUID ticketItemId,
+            String fromStatus,
+            String toStatus,
+            String trigger,
+            String actorType,
+            String actorId,
+            String reasonCode,
+            String correlationId,
+            Instant occurredAt) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("id", UUID.randomUUID());
@@ -513,9 +539,7 @@ public class JdbcKitchenStore {
                     trigger, actor_type, actor_id, reason_code, occurred_at, correlation_id)
                 VALUES (:id, :tenantId, :ticketId, :itemId, :fromStatus, :toStatus,
                     :trigger, :actorType, :actorId, :reasonCode, :occurredAt, :correlationId)
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     public List<TicketEventRow> eventsOf(UUID tenantId, UUID ticketId) {
@@ -526,7 +550,8 @@ public class JdbcKitchenStore {
                 WHERE tenant_id = :tenantId AND ticket_id = :ticketId
                 ORDER BY occurred_at, id
                 """)
-                .param("tenantId", tenantId).param("ticketId", ticketId)
+                .param("tenantId", tenantId)
+                .param("ticketId", ticketId)
                 .query((row, number) -> new TicketEventRow(
                         row.getObject("id", UUID.class),
                         row.getObject("ticket_id", UUID.class),
@@ -642,25 +667,72 @@ public class JdbcKitchenStore {
 
     // ------------------------------------------------------------------- records
 
-    public record StationRow(UUID id, UUID tenantId, UUID brandId, UUID locationId, String code,
-            StationRole role, String displayNameRu, String displayNameUz, String displayNameEn,
-            int sortOrder, boolean fallback, String status, int version, Instant createdAt) { }
+    public record StationRow(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            String code,
+            StationRole role,
+            String displayNameRu,
+            String displayNameUz,
+            String displayNameEn,
+            int sortOrder,
+            boolean fallback,
+            String status,
+            int version,
+            Instant createdAt) {}
 
-    public record TicketRow(UUID id, UUID tenantId, UUID brandId, UUID locationId, UUID orderId,
-            String sequenceLabel, String fulfilmentMode, String channelCode, TicketStatus status,
-            ReleaseMode releaseMode, Instant releaseAt, Instant releasedAt,
-            Integer prepEstimateSeconds, Instant targetReadyAt, Instant startedAt, Instant readyAt,
-            Instant handedOverAt, int routingVersion, int version, Instant createdAt) { }
+    public record TicketRow(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID orderId,
+            String sequenceLabel,
+            String fulfilmentMode,
+            String channelCode,
+            TicketStatus status,
+            ReleaseMode releaseMode,
+            Instant releaseAt,
+            Instant releasedAt,
+            Integer prepEstimateSeconds,
+            Instant targetReadyAt,
+            Instant startedAt,
+            Instant readyAt,
+            Instant handedOverAt,
+            int routingVersion,
+            int version,
+            Instant createdAt) {}
 
-    public record TicketItemRow(UUID id, UUID tenantId, UUID ticketId, UUID locationId,
-            UUID orderLineId, UUID stationId, int quantity, RoutingLevel routedBy,
-            TicketItemStatus status, Instant startedAt, Instant readyAt, Instant cancelledAt,
-            int version, Instant createdAt) { }
+    public record TicketItemRow(
+            UUID id,
+            UUID tenantId,
+            UUID ticketId,
+            UUID locationId,
+            UUID orderLineId,
+            UUID stationId,
+            int quantity,
+            RoutingLevel routedBy,
+            TicketItemStatus status,
+            Instant startedAt,
+            Instant readyAt,
+            Instant cancelledAt,
+            int version,
+            Instant createdAt) {}
 
-    public record TicketEventRow(UUID id, UUID ticketId, UUID ticketItemId, String fromStatus,
-            String toStatus, String trigger, String actorType, String actorId, String reasonCode,
-            Instant occurredAt) { }
+    public record TicketEventRow(
+            UUID id,
+            UUID ticketId,
+            UUID ticketItemId,
+            String fromStatus,
+            String toStatus,
+            String trigger,
+            String actorType,
+            String actorId,
+            String reasonCode,
+            Instant occurredAt) {}
 
     /** Which station a line routes to, and which of the five levels decided it. */
-    public record ResolvedStation(UUID stationId, RoutingLevel level) { }
+    public record ResolvedStation(UUID stationId, RoutingLevel level) {}
 }

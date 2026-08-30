@@ -7,10 +7,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -59,8 +57,7 @@ public class CourierEngagementService {
      * and learn whether some other tenant holds that asset. The caller who owns
      * the asset never sees this message, so it costs them nothing.
      */
-    private static final String NO_SUCH_EVIDENCE =
-            "The evidence media asset is not available in this tenant";
+    private static final String NO_SUCH_EVIDENCE = "The evidence media asset is not available in this tenant";
 
     private final JdbcCourierStore couriers;
     private final FieldProtection protection;
@@ -69,8 +66,12 @@ public class CourierEngagementService {
     private final MediaAvailability media;
     private final Clock clock;
 
-    public CourierEngagementService(JdbcCourierStore couriers, FieldProtection protection,
-            AuditRecorder audit, CourierPolicyResolver policies, MediaAvailability media,
+    public CourierEngagementService(
+            JdbcCourierStore couriers,
+            FieldProtection protection,
+            AuditRecorder audit,
+            CourierPolicyResolver policies,
+            MediaAvailability media,
             Clock clock) {
         this.couriers = couriers;
         this.protection = protection;
@@ -89,30 +90,55 @@ public class CourierEngagementService {
     @Transactional
     public Registration register(NewCourier command) {
         UUID courierId = UUID.randomUUID();
-        String protectedName = protection.protect(
-                        command.tenantId(), DataClass.PERSONAL,
-                        new FieldProtection.RecordRef("fulfillment.couriers", "protected_full_name",
-                                courierId),
+        String protectedName = protection
+                .protect(
+                        command.tenantId(),
+                        DataClass.PERSONAL,
+                        new FieldProtection.RecordRef("fulfillment.couriers", "protected_full_name", courierId),
                         command.fullName())
                 .serialize();
 
-        couriers.insertCourier(new CourierRow(courierId, command.tenantId(), command.courierTypeId(),
-                command.principalSubject(), command.displayReference(), protectedName, "ACTIVE", 1));
+        couriers.insertCourier(new CourierRow(
+                courierId,
+                command.tenantId(),
+                command.courierTypeId(),
+                command.principalSubject(),
+                command.displayReference(),
+                protectedName,
+                "ACTIVE",
+                1));
 
         UUID engagementId = UUID.randomUUID();
-        couriers.insertEngagement(new EngagementRow(engagementId, command.tenantId(), courierId,
-                EngagementStatus.PENDING_VERIFICATION, command.engagedFrom(), null,
-                null, null, null, null, null, null, null,
-                RegistrationWarningState.VALID, null, 1));
+        couriers.insertEngagement(new EngagementRow(
+                engagementId,
+                command.tenantId(),
+                courierId,
+                EngagementStatus.PENDING_VERIFICATION,
+                command.engagedFrom(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                RegistrationWarningState.VALID,
+                null,
+                1));
 
         audit.record(AuditFact.of("courier.engagement.opened", AuditClass.BUSINESS)
                 .by(command.actor())
                 .at(ResourceScope.tenant(command.tenantId()))
                 .target("courier_engagement", engagementId)
                 .because(command.reason())
-                .changed(Map.of("courierReference", command.displayReference(),
-                        "engagementType", "SELF_EMPLOYED",
-                        "status", EngagementStatus.PENDING_VERIFICATION.name()))
+                .changed(Map.of(
+                        "courierReference",
+                        command.displayReference(),
+                        "engagementType",
+                        "SELF_EMPLOYED",
+                        "status",
+                        EngagementStatus.PENDING_VERIFICATION.name()))
                 .usingCapability("courier.engagement.manage")
                 .correlatedBy(command.correlationId())
                 .occurredAt(clock.instant())
@@ -132,19 +158,20 @@ public class CourierEngagementService {
     @Transactional
     public EngagementRow verify(VerifyRegistration command) {
         EngagementRow engagement = couriers.findEngagement(command.tenantId(), command.engagementId())
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No such engagement: " + command.engagementId()));
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.RESOURCE_NOT_FOUND, "No such engagement: " + command.engagementId()));
 
         if (command.method() != VerificationMethod.MANUAL_ATTESTATION) {
             // REGISTRY_LOOKUP is modelled and not built. Accepting it here would
             // record an attestation nobody made, under a method nobody ran.
-            throw new ApiException(ErrorCode.INVALID_REQUEST,
+            throw new ApiException(
+                    ErrorCode.INVALID_REQUEST,
                     "Only MANUAL_ATTESTATION is implemented; whether an authoritative "
                             + "machine-readable registration source exists is an open input on ADR 0042");
         }
         if (!command.validUntil().isAfter(today(command.tenantId()))) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A registration that has already expired cannot be attested as valid");
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "A registration that has already expired cannot be attested as valid");
         }
         requireOwnEvidence(command.tenantId(), command.evidenceMediaId());
 
@@ -152,17 +179,29 @@ public class CourierEngagementService {
         LocalDate decayDue = today(command.tenantId()).plusDays(policy.reverificationDays());
         LocalDate dueOn = decayDue.isBefore(command.validUntil()) ? decayDue : command.validUntil();
 
-        String protectedRef = protection.protect(
-                        command.tenantId(), DataClass.PERSONAL_SENSITIVE,
-                        new FieldProtection.RecordRef("fulfillment.courier_engagements",
-                                "protected_registration_ref", command.engagementId()),
+        String protectedRef = protection
+                .protect(
+                        command.tenantId(),
+                        DataClass.PERSONAL_SENSITIVE,
+                        new FieldProtection.RecordRef(
+                                "fulfillment.courier_engagements",
+                                "protected_registration_ref",
+                                command.engagementId()),
                         command.registrationIdentifier())
                 .serialize();
 
-        boolean applied = couriers.verify(command.tenantId(), command.engagementId(),
-                engagement.version(), protectedRef, command.validUntil(), dueOn,
-                command.method(), command.actor().subject(), command.evidenceMediaId(),
-                warningStateFor(dueOn, policy, today(command.tenantId())), clock.instant());
+        boolean applied = couriers.verify(
+                command.tenantId(),
+                command.engagementId(),
+                engagement.version(),
+                protectedRef,
+                command.validUntil(),
+                dueOn,
+                command.method(),
+                command.actor().subject(),
+                command.evidenceMediaId(),
+                warningStateFor(dueOn, policy, today(command.tenantId())),
+                clock.instant());
 
         if (!applied) {
             throw ApiException.staleVersion(engagement.version(), engagement.version() + 1L);
@@ -175,29 +214,41 @@ public class CourierEngagementService {
                 .at(ResourceScope.tenant(command.tenantId()))
                 .target("courier_engagement", command.engagementId())
                 .because(command.reason())
-                .changed(Map.of("method", command.method().name(),
-                        "registrationValidUntil", command.validUntil().toString(),
-                        "reverificationDueOn", dueOn.toString()))
-                .evidence(command.evidenceMediaId() == null ? null : command.evidenceMediaId().toString())
+                .changed(Map.of(
+                        "method",
+                        command.method().name(),
+                        "registrationValidUntil",
+                        command.validUntil().toString(),
+                        "reverificationDueOn",
+                        dueOn.toString()))
+                .evidence(
+                        command.evidenceMediaId() == null
+                                ? null
+                                : command.evidenceMediaId().toString())
                 .usingCapability("courier.registration.verify")
                 .correlatedBy(command.correlationId())
                 .occurredAt(clock.instant())
                 .build());
 
-        return couriers.findEngagement(command.tenantId(), command.engagementId()).orElseThrow();
+        return couriers.findEngagement(command.tenantId(), command.engagementId())
+                .orElseThrow();
     }
 
     /** A manager suspending an engagement for an operational reason. */
     @Transactional
-    public void suspend(UUID tenantId, UUID engagementId, String reasonCode, ActorRef actor,
-            String reason, String correlationId) {
+    public void suspend(
+            UUID tenantId, UUID engagementId, String reasonCode, ActorRef actor, String reason, String correlationId) {
 
-        boolean applied = couriers.suspend(tenantId, engagementId,
-                EngagementStatus.SUSPENDED_OPERATIONAL, reasonCode,
-                RegistrationWarningState.VALID, clock.instant());
+        boolean applied = couriers.suspend(
+                tenantId,
+                engagementId,
+                EngagementStatus.SUSPENDED_OPERATIONAL,
+                reasonCode,
+                RegistrationWarningState.VALID,
+                clock.instant());
         if (!applied) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
-                    "The engagement is not in a state that can be suspended");
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT, "The engagement is not in a state that can be suspended");
         }
 
         audit.record(AuditFact.of("courier.engagement.suspended", AuditClass.BUSINESS)
@@ -205,8 +256,7 @@ public class CourierEngagementService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("courier_engagement", engagementId)
                 .because(reason)
-                .changed(Map.of("status", EngagementStatus.SUSPENDED_OPERATIONAL.name(),
-                        "reasonCode", reasonCode))
+                .changed(Map.of("status", EngagementStatus.SUSPENDED_OPERATIONAL.name(), "reasonCode", reasonCode))
                 .usingCapability("courier.engagement.manage")
                 .correlatedBy(correlationId)
                 .occurredAt(clock.instant())
@@ -219,17 +269,18 @@ public class CourierEngagementService {
      * statement holds only a reference; this is the only path that resolves it.
      */
     @Transactional
-    public String revealRegistrationIdentifier(UUID tenantId, UUID engagementId, String purpose,
-            ActorRef actor, String correlationId) {
+    public String revealRegistrationIdentifier(
+            UUID tenantId, UUID engagementId, String purpose, ActorRef actor, String correlationId) {
 
         String stored = couriers.readProtectedRegistrationRef(tenantId, engagementId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No registration is recorded on this engagement"));
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.RESOURCE_NOT_FOUND, "No registration is recorded on this engagement"));
 
-        String revealed = protection.reveal(tenantId,
+        String revealed = protection.reveal(
+                tenantId,
                 uz.horecaos.platform.iam.api.protection.ProtectedValue.deserialize(stored),
-                new FieldProtection.RecordRef("fulfillment.courier_engagements",
-                        "protected_registration_ref", engagementId),
+                new FieldProtection.RecordRef(
+                        "fulfillment.courier_engagements", "protected_registration_ref", engagementId),
                 purpose);
 
         audit.record(AuditFact.of("courier.registration.revealed", AuditClass.SECURITY)
@@ -286,8 +337,8 @@ public class CourierEngagementService {
         }
     }
 
-    static RegistrationWarningState warningStateFor(LocalDate dueOn,
-            CourierCompensationPolicy policy, LocalDate today) {
+    static RegistrationWarningState warningStateFor(
+            LocalDate dueOn, CourierCompensationPolicy policy, LocalDate today) {
 
         if (dueOn.isBefore(today)) {
             return RegistrationWarningState.LAPSED;
@@ -305,13 +356,27 @@ public class CourierEngagementService {
     }
 
     /** @param displayReference a non-personal handle a dispatch board may show */
-    public record NewCourier(UUID tenantId, UUID courierTypeId, String principalSubject,
-            String displayReference, String fullName, LocalDate engagedFrom, ActorRef actor,
-            String reason, String correlationId) { }
+    public record NewCourier(
+            UUID tenantId,
+            UUID courierTypeId,
+            String principalSubject,
+            String displayReference,
+            String fullName,
+            LocalDate engagedFrom,
+            ActorRef actor,
+            String reason,
+            String correlationId) {}
 
-    public record VerifyRegistration(UUID tenantId, UUID engagementId, String registrationIdentifier,
-            LocalDate validUntil, VerificationMethod method, UUID evidenceMediaId, ActorRef actor,
-            String reason, String correlationId) { }
+    public record VerifyRegistration(
+            UUID tenantId,
+            UUID engagementId,
+            String registrationIdentifier,
+            LocalDate validUntil,
+            VerificationMethod method,
+            UUID evidenceMediaId,
+            ActorRef actor,
+            String reason,
+            String correlationId) {}
 
-    public record Registration(UUID courierId, UUID engagementId) { }
+    public record Registration(UUID courierId, UUID engagementId) {}
 }

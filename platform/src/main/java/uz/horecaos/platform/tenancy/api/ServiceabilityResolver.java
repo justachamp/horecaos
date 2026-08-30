@@ -19,6 +19,6 @@ public interface ServiceabilityResolver {
      *           clock inside, so a scheduled order can ask about its own start
      *           time and so a test can ask about 01:00 without waiting for it
      */
-    Serviceability resolve(UUID tenantId, UUID brandId, UUID locationId,
-            UUID channelId, FulfillmentMode mode, Instant at);
+    Serviceability resolve(
+            UUID tenantId, UUID brandId, UUID locationId, UUID channelId, FulfillmentMode mode, Instant at);
 }

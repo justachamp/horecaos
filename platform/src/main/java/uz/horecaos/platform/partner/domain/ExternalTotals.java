@@ -44,7 +44,10 @@ public record ExternalTotals(
         if (!currency.matches("^[A-Z]{3}$")) {
             throw new IllegalArgumentException("A currency is an ISO 4217 alphabetic code");
         }
-        if (customerPaidTotalMinor < 0 || subtotalMinor < 0 || discountMinor < 0 || feeMinor < 0
+        if (customerPaidTotalMinor < 0
+                || subtotalMinor < 0
+                || discountMinor < 0
+                || feeMinor < 0
                 || (taxMinor != null && taxMinor < 0)) {
             throw new IllegalArgumentException("Partner amounts are non-negative minor units");
         }
@@ -63,8 +66,7 @@ public record ExternalTotals(
      * constraint is what stops a later import path bypassing it.
      */
     public boolean reconciles() {
-        return customerPaidTotalMinor
-                == subtotalMinor + effectiveTaxMinor() + feeMinor - discountMinor;
+        return customerPaidTotalMinor == subtotalMinor + effectiveTaxMinor() + feeMinor - discountMinor;
     }
 
     /**

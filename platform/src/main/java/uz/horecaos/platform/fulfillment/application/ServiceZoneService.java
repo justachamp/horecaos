@@ -7,12 +7,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.fulfillment.domain.BranchOrigin;
 import uz.horecaos.platform.fulfillment.domain.VersionStatus;
 import uz.horecaos.platform.fulfillment.domain.zone.ZoneRole;
@@ -59,11 +56,10 @@ public class ServiceZoneService {
     }
 
     @Transactional
-    public UUID createZone(UUID tenantId, UUID brandId, ZoneRole role, String code,
-            String nameRu, String nameUz, String nameEn) {
+    public UUID createZone(
+            UUID tenantId, UUID brandId, ZoneRole role, String code, String nameRu, String nameUz, String nameEn) {
         UUID zoneId = UUID.randomUUID();
-        store.insertZone(zoneId, tenantId, brandId, role, code, nameRu, nameUz, nameEn,
-                clock.instant());
+        store.insertZone(zoneId, tenantId, brandId, role, code, nameRu, nameUz, nameEn, clock.instant());
         return zoneId;
     }
 
@@ -83,15 +79,14 @@ public class ServiceZoneService {
      *                                               failures it was, and what to do
      */
     @Transactional
-    public DraftedVersion draftCircleVersion(NewVersion request, UUID originLocationId,
-            int radiusMeters) {
+    public DraftedVersion draftCircleVersion(NewVersion request, UUID originLocationId, int radiusMeters) {
 
         if (radiusMeters <= 0) {
             throw new IllegalArgumentException("A circle needs a positive radius");
         }
         BranchOrigin origin = store.findBranch(request.tenantId(), originLocationId)
-                .orElseThrow(() -> new DeliveryResourceNotFoundException(
-                        "No location " + originLocationId + " for this tenant"))
+                .orElseThrow(() ->
+                        new DeliveryResourceNotFoundException("No location " + originLocationId + " for this tenant"))
                 .origin();
 
         int version = store.nextVersion(request.tenantId(), request.zoneId());
@@ -107,7 +102,9 @@ public class ServiceZoneService {
 
         store.insertCircleVersion(
                 draft(request, id, version, originLocationId, now),
-                origin.point(), radiusMeters, objectMapper.writeValueAsString(shape));
+                origin.point(),
+                radiusMeters,
+                objectMapper.writeValueAsString(shape));
         return new DraftedVersion(id, request.zoneId(), version);
     }
 
@@ -122,8 +119,8 @@ public class ServiceZoneService {
         shape.put("kind", "POLYGON");
         shape.put("geoJson", geoJson);
 
-        store.insertPolygonVersion(draft(request, id, version, null, now), geoJson,
-                objectMapper.writeValueAsString(shape));
+        store.insertPolygonVersion(
+                draft(request, id, version, null, now), geoJson, objectMapper.writeValueAsString(shape));
         return new DraftedVersion(id, request.zoneId(), version);
     }
 
@@ -137,20 +134,19 @@ public class ServiceZoneService {
     @Transactional
     public void activate(UUID tenantId, UUID brandId, UUID zoneId, int version, UUID actorId) {
         store.zoneRole(tenantId, brandId, zoneId)
-                .orElseThrow(() -> new DeliveryResourceNotFoundException(
-                        "No zone " + zoneId + " for this brand"));
+                .orElseThrow(() -> new DeliveryResourceNotFoundException("No zone " + zoneId + " for this brand"));
 
         VersionStatus status = store.versionStatus(tenantId, zoneId, version)
-                .orElseThrow(() -> new DeliveryResourceNotFoundException(
-                        "Zone %s has no version %d".formatted(zoneId, version)));
+                .orElseThrow(() ->
+                        new DeliveryResourceNotFoundException("Zone %s has no version %d".formatted(zoneId, version)));
         if (status != VersionStatus.DRAFT) {
             throw new ZoneActivationRefusedException(
                     List.of("Only a DRAFT version can be activated; this one is " + status));
         }
 
         var facts = store.geometryFacts(tenantId, zoneId, version)
-                .orElseThrow(() -> new DeliveryResourceNotFoundException(
-                        "Zone %s has no version %d".formatted(zoneId, version)));
+                .orElseThrow(() ->
+                        new DeliveryResourceNotFoundException("Zone %s has no version %d".formatted(zoneId, version)));
 
         List<String> problems = new ArrayList<>();
         if (!facts.validRings()) {
@@ -160,10 +156,9 @@ public class ServiceZoneService {
         }
         if (facts.areaSquareMeters() > MAX_ZONE_AREA_SQUARE_METERS) {
             problems.add(("This polygon covers %.0f km², above the %.0f km² limit. A zone this "
-                    + "size is almost always a drawing slip, and activating one stops nothing "
-                    + "and serves everything.")
-                    .formatted(facts.areaSquareMeters() / 1_000_000d,
-                            MAX_ZONE_AREA_SQUARE_METERS / 1_000_000d));
+                            + "size is almost always a drawing slip, and activating one stops nothing "
+                            + "and serves everything.")
+                    .formatted(facts.areaSquareMeters() / 1_000_000d, MAX_ZONE_AREA_SQUARE_METERS / 1_000_000d));
         }
         if (facts.hasRegion() && !facts.withinRegion()) {
             problems.add("The polygon falls outside its region's bounding box, which is what a "
@@ -200,13 +195,24 @@ public class ServiceZoneService {
         store.bindLocation(tenantId, brandId, zoneId, locationId, clock.instant());
     }
 
-    private JdbcServiceZoneStore.DraftVersion draft(NewVersion request, UUID id, int version,
-            UUID originLocationId, Instant now) {
+    private JdbcServiceZoneStore.DraftVersion draft(
+            NewVersion request, UUID id, int version, UUID originLocationId, Instant now) {
         return new JdbcServiceZoneStore.DraftVersion(
-                id, request.tenantId(), request.zoneId(), request.role(), version,
-                originLocationId, request.regionId(), resolveRegion(request), request.priority(),
-                request.currency(), request.deliveryTariffId(), request.freeDeliveryFromMinor(),
-                request.minBasketMinor(), request.createdBy(), now);
+                id,
+                request.tenantId(),
+                request.zoneId(),
+                request.role(),
+                version,
+                originLocationId,
+                request.regionId(),
+                resolveRegion(request),
+                request.priority(),
+                request.currency(),
+                request.deliveryTariffId(),
+                request.freeDeliveryFromMinor(),
+                request.minBasketMinor(),
+                request.createdBy(),
+                now);
     }
 
     /**
@@ -247,11 +253,19 @@ public class ServiceZoneService {
      *                 resolved rather than left to the planner
      */
     public record NewVersion(
-            UUID tenantId, UUID brandId, UUID zoneId, ZoneRole role, UUID regionId,
-            int priority, String currency, UUID deliveryTariffId,
-            Long freeDeliveryFromMinor, Long minBasketMinor, UUID createdBy) { }
+            UUID tenantId,
+            UUID brandId,
+            UUID zoneId,
+            ZoneRole role,
+            UUID regionId,
+            int priority,
+            String currency,
+            UUID deliveryTariffId,
+            Long freeDeliveryFromMinor,
+            Long minBasketMinor,
+            UUID createdBy) {}
 
-    public record DraftedVersion(UUID id, UUID zoneId, int version) { }
+    public record DraftedVersion(UUID id, UUID zoneId, int version) {}
 
     /** Carries every reason at once, so the console can list them. */
     public static final class ZoneActivationRefusedException extends RuntimeException {

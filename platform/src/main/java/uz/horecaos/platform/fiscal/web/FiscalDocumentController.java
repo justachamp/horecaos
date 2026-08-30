@@ -1,17 +1,17 @@
 package uz.horecaos.platform.fiscal.web;
 
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,10 +20,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.fiscal.api.PartnerFiscalizationPort;
 import uz.horecaos.platform.fiscal.application.FiscalDocumentService;
@@ -56,8 +52,7 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  */
 @RestController
 @RequestMapping("/api/v1/tenants/{tenantId}/fiscal")
-@Tag(name = "Fiscal documents",
-        description = "Unreported receipts, blocked work, and receipt coverage")
+@Tag(name = "Fiscal documents", description = "Unreported receipts, blocked work, and receipt coverage")
 public class FiscalDocumentController {
 
     private static final int MAX_WINDOW_DAYS = 92;
@@ -72,7 +67,8 @@ public class FiscalDocumentController {
 
     @GetMapping("/documents/blocked")
     @RequiresCapability(value = Capability.FISCAL_DOCUMENT_READ, scope = ScopeType.TENANT)
-    @Operation(summary = "Documents that owe a receipt and are waiting for a person",
+    @Operation(
+            summary = "Documents that owe a receipt and are waiting for a person",
             description = "Longest-waiting first. A blocked document is work with a reason, not "
                     + "an error: PROVIDER_REPORT_OVERDUE means a payment partner was asked and "
                     + "never answered, which on Payme's inbound-only reporting path is otherwise "
@@ -83,23 +79,24 @@ public class FiscalDocumentController {
             @RequestParam(defaultValue = "100") @Max(500) int limit) {
 
         if (reasonCode != null && !FiscalReasonCode.BLOCKING.contains(reasonCode)) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "Not a blocking reason code", Map.of("reasonCode", reasonCode));
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "Not a blocking reason code", Map.of("reasonCode", reasonCode));
         }
 
         List<BlockedDocumentResponse> rows = documents.blocked(tenantId, reasonCode, limit).stream()
                 .map(BlockedDocumentResponse::of)
                 .toList();
 
-        return ResponseEntity.ok(new BlockedWorklistResponse(rows.size(), rows,
-                documents.partnerFiscalizationWired()
-                        ? null
-                        : PartnerFiscalizationPort.NOT_WIRED_WARNING));
+        return ResponseEntity.ok(new BlockedWorklistResponse(
+                rows.size(),
+                rows,
+                documents.partnerFiscalizationWired() ? null : PartnerFiscalizationPort.NOT_WIRED_WARNING));
     }
 
     @GetMapping("/orders/{orderId}/documents")
     @RequiresCapability(value = Capability.FISCAL_DOCUMENT_READ, scope = ScopeType.TENANT)
-    @Operation(summary = "Every fiscal document for one order",
+    @Operation(
+            summary = "Every fiscal document for one order",
             description = "A list, always. One order has several documents by design: a Payme "
                     + "PERFORM and its CANCEL are two receipts by the provider's own statement, "
                     + "and a split tender settles on two paths. A caller that expects one is "
@@ -114,31 +111,30 @@ public class FiscalDocumentController {
 
     @GetMapping("/coverage")
     @RequiresCapability(value = Capability.FISCAL_DOCUMENT_READ, scope = ScopeType.TENANT)
-    @Operation(summary = "How much of a window's trade has a provider receipt",
+    @Operation(
+            summary = "How much of a window's trade has a provider receipt",
             description = "Reported as counts and two separate shares, never as one coverage "
                     + "figure. Cash is this market's majority tender and no payment provider can "
                     + "receipt it at all, so a single number would either report an unreceipted "
                     + "majority as healthy or a compliant restaurant as failing.")
     public ResponseEntity<CoverageResponse> coverage(
-            @PathVariable UUID tenantId,
-            @RequestParam Instant from,
-            @RequestParam Instant to) {
+            @PathVariable UUID tenantId, @RequestParam Instant from, @RequestParam Instant to) {
 
         if (!to.isAfter(from)) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "The window must end after it starts");
         }
         if (from.plus(MAX_WINDOW_DAYS, ChronoUnit.DAYS).isBefore(to)) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A coverage window is at most %d days".formatted(MAX_WINDOW_DAYS));
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "A coverage window is at most %d days".formatted(MAX_WINDOW_DAYS));
         }
 
         return ResponseEntity.ok(CoverageResponse.of(documents.coverage(tenantId, from, to)));
     }
 
     @PostMapping("/documents/{documentId}/retries")
-    @RequiresCapability(value = Capability.FISCAL_DOCUMENT_RESOLVE, scope = ScopeType.TENANT,
-            mutating = true)
-    @Operation(summary = "Ask the partner for this document's receipt again",
+    @RequiresCapability(value = Capability.FISCAL_DOCUMENT_RESOLVE, scope = ScopeType.TENANT, mutating = true)
+    @Operation(
+            summary = "Ask the partner for this document's receipt again",
             description = "Reuses the document and never creates a second one: two sale receipts "
                     + "for one payment is a discrepancy with the tax authority that can only be "
                     + "corrected, never deleted. On the Click path the adapter reads back through "
@@ -146,16 +142,26 @@ public class FiscalDocumentController {
                     + "submission worked — because Click does not document submit_items as "
                     + "idempotent.")
     public ResponseEntity<ResolutionResponse> retry(
-            @PathVariable UUID tenantId, @PathVariable UUID documentId,
-            @Valid @RequestBody ResolutionRequest body, HttpServletRequest request) {
+            @PathVariable UUID tenantId,
+            @PathVariable UUID documentId,
+            @Valid @RequestBody ResolutionRequest body,
+            HttpServletRequest request) {
 
         long expected = AggregateVersion.requireIfMatch(request);
         String idempotencyKey = requireIdempotencyKey(request);
 
         try {
-            var result = documents.retry(tenantId, documentId, (int) expected, idempotencyKey,
-                    actor(), body.reason(), request.getHeader("X-Correlation-Id"));
-            return ResponseEntity.ok(new ResolutionResponse(documentId, result.outcome().name(),
+            var result = documents.retry(
+                    tenantId,
+                    documentId,
+                    (int) expected,
+                    idempotencyKey,
+                    actor(),
+                    body.reason(),
+                    request.getHeader("X-Correlation-Id"));
+            return ResponseEntity.ok(new ResolutionResponse(
+                    documentId,
+                    result.outcome().name(),
                     result.version(),
                     result.outcome() == PartnerFiscalizationPort.Outcome.NOT_WIRED
                             ? PartnerFiscalizationPort.NOT_WIRED_WARNING
@@ -163,10 +169,14 @@ public class FiscalDocumentController {
         } catch (FiscalDocumentService.UnknownDocumentException missing) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
         } catch (FiscalDocumentService.NotRetryableException refused) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT, refused.getMessage(),
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    refused.getMessage(),
                     Map.of("status", refused.state().name()));
         } catch (FiscalDocumentService.NoSellerException unsellable) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT, unsellable.getMessage(),
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    unsellable.getMessage(),
                     Map.of("reasonCode", FiscalReasonCode.NO_FISCAL_PATH));
         } catch (FiscalDocumentService.StaleDocumentException stale) {
             throw ApiException.staleVersion(stale.expected(), stale.actual());
@@ -174,29 +184,37 @@ public class FiscalDocumentController {
     }
 
     @PostMapping("/documents/{documentId}/unblocks")
-    @RequiresCapability(value = Capability.FISCAL_DOCUMENT_RESOLVE, scope = ScopeType.TENANT,
-            mutating = true)
-    @Operation(summary = "Return a blocked document to the queue",
+    @RequiresCapability(value = Capability.FISCAL_DOCUMENT_RESOLVE, scope = ScopeType.TENANT, mutating = true)
+    @Operation(
+            summary = "Return a blocked document to the queue",
             description = "For the case where the thing blocking it is fixed — a classification "
                     + "entered, a terminal brought back. It asserts that the obstacle is gone, "
                     + "not that a receipt exists, so the document goes back to PENDING and its "
                     + "deadline is cleared rather than being marked resolved.")
     public ResponseEntity<ResolutionResponse> unblock(
-            @PathVariable UUID tenantId, @PathVariable UUID documentId,
-            @Valid @RequestBody ResolutionRequest body, HttpServletRequest request) {
+            @PathVariable UUID tenantId,
+            @PathVariable UUID documentId,
+            @Valid @RequestBody ResolutionRequest body,
+            HttpServletRequest request) {
 
         long expected = AggregateVersion.requireIfMatch(request);
         requireIdempotencyKey(request);
 
         try {
-            documents.reopen(tenantId, documentId, (int) expected, actor(), body.reason(),
+            documents.reopen(
+                    tenantId,
+                    documentId,
+                    (int) expected,
+                    actor(),
+                    body.reason(),
                     request.getHeader("X-Correlation-Id"));
-            return ResponseEntity.ok(new ResolutionResponse(documentId, "PENDING",
-                    (int) expected + 1, null));
+            return ResponseEntity.ok(new ResolutionResponse(documentId, "PENDING", (int) expected + 1, null));
         } catch (FiscalDocumentService.UnknownDocumentException missing) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
         } catch (FiscalDocumentService.NotRetryableException refused) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT, refused.getMessage(),
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    refused.getMessage(),
                     Map.of("status", refused.state().name()));
         } catch (FiscalDocumentService.StaleDocumentException stale) {
             throw ApiException.staleVersion(stale.expected(), stale.actual());
@@ -211,23 +229,23 @@ public class FiscalDocumentController {
     private static String requireIdempotencyKey(HttpServletRequest request) {
         String key = request.getHeader("Idempotency-Key");
         if (key == null || key.isBlank()) {
-            throw new ApiException(ErrorCode.IDEMPOTENCY_KEY_REQUIRED,
+            throw new ApiException(
+                    ErrorCode.IDEMPOTENCY_KEY_REQUIRED,
                     "A fiscal resolution command carries an Idempotency-Key (ADR 0031)");
         }
         return key;
     }
 
     /** Every command here records why, because ADR 0027 refuses a user action without one. */
-    record ResolutionRequest(@NotBlank @Size(max = 255) String reason) { }
+    record ResolutionRequest(@NotBlank @Size(max = 255) String reason) {}
 
-    record ResolutionResponse(UUID documentId, String outcome, int version, String warning) { }
+    record ResolutionResponse(UUID documentId, String outcome, int version, String warning) {}
 
     /**
      * @param warning present when no provider adapter is wired, so the gap appears
      *                on every read rather than in a startup log nobody sees again
      */
-    record BlockedWorklistResponse(int count, List<BlockedDocumentResponse> documents,
-            String warning) { }
+    record BlockedWorklistResponse(int count, List<BlockedDocumentResponse> documents, String warning) {}
 
     /**
      * @param hasEvidence whether the tax authority's identifiers are on the row.
@@ -252,11 +270,22 @@ public class FiscalDocumentController {
             Instant blockedAt) {
 
         static BlockedDocumentResponse of(FiscalDocumentRow row) {
-            return new BlockedDocumentResponse(row.id(), row.orderId(), row.legalEntityId(),
-                    row.documentType(), row.responsibility(), row.providerType(),
-                    row.state().name(), row.reasonCode(), row.reasonNote(), row.hasEvidence(),
-                    row.attemptCount(), row.version(), row.submittedAt(),
-                    row.reportingDeadlineAt(), row.blockedAt());
+            return new BlockedDocumentResponse(
+                    row.id(),
+                    row.orderId(),
+                    row.legalEntityId(),
+                    row.documentType(),
+                    row.responsibility(),
+                    row.providerType(),
+                    row.state().name(),
+                    row.reasonCode(),
+                    row.reasonNote(),
+                    row.hasEvidence(),
+                    row.attemptCount(),
+                    row.version(),
+                    row.submittedAt(),
+                    row.reportingDeadlineAt(),
+                    row.blockedAt());
         }
     }
 
@@ -286,15 +315,22 @@ public class FiscalDocumentController {
             String warning) {
 
         static CoverageResponse of(FiscalCoverage coverage) {
-            return new CoverageResponse(coverage.from(), coverage.to(), coverage.saleDocuments(),
-                    coverage.issued(), coverage.notApplicable(), coverage.notApplicableCash(),
-                    coverage.blocked(), coverage.failed(), coverage.awaitingProvider(),
-                    coverage.unreceipted(), coverage.issuedBasisPoints(),
-                    coverage.notApplicableBasisPoints(), coverage.unreceiptedBasisPoints(),
+            return new CoverageResponse(
+                    coverage.from(),
+                    coverage.to(),
+                    coverage.saleDocuments(),
+                    coverage.issued(),
+                    coverage.notApplicable(),
+                    coverage.notApplicableCash(),
+                    coverage.blocked(),
+                    coverage.failed(),
+                    coverage.awaitingProvider(),
+                    coverage.unreceipted(),
+                    coverage.issuedBasisPoints(),
+                    coverage.notApplicableBasisPoints(),
+                    coverage.unreceiptedBasisPoints(),
                     coverage.providerPathIsMinority(),
-                    coverage.partnerFiscalizationWired()
-                            ? null
-                            : PartnerFiscalizationPort.NOT_WIRED_WARNING);
+                    coverage.partnerFiscalizationWired() ? null : PartnerFiscalizationPort.NOT_WIRED_WARNING);
         }
     }
 }

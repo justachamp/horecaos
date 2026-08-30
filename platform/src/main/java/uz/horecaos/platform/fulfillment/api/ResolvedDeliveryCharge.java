@@ -65,8 +65,8 @@ public record ResolvedDeliveryCharge(
      * tenant that never named one.
      */
     public static ResolvedDeliveryCharge none(DeliveryFeeOutcome outcome, String currency) {
-        return new ResolvedDeliveryCharge(outcome, currency, 0L, 0L, null, null,
-                null, null, null, null, null, null, null, null, null, List.of());
+        return new ResolvedDeliveryCharge(
+                outcome, currency, 0L, 0L, null, null, null, null, null, null, null, null, null, null, null, List.of());
     }
 
     public boolean isResolved() {
@@ -83,19 +83,36 @@ public record ResolvedDeliveryCharge(
      */
     public String canonicalForm() {
         return new StringBuilder()
-                .append("outcome=").append(outcome)
-                .append(":currency=").append(currency)
-                .append(":fee=").append(feeMinor)
-                .append(":tariffDiscount=").append(tariffDiscountMinor)
-                .append(":zone=").append(zoneId).append('@').append(zoneVersion)
-                .append(":tariff=").append(tariffId).append('@').append(tariffVersion)
-                .append(":band=").append(bandSequence)
-                .append(":rule=").append(timeRuleSequence)
-                .append(":distance=").append(distanceMeters)
-                .append('/').append(distanceMode)
-                .append('/').append(distanceSource)
-                .append(":minBasket=").append(minBasketMinor)
-                .append(":freeFrom=").append(freeDeliveryFromMinor)
+                .append("outcome=")
+                .append(outcome)
+                .append(":currency=")
+                .append(currency)
+                .append(":fee=")
+                .append(feeMinor)
+                .append(":tariffDiscount=")
+                .append(tariffDiscountMinor)
+                .append(":zone=")
+                .append(zoneId)
+                .append('@')
+                .append(zoneVersion)
+                .append(":tariff=")
+                .append(tariffId)
+                .append('@')
+                .append(tariffVersion)
+                .append(":band=")
+                .append(bandSequence)
+                .append(":rule=")
+                .append(timeRuleSequence)
+                .append(":distance=")
+                .append(distanceMeters)
+                .append('/')
+                .append(distanceMode)
+                .append('/')
+                .append(distanceSource)
+                .append(":minBasket=")
+                .append(minBasketMinor)
+                .append(":freeFrom=")
+                .append(freeDeliveryFromMinor)
                 .toString();
     }
 }

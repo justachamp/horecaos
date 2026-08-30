@@ -1,10 +1,10 @@
 package uz.horecaos.platform.tenancy.application.onboarding;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,8 +12,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
-import io.micrometer.core.instrument.MeterRegistry;
 
 /**
  * Drives onboarding across replicas (ADR 0008).
@@ -138,7 +136,8 @@ public class OnboardingScheduler {
     private double count(String predicate) {
         try {
             return jdbc.sql("SELECT count(*) FROM tenant.onboarding_runs WHERE " + predicate)
-                    .query(Long.class).single();
+                    .query(Long.class)
+                    .single();
         } catch (RuntimeException unavailable) {
             // A gauge must never take the application down with it.
             return -1;

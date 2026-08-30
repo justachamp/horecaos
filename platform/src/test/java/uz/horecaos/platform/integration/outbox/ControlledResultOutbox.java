@@ -2,7 +2,6 @@ package uz.horecaos.platform.integration.outbox;
 
 import java.time.Instant;
 import java.util.UUID;
-
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 
 /**
@@ -22,6 +21,7 @@ public final class ControlledResultOutbox {
 
     /** Test-only, and deliberately not in {@code EventCatalog} for that reason. */
     public static final String EVENT_TYPE = "ControlledCommandCompleted";
+
     public static final String TOPIC = "integration.controlled.events";
 
     private final JdbcOutboxStore outbox;
@@ -47,11 +47,10 @@ public final class ControlledResultOutbox {
                 // opaque reference: ADR 0029 keeps provider payloads out of
                 // events, and a canonical result is exactly where that leaks.
                 """
-                {"commandId":"%s","status":"%s","externalReference":%s}"""
-                        .formatted(commandId, outcome.status().name(),
-                                outcome.externalReference() == null
-                                        ? "null"
-                                        : "\"" + outcome.externalReference() + "\""),
+                {"commandId":"%s","status":"%s","externalReference":%s}""".formatted(
+                        commandId,
+                        outcome.status().name(),
+                        outcome.externalReference() == null ? "null" : "\"" + outcome.externalReference() + "\""),
                 "{}"));
     }
 }

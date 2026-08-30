@@ -9,7 +9,6 @@ package uz.horecaos.platform.courier.domain;
  * arrangement into an undeclared one without producing an error anywhere.
  */
 public enum EngagementStatus {
-
     PENDING_VERIFICATION,
     ACTIVE,
 

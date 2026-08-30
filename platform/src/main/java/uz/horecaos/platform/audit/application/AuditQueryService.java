@@ -5,7 +5,6 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
@@ -89,25 +88,26 @@ public class AuditQueryService {
             statement = statement.param("to", query.to().atOffset(ZoneOffset.UTC));
         }
 
-        return statement.query((rs, rowNumber) -> new AuditEventView(
-                rs.getObject("id", UUID.class),
-                rs.getObject("recorded_at", OffsetDateTime.class).toInstant(),
-                rs.getObject("tenant_id", UUID.class),
-                rs.getString("audit_class"),
-                rs.getString("action_code"),
-                rs.getString("actor_type"),
-                rs.getString("actor_subject"),
-                rs.getString("actor_display"),
-                rs.getString("scope_type"),
-                rs.getObject("scope_id", UUID.class),
-                rs.getString("target_type"),
-                rs.getObject("target_id", UUID.class),
-                rs.getString("outcome"),
-                rs.getString("reason"),
-                rs.getString("capability_used"),
-                rs.getObject("approval_request_id", UUID.class),
-                rs.getString("correlation_id"),
-                rs.getObject("occurred_at", OffsetDateTime.class).toInstant()))
+        return statement
+                .query((rs, rowNumber) -> new AuditEventView(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("recorded_at", OffsetDateTime.class).toInstant(),
+                        rs.getObject("tenant_id", UUID.class),
+                        rs.getString("audit_class"),
+                        rs.getString("action_code"),
+                        rs.getString("actor_type"),
+                        rs.getString("actor_subject"),
+                        rs.getString("actor_display"),
+                        rs.getString("scope_type"),
+                        rs.getObject("scope_id", UUID.class),
+                        rs.getString("target_type"),
+                        rs.getObject("target_id", UUID.class),
+                        rs.getString("outcome"),
+                        rs.getString("reason"),
+                        rs.getString("capability_used"),
+                        rs.getObject("approval_request_id", UUID.class),
+                        rs.getString("correlation_id"),
+                        rs.getObject("occurred_at", OffsetDateTime.class).toInstant()))
                 .list();
     }
 
@@ -124,13 +124,32 @@ public class AuditQueryService {
      * separate, individually audited read rather than a field on every row.
      */
     public record AuditEventView(
-            UUID id, Instant recordedAt, UUID tenantId, String auditClass, String actionCode,
-            String actorType, String actorSubject, String actorDisplay,
-            String scopeType, UUID scopeId, String targetType, UUID targetId,
-            String outcome, String reason, String capabilityUsed,
-            UUID approvalRequestId, String correlationId, Instant occurredAt) { }
+            UUID id,
+            Instant recordedAt,
+            UUID tenantId,
+            String auditClass,
+            String actionCode,
+            String actorType,
+            String actorSubject,
+            String actorDisplay,
+            String scopeType,
+            UUID scopeId,
+            String targetType,
+            UUID targetId,
+            String outcome,
+            String reason,
+            String capabilityUsed,
+            UUID approvalRequestId,
+            String correlationId,
+            Instant occurredAt) {}
 
     public record AuditQuery(
-            UUID tenantId, String actorSubject, String actionCode, UUID targetId,
-            String auditClass, Instant from, Instant to, Integer limit) { }
+            UUID tenantId,
+            String actorSubject,
+            String actionCode,
+            UUID targetId,
+            String auditClass,
+            Instant from,
+            Instant to,
+            Integer limit) {}
 }

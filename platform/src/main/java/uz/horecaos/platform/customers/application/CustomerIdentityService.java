@@ -4,13 +4,11 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.customers.api.CustomerAccountRef;
 import uz.horecaos.platform.customers.api.CustomerDirectory;
 import uz.horecaos.platform.customers.api.CustomerIdentityPolicy;
@@ -94,12 +92,17 @@ public class CustomerIdentityService implements CustomerDirectory {
             return new Resolution(new CustomerAccountRef(effective, tenantId), false, policy);
         }
 
-        return new Resolution(create(tenantId, brandId, issuer, subject, resolved, partition, now),
-                true, policy);
+        return new Resolution(create(tenantId, brandId, issuer, subject, resolved, partition, now), true, policy);
     }
 
-    private CustomerAccountRef create(UUID tenantId, UUID brandId, String issuer, String subject,
-            ResolvedIdentityPolicy resolved, UUID partition, Instant now) {
+    private CustomerAccountRef create(
+            UUID tenantId,
+            UUID brandId,
+            String issuer,
+            String subject,
+            ResolvedIdentityPolicy resolved,
+            UUID partition,
+            Instant now) {
 
         UUID accountId = UUID.randomUUID();
         CustomerIdentityPolicy policy = resolved.mode();
@@ -111,15 +114,13 @@ public class CustomerIdentityService implements CustomerDirectory {
         // a migration from a known starting point rather than a reinterpretation.
         store.insertAccount(accountId, tenantId, partition, resolved.version(), now);
         try {
-            store.insertPrincipalLink(UUID.randomUUID(), tenantId, partition, accountId,
-                    issuer, subject, now);
+            store.insertPrincipalLink(UUID.randomUUID(), tenantId, partition, accountId, issuer, subject, now);
         } catch (DuplicateKeyException raced) {
             // Two concurrent first sign-ins for the same subject. The partial
             // unique index caught the loser, which is the point of having it:
             // the alternative is one person quietly owning two accounts. Re-read
             // rather than fail, so the user simply signs in.
-            log.info("Concurrent first sign-in for a subject in tenant {}; using the winning account",
-                    tenantId);
+            log.info("Concurrent first sign-in for a subject in tenant {}; using the winning account", tenantId);
             UUID winner = store.findLinkedAccount(tenantId, partition, issuer, subject)
                     .orElseThrow(() -> raced);
             ensureBrandProfile(tenantId, brandId, winner);
@@ -144,8 +145,7 @@ public class CustomerIdentityService implements CustomerDirectory {
     /** Reads an account without creating one. */
     @Override
     @Transactional(readOnly = true)
-    public Optional<CustomerAccountRef> findAccount(UUID tenantId, UUID brandId, String issuer,
-            String subject) {
+    public Optional<CustomerAccountRef> findAccount(UUID tenantId, UUID brandId, String issuer, String subject) {
         return find(tenantId, brandId, issuer, subject);
     }
 
@@ -154,8 +154,7 @@ public class CustomerIdentityService implements CustomerDirectory {
     public Optional<CustomerAccountRef> find(UUID tenantId, UUID brandId, String issuer, String subject) {
         UUID partition = policies.policyFor(tenantId, clock.instant()).mode().partitionFor(brandId);
         return store.findLinkedAccount(tenantId, partition, issuer, subject)
-                .map(accountId -> new CustomerAccountRef(
-                        store.resolveMergeTarget(tenantId, accountId), tenantId));
+                .map(accountId -> new CustomerAccountRef(store.resolveMergeTarget(tenantId, accountId), tenantId));
     }
 
     /**
@@ -209,5 +208,5 @@ public class CustomerIdentityService implements CustomerDirectory {
      * @param created true on first sign-in, which is when a storefront should ask
      *                for consent rather than assume it
      */
-    public record Resolution(CustomerAccountRef account, boolean created, CustomerIdentityPolicy policy) { }
+    public record Resolution(CustomerAccountRef account, boolean created, CustomerIdentityPolicy policy) {}
 }

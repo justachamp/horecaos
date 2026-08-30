@@ -2,6 +2,7 @@ package uz.horecaos.platform.tenancy.application.onboarding;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -9,9 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import javax.sql.DataSource;
-
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
@@ -28,12 +27,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditRecorder;
@@ -81,8 +76,7 @@ class OnboardingOutboxIntegrationTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        dataSource = new DriverManagerDataSource(
-                db.jdbcUrl(), db.username(), db.password());
+        dataSource = new DriverManagerDataSource(db.jdbcUrl(), db.username(), db.password());
     }
 
     @AfterAll
@@ -121,18 +115,16 @@ class OnboardingOutboxIntegrationTests {
     void theStartFactIsWrittenToTheOutboxAndNotToKafka() {
         UUID runId = service.startRun(TENANT, TEMPLATE, 1, Map.of("ownerEmail", "owner@acme.example"), ADMIN);
 
-        assertThat(outboxRows())
-                .singleElement()
-                .satisfies(row -> {
-                    assertThat(row).containsEntry("eventType", "TenantOnboardingStarted");
-                    assertThat(row).containsEntry("topic", "tenancy.events");
-                    assertThat(row).containsEntry("tenantId", TENANT);
-                    assertThat(row)
-                            .as("ADR 0008 partitions onboarding by tenant")
-                            .containsEntry("partitionKey", TENANT.toString());
-                    assertThat(row).containsEntry("status", "PENDING");
-                    assertThat(row).containsEntry("runId", runId.toString());
-                });
+        assertThat(outboxRows()).singleElement().satisfies(row -> {
+            assertThat(row).containsEntry("eventType", "TenantOnboardingStarted");
+            assertThat(row).containsEntry("topic", "tenancy.events");
+            assertThat(row).containsEntry("tenantId", TENANT);
+            assertThat(row)
+                    .as("ADR 0008 partitions onboarding by tenant")
+                    .containsEntry("partitionKey", TENANT.toString());
+            assertThat(row).containsEntry("status", "PENDING");
+            assertThat(row).containsEntry("runId", runId.toString());
+        });
     }
 
     @Test
@@ -143,17 +135,20 @@ class OnboardingOutboxIntegrationTests {
             return null;
         });
 
-        assertThat(jdbc.sql("SELECT count(*) FROM tenant.onboarding_runs").query(Long.class).single())
+        assertThat(jdbc.sql("SELECT count(*) FROM tenant.onboarding_runs")
+                        .query(Long.class)
+                        .single())
                 .isZero();
-        assertThat(jdbc.sql("SELECT count(*) FROM integration.outbox_events").query(Long.class).single())
+        assertThat(jdbc.sql("SELECT count(*) FROM integration.outbox_events")
+                        .query(Long.class)
+                        .single())
                 .as("ADR 0004: the fact and the state change are one write, so neither survives alone")
                 .isZero();
     }
 
     @Test
     void everyTransitionOfACompleteRunReachesTheOutbox() {
-        UUID runId = service.startRun(
-                TENANT, TEMPLATE, 1, Map.of("ownerEmail", "owner@acme.example"), ADMIN);
+        UUID runId = service.startRun(TENANT, TEMPLATE, 1, Map.of("ownerEmail", "owner@acme.example"), ADMIN);
         drain(runId);
         service.activate(runId, ADMIN, "go live");
 
@@ -176,11 +171,12 @@ class OnboardingOutboxIntegrationTests {
 
     @Test
     void noOnboardingFactCarriesTheOwnerEmail() {
-        UUID runId = service.startRun(
-                TENANT, TEMPLATE, 1, Map.of("ownerEmail", "owner@acme.example"), ADMIN);
+        UUID runId = service.startRun(TENANT, TEMPLATE, 1, Map.of("ownerEmail", "owner@acme.example"), ADMIN);
         drain(runId);
 
-        assertThat(jdbc.sql("SELECT payload::text FROM integration.outbox_events").query(String.class).list())
+        assertThat(jdbc.sql("SELECT payload::text FROM integration.outbox_events")
+                        .query(String.class)
+                        .list())
                 .as("ADR 0029: an owner's email address is personal data and never reaches a topic")
                 .noneMatch(payload -> payload.contains("owner@acme.example"));
     }
@@ -232,7 +228,11 @@ class OnboardingOutboxIntegrationTests {
                 INSERT INTO tenant.locations
                     (id, tenant_id, brand_id, code, slug, display_name, timezone, status, version)
                 VALUES (:id, :tenantId, :brandId, 'LOC', 'loc', 'Chilonzor', 'Asia/Tashkent', 'ACTIVE', 0)
-                """).param("id", LOCATION).param("tenantId", TENANT).param("brandId", BRAND).update();
+                """)
+                .param("id", LOCATION)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
     }
 
     @Configuration(proxyBeanMethods = false)
@@ -277,8 +277,7 @@ class OnboardingOutboxIntegrationTests {
         }
 
         @Bean
-        TenancyOutboxEventListener tenancyOutboxEventListener(
-                JdbcOutboxStore outbox, ObjectMapper objectMapper) {
+        TenancyOutboxEventListener tenancyOutboxEventListener(JdbcOutboxStore outbox, ObjectMapper objectMapper) {
             return new TenancyOutboxEventListener(outbox, objectMapper, "tenancy.events");
         }
 

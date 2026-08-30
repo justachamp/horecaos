@@ -64,8 +64,7 @@ import java.util.Locale;
  */
 public final class DecodeError {
 
-    private DecodeError() {
-    }
+    private DecodeError() {}
 
     /**
      * @return true when this error describes what the input asked for rather
@@ -90,8 +89,7 @@ public final class DecodeError {
             return false;
         }
         String normalized = message.toLowerCase(Locale.ROOT);
-        return normalized.contains("java heap space")
-                || normalized.contains("requested array size exceeds vm limit");
+        return normalized.contains("java heap space") || normalized.contains("requested array size exceeds vm limit");
     }
 
     /**

@@ -9,7 +9,6 @@ package uz.horecaos.platform.payments.domain;
  * provider is never told.
  */
 public enum PaymentTransactionType {
-
     RESERVE,
 
     CAPTURE,

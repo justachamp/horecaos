@@ -1,17 +1,14 @@
 package uz.horecaos.platform.media.infrastructure.imaging;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.io.EOFException;
-
 import javax.imageio.IIOException;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.media.api.ImageDerivativeRenderer.Failed;
 import uz.horecaos.platform.media.api.ImageDerivativeRenderer.Unsupported;
 import uz.horecaos.platform.media.domain.DecodeError;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Telling "cannot" from "failed" at the point the JDK blurs them (ADR 0010).
@@ -41,8 +38,8 @@ class DecodeFailureClassificationTests {
         // IOException catch and used to be read as "this renderer cannot decode
         // this format" — which completed the job, cleared its error columns and
         // incremented the rendered counter.
-        IIOException wrapped = new IIOException("Caught exception during read: ",
-                new OutOfMemoryError("Java heap space"));
+        IIOException wrapped =
+                new IIOException("Caught exception during read: ", new OutOfMemoryError("Java heap space"));
 
         assertThat(ImageIoDerivativeRenderer.classifyDecodeFailure(wrapped))
                 .isEqualTo(new Failed("RENDER_OUT_OF_MEMORY"));
@@ -52,10 +49,9 @@ class DecodeFailureClassificationTests {
     @DisplayName("a genuinely unreadable file is still settled")
     void aCorruptStreamIsUnsupported() {
         assertThat(ImageIoDerivativeRenderer.classifyDecodeFailure(
-                new IIOException("Invalid chunk length", new EOFException())))
+                        new IIOException("Invalid chunk length", new EOFException())))
                 .isEqualTo(new Unsupported("SOURCE_MALFORMED"));
-        assertThat(ImageIoDerivativeRenderer.classifyDecodeFailure(
-                new ArrayIndexOutOfBoundsException(-1)))
+        assertThat(ImageIoDerivativeRenderer.classifyDecodeFailure(new ArrayIndexOutOfBoundsException(-1)))
                 .isEqualTo(new Unsupported("SOURCE_MALFORMED"));
     }
 
@@ -91,18 +87,21 @@ class DecodeFailureClassificationTests {
         // refuses traffic so the readiness probe fails and autoheal restarts the
         // container. ProcessFatalErrorTests pins that, and asserts this
         // classifier and the platform-wide one still agree.
-        assertThat(DecodeError.isRecoverable(new OutOfMemoryError("Java heap space"))).isTrue();
-        assertThat(DecodeError.isRecoverable(
-                new OutOfMemoryError("Requested array size exceeds VM limit"))).isTrue();
+        assertThat(DecodeError.isRecoverable(new OutOfMemoryError("Java heap space")))
+                .isTrue();
+        assertThat(DecodeError.isRecoverable(new OutOfMemoryError("Requested array size exceeds VM limit")))
+                .isTrue();
         assertThat(DecodeError.isRecoverable(new StackOverflowError())).isTrue();
 
         assertThat(DecodeError.isRecoverable(new OutOfMemoryError("Metaspace"))).isFalse();
-        assertThat(DecodeError.isRecoverable(
-                new OutOfMemoryError("unable to create native thread"))).isFalse();
-        assertThat(DecodeError.isRecoverable(
-                new OutOfMemoryError("GC overhead limit exceeded"))).isFalse();
+        assertThat(DecodeError.isRecoverable(new OutOfMemoryError("unable to create native thread")))
+                .isFalse();
+        assertThat(DecodeError.isRecoverable(new OutOfMemoryError("GC overhead limit exceeded")))
+                .isFalse();
         assertThat(DecodeError.isRecoverable(new OutOfMemoryError())).isFalse();
-        assertThat(DecodeError.isRecoverable(new NoClassDefFoundError("a codec"))).isFalse();
-        assertThat(DecodeError.isRecoverable(new InternalError("the VM is unwell"))).isFalse();
+        assertThat(DecodeError.isRecoverable(new NoClassDefFoundError("a codec")))
+                .isFalse();
+        assertThat(DecodeError.isRecoverable(new InternalError("the VM is unwell")))
+                .isFalse();
     }
 }

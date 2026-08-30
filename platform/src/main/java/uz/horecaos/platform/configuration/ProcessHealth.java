@@ -2,7 +2,6 @@ package uz.horecaos.platform.configuration;
 
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.availability.AvailabilityChangeEvent;
@@ -148,8 +147,7 @@ public class ProcessHealth {
             return false;
         }
         String normalized = message.toLowerCase(Locale.ROOT);
-        return normalized.contains("java heap space")
-                || normalized.contains("requested array size exceeds vm limit");
+        return normalized.contains("java heap space") || normalized.contains("requested array size exceeds vm limit");
     }
 
     /**
@@ -170,8 +168,10 @@ public class ProcessHealth {
      */
     public boolean reportFatal(String source, Throwable failure) {
         if (!reported.compareAndSet(false, true)) {
-            log.debug("{} met a process-fatal error after this process was already marked "
-                    + "unhealthy ({})", source, failure.getClass().getName());
+            log.debug(
+                    "{} met a process-fatal error after this process was already marked " + "unhealthy ({})",
+                    source,
+                    failure.getClass().getName());
             return false;
         }
 
@@ -180,11 +180,14 @@ public class ProcessHealth {
         // than interpolated: the one at the top is the JVM's own, but a wrapped
         // cause further down may carry an object key or a filename, and this
         // line is the one that will be quoted into an incident note.
-        log.error("{} met a process-fatal error ({}); this process is refusing traffic so the "
+        log.error(
+                "{} met a process-fatal error ({}); this process is refusing traffic so the "
                         + "readiness probe fails and the container is restarted. In-flight work is "
                         + "settled or released; nothing is lost, and nothing more will be attempted "
                         + "by this process.",
-                source, failure.getClass().getName(), failure);
+                source,
+                failure.getClass().getName(),
+                failure);
 
         AvailabilityChangeEvent.publish(events, this, LivenessState.BROKEN);
         AvailabilityChangeEvent.publish(events, this, ReadinessState.REFUSING_TRAFFIC);

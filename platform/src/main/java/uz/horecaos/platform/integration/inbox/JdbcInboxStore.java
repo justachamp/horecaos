@@ -1,7 +1,5 @@
 package uz.horecaos.platform.integration.inbox;
 
-import uz.horecaos.platform.integration.api.ExternalEventEnvelope;
-
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -10,9 +8,9 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import uz.horecaos.platform.integration.api.ExternalEventEnvelope;
 
 /**
  * Inbox persistence (ADR 0005).
@@ -113,11 +111,12 @@ public class JdbcInboxStore {
                    AND (status IN ('RECEIVED', 'RETRY_PENDING')
                         OR (status = 'PROCESSING' AND processing_started_at <= :leaseCutoff))
                 """)
-                .param("id", id)
-                .param("token", processingToken)
-                .param("now", at(now))
-                .param("leaseCutoff", at(now.minus(PROCESSING_LEASE)))
-                .update() == 1;
+                        .param("id", id)
+                        .param("token", processingToken)
+                        .param("now", at(now))
+                        .param("leaseCutoff", at(now.minus(PROCESSING_LEASE)))
+                        .update()
+                == 1;
     }
 
     /**
@@ -360,8 +359,7 @@ public class JdbcInboxStore {
             int partition,
             long recordOffset,
             String status,
-            int attemptCount) {
-    }
+            int attemptCount) {}
 
     /** The subset of an inbox row the executor needs to decide what to do. */
     public record InboxRow(

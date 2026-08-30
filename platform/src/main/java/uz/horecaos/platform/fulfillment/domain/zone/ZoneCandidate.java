@@ -36,8 +36,8 @@ public record ZoneCandidate(
      * statement. An operator who draws a tight zone inside a loose one is saying
      * something about the tight one.
      */
-    public static final Comparator<ZoneCandidate> RANKING =
-            Comparator.comparingInt(ZoneCandidate::priority).reversed()
-                    .thenComparingDouble(ZoneCandidate::areaSquareMeters)
-                    .thenComparing(ZoneCandidate::zoneId);
+    public static final Comparator<ZoneCandidate> RANKING = Comparator.comparingInt(ZoneCandidate::priority)
+            .reversed()
+            .thenComparingDouble(ZoneCandidate::areaSquareMeters)
+            .thenComparing(ZoneCandidate::zoneId);
 }

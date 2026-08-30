@@ -2,10 +2,9 @@ package uz.horecaos.platform.reporting.application;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.reporting.domain.MetricDefinition;
 import uz.horecaos.platform.reporting.domain.MetricRegistry;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore;
@@ -54,14 +53,15 @@ public class MetricDefinitionSynchronizer implements ApplicationRunner {
     }
 
     private boolean synchronize(MetricDefinition definition) {
-        var stored = store.findStoredMetric(definition.id().name(), definition.id().version());
+        var stored =
+                store.findStoredMetric(definition.id().name(), definition.id().version());
         if (stored.isEmpty()) {
             store.insertDefinitionIfAbsent(definition);
             return true;
         }
         if (!stored.get().digest().equals(definition.digest())) {
-            throw new MetricDefinitionDriftException(definition.id().code(),
-                    stored.get().signedBy() != null);
+            throw new MetricDefinitionDriftException(
+                    definition.id().code(), stored.get().signedBy() != null);
         }
         return false;
     }
@@ -71,17 +71,18 @@ public class MetricDefinitionSynchronizer implements ApplicationRunner {
 
         public MetricDefinitionDriftException(String metricCode, boolean signed) {
             super(("Metric %s was edited in place. ADR 0043: a definition change is a new "
-                    + "version, so cut a v%s rather than changing this one.%s")
-                    .formatted(metricCode, nextVersion(metricCode),
-                            signed ? " The stored row carries a finance signature over the "
-                                    + "previous wording." : ""));
+                            + "version, so cut a v%s rather than changing this one.%s")
+                    .formatted(
+                            metricCode,
+                            nextVersion(metricCode),
+                            signed
+                                    ? " The stored row carries a finance signature over the " + "previous wording."
+                                    : ""));
         }
 
         private static String nextVersion(String metricCode) {
             int marker = metricCode.lastIndexOf(".v");
-            return marker < 0
-                    ? "2"
-                    : String.valueOf(Integer.parseInt(metricCode.substring(marker + 2)) + 1);
+            return marker < 0 ? "2" : String.valueOf(Integer.parseInt(metricCode.substring(marker + 2)) + 1);
         }
     }
 }

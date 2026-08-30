@@ -18,8 +18,7 @@ public final class AccrualCalculator {
 
     private static final int METRES_PER_KM = 1000;
 
-    private AccrualCalculator() {
-    }
+    private AccrualCalculator() {}
 
     /**
      * One delivered order.
@@ -47,8 +46,7 @@ public final class AccrualCalculator {
             int from = band.bandFromMeters();
             int to = band.bandToMeters() == null ? Integer.MAX_VALUE : band.bandToMeters();
             int metresInBand = Math.max(0, Math.min(distanceMeters, to) - from);
-            thousandths = Math.addExact(thousandths,
-                    Math.multiplyExact((long) metresInBand, band.amountMinor()));
+            thousandths = Math.addExact(thousandths, Math.multiplyExact((long) metresInBand, band.amountMinor()));
         }
         long perKm = roundHalfUp(thousandths, METRES_PER_KM);
 
@@ -73,8 +71,8 @@ public final class AccrualCalculator {
             throw new IllegalArgumentException("Paid seconds are never negative");
         }
         long fixed = card.of(RateComponentType.PER_SHIFT_FIXED).stream()
-                .filter(component -> component.minimumPaidSeconds() == null
-                        || paidSeconds >= component.minimumPaidSeconds())
+                .filter(component ->
+                        component.minimumPaidSeconds() == null || paidSeconds >= component.minimumPaidSeconds())
                 .mapToLong(RateComponent::amountMinor)
                 .sum();
         return new CourierAccrual(fixed, 0, 0, 0);

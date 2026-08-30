@@ -7,11 +7,7 @@ package uz.horecaos.platform.courier.domain;
  * a formatter that asks ISO 4217 for the decimal places divides by a hundred and
  * shows a courier a hundredth of what he is owed.
  */
-public record CourierAccrual(
-        long fixedMinor,
-        long perOrderMinor,
-        long perKmMinor,
-        long minimumTopUpMinor) {
+public record CourierAccrual(long fixedMinor, long perOrderMinor, long perKmMinor, long minimumTopUpMinor) {
 
     public static final CourierAccrual NOTHING = new CourierAccrual(0, 0, 0, 0);
 

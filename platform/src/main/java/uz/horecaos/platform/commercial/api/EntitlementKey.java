@@ -38,8 +38,8 @@ public record EntitlementKey<T>(
         Objects.requireNonNull(valueType, "A value type is required");
         Objects.requireNonNull(resetPeriod, "A reset period is required");
         Objects.requireNonNull(owningModule, "An owning module is required");
-        allowedDimensions = Set.copyOf(
-                Objects.requireNonNull(allowedDimensions, "An allowed dimension set is required"));
+        allowedDimensions =
+                Set.copyOf(Objects.requireNonNull(allowedDimensions, "An allowed dimension set is required"));
 
         // Underscores are allowed in the first segment as well as the later
         // ones, unlike ADR 0030's configuration codes. ADR 0021's own catalogue
@@ -56,12 +56,10 @@ public record EntitlementKey<T>(
         // broken tenant, which is exactly the failure the meter-only rollout
         // exists to avoid.
         if (defaultMode == null || defaultMode.canRefuse()) {
-            throw new IllegalArgumentException(
-                    "A catalogue default must never be able to refuse: " + code);
+            throw new IllegalArgumentException("A catalogue default must never be able to refuse: " + code);
         }
         if (valueType == Boolean.class && resetPeriod != ResetPeriod.NONE) {
-            throw new IllegalArgumentException(
-                    "A feature entitlement has nothing to reset: " + code);
+            throw new IllegalArgumentException("A feature entitlement has nothing to reset: " + code);
         }
     }
 
@@ -129,8 +127,16 @@ public record EntitlementKey<T>(
         }
 
         public EntitlementKey<T> build() {
-            return new EntitlementKey<>(code, valueType, safeDefault, EnforcementMode.METER_ONLY,
-                    resetPeriod, unit, allowedDimensions, owningModule, description);
+            return new EntitlementKey<>(
+                    code,
+                    valueType,
+                    safeDefault,
+                    EnforcementMode.METER_ONLY,
+                    resetPeriod,
+                    unit,
+                    allowedDimensions,
+                    owningModule,
+                    description);
         }
     }
 }

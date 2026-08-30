@@ -8,7 +8,6 @@ package uz.horecaos.platform.kitchen.domain;
  * status has exactly one value.
  */
 public enum TicketItemStatus {
-
     QUEUED,
     STARTED,
     READY,

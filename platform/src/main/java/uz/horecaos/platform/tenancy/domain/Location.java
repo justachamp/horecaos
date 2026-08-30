@@ -2,7 +2,6 @@ package uz.horecaos.platform.tenancy.domain;
 
 import java.time.ZoneId;
 import java.util.Objects;
-
 import uz.horecaos.platform.tenancy.api.BrandId;
 import uz.horecaos.platform.tenancy.api.LocationId;
 import uz.horecaos.platform.tenancy.api.TenantId;
@@ -73,16 +72,7 @@ public final class Location {
             ZoneId timezone,
             OperatingUnitStatus status,
             LocationPlace place) {
-        return new Location(
-                id,
-                tenantId,
-                brandId,
-                code,
-                slug,
-                displayName,
-                timezone,
-                status,
-                place);
+        return new Location(id, tenantId, brandId, code, slug, displayName, timezone, status, place);
     }
 
     /**

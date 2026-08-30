@@ -10,10 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.courier.domain.CostBasis;
 import uz.horecaos.platform.courier.domain.CostPath;
 import uz.horecaos.platform.courier.domain.MatchStatus;
@@ -77,16 +75,15 @@ public class JdbcDeliveryCostStore {
                 VALUES (:id, :tenantId, :shipmentId, :legalEntityId, :businessDate,
                     :costPath, :costBasis, :amount, :currency, :sourceType, :sourceId,
                     :courierId, :providerCode, :recognisedAt, :supersedes, :recordedBy)
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     public List<CostLineRow> linesOfShipment(UUID tenantId, UUID shipmentId) {
         return jdbc.sql(SELECT_LINE + """
                  WHERE line.tenant_id = :tenantId AND line.shipment_id = :shipmentId
                 """ + LIVE_LINES + " ORDER BY line.recognised_at")
-                .param("tenantId", tenantId).param("shipmentId", shipmentId)
+                .param("tenantId", tenantId)
+                .param("shipmentId", shipmentId)
                 .query(JdbcDeliveryCostStore::mapLine)
                 .list();
     }
@@ -111,8 +108,10 @@ public class JdbcDeliveryCostStore {
                  GROUP BY line.cost_path, line.currency
                  ORDER BY line.cost_path
                 """)
-                .param("tenantId", tenantId).param("basis", basis.name())
-                .param("from", from).param("to", to)
+                .param("tenantId", tenantId)
+                .param("basis", basis.name())
+                .param("from", from)
+                .param("to", to)
                 .query((ResultSet rs, int rowNumber) -> new PathTotal(
                         CostPath.valueOf(rs.getString("cost_path")),
                         rs.getString("currency"),
@@ -143,8 +142,10 @@ public class JdbcDeliveryCostStore {
                            AND atBasis.shipment_id = line.shipment_id
                            AND atBasis.cost_basis = :basis)
                 """)
-                .param("tenantId", tenantId).param("basis", basis.name())
-                .param("from", from).param("to", to)
+                .param("tenantId", tenantId)
+                .param("basis", basis.name())
+                .param("from", from)
+                .param("to", to)
                 .query(Integer.class)
                 .single();
         return count == null ? 0 : count;
@@ -172,9 +173,7 @@ public class JdbcDeliveryCostStore {
                     imported_by, imported_at, version)
                 VALUES (:id, :tenantId, :providerCode, :invoiceRef, :legalEntityId,
                     :start, :end, :total, :currency, 'IMPORTED', :importedBy, now(), 1)
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     public void insertInvoiceLine(InvoiceLineRow line) {
@@ -195,13 +194,11 @@ public class JdbcDeliveryCostStore {
                     amount_minor, currency, charge_type, match_status)
                 VALUES (:id, :tenantId, :invoiceId, :shipmentRef, :shipmentId,
                     :amount, :currency, :chargeType, :matchStatus)
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
-    public boolean matchLine(UUID tenantId, UUID lineId, UUID shipmentId, MatchStatus status,
-            Long varianceMinor, String reasonCode) {
+    public boolean matchLine(
+            UUID tenantId, UUID lineId, UUID shipmentId, MatchStatus status, Long varianceMinor, String reasonCode) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
@@ -216,9 +213,7 @@ public class JdbcDeliveryCostStore {
                    SET shipment_id = :shipmentId, match_status = :status,
                        variance_minor = :variance, reason_code = :reasonCode, matched_at = now()
                  WHERE tenant_id = :tenantId AND id = :id
-                """)
-                .params(params)
-                .update() == 1;
+                """).params(params).update() == 1;
     }
 
     public void markInvoiceMatched(UUID tenantId, UUID invoiceId) {
@@ -226,9 +221,7 @@ public class JdbcDeliveryCostStore {
                 UPDATE fulfillment.partner_delivery_invoices
                    SET status = 'MATCHED', matched_at = now(), version = version + 1
                  WHERE tenant_id = :tenantId AND id = :id AND status = 'IMPORTED'
-                """)
-                .param("tenantId", tenantId).param("id", invoiceId)
-                .update();
+                """).param("tenantId", tenantId).param("id", invoiceId).update();
     }
 
     public List<InvoiceLineRow> linesOfInvoice(UUID tenantId, UUID invoiceId) {
@@ -236,7 +229,8 @@ public class JdbcDeliveryCostStore {
                  WHERE tenant_id = :tenantId AND invoice_id = :invoiceId
                  ORDER BY provider_shipment_ref, charge_type
                 """)
-                .param("tenantId", tenantId).param("invoiceId", invoiceId)
+                .param("tenantId", tenantId)
+                .param("invoiceId", invoiceId)
                 .query(JdbcDeliveryCostStore::mapInvoiceLine)
                 .list();
     }
@@ -248,7 +242,8 @@ public class JdbcDeliveryCostStore {
                   FROM fulfillment.partner_delivery_invoices
                  WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("id", invoiceId)
+                .param("tenantId", tenantId)
+                .param("id", invoiceId)
                 .query((ResultSet rs, int rowNumber) -> new InvoiceRow(
                         rs.getObject("id", UUID.class),
                         rs.getObject("tenant_id", UUID.class),
@@ -266,20 +261,51 @@ public class JdbcDeliveryCostStore {
 
     // -------------------------------------------------------------------- rows
 
-    public record CostLineRow(UUID id, UUID tenantId, UUID shipmentId, UUID legalEntityId,
-            LocalDate businessDate, CostPath costPath, CostBasis costBasis, long amountMinor,
-            String currency, String sourceType, UUID sourceId, UUID courierId, String providerCode,
-            Instant recognisedAt, UUID supersedesLineId, String recordedBy) { }
+    public record CostLineRow(
+            UUID id,
+            UUID tenantId,
+            UUID shipmentId,
+            UUID legalEntityId,
+            LocalDate businessDate,
+            CostPath costPath,
+            CostBasis costBasis,
+            long amountMinor,
+            String currency,
+            String sourceType,
+            UUID sourceId,
+            UUID courierId,
+            String providerCode,
+            Instant recognisedAt,
+            UUID supersedesLineId,
+            String recordedBy) {}
 
-    public record PathTotal(CostPath costPath, String currency, long totalMinor, int shipmentCount) { }
+    public record PathTotal(CostPath costPath, String currency, long totalMinor, int shipmentCount) {}
 
-    public record InvoiceRow(UUID id, UUID tenantId, String providerCode, String providerInvoiceRef,
-            UUID legalEntityId, LocalDate periodStart, LocalDate periodEnd, long totalMinor,
-            String currency, String status, String importedBy) { }
+    public record InvoiceRow(
+            UUID id,
+            UUID tenantId,
+            String providerCode,
+            String providerInvoiceRef,
+            UUID legalEntityId,
+            LocalDate periodStart,
+            LocalDate periodEnd,
+            long totalMinor,
+            String currency,
+            String status,
+            String importedBy) {}
 
-    public record InvoiceLineRow(UUID id, UUID tenantId, UUID invoiceId, String providerShipmentRef,
-            UUID shipmentId, long amountMinor, String currency, PartnerChargeType chargeType,
-            MatchStatus matchStatus, Long varianceMinor, String reasonCode) { }
+    public record InvoiceLineRow(
+            UUID id,
+            UUID tenantId,
+            UUID invoiceId,
+            String providerShipmentRef,
+            UUID shipmentId,
+            long amountMinor,
+            String currency,
+            PartnerChargeType chargeType,
+            MatchStatus matchStatus,
+            Long varianceMinor,
+            String reasonCode) {}
 
     // ----------------------------------------------------------------- mapping
 

@@ -4,7 +4,6 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.Waypoint;
 
 /**

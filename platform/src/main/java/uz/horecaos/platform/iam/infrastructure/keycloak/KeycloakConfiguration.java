@@ -5,7 +5,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,7 +12,6 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
-
 import uz.horecaos.platform.iam.api.organizations.OrganizationDirectory;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
@@ -49,16 +47,15 @@ public class KeycloakConfiguration {
             @Value("${horecaos.keycloak.provisioning-client-id:horecaos-provisioning}") String clientId,
             @Value("${horecaos.environment:local}") String environment) {
 
-        RestClient client = authenticatedClient(
-                secrets, clock, baseUrl, realm, clientId, "provisioning-secret", environment);
+        RestClient client =
+                authenticatedClient(secrets, clock, baseUrl, realm, clientId, "provisioning-secret", environment);
 
         // Its own directory instance, on the provisioning credential. The read
         // path is shared code, never a shared token: a provisioner that borrowed
         // the reader's client would be unable to read back what it just wrote,
         // and a reader that borrowed this one would hold `manage-organizations`
         // on a timer.
-        return new KeycloakOrganizationProvisioner(
-                client, new KeycloakOrganizationDirectory(client, realm), realm);
+        return new KeycloakOrganizationProvisioner(client, new KeycloakOrganizationDirectory(client, realm), realm);
     }
 
     /**
@@ -79,16 +76,20 @@ public class KeycloakConfiguration {
             @Value("${horecaos.environment:local}") String environment) {
 
         return new KeycloakOrganizationDirectory(
-                authenticatedClient(secrets, clock, baseUrl, realm, clientId, "reader-secret", environment),
-                realm);
+                authenticatedClient(secrets, clock, baseUrl, realm, clientId, "reader-secret", environment), realm);
     }
 
     private static RestClient authenticatedClient(
-            SecretResolver secrets, Clock clock, String baseUrl, String realm,
-            String clientId, String secretName, String environment) {
+            SecretResolver secrets,
+            Clock clock,
+            String baseUrl,
+            String realm,
+            String clientId,
+            String secretName,
+            String environment) {
 
-        SecretReference clientSecret = new SecretReference(
-                environment, SecretCategory.IDENTITY_ADMIN, "keycloak", secretName);
+        SecretReference clientSecret =
+                new SecretReference(environment, SecretCategory.IDENTITY_ADMIN, "keycloak", secretName);
         TokenSource tokens = new TokenSource(baseUrl, realm, clientId, clientSecret, secrets, clock);
 
         return RestClient.builder()
@@ -117,8 +118,12 @@ public class KeycloakConfiguration {
         private final AtomicReference<CachedToken> cached = new AtomicReference<>();
 
         private TokenSource(
-                String baseUrl, String realm, String clientId, SecretReference clientSecret,
-                SecretResolver secrets, Clock clock) {
+                String baseUrl,
+                String realm,
+                String clientId,
+                SecretReference clientSecret,
+                SecretResolver secrets,
+                Clock clock) {
             this.baseUrl = baseUrl;
             this.realm = realm;
             this.clientId = clientId;
@@ -150,14 +155,13 @@ public class KeycloakConfiguration {
                     .contentType(org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED)
                     .body(form)
                     .retrieve()
-                    .body(new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() { });
+                    .body(new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {});
 
             if (response == null || response.get("access_token") == null) {
                 throw new IllegalStateException("Keycloak did not return an access token");
             }
             String value = String.valueOf(response.get("access_token"));
-            long expiresIn = response.get("expires_in") instanceof Number seconds
-                    ? seconds.longValue() : 60L;
+            long expiresIn = response.get("expires_in") instanceof Number seconds ? seconds.longValue() : 60L;
 
             cached.set(new CachedToken(
                     value, clock.instant().plusSeconds(expiresIn).minus(REFRESH_MARGIN)));
@@ -165,5 +169,5 @@ public class KeycloakConfiguration {
         }
     }
 
-    private record CachedToken(String value, Instant expiresAt) { }
+    private record CachedToken(String value, Instant expiresAt) {}
 }

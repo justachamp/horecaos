@@ -13,19 +13,16 @@ import java.util.UUID;
  */
 public final class SupportContent {
 
-    private SupportContent() {
-    }
+    private SupportContent() {}
 
     /**
      * @param name resolved in the requested locale, falling back to any
      *     published translation rather than to the code -- a code is an
      *     authoring identifier and showing one is showing a database value.
      */
-    public record FaqCategory(UUID categoryId, String code, String name, int sortOrder,
-            List<FaqEntry> entries) { }
+    public record FaqCategory(UUID categoryId, String code, String name, int sortOrder, List<FaqEntry> entries) {}
 
-    public record FaqEntry(UUID entryId, String code, String question, String answer,
-            int sortOrder) { }
+    public record FaqEntry(UUID entryId, String code, String question, String answer, int sortOrder) {}
 
     /**
      * @param platform a checked vocabulary, so a storefront can choose an icon
@@ -33,6 +30,5 @@ public final class SupportContent {
      * @param imageUrl null unless an operator overrode the platform's own
      *     artwork with an uploaded asset.
      */
-    public record SocialLink(UUID linkId, String platform, String url, String imageUrl,
-            int sortOrder) { }
+    public record SocialLink(UUID linkId, String platform, String url, String imageUrl, int sortOrder) {}
 }

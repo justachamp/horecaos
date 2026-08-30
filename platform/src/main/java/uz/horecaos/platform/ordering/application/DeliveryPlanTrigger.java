@@ -5,7 +5,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
-
 import uz.horecaos.platform.fulfillment.api.DeliveryPlanner;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 
@@ -54,12 +53,14 @@ public class DeliveryPlanTrigger {
         // with no destination all come back empty, and none of them is an error a
         // confirmation should be failed for: refusing here would turn a delivery
         // configuration problem into a checkout outage for the whole branch.
-        planner.planFor(event.tenantId().value(), event.brandId(), event.locationId(),
-                        event.orderId(), event.confirmedAt())
+        planner.planFor(
+                        event.tenantId().value(),
+                        event.brandId(),
+                        event.locationId(),
+                        event.orderId(),
+                        event.confirmedAt())
                 .ifPresentOrElse(
-                        planId -> log.debug("Opened delivery plan {} for order {}", planId,
-                                event.orderId()),
-                        () -> log.debug("Order {} has nothing to deliver; no plan was opened",
-                                event.orderId()));
+                        planId -> log.debug("Opened delivery plan {} for order {}", planId, event.orderId()),
+                        () -> log.debug("Order {} has nothing to deliver; no plan was opened", event.orderId()));
     }
 }

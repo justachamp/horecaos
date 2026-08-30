@@ -23,6 +23,5 @@ public interface CustomerDirectory {
      * @return empty when this principal has no account for this tenant and brand,
      *         which is an ordinary answer for a customer who has never ordered
      */
-    Optional<CustomerAccountRef> findAccount(UUID tenantId, UUID brandId, String issuer,
-            String subject);
+    Optional<CustomerAccountRef> findAccount(UUID tenantId, UUID brandId, String issuer, String subject);
 }

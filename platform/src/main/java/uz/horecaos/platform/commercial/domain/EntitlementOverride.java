@@ -2,7 +2,6 @@ package uz.horecaos.platform.commercial.domain;
 
 import java.time.Instant;
 import java.util.Objects;
-
 import uz.horecaos.platform.commercial.api.EnforcementMode;
 
 /**
@@ -28,8 +27,7 @@ public record EntitlementOverride(
         Objects.requireNonNull(validUntil, "A validity end is required");
 
         if ((integerValue == null) == (booleanValue == null)) {
-            throw new IllegalArgumentException(
-                    "An override carries exactly one typed value: " + entitlementKey);
+            throw new IllegalArgumentException("An override carries exactly one typed value: " + entitlementKey);
         }
         if (!validUntil.isAfter(validFrom)) {
             throw new IllegalArgumentException("An override expires after it starts: " + entitlementKey);

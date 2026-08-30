@@ -7,10 +7,8 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.customers.application.CustomerSessionStore;
 
 /**
@@ -80,9 +78,10 @@ public class JdbcCustomerSessionStore implements CustomerSessionStore {
                 SET revoked_at = :now
                 WHERE token_hash = :tokenHash AND revoked_at IS NULL
                 """)
-                .param("tokenHash", tokenHash)
-                .param("now", utc(now))
-                .update() == 1;
+                        .param("tokenHash", tokenHash)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     @Override
@@ -117,10 +116,7 @@ public class JdbcCustomerSessionStore implements CustomerSessionStore {
                     ORDER BY expires_at
                     LIMIT :limit
                 )
-                """)
-                .param("cutoff", utc(cutoff))
-                .param("limit", limit)
-                .update();
+                """).param("cutoff", utc(cutoff)).param("limit", limit).update();
     }
 
     private static StoredSession readSession(ResultSet rs, int rowNum) throws SQLException {

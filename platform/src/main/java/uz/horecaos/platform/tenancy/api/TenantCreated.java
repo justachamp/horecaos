@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
-public record TenantCreated (
+public record TenantCreated(
         UUID eventId,
         TenantId tenantId,
         Instant occurredAt,
@@ -14,7 +14,8 @@ public record TenantCreated (
         String defaultCurrency,
         String defaultTimezone,
         String status,
-        String customerIdentityMode) implements TenancyEvent {
+        String customerIdentityMode)
+        implements TenancyEvent {
 
     public TenantCreated {
         Objects.requireNonNull(eventId, "Event ID is required");
@@ -47,8 +48,14 @@ public record TenantCreated (
     @Override
     public Object payload() {
         return new Payload(
-                tenantId.value(), slug, legalName, displayName, defaultCurrency,
-                defaultTimezone, status, customerIdentityMode);
+                tenantId.value(),
+                slug,
+                legalName,
+                displayName,
+                defaultCurrency,
+                defaultTimezone,
+                status,
+                customerIdentityMode);
     }
 
     public record Payload(
@@ -59,5 +66,5 @@ public record TenantCreated (
             String defaultCurrency,
             String defaultTimezone,
             String status,
-            String customerIdentityMode) { }
+            String customerIdentityMode) {}
 }

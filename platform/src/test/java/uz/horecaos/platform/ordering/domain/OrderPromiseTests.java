@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 
 import java.time.Duration;
 import java.time.Instant;
-
 import org.junit.jupiter.api.Test;
 
 /**
@@ -106,26 +105,26 @@ class OrderPromiseTests {
 
     @Test
     void refusesABasisAndATimeThatDisagree() {
-        assertThatIllegalArgumentException().isThrownBy(() ->
-                new OrderPromise(PLACED, PromiseBasis.NOT_PROMISED, null, null));
-        assertThatIllegalArgumentException().isThrownBy(() ->
-                new OrderPromise(null, PromiseBasis.PREPARATION_BAND, 25, null));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new OrderPromise(PLACED, PromiseBasis.NOT_PROMISED, null, null));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new OrderPromise(null, PromiseBasis.PREPARATION_BAND, 25, null));
     }
 
     @Test
     void refusesPreparationMinutesOnABasisThatDidNotDeriveThem() {
-        assertThatIllegalArgumentException().isThrownBy(() ->
-                new OrderPromise(PLACED, PromiseBasis.OPERATOR_OVERRIDE, 25, null));
-        assertThatIllegalArgumentException().isThrownBy(() ->
-                new OrderPromise(PLACED, PromiseBasis.PREPARATION_BAND, null, null));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new OrderPromise(PLACED, PromiseBasis.OPERATOR_OVERRIDE, 25, null));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new OrderPromise(PLACED, PromiseBasis.PREPARATION_BAND, null, null));
     }
 
     @Test
     void refusesMinutesOutsideADay() {
-        assertThatIllegalArgumentException().isThrownBy(() ->
-                new OrderPromise(PLACED, PromiseBasis.PREPARATION_BAND, 1441, null));
-        assertThatIllegalArgumentException().isThrownBy(() ->
-                new OrderPromise(PLACED, PromiseBasis.PREPARATION_BAND, -1, null));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new OrderPromise(PLACED, PromiseBasis.PREPARATION_BAND, 1441, null));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new OrderPromise(PLACED, PromiseBasis.PREPARATION_BAND, -1, null));
     }
 
     @Test
@@ -142,9 +141,11 @@ class OrderPromiseTests {
         OrderPromise promise = OrderPromise.assemble(PLACED, 25, null, null);
         Instant promisedAt = promise.promisedAt();
 
-        assertThat(promise.lateAt(promisedAt.minusSeconds(1), OrderStatus.PREPARING)).isFalse();
+        assertThat(promise.lateAt(promisedAt.minusSeconds(1), OrderStatus.PREPARING))
+                .isFalse();
         assertThat(promise.lateAt(promisedAt, OrderStatus.PREPARING)).isFalse();
-        assertThat(promise.lateAt(promisedAt.plusSeconds(1), OrderStatus.PREPARING)).isTrue();
+        assertThat(promise.lateAt(promisedAt.plusSeconds(1), OrderStatus.PREPARING))
+                .isTrue();
     }
 
     /**

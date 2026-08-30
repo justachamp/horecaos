@@ -34,11 +34,7 @@ import java.util.Optional;
  *                      was <em>not modelled</em> — ADR 0037's zone model was not
  *                      built when the order was taken — and not that it was zero
  */
-public record OrderPromise(
-        Instant promisedAt,
-        PromiseBasis basis,
-        Integer prepMinutes,
-        Integer travelMinutes) {
+public record OrderPromise(Instant promisedAt, PromiseBasis basis, Integer prepMinutes, Integer travelMinutes) {
 
     /**
      * What a branch is quoted at when no band covers the instant.
@@ -95,14 +91,12 @@ public record OrderPromise(
      *
      * @param travelMinutes null while ADR 0037 is unbuilt
      */
-    public static OrderPromise from(Instant placedAt, PromiseBasis basis, int prepMinutes,
-            Integer travelMinutes) {
+    public static OrderPromise from(Instant placedAt, PromiseBasis basis, int prepMinutes, Integer travelMinutes) {
 
         if (!basis.isDerivedFromDuration()) {
             throw new IllegalArgumentException(basis + " is not derived from a duration");
         }
-        Duration total = Duration.ofMinutes(prepMinutes)
-                .plusMinutes(travelMinutes == null ? 0 : travelMinutes);
+        Duration total = Duration.ofMinutes(prepMinutes).plusMinutes(travelMinutes == null ? 0 : travelMinutes);
         return new OrderPromise(placedAt.plus(total), basis, prepMinutes, travelMinutes);
     }
 
@@ -137,12 +131,11 @@ public record OrderPromise(
      * @param travelMinutes ADR 0037's road estimate; null while that model is
      *                      unbuilt, which every delivery order is today
      */
-    public static OrderPromise assemble(Instant placedAt, Integer bandMinutes,
-            Duration itemOverride, Integer travelMinutes) {
+    public static OrderPromise assemble(
+            Instant placedAt, Integer bandMinutes, Duration itemOverride, Integer travelMinutes) {
 
         int baseline = bandMinutes != null ? bandMinutes : DEFAULT_PREP_MINUTES;
-        PromiseBasis basis = bandMinutes != null
-                ? PromiseBasis.PREPARATION_BAND : PromiseBasis.PLATFORM_DEFAULT;
+        PromiseBasis basis = bandMinutes != null ? PromiseBasis.PREPARATION_BAND : PromiseBasis.PLATFORM_DEFAULT;
 
         if (itemOverride != null) {
             // Rounded up. A forty-and-a-half-minute dish that quotes forty is late

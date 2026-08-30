@@ -2,7 +2,6 @@ package uz.horecaos.platform.migration.web;
 
 import java.time.Instant;
 import java.util.UUID;
-
 import uz.horecaos.platform.migration.application.MigrationProgramStore.ProgramRow;
 import uz.horecaos.platform.migration.application.ProgramStatus;
 
@@ -30,8 +29,14 @@ public record ProgramView(
 
     static ProgramView of(ProgramRow row) {
         return new ProgramView(
-                row.id(), row.name(), row.status(), row.sourceEnvironment(),
-                row.targetEnvironment(), row.policyVersion(), row.startedAt(),
-                row.completedAt(), row.version());
+                row.id(),
+                row.name(),
+                row.status(),
+                row.sourceEnvironment(),
+                row.targetEnvironment(),
+                row.policyVersion(),
+                row.startedAt(),
+                row.completedAt(),
+                row.version());
     }
 }

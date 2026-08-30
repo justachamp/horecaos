@@ -14,10 +14,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayAggregate;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayKey;
 import uz.horecaos.platform.reporting.application.ReportingFacts.OrderFact;
@@ -91,8 +89,8 @@ public class JdbcReportingStore {
                 .optional();
     }
 
-    public void upsertBoundary(UUID tenantId, BusinessDayBoundary boundary,
-            LocalDate effectiveFrom, LocalDate recutCompletedThrough) {
+    public void upsertBoundary(
+            UUID tenantId, BusinessDayBoundary boundary, LocalDate effectiveFrom, LocalDate recutCompletedThrough) {
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
         params.put("start", boundary.start());
@@ -113,17 +111,14 @@ public class JdbcReportingStore {
                     boundary_effective_from = EXCLUDED.boundary_effective_from,
                     recut_completed_through = EXCLUDED.recut_completed_through,
                     updated_at = now()
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     /**
      * @param recutCompletedThrough how far a recut after a boundary change has
      *                              got. Null when no change is outstanding
      */
-    public record StoredBoundary(BusinessDayBoundary boundary, LocalDate recutCompletedThrough) {
-    }
+    public record StoredBoundary(BusinessDayBoundary boundary, LocalDate recutCompletedThrough) {}
 
     // ------------------------------------------------------ metric registry
 
@@ -159,9 +154,7 @@ public class JdbcReportingStore {
                     :metricId, :version, :grain, :sourceFact, :sourceAvailable, :aggregation,
                     :inclusionRule, :currencyRule, :roundingRule, :unit, :digest, :effectiveFrom)
                 ON CONFLICT (metric_id, version) DO NOTHING
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     /** The stored digest and signature for one metric version. */
@@ -171,7 +164,8 @@ public class JdbcReportingStore {
                   FROM reporting.metric_definitions
                  WHERE metric_id = :metricId AND version = :version
                 """)
-                .param("metricId", name).param("version", version)
+                .param("metricId", name)
+                .param("version", version)
                 .query((ResultSet row, int number) -> new StoredMetric(
                         row.getString("definition_digest"),
                         row.getString("signed_by"),
@@ -192,13 +186,14 @@ public class JdbcReportingStore {
                    SET signed_by = :signedBy, signed_at = :signedAt
                  WHERE metric_id = :metricId AND version = :version AND signed_by IS NULL
                 """)
-                .param("metricId", name).param("version", version)
-                .param("signedBy", signedBy).param("signedAt", utc(signedAt))
+                .param("metricId", name)
+                .param("version", version)
+                .param("signedBy", signedBy)
+                .param("signedAt", utc(signedAt))
                 .update();
     }
 
-    public record StoredMetric(String digest, String signedBy, Instant signedAt) {
-    }
+    public record StoredMetric(String digest, String signedBy, Instant signedAt) {}
 
     // -------------------------------------------------------- source reads
 
@@ -243,7 +238,9 @@ public class JdbcReportingStore {
                    AND o.created_at >= :from AND o.created_at < :to
                  ORDER BY o.created_at, o.id
                 """)
-                .param("tenantId", tenantId).param("from", utc(from)).param("to", utc(to))
+                .param("tenantId", tenantId)
+                .param("from", utc(from))
+                .param("to", utc(to))
                 .query(JdbcReportingStore::sourceOrder)
                 .list();
     }
@@ -258,7 +255,9 @@ public class JdbcReportingStore {
                    AND o.created_at >= :from AND o.created_at < :to
                  ORDER BY l.order_id, l.line_number
                 """)
-                .param("tenantId", tenantId).param("from", utc(from)).param("to", utc(to))
+                .param("tenantId", tenantId)
+                .param("from", utc(from))
+                .param("to", utc(to))
                 .query((ResultSet row, int number) -> new SourceLine(
                         row.getObject("id", UUID.class),
                         row.getObject("order_id", UUID.class),
@@ -290,7 +289,9 @@ public class JdbcReportingStore {
                    AND t.occurred_at >= :from AND t.occurred_at < :to
                  ORDER BY t.occurred_at, t.id
                 """)
-                .param("tenantId", tenantId).param("from", utc(from)).param("to", utc(to))
+                .param("tenantId", tenantId)
+                .param("from", utc(from))
+                .param("to", utc(to))
                 .query((ResultSet row, int number) -> new SourceRefund(
                         row.getObject("id", UUID.class),
                         row.getObject("order_id", UUID.class),
@@ -338,30 +339,50 @@ public class JdbcReportingStore {
                                 row.getObject("legal_entity_id", UUID.class),
                                 row.getString("channel_code_snapshot"),
                                 row.getString("fulfillment_mode"),
-                                row.getObject("created_at", OffsetDateTime.class).toInstant())))
+                                row.getObject("created_at", OffsetDateTime.class)
+                                        .toInstant())))
                 .list()
                 .forEach(entry -> byOrder.put(entry.getKey(), entry.getValue()));
         return Map.copyOf(byOrder);
     }
 
-    public record SourceOrder(UUID orderId, UUID brandId, UUID locationId, UUID legalEntityId,
-            String channelCode, String fulfilmentMode, String status, Instant createdAt,
-            Instant confirmedAt, Instant closedAt, Instant readyAt, UUID customerAccountId,
-            boolean firstOrder, long subtotalMinor, long taxMinor, long discountMinor,
-            long feeMinor, long totalMinor, Instant promisedAt, Integer promiseTravelMinutes,
-            String cancellationReasonCode, int version) {
-    }
+    public record SourceOrder(
+            UUID orderId,
+            UUID brandId,
+            UUID locationId,
+            UUID legalEntityId,
+            String channelCode,
+            String fulfilmentMode,
+            String status,
+            Instant createdAt,
+            Instant confirmedAt,
+            Instant closedAt,
+            Instant readyAt,
+            UUID customerAccountId,
+            boolean firstOrder,
+            long subtotalMinor,
+            long taxMinor,
+            long discountMinor,
+            long feeMinor,
+            long totalMinor,
+            Instant promisedAt,
+            Integer promiseTravelMinutes,
+            String cancellationReasonCode,
+            int version) {}
 
-    public record SourceLine(UUID lineId, UUID orderId, UUID variantId, String productName,
-            int quantity, long baseAmountMinor, long finalAmountMinor) {
-    }
+    public record SourceLine(
+            UUID lineId,
+            UUID orderId,
+            UUID variantId,
+            String productName,
+            int quantity,
+            long baseAmountMinor,
+            long finalAmountMinor) {}
 
-    public record SourceRefund(UUID refundId, UUID orderId, long amountMinor, Instant occurredAt) {
-    }
+    public record SourceRefund(UUID refundId, UUID orderId, long amountMinor, Instant occurredAt) {}
 
-    public record RefundedOrder(UUID locationId, UUID legalEntityId, String channelCode,
-            String fulfilmentMode, Instant createdAt) {
-    }
+    public record RefundedOrder(
+            UUID locationId, UUID legalEntityId, String channelCode, String fulfilmentMode, Instant createdAt) {}
 
     // ---------------------------------------------------------- fact writes
 
@@ -373,11 +394,11 @@ public class JdbcReportingStore {
      * the old day, where it would be counted twice.
      */
     public void clearDay(UUID tenantId, LocalDate businessDate) {
-        for (String table : List.of("fact_order_line", "fact_order", "fact_refund",
-                "agg_branch_day", "agg_sla_bucket_day")) {
-            jdbc.sql("DELETE FROM reporting.%s WHERE tenant_id = :tenantId AND business_date = :day"
-                    .formatted(table))
-                    .param("tenantId", tenantId).param("day", businessDate)
+        for (String table :
+                List.of("fact_order_line", "fact_order", "fact_refund", "agg_branch_day", "agg_sla_bucket_day")) {
+            jdbc.sql("DELETE FROM reporting.%s WHERE tenant_id = :tenantId AND business_date = :day".formatted(table))
+                    .param("tenantId", tenantId)
+                    .param("day", businessDate)
                     .update();
         }
     }
@@ -460,9 +481,7 @@ public class JdbcReportingStore {
                     :net, :lineCount, :itemCount, :secondsToConfirm, :secondsToReady,
                     :secondsTotal, :promisedAt, :promiseTravelMinutes, :secondsLate,
                     :calculationVersion, :sourceOrderVersion)
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     public void insertLineFact(OrderLineFact fact) {
@@ -487,9 +506,7 @@ public class JdbcReportingStore {
                 VALUES (
                     :tenantId, :businessDate, :orderId, :lineId, :locationId, :variantId,
                     :categoryId, :productName, :quantity, :gross, :discount, :net)
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     public void insertRefundFact(RefundFact fact) {
@@ -517,9 +534,7 @@ public class JdbcReportingStore {
                     :tenantId, :businessDate, :refundId, :orderId, :orderBusinessDate,
                     :locationId, :legalEntityId, :channelCode, :fulfilmentType, :refunded,
                     :occurredAt, :boundaryVersion, :calculationVersion)
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     public void insertAggregate(BranchDayAggregate row) {
@@ -557,9 +572,7 @@ public class JdbcReportingStore {
                     :cancelledCount, :gross, :discount, :net, :refunded,
                     :avgSecondsTotal, :promisedCount, :lateCount, :distinctCustomers,
                     :newCustomers)
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     public void insertSlaBucket(SlaBucketAggregate row) {
@@ -580,9 +593,7 @@ public class JdbcReportingStore {
                 VALUES (
                     :tenantId, :businessDate, :scopeKind, :scopeId, :bucketSetVersion,
                     :bucketCode, :orderCount, :share)
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     // ---------------------------------------------------------- read path
@@ -604,7 +615,9 @@ public class JdbcReportingStore {
                  WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
                  ORDER BY business_date, location_id, channel_code, fulfilment_type
                 """)
-                .param("tenantId", tenantId).param("from", from).param("to", to)
+                .param("tenantId", tenantId)
+                .param("from", from)
+                .param("to", to)
                 .query(JdbcReportingStore::aggregate)
                 .list();
     }
@@ -617,7 +630,9 @@ public class JdbcReportingStore {
                  WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
                  ORDER BY business_date, scope_id, bucket_code
                 """)
-                .param("tenantId", tenantId).param("from", from).param("to", to)
+                .param("tenantId", tenantId)
+                .param("from", from)
+                .param("to", to)
                 .query((ResultSet row, int number) -> new SlaBucketAggregate(
                         row.getObject("tenant_id", UUID.class),
                         row.getObject("business_date", LocalDate.class),
@@ -639,8 +654,7 @@ public class JdbcReportingStore {
      *
      * @return null when no order in the range reached READY, which is not zero
      */
-    public Integer medianSecondsToReady(UUID tenantId, LocalDate from, LocalDate to,
-            List<UUID> locationIds) {
+    public Integer medianSecondsToReady(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
         params.put("from", from);
@@ -678,15 +692,23 @@ public class JdbcReportingStore {
                  WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
                  ORDER BY boundary_version
                 """)
-                .param("tenantId", tenantId).param("from", from).param("to", to)
+                .param("tenantId", tenantId)
+                .param("from", from)
+                .param("to", to)
                 .query(Integer.class)
                 .list();
     }
 
     // ------------------------------------------------ runs and divergence
 
-    public void insertRun(UUID runId, UUID tenantId, LocalDate businessDate, String kind,
-            int boundaryVersion, int calculationVersion, Instant startedAt) {
+    public void insertRun(
+            UUID runId,
+            UUID tenantId,
+            LocalDate businessDate,
+            String kind,
+            int boundaryVersion,
+            int calculationVersion,
+            Instant startedAt) {
         jdbc.sql("""
                 INSERT INTO reporting.close_runs (
                     id, tenant_id, business_date, run_kind, status, boundary_version,
@@ -695,22 +717,29 @@ public class JdbcReportingStore {
                     :id, :tenantId, :businessDate, :kind, 'RUNNING', :boundaryVersion,
                     :calculationVersion, :startedAt)
                 """)
-                .param("id", runId).param("tenantId", tenantId).param("businessDate", businessDate)
-                .param("kind", kind).param("boundaryVersion", boundaryVersion)
-                .param("calculationVersion", calculationVersion).param("startedAt", utc(startedAt))
+                .param("id", runId)
+                .param("tenantId", tenantId)
+                .param("businessDate", businessDate)
+                .param("kind", kind)
+                .param("boundaryVersion", boundaryVersion)
+                .param("calculationVersion", calculationVersion)
+                .param("startedAt", utc(startedAt))
                 .update();
     }
 
-    public void completeRun(UUID runId, int ordersWritten, int linesWritten, int divergencesFound,
-            Instant completedAt) {
+    public void completeRun(
+            UUID runId, int ordersWritten, int linesWritten, int divergencesFound, Instant completedAt) {
         jdbc.sql("""
                 UPDATE reporting.close_runs
                    SET status = 'COMPLETED', orders_written = :orders, lines_written = :lines,
                        divergences_found = :divergences, completed_at = :completedAt
                  WHERE id = :id AND status = 'RUNNING'
                 """)
-                .param("id", runId).param("orders", ordersWritten).param("lines", linesWritten)
-                .param("divergences", divergencesFound).param("completedAt", utc(completedAt))
+                .param("id", runId)
+                .param("orders", ordersWritten)
+                .param("lines", linesWritten)
+                .param("divergences", divergencesFound)
+                .param("completedAt", utc(completedAt))
                 .update();
     }
 
@@ -743,8 +772,15 @@ public class JdbcReportingStore {
                 .optional();
     }
 
-    public void insertDivergence(UUID id, UUID tenantId, UUID runId, LocalDate businessDate,
-            String metricId, int metricVersion, String dimensionKey, long storedValue,
+    public void insertDivergence(
+            UUID id,
+            UUID tenantId,
+            UUID runId,
+            LocalDate businessDate,
+            String metricId,
+            int metricVersion,
+            String dimensionKey,
+            long storedValue,
             long recutValue) {
         jdbc.sql("""
                 INSERT INTO reporting.aggregate_divergences (
@@ -754,11 +790,15 @@ public class JdbcReportingStore {
                     :id, :tenantId, :runId, :businessDate, :metricId, :metricVersion,
                     :dimensionKey, :stored, :recut, :difference)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("runId", runId)
-                .param("businessDate", businessDate).param("metricId", metricId)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("runId", runId)
+                .param("businessDate", businessDate)
+                .param("metricId", metricId)
                 .param("metricVersion", metricVersion)
                 .param("dimensionKey", truncate(dimensionKey, 512))
-                .param("stored", storedValue).param("recut", recutValue)
+                .param("stored", storedValue)
+                .param("recut", recutValue)
                 .param("difference", recutValue - storedValue)
                 .update();
     }
@@ -783,12 +823,16 @@ public class JdbcReportingStore {
                 .list();
     }
 
-    public record CompletedRun(LocalDate businessDate, String runKind, Instant completedAt) {
-    }
+    public record CompletedRun(LocalDate businessDate, String runKind, Instant completedAt) {}
 
-    public record Divergence(LocalDate businessDate, String metricCode, String dimensionKey,
-            long storedValue, long recutValue, long difference, Instant detectedAt) {
-    }
+    public record Divergence(
+            LocalDate businessDate,
+            String metricCode,
+            String dimensionKey,
+            long storedValue,
+            long recutValue,
+            long difference,
+            Instant detectedAt) {}
 
     // ------------------------------------------------------------ mapping
 
@@ -829,7 +873,8 @@ public class JdbcReportingStore {
                 row.getString("channel_code"),
                 row.getString("fulfilment_type"));
 
-        return new BranchDayAggregate(key,
+        return new BranchDayAggregate(
+                key,
                 row.getInt("boundary_version"),
                 row.getInt("metric_calculation_version"),
                 row.getInt("order_count"),

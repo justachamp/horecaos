@@ -1,14 +1,14 @@
 package uz.horecaos.platform.audit.web;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,10 +18,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.application.ApprovalPolicyService;
 import uz.horecaos.platform.audit.application.ApprovalPolicyService.PolicyCoverage;
@@ -58,7 +54,8 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  */
 @RestController
 @RequestMapping("/api/v1/control-plane/tenants/{tenantId}/approval-policies")
-@Tag(name = "Approval policies",
+@Tag(
+        name = "Approval policies",
         description = "The maker-checker thresholds that decide when an action needs a second signature")
 public class ApprovalPolicyController {
 
@@ -66,8 +63,7 @@ public class ApprovalPolicyController {
     private final CurrentActor currentActor;
     private final Clock clock;
 
-    public ApprovalPolicyController(
-            ApprovalPolicyService policies, CurrentActor currentActor, Clock clock) {
+    public ApprovalPolicyController(ApprovalPolicyService policies, CurrentActor currentActor, Clock clock) {
         this.policies = policies;
         this.currentActor = currentActor;
         this.clock = clock;
@@ -75,7 +71,8 @@ public class ApprovalPolicyController {
 
     @GetMapping
     @RequiresCapability(value = Capability.APPROVAL_POLICY_MANAGE, scope = ScopeType.TENANT)
-    @Operation(summary = "List the approval policies governing this tenant",
+    @Operation(
+            summary = "List the approval policies governing this tenant",
             description = "Every version of each policy, newest first. An action code with no row "
                     + "here needs no second signature, which is the state every action is in "
                     + "until somebody publishes one.")
@@ -86,17 +83,17 @@ public class ApprovalPolicyController {
             @RequestParam(required = false) Integer limit) {
 
         Instant now = clock.instant();
-        List<PolicyResponse> found = policies
-                .list(tenantId, actionCode, includeEnded, Page.limitOrDefault(limit))
-                .stream()
-                .map(view -> PolicyResponse.of(view, now))
-                .toList();
+        List<PolicyResponse> found =
+                policies.list(tenantId, actionCode, includeEnded, Page.limitOrDefault(limit)).stream()
+                        .map(view -> PolicyResponse.of(view, now))
+                        .toList();
         return Page.last(found);
     }
 
     @GetMapping("/coverage")
     @RequiresCapability(value = Capability.APPROVAL_POLICY_MANAGE, scope = ScopeType.TENANT)
-    @Operation(summary = "Show registered approval actions and their configured scopes",
+    @Operation(
+            summary = "Show registered approval actions and their configured scopes",
             description = "An empty configuredScopes list is an unresolved action. Its missingPolicyMode "
                     + "states whether it currently proceeds on one signature or is refused until a "
                     + "policy is authored. A scoped row is not presented as tenant-wide coverage.")
@@ -108,14 +105,13 @@ public class ApprovalPolicyController {
     }
 
     @PostMapping
-    @RequiresCapability(value = Capability.APPROVAL_POLICY_MANAGE, scope = ScopeType.TENANT,
-            mutating = true)
-    @Operation(summary = "Publish the next version of an approval policy",
+    @RequiresCapability(value = Capability.APPROVAL_POLICY_MANAGE, scope = ScopeType.TENANT, mutating = true)
+    @Operation(
+            summary = "Publish the next version of an approval policy",
             description = "Never an edit. The previous open version is closed at the instant this "
                     + "one starts, so what an earlier approver was shown stays readable and the "
                     + "version snapshotted onto their request still means what it said.")
-    ResponseEntity<PolicyResponse> author(
-            @PathVariable UUID tenantId, @Valid @RequestBody AuthorPolicyRequest body) {
+    ResponseEntity<PolicyResponse> author(@PathVariable UUID tenantId, @Valid @RequestBody AuthorPolicyRequest body) {
 
         PolicyView published = policies.author(new ApprovalPolicyService.NewPolicyVersion(
                 scope(tenantId, body),
@@ -126,14 +122,13 @@ public class ApprovalPolicyController {
                 actor(),
                 body.reason()));
 
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(PolicyResponse.of(published, clock.instant()));
+        return ResponseEntity.status(HttpStatus.CREATED).body(PolicyResponse.of(published, clock.instant()));
     }
 
     @PostMapping("/{policyId}/expiry")
-    @RequiresCapability(value = Capability.APPROVAL_POLICY_MANAGE, scope = ScopeType.TENANT,
-            mutating = true)
-    @Operation(summary = "End-date a policy version",
+    @RequiresCapability(value = Capability.APPROVAL_POLICY_MANAGE, scope = ScopeType.TENANT, mutating = true)
+    @Operation(
+            summary = "End-date a policy version",
             description = "Closes the version's window, which is the only way to retire a threshold: "
                     + "resolution takes the highest version whose window is open, so a superseding "
                     + "row cannot switch an earlier one off. This is how an operator says stop "
@@ -145,13 +140,10 @@ public class ApprovalPolicyController {
                     + "call off a scheduled change, publish the threshold you want as a new "
                     + "version.")
     PolicyResponse endDate(
-            @PathVariable UUID tenantId,
-            @PathVariable UUID policyId,
-            @Valid @RequestBody EndPolicyRequest body) {
+            @PathVariable UUID tenantId, @PathVariable UUID policyId, @Valid @RequestBody EndPolicyRequest body) {
 
         return PolicyResponse.of(
-                policies.endDate(tenantId, policyId, body.effectiveAt(), actor(), body.reason()),
-                clock.instant());
+                policies.endDate(tenantId, policyId, body.effectiveAt(), actor(), body.reason()), clock.instant());
     }
 
     private ActorRef actor() {
@@ -162,38 +154,35 @@ public class ApprovalPolicyController {
         try {
             return ScopeType.valueOf(value);
         } catch (IllegalArgumentException notAScope) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "scopeType is one of TENANT, BRAND, or LOCATION");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "scopeType is one of TENANT, BRAND, or LOCATION");
         }
     }
 
-    private static uz.horecaos.platform.iam.api.ResourceScope scope(
-            UUID tenantId, AuthorPolicyRequest body) {
+    private static uz.horecaos.platform.iam.api.ResourceScope scope(UUID tenantId, AuthorPolicyRequest body) {
         return switch (scopeType(body.scopeType())) {
             case TENANT -> {
                 if (body.brandId() != null || body.locationId() != null) {
-                    throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                            "A TENANT policy names no brand or location");
+                    throw new ApiException(ErrorCode.VALIDATION_FAILED, "A TENANT policy names no brand or location");
                 }
                 yield uz.horecaos.platform.iam.api.ResourceScope.tenant(tenantId);
             }
             case BRAND -> {
                 if (body.brandId() == null || body.locationId() != null) {
-                    throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                            "A BRAND policy requires brandId and names no location");
+                    throw new ApiException(
+                            ErrorCode.VALIDATION_FAILED, "A BRAND policy requires brandId and names no location");
                 }
                 yield uz.horecaos.platform.iam.api.ResourceScope.brand(tenantId, body.brandId());
             }
             case LOCATION -> {
                 if (body.brandId() == null || body.locationId() == null) {
-                    throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                            "A LOCATION policy requires both brandId and locationId");
+                    throw new ApiException(
+                            ErrorCode.VALIDATION_FAILED, "A LOCATION policy requires both brandId and locationId");
                 }
-                yield uz.horecaos.platform.iam.api.ResourceScope.location(
-                        tenantId, body.brandId(), body.locationId());
+                yield uz.horecaos.platform.iam.api.ResourceScope.location(tenantId, body.brandId(), body.locationId());
             }
-            case PLATFORM -> throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A tenant authors TENANT, BRAND, or LOCATION policies");
+            case PLATFORM ->
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED, "A tenant authors TENANT, BRAND, or LOCATION policies");
         };
     }
 
@@ -218,20 +207,19 @@ public class ApprovalPolicyController {
             @NotBlank String scopeType,
             UUID brandId,
             UUID locationId,
+
             @NotBlank @Size(max = ApprovalPolicyService.MAXIMUM_THRESHOLD_LENGTH)
             String thresholdDescription,
+
             @NotBlank @Size(max = 128) String requiredApproverCapability,
             Instant validFrom,
-            @NotBlank @Size(max = 1000) String reason) {
-    }
+            @NotBlank @Size(max = 1000) String reason) {}
 
     /**
      * @param effectiveAt when the threshold stops applying, or absent for now
      */
     public record EndPolicyRequest(
-            Instant effectiveAt,
-            @NotBlank @Size(max = 1000) String reason) {
-    }
+            Instant effectiveAt, @NotBlank @Size(max = 1000) String reason) {}
 
     /**
      * @param governsNow whether this version is the one an action resolving right
@@ -257,10 +245,19 @@ public class ApprovalPolicyController {
 
         static PolicyResponse of(PolicyView view, Instant now) {
             return new PolicyResponse(
-                    view.id(), view.actionCode(), view.scopeType(), view.brandId(), view.locationId(),
-                    view.legacyScopeWide(), view.thresholdDescription(),
-                    view.requiredApproverCapability(), view.validFrom(), view.validUntil(),
-                    view.version(), view.authoredBy(), view.createdAt(),
+                    view.id(),
+                    view.actionCode(),
+                    view.scopeType(),
+                    view.brandId(),
+                    view.locationId(),
+                    view.legacyScopeWide(),
+                    view.thresholdDescription(),
+                    view.requiredApproverCapability(),
+                    view.validFrom(),
+                    view.validUntil(),
+                    view.version(),
+                    view.authoredBy(),
+                    view.createdAt(),
                     view.isOpenAt(now));
         }
     }
@@ -273,9 +270,12 @@ public class ApprovalPolicyController {
 
         static PolicyCoverageResponse of(PolicyCoverage coverage, Instant now) {
             return new PolicyCoverageResponse(
-                    coverage.actionCode(), coverage.missingPolicyMode().name(),
+                    coverage.actionCode(),
+                    coverage.missingPolicyMode().name(),
                     coverage.configuredAnywhere(),
-                    coverage.configuredScopes().stream().map(view -> PolicyResponse.of(view, now)).toList());
+                    coverage.configuredScopes().stream()
+                            .map(view -> PolicyResponse.of(view, now))
+                            .toList());
         }
     }
 }

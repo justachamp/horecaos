@@ -7,7 +7,6 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,7 +14,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-
 import uz.horecaos.platform.media.api.MediaAssetAvailable;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.MediaAssetStatus;
@@ -70,9 +68,13 @@ public class MediaAssetService implements MediaAvailability {
     private final Clock clock;
     private final String bucket;
 
-    public MediaAssetService(JdbcMediaAssetStore store, JdbcDerivativeJobStore derivativeJobs,
-            ObjectStorage storage, TransactionTemplate transactions,
-            ApplicationEventPublisher events, Clock clock,
+    public MediaAssetService(
+            JdbcMediaAssetStore store,
+            JdbcDerivativeJobStore derivativeJobs,
+            ObjectStorage storage,
+            TransactionTemplate transactions,
+            ApplicationEventPublisher events,
+            Clock clock,
             @Value("${horecaos.media.bucket:horecaos-media}") String bucket) {
         this.store = store;
         this.derivativeJobs = derivativeJobs;
@@ -89,10 +91,17 @@ public class MediaAssetService implements MediaAvailability {
      * @throws IllegalArgumentException if the declared type or size is outside policy
      */
     @Transactional
-    public UploadTicket requestUpload(UUID tenantId, MediaOwner owner, MediaVisibility visibility,
-            String contentType, long sizeBytes, String originalFilename, UUID actorId) {
+    public UploadTicket requestUpload(
+            UUID tenantId,
+            MediaOwner owner,
+            MediaVisibility visibility,
+            String contentType,
+            long sizeBytes,
+            String originalFilename,
+            UUID actorId) {
 
-        String normalizedType = contentType == null ? "" : contentType.toLowerCase(Locale.ROOT).strip();
+        String normalizedType =
+                contentType == null ? "" : contentType.toLowerCase(Locale.ROOT).strip();
         if (!ALLOWED_IMAGE_TYPES.contains(normalizedType)) {
             throw new IllegalArgumentException("Unsupported media type: " + contentType);
         }
@@ -104,22 +113,34 @@ public class MediaAssetService implements MediaAvailability {
         // The key is ours, derived from ids we control. A client-supplied name
         // anywhere in this path would allow traversal and cross-tenant
         // overwrite; the original filename is stored as a label only.
-        String key = "%s/%s/%s/%s".formatted(
-                tenantId, owner.scope().name().toLowerCase(Locale.ROOT), owner.id(), assetId);
+        String key =
+                "%s/%s/%s/%s".formatted(tenantId, owner.scope().name().toLowerCase(Locale.ROOT), owner.id(), assetId);
 
         Instant now = clock.instant();
         store.insertPending(new MediaAsset(
-                assetId, tenantId, owner, key, bucket,
-                MediaAssetStatus.PENDING_UPLOAD, visibility,
-                normalizedType, sizeBytes, null,
-                null, null, null,
-                safeLabel(originalFilename), null, null, actorId, now));
+                assetId,
+                tenantId,
+                owner,
+                key,
+                bucket,
+                MediaAssetStatus.PENDING_UPLOAD,
+                visibility,
+                normalizedType,
+                sizeBytes,
+                null,
+                null,
+                null,
+                null,
+                safeLabel(originalFilename),
+                null,
+                null,
+                actorId,
+                now));
 
         ObjectStorage.PresignedUpload presigned =
                 storage.presignUpload(bucket, key, normalizedType, sizeBytes, UPLOAD_WINDOW);
 
-        return new UploadTicket(assetId, presigned.url(), presigned.requiredHeaders(),
-                presigned.expiresAt());
+        return new UploadTicket(assetId, presigned.url(), presigned.requiredHeaders(), presigned.expiresAt());
     }
 
     /**
@@ -188,19 +209,21 @@ public class MediaAssetService implements MediaAvailability {
         ObjectStorage.StoredObject object = stored.get();
 
         if (object.sizeBytes() > MAX_IMAGE_BYTES) {
-            return reject(asset, "SIZE_EXCEEDED",
-                    "Stored object is %d bytes".formatted(object.sizeBytes()));
+            return reject(asset, "SIZE_EXCEEDED", "Stored object is %d bytes".formatted(object.sizeBytes()));
         }
         if (object.sizeBytes() != asset.declaredSizeBytes()) {
             // A mismatch means the upload was not what was authorised. It is
             // rejected rather than accepted-as-found, because the declared size
             // is what the presigned URL was signed for.
-            return reject(asset, "SIZE_MISMATCH",
+            return reject(
+                    asset,
+                    "SIZE_MISMATCH",
                     "Declared %d bytes, stored %d".formatted(asset.declaredSizeBytes(), object.sizeBytes()));
         }
 
         String storedType = object.contentType() == null
-                ? "" : object.contentType().toLowerCase(Locale.ROOT).strip();
+                ? ""
+                : object.contentType().toLowerCase(Locale.ROOT).strip();
         if (!ALLOWED_IMAGE_TYPES.contains(storedType)) {
             return reject(asset, "TYPE_NOT_ALLOWED", "Stored content type is " + storedType);
         }
@@ -210,19 +233,18 @@ public class MediaAssetService implements MediaAvailability {
         // differs — but the header came from the same client as the bytes, and
         // HeadObject reports it back unchanged. Reading the image's own header is
         // the first check in this method that the uploader did not author.
-        Optional<ProbedImage> probed = ImageProbe.probe(
-                storage.readPrefix(asset.bucket(), asset.objectKey(), ImageProbe.PROBE_BYTES));
+        Optional<ProbedImage> probed =
+                ImageProbe.probe(storage.readPrefix(asset.bucket(), asset.objectKey(), ImageProbe.PROBE_BYTES));
         if (probed.isEmpty()) {
-            return reject(asset, "CONTENT_NOT_AN_IMAGE",
-                    "The stored bytes do not begin with a supported image header");
+            return reject(asset, "CONTENT_NOT_AN_IMAGE", "The stored bytes do not begin with a supported image header");
         }
         ProbedImage image = probed.get();
         if (!image.contentType().equals(storedType)) {
             // Not silently corrected to what the bytes are: the declared type is
             // what the URL was signed for and what a storefront would serve this
             // as, so a disagreement means the upload was not the one authorised.
-            return reject(asset, "TYPE_MISMATCH",
-                    "Declared %s, content is %s".formatted(storedType, image.contentType()));
+            return reject(
+                    asset, "TYPE_MISMATCH", "Declared %s, content is %s".formatted(storedType, image.contentType()));
         }
         if (!ImageCostLimits.withinBudget(image)) {
             // The header's dimensions and its sample depth together, because
@@ -235,10 +257,15 @@ public class MediaAssetService implements MediaAvailability {
             // operator and to anything that has been reading it; what changed is
             // the quantity it is a verdict on. The reason names the cost, since
             // "8000x5000 was refused" is not an explanation on its own.
-            return reject(asset, "DIMENSIONS_EXCEEDED",
+            return reject(
+                    asset,
+                    "DIMENSIONS_EXCEEDED",
                     "Header declares %dx%d at %d byte(s) per decoded pixel, %d bytes to decode"
-                            .formatted(image.widthPx(), image.heightPx(),
-                                    image.decodedBytesPerPixel(), image.decodedBytes()));
+                            .formatted(
+                                    image.widthPx(),
+                                    image.heightPx(),
+                                    image.decodedBytesPerPixel(),
+                                    image.decodedBytes()));
         }
 
         publishAvailable(asset, image, object, clock.instant());
@@ -263,13 +290,17 @@ public class MediaAssetService implements MediaAvailability {
      * connection for microseconds rather than for however long a degraded MinIO
      * takes to answer a head request.
      */
-    private void publishAvailable(MediaAsset asset, ProbedImage image,
-            ObjectStorage.StoredObject object, Instant now) {
+    private void publishAvailable(MediaAsset asset, ProbedImage image, ObjectStorage.StoredObject object, Instant now) {
 
         transactions.executeWithoutResult(status -> {
-            store.markAvailable(asset.assetId(), image.contentType(), object.sizeBytes(),
+            store.markAvailable(
+                    asset.assetId(),
+                    image.contentType(),
+                    object.sizeBytes(),
                     object.checksumSha256().orElse(object.eTag()),
-                    image.widthPx(), image.heightPx(), now);
+                    image.widthPx(),
+                    image.heightPx(),
+                    now);
 
             // Enqueued rather than rendered here. Rendering decodes a raster and
             // re-encodes it three times; on this thread it would put an
@@ -278,10 +309,17 @@ public class MediaAssetService implements MediaAvailability {
             derivativeJobs.enqueue(UUID.randomUUID(), asset.tenantId(), asset.assetId(), now);
 
             events.publishEvent(new MediaAssetAvailable(
-                    UUID.randomUUID(), asset.tenantId(), asset.assetId(), now,
-                    asset.owner().scope().name(), asset.owner().id(),
-                    asset.visibility().name(), image.contentType(), object.sizeBytes(),
-                    image.widthPx(), image.heightPx()));
+                    UUID.randomUUID(),
+                    asset.tenantId(),
+                    asset.assetId(),
+                    now,
+                    asset.owner().scope().name(),
+                    asset.owner().id(),
+                    asset.visibility().name(),
+                    image.contentType(),
+                    object.sizeBytes(),
+                    image.widthPx(),
+                    image.heightPx()));
         });
     }
 
@@ -328,6 +366,9 @@ public class MediaAssetService implements MediaAvailability {
         return stripped.length() > 255 ? stripped.substring(0, 255) : stripped;
     }
 
-    public record UploadTicket(MediaAssetId assetId, java.net.URI uploadUrl,
-            java.util.Map<String, String> requiredHeaders, Instant expiresAt) { }
+    public record UploadTicket(
+            MediaAssetId assetId,
+            java.net.URI uploadUrl,
+            java.util.Map<String, String> requiredHeaders,
+            Instant expiresAt) {}
 }

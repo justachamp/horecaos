@@ -1,17 +1,16 @@
 package uz.horecaos.platform.integration.camel.delivery;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.integration.api.delivery.DeliveryCapability;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.DeliveryRequest;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.Dropoff;
@@ -21,8 +20,6 @@ import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.integration.camel.common.ProviderExceptionClassifier;
 import uz.horecaos.platform.integration.camel.common.ProviderHttpClient;
 import uz.horecaos.platform.integration.camel.delivery.yandex.YandexDeliveryAdapter;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * What Yandex actually receives, and what a claim means when it comes back
@@ -36,8 +33,8 @@ class YandexDeliveryAdapterTests {
     @BeforeEach
     void startPartner() throws Exception {
         partner = RecordingPartnerServer.start();
-        adapter = new YandexDeliveryAdapter(new ProviderHttpClient(
-                JsonMapper.builder().build(), new ProviderExceptionClassifier()));
+        adapter = new YandexDeliveryAdapter(
+                new ProviderHttpClient(JsonMapper.builder().build(), new ProviderExceptionClassifier()));
     }
 
     @AfterEach
@@ -193,7 +190,8 @@ class YandexDeliveryAdapterTests {
     @DisplayName("Yandex declares a reservation phase and no reschedule")
     void declaresTheCapabilitiesItActuallyHas() {
         assertThat(adapter.capabilities())
-                .contains(DeliveryCapability.RESERVE_SHIPMENT,
+                .contains(
+                        DeliveryCapability.RESERVE_SHIPMENT,
                         DeliveryCapability.CONFIRM_SHIPMENT,
                         DeliveryCapability.QUERY_CANCELLATION_COST)
                 .doesNotContain(DeliveryCapability.RESCHEDULE_SHIPMENT);
@@ -220,8 +218,7 @@ class YandexDeliveryAdapterTests {
         return new DeliveryRequest(
                 "QO-2002",
                 new Pickup(41.3111, 69.2797, "Amir Temur 1", "Kitchen", "+998901112233", null),
-                new Dropoff(41.2995, 69.2401, "Navoi 5", "Customer", "+998907654321",
-                        null, "2", "4", "12"),
+                new Dropoff(41.2995, 69.2401, "Navoi 5", "Customer", "+998907654321", null, "2", "4", "12"),
                 pickupAt,
                 true,
                 150_000_00L,

@@ -10,10 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.payments.api.EntitlementBenefit;
 import uz.horecaos.platform.payments.api.EntitlementScope;
 
@@ -49,15 +47,31 @@ public class JdbcRemedyStore {
      *                             {@link uz.horecaos.platform.payments.application.DeliveryFeeBasisPort}
      *                             could not supply one
      */
-    public record RemedyRow(UUID id, UUID tenantId, UUID brandId, UUID orderId,
-            RemedyType remedyType, String reasonCode, String reason, String currency,
-            long amountMinor, long attestedMoneyMinor, long platformSettledMinor,
-            SettlementBasis settlementBasis, ExecutionChannel executionChannel,
-            String providerReference, String executedBy, Instant executedAt,
-            VerificationState verificationState, String verificationSource, Instant verifiedAt,
-            Long deliveryFeeBasisMinor, String recordedBy, Instant recordedAt,
-            UUID approvalRequestId, int version) {
-    }
+    public record RemedyRow(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID orderId,
+            RemedyType remedyType,
+            String reasonCode,
+            String reason,
+            String currency,
+            long amountMinor,
+            long attestedMoneyMinor,
+            long platformSettledMinor,
+            SettlementBasis settlementBasis,
+            ExecutionChannel executionChannel,
+            String providerReference,
+            String executedBy,
+            Instant executedAt,
+            VerificationState verificationState,
+            String verificationSource,
+            Instant verifiedAt,
+            Long deliveryFeeBasisMinor,
+            String recordedBy,
+            Instant recordedAt,
+            UUID approvalRequestId,
+            int version) {}
 
     public void insertRemedy(RemedyRow remedy, String idempotencyKey, Instant now) {
         Map<String, Object> parameters = new HashMap<>();
@@ -73,8 +87,11 @@ public class JdbcRemedyStore {
         parameters.put("attested", remedy.attestedMoneyMinor());
         parameters.put("platformSettled", remedy.platformSettledMinor());
         parameters.put("basis", remedy.settlementBasis().name());
-        parameters.put("channel",
-                remedy.executionChannel() == null ? null : remedy.executionChannel().name());
+        parameters.put(
+                "channel",
+                remedy.executionChannel() == null
+                        ? null
+                        : remedy.executionChannel().name());
         parameters.put("providerReference", remedy.providerReference());
         parameters.put("executedBy", remedy.executedBy());
         parameters.put("executedAt", utc(remedy.executedAt()));
@@ -101,9 +118,7 @@ public class JdbcRemedyStore {
                     :executedAt, :verification, :feeBasis,
                     :recordedBy, :recordedAt, :approvalRequestId, :idempotencyKey,
                     1, :now, :now)
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
     }
 
     public Optional<RemedyRow> findRemedy(UUID tenantId, UUID remedyId) {
@@ -111,7 +126,8 @@ public class JdbcRemedyStore {
                 SELECT * FROM payments.order_remedies
                  WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("id", remedyId)
+                .param("tenantId", tenantId)
+                .param("id", remedyId)
                 .query(JdbcRemedyStore::toRemedy)
                 .optional();
     }
@@ -122,7 +138,8 @@ public class JdbcRemedyStore {
                  WHERE tenant_id = :tenantId AND order_id = :orderId
                  ORDER BY recorded_at
                 """)
-                .param("tenantId", tenantId).param("orderId", orderId)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
                 .query(JdbcRemedyStore::toRemedy)
                 .list();
     }
@@ -140,8 +157,11 @@ public class JdbcRemedyStore {
                 SELECT COALESCE(SUM(amount_minor), 0) FROM payments.order_remedies
                  WHERE tenant_id = :tenantId AND order_id = :orderId
                 """)
-                .param("tenantId", tenantId).param("orderId", orderId)
-                .query(Long.class).optional().orElse(0L);
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query(Long.class)
+                .optional()
+                .orElse(0L);
         return total == null ? 0L : total;
     }
 
@@ -152,8 +172,11 @@ public class JdbcRemedyStore {
                  WHERE tenant_id = :tenantId AND order_id = :orderId
                    AND remedy_type = 'DELIVERY_FEE_REIMBURSEMENT'
                 """)
-                .param("tenantId", tenantId).param("orderId", orderId)
-                .query(Long.class).optional().orElse(0L);
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query(Long.class)
+                .optional()
+                .orElse(0L);
         return total == null ? 0L : total;
     }
 
@@ -166,8 +189,7 @@ public class JdbcRemedyStore {
      * ordinary and one from six weeks ago that no settlement file ever matched is a
      * refund that may never have happened.
      */
-    public List<RemedyRow> unverifiedAttestations(UUID tenantId, Instant recordedBefore,
-            int limit) {
+    public List<RemedyRow> unverifiedAttestations(UUID tenantId, Instant recordedBefore, int limit) {
         return jdbc.sql("""
                 SELECT * FROM payments.order_remedies
                  WHERE tenant_id = :tenantId
@@ -177,7 +199,8 @@ public class JdbcRemedyStore {
                  ORDER BY recorded_at
                  LIMIT :limit
                 """)
-                .param("tenantId", tenantId).param("before", utc(recordedBefore))
+                .param("tenantId", tenantId)
+                .param("before", utc(recordedBefore))
                 .param("limit", limit)
                 .query(JdbcRemedyStore::toRemedy)
                 .list();
@@ -192,10 +215,14 @@ public class JdbcRemedyStore {
      * the point: the two questions have different answers for a P&amp;L and for a
      * bank reconciliation.
      */
-    public record RemedyTotals(RemedyType remedyType, String currency, long remedyCount,
-            long amountMinor, long attestedMoneyMinor, long platformSettledMinor,
-            long unverifiedMinor) {
-    }
+    public record RemedyTotals(
+            RemedyType remedyType,
+            String currency,
+            long remedyCount,
+            long amountMinor,
+            long attestedMoneyMinor,
+            long platformSettledMinor,
+            long unverifiedMinor) {}
 
     public List<RemedyTotals> totalsByType(UUID tenantId, Instant from, Instant to) {
         return jdbc.sql("""
@@ -213,7 +240,9 @@ public class JdbcRemedyStore {
                  GROUP BY remedy_type, currency
                  ORDER BY remedy_type, currency
                 """)
-                .param("tenantId", tenantId).param("from", utc(from)).param("to", utc(to))
+                .param("tenantId", tenantId)
+                .param("from", utc(from))
+                .param("to", utc(to))
                 .query((row, number) -> new RemedyTotals(
                         RemedyType.valueOf(row.getString("remedy_type")),
                         row.getString("currency"),
@@ -232,8 +261,8 @@ public class JdbcRemedyStore {
      * <p>Conditional on the row still being {@code UNVERIFIED}, so a second
      * reconciliation run cannot overwrite a dispute with a confirmation.
      */
-    public boolean recordVerification(UUID tenantId, UUID remedyId, VerificationState state,
-            String source, Instant now) {
+    public boolean recordVerification(
+            UUID tenantId, UUID remedyId, VerificationState state, String source, Instant now) {
         return jdbc.sql("""
                 UPDATE payments.order_remedies
                    SET verification_state = :state,
@@ -245,18 +274,35 @@ public class JdbcRemedyStore {
                    AND verification_state = 'UNVERIFIED'
                    AND attested_money_minor > 0
                 """)
-                .param("tenantId", tenantId).param("id", remedyId)
-                .param("state", state.name()).param("source", source).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", remedyId)
+                        .param("state", state.name())
+                        .param("source", source)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     // --------------------------------------------------------- entitlements
 
-    public record EntitlementRow(UUID id, UUID tenantId, UUID brandId, UUID remedyId,
-            UUID customerAccountId, EntitlementScope appliesTo, EntitlementBenefit benefit,
-            Integer percentBasisPoints, Long amountMinor, Long maximumMinor, String currency,
-            int usesGranted, int usesConsumed, Instant startsAt, Instant expiresAt,
-            EntitlementStatus status, int version) {
+    public record EntitlementRow(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID remedyId,
+            UUID customerAccountId,
+            EntitlementScope appliesTo,
+            EntitlementBenefit benefit,
+            Integer percentBasisPoints,
+            Long amountMinor,
+            Long maximumMinor,
+            String currency,
+            int usesGranted,
+            int usesConsumed,
+            Instant startsAt,
+            Instant expiresAt,
+            EntitlementStatus status,
+            int version) {
 
         public int usesRemaining() {
             return Math.max(0, usesGranted - usesConsumed);
@@ -293,9 +339,7 @@ public class JdbcRemedyStore {
                     :benefit, :percentBp, :amount, :maximum, :currency,
                     :usesGranted, 0, :startsAt, :expiresAt, :status,
                     1, :now, :now)
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
     }
 
     public Optional<EntitlementRow> findEntitlement(UUID tenantId, UUID entitlementId) {
@@ -303,7 +347,8 @@ public class JdbcRemedyStore {
                 SELECT * FROM payments.remedy_entitlements
                  WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("id", entitlementId)
+                .param("tenantId", tenantId)
+                .param("id", entitlementId)
                 .query(JdbcRemedyStore::toEntitlement)
                 .optional();
     }
@@ -314,8 +359,7 @@ public class JdbcRemedyStore {
      * <p>Brand and customer are both predicates, never one or the other: an
      * entitlement is a promise made by one brand to one person.
      */
-    public List<EntitlementRow> spendableEntitlements(UUID tenantId, UUID brandId,
-            UUID customerAccountId, Instant at) {
+    public List<EntitlementRow> spendableEntitlements(UUID tenantId, UUID brandId, UUID customerAccountId, Instant at) {
         return jdbc.sql("""
                 SELECT * FROM payments.remedy_entitlements
                  WHERE tenant_id = :tenantId AND brand_id = :brandId
@@ -325,8 +369,10 @@ public class JdbcRemedyStore {
                    AND starts_at <= :at AND expires_at > :at
                  ORDER BY expires_at
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
-                .param("customerAccountId", customerAccountId).param("at", utc(at))
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("customerAccountId", customerAccountId)
+                .param("at", utc(at))
                 .query(JdbcRemedyStore::toEntitlement)
                 .list();
     }
@@ -352,8 +398,11 @@ public class JdbcRemedyStore {
                    AND uses_consumed < uses_granted
                    AND starts_at <= :at AND expires_at > :at
                 """)
-                .param("tenantId", tenantId).param("id", entitlementId).param("at", utc(at))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", entitlementId)
+                        .param("at", utc(at))
+                        .update()
+                == 1;
     }
 
     /** Closes out grants whose window has passed. Scheduled, never on a request path. */
@@ -362,17 +411,20 @@ public class JdbcRemedyStore {
                 UPDATE payments.remedy_entitlements
                    SET status = 'EXPIRED', version = version + 1, updated_at = :at
                  WHERE status = 'ACTIVE' AND expires_at <= :at
-                """)
-                .param("at", utc(at))
-                .update();
+                """).param("at", utc(at)).update();
     }
 
     // --------------------------------------------------------- redemptions
 
-    public record RedemptionRow(UUID id, UUID tenantId, UUID entitlementId, UUID orderId,
-            long subtotalDiscountMinor, long deliveryDiscountMinor, String currency,
-            Instant redeemedAt) {
-    }
+    public record RedemptionRow(
+            UUID id,
+            UUID tenantId,
+            UUID entitlementId,
+            UUID orderId,
+            long subtotalDiscountMinor,
+            long deliveryDiscountMinor,
+            String currency,
+            Instant redeemedAt) {}
 
     /**
      * Records the use. Append-only, and unique per order.
@@ -390,14 +442,16 @@ public class JdbcRemedyStore {
                     :subtotal, :delivery, :currency, :redeemedAt)
                 ON CONFLICT ON CONSTRAINT uq_entitlement_redemption_order DO NOTHING
                 """)
-                .param("id", redemption.id()).param("tenantId", redemption.tenantId())
-                .param("entitlementId", redemption.entitlementId())
-                .param("orderId", redemption.orderId())
-                .param("subtotal", redemption.subtotalDiscountMinor())
-                .param("delivery", redemption.deliveryDiscountMinor())
-                .param("currency", redemption.currency())
-                .param("redeemedAt", utc(redemption.redeemedAt()))
-                .update() == 1;
+                        .param("id", redemption.id())
+                        .param("tenantId", redemption.tenantId())
+                        .param("entitlementId", redemption.entitlementId())
+                        .param("orderId", redemption.orderId())
+                        .param("subtotal", redemption.subtotalDiscountMinor())
+                        .param("delivery", redemption.deliveryDiscountMinor())
+                        .param("currency", redemption.currency())
+                        .param("redeemedAt", utc(redemption.redeemedAt()))
+                        .update()
+                == 1;
     }
 
     public List<RedemptionRow> redemptionsOf(UUID tenantId, UUID entitlementId) {
@@ -406,7 +460,8 @@ public class JdbcRemedyStore {
                  WHERE tenant_id = :tenantId AND entitlement_id = :entitlementId
                  ORDER BY redeemed_at
                 """)
-                .param("tenantId", tenantId).param("entitlementId", entitlementId)
+                .param("tenantId", tenantId)
+                .param("entitlementId", entitlementId)
                 .query((row, number) -> new RedemptionRow(
                         row.getObject("id", UUID.class),
                         row.getObject("tenant_id", UUID.class),

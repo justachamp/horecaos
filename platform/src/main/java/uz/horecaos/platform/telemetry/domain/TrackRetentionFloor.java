@@ -43,14 +43,12 @@ public final class TrackRetentionFloor {
      */
     public static final int REVIEW_CEILING_DAYS = 90;
 
-    private TrackRetentionFloor() {
-    }
+    private TrackRetentionFloor() {}
 
     /** The minimum retention a calendar of this shape can be evidenced with. */
     public static int floorDays(int settlementPeriodDays, int statementDisputeDays) {
         if (settlementPeriodDays <= 0 || statementDisputeDays <= 0) {
-            throw new IllegalArgumentException(
-                    "A settlement period and a dispute window are both positive day counts");
+            throw new IllegalArgumentException("A settlement period and a dispute window are both positive day counts");
         }
         return settlementPeriodDays + statementDisputeDays;
     }
@@ -61,26 +59,32 @@ public final class TrackRetentionFloor {
      * @param origin where the value came from, so a breach names the tenant or
      *               brand that set it rather than saying "some row"
      */
-    public static Verdict check(String origin, int retentionDays,
-            int settlementPeriodDays, int statementDisputeDays) {
+    public static Verdict check(String origin, int retentionDays, int settlementPeriodDays, int statementDisputeDays) {
 
         Objects.requireNonNull(origin, "An origin is required");
         int floor = floorDays(settlementPeriodDays, statementDisputeDays);
 
         if (retentionDays < floor) {
-            return new Verdict(origin, retentionDays, floor, Outcome.BELOW_FLOOR,
+            return new Verdict(
+                    origin,
+                    retentionDays,
+                    floor,
+                    Outcome.BELOW_FLOOR,
                     ("%s retains courier tracks for %d days, below the %d-day floor "
-                            + "(settlement period %d + statement dispute window %d). A track that "
-                            + "expires before the period it evidences is worse than no track, "
-                            + "because it looks like evidence until somebody asks for it.")
-                            .formatted(origin, retentionDays, floor,
-                                    settlementPeriodDays, statementDisputeDays));
+                                    + "(settlement period %d + statement dispute window %d). A track that "
+                                    + "expires before the period it evidences is worse than no track, "
+                                    + "because it looks like evidence until somebody asks for it.")
+                            .formatted(origin, retentionDays, floor, settlementPeriodDays, statementDisputeDays));
         }
         if (retentionDays > REVIEW_CEILING_DAYS) {
-            return new Verdict(origin, retentionDays, floor, Outcome.ABOVE_REVIEW_CEILING,
+            return new Verdict(
+                    origin,
+                    retentionDays,
+                    floor,
+                    Outcome.ABOVE_REVIEW_CEILING,
                     ("%s retains courier tracks for %d days, past the %d-day review ceiling. "
-                            + "Nothing reads a track past the dispute window, so this is a "
-                            + "movement history of identified people kept for no stated purpose.")
+                                    + "Nothing reads a track past the dispute window, so this is a "
+                                    + "movement history of identified people kept for no stated purpose.")
                             .formatted(origin, retentionDays, REVIEW_CEILING_DAYS));
         }
         return new Verdict(origin, retentionDays, floor, Outcome.WITHIN_FLOOR, null);
@@ -103,8 +107,7 @@ public final class TrackRetentionFloor {
      *                    reader learns why the floor exists rather than only that
      *                    it was breached
      */
-    public record Verdict(String origin, int retentionDays, int floorDays,
-            Outcome outcome, String explanation) {
+    public record Verdict(String origin, int retentionDays, int floorDays, Outcome outcome, String explanation) {
 
         public boolean isProblem() {
             return outcome != Outcome.WITHIN_FLOOR;

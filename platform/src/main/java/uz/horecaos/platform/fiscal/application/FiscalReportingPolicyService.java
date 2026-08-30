@@ -2,11 +2,9 @@ package uz.horecaos.platform.fiscal.application;
 
 import java.util.Set;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-
 import uz.horecaos.platform.fiscal.domain.FiscalReportingPolicy;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
@@ -70,9 +68,12 @@ public class FiscalReportingPolicyService {
                     .map(ResolvedPolicy::document)
                     .orElseGet(FiscalReportingPolicy::platformDefault);
         } catch (RuntimeException unreadable) {
-            log.error("Tenant {} has an unreadable {} policy; the platform default of {} minutes "
+            log.error(
+                    "Tenant {} has an unreadable {} policy; the platform default of {} minutes "
                             + "applies to its fiscal sweep until it is fixed.",
-                    tenantId, REPORTING_DEADLINE.code(), FiscalReportingPolicy.DEFAULT_MINUTES,
+                    tenantId,
+                    REPORTING_DEADLINE.code(),
+                    FiscalReportingPolicy.DEFAULT_MINUTES,
                     unreadable);
             return FiscalReportingPolicy.platformDefault();
         }

@@ -36,15 +36,14 @@ public final class CommercialConfigurationKeys {
      * {@code METER_ONLY} again, which changes behaviour without rewriting a
      * single historical usage row.
      */
-    public static final ConfigurationKey<String> ENFORCEMENT_CEILING =
-            ConfigurationKey.of(ENFORCEMENT_CEILING_CODE, String.class)
-                    .defaultValue(EnforcementMode.METER_ONLY.name())
-                    .ownedBy("commercial")
-                    .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
-                    .describedAs("The strongest enforcement mode entitlement checks may apply for this tenant. "
-                            + "METER_ONLY measures and refuses nothing.")
-                    .build();
+    public static final ConfigurationKey<String> ENFORCEMENT_CEILING = ConfigurationKey.of(
+                    ENFORCEMENT_CEILING_CODE, String.class)
+            .defaultValue(EnforcementMode.METER_ONLY.name())
+            .ownedBy("commercial")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("The strongest enforcement mode entitlement checks may apply for this tenant. "
+                    + "METER_ONLY measures and refuses nothing.")
+            .build();
 
-    private CommercialConfigurationKeys() {
-    }
+    private CommercialConfigurationKeys() {}
 }

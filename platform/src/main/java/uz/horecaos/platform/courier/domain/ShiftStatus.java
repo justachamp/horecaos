@@ -2,7 +2,6 @@ package uz.horecaos.platform.courier.domain;
 
 /** The shift lifecycle (ADR 0042). */
 public enum ShiftStatus {
-
     OPEN,
     CLOSE_REQUESTED,
     RECONCILING,

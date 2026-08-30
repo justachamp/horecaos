@@ -1,18 +1,15 @@
 package uz.horecaos.platform.loyalty.web;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.loyalty.application.LoyaltyQueryService;
@@ -47,22 +44,22 @@ public class LoyaltyStorefrontController {
 
     @GetMapping("/tenants/{tenantId}/accounts/{accountId}")
     @RequiresCapability(value = Capability.LOYALTY_READ, scope = ScopeType.TENANT)
-    @Operation(summary = "One points balance",
+    @Operation(
+            summary = "One points balance",
             description = "The balance, what is spendable today, what an unfinished checkout is "
                     + "holding, and the next lot to expire. Points are not money: they cannot be "
                     + "withdrawn, cannot be transferred, and have no value outside the platform.")
-    public ResponseEntity<BalanceResponse> balance(@PathVariable UUID tenantId,
-            @PathVariable UUID accountId) {
+    public ResponseEntity<BalanceResponse> balance(@PathVariable UUID tenantId, @PathVariable UUID accountId) {
         return ResponseEntity.ok(BalanceResponse.of(loyalty.balance(tenantId, accountId)));
     }
 
     @GetMapping("/tenants/{tenantId}/accounts/{accountId}/entries")
     @RequiresCapability(value = Capability.LOYALTY_READ, scope = ScopeType.TENANT)
-    @Operation(summary = "The movements behind a balance",
+    @Operation(
+            summary = "The movements behind a balance",
             description = "Every entry that produced the balance, newest first, each with the "
                     + "balance it left behind. This is what a disputed figure is answered from.")
-    public ResponseEntity<List<EntryResponse>> entries(@PathVariable UUID tenantId,
-            @PathVariable UUID accountId) {
+    public ResponseEntity<List<EntryResponse>> entries(@PathVariable UUID tenantId, @PathVariable UUID accountId) {
         return ResponseEntity.ok(loyalty.entries(tenantId, accountId).stream()
                 .map(EntryResponse::of)
                 .toList());
@@ -73,11 +70,19 @@ public class LoyaltyStorefrontController {
      *                balance because a multi-brand customer holds several and
      *                cannot spend one at another
      */
-    public record BalanceResponse(UUID accountId, UUID brandId, ApiMoney balance,
-            ApiMoney spendable, ApiMoney held, Instant nextExpiryAt, ApiMoney nextExpiryAmount) {
+    public record BalanceResponse(
+            UUID accountId,
+            UUID brandId,
+            ApiMoney balance,
+            ApiMoney spendable,
+            ApiMoney held,
+            Instant nextExpiryAt,
+            ApiMoney nextExpiryAmount) {
 
         static BalanceResponse of(BalanceView view) {
-            return new BalanceResponse(view.accountId(), view.brandId(),
+            return new BalanceResponse(
+                    view.accountId(),
+                    view.brandId(),
                     ApiMoney.of(view.balanceMinor(), view.currency()),
                     ApiMoney.of(view.spendableMinor(), view.currency()),
                     ApiMoney.of(view.heldMinor(), view.currency()),
@@ -86,12 +91,24 @@ public class LoyaltyStorefrontController {
         }
     }
 
-    public record EntryResponse(UUID id, String type, long amountMinor, long balanceAfterMinor,
-            UUID orderId, String reasonCode, Instant occurredAt) {
+    public record EntryResponse(
+            UUID id,
+            String type,
+            long amountMinor,
+            long balanceAfterMinor,
+            UUID orderId,
+            String reasonCode,
+            Instant occurredAt) {
 
         static EntryResponse of(EntryRow row) {
-            return new EntryResponse(row.id(), row.entryType().name(), row.amountMinor(),
-                    row.balanceAfterMinor(), row.orderId(), row.reasonCode(), row.occurredAt());
+            return new EntryResponse(
+                    row.id(),
+                    row.entryType().name(),
+                    row.amountMinor(),
+                    row.balanceAfterMinor(),
+                    row.orderId(),
+                    row.reasonCode(),
+                    row.occurredAt());
         }
     }
 }

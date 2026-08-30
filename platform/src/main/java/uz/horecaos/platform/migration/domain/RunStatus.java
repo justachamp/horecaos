@@ -10,7 +10,6 @@ package uz.horecaos.platform.migration.domain;
  * migration breaking.
  */
 public enum RunStatus {
-
     RUNNING(false),
 
     COMPLETED(true),

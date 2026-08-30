@@ -23,20 +23,18 @@ public final class KitchenStateMachine {
     private static final Map<TicketStatus, Set<TicketStatus>> TICKET = ticketTransitions();
     private static final Map<TicketItemStatus, Set<TicketItemStatus>> ITEM = itemTransitions();
 
-    private KitchenStateMachine() {
-    }
+    private KitchenStateMachine() {}
 
     private static Map<TicketStatus, Set<TicketStatus>> ticketTransitions() {
         Map<TicketStatus, Set<TicketStatus>> transitions = new EnumMap<>(TicketStatus.class);
 
         transitions.put(TicketStatus.HELD, EnumSet.of(TicketStatus.FIRED, TicketStatus.VOIDED));
-        transitions.put(TicketStatus.FIRED, EnumSet.of(
-                TicketStatus.IN_PRODUCTION, TicketStatus.VOIDED));
-        transitions.put(TicketStatus.IN_PRODUCTION, EnumSet.of(
-                TicketStatus.READY, TicketStatus.VOIDED));
+        transitions.put(TicketStatus.FIRED, EnumSet.of(TicketStatus.IN_PRODUCTION, TicketStatus.VOIDED));
+        transitions.put(TicketStatus.IN_PRODUCTION, EnumSet.of(TicketStatus.READY, TicketStatus.VOIDED));
         // The recall edge, and the handover that closes the ticket.
-        transitions.put(TicketStatus.READY, EnumSet.of(
-                TicketStatus.IN_PRODUCTION, TicketStatus.HANDED_OVER, TicketStatus.VOIDED));
+        transitions.put(
+                TicketStatus.READY,
+                EnumSet.of(TicketStatus.IN_PRODUCTION, TicketStatus.HANDED_OVER, TicketStatus.VOIDED));
 
         for (TicketStatus status : TicketStatus.values()) {
             if (status.terminal()) {
@@ -47,13 +45,10 @@ public final class KitchenStateMachine {
     }
 
     private static Map<TicketItemStatus, Set<TicketItemStatus>> itemTransitions() {
-        Map<TicketItemStatus, Set<TicketItemStatus>> transitions =
-                new EnumMap<>(TicketItemStatus.class);
+        Map<TicketItemStatus, Set<TicketItemStatus>> transitions = new EnumMap<>(TicketItemStatus.class);
 
-        transitions.put(TicketItemStatus.QUEUED, EnumSet.of(
-                TicketItemStatus.STARTED, TicketItemStatus.CANCELLED));
-        transitions.put(TicketItemStatus.STARTED, EnumSet.of(
-                TicketItemStatus.READY, TicketItemStatus.CANCELLED));
+        transitions.put(TicketItemStatus.QUEUED, EnumSet.of(TicketItemStatus.STARTED, TicketItemStatus.CANCELLED));
+        transitions.put(TicketItemStatus.STARTED, EnumSet.of(TicketItemStatus.READY, TicketItemStatus.CANCELLED));
         // An item recall, which is what a cook presses when they marked the wrong
         // line ready. It must be one press: the alternative is finding a manager
         // mid-service, and what actually happens then is that nobody corrects it.
@@ -87,8 +82,7 @@ public final class KitchenStateMachine {
      * @return the status the items imply, which may be {@code current}
      */
     public static TicketStatus rollUp(TicketStatus current, Iterable<TicketItemStatus> items) {
-        if (current != TicketStatus.FIRED && current != TicketStatus.IN_PRODUCTION
-                && current != TicketStatus.READY) {
+        if (current != TicketStatus.FIRED && current != TicketStatus.IN_PRODUCTION && current != TicketStatus.READY) {
             return current;
         }
 

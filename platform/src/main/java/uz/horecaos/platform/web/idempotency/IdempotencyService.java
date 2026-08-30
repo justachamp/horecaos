@@ -11,7 +11,6 @@ import java.time.ZoneOffset;
 import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -84,9 +83,7 @@ public class IdempotencyService {
                 .param("expiresAt", at(now.plus(request.retention())))
                 .update();
 
-        return inserted == 1
-                ? new IdempotencyOutcome.Proceed(recordId)
-                : inspectExisting(request, hash, now);
+        return inserted == 1 ? new IdempotencyOutcome.Proceed(recordId) : inspectExisting(request, hash, now);
     }
 
     /** Records the response so an identical retry replays it rather than re-running. */
@@ -164,7 +161,9 @@ public class IdempotencyService {
                         (Integer) resultSet.getObject("response_status"),
                         resultSet.getString("response_body"),
                         resultSet.getBoolean("response_body_protected"),
-                        resultSet.getObject("lease_expires_at", java.time.OffsetDateTime.class).toInstant()))
+                        resultSet
+                                .getObject("lease_expires_at", java.time.OffsetDateTime.class)
+                                .toInstant()))
                 .optional();
 
         if (existing.isEmpty()) {
@@ -177,8 +176,8 @@ public class IdempotencyService {
             return new IdempotencyOutcome.Conflict();
         }
         if ("COMPLETED".equals(record.status())) {
-            return new IdempotencyOutcome.Replay(record.id(), record.responseStatus(),
-                    record.responseBody(), record.responseBodyProtected());
+            return new IdempotencyOutcome.Replay(
+                    record.id(), record.responseStatus(), record.responseBody(), record.responseBodyProtected());
         }
         if (record.leaseExpiresAt().isAfter(now)) {
             return new IdempotencyOutcome.InProgress();
@@ -196,9 +195,7 @@ public class IdempotencyService {
                 .param("now", at(now))
                 .update();
 
-        return taken == 1
-                ? new IdempotencyOutcome.Proceed(record.id())
-                : new IdempotencyOutcome.InProgress();
+        return taken == 1 ? new IdempotencyOutcome.Proceed(record.id()) : new IdempotencyOutcome.InProgress();
     }
 
     /**
@@ -220,7 +217,11 @@ public class IdempotencyService {
     }
 
     private record Existing(
-            UUID id, String requestHash, String status,
-            Integer responseStatus, String responseBody, boolean responseBodyProtected,
-            Instant leaseExpiresAt) { }
+            UUID id,
+            String requestHash,
+            String status,
+            Integer responseStatus,
+            String responseBody,
+            boolean responseBodyProtected,
+            Instant leaseExpiresAt) {}
 }

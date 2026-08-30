@@ -1,16 +1,13 @@
 package uz.horecaos.platform.migration.infrastructure.legacy;
 
-import javax.sql.DataSource;
-
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
-
+import javax.sql.DataSource;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.simple.JdbcClient;
-
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
 
@@ -60,9 +57,8 @@ public class LegacySourceConfiguration {
         // Belt to the pool's braces: this one is enforced by the server, so a
         // component that opened its own transaction on this connection would still
         // be unable to write.
-        config.setConnectionInitSql(
-                "SET default_transaction_read_only = on; SET statement_timeout = %d"
-                        .formatted(properties.statementTimeout().toMillis()));
+        config.setConnectionInitSql("SET default_transaction_read_only = on; SET statement_timeout = %d"
+                .formatted(properties.statementTimeout().toMillis()));
         return new HikariDataSource(config);
     }
 

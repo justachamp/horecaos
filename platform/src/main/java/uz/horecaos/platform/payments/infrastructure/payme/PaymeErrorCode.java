@@ -73,8 +73,7 @@ public final class PaymeErrorCode {
     /** {@code SetFiscalData}: an invalid parameter, named in {@code message}. */
     public static final int FISCAL_INVALID_PARAMETERS = -32602;
 
-    private PaymeErrorCode() {
-    }
+    private PaymeErrorCode() {}
 
     /** Whether a code falls in the range whose localised message and {@code data} are mandatory. */
     public static boolean isAccountError(int code) {

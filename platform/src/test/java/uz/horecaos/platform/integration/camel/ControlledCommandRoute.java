@@ -7,10 +7,8 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
-
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
-
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.integration.camel.common.ProviderExceptionClassifier;
 
@@ -49,7 +47,8 @@ public final class ControlledCommandRoute extends RouteBuilder {
     public ControlledCommandRoute(String baseUrl, ProviderExceptionClassifier classifier) {
         this.baseUrl = baseUrl;
         this.classifier = classifier;
-        this.http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+        this.http =
+                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
     }
 
     @Override
@@ -68,8 +67,8 @@ public final class ControlledCommandRoute extends RouteBuilder {
                 .description("Calls the controlled fake provider for one command")
                 .process(this::invoke)
                 .choice()
-                    .when(exchange -> outcome(exchange).requiresReconciliation())
-                        .to(RECONCILE_ENDPOINT)
+                .when(exchange -> outcome(exchange).requiresReconciliation())
+                .to(RECONCILE_ENDPOINT)
                 .end()
                 .process(exchange -> exchange.getIn().setBody(outcome(exchange)));
 
@@ -94,11 +93,12 @@ public final class ControlledCommandRoute extends RouteBuilder {
 
         try {
             HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
-            Duration retryAfter = response.headers().firstValue("Retry-After")
+            Duration retryAfter = response.headers()
+                    .firstValue("Retry-After")
                     .map(value -> Duration.ofSeconds(Long.parseLong(value)))
                     .orElse(null);
-            exchange.getIn().setHeader(OUTCOME_HEADER,
-                    classifier.classify(response.statusCode(), response.body(), retryAfter));
+            exchange.getIn()
+                    .setHeader(OUTCOME_HEADER, classifier.classify(response.statusCode(), response.body(), retryAfter));
         } catch (Exception failure) {
             // Sent is the default, and only a connect-phase failure proves
             // otherwise. Assuming "sent" costs one status query; assuming "not
@@ -123,25 +123,35 @@ public final class ControlledCommandRoute extends RouteBuilder {
         try {
             HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 200) {
-                exchange.getIn().setHeader(OUTCOME_HEADER, ProviderOutcome.success(
-                        Map.of("reconciled", true), reference(response.body())));
+                exchange.getIn()
+                        .setHeader(
+                                OUTCOME_HEADER,
+                                ProviderOutcome.success(Map.of("reconciled", true), reference(response.body())));
                 return;
             }
             // The provider has no record of it, so nothing was acted on and
             // sending it again is safe.
-            exchange.getIn().setHeader(OUTCOME_HEADER,
-                    ProviderOutcome.retryable("NOT_ACCEPTED", "The provider has no record of this command", null));
+            exchange.getIn()
+                    .setHeader(
+                            OUTCOME_HEADER,
+                            ProviderOutcome.retryable(
+                                    "NOT_ACCEPTED", "The provider has no record of this command", null));
         } catch (Exception failure) {
             // Still uncertain, and still not a reason to re-send the command.
-            exchange.getIn().setHeader(OUTCOME_HEADER,
-                    classifier.classify(failure, true));
+            exchange.getIn().setHeader(OUTCOME_HEADER, classifier.classify(failure, true));
         }
     }
 
     private void deadLetter(Exchange exchange) {
         Throwable cause = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Throwable.class);
-        exchange.getIn().setHeader(OUTCOME_HEADER, ProviderOutcome.uncertain("UNCLASSIFIED",
-                cause == null ? "Unknown route failure" : cause.getClass().getSimpleName()));
+        exchange.getIn()
+                .setHeader(
+                        OUTCOME_HEADER,
+                        ProviderOutcome.uncertain(
+                                "UNCLASSIFIED",
+                                cause == null
+                                        ? "Unknown route failure"
+                                        : cause.getClass().getSimpleName()));
         exchange.getIn().setBody(outcome(exchange));
     }
 
@@ -159,5 +169,5 @@ public final class ControlledCommandRoute extends RouteBuilder {
     }
 
     /** One provider-neutral command, as a domain port would send it. */
-    public record ControlledCommand(UUID commandId, UUID tenantId, String scenario) { }
+    public record ControlledCommand(UUID commandId, UUID tenantId, String scenario) {}
 }

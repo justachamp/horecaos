@@ -9,13 +9,10 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
 import javax.imageio.ImageIO;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.media.api.ImageDerivativeRenderer;
 import uz.horecaos.platform.media.domain.DecodeError;
 import uz.horecaos.platform.media.domain.DerivativeVariant;
@@ -115,7 +112,9 @@ public class ImageIoDerivativeRenderer implements ImageDerivativeRenderer {
             if (!DecodeError.isRecoverable(fatal)) {
                 throw fatal;
             }
-            log.warn("A derivative decode ran out of memory ({})", fatal.getClass().getSimpleName());
+            log.warn(
+                    "A derivative decode ran out of memory ({})",
+                    fatal.getClass().getSimpleName());
             return new Failed(RENDER_OUT_OF_MEMORY);
         }
         if (original == null) {
@@ -137,7 +136,9 @@ public class ImageIoDerivativeRenderer implements ImageDerivativeRenderer {
             if (!DecodeError.isRecoverable(fatal)) {
                 throw fatal;
             }
-            log.warn("A derivative rescale ran out of memory ({})", fatal.getClass().getSimpleName());
+            log.warn(
+                    "A derivative rescale ran out of memory ({})",
+                    fatal.getClass().getSimpleName());
             return new Failed(RENDER_OUT_OF_MEMORY);
         } finally {
             // The raster is the largest thing this method holds and the caller
@@ -164,7 +165,8 @@ public class ImageIoDerivativeRenderer implements ImageDerivativeRenderer {
      */
     static RenderOutcome classifyDecodeFailure(Throwable failure) {
         if (DecodeError.ranOutOfMemory(failure)) {
-            log.warn("A derivative decode ran out of memory (reported as {})",
+            log.warn(
+                    "A derivative decode ran out of memory (reported as {})",
                     failure.getClass().getSimpleName());
             return new Failed(RENDER_OUT_OF_MEMORY);
         }
@@ -176,21 +178,20 @@ public class ImageIoDerivativeRenderer implements ImageDerivativeRenderer {
         //
         // The message is not logged. A decoder's own wording quotes the bytes it
         // choked on.
-        log.warn("Derivative source is malformed and was refused by the decoder ({})",
+        log.warn(
+                "Derivative source is malformed and was refused by the decoder ({})",
                 failure.getClass().getSimpleName());
         return new Unsupported(SOURCE_MALFORMED);
     }
 
     /** @return empty when the encoder produced nothing, which is a failure and not a format */
-    private static Optional<Rendition> scaleAndEncode(BufferedImage original,
-            DerivativeVariant variant) {
+    private static Optional<Rendition> scaleAndEncode(BufferedImage original, DerivativeVariant variant) {
 
         int width = Math.min(variant.targetWidthPx(), original.getWidth());
         // Never upscaled. Enlarging a small photograph produces a bigger file
         // that looks worse, and the point of the variant is a size bound, not a
         // promise that every rendition is exactly that wide.
-        int height = Math.max(1,
-                Math.round(original.getHeight() * (float) width / original.getWidth()));
+        int height = Math.max(1, Math.round(original.getHeight() * (float) width / original.getWidth()));
 
         BufferedImage scaled = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         var canvas = scaled.createGraphics();

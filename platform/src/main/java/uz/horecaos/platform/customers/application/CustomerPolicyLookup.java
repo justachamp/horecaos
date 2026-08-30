@@ -2,7 +2,6 @@ package uz.horecaos.platform.customers.application;
 
 import java.time.Instant;
 import java.util.UUID;
-
 import uz.horecaos.platform.customers.api.CustomerIdentityPolicy;
 
 /**

@@ -1,9 +1,7 @@
 package uz.horecaos.platform.web.api;
 
-import java.util.Optional;
-
 import jakarta.servlet.http.HttpServletRequest;
-
+import java.util.Optional;
 import org.springframework.http.HttpHeaders;
 
 /**
@@ -20,8 +18,7 @@ import org.springframework.http.HttpHeaders;
  */
 public final class AggregateVersion {
 
-    private AggregateVersion() {
-    }
+    private AggregateVersion() {}
 
     public static String toETag(long version) {
         return "W/\"%d\"".formatted(version);
@@ -50,9 +47,10 @@ public final class AggregateVersion {
      *                      the check by omitting it
      */
     public static long requireIfMatch(HttpServletRequest request) {
-        return fromIfMatch(request).orElseThrow(() -> new ApiException(
-                ErrorCode.INVALID_REQUEST,
-                "This operation requires an If-Match header carrying the expected version"));
+        return fromIfMatch(request)
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.INVALID_REQUEST,
+                        "This operation requires an If-Match header carrying the expected version"));
     }
 
     /** Fails when the stored version has moved on, with both versions reported. */
@@ -71,8 +69,7 @@ public final class AggregateVersion {
         try {
             return Long.parseLong(value);
         } catch (NumberFormatException malformed) {
-            throw new ApiException(
-                    ErrorCode.INVALID_REQUEST, "If-Match must carry a numeric aggregate version");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "If-Match must carry a numeric aggregate version");
         }
     }
 }

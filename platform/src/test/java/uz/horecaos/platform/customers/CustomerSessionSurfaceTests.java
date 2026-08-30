@@ -6,14 +6,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Locale;
 import java.util.UUID;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,7 +27,6 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.customers.application.CustomerIdentityService;
 import uz.horecaos.platform.customers.domain.CustomerSessionToken;
 import uz.horecaos.platform.support.TestDatabase;
@@ -84,6 +81,7 @@ class CustomerSessionSurfaceTests {
      * only combination that is safe to write into a file.
      */
     private static final String PRESET_PHONE = "+998000000000";
+
     private static final String PRESET_CODE = "000000";
 
     /** An ordinary number. It has no preset, so it needs a gateway, and there is none here. */
@@ -103,8 +101,8 @@ class CustomerSessionSurfaceTests {
 
     @BeforeAll
     static void requireDocker() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
-                "Docker is required for the customer session test");
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(), "Docker is required for the customer session test");
     }
 
     @DynamicPropertySource
@@ -120,8 +118,7 @@ class CustomerSessionSurfaceTests {
         // MAC genuinely run. Stubbing them would make the number's lookup hash —
         // which is the subject a returning customer resolves through — agree with
         // itself by construction.
-        registry.add("horecaos.secrets.data_encryption.platform.kek",
-                () -> "a-test-key-encryption-key");
+        registry.add("horecaos.secrets.data_encryption.platform.kek", () -> "a-test-key-encryption-key");
         // The preset, set the way a local profile sets it. The test profile is in
         // the local set, which is exactly the binding under test: this must work
         // here and must refuse to start anywhere else, and
@@ -140,19 +137,26 @@ class CustomerSessionSurfaceTests {
     void seed() {
         for (UUID tenant : new UUID[] {SHARED_TENANT, ISOLATED_TENANT}) {
             jdbc.sql("DELETE FROM customer.customer_sessions WHERE tenant_id = :t")
-                    .param("t", tenant).update();
+                    .param("t", tenant)
+                    .update();
             jdbc.sql("DELETE FROM customer.verification_challenges WHERE tenant_id = :t")
-                    .param("t", tenant).update();
+                    .param("t", tenant)
+                    .update();
             jdbc.sql("DELETE FROM customer.contact_points WHERE tenant_id = :t")
-                    .param("t", tenant).update();
+                    .param("t", tenant)
+                    .update();
             jdbc.sql("DELETE FROM customer.brand_profiles WHERE tenant_id = :t")
-                    .param("t", tenant).update();
+                    .param("t", tenant)
+                    .update();
             jdbc.sql("DELETE FROM customer.principal_links WHERE tenant_id = :t")
-                    .param("t", tenant).update();
+                    .param("t", tenant)
+                    .update();
             jdbc.sql("DELETE FROM customer.customer_accounts WHERE tenant_id = :t")
-                    .param("t", tenant).update();
+                    .param("t", tenant)
+                    .update();
             jdbc.sql("DELETE FROM platform.idempotency_records WHERE tenant_id = :t")
-                    .param("t", tenant).update();
+                    .param("t", tenant)
+                    .update();
         }
 
         tenant(SHARED_TENANT, "session-shared", "TENANT_SHARED");
@@ -197,7 +201,9 @@ class CustomerSessionSurfaceTests {
         int status = mvc.perform(post(identity(SHARED_TENANT, BRAND) + "/verification-challenges")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"phone\":\"" + PRESET_PHONE + "\"}"))
-                .andReturn().getResponse().getStatus();
+                .andReturn()
+                .getResponse()
+                .getStatus();
 
         assertThat(status).isEqualTo(202);
     }
@@ -229,7 +235,8 @@ class CustomerSessionSurfaceTests {
                 """)
                 .param("t", SHARED_TENANT)
                 .param("a", UUID.fromString(signedIn.accountId()))
-                .query(String.class).single();
+                .query(String.class)
+                .single();
 
         assertThat(issuer)
                 .as("two issuers, two subject namespaces. A phone-derived subject stored "
@@ -245,9 +252,10 @@ class CustomerSessionSurfaceTests {
     void theTokenIsNotStored() throws Exception {
         SignedIn signedIn = signIn(SHARED_TENANT, BRAND);
 
-        String storedHash = jdbc.sql(
-                "SELECT token_hash FROM customer.customer_sessions WHERE tenant_id = :t")
-                .param("t", SHARED_TENANT).query(String.class).single();
+        String storedHash = jdbc.sql("SELECT token_hash FROM customer.customer_sessions WHERE tenant_id = :t")
+                .param("t", SHARED_TENANT)
+                .query(String.class)
+                .single();
 
         assertThat(storedHash)
                 .isNotEqualTo(signedIn.token())
@@ -272,7 +280,9 @@ class CustomerSessionSurfaceTests {
         // contact point and on a challenge row that is purged; a copy here — even
         // a hash — would be a per-customer correlation key in a table with no
         // question to answer with it.
-        assertThat(columns).doesNotContain("phone").doesNotContain("destination")
+        assertThat(columns)
+                .doesNotContain("phone")
+                .doesNotContain("destination")
                 .doesNotContain("contact");
     }
 
@@ -290,11 +300,10 @@ class CustomerSessionSurfaceTests {
                 UPDATE customer.customer_sessions
                 SET issued_at = now() - interval '40 days', expires_at = now() - interval '10 days'
                 WHERE token_hash = :hash
-                """)
-                .param("hash", CustomerSessionToken.hash(signedIn.token())).update();
+                """).param("hash", CustomerSessionToken.hash(signedIn.token())).update();
 
-        MvcResult refused = mvc.perform(get(me(SHARED_TENANT, BRAND))
-                .with(session(signedIn.token()))).andReturn();
+        MvcResult refused = mvc.perform(get(me(SHARED_TENANT, BRAND)).with(session(signedIn.token())))
+                .andReturn();
 
         assertThat(refused.getResponse().getStatus()).isEqualTo(401);
         assertThat(codeOf(refused))
@@ -307,7 +316,7 @@ class CustomerSessionSurfaceTests {
     @DisplayName("a token this platform never issued is not an expired session")
     void anInventedTokenIsUnauthenticated() throws Exception {
         MvcResult refused = mvc.perform(get(me(SHARED_TENANT, BRAND))
-                .with(session(CustomerSessionToken.PREFIX + "notatokenwewouldevermint")))
+                        .with(session(CustomerSessionToken.PREFIX + "notatokenwewouldevermint")))
                 .andReturn();
 
         assertThat(refused.getResponse().getStatus()).isEqualTo(401);
@@ -326,16 +335,20 @@ class CustomerSessionSurfaceTests {
         int signedOut = mvc.perform(delete(identity(SHARED_TENANT, BRAND) + "/sessions/current")
                         .with(session(first.token()))
                         .header("Idempotency-Key", UUID.randomUUID().toString()))
-                .andReturn().getResponse().getStatus();
+                .andReturn()
+                .getResponse()
+                .getStatus();
         assertThat(signedOut).isEqualTo(204);
 
-        MvcResult afterwards = mvc.perform(get(me(SHARED_TENANT, BRAND))
-                .with(session(first.token()))).andReturn();
+        MvcResult afterwards = mvc.perform(get(me(SHARED_TENANT, BRAND)).with(session(first.token())))
+                .andReturn();
         assertThat(afterwards.getResponse().getStatus()).isEqualTo(401);
         assertThat(codeOf(afterwards)).isEqualTo("SESSION_EXPIRED");
 
         assertThat(mvc.perform(get(me(SHARED_TENANT, BRAND)).with(session(second.token())))
-                .andReturn().getResponse().getStatus())
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
                 .as("signing out on one handset must not sign the customer out everywhere")
                 .isEqualTo(200);
     }
@@ -347,13 +360,12 @@ class CustomerSessionSurfaceTests {
     void aSharedSessionSpansBrands() throws Exception {
         SignedIn signedIn = signIn(SHARED_TENANT, BRAND);
 
-        MvcResult sibling = mvc.perform(get(me(SHARED_TENANT, SIBLING_BRAND))
-                .with(session(signedIn.token()))).andReturn();
+        MvcResult sibling = mvc.perform(get(me(SHARED_TENANT, SIBLING_BRAND)).with(session(signedIn.token())))
+                .andReturn();
 
         assertThat(sibling.getResponse().getStatus()).isEqualTo(200);
         assertThat(json(sibling).path("accountId").asText())
-                .as("a shared account is one person across the tenant, which is what the "
-                        + "mode means")
+                .as("a shared account is one person across the tenant, which is what the " + "mode means")
                 .isEqualTo(signedIn.accountId());
     }
 
@@ -362,8 +374,8 @@ class CustomerSessionSurfaceTests {
     void anIsolatedSessionIsOneBrand() throws Exception {
         SignedIn atA = signIn(ISOLATED_TENANT, ISOLATED_BRAND_A);
 
-        MvcResult atB = mvc.perform(get(me(ISOLATED_TENANT, ISOLATED_BRAND_B))
-                .with(session(atA.token()))).andReturn();
+        MvcResult atB = mvc.perform(get(me(ISOLATED_TENANT, ISOLATED_BRAND_B)).with(session(atA.token())))
+                .andReturn();
 
         assertThat(atB.getResponse().getStatus())
                 .as("these are separate businesses holding separate accounts for the same "
@@ -391,8 +403,7 @@ class CustomerSessionSurfaceTests {
         // missing rather than silently swallowing the code. If the preset ever
         // matched more than its one configured number, this is the test that goes
         // red.
-        MvcResult result = mvc.perform(
-                post(identity(SHARED_TENANT, BRAND) + "/verification-challenges")
+        MvcResult result = mvc.perform(post(identity(SHARED_TENANT, BRAND) + "/verification-challenges")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"phone\":\"" + ORDINARY_PHONE + "\"}"))
                 .andReturn();
@@ -408,9 +419,10 @@ class CustomerSessionSurfaceTests {
                 .doesNotContain(ORDINARY_PHONE)
                 .doesNotContain("901112233");
 
-        assertThat(jdbc.sql("SELECT count(*) FROM customer.verification_challenges "
-                        + "WHERE tenant_id = :t").param("t", SHARED_TENANT)
-                        .query(Integer.class).single())
+        assertThat(jdbc.sql("SELECT count(*) FROM customer.verification_challenges " + "WHERE tenant_id = :t")
+                        .param("t", SHARED_TENANT)
+                        .query(Integer.class)
+                        .single())
                 .as("a challenge whose code never left is withdrawn, so it charges the "
                         + "customer's budget for our outage")
                 .isZero();
@@ -424,12 +436,11 @@ class CustomerSessionSurfaceTests {
         UUID staffAccount = seedRealmAccount(STAFF_SUBJECT);
 
         MvcResult me = mvc.perform(get(me(SHARED_TENANT, BRAND))
-                .with(jwt().jwt(builder -> builder.issuer(ISSUER).subject(STAFF_SUBJECT))))
+                        .with(jwt().jwt(builder -> builder.issuer(ISSUER).subject(STAFF_SUBJECT))))
                 .andReturn();
 
         assertThat(me.getResponse().getStatus())
-                .as("the customer filter must be invisible to a request that carries no "
-                        + "customer token")
+                .as("the customer filter must be invisible to a request that carries no " + "customer token")
                 .isEqualTo(200);
         assertThat(json(me).path("accountId").asText()).isEqualTo(staffAccount.toString());
     }
@@ -444,10 +455,12 @@ class CustomerSessionSurfaceTests {
         // ADR 0025 endpoint refuses it — and refuses it at the capability check
         // rather than by failing to find an actor, which is what would happen if
         // JwtCurrentActor had been left unable to describe a non-staff caller.
-        int status = mvc.perform(get("/api/v1/tenants/" + SHARED_TENANT + "/customers/"
-                        + signedIn.accountId() + "/contact-points")
+        int status = mvc.perform(get("/api/v1/tenants/" + SHARED_TENANT + "/customers/" + signedIn.accountId()
+                                + "/contact-points")
                         .with(session(signedIn.token())))
-                .andReturn().getResponse().getStatus();
+                .andReturn()
+                .getResponse()
+                .getStatus();
 
         assertThat(status)
                 .as("reading a customer's contact points is CUSTOMER_PII_REVEAL, and the "
@@ -458,7 +471,10 @@ class CustomerSessionSurfaceTests {
     @Test
     @DisplayName("no credential at all is still refused")
     void anAnonymousCallerIsStillRefused() throws Exception {
-        assertThat(mvc.perform(get(me(SHARED_TENANT, BRAND))).andReturn().getResponse().getStatus())
+        assertThat(mvc.perform(get(me(SHARED_TENANT, BRAND)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
                 .isEqualTo(401);
     }
 
@@ -466,18 +482,17 @@ class CustomerSessionSurfaceTests {
 
     /** The whole journey: ask for a code, type it, exchange the grant. */
     private SignedIn signIn(UUID tenantId, UUID brandId) throws Exception {
-        MvcResult challenge = mvc.perform(
-                post(identity(tenantId, brandId) + "/verification-challenges")
+        MvcResult challenge = mvc.perform(post(identity(tenantId, brandId) + "/verification-challenges")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"phone\":\"" + PRESET_PHONE + "\"}"))
                 .andReturn();
         assertThat(challenge.getResponse().getStatus()).isEqualTo(202);
         String challengeId = json(challenge).path("challengeId").asText();
 
-        MvcResult attempt = mvc.perform(post(identity(tenantId, brandId)
-                        + "/verification-challenges/" + challengeId + "/attempts")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"code\":\"" + PRESET_CODE + "\"}"))
+        MvcResult attempt = mvc.perform(
+                        post(identity(tenantId, brandId) + "/verification-challenges/" + challengeId + "/attempts")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"code\":\"" + PRESET_CODE + "\"}"))
                 .andReturn();
         assertThat(attempt.getResponse().getStatus())
                 .as("the preset code is the code the challenge was written with")
@@ -491,11 +506,13 @@ class CustomerSessionSurfaceTests {
         assertThat(session.getResponse().getStatus()).isIn(200, 201);
 
         JsonNode body = json(session);
-        return new SignedIn(body.path("token").asText(), body.path("accountId").asText(),
+        return new SignedIn(
+                body.path("token").asText(),
+                body.path("accountId").asText(),
                 body.path("created").asBoolean());
     }
 
-    private record SignedIn(String token, String accountId, boolean created) { }
+    private record SignedIn(String token, String accountId, boolean created) {}
 
     /**
      * The customer's own credential, in the header a browser would send it in.
@@ -504,8 +521,7 @@ class CustomerSessionSurfaceTests {
      * context directly and would step over the filter, the bearer-token resolver
      * and the row lookup — every part of what is being asserted.
      */
-    private static org.springframework.test.web.servlet.request.RequestPostProcessor session(
-            String token) {
+    private static org.springframework.test.web.servlet.request.RequestPostProcessor session(String token) {
         return request -> {
             request.addHeader("Authorization", "Bearer " + token);
             return request;
@@ -519,23 +535,36 @@ class CustomerSessionSurfaceTests {
                 INSERT INTO customer.customer_accounts (id, tenant_id,
                     identity_partition_brand_id, status, created_at, updated_at)
                 VALUES (:id, :tenantId, NULL, 'ACTIVE', :now, :now)
-                """).param("id", accountId).param("tenantId", SHARED_TENANT)
-                .param("now", now).update();
+                """)
+                .param("id", accountId)
+                .param("tenantId", SHARED_TENANT)
+                .param("now", now)
+                .update();
         jdbc.sql("""
                 INSERT INTO customer.principal_links (id, tenant_id,
                     identity_partition_brand_id, customer_account_id, issuer, subject, status,
                     linked_at)
                 VALUES (:id, :tenantId, NULL, :accountId, :issuer, :subject, 'ACTIVE', :now)
-                """).param("id", UUID.randomUUID()).param("tenantId", SHARED_TENANT)
-                .param("accountId", accountId).param("issuer", ISSUER).param("subject", subject)
-                .param("now", now).update();
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", SHARED_TENANT)
+                .param("accountId", accountId)
+                .param("issuer", ISSUER)
+                .param("subject", subject)
+                .param("now", now)
+                .update();
         jdbc.sql("""
                 INSERT INTO customer.brand_profiles (id, tenant_id, brand_id,
                     customer_account_id, status, created_at, updated_at)
                 VALUES (:id, :tenantId, :brandId, :accountId, 'ACTIVE', :now, :now)
                 ON CONFLICT (tenant_id, brand_id, customer_account_id) DO NOTHING
-                """).param("id", UUID.randomUUID()).param("tenantId", SHARED_TENANT)
-                .param("brandId", BRAND).param("accountId", accountId).param("now", now).update();
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", SHARED_TENANT)
+                .param("brandId", BRAND)
+                .param("accountId", accountId)
+                .param("now", now)
+                .update();
         return accountId;
     }
 
@@ -551,8 +580,11 @@ class CustomerSessionSurfaceTests {
                     id, tenant_id, version, identity_mode, effective_from)
                 VALUES (:id, :tenantId, 1, :mode, TIMESTAMPTZ '2020-01-01T00:00:00Z')
                 ON CONFLICT DO NOTHING
-                """).param("id", UUID.nameUUIDFromBytes(id.toString().getBytes()))
-                .param("tenantId", id).param("mode", identityMode).update();
+                """)
+                .param("id", UUID.nameUUIDFromBytes(id.toString().getBytes()))
+                .param("tenantId", id)
+                .param("mode", identityMode)
+                .update();
     }
 
     private void brandRow(UUID tenantId, UUID brandId, String code) {
@@ -560,8 +592,12 @@ class CustomerSessionSurfaceTests {
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
                 VALUES (:id, :tenantId, :code, :slug, 'Brand', 'ACTIVE', 0)
                 ON CONFLICT (id) DO NOTHING
-                """).param("id", brandId).param("tenantId", tenantId).param("code", code)
-                .param("slug", code.toLowerCase(Locale.ROOT)).update();
+                """)
+                .param("id", brandId)
+                .param("tenantId", tenantId)
+                .param("code", code)
+                .param("slug", code.toLowerCase(Locale.ROOT))
+                .update();
     }
 
     private static String brand(UUID tenantId, UUID brandId) {

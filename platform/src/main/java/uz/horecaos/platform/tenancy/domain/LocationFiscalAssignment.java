@@ -54,8 +54,7 @@ public record LocationFiscalAssignment(
         Objects.requireNonNull(approvedBy, "ADR 0027 requires an approver on a fiscal assignment");
         if (effectiveUntil != null && !effectiveUntil.isAfter(effectiveFrom)) {
             throw new IllegalArgumentException(
-                    "A fiscal assignment must end after it starts: %s to %s"
-                            .formatted(effectiveFrom, effectiveUntil));
+                    "A fiscal assignment must end after it starts: %s to %s".formatted(effectiveFrom, effectiveUntil));
         }
     }
 

@@ -6,9 +6,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.integration.api.pos.PosApiCall;
 import uz.horecaos.platform.integration.api.pos.PosApiTransport;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
@@ -90,8 +88,9 @@ public class CloposSession {
             // Clopos answered 200 with success true and no token. Rejected rather
             // than retryable: whatever this is, sending the same request again
             // produces the same nothing.
-            return new Token(ProviderOutcome.rejected("CLOPOS_NO_TOKEN",
-                    "Authentication succeeded without returning a token"), null);
+            return new Token(
+                    ProviderOutcome.rejected("CLOPOS_NO_TOKEN", "Authentication succeeded without returning a token"),
+                    null);
         }
 
         tokens.put(key, new CachedToken(value, expiryOf(outcome.normalized(), now)));
@@ -112,13 +111,17 @@ public class CloposSession {
             // Refused here rather than sent, because Clopos answers a missing
             // field with a 400 that reads like our bug — which it is, but three
             // network hops later.
-            return ProviderOutcome.rejected("CLOPOS_CONFIG_INCOMPLETE",
-                    "The installation must carry brand, client id, and integrator id");
+            return ProviderOutcome.rejected(
+                    "CLOPOS_CONFIG_INCOMPLETE", "The installation must carry brand, client id, and integrator id");
         }
 
         PosApiCall call = new PosApiCall(
-                context.tenantId(), context.installationId(), CloposAdapter.PROVIDER_TYPE,
-                "auth", "POST", "/auth",
+                context.tenantId(),
+                context.installationId(),
+                CloposAdapter.PROVIDER_TYPE,
+                "auth",
+                "POST",
+                "/auth",
                 // The client secret enters here and nowhere else. It is applied
                 // inside the gateway, at send time, so it never rests on a record
                 // this module holds.

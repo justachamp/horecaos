@@ -103,8 +103,7 @@ public record MetricDefinition(
         Objects.requireNonNull(unit, "A metric needs a unit");
 
         if (definition == null || definition.isBlank()) {
-            throw new IllegalArgumentException(
-                    "A metric with no written definition cannot be signed: " + id);
+            throw new IllegalArgumentException("A metric with no written definition cannot be signed: " + id);
         }
         // Money is only meaningful once the taxpayer is named (ADR 0038), so a
         // money metric defined at a grain that does not reach the legal entity
@@ -119,8 +118,7 @@ public record MetricDefinition(
         // A metric with no built source has no first date it governs, and stating
         // one would imply figures exist from then.
         if (!sourceAvailable && effectiveFrom != null) {
-            throw new IllegalArgumentException(
-                    "An unbuilt metric cannot be effective from a date: " + id);
+            throw new IllegalArgumentException("An unbuilt metric cannot be effective from a date: " + id);
         }
     }
 
@@ -138,15 +136,26 @@ public record MetricDefinition(
      * convention.
      */
     public String digest() {
-        String canonical = String.join("",
-                id.code(), grain.name(), sourceFact, Boolean.toString(sourceAvailable),
-                aggregation.name(), inclusionRule, currencyRule.name(), roundingRule, unit.name(),
-                definition, inclusion, exclusion, refundTreatment,
+        String canonical = String.join(
+                "",
+                id.code(),
+                grain.name(),
+                sourceFact,
+                Boolean.toString(sourceAvailable),
+                aggregation.name(),
+                inclusionRule,
+                currencyRule.name(),
+                roundingRule,
+                unit.name(),
+                definition,
+                inclusion,
+                exclusion,
+                refundTreatment,
                 openQuestion == null ? "" : openQuestion,
                 effectiveFrom == null ? "" : effectiveFrom.toString());
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(canonical.getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException impossible) {
             throw new IllegalStateException("SHA-256 is required by the platform", impossible);
         }

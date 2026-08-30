@@ -12,7 +12,6 @@ package uz.horecaos.platform.payments.api;
  * use.
  */
 public enum EntitlementScope {
-
     SUBTOTAL,
 
     DELIVERY_FEE,

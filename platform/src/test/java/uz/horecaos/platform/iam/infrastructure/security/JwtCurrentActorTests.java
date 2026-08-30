@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import java.util.Map;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -24,9 +23,10 @@ class JwtCurrentActorTests {
     void readsMultipleOrganizationsAndKeepsTheirRolesIsolated() {
         Jwt jwt = jwt(Map.of(
                 "resource_access", clientRoles("platform-admin"),
-                "organization", Map.of(
-                        "tenant-a", organization("organization-a", "tenant-owner"),
-                        "tenant-b", organization("organization-b", "tenant-viewer"))));
+                "organization",
+                        Map.of(
+                                "tenant-a", organization("organization-a", "tenant-owner"),
+                                "tenant-b", organization("organization-b", "tenant-viewer"))));
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt, List.of()));
 
         var actor = currentActor.get();
@@ -48,17 +48,14 @@ class JwtCurrentActorTests {
     }
 
     private static Jwt jwt(Map<String, Object> claims) {
-        Jwt.Builder builder = Jwt.withTokenValue("test-token")
-                .header("alg", "none")
-                .subject("keycloak-user-42");
+        Jwt.Builder builder =
+                Jwt.withTokenValue("test-token").header("alg", "none").subject("keycloak-user-42");
         claims.forEach(builder::claim);
         return builder.build();
     }
 
     private static Map<String, Object> organization(String id, String... roles) {
-        return Map.of(
-                "id", id,
-                "resource_access", clientRoles(roles));
+        return Map.of("id", id, "resource_access", clientRoles(roles));
     }
 
     private static Map<String, Object> clientRoles(String... roles) {

@@ -1,7 +1,6 @@
 package uz.horecaos.platform.tenancy.domain;
 
 import java.util.Objects;
-
 import uz.horecaos.platform.tenancy.api.BrandId;
 import uz.horecaos.platform.tenancy.api.TenantId;
 
@@ -15,12 +14,7 @@ public final class Brand {
     private OperatingUnitStatus status;
 
     private Brand(
-            BrandId id,
-            TenantId tenantId,
-            String code,
-            Slug slug,
-            String displayName,
-            OperatingUnitStatus status) {
+            BrandId id, TenantId tenantId, String code, Slug slug, String displayName, OperatingUnitStatus status) {
         this.id = Objects.requireNonNull(id, "Brand ID is required");
         this.tenantId = Objects.requireNonNull(tenantId, "Tenant ID is required");
         this.code = normalizedCode(code);
@@ -29,18 +23,12 @@ public final class Brand {
         this.status = Objects.requireNonNull(status, "Brand status is required");
     }
 
-    public static Brand draft(
-            BrandId id, TenantId tenantId, String code, Slug slug, String displayName) {
+    public static Brand draft(BrandId id, TenantId tenantId, String code, Slug slug, String displayName) {
         return new Brand(id, tenantId, code, slug, displayName, OperatingUnitStatus.DRAFT);
     }
 
     public static Brand reconstitute(
-            BrandId id,
-            TenantId tenantId,
-            String code,
-            Slug slug,
-            String displayName,
-            OperatingUnitStatus status) {
+            BrandId id, TenantId tenantId, String code, Slug slug, String displayName, OperatingUnitStatus status) {
         return new Brand(id, tenantId, code, slug, displayName, status);
     }
 

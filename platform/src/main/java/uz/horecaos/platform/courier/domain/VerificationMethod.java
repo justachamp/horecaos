@@ -10,7 +10,6 @@ package uz.horecaos.platform.courier.domain;
  * an adapter rather than changing what an engagement is.
  */
 public enum VerificationMethod {
-
     MANUAL_ATTESTATION,
     REGISTRY_LOOKUP
 }

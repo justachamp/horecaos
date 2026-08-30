@@ -6,10 +6,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.notifications.domain.ContentHashes;
 import uz.horecaos.platform.notifications.domain.MessageLocale;
 import uz.horecaos.platform.notifications.domain.MoneyText;
@@ -29,8 +27,7 @@ class TemplateRenderingTests {
     @Test
     @DisplayName("a placeholder the schema does not declare fails while it is being authored")
     void undeclaredVariableIsRefusedAtAuthoringTime() {
-        assertThatThrownBy(() -> TemplateRenderer.validate(
-                "Заказ {{orderNumbr}} принят", Set.of("orderNumber")))
+        assertThatThrownBy(() -> TemplateRenderer.validate("Заказ {{orderNumbr}} принят", Set.of("orderNumber")))
                 .as("a typo must be a refused draft, not a message reading \"{{orderNumbr}}\"")
                 .isInstanceOf(TemplateContractException.class)
                 .hasMessageContaining("orderNumbr");
@@ -39,8 +36,8 @@ class TemplateRenderingTests {
     @Test
     @DisplayName("a declared placeholder passes")
     void declaredVariablesValidate() {
-        TemplateRenderer.validate("Buyurtma {{orderNumber}}, {{amount}} {{currency}}",
-                Set.of("orderNumber", "amount", "currency"));
+        TemplateRenderer.validate(
+                "Buyurtma {{orderNumber}}, {{amount}} {{currency}}", Set.of("orderNumber", "amount", "currency"));
     }
 
     @Test
@@ -83,8 +80,7 @@ class TemplateRenderingTests {
     @DisplayName("every locale HorecaOS sends in is in the required set")
     void theRequiredLocaleSetIsTheOneAdr0035Names() {
         assertThat(MessageLocale.required())
-                .containsExactlyInAnyOrder(MessageLocale.RU, MessageLocale.UZ_LATN,
-                        MessageLocale.EN);
+                .containsExactlyInAnyOrder(MessageLocale.RU, MessageLocale.UZ_LATN, MessageLocale.EN);
         assertThat(MessageLocale.parse("uz-latn")).contains(MessageLocale.UZ_LATN);
         assertThat(MessageLocale.parse("de")).isEmpty();
     }

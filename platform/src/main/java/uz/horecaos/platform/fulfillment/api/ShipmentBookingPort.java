@@ -100,16 +100,28 @@ public interface ShipmentBookingPort {
             }
         }
 
-        public static QuoteOutcome priced(long priceMinor, String currency,
-                Integer pickupEtaSeconds, Integer deliveryEtaSeconds,
-                Integer distanceMeters, Integer deadHeadMeters) {
-            return new QuoteOutcome(priceMinor, currency, pickupEtaSeconds, deliveryEtaSeconds,
-                    distanceMeters, deadHeadMeters, null, false, null, null);
+        public static QuoteOutcome priced(
+                long priceMinor,
+                String currency,
+                Integer pickupEtaSeconds,
+                Integer deliveryEtaSeconds,
+                Integer distanceMeters,
+                Integer deadHeadMeters) {
+            return new QuoteOutcome(
+                    priceMinor,
+                    currency,
+                    pickupEtaSeconds,
+                    deliveryEtaSeconds,
+                    distanceMeters,
+                    deadHeadMeters,
+                    null,
+                    false,
+                    null,
+                    null);
         }
 
         public static QuoteOutcome unavailable(String failureCode) {
-            return new QuoteOutcome(null, null, null, null, null, null, null, false,
-                    failureCode, null);
+            return new QuoteOutcome(null, null, null, null, null, null, null, false, failureCode, null);
         }
 
         public boolean hasPrice() {
@@ -131,11 +143,7 @@ public interface ShipmentBookingPort {
      *                     Without it an advance booking has to wait until the
      *                     pickup window is near enough to book on demand
      */
-    record PartnerOption(
-            UUID bindingId,
-            String providerType,
-            boolean supportsHold,
-            boolean supportsScheduling) {
+    record PartnerOption(UUID bindingId, String providerType, boolean supportsHold, boolean supportsScheduling) {
 
         public PartnerOption {
             Objects.requireNonNull(bindingId, "A binding id is required");
@@ -205,8 +213,7 @@ public interface ShipmentBookingPort {
                         "A scheduled booking must name the pickup instant it is scheduled for");
             }
             if (itemValueMinor < 0) {
-                throw new IllegalArgumentException(
-                        "An item value cannot be negative, was " + itemValueMinor);
+                throw new IllegalArgumentException("An item value cannot be negative, was " + itemValueMinor);
             }
         }
 
@@ -285,17 +292,26 @@ public interface ShipmentBookingPort {
             String errorCode,
             String detail) {
 
-        public static BookingReceipt of(BookingStatus status, BookingCommand command,
-                String providerType, String externalReference, String errorCode, String detail) {
-            return new BookingReceipt(status, command.commandId(), command.bindingId(),
-                    providerType, externalReference, errorCode, detail);
+        public static BookingReceipt of(
+                BookingStatus status,
+                BookingCommand command,
+                String providerType,
+                String externalReference,
+                String errorCode,
+                String detail) {
+            return new BookingReceipt(
+                    status,
+                    command.commandId(),
+                    command.bindingId(),
+                    providerType,
+                    externalReference,
+                    errorCode,
+                    detail);
         }
 
         /** Whether this attempt produced something that must not be abandoned silently. */
         public boolean holdsProviderState() {
-            return status == BookingStatus.BOOKED
-                    || status == BookingStatus.HELD
-                    || status == BookingStatus.UNCERTAIN;
+            return status == BookingStatus.BOOKED || status == BookingStatus.HELD || status == BookingStatus.UNCERTAIN;
         }
     }
 

@@ -27,9 +27,7 @@ public final class LegalEntitySchema {
 
     /** The exact DDL, in the order it must run. */
     public static final String[] STATEMENTS = {
-            "CREATE EXTENSION IF NOT EXISTS btree_gist",
-
-            """
+        "CREATE EXTENSION IF NOT EXISTS btree_gist", """
             CREATE TABLE tenant.legal_entities (
                 id uuid PRIMARY KEY,
                 tenant_id uuid NOT NULL,
@@ -60,9 +58,7 @@ public final class LegalEntitySchema {
                     vat_registered OR vat_certificate_reference IS NULL),
                 CONSTRAINT ck_legal_entity_version CHECK (version >= 1)
             )
-            """,
-
-            """
+            """, """
             CREATE TABLE tenant.location_fiscal_assignments (
                 id uuid PRIMARY KEY,
                 tenant_id uuid NOT NULL,
@@ -93,20 +89,18 @@ public final class LegalEntitySchema {
                     location_id WITH =,
                     daterange(effective_from, effective_until, '[)') WITH &&)
             )
-            """,
-
-            """
+            """, """
             CREATE INDEX ix_location_fiscal_assignment_resolution
                 ON tenant.location_fiscal_assignments (tenant_id, location_id, effective_from DESC)
             """,
     };
 
-    private LegalEntitySchema() {
-    }
+    private LegalEntitySchema() {}
 
     /** Drops and recreates both tables, so each test starts from a known empty pair. */
     public static void apply(JdbcClient jdbc) {
-        jdbc.sql("DROP TABLE IF EXISTS tenant.location_fiscal_assignments CASCADE").update();
+        jdbc.sql("DROP TABLE IF EXISTS tenant.location_fiscal_assignments CASCADE")
+                .update();
         jdbc.sql("DROP TABLE IF EXISTS tenant.legal_entities CASCADE").update();
         for (String statement : STATEMENTS) {
             jdbc.sql(statement).update();

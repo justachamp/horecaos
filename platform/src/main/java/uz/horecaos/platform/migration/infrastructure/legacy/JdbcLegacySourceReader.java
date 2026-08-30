@@ -6,12 +6,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
-
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.migration.api.ExtractionSpec;
 import uz.horecaos.platform.migration.api.LegacyRecord;
 import uz.horecaos.platform.migration.application.importing.LegacySourceReader;
@@ -43,23 +41,19 @@ import uz.horecaos.platform.migration.application.importing.SourcePage;
  * fits, is checked by {@link #checkedFilter} here; values are always bound.
  */
 @Repository
-@ConditionalOnProperty(
-        prefix = "horecaos.migration.legacy", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(prefix = "horecaos.migration.legacy", name = "enabled", havingValue = "true")
 public class JdbcLegacySourceReader implements LegacySourceReader {
 
     private static final int MAX_FILTER_LENGTH = 500;
 
-    private static final Pattern SAFE_PREDICATE =
-            Pattern.compile("^[A-Za-z0-9_.,'%()\\[\\]\\s<>=!+*/|-]+$");
+    private static final Pattern SAFE_PREDICATE = Pattern.compile("^[A-Za-z0-9_.,'%()\\[\\]\\s<>=!+*/|-]+$");
 
     /** Everything the allowlist above cannot exclude on its own. */
-    private static final List<String> FORBIDDEN_IN_FILTER =
-            List.of(";", "--", "/*", "*/", "||");
+    private static final List<String> FORBIDDEN_IN_FILTER = List.of(";", "--", "/*", "*/", "||");
 
     private final JdbcClient jdbc;
 
-    public JdbcLegacySourceReader(
-            @Qualifier(LegacySourceConfiguration.LEGACY_JDBC_CLIENT) JdbcClient jdbc) {
+    public JdbcLegacySourceReader(@Qualifier(LegacySourceConfiguration.LEGACY_JDBC_CLIENT) JdbcClient jdbc) {
         this.jdbc = jdbc;
     }
 
@@ -87,7 +81,8 @@ public class JdbcLegacySourceReader implements LegacySourceReader {
         params.put("afterKey", afterKey);
         params.put("limit", limit);
 
-        List<LegacyRecord> records = jdbc.sql(sql).params(params)
+        List<LegacyRecord> records = jdbc.sql(sql)
+                .params(params)
                 .query((row, number) -> toRecord(row, spec))
                 .list();
 
@@ -98,8 +93,7 @@ public class JdbcLegacySourceReader implements LegacySourceReader {
     public SourcePage readChanges(ExtractionSpec spec, String watermark, String afterKey, int limit) {
         if (!spec.hasWatermark()) {
             throw new IllegalArgumentException(
-                    ("%s declares no watermark column, so it has no incremental feed")
-                            .formatted(spec.entityType()));
+                    ("%s declares no watermark column, so it has no incremental feed").formatted(spec.entityType()));
         }
 
         // Inclusive on the watermark and ordered by (watermark, key). The legacy
@@ -123,10 +117,13 @@ public class JdbcLegacySourceReader implements LegacySourceReader {
                 """.formatted(
                         String.join(", ", spec.columns()),
                         spec.table(),
-                        spec.watermarkColumn(), spec.stableKeyColumn(),
-                        watermarkTypeOf(spec), keyTypeOf(spec),
+                        spec.watermarkColumn(),
+                        spec.stableKeyColumn(),
+                        watermarkTypeOf(spec),
+                        keyTypeOf(spec),
                         filter,
-                        spec.watermarkColumn(), spec.stableKeyColumn());
+                        spec.watermarkColumn(),
+                        spec.stableKeyColumn());
 
         Map<String, Object> params = new HashMap<>();
         params.put("watermark", watermark);
@@ -137,7 +134,8 @@ public class JdbcLegacySourceReader implements LegacySourceReader {
         params.put("afterKey", afterKey == null ? "" : afterKey);
         params.put("limit", limit);
 
-        List<LegacyRecord> records = jdbc.sql(sql).params(params)
+        List<LegacyRecord> records = jdbc.sql(sql)
+                .params(params)
                 .query((row, number) -> toRecord(row, spec))
                 .list();
 
@@ -179,8 +177,7 @@ public class JdbcLegacySourceReader implements LegacySourceReader {
     static String requireSafePredicate(String filter) {
         if (filter.length() > MAX_FILTER_LENGTH) {
             throw new IllegalArgumentException(
-                    "A legacy extraction filter is a short predicate, not a query: "
-                            + filter.length() + " characters");
+                    "A legacy extraction filter is a short predicate, not a query: " + filter.length() + " characters");
         }
         if (!SAFE_PREDICATE.matcher(filter).matches()) {
             throw new IllegalArgumentException(
@@ -227,13 +224,16 @@ public class JdbcLegacySourceReader implements LegacySourceReader {
                 WHERE n.nspname = :schema AND c.relname = :table AND a.attname = :column
                   AND a.attnum > 0 AND NOT a.attisdropped
                 """)
-                .param("schema", schema).param("table", name).param("column", column)
+                .param("schema", schema)
+                .param("table", name)
+                .param("column", column)
                 .query(String.class)
                 .optional()
                 .orElseThrow(() -> new IllegalStateException(
                         ("The legacy source has no column %s.%s. The extraction spec describes a "
-                                + "schema this database does not have, which is a mapping error "
-                                + "rather than an empty page.").formatted(table, column)));
+                                        + "schema this database does not have, which is a mapping error "
+                                        + "rather than an empty page.")
+                                .formatted(table, column)));
     }
 
     private SourcePage page(List<LegacyRecord> records, String afterKey, int limit) {
@@ -241,9 +241,8 @@ public class JdbcLegacySourceReader implements LegacySourceReader {
         // The previous bound unchanged on an empty page, never null: null means
         // "start from the beginning", and returning it would restart the entity
         // type from scratch every time it reached the end.
-        String nextKey = records.isEmpty()
-                ? afterKey
-                : records.get(records.size() - 1).stableKey();
+        String nextKey =
+                records.isEmpty() ? afterKey : records.get(records.size() - 1).stableKey();
         return new SourcePage(records, nextKey, exhausted);
     }
 
@@ -263,13 +262,11 @@ public class JdbcLegacySourceReader implements LegacySourceReader {
             // be re-read forever or silently lost.
             throw new IllegalStateException(
                     ("A %s row has a null %s. The stable key must be unique and non-null in the "
-                            + "source; this one cannot be paged from or mapped.")
+                                    + "source; this one cannot be paged from or mapped.")
                             .formatted(spec.entityType(), spec.stableKeyColumn()));
         }
 
         Object version = spec.hasWatermark() ? values.get(spec.watermarkColumn()) : null;
-        return new LegacyRecord(key.toString(),
-                version == null ? null : version.toString(),
-                values);
+        return new LegacyRecord(key.toString(), version == null ? null : version.toString(), values);
     }
 }

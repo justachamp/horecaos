@@ -49,8 +49,7 @@ public interface OrderCatalogSnapshot {
      * common case — the override exists for the lamb that takes forty minutes,
      * not for the menu.
      */
-    Optional<Duration> longestPreparationOverride(UUID tenantId, UUID brandId, UUID locationId,
-            Set<UUID> variantIds);
+    Optional<Duration> longestPreparationOverride(UUID tenantId, UUID brandId, UUID locationId, Set<UUID> variantIds);
 
     /**
      * @param productName the dish as the customer saw it
@@ -58,7 +57,7 @@ public interface OrderCatalogSnapshot {
      *                    the common case: most variants are "regular" or "large"
      *                    and the customer-facing name is the dish
      */
-    record VariantDescriptor(UUID productId, String productName, String variantName, String sku) { }
+    record VariantDescriptor(UUID productId, String productName, String variantName, String sku) {}
 
-    record ModifierDescriptor(UUID groupId, String groupName, String optionName) { }
+    record ModifierDescriptor(UUID groupId, String groupName, String optionName) {}
 }

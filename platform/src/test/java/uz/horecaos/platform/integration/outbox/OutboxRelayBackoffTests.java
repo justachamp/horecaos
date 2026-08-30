@@ -2,6 +2,7 @@ package uz.horecaos.platform.integration.outbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -10,9 +11,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import org.junit.jupiter.api.Test;
 
 /**
@@ -90,10 +88,21 @@ class OutboxRelayBackoffTests {
 
     private static List<ClaimedOutboxEvent> claimed(int attemptCount) {
         return List.of(new ClaimedOutboxEvent(
-                UUID.randomUUID(), "TenantCreated", 1, UUID.randomUUID(),
-                "Tenant", UUID.randomUUID(), "tenancy.events", "partition-key",
-                "correlation-1", null, NOW.minusSeconds(60), "{}", null,
-                attemptCount, UUID.randomUUID()));
+                UUID.randomUUID(),
+                "TenantCreated",
+                1,
+                UUID.randomUUID(),
+                "Tenant",
+                UUID.randomUUID(),
+                "tenancy.events",
+                "partition-key",
+                "correlation-1",
+                null,
+                NOW.minusSeconds(60),
+                "{}",
+                null,
+                attemptCount,
+                UUID.randomUUID()));
     }
 
     /**
@@ -119,8 +128,7 @@ class OutboxRelayBackoffTests {
 
         @Override
         public boolean markFailed(
-                UUID eventId, UUID claimToken, Instant now, Instant nextAttemptAt,
-                String error, boolean deadLetter) {
+                UUID eventId, UUID claimToken, Instant now, Instant nextAttemptAt, String error, boolean deadLetter) {
             nextAttempts.add(nextAttemptAt);
             deadLettered.add(deadLetter);
             return true;

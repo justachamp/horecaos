@@ -5,15 +5,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.UUID;
-
 import org.junit.jupiter.api.Test;
-
+import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
 import uz.horecaos.platform.tenancy.api.ResolutionTrace.Outcome;
 import uz.horecaos.platform.tenancy.api.ResolutionTrace.Source;
 import uz.horecaos.platform.tenancy.api.Resolved;
-import uz.horecaos.platform.iam.api.ResourceScope;
-import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 
 /**
  * ADR 0030 precedence is the rule at least eight capability ADRs depend on, so
@@ -21,16 +19,15 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
  */
 class ScopeResolutionTests {
 
-    private static final ConfigurationKey<Integer> KEY =
-            ConfigurationKey.of("ordering.timeout_seconds", Integer.class)
-                    .defaultValue(600)
-                    .build();
+    private static final ConfigurationKey<Integer> KEY = ConfigurationKey.of("ordering.timeout_seconds", Integer.class)
+            .defaultValue(600)
+            .build();
 
-    private static final ConfigurationKey<Integer> TERMINATING_KEY =
-            ConfigurationKey.of("notifications.quiet_start", Integer.class)
-                    .defaultValue(22)
-                    .explicitNullTerminates()
-                    .build();
+    private static final ConfigurationKey<Integer> TERMINATING_KEY = ConfigurationKey.of(
+                    "notifications.quiet_start", Integer.class)
+            .defaultValue(22)
+            .explicitNullTerminates()
+            .build();
 
     private static final ResourceScope LOCATION = ResourceScope.location(
             UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120001"),
@@ -39,11 +36,14 @@ class ScopeResolutionTests {
 
     @Test
     void locationWinsOverEveryBroaderScope() {
-        Resolved<Integer> resolved = ScopeResolution.resolve(KEY, LOCATION, values(
-                ScopeType.PLATFORM, 100,
-                ScopeType.TENANT, 200,
-                ScopeType.BRAND, 300,
-                ScopeType.LOCATION, 400));
+        Resolved<Integer> resolved = ScopeResolution.resolve(
+                KEY,
+                LOCATION,
+                values(
+                        ScopeType.PLATFORM, 100,
+                        ScopeType.TENANT, 200,
+                        ScopeType.BRAND, 300,
+                        ScopeType.LOCATION, 400));
 
         assertThat(resolved.value()).isEqualTo(400);
         assertThat(resolved.trace().winningScope()).isEqualTo(ScopeType.LOCATION);
@@ -51,10 +51,13 @@ class ScopeResolutionTests {
 
     @Test
     void brandWinsWhenTheLocationHasNoValue() {
-        Resolved<Integer> resolved = ScopeResolution.resolve(KEY, LOCATION, values(
-                ScopeType.PLATFORM, 100,
-                ScopeType.TENANT, 200,
-                ScopeType.BRAND, 300));
+        Resolved<Integer> resolved = ScopeResolution.resolve(
+                KEY,
+                LOCATION,
+                values(
+                        ScopeType.PLATFORM, 100,
+                        ScopeType.TENANT, 200,
+                        ScopeType.BRAND, 300));
 
         assertThat(resolved.value()).isEqualTo(300);
         assertThat(resolved.trace().winningScope()).isEqualTo(ScopeType.BRAND);
@@ -62,9 +65,12 @@ class ScopeResolutionTests {
 
     @Test
     void tenantWinsWhenNeitherLocationNorBrandHasAValue() {
-        Resolved<Integer> resolved = ScopeResolution.resolve(KEY, LOCATION, values(
-                ScopeType.PLATFORM, 100,
-                ScopeType.TENANT, 200));
+        Resolved<Integer> resolved = ScopeResolution.resolve(
+                KEY,
+                LOCATION,
+                values(
+                        ScopeType.PLATFORM, 100,
+                        ScopeType.TENANT, 200));
 
         assertThat(resolved.value()).isEqualTo(200);
         assertThat(resolved.trace().winningScope()).isEqualTo(ScopeType.TENANT);
@@ -72,8 +78,7 @@ class ScopeResolutionTests {
 
     @Test
     void platformWinsWhenNothingNarrowerIsSet() {
-        Resolved<Integer> resolved = ScopeResolution.resolve(KEY, LOCATION, values(
-                ScopeType.PLATFORM, 100));
+        Resolved<Integer> resolved = ScopeResolution.resolve(KEY, LOCATION, values(ScopeType.PLATFORM, 100));
 
         assertThat(resolved.value()).isEqualTo(100);
         assertThat(resolved.trace().winningScope()).isEqualTo(ScopeType.PLATFORM);
@@ -93,9 +98,12 @@ class ScopeResolutionTests {
     void aBrandScopedRequestNeverSeesALocationValue() {
         ResourceScope brandScope = ResourceScope.brand(LOCATION.tenantId(), LOCATION.brandId());
 
-        Resolved<Integer> resolved = ScopeResolution.resolve(KEY, brandScope, values(
-                ScopeType.TENANT, 200,
-                ScopeType.LOCATION, 400));
+        Resolved<Integer> resolved = ScopeResolution.resolve(
+                KEY,
+                brandScope,
+                values(
+                        ScopeType.TENANT, 200,
+                        ScopeType.LOCATION, 400));
 
         assertThat(resolved.value())
                 .as("a location value must not leak upward into a brand-scoped resolution")
@@ -146,9 +154,12 @@ class ScopeResolutionTests {
 
     @Test
     void aPlatformScopedRequestInspectsOnlyThePlatform() {
-        Resolved<Integer> resolved = ScopeResolution.resolve(KEY, ResourceScope.platform(), values(
-                ScopeType.PLATFORM, 100,
-                ScopeType.TENANT, 200));
+        Resolved<Integer> resolved = ScopeResolution.resolve(
+                KEY,
+                ResourceScope.platform(),
+                values(
+                        ScopeType.PLATFORM, 100,
+                        ScopeType.TENANT, 200));
 
         assertThat(resolved.value()).isEqualTo(100);
         assertThat(resolved.trace().inspectedLevels()).hasSize(1);

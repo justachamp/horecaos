@@ -2,7 +2,6 @@ package uz.horecaos.platform.migration.web;
 
 import java.time.Instant;
 import java.util.UUID;
-
 import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.application.MigrationScopeStore.ScopeRow;
 import uz.horecaos.platform.migration.domain.ReadMode;
@@ -47,9 +46,18 @@ public record ScopeView(
 
     static ScopeView of(ScopeRow row) {
         return new ScopeView(
-                row.id(), row.programId(), row.tenantId(), row.brandId(), row.locationId(),
-                row.capability(), row.sourceOwner(), row.targetOwner(),
-                row.modes().writeMode(), row.modes().readMode(),
-                row.state(), row.stateEnteredAt(), row.version());
+                row.id(),
+                row.programId(),
+                row.tenantId(),
+                row.brandId(),
+                row.locationId(),
+                row.capability(),
+                row.sourceOwner(),
+                row.targetOwner(),
+                row.modes().writeMode(),
+                row.modes().readMode(),
+                row.state(),
+                row.stateEnteredAt(),
+                row.version());
     }
 }

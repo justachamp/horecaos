@@ -1,11 +1,11 @@
 package uz.horecaos.platform.web.authorization;
 
-import java.util.Map;
-import java.util.UUID;
-
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-
+import java.util.Map;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,15 +13,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.HandlerMapping;
-
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
-import uz.horecaos.platform.iam.api.ResourceScopeVerifier;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.iam.api.ResourceScopeVerifier;
 
 /**
  * Applies the ADR 0025 capability declared by the handler, and refuses the
@@ -130,9 +126,8 @@ public class CapabilityEnforcementInterceptor implements HandlerInterceptor {
             boolean capabilityAllows = authorization.has(subject(), declaration.value(), scope);
             boolean liveRuleAllowed = response.getStatus() != HttpServletResponse.SC_FORBIDDEN;
 
-            String outcome = capabilityAllows == liveRuleAllowed
-                    ? "agree"
-                    : (liveRuleAllowed ? "would_deny" : "would_allow");
+            String outcome =
+                    capabilityAllows == liveRuleAllowed ? "agree" : (liveRuleAllowed ? "would_deny" : "would_allow");
 
             Counter.builder("horecaos.authorization.shadow")
                     .description("ADR 0025 shadow-mode comparison against the live ADR 0003 rule")
@@ -146,8 +141,12 @@ public class CapabilityEnforcementInterceptor implements HandlerInterceptor {
                 // "would_deny" is the signal that a grant is missing. "would_allow"
                 // is the serious one: the capability model is more permissive than
                 // the live rule.
-                log.warn("ADR 0025 shadow divergence: capability={} scope={} outcome={} status={}",
-                        declaration.value().code(), declaration.scope(), outcome, response.getStatus());
+                log.warn(
+                        "ADR 0025 shadow divergence: capability={} scope={} outcome={} status={}",
+                        declaration.value().code(),
+                        declaration.scope(),
+                        outcome,
+                        response.getStatus());
             }
         } catch (RuntimeException evaluationFailure) {
             // Shadow evaluation must never affect the response it is observing.
@@ -156,9 +155,7 @@ public class CapabilityEnforcementInterceptor implements HandlerInterceptor {
     }
 
     private RequiresCapability declarationOf(Object handler) {
-        return handler instanceof HandlerMethod method
-                ? method.getMethodAnnotation(RequiresCapability.class)
-                : null;
+        return handler instanceof HandlerMethod method ? method.getMethodAnnotation(RequiresCapability.class) : null;
     }
 
     private String subject() {
@@ -167,27 +164,26 @@ public class CapabilityEnforcementInterceptor implements HandlerInterceptor {
 
     @SuppressWarnings("unchecked")
     private ResourceScope scopeOf(HttpServletRequest request, ScopeType scopeType) {
-        Map<String, String> variables = (Map<String, String>)
-                request.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
+        Map<String, String> variables =
+                (Map<String, String>) request.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
         Map<String, String> pathVariables = variables == null ? Map.of() : variables;
 
         return switch (scopeType) {
             case PLATFORM -> ResourceScope.platform();
             case TENANT -> ResourceScope.tenant(uuid(pathVariables, "tenantId"));
-            case BRAND -> ResourceScope.brand(
-                    uuid(pathVariables, "tenantId"), uuid(pathVariables, "brandId"));
-            case LOCATION -> ResourceScope.location(
-                    uuid(pathVariables, "tenantId"),
-                    uuid(pathVariables, "brandId"),
-                    uuid(pathVariables, "locationId"));
+            case BRAND -> ResourceScope.brand(uuid(pathVariables, "tenantId"), uuid(pathVariables, "brandId"));
+            case LOCATION ->
+                ResourceScope.location(
+                        uuid(pathVariables, "tenantId"),
+                        uuid(pathVariables, "brandId"),
+                        uuid(pathVariables, "locationId"));
         };
     }
 
     private static UUID uuid(Map<String, String> pathVariables, String name) {
         String value = pathVariables.get(name);
         if (value == null) {
-            throw new IllegalStateException(
-                    "Endpoint declares a scope requiring the %s path variable".formatted(name));
+            throw new IllegalStateException("Endpoint declares a scope requiring the %s path variable".formatted(name));
         }
         return UUID.fromString(value);
     }

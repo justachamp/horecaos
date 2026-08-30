@@ -10,13 +10,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.iam.api.secrets.SecretValue;
-import uz.horecaos.platform.payments.infrastructure.RotationAwareSecrets;
 import uz.horecaos.platform.payments.application.PaymentAttemptService;
 import uz.horecaos.platform.payments.application.PaymentBindingResolver;
 import uz.horecaos.platform.payments.domain.CallbackKind;
@@ -29,6 +26,7 @@ import uz.horecaos.platform.payments.domain.ProviderBinding;
 import uz.horecaos.platform.payments.domain.ProviderEvidence;
 import uz.horecaos.platform.payments.domain.ProviderOutcome;
 import uz.horecaos.platform.payments.domain.SomAmount;
+import uz.horecaos.platform.payments.infrastructure.RotationAwareSecrets;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentAttemptStore;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentIntentStore;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcProviderCallbackStore;
@@ -93,10 +91,15 @@ public class ClickCallbackProcessor {
     private final ClickPaymentAdapter click;
     private final Clock clock;
 
-    public ClickCallbackProcessor(PaymentBindingResolver bindings, RotationAwareSecrets secrets,
-            JdbcPaymentAttemptStore attempts, JdbcPaymentIntentStore intents,
-            JdbcProviderCallbackStore callbacks, PaymentAttemptService attemptService,
-            ClickPaymentAdapter click, Clock clock) {
+    public ClickCallbackProcessor(
+            PaymentBindingResolver bindings,
+            RotationAwareSecrets secrets,
+            JdbcPaymentAttemptStore attempts,
+            JdbcPaymentIntentStore intents,
+            JdbcProviderCallbackStore callbacks,
+            PaymentAttemptService attemptService,
+            ClickPaymentAdapter click,
+            Clock clock) {
         this.bindings = bindings;
         this.secrets = secrets;
         this.attempts = attempts;
@@ -123,8 +126,7 @@ public class ClickCallbackProcessor {
      *                       until after the signature has been verified, because the
      *                       digest is over the strings Click sent
      */
-    public ClickCallbackDecision handle(String bindingSegment, String expectedAction,
-            Map<String, String> form) {
+    public ClickCallbackDecision handle(String bindingSegment, String expectedAction, Map<String, String> form) {
 
         ClickCallbackRequest request = ClickCallbackRequest.fromForm(form);
         Optional<ProviderBinding> binding = bindings.byCallbackSegment(bindingSegment)
@@ -152,8 +154,8 @@ public class ClickCallbackProcessor {
         return decision;
     }
 
-    private ClickCallbackDecision decide(ProviderBinding account, String expectedAction,
-            ClickCallbackRequest request, boolean signatureValid) {
+    private ClickCallbackDecision decide(
+            ProviderBinding account, String expectedAction, ClickCallbackRequest request, boolean signatureValid) {
 
         // -8 first, and for a partially missing body rather than only for an empty
         // one. The Django reference's isset helper is true only when every required
@@ -202,9 +204,8 @@ public class ClickCallbackProcessor {
         // signature verifies under A's key, and B's order is captured and
         // fiscalized under B's legal entity on A's money. The Payme side already
         // scopes every read by merchant_binding_id; this is the same rule.
-        Optional<PaymentAttempt> found = attempts
-                .findByMerchantTransId(account.tenantId(), PaymentProviderType.CLICK,
-                        request.merchantTransId())
+        Optional<PaymentAttempt> found = attempts.findByMerchantTransId(
+                        account.tenantId(), PaymentProviderType.CLICK, request.merchantTransId())
                 .filter(candidate -> candidate.merchantBindingId().equals(account.bindingId()));
         if (found.isEmpty()) {
             return ClickCallbackDecision.failed(ClickShopApiError.USER_DOES_NOT_EXIST);
@@ -216,8 +217,7 @@ public class ClickCallbackProcessor {
         // so this compares what Click echoed against what this attempt would have
         // been told — no lookup table, and a repeated Prepare cannot produce a
         // second id that makes Complete unresolvable.
-        if (request.isComplete() && !ClickPrepareId.matches(attempt.id(),
-                request.merchantPrepareId())) {
+        if (request.isComplete() && !ClickPrepareId.matches(attempt.id(), request.merchantPrepareId())) {
             return ClickCallbackDecision.failed(ClickShopApiError.TRANSACTION_DOES_NOT_EXIST);
         }
 
@@ -227,10 +227,8 @@ public class ClickCallbackProcessor {
         // been adjusted. A reversed attempt answers -4 as well: Click's record is
         // that this payment was made, and answering -9 would tell it the payment
         // never happened.
-        if (attempt.status() == PaymentAttemptStatus.CAPTURED
-                || attempt.status() == PaymentAttemptStatus.REVERSED) {
-            return ClickCallbackDecision.answered(ClickShopApiError.ALREADY_PAID, attempt.id(),
-                    merchantTransactionId);
+        if (attempt.status() == PaymentAttemptStatus.CAPTURED || attempt.status() == PaymentAttemptStatus.REVERSED) {
+            return ClickCallbackDecision.answered(ClickShopApiError.ALREADY_PAID, attempt.id(), merchantTransactionId);
         }
 
         // Click reporting its own failure. The documented answer is to void the
@@ -239,8 +237,8 @@ public class ClickCallbackProcessor {
         // cancelled whatever figure it carries.
         if (request.reportsClickSideFailure()) {
             voidPayment(attempt, request);
-            return ClickCallbackDecision.answered(ClickShopApiError.TRANSACTION_CANCELLED,
-                    attempt.id(), merchantTransactionId);
+            return ClickCallbackDecision.answered(
+                    ClickShopApiError.TRANSACTION_CANCELLED, attempt.id(), merchantTransactionId);
         }
 
         // -2. Compared as whole-som integers rather than with the references' 0.01
@@ -250,18 +248,18 @@ public class ClickCallbackProcessor {
         // what is being charged, so it is refused rather than rounded into
         // agreement.
         Optional<Long> som = request.amountAsSom();
-        if (som.isEmpty() || !new SomAmount(som.get(), attempt.amount().currency())
-                .matches(attempt.amount())) {
-            log.warn("A Click callback for attempt {} carried an amount the attempt does not "
-                    + "hold; answering -2.", attempt.id());
+        if (som.isEmpty() || !new SomAmount(som.get(), attempt.amount().currency()).matches(attempt.amount())) {
+            log.warn(
+                    "A Click callback for attempt {} carried an amount the attempt does not " + "hold; answering -2.",
+                    attempt.id());
             return ClickCallbackDecision.failed(ClickShopApiError.INCORRECT_AMOUNT);
         }
 
         // -9. Cancelled, expired or failed already: a second Complete against it
         // must not resurrect it.
         if (attempt.status().terminal()) {
-            return ClickCallbackDecision.answered(ClickShopApiError.TRANSACTION_CANCELLED,
-                    attempt.id(), merchantTransactionId);
+            return ClickCallbackDecision.answered(
+                    ClickShopApiError.TRANSACTION_CANCELLED, attempt.id(), merchantTransactionId);
         }
 
         return request.isComplete()
@@ -281,14 +279,12 @@ public class ClickCallbackProcessor {
      * implementations are idempotent by construction, which is the best evidence
      * available.
      */
-    private ClickCallbackDecision prepare(PaymentAttempt attempt, ClickCallbackRequest request,
-            int merchantPrepareId) {
+    private ClickCallbackDecision prepare(PaymentAttempt attempt, ClickCallbackRequest request, int merchantPrepareId) {
 
         if (attempt.status() != PaymentAttemptStatus.RESERVED) {
             reserve(attempt, request);
         }
-        return ClickCallbackDecision.answered(ClickShopApiError.SUCCESS, attempt.id(),
-                merchantPrepareId);
+        return ClickCallbackDecision.answered(ClickShopApiError.SUCCESS, attempt.id(), merchantPrepareId);
     }
 
     /**
@@ -306,8 +302,8 @@ public class ClickCallbackProcessor {
      * answered {@code -4}, which is correct, so the only cost of doing it here is
      * latency on a response Click sets no deadline for.
      */
-    private ClickCallbackDecision complete(ProviderBinding account, PaymentAttempt attempt,
-            ClickCallbackRequest request, int merchantConfirmId) {
+    private ClickCallbackDecision complete(
+            ProviderBinding account, PaymentAttempt attempt, ClickCallbackRequest request, int merchantConfirmId) {
 
         // Asked before the capture is recorded, not after. Recording a capture moves
         // the intent to PAID, so a cancellation that happened while the customer was
@@ -316,42 +312,58 @@ public class ClickCallbackProcessor {
         boolean fulfillable = fulfillable(attempt);
 
         PaymentAttempt reserved = attempt;
-        if (attempt.status() == PaymentAttemptStatus.INITIATED
-                || attempt.status() == PaymentAttemptStatus.PRESENTED) {
+        if (attempt.status() == PaymentAttemptStatus.INITIATED || attempt.status() == PaymentAttemptStatus.PRESENTED) {
             // Complete implies Click saw a successful Prepare. Reaching here means
             // HorecaOS's own Prepare write did not survive, and the reservation is
             // recorded now rather than refusing a payment that has already been
             // taken from a customer's card.
-            log.warn("A Click Complete arrived for attempt {} with no reservation recorded; "
-                    + "reserving before crediting.", attempt.id());
+            log.warn(
+                    "A Click Complete arrived for attempt {} with no reservation recorded; "
+                            + "reserving before crediting.",
+                    attempt.id());
             reserve(attempt, request);
             reserved = attempts.find(attempt.tenantId(), attempt.id()).orElse(attempt);
         }
 
-        attemptService.recordProviderEvent(reserved, PaymentTransactionType.CAPTURE,
-                PaymentAttemptStatus.CAPTURED, reserved.amount(), request.clickTransId(),
+        attemptService.recordProviderEvent(
+                reserved,
+                PaymentTransactionType.CAPTURE,
+                PaymentAttemptStatus.CAPTURED,
+                reserved.amount(),
+                request.clickTransId(),
                 ProviderEvidence.of("completed", clock.instant()),
                 // Click's callbacks carry no payment_id, and nothing documents that
                 // click_paydoc_id is the id the reversal and fiscalization paths
                 // want. It is recorded as the document it is called, and the
                 // payment id is resolved through status_by_mti when one is needed.
-                null, request.clickPaydocId(), clock.instant(), null, null);
+                null,
+                request.clickPaydocId(),
+                clock.instant(),
+                null,
+                null);
 
-        PaymentAttempt captured = attempts.find(reserved.tenantId(), reserved.id())
-                .orElse(reserved);
+        PaymentAttempt captured =
+                attempts.find(reserved.tenantId(), reserved.id()).orElse(reserved);
         if (!fulfillable) {
             reverseAfterAnsweringSuccess(account, captured);
         }
 
-        return ClickCallbackDecision.answered(ClickShopApiError.SUCCESS, captured.id(),
-                merchantConfirmId);
+        return ClickCallbackDecision.answered(ClickShopApiError.SUCCESS, captured.id(), merchantConfirmId);
     }
 
     private void reserve(PaymentAttempt attempt, ClickCallbackRequest request) {
-        attemptService.recordProviderEvent(attempt, PaymentTransactionType.RESERVE,
-                PaymentAttemptStatus.RESERVED, attempt.amount(), request.clickTransId(),
+        attemptService.recordProviderEvent(
+                attempt,
+                PaymentTransactionType.RESERVE,
+                PaymentAttemptStatus.RESERVED,
+                attempt.amount(),
+                request.clickTransId(),
                 ProviderEvidence.of("prepared", clock.instant()),
-                null, request.clickPaydocId(), clock.instant(), null, null);
+                null,
+                request.clickPaydocId(),
+                clock.instant(),
+                null,
+                null);
     }
 
     /**
@@ -365,10 +377,18 @@ public class ClickCallbackProcessor {
         if (attempt.status().terminal()) {
             return;
         }
-        attemptService.recordProviderEvent(attempt, PaymentTransactionType.CANCEL,
-                PaymentAttemptStatus.CANCELLED, attempt.amount(), request.clickTransId(),
+        attemptService.recordProviderEvent(
+                attempt,
+                PaymentTransactionType.CANCEL,
+                PaymentAttemptStatus.CANCELLED,
+                attempt.amount(),
+                request.clickTransId(),
                 ProviderEvidence.of("click-side-failure", clock.instant()),
-                null, request.clickPaydocId(), clock.instant(), null, null);
+                null,
+                request.clickPaydocId(),
+                clock.instant(),
+                null,
+                null);
     }
 
     /**
@@ -386,31 +406,43 @@ public class ClickCallbackProcessor {
     }
 
     private void reverseAfterAnsweringSuccess(ProviderBinding account, PaymentAttempt attempt) {
-        log.warn("Click credited attempt {} for an order that can no longer be fulfilled; "
-                + "answering error 0 and reversing.", attempt.id());
+        log.warn(
+                "Click credited attempt {} for an order that can no longer be fulfilled; "
+                        + "answering error 0 and reversing.",
+                attempt.id());
 
-        ProviderOutcome outcome = click.reverse(attempt, account,
-                "The order could not be fulfilled after a successful Click charge");
+        ProviderOutcome outcome =
+                click.reverse(attempt, account, "The order could not be fulfilled after a successful Click charge");
 
         switch (outcome.classification()) {
-            case SUCCESS -> attemptService.recordProviderEvent(attempt,
-                    PaymentTransactionType.REVERSE, PaymentAttemptStatus.REVERSED,
-                    attempt.amount(), outcome.externalPaymentId(),
-                    outcome.evidence(), outcome.externalPaymentId(), null, clock.instant(),
-                    null, null);
+            case SUCCESS ->
+                attemptService.recordProviderEvent(
+                        attempt,
+                        PaymentTransactionType.REVERSE,
+                        PaymentAttemptStatus.REVERSED,
+                        attempt.amount(),
+                        outcome.externalPaymentId(),
+                        outcome.evidence(),
+                        outcome.externalPaymentId(),
+                        null,
+                        clock.instant(),
+                        null,
+                        null);
             // The money may or may not have gone back, and the reversal must never
             // be sent again to find out. The attempt carries the question and the
             // resolver settles it.
-            case UNCERTAIN, RETRYABLE -> attemptService.markUncertain(attempt,
-                    outcome.failureCode());
+            case UNCERTAIN, RETRYABLE -> attemptService.markUncertain(attempt, outcome.failureCode());
             // Click refused. Which refusal it was cannot be said — the error_code
             // enumeration is unpublished and is an open question with CLICK — so the
             // attempt stays captured, the customer stays charged, and an operator
             // owns the refund. That is the honest position: the alternative is a
             // state that claims the money went back when it did not.
-            case REJECTED -> log.error("Click refused to reverse attempt {} for an order that "
-                    + "cannot be fulfilled; the customer is charged and a human must refund: {}",
-                    attempt.id(), outcome.detail());
+            case REJECTED ->
+                log.error(
+                        "Click refused to reverse attempt {} for an order that "
+                                + "cannot be fulfilled; the customer is charged and a human must refund: {}",
+                        attempt.id(),
+                        outcome.detail());
         }
     }
 
@@ -438,14 +470,14 @@ public class ClickCallbackProcessor {
      */
     private boolean verifySignature(ProviderBinding binding, ClickCallbackRequest request) {
         String cached = secrets.cached(binding.secretReference()).reveal();
-        if (ClickSignature.matches(ClickSignature.expected(cached, request),
-                request.signString())) {
+        if (ClickSignature.matches(ClickSignature.expected(cached, request), request.signString())) {
             return true;
         }
 
         Optional<SecretValue> fresh = secrets.fresh(binding.secretReference());
-        if (fresh.isPresent() && ClickSignature.matches(
-                ClickSignature.expected(fresh.get().reveal(), request), request.signString())) {
+        if (fresh.isPresent()
+                && ClickSignature.matches(
+                        ClickSignature.expected(fresh.get().reveal(), request), request.signString())) {
             return true;
         }
 
@@ -468,26 +500,41 @@ public class ClickCallbackProcessor {
      * protected-payload references the schema reserves stay null until ADR 0029's
      * store for whole request bodies exists.
      */
-    private void record(ProviderBinding binding, ClickCallbackRequest request,
-            String expectedAction, ClickCallbackDecision decision, boolean signatureValid,
+    private void record(
+            ProviderBinding binding,
+            ClickCallbackRequest request,
+            String expectedAction,
+            ClickCallbackDecision decision,
+            boolean signatureValid,
             Map<String, String> form) {
 
         CallbackKind kind = ClickCallbackRequest.ACTION_COMPLETE.equals(expectedAction)
-                ? CallbackKind.CLICK_COMPLETE : CallbackKind.CLICK_PREPARE;
-        String reference = request.clickTransId() == null || request.clickTransId().isBlank()
-                ? "unknown" : request.clickTransId();
+                ? CallbackKind.CLICK_COMPLETE
+                : CallbackKind.CLICK_PREPARE;
+        String reference =
+                request.clickTransId() == null || request.clickTransId().isBlank() ? "unknown" : request.clickTransId();
 
         Instant now = clock.instant();
         try {
-            callbacks.record(UUID.randomUUID(), binding.tenantId(), PaymentProviderType.CLICK,
-                    binding.bindingId(), kind, reference, bodyHash(form), signatureValid,
-                    decision.attemptId(), decision.responseCode(), now, null, null);
+            callbacks.record(
+                    UUID.randomUUID(),
+                    binding.tenantId(),
+                    PaymentProviderType.CLICK,
+                    binding.bindingId(),
+                    kind,
+                    reference,
+                    bodyHash(form),
+                    signatureValid,
+                    decision.attemptId(),
+                    decision.responseCode(),
+                    now,
+                    null,
+                    null);
         } catch (RuntimeException notRecorded) {
             // The inbox is evidence, not the decision. A callback that cannot be
             // recorded must still be answered, because the alternative is that Click
             // retries a payment HorecaOS has already credited.
-            log.error("A Click callback on {} could not be recorded in the inbox.", binding,
-                    notRecorded);
+            log.error("A Click callback on {} could not be recorded in the inbox.", binding, notRecorded);
         }
     }
 
@@ -503,12 +550,16 @@ public class ClickCallbackProcessor {
     private static String bodyHash(Map<String, String> form) {
         StringBuilder canonical = new StringBuilder();
         for (Map.Entry<String, String> field : new TreeMap<>(form).entrySet()) {
-            canonical.append(field.getKey()).append('=')
-                    .append(field.getValue() == null ? "" : field.getValue()).append('&');
+            canonical
+                    .append(field.getKey())
+                    .append('=')
+                    .append(field.getValue() == null ? "" : field.getValue())
+                    .append('&');
         }
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(canonical.toString().getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256")
+                            .digest(canonical.toString().getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException impossible) {
             throw new IllegalStateException("SHA-256 is unavailable", impossible);
         }

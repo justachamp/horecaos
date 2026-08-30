@@ -26,7 +26,6 @@ package uz.horecaos.platform.payments.infrastructure.click;
  * support.
  */
 public enum ClickShopApiError {
-
     SUCCESS(0, "Success"),
 
     SIGN_CHECK_FAILED(-1, "SIGN CHECK FAILED!"),

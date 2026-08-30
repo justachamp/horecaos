@@ -2,13 +2,11 @@ package uz.horecaos.platform.marketing.application;
 
 import java.util.Map;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
 import uz.horecaos.platform.marketing.api.CampaignMessagePort;
 
 /**
@@ -43,8 +41,7 @@ import uz.horecaos.platform.marketing.api.CampaignMessagePort;
 @Configuration
 public class MarketingDeliveryConfiguration {
 
-    private static final Logger log =
-            LoggerFactory.getLogger(MarketingDeliveryConfiguration.class);
+    private static final Logger log = LoggerFactory.getLogger(MarketingDeliveryConfiguration.class);
 
     @Bean
     @ConditionalOnMissingBean(CampaignMessagePort.class)
@@ -63,8 +60,7 @@ public class MarketingDeliveryConfiguration {
             }
 
             @Override
-            public Map<String, String> templateBodies(UUID tenantId, UUID brandId,
-                    String templateKey, String channel) {
+            public Map<String, String> templateBodies(UUID tenantId, UUID brandId, String templateKey, String channel) {
                 return Map.of();
             }
 

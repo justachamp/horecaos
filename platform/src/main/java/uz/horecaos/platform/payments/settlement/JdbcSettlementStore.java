@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -39,12 +38,21 @@ public class JdbcSettlementStore {
      *                           accrual net of the redeemed portion, and the
      *                           courier's cash figure without a code change
      */
-    public record MethodRow(UUID id, String code, String displayName, String responsibility,
-            boolean settlesFromBalance, String status) {
-    }
+    public record MethodRow(
+            UUID id,
+            String code,
+            String displayName,
+            String responsibility,
+            boolean settlesFromBalance,
+            String status) {}
 
-    public UUID registerMethod(UUID tenantId, String code, String displayName,
-            String responsibility, boolean settlesFromBalance, Instant now) {
+    public UUID registerMethod(
+            UUID tenantId,
+            String code,
+            String displayName,
+            String responsibility,
+            boolean settlesFromBalance,
+            Instant now) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO payments.payment_methods (
@@ -55,9 +63,13 @@ public class JdbcSettlementStore {
                     'ACTIVE', 1, :now, :now)
                 ON CONFLICT ON CONSTRAINT uq_payment_method_code DO NOTHING
                 """)
-                .param("id", id).param("tenantId", tenantId).param("code", code)
-                .param("displayName", displayName).param("responsibility", responsibility)
-                .param("settlesFromBalance", settlesFromBalance).param("now", utc(now))
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("code", code)
+                .param("displayName", displayName)
+                .param("responsibility", responsibility)
+                .param("settlesFromBalance", settlesFromBalance)
+                .param("now", utc(now))
                 .update();
         return findMethodByCode(tenantId, code).map(MethodRow::id).orElse(id);
     }
@@ -67,7 +79,8 @@ public class JdbcSettlementStore {
                 SELECT * FROM payments.payment_methods
                  WHERE tenant_id = :tenantId AND code = :code
                 """)
-                .param("tenantId", tenantId).param("code", code)
+                .param("tenantId", tenantId)
+                .param("code", code)
                 .query(JdbcSettlementStore::toMethod)
                 .optional();
     }
@@ -77,14 +90,21 @@ public class JdbcSettlementStore {
                 SELECT * FROM payments.payment_methods
                  WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("id", methodId)
+                .param("tenantId", tenantId)
+                .param("id", methodId)
                 .query(JdbcSettlementStore::toMethod)
                 .optional();
     }
 
-    public record SettlementRow(UUID id, UUID tenantId, UUID orderId, String currency,
-            long totalDueMinor, long settledMinor, SettlementStatus status, int version) {
-    }
+    public record SettlementRow(
+            UUID id,
+            UUID tenantId,
+            UUID orderId,
+            String currency,
+            long totalDueMinor,
+            long settledMinor,
+            SettlementStatus status,
+            int version) {}
 
     public void insertSettlement(SettlementRow settlement, Instant now) {
         jdbc.sql("""
@@ -95,11 +115,14 @@ public class JdbcSettlementStore {
                     :id, :tenantId, :orderId, :currency, :total, :settled,
                     :status, 1, :now, :now)
                 """)
-                .param("id", settlement.id()).param("tenantId", settlement.tenantId())
-                .param("orderId", settlement.orderId()).param("currency", settlement.currency())
+                .param("id", settlement.id())
+                .param("tenantId", settlement.tenantId())
+                .param("orderId", settlement.orderId())
+                .param("currency", settlement.currency())
                 .param("total", settlement.totalDueMinor())
                 .param("settled", settlement.settledMinor())
-                .param("status", settlement.status().name()).param("now", utc(now))
+                .param("status", settlement.status().name())
+                .param("now", utc(now))
                 .update();
     }
 
@@ -109,7 +132,8 @@ public class JdbcSettlementStore {
                 SELECT * FROM payments.order_settlements
                  WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("id", settlementId)
+                .param("tenantId", tenantId)
+                .param("id", settlementId)
                 .query(JdbcSettlementStore::toSettlement)
                 .optional();
     }
@@ -119,7 +143,8 @@ public class JdbcSettlementStore {
                 SELECT * FROM payments.order_settlements
                  WHERE tenant_id = :tenantId AND order_id = :orderId
                 """)
-                .param("tenantId", tenantId).param("orderId", orderId)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
                 .query(JdbcSettlementStore::toSettlement)
                 .optional();
     }
@@ -140,8 +165,7 @@ public class JdbcSettlementStore {
      * {@code settledBefore} so an order settling right now is not offered to an
      * operator mid-transaction.
      */
-    public List<SettlementRow> settlementsRestingPartiallySettled(UUID tenantId,
-            Instant settledBefore, int limit) {
+    public List<SettlementRow> settlementsRestingPartiallySettled(UUID tenantId, Instant settledBefore, int limit) {
         return jdbc.sql("""
                 SELECT * FROM payments.order_settlements
                  WHERE tenant_id = :tenantId
@@ -150,24 +174,34 @@ public class JdbcSettlementStore {
                  ORDER BY updated_at
                  LIMIT :limit
                 """)
-                .param("tenantId", tenantId).param("before", utc(settledBefore))
+                .param("tenantId", tenantId)
+                .param("before", utc(settledBefore))
                 .param("limit", limit)
                 .query(JdbcSettlementStore::toSettlement)
                 .list();
     }
 
-    public boolean transitionSettlement(UUID tenantId, UUID settlementId, SettlementStatus from,
-            SettlementStatus to, long settledMinor, Instant now) {
+    public boolean transitionSettlement(
+            UUID tenantId,
+            UUID settlementId,
+            SettlementStatus from,
+            SettlementStatus to,
+            long settledMinor,
+            Instant now) {
         return jdbc.sql("""
                 UPDATE payments.order_settlements
                    SET status = :to, settled_minor = :settled,
                        version = version + 1, updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id AND status = :from
                 """)
-                .param("tenantId", tenantId).param("id", settlementId)
-                .param("from", from.name()).param("to", to.name())
-                .param("settled", settledMinor).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", settlementId)
+                        .param("from", from.name())
+                        .param("to", to.name())
+                        .param("settled", settledMinor)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -175,10 +209,20 @@ public class JdbcSettlementStore {
      *     Present so that a second partial refund cannot re-refund the whole
      *     tender; see {@code V0048}.
      */
-    public record TenderRow(UUID id, UUID tenantId, UUID settlementId, int sequence,
-            UUID paymentMethodId, boolean settlesFromBalance, long amountMinor, String currency,
-            TenderStatus status, UUID paymentIntentId, UUID loyaltyReservationId,
-            long refundedMinor, int version) {
+    public record TenderRow(
+            UUID id,
+            UUID tenantId,
+            UUID settlementId,
+            int sequence,
+            UUID paymentMethodId,
+            boolean settlesFromBalance,
+            long amountMinor,
+            String currency,
+            TenderStatus status,
+            UUID paymentIntentId,
+            UUID loyaltyReservationId,
+            long refundedMinor,
+            int version) {
 
         /** What is still refundable on this tender. Never negative. */
         public long refundableMinor() {
@@ -212,9 +256,7 @@ public class JdbcSettlementStore {
                     :id, :tenantId, :settlementId, :sequence, :methodId,
                     :settlesFromBalance, :amount, :currency, :status,
                     :intentId, :reservationId, :idempotencyKey, 1, :now, :now)
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
     }
 
     /** One tender by id, for a caller holding a tender reference and nothing else. */
@@ -223,7 +265,8 @@ public class JdbcSettlementStore {
                 SELECT * FROM payments.tenders
                  WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("id", tenderId)
+                .param("tenantId", tenantId)
+                .param("id", tenderId)
                 .query(JdbcSettlementStore::toTender)
                 .optional();
     }
@@ -234,7 +277,8 @@ public class JdbcSettlementStore {
                  WHERE tenant_id = :tenantId AND settlement_id = :settlementId
                  ORDER BY sequence
                 """)
-                .param("tenantId", tenantId).param("settlementId", settlementId)
+                .param("tenantId", tenantId)
+                .param("settlementId", settlementId)
                 .query(JdbcSettlementStore::toTender)
                 .list();
     }
@@ -256,13 +300,15 @@ public class JdbcSettlementStore {
                  WHERE tenant_id = :tenantId AND id = :id
                    AND refunded_minor + :amount <= amount_minor
                 """)
-                .param("tenantId", tenantId).param("id", tenderId)
-                .param("amount", amountMinor).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", tenderId)
+                        .param("amount", amountMinor)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
-    public boolean transitionTender(UUID tenantId, UUID tenderId, TenderStatus from,
-            TenderStatus to, Instant now) {
+    public boolean transitionTender(UUID tenantId, UUID tenderId, TenderStatus from, TenderStatus to, Instant now) {
         boolean terminalMoney = to == TenderStatus.SETTLED || to == TenderStatus.REVERSED;
         return jdbc.sql("""
                 UPDATE payments.tenders
@@ -272,10 +318,14 @@ public class JdbcSettlementStore {
                        updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id AND status = :from
                 """)
-                .param("tenantId", tenantId).param("id", tenderId)
-                .param("from", from.name()).param("to", to.name())
-                .param("terminal", terminalMoney).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", tenderId)
+                        .param("from", from.name())
+                        .param("to", to.name())
+                        .param("terminal", terminalMoney)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /** Binds a balance tender to the loyalty hold it took, once the hold exists. */
@@ -286,8 +336,10 @@ public class JdbcSettlementStore {
                        version = version + 1, updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id AND settles_from_balance
                 """)
-                .param("tenantId", tenantId).param("id", tenderId)
-                .param("reservationId", reservationId).param("now", utc(now))
+                .param("tenantId", tenantId)
+                .param("id", tenderId)
+                .param("reservationId", reservationId)
+                .param("now", utc(now))
                 .update();
     }
 
@@ -327,9 +379,12 @@ public class JdbcSettlementStore {
                  WHERE s.tenant_id = :tenantId AND s.id = :settlementId
                  GROUP BY s.total_due_minor
                 """)
-                .param("tenantId", tenantId).param("settlementId", settlementId)
+                .param("tenantId", tenantId)
+                .param("settlementId", settlementId)
                 .param("cashCode", cashMethodCode)
-                .query(Long.class).optional().orElse(0L);
+                .query(Long.class)
+                .optional()
+                .orElse(0L);
         return due == null ? 0L : due;
     }
 

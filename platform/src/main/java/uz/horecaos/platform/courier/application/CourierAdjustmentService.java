@@ -3,13 +3,11 @@ package uz.horecaos.platform.courier.application;
 import java.time.Clock;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
-import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.ApprovalAction;
+import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.ApprovalParameters;
 import uz.horecaos.platform.audit.api.ApprovalRequestCommand;
 import uz.horecaos.platform.audit.api.ApprovalService;
@@ -54,8 +52,12 @@ public class CourierAdjustmentService {
     private final CourierPolicyResolver policies;
     private final Clock clock;
 
-    public CourierAdjustmentService(JdbcCourierStore couriers, CourierLedgerService ledger,
-            ApprovalService approvals, AuditRecorder audit, CourierPolicyResolver policies,
+    public CourierAdjustmentService(
+            JdbcCourierStore couriers,
+            CourierLedgerService ledger,
+            ApprovalService approvals,
+            AuditRecorder audit,
+            CourierPolicyResolver policies,
             Clock clock) {
         this.couriers = couriers;
         this.ledger = ledger;
@@ -76,25 +78,24 @@ public class CourierAdjustmentService {
      */
     @Transactional
     public Outcome request(AdjustmentCommand command) {
-        AdjustmentReasonRow reason = couriers
-                .findAdjustmentReason(command.tenantId(), command.reasonCode())
-                .orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_FAILED,
-                        "No such adjustment reason: " + command.reasonCode()));
+        AdjustmentReasonRow reason = couriers.findAdjustmentReason(command.tenantId(), command.reasonCode())
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.VALIDATION_FAILED, "No such adjustment reason: " + command.reasonCode()));
         if (!"ACTIVE".equals(reason.status())) {
-            throw new ApiException(ErrorCode.UNPROCESSABLE_STATE,
-                    "That reason is archived: " + command.reasonCode());
+            throw new ApiException(ErrorCode.UNPROCESSABLE_STATE, "That reason is archived: " + command.reasonCode());
         }
 
         boolean penalty = command.amountMinor() < 0;
         if (penalty != "PENALTY".equals(reason.kind())) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
                     "A %s reason cannot carry %d".formatted(reason.kind(), command.amountMinor()));
         }
 
         CourierCompensationPolicy policy = policies.resolve(ResourceScope.tenant(command.tenantId()));
         boolean needsApproval = penalty
                 && (command.origin() == AdjustmentOrigin.MANUAL
-                    || Math.abs(command.amountMinor()) > policy.penaltyApprovalThresholdMinor());
+                        || Math.abs(command.amountMinor()) > policy.penaltyApprovalThresholdMinor());
 
         UUID approvalRequestId = null;
         if (needsApproval) {
@@ -117,9 +118,9 @@ public class CourierAdjustmentService {
                 case ApprovalOutcome.Pending pending -> {
                     return Outcome.pendingApproval(pending.requestId());
                 }
-                case ApprovalOutcome.Declined declined -> throw new ApiException(
-                        ErrorCode.UNPROCESSABLE_STATE,
-                        "The adjustment was declined: " + declined.reason());
+                case ApprovalOutcome.Declined declined ->
+                    throw new ApiException(
+                            ErrorCode.UNPROCESSABLE_STATE, "The adjustment was declined: " + declined.reason());
                 case ApprovalOutcome.NotRequired ignored -> {
                     // A tenant with no approval policy configured still gets the
                     // four-eyes rule for a manual penalty, because ADR 0042 makes
@@ -138,7 +139,8 @@ public class CourierAdjustmentService {
                         } else if (forced instanceof ApprovalOutcome.Pending pending) {
                             return Outcome.pendingApproval(pending.requestId());
                         } else {
-                            throw new ApiException(ErrorCode.UNPROCESSABLE_STATE,
+                            throw new ApiException(
+                                    ErrorCode.UNPROCESSABLE_STATE,
                                     "A manual penalty requires an approval that was not granted");
                         }
                     }
@@ -147,21 +149,36 @@ public class CourierAdjustmentService {
         }
 
         LedgerEntryRow entry = ledger.append(new CourierLedgerService.NewEntry(
-                command.tenantId(), command.courierId(), command.locationId(),
+                command.tenantId(),
+                command.courierId(),
+                command.locationId(),
                 penalty ? LedgerEntryType.PENALTY : LedgerEntryType.BONUS,
-                command.amountMinor(), command.currency(), "courier_adjustment", null,
-                command.origin(), command.reasonCode(), clock.instant(),
-                command.idempotencyKey(), approvalRequestId, null, command.actor().subject()));
+                command.amountMinor(),
+                command.currency(),
+                "courier_adjustment",
+                null,
+                command.origin(),
+                command.reasonCode(),
+                clock.instant(),
+                command.idempotencyKey(),
+                approvalRequestId,
+                null,
+                command.actor().subject()));
 
         audit.record(AuditFact.of("courier.adjustment.recorded", AuditClass.BUSINESS)
                 .by(command.actor())
                 .at(ResourceScope.tenant(command.tenantId()))
                 .target("courier_ledger_entry", entry.id())
                 .because(command.reason())
-                .changed(Map.of("amountMinor", command.amountMinor(),
-                        "reasonCode", command.reasonCode(),
-                        "origin", command.origin().name(),
-                        "outcomeBasis", reason.outcomeBasis()))
+                .changed(Map.of(
+                        "amountMinor",
+                        command.amountMinor(),
+                        "reasonCode",
+                        command.reasonCode(),
+                        "origin",
+                        command.origin().name(),
+                        "outcomeBasis",
+                        reason.outcomeBasis()))
                 .underApproval(approvalRequestId)
                 .usingCapability("courier.adjustment.create")
                 .correlatedBy(command.correlationId())
@@ -198,9 +215,18 @@ public class CourierAdjustmentService {
     }
 
     /** @param amountMinor positive for a bonus, negative for a penalty */
-    public record AdjustmentCommand(UUID tenantId, UUID courierId, UUID locationId,
-            long amountMinor, String currency, String reasonCode, AdjustmentOrigin origin,
-            String idempotencyKey, ActorRef actor, String reason, String correlationId) { }
+    public record AdjustmentCommand(
+            UUID tenantId,
+            UUID courierId,
+            UUID locationId,
+            long amountMinor,
+            String currency,
+            String reasonCode,
+            AdjustmentOrigin origin,
+            String idempotencyKey,
+            ActorRef actor,
+            String reason,
+            String correlationId) {}
 
     public record Outcome(LedgerEntryRow entry, UUID approvalRequestId) {
 

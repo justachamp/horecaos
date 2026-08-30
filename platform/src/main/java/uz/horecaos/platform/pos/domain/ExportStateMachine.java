@@ -25,8 +25,7 @@ public final class ExportStateMachine {
 
     private static final Map<ExportState, Set<ExportState>> ALLOWED = allowed();
 
-    private ExportStateMachine() {
-    }
+    private ExportStateMachine() {}
 
     public static boolean permits(ExportState from, ExportState to) {
         return ALLOWED.getOrDefault(from, Set.of()).contains(to);
@@ -39,43 +38,38 @@ public final class ExportStateMachine {
      */
     public static void require(ExportState from, ExportState to) {
         if (!permits(from, to)) {
-            throw new IllegalStateException(
-                    "A POS export cannot move from %s to %s".formatted(from, to));
+            throw new IllegalStateException("A POS export cannot move from %s to %s".formatted(from, to));
         }
     }
 
     private static Map<ExportState, Set<ExportState>> allowed() {
         Map<ExportState, Set<ExportState>> map = new EnumMap<>(ExportState.class);
 
-        map.put(ExportState.PENDING, EnumSet.of(
-                ExportState.SENT,
-                // A person may abandon before anything is sent — the branch took
-                // the order by telephone while the export was still queued.
-                ExportState.ABANDONED));
+        map.put(
+                ExportState.PENDING,
+                EnumSet.of(
+                        ExportState.SENT,
+                        // A person may abandon before anything is sent — the branch took
+                        // the order by telephone while the export was still queued.
+                        ExportState.ABANDONED));
 
-        map.put(ExportState.SENT, EnumSet.of(
-                ExportState.ACCEPTED,
-                ExportState.REJECTED,
-                ExportState.UNCERTAIN));
+        map.put(ExportState.SENT, EnumSet.of(ExportState.ACCEPTED, ExportState.REJECTED, ExportState.UNCERTAIN));
 
-        map.put(ExportState.UNCERTAIN, EnumSet.of(
-                // Reached only when the provider handed our own correlation
-                // reference back on a candidate. Then the match is an identifier
-                // and not a heuristic.
-                ExportState.RESOLVED_LANDED,
+        map.put(
+                ExportState.UNCERTAIN,
+                EnumSet.of(
+                        // Reached only when the provider handed our own correlation
+                        // reference back on a candidate. Then the match is an identifier
+                        // and not a heuristic.
+                        ExportState.RESOLVED_LANDED, ExportState.AWAITING_OPERATOR, ExportState.ABANDONED));
+
+        map.put(
                 ExportState.AWAITING_OPERATOR,
-                ExportState.ABANDONED));
-
-        map.put(ExportState.AWAITING_OPERATOR, EnumSet.of(
-                ExportState.RESOLVED_LANDED,
-                ExportState.RESOLVED_ABSENT,
-                ExportState.ABANDONED));
+                EnumSet.of(ExportState.RESOLVED_LANDED, ExportState.RESOLVED_ABSENT, ExportState.ABANDONED));
 
         // The one place a second attempt is permitted, and it is permitted
         // because somebody established that the first one did not land.
-        map.put(ExportState.RESOLVED_ABSENT, EnumSet.of(
-                ExportState.SENT,
-                ExportState.ABANDONED));
+        map.put(ExportState.RESOLVED_ABSENT, EnumSet.of(ExportState.SENT, ExportState.ABANDONED));
 
         map.put(ExportState.ACCEPTED, EnumSet.noneOf(ExportState.class));
         map.put(ExportState.REJECTED, EnumSet.noneOf(ExportState.class));

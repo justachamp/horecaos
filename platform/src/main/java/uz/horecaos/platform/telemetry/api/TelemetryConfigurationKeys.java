@@ -1,9 +1,9 @@
 package uz.horecaos.platform.telemetry.api;
 
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
-import uz.horecaos.platform.tenancy.api.ConfigurationKey;
 import uz.horecaos.platform.telemetry.domain.CollectionGate;
 import uz.horecaos.platform.telemetry.domain.TrackRetentionFloor;
+import uz.horecaos.platform.tenancy.api.ConfigurationKey;
 
 /**
  * The telemetry module's ADR 0030 configuration keys (ADR 0045).
@@ -26,6 +26,7 @@ public final class TelemetryConfigurationKeys {
 
     /** The codes both declarations share. */
     public static final String COLLECTION_GATE_CODE = "telemetry.courier_collection_gate";
+
     public static final String TRACK_RETENTION_DAYS_CODE = "telemetry.track_retention_days";
 
     /**
@@ -36,15 +37,15 @@ public final class TelemetryConfigurationKeys {
      * everything to Yandex have different answers, and forcing one is how the
      * narrower gate never gets used anywhere.
      */
-    public static final ConfigurationKey<String> COLLECTION_GATE =
-            ConfigurationKey.of(COLLECTION_GATE_CODE, String.class)
-                    .defaultValue(CollectionGate.ON_DUTY.name())
-                    .ownedBy("telemetry")
-                    .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND, ScopeType.LOCATION)
-                    .describedAs("When courier telemetry is collected inside an open duty session. "
-                            + "ON_DUTY collects for the whole session so a dispatcher can see idle "
-                            + "couriers; ON_ASSIGNMENT collects only while carrying an order.")
-                    .build();
+    public static final ConfigurationKey<String> COLLECTION_GATE = ConfigurationKey.of(
+                    COLLECTION_GATE_CODE, String.class)
+            .defaultValue(CollectionGate.ON_DUTY.name())
+            .ownedBy("telemetry")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND, ScopeType.LOCATION)
+            .describedAs("When courier telemetry is collected inside an open duty session. "
+                    + "ON_DUTY collects for the whole session so a dispatcher can see idle "
+                    + "couriers; ON_ASSIGNMENT collects only while carrying an order.")
+            .build();
 
     /**
      * How long a track survives at coordinate precision.
@@ -56,17 +57,16 @@ public final class TelemetryConfigurationKeys {
      * calendar in ADR 0042. The startup check refuses a production profile whose
      * configured values breach that floor, at any scope one is stored at.
      */
-    public static final ConfigurationKey<Integer> TRACK_RETENTION_DAYS =
-            ConfigurationKey.of(TRACK_RETENTION_DAYS_CODE, Integer.class)
-                    .defaultValue(TrackRetentionFloor.CONFIGURED_TRACK_RETENTION_DAYS)
-                    .ownedBy("telemetry")
-                    .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
-                    .describedAs("Days a courier's track is kept at coordinate precision before its "
-                            + "daily partition is dropped. Must be at least the ADR 0042 settlement "
-                            + "period plus the statement dispute window; a production start refuses "
-                            + "a value below that floor.")
-                    .build();
+    public static final ConfigurationKey<Integer> TRACK_RETENTION_DAYS = ConfigurationKey.of(
+                    TRACK_RETENTION_DAYS_CODE, Integer.class)
+            .defaultValue(TrackRetentionFloor.CONFIGURED_TRACK_RETENTION_DAYS)
+            .ownedBy("telemetry")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Days a courier's track is kept at coordinate precision before its "
+                    + "daily partition is dropped. Must be at least the ADR 0042 settlement "
+                    + "period plus the statement dispute window; a production start refuses "
+                    + "a value below that floor.")
+            .build();
 
-    private TelemetryConfigurationKeys() {
-    }
+    private TelemetryConfigurationKeys() {}
 }

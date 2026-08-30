@@ -1,10 +1,11 @@
 package uz.horecaos.platform.tenancy.web;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
-
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,10 +13,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
 import uz.horecaos.platform.tenancy.api.Serviceability;
@@ -45,21 +42,24 @@ public class ServiceabilityController {
     private final SalesChannelLookup channels;
     private final Clock clock;
 
-    public ServiceabilityController(ServiceabilityResolver resolver, SalesChannelLookup channels,
-            Clock clock) {
+    public ServiceabilityController(ServiceabilityResolver resolver, SalesChannelLookup channels, Clock clock) {
         this.resolver = resolver;
         this.channels = channels;
         this.clock = clock;
     }
 
     @GetMapping("/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/serviceability")
-    @Operation(summary = "Resolve serviceability for a channel and fulfilment mode",
+    @Operation(
+            summary = "Resolve serviceability for a channel and fulfilment mode",
             description = "One resolver, one stable reason code, and a next-available instant "
                     + "where one is computable. \"Closed now\" and \"cannot pre-order\" are "
                     + "different facts and are reported separately.")
     public ResponseEntity<ServiceabilityView> resolve(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId,
-            @RequestParam String channel, @RequestParam FulfillmentMode mode,
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @RequestParam String channel,
+            @RequestParam FulfillmentMode mode,
             @RequestParam(required = false) Instant at) {
 
         // A channel code naming no row is CHANNEL_NOT_ENABLED rather than a 404: a
@@ -69,13 +69,13 @@ public class ServiceabilityController {
                 .map(uz.horecaos.platform.tenancy.api.SalesChannel::id)
                 .orElse(null);
         if (channelId == null) {
-            return cached(new ServiceabilityView(false,
-                    ServiceabilityReason.CHANNEL_NOT_ENABLED.name(), null, false, null));
+            return cached(
+                    new ServiceabilityView(false, ServiceabilityReason.CHANNEL_NOT_ENABLED.name(), null, false, null));
         }
 
         try {
-            Serviceability answer = resolver.resolve(tenantId, brandId, locationId, channelId,
-                    mode, at == null ? clock.instant() : at);
+            Serviceability answer =
+                    resolver.resolve(tenantId, brandId, locationId, channelId, mode, at == null ? clock.instant() : at);
             return cached(ServiceabilityView.of(answer));
         } catch (uz.horecaos.platform.tenancy.application.TenantResourceNotFoundException missing) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
@@ -89,13 +89,19 @@ public class ServiceabilityController {
     }
 
     /** The wire shape. The storefront maps {@code reason} to wording and never renders it. */
-    public record ServiceabilityView(boolean available, String reason, Instant nextAvailableAt,
-            boolean acceptsScheduledOrders, Integer preparationMinutes) {
+    public record ServiceabilityView(
+            boolean available,
+            String reason,
+            Instant nextAvailableAt,
+            boolean acceptsScheduledOrders,
+            Integer preparationMinutes) {
 
         static ServiceabilityView of(Serviceability answer) {
-            return new ServiceabilityView(answer.available(),
+            return new ServiceabilityView(
+                    answer.available(),
                     answer.reason() == null ? null : answer.reason().name(),
-                    answer.nextAvailableAt(), answer.acceptsScheduledOrders(),
+                    answer.nextAvailableAt(),
+                    answer.acceptsScheduledOrders(),
                     answer.preparationMinutes());
         }
     }

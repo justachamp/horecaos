@@ -2,9 +2,7 @@ package uz.horecaos.platform.tenancy.application.onboarding;
 
 import java.util.Map;
 import java.util.Optional;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
 import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStep;
@@ -14,8 +12,7 @@ import uz.horecaos.platform.tenancy.application.port.TenantControlPlaneStore;
 /** The buildable ADR 0008 step handlers. */
 public final class OnboardingStepHandlers {
 
-    private OnboardingStepHandlers() {
-    }
+    private OnboardingStepHandlers() {}
 
     /**
      * Creates or reconciles the tenant's Keycloak organization (ADR 0009).
@@ -30,8 +27,7 @@ public final class OnboardingStepHandlers {
         private final OrganizationProvisioner organizations;
         private final TenantControlPlaneStore tenants;
 
-        public KeycloakOrganizationReconcile(
-                OrganizationProvisioner organizations, TenantControlPlaneStore tenants) {
+        public KeycloakOrganizationReconcile(OrganizationProvisioner organizations, TenantControlPlaneStore tenants) {
             this.organizations = organizations;
             this.tenants = tenants;
         }
@@ -53,9 +49,8 @@ public final class OnboardingStepHandlers {
                     .orElseGet(() -> tenant.get().keycloakOrganizationId().orElse(null));
 
             try {
-                var reference = organizations.ensureOrganization(
-                        new OrganizationProvisioner.EnsureOrganization(
-                                context.tenantId(), alias, tenant.get().displayName(), existing));
+                var reference = organizations.ensureOrganization(new OrganizationProvisioner.EnsureOrganization(
+                        context.tenantId(), alias, tenant.get().displayName(), existing));
 
                 if (tenant.get().keycloakOrganizationId().isEmpty()) {
                     tenant.get().linkKeycloakOrganization(reference.organizationId());
@@ -94,21 +89,18 @@ public final class OnboardingStepHandlers {
             Object subject = context.input().get("ownerSubjectId");
 
             if (email == null && subject == null) {
-                return StepResult.failed(
-                        "OWNER_NOT_SUPPLIED", "An owner email or an existing subject id is required");
+                return StepResult.failed("OWNER_NOT_SUPPLIED", "An owner email or an existing subject id is required");
             }
             Object organizationId = context.input().get("organizationId");
             if (organizationId == null) {
-                return StepResult.retry(
-                        "AWAITING_ORGANIZATION", "The organization step has not completed yet");
+                return StepResult.retry("AWAITING_ORGANIZATION", "The organization step has not completed yet");
             }
 
             try {
-                var membership = organizations.ensureMembership(
-                        new OrganizationProvisioner.EnsureMembership(
-                                String.valueOf(organizationId),
-                                email == null ? null : String.valueOf(email),
-                                subject == null ? null : String.valueOf(subject)));
+                var membership = organizations.ensureMembership(new OrganizationProvisioner.EnsureMembership(
+                        String.valueOf(organizationId),
+                        email == null ? null : String.valueOf(email),
+                        subject == null ? null : String.valueOf(subject)));
 
                 // The subject id, never the invitation token: ADR 0009 forbids
                 // storing anything that could be replayed to gain access.
@@ -175,8 +167,7 @@ public final class OnboardingStepHandlers {
                 return StepResult.failed(
                         "NO_LOCATION", "No brand has a location, so the tenant cannot receive an order");
             }
-            return StepResult.completed(
-                    Map.of("brands", brands.size(), "locations", locations), null);
+            return StepResult.completed(Map.of("brands", brands.size(), "locations", locations), null);
         }
     }
 

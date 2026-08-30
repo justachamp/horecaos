@@ -5,7 +5,6 @@ import org.apache.camel.ProducerTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.customers.spi.VerificationCodeTransport;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 
@@ -58,8 +57,8 @@ public class CamelVerificationCodeTransport implements VerificationCodeTransport
             return Outcome.refused("CHANNEL_UNSUPPORTED");
         }
 
-        SmsVerificationOperation operation = SmsVerificationOperation.send(message,
-                VerificationCodeText.render(message.code(), message.validFor(), message.locale()));
+        SmsVerificationOperation operation = SmsVerificationOperation.send(
+                message, VerificationCodeText.render(message.code(), message.validFor(), message.locale()));
 
         return translate(dispatch(operation));
     }
@@ -69,11 +68,11 @@ public class CamelVerificationCodeTransport implements VerificationCodeTransport
             // The whole exchange rather than a body, because the outcome travels
             // as a header: the dead-letter path replaces the body, and reading the
             // body would erase the very classification the caller needs.
-            Exchange result = producer.request(SmsRouteBuilder.SEND_ENDPOINT,
-                    exchange -> exchange.getIn().setBody(operation));
+            Exchange result = producer.request(
+                    SmsRouteBuilder.SEND_ENDPOINT, exchange -> exchange.getIn().setBody(operation));
 
-            ProviderOutcome outcome = result.getMessage()
-                    .getHeader(SmsRouteBuilder.OUTCOME_HEADER, ProviderOutcome.class);
+            ProviderOutcome outcome =
+                    result.getMessage().getHeader(SmsRouteBuilder.OUTCOME_HEADER, ProviderOutcome.class);
 
             if (outcome == null && result.getException() != null) {
                 // ProducerTemplate.request attaches a failure to the exchange
@@ -89,8 +88,8 @@ public class CamelVerificationCodeTransport implements VerificationCodeTransport
                     // whether the gateway acted. Uncertain rather than retryable:
                     // assuming the comfortable answer here is how a wiring mistake
                     // becomes duplicate messages.
-                    ? ProviderOutcome.uncertain("ROUTE_PRODUCED_NO_OUTCOME",
-                            "The route returned without classifying the call")
+                    ? ProviderOutcome.uncertain(
+                            "ROUTE_PRODUCED_NO_OUTCOME", "The route returned without classifying the call")
                     : outcome;
 
         } catch (RuntimeException failure) {
@@ -112,12 +111,12 @@ public class CamelVerificationCodeTransport implements VerificationCodeTransport
      * message of the exception it throws, and the exchange body is a phone number
      * and a live one-time code.
      */
-    private static ProviderOutcome unreachable(SmsVerificationOperation operation,
-            Throwable failure) {
-        log.error("The verification route could not be reached for challenge {}: {}",
-                operation.challengeId(), failure.getClass().getSimpleName());
-        return ProviderOutcome.retryable(ROUTE_UNAVAILABLE,
-                failure.getClass().getSimpleName(), null);
+    private static ProviderOutcome unreachable(SmsVerificationOperation operation, Throwable failure) {
+        log.error(
+                "The verification route could not be reached for challenge {}: {}",
+                operation.challengeId(),
+                failure.getClass().getSimpleName());
+        return ProviderOutcome.retryable(ROUTE_UNAVAILABLE, failure.getClass().getSimpleName(), null);
     }
 
     /**

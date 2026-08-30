@@ -10,12 +10,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.commercial.api.UsagePeriod;
 import uz.horecaos.platform.commercial.domain.UsageTotals;
 
@@ -49,9 +46,18 @@ public class JdbcUsageStore {
      *
      * @return true when the movement was recorded by this call
      */
-    public boolean appendEvent(UUID id, UUID tenantId, String entitlementKey, long quantity,
-            String unit, String periodKey, String sourceType, String sourceEventId,
-            Instant occurredAt, Map<String, String> dimensions, Instant recordedAt) {
+    public boolean appendEvent(
+            UUID id,
+            UUID tenantId,
+            String entitlementKey,
+            long quantity,
+            String unit,
+            String periodKey,
+            String sourceType,
+            String sourceEventId,
+            Instant occurredAt,
+            Map<String, String> dimensions,
+            Instant recordedAt) {
 
         return jdbc.sql("""
                 INSERT INTO commercial.usage_events (
@@ -62,20 +68,35 @@ public class JdbcUsageStore {
                     :sourceType, :sourceEventId, :occurredAt, :recordedAt, :dimensions::jsonb)
                 ON CONFLICT (tenant_id, entitlement_key, source_type, source_event_id) DO NOTHING
                 """)
-                .param("id", id).param("tenantId", tenantId).param("key", entitlementKey)
-                .param("quantity", quantity).param("unit", unit).param("periodKey", periodKey)
-                .param("sourceType", sourceType).param("sourceEventId", sourceEventId)
-                .param("occurredAt", utc(occurredAt)).param("recordedAt", utc(recordedAt))
-                // Sorted, so two recordings of the same dimensions produce the
-                // same stored document and a byte comparison during a dispute
-                // means something.
-                .param("dimensions", objectMapper.writeValueAsString(new TreeMap<>(dimensions)))
-                .update() == 1;
+                        .param("id", id)
+                        .param("tenantId", tenantId)
+                        .param("key", entitlementKey)
+                        .param("quantity", quantity)
+                        .param("unit", unit)
+                        .param("periodKey", periodKey)
+                        .param("sourceType", sourceType)
+                        .param("sourceEventId", sourceEventId)
+                        .param("occurredAt", utc(occurredAt))
+                        .param("recordedAt", utc(recordedAt))
+                        // Sorted, so two recordings of the same dimensions produce the
+                        // same stored document and a byte comparison during a dispute
+                        // means something.
+                        .param("dimensions", objectMapper.writeValueAsString(new TreeMap<>(dimensions)))
+                        .update()
+                == 1;
     }
 
-    public void insertAdjustment(UUID id, UUID tenantId, String entitlementKey, String periodKey,
-            long quantityDelta, String reason, String sourceReference, String createdBy,
-            String approvedBy, Instant now) {
+    public void insertAdjustment(
+            UUID id,
+            UUID tenantId,
+            String entitlementKey,
+            String periodKey,
+            long quantityDelta,
+            String reason,
+            String sourceReference,
+            String createdBy,
+            String approvedBy,
+            Instant now) {
 
         jdbc.sql("""
                 INSERT INTO commercial.usage_adjustments (
@@ -85,10 +106,15 @@ public class JdbcUsageStore {
                     :id, :tenantId, :key, :periodKey, :delta,
                     :reason, :sourceReference, :approvedBy, :createdBy, :now)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("key", entitlementKey)
-                .param("periodKey", periodKey).param("delta", quantityDelta)
-                .param("reason", reason).param("sourceReference", sourceReference)
-                .param("approvedBy", approvedBy).param("createdBy", createdBy)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("key", entitlementKey)
+                .param("periodKey", periodKey)
+                .param("delta", quantityDelta)
+                .param("reason", reason)
+                .param("sourceReference", sourceReference)
+                .param("approvedBy", approvedBy)
+                .param("createdBy", createdBy)
                 .param("now", utc(now))
                 .update();
     }
@@ -117,10 +143,12 @@ public class JdbcUsageStore {
                       WHERE tenant_id = :tenantId AND entitlement_key = :key
                         AND period_key = :periodKey) AS adjustment_quantity
                 """)
-                .param("tenantId", tenantId).param("key", entitlementKey)
+                .param("tenantId", tenantId)
+                .param("key", entitlementKey)
                 .param("periodKey", period.key())
                 .query((row, number) -> new UsageTotals(
-                        entitlementKey, period,
+                        entitlementKey,
+                        period,
                         row.getLong("event_quantity"),
                         row.getLong("adjustment_quantity"),
                         row.getInt("event_count"),
@@ -169,10 +197,12 @@ public class JdbcUsageStore {
                   FROM commercial.usage_aggregates
                  WHERE tenant_id = :tenantId AND entitlement_key = :key AND period_key = :periodKey
                 """)
-                .param("tenantId", tenantId).param("key", entitlementKey)
+                .param("tenantId", tenantId)
+                .param("key", entitlementKey)
                 .param("periodKey", period.key())
                 .query((row, number) -> new UsageTotals(
-                        entitlementKey, period,
+                        entitlementKey,
+                        period,
                         row.getLong("event_quantity"),
                         row.getLong("adjustment_quantity"),
                         row.getInt("event_count"),
@@ -193,10 +223,11 @@ public class JdbcUsageStore {
                 SELECT period_start, period_end FROM commercial.usage_aggregates
                  WHERE tenant_id = :tenantId AND entitlement_key = :key AND period_key = :periodKey
                 """)
-                .param("tenantId", tenantId).param("key", entitlementKey)
+                .param("tenantId", tenantId)
+                .param("key", entitlementKey)
                 .param("periodKey", periodKey)
-                .query((row, number) -> new UsagePeriod(periodKey,
-                        instant(row, "period_start"), instant(row, "period_end")))
+                .query((row, number) ->
+                        new UsagePeriod(periodKey, instant(row, "period_start"), instant(row, "period_end")))
                 .optional();
     }
 
@@ -209,7 +240,8 @@ public class JdbcUsageStore {
                 SELECT MIN(occurred_at) AS earliest FROM commercial.usage_events
                  WHERE tenant_id = :tenantId AND entitlement_key = :key AND period_key = :periodKey
                 """)
-                .param("tenantId", tenantId).param("key", entitlementKey)
+                .param("tenantId", tenantId)
+                .param("key", entitlementKey)
                 .param("periodKey", periodKey)
                 .query((row, number) -> instant(row, "earliest"))
                 .optional()
@@ -250,8 +282,7 @@ public class JdbcUsageStore {
                   FROM commercial.usage_adjustments WHERE tenant_id = :tenantId
                 """)
                 .param("tenantId", tenantId)
-                .query((row, number) -> new PeriodRef(
-                        row.getString("entitlement_key"), row.getString("period_key")))
+                .query((row, number) -> new PeriodRef(row.getString("entitlement_key"), row.getString("period_key")))
                 .list();
     }
 
@@ -265,10 +296,10 @@ public class JdbcUsageStore {
             long adjustmentQuantity,
             long consumedQuantity,
             int eventCount,
-            Instant lastEventAt) { }
+            Instant lastEventAt) {}
 
     /** A key and the period partition it was recorded in. */
-    public record PeriodRef(String entitlementKey, String periodKey) { }
+    public record PeriodRef(String entitlementKey, String periodKey) {}
 
     private static Instant instant(ResultSet row, String column) throws SQLException {
         OffsetDateTime value = row.getObject(column, OffsetDateTime.class);

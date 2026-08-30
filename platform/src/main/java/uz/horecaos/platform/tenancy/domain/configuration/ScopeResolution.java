@@ -3,15 +3,14 @@ package uz.horecaos.platform.tenancy.domain.configuration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
+import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
 import uz.horecaos.platform.tenancy.api.ResolutionTrace;
 import uz.horecaos.platform.tenancy.api.ResolutionTrace.Level;
 import uz.horecaos.platform.tenancy.api.ResolutionTrace.Outcome;
 import uz.horecaos.platform.tenancy.api.ResolutionTrace.Source;
 import uz.horecaos.platform.tenancy.api.Resolved;
-import uz.horecaos.platform.iam.api.ResourceScope;
-import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 
 /**
  * The single definition of configuration precedence in the platform (ADR 0030).
@@ -23,8 +22,7 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
  */
 public final class ScopeResolution {
 
-    private ScopeResolution() {
-    }
+    private ScopeResolution() {}
 
     /**
      * Resolves most-specific-first, stopping at the first level with an
@@ -50,19 +48,20 @@ public final class ScopeResolution {
             if (stored.explicitNull()) {
                 if (key.explicitNullTerminates()) {
                     inspected.add(new Level(scopeType, Outcome.EXPLICIT_NULL_TERMINATED));
-                    return new Resolved<>(null, new ResolutionTrace(
-                            key.code(), Source.SCOPED_VALUE, scopeType, inspected));
+                    return new Resolved<>(
+                            null, new ResolutionTrace(key.code(), Source.SCOPED_VALUE, scopeType, inspected));
                 }
                 inspected.add(new Level(scopeType, Outcome.EXPLICIT_NULL_CONTINUED));
                 continue;
             }
 
             inspected.add(new Level(scopeType, Outcome.VALUE));
-            return new Resolved<>(key.valueType().cast(stored.value()), new ResolutionTrace(
-                    key.code(), Source.SCOPED_VALUE, scopeType, inspected));
+            return new Resolved<>(
+                    key.valueType().cast(stored.value()),
+                    new ResolutionTrace(key.code(), Source.SCOPED_VALUE, scopeType, inspected));
         }
 
-        return new Resolved<>(key.defaultValue(), new ResolutionTrace(
-                key.code(), Source.CODE_DEFAULT, null, inspected));
+        return new Resolved<>(
+                key.defaultValue(), new ResolutionTrace(key.code(), Source.CODE_DEFAULT, null, inspected));
     }
 }

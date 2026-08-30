@@ -1,6 +1,7 @@
 package uz.horecaos.platform.pricing;
 
-import javax.sql.DataSource;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -8,7 +9,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -17,12 +18,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.json.JsonMapper;
-
-import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.pricing.application.CatalogPricingContext;
 import uz.horecaos.platform.pricing.application.PriceAuthoringService;
 import uz.horecaos.platform.pricing.application.PriceAuthoringService.AssignmentScope;
@@ -34,10 +31,8 @@ import uz.horecaos.platform.pricing.domain.Quote;
 import uz.horecaos.platform.pricing.domain.QuoteRequest;
 import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingContext;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
+import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * Price authoring, end to end (ADR 0018).
@@ -78,8 +73,8 @@ class PriceAuthoringTests {
 
     @BeforeAll
     static void startDatabase() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
-                "Docker is required for price authoring tests");
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(), "Docker is required for price authoring tests");
         db = TestDatabase.migrated();
         jdbcUrl = db.jdbcUrl();
         username = db.username();
@@ -98,12 +93,14 @@ class PriceAuthoringTests {
         DataSource dataSource = db.dataSource();
         jdbc = JdbcClient.create(dataSource);
         jdbc.sql("TRUNCATE TABLE pricing.quote_adjustments, pricing.quote_lines, pricing.quotes, "
-                + "pricing.prices, pricing.price_book_assignments, pricing.price_books, "
-                + "pricing.tax_profiles CASCADE").update();
+                        + "pricing.prices, pricing.price_book_assignments, pricing.price_books, "
+                        + "pricing.tax_profiles CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE catalog.publication_items, catalog.publications, "
-                + "catalog.location_offerings, catalog.translations, catalog.catalog_products, "
-                + "catalog.modifier_options, catalog.modifier_groups, "
-                + "catalog.variants, catalog.products, catalog.catalogs CASCADE").update();
+                        + "catalog.location_offerings, catalog.translations, catalog.catalog_products, "
+                        + "catalog.modifier_options, catalog.modifier_groups, "
+                        + "catalog.variants, catalog.products, catalog.catalogs CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
 
         clock = new MutableClock(NOW);
@@ -124,8 +121,7 @@ class PriceAuthoringTests {
                 (origin, destination, installationId) -> java.util.Optional.empty(),
                 new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
 
-        quotes = new QuoteService(pricingStore, new PricingEngine(), catalog, channelStore,
-                deliveryFees, clock);
+        quotes = new QuoteService(pricingStore, new PricingEngine(), catalog, channelStore, deliveryFees, clock);
 
         seedTenancyAndCatalog();
     }
@@ -139,8 +135,7 @@ class PriceAuthoringTests {
         assertThat(drafted.status()).isEqualTo(PriceAuthoringService.Status.DRAFT);
 
         authoring.assign(TENANT, BRAND, drafted.id(), AssignmentScope.BRAND, null, assignment(0));
-        var priced = authoring.setPrice(TENANT, BRAND, drafted.id(),
-                PriceableType.VARIANT, burgerVariant, 50_000L);
+        var priced = authoring.setPrice(TENANT, BRAND, drafted.id(), PriceableType.VARIANT, burgerVariant, 50_000L);
         authoring.setTaxProfile(TENANT, BRAND, "UZ", TaxMode.INCLUSIVE, 1200);
 
         assertThat(catchThrowable(() -> quotes.quote(cart(Map.of(burgerVariant, 1)))))
@@ -157,7 +152,8 @@ class PriceAuthoringTests {
         assertThat(quote.total().minor()).isEqualTo(100_000L);
         assertThat(quote.tax().minor()).isEqualTo(10_714L);
         assertThat(quote.subtotal().minor() + quote.tax().minor()).isEqualTo(100_000L);
-        assertThat(quote.lines()).singleElement()
+        assertThat(quote.lines())
+                .singleElement()
                 .satisfies(line -> assertThat(line.descriptionSnapshot()).isEqualTo("Qo'y burger"));
     }
 
@@ -170,11 +166,10 @@ class PriceAuthoringTests {
         var quote = quotes.quote(cartWithModifier(burgerVariant, cheeseOption));
 
         assertThat(quote.total().minor()).isEqualTo(57_000L);
-        assertThat(quote.adjustments())
-                .anySatisfy(adjustment -> {
-                    assertThat(adjustment.type()).isEqualTo(Quote.Adjustment.Type.MODIFIER);
-                    assertThat(adjustment.amount().minor()).isEqualTo(7_000L);
-                });
+        assertThat(quote.adjustments()).anySatisfy(adjustment -> {
+            assertThat(adjustment.type()).isEqualTo(Quote.Adjustment.Type.MODIFIER);
+            assertThat(adjustment.amount().minor()).isEqualTo(7_000L);
+        });
     }
 
     @Test
@@ -226,10 +221,12 @@ class PriceAuthoringTests {
         // The closed row is the only evidence of what yesterday's quote was priced
         // from; an UPDATE in place would destroy it.
         assertThat(jdbc.sql("SELECT amount_minor FROM pricing.prices ORDER BY valid_from")
-                .query(Long.class).list())
+                        .query(Long.class)
+                        .list())
                 .containsExactly(50_000L, 60_000L);
         assertThat(jdbc.sql("SELECT count(*) FROM pricing.prices WHERE valid_until IS NULL")
-                .query(Long.class).single())
+                        .query(Long.class)
+                        .single())
                 .as("ux_price_current allows exactly one open row per priceable")
                 .isEqualTo(1L);
     }
@@ -243,7 +240,9 @@ class PriceAuthoringTests {
         // Same instant, so the first row was in force for nobody. Closing it would
         // violate ck_price_window, which requires the close to come strictly after
         // the open, and there is no history worth keeping.
-        assertThat(jdbc.sql("SELECT amount_minor FROM pricing.prices").query(Long.class).list())
+        assertThat(jdbc.sql("SELECT amount_minor FROM pricing.prices")
+                        .query(Long.class)
+                        .list())
                 .containsExactly(55_000L);
     }
 
@@ -252,20 +251,21 @@ class PriceAuthoringTests {
     void concurrentActivationsSettleOnce() {
         var drafted = authoring.create(TENANT, BRAND, newBook("Main menu", 0));
         authoring.assign(TENANT, BRAND, drafted.id(), AssignmentScope.BRAND, null, assignment(0));
-        var ready = authoring.setPrice(TENANT, BRAND, drafted.id(),
-                PriceableType.VARIANT, burgerVariant, 50_000L);
+        var ready = authoring.setPrice(TENANT, BRAND, drafted.id(), PriceableType.VARIANT, burgerVariant, 50_000L);
 
         // Both read the same version and both press activate. The conditional
         // update is what settles it, not the status check in the service: at the
         // store level neither caller has looked at the row in between, which is
         // exactly the race two browser tabs produce.
-        assertThat(pricingStore.activatePriceBook(TENANT, BRAND, drafted.id(),
-                ready.version(), NOW)).isTrue();
-        assertThat(pricingStore.activatePriceBook(TENANT, BRAND, drafted.id(),
-                ready.version(), NOW)).isFalse();
+        assertThat(pricingStore.activatePriceBook(TENANT, BRAND, drafted.id(), ready.version(), NOW))
+                .isTrue();
+        assertThat(pricingStore.activatePriceBook(TENANT, BRAND, drafted.id(), ready.version(), NOW))
+                .isFalse();
 
         assertThat(jdbc.sql("SELECT version FROM pricing.price_books WHERE id = :id")
-                .param("id", drafted.id()).query(Integer.class).single())
+                        .param("id", drafted.id())
+                        .query(Integer.class)
+                        .single())
                 .isEqualTo(ready.version() + 1);
     }
 
@@ -274,17 +274,14 @@ class PriceAuthoringTests {
     void activatingWithAStaleVersionLoses() {
         var drafted = authoring.create(TENANT, BRAND, newBook("Main menu", 0));
         authoring.assign(TENANT, BRAND, drafted.id(), AssignmentScope.BRAND, null, assignment(0));
-        var stale = authoring.setPrice(TENANT, BRAND, drafted.id(),
-                PriceableType.VARIANT, burgerVariant, 50_000L);
+        var stale = authoring.setPrice(TENANT, BRAND, drafted.id(), PriceableType.VARIANT, burgerVariant, 50_000L);
 
         // A colleague corrects a price between the read and the activation. The
         // activator is no longer approving the book they looked at.
         clock.advance(Duration.ofMinutes(1));
-        authoring.setPrice(TENANT, BRAND, drafted.id(),
-                PriceableType.VARIANT, burgerVariant, 80_000L);
+        authoring.setPrice(TENANT, BRAND, drafted.id(), PriceableType.VARIANT, burgerVariant, 80_000L);
 
-        assertThat(catchThrowable(() ->
-                authoring.activate(TENANT, BRAND, drafted.id(), stale.version())))
+        assertThat(catchThrowable(() -> authoring.activate(TENANT, BRAND, drafted.id(), stale.version())))
                 .isInstanceOf(OptimisticLockingFailureException.class);
         assertThat(authoring.require(TENANT, BRAND, drafted.id()).status())
                 .isEqualTo(PriceAuthoringService.Status.DRAFT);
@@ -299,8 +296,7 @@ class PriceAuthoringTests {
 
         // It would win resolution for its scope and then refuse every cart under
         // it with ITEM_NOT_PRICED, which is worse than having no book at all.
-        assertThat(catchThrowable(() ->
-                authoring.activate(TENANT, BRAND, drafted.id(), current.version())))
+        assertThat(catchThrowable(() -> authoring.activate(TENANT, BRAND, drafted.id(), current.version())))
                 .isInstanceOf(PriceAuthoringService.PriceBookLifecycleException.class);
     }
 
@@ -311,14 +307,12 @@ class PriceAuthoringTests {
 
         var second = authoring.create(TENANT, BRAND, newBook("Also main", 0));
         authoring.assign(TENANT, BRAND, second.id(), AssignmentScope.BRAND, null, assignment(0));
-        var ready = authoring.setPrice(TENANT, BRAND, second.id(),
-                PriceableType.VARIANT, burgerVariant, 70_000L);
+        var ready = authoring.setPrice(TENANT, BRAND, second.id(), PriceableType.VARIANT, burgerVariant, 70_000L);
 
         // Resolution would still settle this — by an id nobody chose. An operator
         // getting a price they did not pick, with nothing anywhere saying why, is
         // worse than a refusal naming the fix.
-        assertThat(catchThrowable(() ->
-                authoring.activate(TENANT, BRAND, second.id(), ready.version())))
+        assertThat(catchThrowable(() -> authoring.activate(TENANT, BRAND, second.id(), ready.version())))
                 .isInstanceOf(PriceAuthoringService.PriceBookLifecycleException.class);
     }
 
@@ -329,14 +323,12 @@ class PriceAuthoringTests {
 
         var promotion = authoring.create(TENANT, BRAND, newBook("Ramadan", 10));
         authoring.assign(TENANT, BRAND, promotion.id(), AssignmentScope.BRAND, null, assignment(0));
-        var ready = authoring.setPrice(TENANT, BRAND, promotion.id(),
-                PriceableType.VARIANT, burgerVariant, 40_000L);
+        var ready = authoring.setPrice(TENANT, BRAND, promotion.id(), PriceableType.VARIANT, burgerVariant, 40_000L);
         authoring.activate(TENANT, BRAND, promotion.id(), ready.version());
 
         // The tie check refuses ambiguity, not overlap: priority is the sanctioned
         // way to put one book in front of another.
-        assertThat(quotes.quote(cart(Map.of(burgerVariant, 1))).total().minor())
-                .isEqualTo(40_000L);
+        assertThat(quotes.quote(cart(Map.of(burgerVariant, 1))).total().minor()).isEqualTo(40_000L);
     }
 
     @Test
@@ -345,14 +337,11 @@ class PriceAuthoringTests {
         liveBrandBook(50_000L);
 
         var branchBook = authoring.create(TENANT, BRAND, newBook("Main street", 0));
-        authoring.assign(TENANT, BRAND, branchBook.id(), AssignmentScope.LOCATION, LOCATION,
-                assignment(0));
-        var ready = authoring.setPrice(TENANT, BRAND, branchBook.id(),
-                PriceableType.VARIANT, burgerVariant, 45_000L);
+        authoring.assign(TENANT, BRAND, branchBook.id(), AssignmentScope.LOCATION, LOCATION, assignment(0));
+        var ready = authoring.setPrice(TENANT, BRAND, branchBook.id(), PriceableType.VARIANT, burgerVariant, 45_000L);
         authoring.activate(TENANT, BRAND, branchBook.id(), ready.version());
 
-        assertThat(quotes.quote(cart(Map.of(burgerVariant, 1))).total().minor())
-                .isEqualTo(45_000L);
+        assertThat(quotes.quote(cart(Map.of(burgerVariant, 1))).total().minor()).isEqualTo(45_000L);
     }
 
     @Test
@@ -363,7 +352,8 @@ class PriceAuthoringTests {
         authoring.assign(TENANT, BRAND, drafted.id(), AssignmentScope.BRAND, null, assignment(5));
 
         assertThat(jdbc.sql("SELECT priority FROM pricing.price_book_assignments")
-                .query(Integer.class).list())
+                        .query(Integer.class)
+                        .list())
                 .as("a second row saying the same thing only ties against itself")
                 .containsExactly(5);
     }
@@ -376,10 +366,12 @@ class PriceAuthoringTests {
         // priceable_id carries no foreign key — it points at two different tables
         // depending on the row — so without this check the price would be written
         // and simply never match anything.
-        assertThat(catchThrowable(() -> authoring.setPrice(TENANT, BRAND, drafted.id(),
-                PriceableType.VARIANT, otherBrandVariant, 50_000L)))
+        assertThat(catchThrowable(() -> authoring.setPrice(
+                        TENANT, BRAND, drafted.id(), PriceableType.VARIANT, otherBrandVariant, 50_000L)))
                 .isInstanceOf(PriceAuthoringService.UnknownPriceableException.class);
-        assertThat(jdbc.sql("SELECT count(*) FROM pricing.prices").query(Long.class).single())
+        assertThat(jdbc.sql("SELECT count(*) FROM pricing.prices")
+                        .query(Long.class)
+                        .single())
                 .isZero();
     }
 
@@ -388,8 +380,8 @@ class PriceAuthoringTests {
     void anAssignmentToAnUnknownChannelIsRefused() {
         var drafted = authoring.create(TENANT, BRAND, newBook("Aggregator", 0));
 
-        assertThat(catchThrowable(() -> authoring.assign(TENANT, BRAND, drafted.id(),
-                AssignmentScope.CHANNEL, UUID.randomUUID(), assignment(0))))
+        assertThat(catchThrowable(() -> authoring.assign(
+                        TENANT, BRAND, drafted.id(), AssignmentScope.CHANNEL, UUID.randomUUID(), assignment(0))))
                 .isInstanceOf(PriceAuthoringService.UnknownAssignmentScopeException.class);
     }
 
@@ -398,10 +390,11 @@ class PriceAuthoringTests {
     void anExclusiveTaxProfileIsRefused() {
         // The engine implements inclusive VAT only. Storing this would look saved
         // and then fail every quote the brand takes.
-        assertThat(catchThrowable(() ->
-                authoring.setTaxProfile(TENANT, BRAND, "UZ", TaxMode.EXCLUSIVE, 1200)))
+        assertThat(catchThrowable(() -> authoring.setTaxProfile(TENANT, BRAND, "UZ", TaxMode.EXCLUSIVE, 1200)))
                 .isInstanceOf(PricingEngine.UnsupportedTaxModeException.class);
-        assertThat(jdbc.sql("SELECT count(*) FROM pricing.tax_profiles").query(Long.class).single())
+        assertThat(jdbc.sql("SELECT count(*) FROM pricing.tax_profiles")
+                        .query(Long.class)
+                        .single())
                 .isZero();
     }
 
@@ -421,9 +414,12 @@ class PriceAuthoringTests {
         assertThat(quote.total().minor()).isEqualTo(50_000L);
         assertThat(quote.tax().minor()).isZero();
         assertThat(jdbc.sql("SELECT count(*) FROM pricing.tax_profiles WHERE valid_until IS NULL")
-                .query(Long.class).single())
+                        .query(Long.class)
+                        .single())
                 .isEqualTo(1L);
-        assertThat(jdbc.sql("SELECT count(*) FROM pricing.tax_profiles").query(Long.class).single())
+        assertThat(jdbc.sql("SELECT count(*) FROM pricing.tax_profiles")
+                        .query(Long.class)
+                        .single())
                 .isEqualTo(2L);
     }
 
@@ -433,8 +429,8 @@ class PriceAuthoringTests {
     private UUID liveBrandBook(long burgerAmountMinor) {
         var drafted = authoring.create(TENANT, BRAND, newBook("Main menu", 0));
         authoring.assign(TENANT, BRAND, drafted.id(), AssignmentScope.BRAND, null, assignment(0));
-        var ready = authoring.setPrice(TENANT, BRAND, drafted.id(),
-                PriceableType.VARIANT, burgerVariant, burgerAmountMinor);
+        var ready = authoring.setPrice(
+                TENANT, BRAND, drafted.id(), PriceableType.VARIANT, burgerVariant, burgerAmountMinor);
         authoring.activate(TENANT, BRAND, drafted.id(), ready.version());
         authoring.setTaxProfile(TENANT, BRAND, "UZ", TaxMode.INCLUSIVE, 1200);
         return drafted.id();
@@ -452,15 +448,20 @@ class PriceAuthoringTests {
         List<QuoteRequest.Line> lines = new java.util.ArrayList<>();
         int index = 0;
         for (var entry : quantities.entrySet()) {
-            lines.add(new QuoteRequest.Line("line-" + index++, entry.getKey(), entry.getValue(),
-                    List.of()));
+            lines.add(new QuoteRequest.Line("line-" + index++, entry.getKey(), entry.getValue(), List.of()));
         }
         return new QuoteRequest(TENANT, BRAND, LOCATION, null, "STOREFRONT", lines, null);
     }
 
     private QuoteRequest cartWithModifier(UUID variantId, UUID optionId) {
-        return new QuoteRequest(TENANT, BRAND, LOCATION, null, "STOREFRONT",
-                List.of(new QuoteRequest.Line("line-0", variantId, 1, List.of(optionId))), null);
+        return new QuoteRequest(
+                TENANT,
+                BRAND,
+                LOCATION,
+                null,
+                "STOREFRONT",
+                List.of(new QuoteRequest.Line("line-0", variantId, 1, List.of(optionId))),
+                null);
     }
 
     private void seedTenancyAndCatalog() {
@@ -477,7 +478,11 @@ class PriceAuthoringTests {
                     timezone, status, version)
                 VALUES (:id, :tenantId, :brandId, 'MAIN01', 'main-01', 'Main',
                         'Asia/Tashkent', 'ACTIVE', 0)
-                """).param("id", LOCATION).param("tenantId", TENANT).param("brandId", BRAND).update();
+                """)
+                .param("id", LOCATION)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type,
@@ -489,7 +494,11 @@ class PriceAuthoringTests {
         jdbc.sql("""
                 INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
                 VALUES (:id, :tenantId, :brandId, 'MAIN', 'Main menu', 'ACTIVE')
-                """).param("id", catalogId).param("tenantId", TENANT).param("brandId", BRAND).update();
+                """)
+                .param("id", catalogId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
 
         burgerVariant = seedProduct(BRAND, catalogId, "BURGER", "Qo'y burger");
         otherBrandVariant = seedProduct(OTHER_BRAND, null, "BURGER", "Another brand's burger");
@@ -501,8 +510,11 @@ class PriceAuthoringTests {
                 VALUES (:id, :tenantId, :brandId, :catalogId, 'STOREFRONT', 'PUBLISHED',
                         'hash', now())
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", TENANT)
-                .param("brandId", BRAND).param("catalogId", catalogId).update();
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("catalogId", catalogId)
+                .update();
     }
 
     private void seedBrand(UUID brandId, String code, String slug) {
@@ -510,8 +522,11 @@ class PriceAuthoringTests {
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
                 VALUES (:id, :tenantId, :code, :slug, :code, 'ACTIVE', 0)
                 """)
-                .param("id", brandId).param("tenantId", TENANT)
-                .param("code", code).param("slug", slug).update();
+                .param("id", brandId)
+                .param("tenantId", TENANT)
+                .param("code", code)
+                .param("slug", slug)
+                .update();
     }
 
     private UUID seedProduct(UUID brandId, UUID catalog, String code, String name) {
@@ -520,26 +535,43 @@ class PriceAuthoringTests {
         jdbc.sql("""
                 INSERT INTO catalog.products (id, tenant_id, brand_id, code, status)
                 VALUES (:id, :tenantId, :brandId, :code, 'ACTIVE')
-                """).param("id", productId).param("tenantId", TENANT)
-                .param("brandId", brandId).param("code", code).update();
+                """)
+                .param("id", productId)
+                .param("tenantId", TENANT)
+                .param("brandId", brandId)
+                .param("code", code)
+                .update();
         jdbc.sql("""
                 INSERT INTO catalog.variants (id, tenant_id, brand_id, product_id, sku, status)
                 VALUES (:id, :tenantId, :brandId, :productId, :sku, 'ACTIVE')
-                """).param("id", variantId).param("tenantId", TENANT).param("brandId", brandId)
-                .param("productId", productId).param("sku", "SKU-" + code).update();
+                """)
+                .param("id", variantId)
+                .param("tenantId", TENANT)
+                .param("brandId", brandId)
+                .param("productId", productId)
+                .param("sku", "SKU-" + code)
+                .update();
         if (catalog != null) {
             jdbc.sql("""
                     INSERT INTO catalog.catalog_products (tenant_id, brand_id, catalog_id, product_id)
                     VALUES (:tenantId, :brandId, :catalogId, :productId)
-                    """).param("tenantId", TENANT).param("brandId", brandId)
-                    .param("catalogId", catalog).param("productId", productId).update();
+                    """)
+                    .param("tenantId", TENANT)
+                    .param("brandId", brandId)
+                    .param("catalogId", catalog)
+                    .param("productId", productId)
+                    .update();
         }
         jdbc.sql("""
                 INSERT INTO catalog.translations (tenant_id, brand_id, entity_type, entity_id,
                     locale, name)
                 VALUES (:tenantId, :brandId, 'PRODUCT', :productId, 'uz', :name)
-                """).param("tenantId", TENANT).param("brandId", brandId)
-                .param("productId", productId).param("name", name).update();
+                """)
+                .param("tenantId", TENANT)
+                .param("brandId", brandId)
+                .param("productId", productId)
+                .param("name", name)
+                .update();
         return variantId;
     }
 
@@ -549,14 +581,23 @@ class PriceAuthoringTests {
         jdbc.sql("""
                 INSERT INTO catalog.modifier_groups (id, tenant_id, brand_id, code, status)
                 VALUES (:id, :tenantId, :brandId, :code, 'ACTIVE')
-                """).param("id", groupId).param("tenantId", TENANT).param("brandId", brandId)
-                .param("code", "EXTRAS").update();
+                """)
+                .param("id", groupId)
+                .param("tenantId", TENANT)
+                .param("brandId", brandId)
+                .param("code", "EXTRAS")
+                .update();
         jdbc.sql("""
                 INSERT INTO catalog.modifier_options (id, tenant_id, brand_id, modifier_group_id,
                     code, status)
                 VALUES (:id, :tenantId, :brandId, :groupId, :code, 'ACTIVE')
-                """).param("id", optionId).param("tenantId", TENANT).param("brandId", brandId)
-                .param("groupId", groupId).param("code", code).update();
+                """)
+                .param("id", optionId)
+                .param("tenantId", TENANT)
+                .param("brandId", brandId)
+                .param("groupId", groupId)
+                .param("code", code)
+                .update();
         return optionId;
     }
 

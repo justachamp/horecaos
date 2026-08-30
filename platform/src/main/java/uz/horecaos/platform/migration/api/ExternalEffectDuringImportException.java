@@ -21,7 +21,7 @@ public class ExternalEffectDuringImportException extends RuntimeException {
 
     public ExternalEffectDuringImportException(ExternalEffect effect, String operation) {
         super(("A historical import called %s, which produces %s. ADR 0024 forbids it: import "
-                + "historical facts as snapshots rather than by replaying the live path.")
+                        + "historical facts as snapshots rather than by replaying the live path.")
                 .formatted(operation, effect));
         this.effect = effect;
     }

@@ -10,10 +10,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.marketing.domain.EngagementPolicy;
 import uz.horecaos.platform.marketing.domain.EngagementPolicy.EngagementOverride;
 
@@ -64,8 +62,7 @@ public class JdbcEngagementStore {
                 .query((ResultSet row, int number) -> new EngagementOverride(
                         row.getObject("quiet_hours_start", LocalTime.class),
                         row.getObject("quiet_hours_end", LocalTime.class),
-                        row.getString("timezone") == null
-                                ? null : ZoneId.of(row.getString("timezone")),
+                        row.getString("timezone") == null ? null : ZoneId.of(row.getString("timezone")),
                         row.getObject("marketing_messages_per_7d", Integer.class),
                         row.getObject("marketing_messages_per_30d", Integer.class),
                         row.getObject("sms_price_per_segment_minor", Long.class),
@@ -83,8 +80,11 @@ public class JdbcEngagementStore {
         parameters.put("brandId", brandId);
         parameters.put("quietStart", override.quietHoursStart());
         parameters.put("quietEnd", override.quietHoursEnd());
-        parameters.put("timezone", override.timezone() == null
-                ? EngagementPolicy.DEFAULT_ZONE.getId() : override.timezone().getId());
+        parameters.put(
+                "timezone",
+                override.timezone() == null
+                        ? EngagementPolicy.DEFAULT_ZONE.getId()
+                        : override.timezone().getId());
         parameters.put("weekly", override.messagesPer7Days());
         parameters.put("monthly", override.messagesPer30Days());
         parameters.put("price", override.smsPricePerSegmentMinor());
@@ -108,16 +108,22 @@ public class JdbcEngagementStore {
                     currency = EXCLUDED.currency,
                     version = marketing.engagement_policies.version + 1,
                     updated_at = EXCLUDED.updated_at
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
     }
 
     // ----------------------------------------------------------- suppression
 
-    public UUID recordSuppression(UUID tenantId, UUID brandId, UUID accountId, String channel,
-            String reason, UUID appliedBy, String appliedByType, String statedReason,
-            Instant appliedAt, Instant expiresAt) {
+    public UUID recordSuppression(
+            UUID tenantId,
+            UUID brandId,
+            UUID accountId,
+            String channel,
+            String reason,
+            UUID appliedBy,
+            String appliedByType,
+            String statedReason,
+            Instant appliedAt,
+            Instant expiresAt) {
 
         UUID id = UUID.randomUUID();
         Map<String, Object> parameters = new HashMap<>();
@@ -141,9 +147,7 @@ public class JdbcEngagementStore {
                 VALUES (:id, :tenantId, :brandId, :accountId, :channel, :reason,
                     :appliedBy, :appliedByType, :statedReason, :appliedAt, :expiresAt,
                     :appliedAt)
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
         return id;
     }
 
@@ -155,8 +159,7 @@ public class JdbcEngagementStore {
      * arms are written as "matches, or is unscoped". Writing them as equality
      * would let a tenant-wide {@code PLATFORM_BLOCK} be bypassed by naming a brand.
      */
-    public boolean hasActiveSuppression(UUID tenantId, UUID brandId, UUID accountId,
-            String channel, Instant now) {
+    public boolean hasActiveSuppression(UUID tenantId, UUID brandId, UUID accountId, String channel, Instant now) {
 
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
@@ -175,26 +178,23 @@ public class JdbcEngagementStore {
                        AND (s.expires_at IS NULL OR s.expires_at > :now)
                        AND (s.brand_id IS NULL OR s.brand_id = :brandId)
                        AND (s.channel IS NULL OR s.channel = :channel))
-                """)
-                .params(parameters)
-                .query(Boolean.class)
-                .single();
+                """).params(parameters).query(Boolean.class).single();
     }
 
     /** Closes a suppression without removing the evidence that it existed. */
-    public boolean liftSuppression(UUID tenantId, UUID suppressionId, UUID liftedBy,
-            String reason, Instant now) {
+    public boolean liftSuppression(UUID tenantId, UUID suppressionId, UUID liftedBy, String reason, Instant now) {
         return jdbc.sql("""
                 UPDATE marketing.suppressions
                    SET lifted_at = :now, lifted_by = :liftedBy, lift_reason = :reason
                  WHERE tenant_id = :tenantId AND id = :id AND lifted_at IS NULL
                 """)
-                .param("tenantId", tenantId)
-                .param("id", suppressionId)
-                .param("liftedBy", liftedBy)
-                .param("reason", reason)
-                .param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", suppressionId)
+                        .param("liftedBy", liftedBy)
+                        .param("reason", reason)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     // -------------------------------------------------------- frequency cap
@@ -235,8 +235,15 @@ public class JdbcEngagementStore {
      *
      * @return true when this call wrote the row
      */
-    public boolean recordSend(UUID tenantId, UUID brandId, UUID accountId, String channel,
-            String sourceType, UUID sourceId, UUID notificationId, Instant sentAt) {
+    public boolean recordSend(
+            UUID tenantId,
+            UUID brandId,
+            UUID accountId,
+            String channel,
+            String sourceType,
+            UUID sourceId,
+            UUID notificationId,
+            Instant sentAt) {
 
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("id", UUID.randomUUID());
@@ -256,9 +263,7 @@ public class JdbcEngagementStore {
                 VALUES (:id, :tenantId, :brandId, :accountId, :channel,
                     :sourceType, :sourceId, :notificationId, :sentAt)
                 ON CONFLICT (source_id, customer_account_id) DO NOTHING
-                """)
-                .params(parameters)
-                .update() == 1;
+                """).params(parameters).update() == 1;
     }
 
     public Optional<SuppressionRow> findSuppression(UUID tenantId, UUID suppressionId) {
@@ -290,6 +295,13 @@ public class JdbcEngagementStore {
         return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
-    public record SuppressionRow(UUID id, UUID brandId, UUID customerAccountId, String channel,
-            String reason, Instant appliedAt, Instant expiresAt, Instant liftedAt) { }
+    public record SuppressionRow(
+            UUID id,
+            UUID brandId,
+            UUID customerAccountId,
+            String channel,
+            String reason,
+            Instant appliedAt,
+            Instant expiresAt,
+            Instant liftedAt) {}
 }

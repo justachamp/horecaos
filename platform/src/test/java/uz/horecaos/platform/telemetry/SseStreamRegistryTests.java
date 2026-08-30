@@ -3,6 +3,7 @@ package uz.horecaos.platform.telemetry;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -12,15 +13,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.telemetry.api.RealtimeSignal;
 import uz.horecaos.platform.telemetry.api.RealtimeSignal.Subscription;
 import uz.horecaos.platform.telemetry.api.ScopeKey;
@@ -123,8 +119,14 @@ class SseStreamRegistryTests {
     void aSignalForAnotherTenantIsNotDelivered() {
         open(Set.of(queueSubscription()));
 
-        registry.onSignal(RealtimeSignal.of(UUID.randomUUID(), StreamChannel.ORDER_QUEUE,
-                ScopeKey.location(BRANCH), "ORDER", UUID.randomUUID(), 1L, NOON));
+        registry.onSignal(RealtimeSignal.of(
+                UUID.randomUUID(),
+                StreamChannel.ORDER_QUEUE,
+                ScopeKey.location(BRANCH),
+                "ORDER",
+                UUID.randomUUID(),
+                1L,
+                NOON));
         registry.tick(NOON.plusSeconds(1));
 
         assertThat(sink.frames)
@@ -136,8 +138,8 @@ class SseStreamRegistryTests {
     void aSignalForAnUnsubscribedChannelIsNotDelivered() {
         open(Set.of(queueSubscription()));
 
-        registry.onSignal(RealtimeSignal.of(TENANT, StreamChannel.STOP_LIST,
-                ScopeKey.location(BRANCH), "OFFERING", UUID.randomUUID(), 1L, NOON));
+        registry.onSignal(RealtimeSignal.of(
+                TENANT, StreamChannel.STOP_LIST, ScopeKey.location(BRANCH), "OFFERING", UUID.randomUUID(), 1L, NOON));
         registry.tick(NOON.plusSeconds(1));
 
         assertThat(sink.frames).isEmpty();
@@ -150,8 +152,14 @@ class SseStreamRegistryTests {
     void theCourierMapArrivesAsASnapshotRatherThanAsNFetches() {
         open(Set.of(new Subscription(StreamChannel.COURIER_POSITIONS, ScopeKey.location(BRANCH))));
 
-        registry.onSignal(RealtimeSignal.of(TENANT, StreamChannel.COURIER_POSITIONS,
-                ScopeKey.location(BRANCH), "COURIER", UUID.randomUUID(), null, NOON));
+        registry.onSignal(RealtimeSignal.of(
+                TENANT,
+                StreamChannel.COURIER_POSITIONS,
+                ScopeKey.location(BRANCH),
+                "COURIER",
+                UUID.randomUUID(),
+                null,
+                NOON));
         registry.tick(NOON.plusSeconds(6));
 
         assertThat(sink.eventsNamed("snapshot")).hasSize(1);
@@ -167,8 +175,8 @@ class SseStreamRegistryTests {
         registry = newRegistry(List.of());
         open(Set.of(new Subscription(StreamChannel.COUNTERS, ScopeKey.location(BRANCH))));
 
-        registry.onSignal(RealtimeSignal.of(TENANT, StreamChannel.COUNTERS,
-                ScopeKey.location(BRANCH), "COUNTER", null, null, NOON));
+        registry.onSignal(RealtimeSignal.of(
+                TENANT, StreamChannel.COUNTERS, ScopeKey.location(BRANCH), "COUNTER", null, null, NOON));
         registry.tick(NOON.plusSeconds(3));
 
         assertThat(sink.eventsNamed("signal")).hasSize(1);
@@ -179,8 +187,13 @@ class SseStreamRegistryTests {
     @Test
     @DisplayName("a reconnect with Last-Event-Id gets a resync, never a replay")
     void thereIsNoReplayBuffer() {
-        registry.open(TENANT, DISPATCHER, Set.of(queueSubscription()), sink,
-                NOON.plusSeconds(600), "01J8ZQ-something-the-client-last-saw");
+        registry.open(
+                TENANT,
+                DISPATCHER,
+                Set.of(queueSubscription()),
+                sink,
+                NOON.plusSeconds(600),
+                "01J8ZQ-something-the-client-last-saw");
 
         // A buffer would be server-side per-client state, which ADR 0033 spent a
         // section refusing — and three stale frames delivered in order to a
@@ -211,8 +224,7 @@ class SseStreamRegistryTests {
     @Test
     @DisplayName("a stream closes when its access token expires")
     void aStreamNeverOutlivesTheTokenItWasOpenedWith() {
-        registry.open(TENANT, DISPATCHER, Set.of(queueSubscription()), sink,
-                NOON.plusSeconds(300), null);
+        registry.open(TENANT, DISPATCHER, Set.of(queueSubscription()), sink, NOON.plusSeconds(300), null);
 
         registry.tick(NOON.plusSeconds(299));
         assertThat(registry.openStreams()).isOne();
@@ -231,8 +243,7 @@ class SseStreamRegistryTests {
         open(Set.of(queueSubscription()));
 
         RecordingSink otherPerson = new RecordingSink();
-        registry.open(TENANT, "another-subject", Set.of(queueSubscription()),
-                otherPerson, NOON.plusSeconds(600), null);
+        registry.open(TENANT, "another-subject", Set.of(queueSubscription()), otherPerson, NOON.plusSeconds(600), null);
 
         int closed = registry.closeForPrincipal(DISPATCHER, "GRANTS_CHANGED");
 
@@ -266,8 +277,7 @@ class SseStreamRegistryTests {
     @Test
     @DisplayName("one tenant cannot empty the replica's pool")
     void aGreedyTenantStopsAtTheReserveRatherThanAtTheCap() {
-        int lendable = SseStreamRegistry.MAXIMUM_STREAMS
-                - SseStreamRegistry.RESERVED_FOR_OTHER_TENANTS;
+        int lendable = SseStreamRegistry.MAXIMUM_STREAMS - SseStreamRegistry.RESERVED_FOR_OTHER_TENANTS;
         for (int stream = 0; stream < lendable; stream++) {
             openFor(TENANT, "wall-board-" + stream);
         }
@@ -289,21 +299,20 @@ class SseStreamRegistryTests {
     @DisplayName("a tenant under its guarantee still connects to a crowded replica")
     void theReserveIsWhatMakesTheGuaranteeAGuarantee() {
         UUID neighbour = UUID.randomUUID();
-        for (int stream = 0; stream < SseStreamRegistry.MAXIMUM_STREAMS
-                - SseStreamRegistry.RESERVED_FOR_OTHER_TENANTS; stream++) {
+        for (int stream = 0;
+                stream < SseStreamRegistry.MAXIMUM_STREAMS - SseStreamRegistry.RESERVED_FOR_OTHER_TENANTS;
+                stream++) {
             openFor(neighbour, "neighbour-" + stream);
         }
 
         for (int stream = 0; stream < SseStreamRegistry.TENANT_GUARANTEED_STREAMS; stream++) {
             openFor(TENANT, "dispatcher-" + stream);
         }
-        assertThat(registry.streamsHeldBy(TENANT))
-                .isEqualTo(SseStreamRegistry.TENANT_GUARANTEED_STREAMS);
+        assertThat(registry.streamsHeldBy(TENANT)).isEqualTo(SseStreamRegistry.TENANT_GUARANTEED_STREAMS);
 
         // Past its own guarantee this tenant is refused too, and the slot it did
         // not take is the one the third tenant on the box gets.
-        assertThat(catchThrowable(() -> openFor(TENANT, "fifty-one")))
-                .isInstanceOf(StreamCapReachedException.class);
+        assertThat(catchThrowable(() -> openFor(TENANT, "fifty-one"))).isInstanceOf(StreamCapReachedException.class);
         UUID third = UUID.randomUUID();
         openFor(third, "third-tenant");
         assertThat(registry.streamsHeldBy(third)).isOne();
@@ -327,8 +336,7 @@ class SseStreamRegistryTests {
     void aClientThatWentAwayMidWriteIsDroppedRatherThanRetried() {
         RecordingSink broken = new RecordingSink();
         broken.failOnSend = true;
-        registry.open(TENANT, DISPATCHER, Set.of(queueSubscription()), broken,
-                NOON.plusSeconds(600), null);
+        registry.open(TENANT, DISPATCHER, Set.of(queueSubscription()), broken, NOON.plusSeconds(600), null);
 
         registry.onSignal(orderQueueSignal(NOON));
         registry.tick(NOON.plusSeconds(1));
@@ -345,8 +353,8 @@ class SseStreamRegistryTests {
     }
 
     private Connection openFor(UUID tenantId, String subject) {
-        return registry.open(tenantId, subject, Set.of(queueSubscription()),
-                new RecordingSink(), NOON.plusSeconds(600), null);
+        return registry.open(
+                tenantId, subject, Set.of(queueSubscription()), new RecordingSink(), NOON.plusSeconds(600), null);
     }
 
     private static Subscription queueSubscription() {
@@ -354,8 +362,14 @@ class SseStreamRegistryTests {
     }
 
     private static RealtimeSignal orderQueueSignal(Instant at) {
-        return RealtimeSignal.of(TENANT, StreamChannel.ORDER_QUEUE, ScopeKey.location(BRANCH),
-                "ORDER", UUID.randomUUID(), (long) (at.toEpochMilli() - NOON.toEpochMilli()) / 2 + 1, at);
+        return RealtimeSignal.of(
+                TENANT,
+                StreamChannel.ORDER_QUEUE,
+                ScopeKey.location(BRANCH),
+                "ORDER",
+                UUID.randomUUID(),
+                (long) (at.toEpochMilli() - NOON.toEpochMilli()) / 2 + 1,
+                at);
     }
 
     private static final class FleetSnapshotSource implements SnapshotSource {
@@ -367,7 +381,8 @@ class SseStreamRegistryTests {
 
         @Override
         public Optional<Object> snapshot(UUID tenantId, ScopeKey scopeKey) {
-            return Optional.of(Map.of("pins", List.of(Map.of("courierId", UUID.randomUUID().toString()))));
+            return Optional.of(
+                    Map.of("pins", List.of(Map.of("courierId", UUID.randomUUID().toString()))));
         }
     }
 
@@ -402,12 +417,13 @@ class SseStreamRegistryTests {
         }
 
         List<Frame> eventsNamed(String eventName) {
-            return frames.stream().filter(frame -> frame.eventName().equals(eventName)).toList();
+            return frames.stream()
+                    .filter(frame -> frame.eventName().equals(eventName))
+                    .toList();
         }
     }
 
-    private record Frame(String eventName, String id, String data) {
-    }
+    private record Frame(String eventName, String id, String data) {}
 
     /** A clock a test moves, so nothing here has to sleep to observe a window close. */
     private static final class MovableClock extends Clock {

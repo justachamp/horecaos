@@ -1,17 +1,16 @@
 package uz.horecaos.platform.customers;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
-
 import uz.horecaos.platform.customers.application.RandomVerificationCodeSource;
 import uz.horecaos.platform.customers.application.VerificationCodeSource.Code;
 import uz.horecaos.platform.customers.domain.VerificationCode;
 import uz.horecaos.platform.customers.infrastructure.security.PresetVerificationCodeGuard;
 import uz.horecaos.platform.customers.infrastructure.security.PresetVerificationCodeSource;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * The number that signs in with a fixed code, and the three things that stop it
@@ -72,8 +71,7 @@ class PresetVerificationCodeTests {
         // national number and compared against E.164, an uncanonicalised preset
         // silently never matches and the owner cannot sign in with no error
         // anywhere to explain it.
-        assertThat(source("000 00 00 00", "424242").codeFor(PRESET).value())
-                .isEqualTo("424242");
+        assertThat(source("000 00 00 00", "424242").codeFor(PRESET).value()).isEqualTo("424242");
         assertThat(source.codeFor(PRESET).requiresDelivery()).isFalse();
     }
 
@@ -88,23 +86,20 @@ class PresetVerificationCodeTests {
     @Test
     @DisplayName("a number that is not an Uzbek mobile fails at startup too")
     void aMistypedNumberIsRefusedAtConstruction() {
-        assertThatThrownBy(() -> source("not-a-number", "424242"))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> source("not-a-number", "424242")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     @DisplayName("the preset source cannot exist outside a local profile")
     void theSourceIsProfileBound() {
         org.springframework.context.annotation.Profile profile =
-                PresetVerificationCodeSource.class.getAnnotation(
-                        org.springframework.context.annotation.Profile.class);
+                PresetVerificationCodeSource.class.getAnnotation(org.springframework.context.annotation.Profile.class);
 
         assertThat(profile)
                 .as("the first of the three locks. Without it the guard is the only one, "
                         + "and a guard can be disabled by removing a bean")
                 .isNotNull();
-        assertThat(profile.value())
-                .containsExactlyInAnyOrder("local", "test", "default");
+        assertThat(profile.value()).containsExactlyInAnyOrder("local", "test", "default");
     }
 
     // ----------------------------------------------------------------- the guard

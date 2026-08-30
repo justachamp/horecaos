@@ -31,5 +31,4 @@ import java.lang.annotation.Target;
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
-public @interface CustomerOwned {
-}
+public @interface CustomerOwned {}

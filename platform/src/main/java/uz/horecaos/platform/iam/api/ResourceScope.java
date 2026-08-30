@@ -83,7 +83,7 @@ public record ResourceScope(ScopeType type, UUID tenantId, UUID brandId, UUID lo
                 chain.add(platform());
             }
             case TENANT -> chain.add(platform());
-            case PLATFORM -> { }
+            case PLATFORM -> {}
         }
         return List.copyOf(chain);
     }

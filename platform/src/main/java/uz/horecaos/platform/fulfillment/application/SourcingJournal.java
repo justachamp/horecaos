@@ -4,7 +4,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.BookingReceipt;
 import uz.horecaos.platform.fulfillment.domain.sourcing.AttemptStatus;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryQuote;
@@ -61,8 +60,7 @@ public interface SourcingJournal {
      *         receipt was not a booking; either way the caller must not book
      *         anything else for this plan on the strength of it
      */
-    boolean settlePartnerAttempt(UUID tenantId, UUID attemptId, BookingReceipt receipt,
-            Instant now);
+    boolean settlePartnerAttempt(UUID tenantId, UUID attemptId, BookingReceipt receipt, Instant now);
 
     /**
      * The durable offer a courier can accept against.
@@ -110,8 +108,8 @@ public interface SourcingJournal {
      * produce sixty rows an hour saying the same thing, and
      * {@code ux_exception_one_open} is what stops it.
      */
-    void raiseException(UUID tenantId, UUID brandId, UUID locationId, UUID planId,
-            String reasonCode, String detail, Instant now);
+    void raiseException(
+            UUID tenantId, UUID brandId, UUID locationId, UUID planId, String reasonCode, String detail, Instant now);
 
     /**
      * @param idempotencyKey the key the partner sees, derived from the plan, the
@@ -130,7 +128,7 @@ public interface SourcingJournal {
             String decisionReason,
             UUID policyId,
             int policyVersion,
-            Instant now) { }
+            Instant now) {}
 
     /**
      * @param expiresAt when the offer lapses. Never null: a courier who is never
@@ -145,7 +143,7 @@ public interface SourcingJournal {
             String decisionReason,
             UUID policyId,
             int policyVersion,
-            Instant now) { }
+            Instant now) {}
 
     /**
      * The attempt row, whether this call created it or found it.

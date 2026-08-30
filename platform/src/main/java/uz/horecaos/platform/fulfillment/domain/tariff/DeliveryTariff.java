@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-
 import uz.horecaos.platform.fulfillment.domain.VersionStatus;
 
 /**
@@ -66,13 +65,38 @@ public record DeliveryTariff(
      * standing discount. Every tariff authored in the control plane before V0032
      * meant exactly this.
      */
-    public DeliveryTariff(UUID tariffId, int version, VersionStatus status, String currency,
-            FeeSource feeSource, DistanceMode distanceMode, int roadFactorBasisPoints,
-            UUID routingProviderInstallationId, int maxDistanceMeters, long minFeeMinor,
-            Long maxFeeMinor, List<TariffBand> bands, List<TariffTimeRule> timeRules) {
-        this(tariffId, version, status, currency, feeSource, distanceMode, roadFactorBasisPoints,
-                routingProviderInstallationId, maxDistanceMeters, minFeeMinor, maxFeeMinor,
-                DistanceAccrual.STARTED_KILOMETRE, null, null, bands, timeRules, List.of());
+    public DeliveryTariff(
+            UUID tariffId,
+            int version,
+            VersionStatus status,
+            String currency,
+            FeeSource feeSource,
+            DistanceMode distanceMode,
+            int roadFactorBasisPoints,
+            UUID routingProviderInstallationId,
+            int maxDistanceMeters,
+            long minFeeMinor,
+            Long maxFeeMinor,
+            List<TariffBand> bands,
+            List<TariffTimeRule> timeRules) {
+        this(
+                tariffId,
+                version,
+                status,
+                currency,
+                feeSource,
+                distanceMode,
+                roadFactorBasisPoints,
+                routingProviderInstallationId,
+                maxDistanceMeters,
+                minFeeMinor,
+                maxFeeMinor,
+                DistanceAccrual.STARTED_KILOMETRE,
+                null,
+                null,
+                bands,
+                timeRules,
+                List.of());
     }
 
     public DeliveryTariff {
@@ -85,8 +109,7 @@ public record DeliveryTariff(
                     "A rounding step and a rounding rule are one decision; set both or neither");
         }
         if (feeRoundingStepMinor != null && feeRoundingStepMinor <= 0) {
-            throw new IllegalArgumentException(
-                    "A rounding step must be positive; null means no rounding");
+            throw new IllegalArgumentException("A rounding step must be positive; null means no rounding");
         }
     }
 
@@ -129,11 +152,13 @@ public record DeliveryTariff(
             problems.addAll(tilingProblems(set));
         }
 
-        Set<String> known = new LinkedHashSet<>(bands.stream().map(TariffBand::bandSet).toList());
+        Set<String> known =
+                new LinkedHashSet<>(bands.stream().map(TariffBand::bandSet).toList());
         for (String orphan : known) {
             if (!required.contains(orphan)) {
                 problems.add(("Band set '%s' is not put in force by any time rule, so its bands "
-                        + "would never price anything").formatted(orphan));
+                                + "would never price anything")
+                        .formatted(orphan));
             }
         }
 
@@ -141,7 +166,7 @@ public record DeliveryTariff(
             if (discount.kind() == TariffDiscount.Kind.DISTANCE_ALLOWANCE
                     && discount.allowanceMeters() > maxDistanceMeters) {
                 problems.add(("A distance allowance of %d m exceeds the tariff's %d m reach, so it "
-                        + "would waive a fee no address can be charged")
+                                + "would waive a fee no address can be charged")
                         .formatted(discount.allowanceMeters(), maxDistanceMeters));
             }
         }
@@ -152,15 +177,14 @@ public record DeliveryTariff(
         List<String> problems = new ArrayList<>();
         List<TariffBand> ordered = new ArrayList<>(bandsOf(set));
         if (ordered.isEmpty()) {
-            problems.add("Band set '%s' has no bands, so nothing prices while it is in force"
-                    .formatted(set));
+            problems.add("Band set '%s' has no bands, so nothing prices while it is in force".formatted(set));
             return problems;
         }
         ordered.sort(Comparator.comparingInt(TariffBand::fromMeters));
 
         if (ordered.getFirst().fromMeters() != 0) {
             problems.add("Band set '%s' must start at 0 m; it starts at %d m, so every address "
-                    .formatted(set, ordered.getFirst().fromMeters())
+                            .formatted(set, ordered.getFirst().fromMeters())
                     + "closer than that is unpriceable");
         }
         for (int i = 1; i < ordered.size(); i++) {
@@ -168,14 +192,14 @@ public record DeliveryTariff(
             int nextStart = ordered.get(i).fromMeters();
             if (nextStart != previousEnd) {
                 problems.add("Band set '%s' leaves a gap between %d m and %d m; an address in it "
-                        .formatted(set, previousEnd, nextStart)
+                                .formatted(set, previousEnd, nextStart)
                         + "prices at nothing while its neighbours price fine");
             }
         }
         int coveredTo = ordered.getLast().toMeters();
         if (coveredTo < maxDistanceMeters) {
             problems.add("Band set '%s' covers to %d m but the tariff reaches %d m, leaving the "
-                    .formatted(set, coveredTo, maxDistanceMeters)
+                            .formatted(set, coveredTo, maxDistanceMeters)
                     + "last %d m unpriceable".formatted(maxDistanceMeters - coveredTo));
         }
         return problems;
@@ -191,6 +215,8 @@ public record DeliveryTariff(
 
     /** The band of the base set containing this distance. Kept for callers that name no set. */
     public Optional<TariffBand> bandFor(int meters) {
-        return bandsOf(TariffBand.BASE_SET).stream().filter(band -> band.contains(meters)).findFirst();
+        return bandsOf(TariffBand.BASE_SET).stream()
+                .filter(band -> band.contains(meters))
+                .findFirst();
     }
 }

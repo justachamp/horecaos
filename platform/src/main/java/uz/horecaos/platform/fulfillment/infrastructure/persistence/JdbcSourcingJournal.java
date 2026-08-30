@@ -4,11 +4,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.BookingReceipt;
 import uz.horecaos.platform.fulfillment.application.SourcingJournal;
 import uz.horecaos.platform.fulfillment.domain.sourcing.AttemptStatus;
@@ -47,8 +45,8 @@ public class JdbcSourcingJournal implements SourcingJournal {
     private final JdbcDeliveryQuoteStore quotes;
     private final JdbcDeliveryExceptionStore exceptions;
 
-    public JdbcSourcingJournal(JdbcAssignmentStore assignments, JdbcDeliveryQuoteStore quotes,
-            JdbcDeliveryExceptionStore exceptions) {
+    public JdbcSourcingJournal(
+            JdbcAssignmentStore assignments, JdbcDeliveryQuoteStore quotes, JdbcDeliveryExceptionStore exceptions) {
         this.assignments = assignments;
         this.quotes = quotes;
         this.exceptions = exceptions;
@@ -62,46 +60,74 @@ public class JdbcSourcingJournal implements SourcingJournal {
     @Override
     public OpenAttempt openPartnerAttempt(PartnerAttempt attempt) {
         var opened = assignments.open(new JdbcAssignmentStore.NewAttempt(
-                attempt.tenantId(), attempt.planId(), SourceType.PARTNER, AttemptStatus.REQUESTED,
-                null, attempt.bindingId(), attempt.quoteId(), attempt.idempotencyKey(),
-                attempt.decisionReason(), attempt.policyId(), version(attempt.policyId(),
-                attempt.policyVersion()), null, attempt.now()));
+                attempt.tenantId(),
+                attempt.planId(),
+                SourceType.PARTNER,
+                AttemptStatus.REQUESTED,
+                null,
+                attempt.bindingId(),
+                attempt.quoteId(),
+                attempt.idempotencyKey(),
+                attempt.decisionReason(),
+                attempt.policyId(),
+                version(attempt.policyId(), attempt.policyVersion()),
+                null,
+                attempt.now()));
 
-        return new OpenAttempt(opened.attemptId(), opened.sequenceNumber(), opened.status(),
-                opened.fresh());
+        return new OpenAttempt(opened.attemptId(), opened.sequenceNumber(), opened.status(), opened.fresh());
     }
 
     @Override
     public OpenAttempt openInternalOffer(InternalOffer offer) {
         var opened = assignments.open(new JdbcAssignmentStore.NewAttempt(
-                offer.tenantId(), offer.planId(), SourceType.INTERNAL, AttemptStatus.OFFERED,
-                offer.courierId(), null, null, offer.idempotencyKey(), offer.decisionReason(),
-                offer.policyId(), version(offer.policyId(), offer.policyVersion()),
-                offer.expiresAt(), offer.now()));
+                offer.tenantId(),
+                offer.planId(),
+                SourceType.INTERNAL,
+                AttemptStatus.OFFERED,
+                offer.courierId(),
+                null,
+                null,
+                offer.idempotencyKey(),
+                offer.decisionReason(),
+                offer.policyId(),
+                version(offer.policyId(), offer.policyVersion()),
+                offer.expiresAt(),
+                offer.now()));
 
-        return new OpenAttempt(opened.attemptId(), opened.sequenceNumber(), opened.status(),
-                opened.fresh());
+        return new OpenAttempt(opened.attemptId(), opened.sequenceNumber(), opened.status(), opened.fresh());
     }
 
     @Override
-    public boolean settlePartnerAttempt(UUID tenantId, UUID attemptId, BookingReceipt receipt,
-            Instant now) {
+    public boolean settlePartnerAttempt(UUID tenantId, UUID attemptId, BookingReceipt receipt, Instant now) {
 
         return switch (receipt.status()) {
             case BOOKED -> {
                 Optional<UUID> shipment = assignments.win(new JdbcAssignmentStore.WinningAttempt(
-                        tenantId, attemptId, SourceType.PARTNER, AttemptStatus.REQUESTED,
-                        receipt.providerType(), receipt.externalReference(), now));
+                        tenantId,
+                        attemptId,
+                        SourceType.PARTNER,
+                        AttemptStatus.REQUESTED,
+                        receipt.providerType(),
+                        receipt.externalReference(),
+                        now));
                 if (shipment.isEmpty()) {
                     // The plan already has a shipment. The booking that just
                     // succeeded is therefore a second courier, and it exists at the
                     // partner whatever this row says — so the attempt is closed as
                     // uncertain and an operator is told to cancel it, rather than
                     // being quietly dropped.
-                    log.warn("Plan attempt {} booked a partner that lost the single-winner "
-                            + "compare-and-set; the booking must be cancelled", attemptId);
-                    assignments.close(tenantId, attemptId, AttemptStatus.UNCERTAIN,
-                            HOLD_NOT_CONFIRMED, receipt.externalReference(), true, now);
+                    log.warn(
+                            "Plan attempt {} booked a partner that lost the single-winner "
+                                    + "compare-and-set; the booking must be cancelled",
+                            attemptId);
+                    assignments.close(
+                            tenantId,
+                            attemptId,
+                            AttemptStatus.UNCERTAIN,
+                            HOLD_NOT_CONFIRMED,
+                            receipt.externalReference(),
+                            true,
+                            now);
                 }
                 yield shipment.isPresent();
             }
@@ -109,13 +135,25 @@ public class JdbcSourcingJournal implements SourcingJournal {
                 // A hold that nothing promoted. ADR 0014: an abandoned hold is an
                 // operational exception, not a no-op, and nothing else may be
                 // booked for this plan while it stands.
-                assignments.close(tenantId, attemptId, AttemptStatus.UNCERTAIN,
-                        HOLD_NOT_CONFIRMED, receipt.externalReference(), true, now);
+                assignments.close(
+                        tenantId,
+                        attemptId,
+                        AttemptStatus.UNCERTAIN,
+                        HOLD_NOT_CONFIRMED,
+                        receipt.externalReference(),
+                        true,
+                        now);
                 yield false;
             }
             case REJECTED -> {
-                assignments.close(tenantId, attemptId, AttemptStatus.FAILED,
-                        code(receipt.errorCode(), PARTNER_REJECTED), null, false, now);
+                assignments.close(
+                        tenantId,
+                        attemptId,
+                        AttemptStatus.FAILED,
+                        code(receipt.errorCode(), PARTNER_REJECTED),
+                        null,
+                        false,
+                        now);
                 yield false;
             }
             case RETRYABLE ->
@@ -124,9 +162,14 @@ public class JdbcSourcingJournal implements SourcingJournal {
                 // the retry as the retry it is rather than as a second order.
                 false;
             case UNCERTAIN -> {
-                assignments.close(tenantId, attemptId, AttemptStatus.UNCERTAIN,
+                assignments.close(
+                        tenantId,
+                        attemptId,
+                        AttemptStatus.UNCERTAIN,
                         code(receipt.errorCode(), PARTNER_UNCERTAIN),
-                        receipt.externalReference(), true, now);
+                        receipt.externalReference(),
+                        true,
+                        now);
                 yield false;
             }
         };
@@ -139,8 +182,7 @@ public class JdbcSourcingJournal implements SourcingJournal {
 
     @Override
     public Optional<UUID> assignedShipment(UUID tenantId, UUID planId) {
-        return assignments.findShipment(tenantId, planId)
-                .map(JdbcAssignmentStore.Shipment::id);
+        return assignments.findShipment(tenantId, planId).map(JdbcAssignmentStore.Shipment::id);
     }
 
     @Override
@@ -154,11 +196,10 @@ public class JdbcSourcingJournal implements SourcingJournal {
     }
 
     @Override
-    public void raiseException(UUID tenantId, UUID brandId, UUID locationId, UUID planId,
-            String reasonCode, String detail, Instant now) {
+    public void raiseException(
+            UUID tenantId, UUID brandId, UUID locationId, UUID planId, String reasonCode, String detail, Instant now) {
 
-        if (exceptions.raise(tenantId, brandId, locationId, planId, reasonCode, detail,
-                RAISED_BY, now)) {
+        if (exceptions.raise(tenantId, brandId, locationId, planId, reasonCode, detail, RAISED_BY, now)) {
             log.warn("Delivery plan {} needs manual action: {}", planId, reasonCode);
         }
     }

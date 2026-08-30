@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -83,16 +82,15 @@ public class JdbcNotificationStore {
                     :triggerEventId, :idempotencyKey, 'CREATED', CAST(:variables AS jsonb),
                     :scheduledAt, :expiresAt, :scheduledAt, :now, :now)
                 ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
-                """)
-                .params(parameters)
-                .update() == 1;
+                """).params(parameters).update() == 1;
     }
 
     public Optional<NotificationRow> find(UUID tenantId, UUID notificationId) {
         return jdbc.sql(SELECT_NOTIFICATION + """
                 WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("id", notificationId)
+                .param("tenantId", tenantId)
+                .param("id", notificationId)
                 .query(JdbcNotificationStore::notificationRow)
                 .optional();
     }
@@ -101,7 +99,8 @@ public class JdbcNotificationStore {
         return jdbc.sql(SELECT_NOTIFICATION + """
                 WHERE tenant_id = :tenantId AND idempotency_key = :key
                 """)
-                .param("tenantId", tenantId).param("key", idempotencyKey)
+                .param("tenantId", tenantId)
+                .param("key", idempotencyKey)
                 .query(JdbcNotificationStore::notificationRow)
                 .optional();
     }
@@ -113,7 +112,8 @@ public class JdbcNotificationStore {
                   AND subject_id = :subjectId
                 ORDER BY created_at DESC
                 """)
-                .param("tenantId", tenantId).param("subjectType", subjectType)
+                .param("tenantId", tenantId)
+                .param("subjectType", subjectType)
                 .param("subjectId", subjectId)
                 .query(JdbcNotificationStore::notificationRow)
                 .list();
@@ -132,8 +132,7 @@ public class JdbcNotificationStore {
      * so a message that crashes the worker every time still runs out of attempts
      * instead of looping forever.
      */
-    public List<NotificationRow> claimDue(Instant now, Instant leaseUntil, int batchSize,
-            UUID claimToken) {
+    public List<NotificationRow> claimDue(Instant now, Instant leaseUntil, int batchSize, UUID claimToken) {
         return jdbc.sql("""
                 UPDATE notifications.notifications
                 SET claim_token = :token, claimed_at = :now, attempt_count = attempt_count + 1,
@@ -155,8 +154,10 @@ public class JdbcNotificationStore {
                           scheduled_at, expires_at, attempt_count, next_attempt_at,
                           claim_token, terminal_at, last_error, version, created_at
                 """)
-                .param("token", claimToken).param("now", utc(now))
-                .param("leaseUntil", utc(leaseUntil)).param("batchSize", batchSize)
+                .param("token", claimToken)
+                .param("now", utc(now))
+                .param("leaseUntil", utc(leaseUntil))
+                .param("batchSize", batchSize)
                 .query(JdbcNotificationStore::notificationRow)
                 .list();
     }
@@ -169,9 +170,18 @@ public class JdbcNotificationStore {
      * change what this message says: the version chosen is the version sent, and
      * is the version an auditor is shown.
      */
-    public boolean markReady(UUID tenantId, UUID notificationId, UUID claimToken,
-            UUID templateId, int templateVersion, String locale, UUID accountId, UUID endpointId,
-            String variablesJson, String variablesHash, Instant now) {
+    public boolean markReady(
+            UUID tenantId,
+            UUID notificationId,
+            UUID claimToken,
+            UUID templateId,
+            int templateVersion,
+            String locale,
+            UUID accountId,
+            UUID endpointId,
+            String variablesJson,
+            String variablesHash,
+            Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
         parameters.put("id", notificationId);
@@ -194,9 +204,7 @@ public class JdbcNotificationStore {
                     variables_hash = :variablesHash, version = version + 1, updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :id AND claim_token = :token
                   AND status = 'CREATED'
-                """)
-                .params(parameters)
-                .update() == 1;
+                """).params(parameters).update() == 1;
     }
 
     /**
@@ -206,8 +214,7 @@ public class JdbcNotificationStore {
      * is what makes "why did the customer not get their confirmation?"
      * unanswerable, which is the question support actually receives.
      */
-    public boolean markSuppressed(UUID tenantId, UUID notificationId, UUID claimToken,
-            String reason, Instant now) {
+    public boolean markSuppressed(UUID tenantId, UUID notificationId, UUID claimToken, String reason, Instant now) {
         return jdbc.sql("""
                 UPDATE notifications.notifications
                 SET status = 'SUPPRESSED', suppression_reason = :reason, claim_token = NULL,
@@ -216,13 +223,17 @@ public class JdbcNotificationStore {
                 WHERE tenant_id = :tenantId AND id = :id AND claim_token = :token
                   AND status IN ('CREATED', 'READY')
                 """)
-                .param("tenantId", tenantId).param("id", notificationId)
-                .param("token", claimToken).param("reason", reason).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", notificationId)
+                        .param("token", claimToken)
+                        .param("reason", reason)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
-    public boolean markSending(UUID tenantId, UUID notificationId, UUID claimToken,
-            String renderedContentHash, Instant now) {
+    public boolean markSending(
+            UUID tenantId, UUID notificationId, UUID claimToken, String renderedContentHash, Instant now) {
         return jdbc.sql("""
                 UPDATE notifications.notifications
                 SET status = 'SENDING', rendered_content_hash = :hash, version = version + 1,
@@ -230,10 +241,13 @@ public class JdbcNotificationStore {
                 WHERE tenant_id = :tenantId AND id = :id AND claim_token = :token
                   AND status IN ('READY', 'SENDING', 'RETRY_PENDING', 'UNCERTAIN', 'RECONCILING')
                 """)
-                .param("tenantId", tenantId).param("id", notificationId)
-                .param("token", claimToken).param("hash", renderedContentHash)
-                .param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", notificationId)
+                        .param("token", claimToken)
+                        .param("hash", renderedContentHash)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -243,16 +257,18 @@ public class JdbcNotificationStore {
      * let a second worker pick the row up and send the message whose fate this call
      * is in the middle of establishing.
      */
-    public boolean markReconciling(UUID tenantId, UUID notificationId, UUID claimToken,
-            Instant now) {
+    public boolean markReconciling(UUID tenantId, UUID notificationId, UUID claimToken, Instant now) {
         return jdbc.sql("""
                 UPDATE notifications.notifications
                 SET status = 'RECONCILING', version = version + 1, updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :id AND claim_token = :token
                 """)
-                .param("tenantId", tenantId).param("id", notificationId)
-                .param("token", claimToken).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", notificationId)
+                        .param("token", claimToken)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -266,8 +282,14 @@ public class JdbcNotificationStore {
      *                      terminal status, which the claim query excludes by
      *                      status rather than by time
      */
-    public boolean settle(UUID tenantId, UUID notificationId, UUID claimToken, String status,
-            Instant nextAttemptAt, String lastError, Instant now) {
+    public boolean settle(
+            UUID tenantId,
+            UUID notificationId,
+            UUID claimToken,
+            String status,
+            Instant nextAttemptAt,
+            String lastError,
+            Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
         parameters.put("id", notificationId);
@@ -286,9 +308,7 @@ public class JdbcNotificationStore {
                         THEN :now ELSE NULL END,
                     version = version + 1, updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :id AND claim_token = :token
-                """)
-                .params(parameters)
-                .update() == 1;
+                """).params(parameters).update() == 1;
     }
 
     /**
@@ -306,8 +326,7 @@ public class JdbcNotificationStore {
      * <p>Conditional on the version read, so two operators pressing retry at once
      * produce one reopening rather than two.
      */
-    public boolean reopenForRetry(UUID tenantId, UUID notificationId, int expectedVersion,
-            String reason, Instant now) {
+    public boolean reopenForRetry(UUID tenantId, UUID notificationId, int expectedVersion, String reason, Instant now) {
         return jdbc.sql("""
                 UPDATE notifications.notifications
                 SET status = 'CREATED', suppression_reason = NULL, terminal_at = NULL,
@@ -317,10 +336,13 @@ public class JdbcNotificationStore {
                 WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
                   AND status IN ('SUPPRESSED', 'FAILED_TERMINAL', 'EXPIRED', 'MANUAL_REVIEW')
                 """)
-                .param("tenantId", tenantId).param("id", notificationId)
-                .param("expectedVersion", expectedVersion).param("reason", reason)
-                .param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", notificationId)
+                        .param("expectedVersion", expectedVersion)
+                        .param("reason", reason)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     // -------------------------------------------------------------- endpoints
@@ -332,8 +354,14 @@ public class JdbcNotificationStore {
      * customer arriving together would both find nothing and both insert, and one
      * would fail on the unique index after doing its half of the work.
      */
-    public UUID ensureEndpoint(UUID tenantId, UUID accountId, String endpointType,
-            UUID contactPointId, String normalizedHash, String verificationStatus, Instant now) {
+    public UUID ensureEndpoint(
+            UUID tenantId,
+            UUID accountId,
+            String endpointType,
+            UUID contactPointId,
+            String normalizedHash,
+            String verificationStatus,
+            Instant now) {
         return jdbc.sql("""
                 INSERT INTO notifications.recipient_endpoints (
                     id, tenant_id, customer_account_id, endpoint_type, contact_point_id,
@@ -346,10 +374,14 @@ public class JdbcNotificationStore {
                               updated_at = excluded.updated_at
                 RETURNING id
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", tenantId)
-                .param("accountId", accountId).param("type", endpointType)
-                .param("contactPointId", contactPointId).param("hash", normalizedHash)
-                .param("verification", verificationStatus).param("now", utc(now))
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("type", endpointType)
+                .param("contactPointId", contactPointId)
+                .param("hash", normalizedHash)
+                .param("verification", verificationStatus)
+                .param("now", utc(now))
                 .query(UUID.class)
                 .single();
     }
@@ -361,7 +393,8 @@ public class JdbcNotificationStore {
                 FROM notifications.recipient_endpoints
                 WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("id", endpointId)
+                .param("tenantId", tenantId)
+                .param("id", endpointId)
                 .query((row, number) -> new EndpointRow(
                         row.getObject("id", UUID.class),
                         row.getObject("customer_account_id", UUID.class),
@@ -391,7 +424,8 @@ public class JdbcNotificationStore {
                 ORDER BY attempt_number DESC
                 LIMIT 1
                 """)
-                .param("tenantId", tenantId).param("notificationId", notificationId)
+                .param("tenantId", tenantId)
+                .param("notificationId", notificationId)
                 .query(JdbcNotificationStore::attemptRow)
                 .optional();
     }
@@ -401,14 +435,22 @@ public class JdbcNotificationStore {
                 WHERE tenant_id = :tenantId AND notification_id = :notificationId
                 ORDER BY attempt_number
                 """)
-                .param("tenantId", tenantId).param("notificationId", notificationId)
+                .param("tenantId", tenantId)
+                .param("notificationId", notificationId)
                 .query(JdbcNotificationStore::attemptRow)
                 .list();
     }
 
-    public void insertAttempt(UUID id, UUID tenantId, UUID notificationId, String channel,
-            UUID providerBindingId, String providerType, int attemptNumber,
-            String providerIdempotencyKey, Instant now) {
+    public void insertAttempt(
+            UUID id,
+            UUID tenantId,
+            UUID notificationId,
+            String channel,
+            UUID providerBindingId,
+            String providerType,
+            int attemptNumber,
+            String providerIdempotencyKey,
+            Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("id", id);
         parameters.put("tenantId", tenantId);
@@ -427,9 +469,7 @@ public class JdbcNotificationStore {
                     created_at, updated_at)
                 VALUES (:id, :tenantId, :notificationId, :channel, :bindingId, :providerType,
                     :attemptNumber, :key, 'REQUESTED', :now, :now, :now)
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
     }
 
     public int nextAttemptNumber(UUID tenantId, UUID notificationId) {
@@ -438,7 +478,8 @@ public class JdbcNotificationStore {
                 FROM notifications.delivery_attempts
                 WHERE tenant_id = :tenantId AND notification_id = :notificationId
                 """)
-                .param("tenantId", tenantId).param("notificationId", notificationId)
+                .param("tenantId", tenantId)
+                .param("notificationId", notificationId)
                 .query(Integer.class)
                 .single();
     }
@@ -451,9 +492,16 @@ public class JdbcNotificationStore {
      * overstating a guarantee the provider did not give is how it ends up quoted
      * in a support conversation and then in a dispute.
      */
-    public void settleAttempt(UUID tenantId, UUID attemptId, String status,
-            String externalMessageId, String failureCode, UUID providerBindingId,
-            String providerType, Instant acknowledgedAt, Instant now) {
+    public void settleAttempt(
+            UUID tenantId,
+            UUID attemptId,
+            String status,
+            String externalMessageId,
+            String failureCode,
+            UUID providerBindingId,
+            String providerType,
+            Instant acknowledgedAt,
+            Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
         parameters.put("id", attemptId);
@@ -477,9 +525,7 @@ public class JdbcNotificationStore {
                     failure_code = :failureCode, acknowledged_at = :acknowledgedAt,
                     updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :id
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
     }
 
     /**
@@ -490,8 +536,14 @@ public class JdbcNotificationStore {
      * duplicate must not regress a terminal status, and the cheapest way to honour
      * that is for the second copy never to be stored.
      */
-    public void recordStatusEvent(UUID tenantId, UUID attemptId, String providerEventId,
-            String normalizedStatus, String providerStatus, Instant occurredAt, Instant now) {
+    public void recordStatusEvent(
+            UUID tenantId,
+            UUID attemptId,
+            String providerEventId,
+            String normalizedStatus,
+            String providerStatus,
+            Instant occurredAt,
+            Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("id", UUID.randomUUID());
         parameters.put("tenantId", tenantId);
@@ -509,9 +561,7 @@ public class JdbcNotificationStore {
                 VALUES (:id, :tenantId, :attemptId, :providerEventId, :normalizedStatus,
                     :providerStatus, :occurredAt, :now)
                 ON CONFLICT (tenant_id, attempt_id, provider_event_id) DO NOTHING
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
     }
 
     public List<StatusEventRow> statusEvents(UUID tenantId, UUID attemptId) {
@@ -521,7 +571,8 @@ public class JdbcNotificationStore {
                 WHERE tenant_id = :tenantId AND attempt_id = :attemptId
                 ORDER BY occurred_at, recorded_at
                 """)
-                .param("tenantId", tenantId).param("attemptId", attemptId)
+                .param("tenantId", tenantId)
+                .param("attemptId", attemptId)
                 .query((row, number) -> new StatusEventRow(
                         row.getString("provider_event_id"),
                         row.getString("normalized_status"),
@@ -539,8 +590,8 @@ public class JdbcNotificationStore {
      * two different orderings for "brand beats tenant" in one module is how the two
      * end up disagreeing about which brand a customer opted out of.
      */
-    public Optional<PreferenceRow> effectivePreference(UUID tenantId, UUID accountId, UUID brandId,
-            String notificationClass, String channel) {
+    public Optional<PreferenceRow> effectivePreference(
+            UUID tenantId, UUID accountId, UUID brandId, String notificationClass, String channel) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
         parameters.put("accountId", accountId);
@@ -571,7 +622,8 @@ public class JdbcNotificationStore {
                 WHERE tenant_id = :tenantId AND customer_account_id = :accountId
                 ORDER BY notification_class, channel, brand_id NULLS LAST
                 """)
-                .param("tenantId", tenantId).param("accountId", accountId)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
                 .query(JdbcNotificationStore::preferenceRow)
                 .list();
     }
@@ -584,8 +636,14 @@ public class JdbcNotificationStore {
      * single upsert over a nullable brand column would treat them as unrelated and
      * insert duplicates, because NULL does not compare equal to itself.
      */
-    public void upsertPreference(UUID tenantId, UUID accountId, UUID brandId,
-            String notificationClass, String channel, boolean enabled, Instant now) {
+    public void upsertPreference(
+            UUID tenantId,
+            UUID accountId,
+            UUID brandId,
+            String notificationClass,
+            String channel,
+            boolean enabled,
+            Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("id", UUID.randomUUID());
         parameters.put("tenantId", tenantId);
@@ -611,9 +669,7 @@ public class JdbcNotificationStore {
                 DO UPDATE SET enabled = excluded.enabled,
                               version = notifications.notification_preferences.version + 1,
                               updated_at = excluded.updated_at
-                """.formatted(conflictTarget))
-                .params(parameters)
-                .update();
+                """.formatted(conflictTarget)).params(parameters).update();
     }
 
     // ------------------------------------------------------------------- rows
@@ -636,8 +692,7 @@ public class JdbcNotificationStore {
             FROM notifications.delivery_attempts
             """;
 
-    private static NotificationRow notificationRow(java.sql.ResultSet row, int number)
-            throws java.sql.SQLException {
+    private static NotificationRow notificationRow(java.sql.ResultSet row, int number) throws java.sql.SQLException {
         return new NotificationRow(
                 row.getObject("id", UUID.class),
                 row.getObject("tenant_id", UUID.class),
@@ -675,8 +730,7 @@ public class JdbcNotificationStore {
                 instant(row.getObject("created_at", OffsetDateTime.class)));
     }
 
-    private static AttemptRow attemptRow(java.sql.ResultSet row, int number)
-            throws java.sql.SQLException {
+    private static AttemptRow attemptRow(java.sql.ResultSet row, int number) throws java.sql.SQLException {
         return new AttemptRow(
                 row.getObject("id", UUID.class),
                 row.getObject("notification_id", UUID.class),
@@ -693,8 +747,7 @@ public class JdbcNotificationStore {
                 instant(row.getObject("acknowledged_at", OffsetDateTime.class)));
     }
 
-    private static PreferenceRow preferenceRow(java.sql.ResultSet row, int number)
-            throws java.sql.SQLException {
+    private static PreferenceRow preferenceRow(java.sql.ResultSet row, int number) throws java.sql.SQLException {
         return new PreferenceRow(
                 row.getObject("id", UUID.class),
                 row.getObject("brand_id", UUID.class),
@@ -740,35 +793,80 @@ public class JdbcNotificationStore {
             String triggerVariablesJson,
             Instant scheduledAt,
             Instant expiresAt,
-            Instant createdAt) { }
+            Instant createdAt) {}
 
     /**
      * @param templateVersion null until eligibility freezes one, which is a
      *                        different thing from version zero
      */
     public record NotificationRow(
-            UUID id, UUID tenantId, UUID brandId, UUID locationId, String notificationClass,
-            String channel, String templateKey, UUID templateId, Integer templateVersion,
-            String locale, String subjectType, UUID subjectId, UUID recipientEndpointId,
-            UUID recipientAccountId, UUID triggerEventId, String idempotencyKey, String status,
-            String suppressionReason, String variablesJson, String variablesHash,
-            String renderedContentHash, Instant scheduledAt, Instant expiresAt, int attemptCount,
-            Instant nextAttemptAt, UUID claimToken, Instant terminalAt, String lastError,
-            int version, Instant createdAt) { }
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            String notificationClass,
+            String channel,
+            String templateKey,
+            UUID templateId,
+            Integer templateVersion,
+            String locale,
+            String subjectType,
+            UUID subjectId,
+            UUID recipientEndpointId,
+            UUID recipientAccountId,
+            UUID triggerEventId,
+            String idempotencyKey,
+            String status,
+            String suppressionReason,
+            String variablesJson,
+            String variablesHash,
+            String renderedContentHash,
+            Instant scheduledAt,
+            Instant expiresAt,
+            int attemptCount,
+            Instant nextAttemptAt,
+            UUID claimToken,
+            Instant terminalAt,
+            String lastError,
+            int version,
+            Instant createdAt) {}
 
-    public record EndpointRow(UUID id, UUID customerAccountId, String endpointType,
-            UUID contactPointId, String operationsEndpointReference, String normalizedHash,
-            String verificationStatus, String status) { }
+    public record EndpointRow(
+            UUID id,
+            UUID customerAccountId,
+            String endpointType,
+            UUID contactPointId,
+            String operationsEndpointReference,
+            String normalizedHash,
+            String verificationStatus,
+            String status) {}
 
-    public record AttemptRow(UUID id, UUID notificationId, String channel, UUID providerBindingId,
-            String providerType, int attemptNumber, String providerIdempotencyKey, String status,
-            String externalMessageId, String failureCode, boolean uncertainOutcome,
-            Instant requestedAt, Instant acknowledgedAt) { }
+    public record AttemptRow(
+            UUID id,
+            UUID notificationId,
+            String channel,
+            UUID providerBindingId,
+            String providerType,
+            int attemptNumber,
+            String providerIdempotencyKey,
+            String status,
+            String externalMessageId,
+            String failureCode,
+            boolean uncertainOutcome,
+            Instant requestedAt,
+            Instant acknowledgedAt) {}
 
-    public record StatusEventRow(String providerEventId, String normalizedStatus,
-            String providerStatus, Instant occurredAt) { }
+    public record StatusEventRow(
+            String providerEventId, String normalizedStatus, String providerStatus, Instant occurredAt) {}
 
-    public record PreferenceRow(UUID id, UUID brandId, String notificationClass, String channel,
-            boolean enabled, java.time.LocalTime quietHoursStart, java.time.LocalTime quietHoursEnd,
-            String timezone, int version) { }
+    public record PreferenceRow(
+            UUID id,
+            UUID brandId,
+            String notificationClass,
+            String channel,
+            boolean enabled,
+            java.time.LocalTime quietHoursStart,
+            java.time.LocalTime quietHoursEnd,
+            String timezone,
+            int version) {}
 }

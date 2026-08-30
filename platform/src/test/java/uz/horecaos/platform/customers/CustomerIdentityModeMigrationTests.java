@@ -1,11 +1,12 @@
 package uz.horecaos.platform.customers;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
-
 import javax.sql.DataSource;
-
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.Assumptions;
@@ -14,11 +15,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.support.TestDatabase;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * V0060: making the tenant identity mode have one answer (ADR 0015).
@@ -49,8 +46,7 @@ class CustomerIdentityModeMigrationTests {
      * caveat: whatever lands between it and V0063 is applied by the second
      * migrate, exactly as a deployment would.
      */
-    private static final MigrationVersion BEFORE_THE_VERSION_FIX =
-            MigrationVersion.fromVersion("0061");
+    private static final MigrationVersion BEFORE_THE_VERSION_FIX = MigrationVersion.fromVersion("0061");
 
     /**
      * V0060 itself, so the backfill it performs can be asserted before V0072
@@ -63,16 +59,14 @@ class CustomerIdentityModeMigrationTests {
      * still exist and can be caught disagreeing with the function that V0063
      * made the single definition of "current".
      */
-    private static final MigrationVersion BEFORE_THE_MIRROR_DROP =
-            MigrationVersion.fromVersion("0069");
+    private static final MigrationVersion BEFORE_THE_MIRROR_DROP = MigrationVersion.fromVersion("0069");
 
-    private static final OffsetDateTime EFFECTIVE_FROM =
-            OffsetDateTime.of(2026, 8, 20, 0, 0, 0, 0, ZoneOffset.UTC);
+    private static final OffsetDateTime EFFECTIVE_FROM = OffsetDateTime.of(2026, 8, 20, 0, 0, 0, 0, ZoneOffset.UTC);
 
     @BeforeAll
     static void requireDocker() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
-                "Docker is required for migration tests");
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(), "Docker is required for migration tests");
     }
 
     @Test
@@ -137,12 +131,10 @@ class CustomerIdentityModeMigrationTests {
             insertPolicy(jdbc, tenantId, 1, "BRAND_ISOLATED", EFFECTIVE_FROM, cutover);
             insertPolicy(jdbc, tenantId, 2, "TENANT_SHARED", cutover, null);
 
-            OffsetDateTime duringTheWindow =
-                    OffsetDateTime.of(2026, 8, 21, 12, 0, 0, 0, ZoneOffset.UTC);
+            OffsetDateTime duringTheWindow = OffsetDateTime.of(2026, 8, 21, 12, 0, 0, 0, ZoneOffset.UTC);
 
             // The one definition of "current" is right.
-            assertThat(currentPolicy(jdbc, tenantId, duringTheWindow))
-                    .isEqualTo("1 BRAND_ISOLATED");
+            assertThat(currentPolicy(jdbc, tenantId, duringTheWindow)).isEqualTo("1 BRAND_ISOLATED");
             // The trigger that was supposed to mirror it is not.
             assertThat(identityColumn(jdbc, tenantId)).isEqualTo("TENANT_SHARED");
 
@@ -152,8 +144,7 @@ class CustomerIdentityModeMigrationTests {
             assertThat(triggerNames(jdbc)).doesNotContain("trg_customer_identity_policy_mirror");
             // The answer that survives is the one that takes the instant it is
             // asked about, and it still moves with the clock and no write.
-            assertThat(currentPolicy(jdbc, tenantId, duringTheWindow))
-                    .isEqualTo("1 BRAND_ISOLATED");
+            assertThat(currentPolicy(jdbc, tenantId, duringTheWindow)).isEqualTo("1 BRAND_ISOLATED");
             assertThat(currentPolicy(jdbc, tenantId, cutover)).isEqualTo("2 TENANT_SHARED");
         }
     }
@@ -212,17 +203,15 @@ class CustomerIdentityModeMigrationTests {
 
             // Both were written by the ordinal expression, so both say 2. One of
             // them is right by accident.
-            UUID before = insertAccount(jdbc, tenantId, 2,
-                    OffsetDateTime.of(2026, 8, 5, 0, 0, 0, 0, ZoneOffset.UTC));
-            UUID after = insertAccount(jdbc, tenantId, 2,
-                    OffsetDateTime.of(2026, 8, 15, 0, 0, 0, 0, ZoneOffset.UTC));
+            UUID before = insertAccount(jdbc, tenantId, 2, OffsetDateTime.of(2026, 8, 5, 0, 0, 0, 0, ZoneOffset.UTC));
+            UUID after = insertAccount(jdbc, tenantId, 2, OffsetDateTime.of(2026, 8, 15, 0, 0, 0, 0, ZoneOffset.UTC));
 
             // A tenant that configured nothing at all. Its account claims version
             // 1, a decision nobody made.
             UUID unconfiguredTenant = UUID.randomUUID();
             insertTenant(jdbc, unconfiguredTenant, "tenant-never-configured");
-            UUID unconfigured = insertAccount(jdbc, unconfiguredTenant, 1,
-                    OffsetDateTime.of(2026, 8, 5, 0, 0, 0, 0, ZoneOffset.UTC));
+            UUID unconfigured = insertAccount(
+                    jdbc, unconfiguredTenant, 1, OffsetDateTime.of(2026, 8, 5, 0, 0, 0, 0, ZoneOffset.UTC));
 
             migrateTo(dataSource, MigrationVersion.LATEST);
 
@@ -250,8 +239,7 @@ class CustomerIdentityModeMigrationTests {
             insertTenant(jdbc, tenantId, "tenant-retroactive-policy");
             insertPolicy(jdbc, tenantId, 1, "TENANT_SHARED", EFFECTIVE_FROM, null);
             // The customer predates the policy history that claims to govern it.
-            insertAccount(jdbc, tenantId, 1,
-                    OffsetDateTime.of(2026, 7, 1, 0, 0, 0, 0, ZoneOffset.UTC));
+            insertAccount(jdbc, tenantId, 1, OffsetDateTime.of(2026, 7, 1, 0, 0, 0, 0, ZoneOffset.UTC));
 
             assertThatThrownBy(() -> migrateTo(dataSource, MigrationVersion.LATEST))
                     .hasStackTraceContaining("ADR 0015")
@@ -269,9 +257,7 @@ class CustomerIdentityModeMigrationTests {
                     id, slug, legal_name, display_name, default_currency, default_timezone,
                     status, version)
                 VALUES (:id, :slug, 'Legal', 'Display', 'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
-                """)
-                .param("id", tenantId).param("slug", slug)
-                .update();
+                """).param("id", tenantId).param("slug", slug).update();
     }
 
     private static void configureIdentityMode(JdbcClient jdbc, UUID tenantId, String mode) {
@@ -291,14 +277,16 @@ class CustomerIdentityModeMigrationTests {
         jdbc.sql("""
                 INSERT INTO customer.customer_accounts (id, tenant_id, status)
                 VALUES (:id, :tenantId, 'ACTIVE')
-                """)
-                .param("id", UUID.randomUUID())
-                .param("tenantId", tenantId)
-                .update();
+                """).param("id", UUID.randomUUID()).param("tenantId", tenantId).update();
     }
 
-    private static void insertPolicy(JdbcClient jdbc, UUID tenantId, int version, String mode,
-            OffsetDateTime effectiveFrom, OffsetDateTime supersededAt) {
+    private static void insertPolicy(
+            JdbcClient jdbc,
+            UUID tenantId,
+            int version,
+            String mode,
+            OffsetDateTime effectiveFrom,
+            OffsetDateTime supersededAt) {
         jdbc.sql("""
                 INSERT INTO tenant.customer_identity_policies (
                     id, tenant_id, version, identity_mode, effective_from, superseded_at)
@@ -314,8 +302,7 @@ class CustomerIdentityModeMigrationTests {
     }
 
     /** An account as the ordinal expression wrote it: a version, right or not. */
-    private static UUID insertAccount(JdbcClient jdbc, UUID tenantId, int policyVersion,
-            OffsetDateTime createdAt) {
+    private static UUID insertAccount(JdbcClient jdbc, UUID tenantId, int policyVersion, OffsetDateTime createdAt) {
         UUID accountId = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO customer.customer_accounts (
@@ -335,10 +322,7 @@ class CustomerIdentityModeMigrationTests {
         return jdbc.sql("""
                 SELECT coalesce(identity_policy_version::text, 'UNCONFIGURED')
                 FROM customer.customer_accounts WHERE id = :id
-                """)
-                .param("id", accountId)
-                .query(String.class)
-                .single();
+                """).param("id", accountId).query(String.class).single();
     }
 
     private static String currentPolicy(JdbcClient jdbc, UUID tenantId, OffsetDateTime at) {
@@ -356,9 +340,7 @@ class CustomerIdentityModeMigrationTests {
         return jdbc.sql("""
                 SELECT column_name FROM information_schema.columns
                 WHERE table_schema = 'tenant' AND table_name = 'tenants'
-                """)
-                .query(String.class)
-                .list();
+                """).query(String.class).list();
     }
 
     private static java.util.List<String> triggerNames(JdbcClient jdbc) {
@@ -370,9 +352,7 @@ class CustomerIdentityModeMigrationTests {
                 WHERE n.nspname = 'tenant'
                   AND c.relname = 'customer_identity_policies'
                   AND NOT t.tgisinternal
-                """)
-                .query(String.class)
-                .list();
+                """).query(String.class).list();
     }
 
     private static String identityColumn(JdbcClient jdbc, UUID tenantId) {

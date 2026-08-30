@@ -24,91 +24,90 @@ public final class EntitlementKeys {
 
     // ------------------------------------------------------- standing limits
 
-    public static final EntitlementKey<Long> BRANDS_MAX_COUNT =
-            EntitlementKey.counted("brands.max_count", "brand")
-                    .ownedBy("tenancy")
-                    .describedAs("Brands the tenant may have. A standing limit: lowering it never removes a brand.")
-                    .build();
+    public static final EntitlementKey<Long> BRANDS_MAX_COUNT = EntitlementKey.counted("brands.max_count", "brand")
+            .ownedBy("tenancy")
+            .describedAs("Brands the tenant may have. A standing limit: lowering it never removes a brand.")
+            .build();
 
-    public static final EntitlementKey<Long> LOCATIONS_MAX_COUNT =
-            EntitlementKey.counted("locations.max_count", "location")
-                    .ownedBy("tenancy")
-                    .withDimensions("brand_id")
-                    .describedAs("Branches the tenant may operate. The line every plan is actually sold on.")
-                    .build();
+    public static final EntitlementKey<Long> LOCATIONS_MAX_COUNT = EntitlementKey.counted(
+                    "locations.max_count", "location")
+            .ownedBy("tenancy")
+            .withDimensions("brand_id")
+            .describedAs("Branches the tenant may operate. The line every plan is actually sold on.")
+            .build();
 
-    public static final EntitlementKey<Long> CONTROL_PLANE_USERS_MAX_COUNT =
-            EntitlementKey.counted("control_plane.users.max_count", "user")
-                    .ownedBy("iam")
-                    .describedAs("Staff accounts with access to the tenant's own console.")
-                    .build();
+    public static final EntitlementKey<Long> CONTROL_PLANE_USERS_MAX_COUNT = EntitlementKey.counted(
+                    "control_plane.users.max_count", "user")
+            .ownedBy("iam")
+            .describedAs("Staff accounts with access to the tenant's own console.")
+            .build();
 
-    public static final EntitlementKey<Long> CATALOG_PRODUCTS_MAX_COUNT =
-            EntitlementKey.counted("catalog.products.max_count", "product")
-                    .ownedBy("catalog")
-                    .withDimensions("brand_id")
-                    .describedAs("Products that may exist across the tenant's catalogues.")
-                    .build();
+    public static final EntitlementKey<Long> CATALOG_PRODUCTS_MAX_COUNT = EntitlementKey.counted(
+                    "catalog.products.max_count", "product")
+            .ownedBy("catalog")
+            .withDimensions("brand_id")
+            .describedAs("Products that may exist across the tenant's catalogues.")
+            .build();
 
-    public static final EntitlementKey<Long> POS_INSTALLATIONS_MAX_COUNT =
-            EntitlementKey.counted("pos.installations.max_count", "installation")
-                    .ownedBy("integration")
-                    .describedAs("Provider installations of the POS category.")
-                    .build();
+    public static final EntitlementKey<Long> POS_INSTALLATIONS_MAX_COUNT = EntitlementKey.counted(
+                    "pos.installations.max_count", "installation")
+            .ownedBy("integration")
+            .describedAs("Provider installations of the POS category.")
+            .build();
 
     // ----------------------------------------------------- period allowances
 
-    public static final EntitlementKey<Long> ORDERS_MONTHLY_INCLUDED =
-            EntitlementKey.counted("orders.monthly_included", "order")
-                    .resetting(ResetPeriod.BILLING_PERIOD)
-                    .ownedBy("ordering")
-                    .withDimensions("location_id", "channel", "fulfillment_mode")
-                    .describedAs("Orders included in the plan's billing period. The canonical overage line.")
-                    .build();
+    public static final EntitlementKey<Long> ORDERS_MONTHLY_INCLUDED = EntitlementKey.counted(
+                    "orders.monthly_included", "order")
+            .resetting(ResetPeriod.BILLING_PERIOD)
+            .ownedBy("ordering")
+            .withDimensions("location_id", "channel", "fulfillment_mode")
+            .describedAs("Orders included in the plan's billing period. The canonical overage line.")
+            .build();
 
-    public static final EntitlementKey<Long> NOTIFICATIONS_MONTHLY_INCLUDED =
-            EntitlementKey.counted("notifications.monthly_included", "message")
-                    .resetting(ResetPeriod.BILLING_PERIOD)
-                    .ownedBy("notifications")
-                    .withDimensions("channel")
-                    .describedAs("Notification messages included per billing period. Each carries a real per-message cost.")
-                    .build();
+    public static final EntitlementKey<Long> NOTIFICATIONS_MONTHLY_INCLUDED = EntitlementKey.counted(
+                    "notifications.monthly_included", "message")
+            .resetting(ResetPeriod.BILLING_PERIOD)
+            .ownedBy("notifications")
+            .withDimensions("channel")
+            .describedAs("Notification messages included per billing period. Each carries a real per-message cost.")
+            .build();
 
-    public static final EntitlementKey<Long> MEDIA_STORAGE_BYTES_INCLUDED =
-            EntitlementKey.counted("media.storage_bytes_included", "byte")
-                    .ownedBy("media")
-                    .describedAs("Stored bytes included. A standing measure: deleting an asset returns the allowance.")
-                    .build();
+    public static final EntitlementKey<Long> MEDIA_STORAGE_BYTES_INCLUDED = EntitlementKey.counted(
+                    "media.storage_bytes_included", "byte")
+            .ownedBy("media")
+            .describedAs("Stored bytes included. A standing measure: deleting an asset returns the allowance.")
+            .build();
 
     // ------------------------------------------------------------- features
 
-    public static final EntitlementKey<Boolean> POS_INTEGRATIONS_ENABLED =
-            EntitlementKey.feature("pos.integrations.enabled")
-                    .safeDefault(Boolean.TRUE)
-                    .ownedBy("integration")
-                    .describedAs("Whether POS provider integrations may be installed and bound.")
-                    .build();
+    public static final EntitlementKey<Boolean> POS_INTEGRATIONS_ENABLED = EntitlementKey.feature(
+                    "pos.integrations.enabled")
+            .safeDefault(Boolean.TRUE)
+            .ownedBy("integration")
+            .describedAs("Whether POS provider integrations may be installed and bound.")
+            .build();
 
-    public static final EntitlementKey<Boolean> DELIVERY_PARTNER_INTEGRATIONS_ENABLED =
-            EntitlementKey.feature("delivery.partner_integrations.enabled")
-                    .safeDefault(Boolean.TRUE)
-                    .ownedBy("fulfillment")
-                    .describedAs("Whether external delivery partners may be used for dispatch.")
-                    .build();
+    public static final EntitlementKey<Boolean> DELIVERY_PARTNER_INTEGRATIONS_ENABLED = EntitlementKey.feature(
+                    "delivery.partner_integrations.enabled")
+            .safeDefault(Boolean.TRUE)
+            .ownedBy("fulfillment")
+            .describedAs("Whether external delivery partners may be used for dispatch.")
+            .build();
 
-    public static final EntitlementKey<Boolean> PAYMENTS_PROVIDER_INTEGRATIONS_ENABLED =
-            EntitlementKey.feature("payments.provider_integrations.enabled")
-                    .safeDefault(Boolean.TRUE)
-                    .ownedBy("payments")
-                    .describedAs("Whether payment provider installations may be bound to a merchant account.")
-                    .build();
+    public static final EntitlementKey<Boolean> PAYMENTS_PROVIDER_INTEGRATIONS_ENABLED = EntitlementKey.feature(
+                    "payments.provider_integrations.enabled")
+            .safeDefault(Boolean.TRUE)
+            .ownedBy("payments")
+            .describedAs("Whether payment provider installations may be bound to a merchant account.")
+            .build();
 
-    public static final EntitlementKey<Boolean> ANALYTICS_ADVANCED_ENABLED =
-            EntitlementKey.feature("analytics.advanced.enabled")
-                    .safeDefault(Boolean.TRUE)
-                    .ownedBy("reporting")
-                    .describedAs("Whether the advanced reporting surfaces are available.")
-                    .build();
+    public static final EntitlementKey<Boolean> ANALYTICS_ADVANCED_ENABLED = EntitlementKey.feature(
+                    "analytics.advanced.enabled")
+            .safeDefault(Boolean.TRUE)
+            .ownedBy("reporting")
+            .describedAs("Whether the advanced reporting surfaces are available.")
+            .build();
 
     private static final Map<String, EntitlementKey<?>> BY_CODE = index(List.of(
             BRANDS_MAX_COUNT,
@@ -124,8 +123,7 @@ public final class EntitlementKeys {
             PAYMENTS_PROVIDER_INTEGRATIONS_ENABLED,
             ANALYTICS_ADVANCED_ENABLED));
 
-    private EntitlementKeys() {
-    }
+    private EntitlementKeys() {}
 
     public static Collection<EntitlementKey<?>> all() {
         return BY_CODE.values();
@@ -143,9 +141,9 @@ public final class EntitlementKeys {
      * ends rather than resolving to nothing.
      */
     public static EntitlementKey<?> require(String code) {
-        return find(code).orElseThrow(() -> new UnknownEntitlementKeyException(
-                "Unknown entitlement key \"%s\". Declare it in EntitlementKeys (ADR 0021)."
-                        .formatted(code)));
+        return find(code)
+                .orElseThrow(() -> new UnknownEntitlementKeyException(
+                        "Unknown entitlement key \"%s\". Declare it in EntitlementKeys (ADR 0021).".formatted(code)));
     }
 
     private static Map<String, EntitlementKey<?>> index(List<EntitlementKey<?>> keys) {

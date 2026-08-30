@@ -50,13 +50,11 @@ import java.util.Set;
  */
 public final class ScopeStateMachine {
 
-    private static final Set<ScopeState> HOLDING =
-            EnumSet.of(ScopeState.PAUSED, ScopeState.BLOCKED_RECONCILIATION);
+    private static final Set<ScopeState> HOLDING = EnumSet.of(ScopeState.PAUSED, ScopeState.BLOCKED_RECONCILIATION);
 
     private static final Map<ScopeState, Set<ScopeState>> ALLOWED = allowed();
 
-    private ScopeStateMachine() {
-    }
+    private ScopeStateMachine() {}
 
     private static Map<ScopeState, Set<ScopeState>> allowed() {
         Map<ScopeState, Set<ScopeState>> transitions = new EnumMap<>(ScopeState.class);
@@ -67,9 +65,7 @@ public final class ScopeStateMachine {
         transitions.put(ScopeState.CATCHING_UP, EnumSet.of(ScopeState.SHADOW_READING));
         transitions.put(ScopeState.SHADOW_READING, EnumSet.of(ScopeState.CANARY));
 
-        transitions.put(ScopeState.CANARY, EnumSet.of(
-                ScopeState.CUTOVER_READY,
-                ScopeState.ROLLING_BACK));
+        transitions.put(ScopeState.CANARY, EnumSet.of(ScopeState.CUTOVER_READY, ScopeState.ROLLING_BACK));
 
         // CUTOVER_READY -> TARGET_OWNED is the transfer of ownership itself. That
         // the reconciliation is signed and the target owner is a real recorded
@@ -77,17 +73,11 @@ public final class ScopeStateMachine {
         // way an order's policy-gated cancel does; the ADR's rule that no admin UI
         // may skip either is enforced there and cannot be enforced here. The edge
         // existing at all is a modelling question and belongs in this table.
-        transitions.put(ScopeState.CUTOVER_READY, EnumSet.of(
-                ScopeState.TARGET_OWNED,
-                ScopeState.CANARY));
+        transitions.put(ScopeState.CUTOVER_READY, EnumSet.of(ScopeState.TARGET_OWNED, ScopeState.CANARY));
 
-        transitions.put(ScopeState.TARGET_OWNED, EnumSet.of(
-                ScopeState.ROLLBACK_WINDOW,
-                ScopeState.ROLLING_BACK));
+        transitions.put(ScopeState.TARGET_OWNED, EnumSet.of(ScopeState.ROLLBACK_WINDOW, ScopeState.ROLLING_BACK));
 
-        transitions.put(ScopeState.ROLLBACK_WINDOW, EnumSet.of(
-                ScopeState.LEGACY_READ_ONLY,
-                ScopeState.TARGET_OWNED));
+        transitions.put(ScopeState.ROLLBACK_WINDOW, EnumSet.of(ScopeState.LEGACY_READ_ONLY, ScopeState.TARGET_OWNED));
 
         transitions.put(ScopeState.LEGACY_READ_ONLY, EnumSet.of(ScopeState.RETIRED));
         transitions.put(ScopeState.ROLLING_BACK, EnumSet.of(ScopeState.CATCHING_UP));

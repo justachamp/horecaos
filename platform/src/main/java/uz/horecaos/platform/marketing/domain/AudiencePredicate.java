@@ -35,8 +35,8 @@ public record AudiencePredicate(
             throw new IllegalArgumentException("A predicate needs a type and an operator");
         }
         if (!type.allowedOperators().contains(operator)) {
-            throw new IllegalArgumentException("%s does not accept %s; it accepts %s"
-                    .formatted(type, operator, type.allowedOperators()));
+            throw new IllegalArgumentException(
+                    "%s does not accept %s; it accepts %s".formatted(type, operator, type.allowedOperators()));
         }
         textValues = textValues == null ? null : List.copyOf(textValues);
 
@@ -51,8 +51,7 @@ public record AudiencePredicate(
                     }
                     if (numericLow > numericHigh) {
                         throw new IllegalArgumentException(
-                                "%s has an inverted range: %d to %d"
-                                        .formatted(type, numericLow, numericHigh));
+                                "%s has an inverted range: %d to %d".formatted(type, numericLow, numericHigh));
                     }
                 }
             }
@@ -70,14 +69,11 @@ public record AudiencePredicate(
                     throw new IllegalArgumentException(type + " needs at least one value");
                 }
                 if (textValues.size() > MAX_TEXT_VALUES) {
-                    throw new IllegalArgumentException(
-                            "%s accepts at most %d values".formatted(type, MAX_TEXT_VALUES));
+                    throw new IllegalArgumentException("%s accepts at most %d values".formatted(type, MAX_TEXT_VALUES));
                 }
-                if (type == PredicateType.PREFERRED_LOCALE
-                        && !SUPPORTED_LOCALES.containsAll(textValues)) {
+                if (type == PredicateType.PREFERRED_LOCALE && !SUPPORTED_LOCALES.containsAll(textValues)) {
                     throw new IllegalArgumentException(
-                            "Locales must be among %s, not %s"
-                                    .formatted(SUPPORTED_LOCALES, textValues));
+                            "Locales must be among %s, not %s".formatted(SUPPORTED_LOCALES, textValues));
                 }
             }
             case AUDIENCE -> {
@@ -89,23 +85,21 @@ public record AudiencePredicate(
     }
 
     /** A one-sided or two-sided numeric band. */
-    public static AudiencePredicate numeric(PredicateType type, PredicateOperator operator,
-            Long low, Long high) {
+    public static AudiencePredicate numeric(PredicateType type, PredicateOperator operator, Long low, Long high) {
         return new AudiencePredicate(type, operator, low, high, null, null, null, null);
     }
 
     public static AudiencePredicate registeredBetween(LocalDate from, LocalDate to) {
-        return new AudiencePredicate(PredicateType.REGISTERED_BETWEEN, PredicateOperator.BETWEEN,
-                null, null, from, to, null, null);
+        return new AudiencePredicate(
+                PredicateType.REGISTERED_BETWEEN, PredicateOperator.BETWEEN, null, null, from, to, null, null);
     }
 
-    public static AudiencePredicate textSet(PredicateType type, PredicateOperator operator,
-            List<String> values) {
+    public static AudiencePredicate textSet(PredicateType type, PredicateOperator operator, List<String> values) {
         return new AudiencePredicate(type, operator, null, null, null, null, values, null);
     }
 
     public static AudiencePredicate audienceMembership(PredicateOperator operator, UUID audienceId) {
-        return new AudiencePredicate(PredicateType.AUDIENCE_MEMBERSHIP, operator,
-                null, null, null, null, null, audienceId);
+        return new AudiencePredicate(
+                PredicateType.AUDIENCE_MEMBERSHIP, operator, null, null, null, null, null, audienceId);
     }
 }

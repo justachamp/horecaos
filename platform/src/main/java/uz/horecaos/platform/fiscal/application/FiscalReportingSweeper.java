@@ -29,8 +29,7 @@ import org.springframework.stereotype.Component;
  * arrive to trigger it.
  */
 @Component
-@ConditionalOnProperty(name = "horecaos.fiscal.reporting-sweeper.enabled", havingValue = "true",
-        matchIfMissing = true)
+@ConditionalOnProperty(name = "horecaos.fiscal.reporting-sweeper.enabled", havingValue = "true", matchIfMissing = true)
 public class FiscalReportingSweeper {
 
     private static final Logger log = LoggerFactory.getLogger(FiscalReportingSweeper.class);
@@ -38,7 +37,8 @@ public class FiscalReportingSweeper {
     private final FiscalDocumentService documents;
     private final int batchSize;
 
-    public FiscalReportingSweeper(FiscalDocumentService documents,
+    public FiscalReportingSweeper(
+            FiscalDocumentService documents,
             @Value("${horecaos.fiscal.reporting-sweeper.batch-size:200}") int batchSize) {
         this.documents = documents;
         this.batchSize = batchSize;

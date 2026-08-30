@@ -44,8 +44,7 @@ public final class KafkaTopicCatalog {
             new TopicSpecification(FULFILLMENT_EVENTS, 6, (short) 1, BUSINESS_FACT_RETENTION),
             new TopicSpecification(REALTIME_SIGNALS, 3, (short) 1, SIGNAL_RETENTION)));
 
-    private KafkaTopicCatalog() {
-    }
+    private KafkaTopicCatalog() {}
 
     public static Collection<TopicSpecification> all() {
         return TOPICS.values();
@@ -56,8 +55,9 @@ public final class KafkaTopicCatalog {
     }
 
     public static TopicSpecification require(String name) {
-        return find(name).orElseThrow(() -> new IllegalArgumentException(
-                "No ADR 0032 topic specification is registered for " + name));
+        return find(name)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("No ADR 0032 topic specification is registered for " + name));
     }
 
     private static Map<String, TopicSpecification> index(List<TopicSpecification> topics) {
@@ -72,8 +72,7 @@ public final class KafkaTopicCatalog {
     }
 
     /** One broker-level topic policy, including its destructive-retention boundary. */
-    public record TopicSpecification(
-            String name, int partitions, short replicationFactor, Duration retention) {
+    public record TopicSpecification(String name, int partitions, short replicationFactor, Duration retention) {
 
         public TopicSpecification {
             if (name == null || name.isBlank()) {

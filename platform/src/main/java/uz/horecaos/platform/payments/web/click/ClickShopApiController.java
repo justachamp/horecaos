@@ -1,7 +1,7 @@
 package uz.horecaos.platform.payments.web.click;
 
+import io.swagger.v3.oas.annotations.Hidden;
 import java.util.Map;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -10,9 +10,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Hidden;
-
 import uz.horecaos.platform.payments.infrastructure.click.ClickCallbackDecision;
 import uz.horecaos.platform.payments.infrastructure.click.ClickCallbackProcessor;
 import uz.horecaos.platform.payments.infrastructure.click.ClickCallbackRequest;
@@ -57,8 +54,7 @@ public class ClickShopApiController {
 
     /** {@code action=0}: verify the order and the amount, reserve, and mint the prepare id. */
     @PostMapping(path = "/prepare", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ClickShopApiResponse prepare(@PathVariable String bindingRef,
-            @RequestParam Map<String, String> form) {
+    public ClickShopApiResponse prepare(@PathVariable String bindingRef, @RequestParam Map<String, String> form) {
         return answer(bindingRef, ClickCallbackRequest.ACTION_PREPARE, form);
     }
 
@@ -70,13 +66,11 @@ public class ClickShopApiController {
      * be fulfilled is credited, answered {@code 0}, and reversed.
      */
     @PostMapping(path = "/complete", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ClickShopApiResponse complete(@PathVariable String bindingRef,
-            @RequestParam Map<String, String> form) {
+    public ClickShopApiResponse complete(@PathVariable String bindingRef, @RequestParam Map<String, String> form) {
         return answer(bindingRef, ClickCallbackRequest.ACTION_COMPLETE, form);
     }
 
-    private ClickShopApiResponse answer(String bindingRef, String action,
-            Map<String, String> form) {
+    private ClickShopApiResponse answer(String bindingRef, String action, Map<String, String> form) {
 
         String clickTransId = form.get("click_trans_id");
         String merchantTransId = form.get("merchant_trans_id");
@@ -93,10 +87,8 @@ public class ClickShopApiController {
             // Reaching it after a successful charge is survivable — Click retries,
             // and the retry credits the order — whereas answering -2 or -5 in this
             // situation would leave the customer charged and uncredited.
-            log.error("A Click {} could not be processed; answering -7 so Click retries.",
-                    action, failure);
-            return ClickShopApiResponse.failed(clickTransId, merchantTransId,
-                    ClickShopApiError.FAILED_TO_UPDATE_USER);
+            log.error("A Click {} could not be processed; answering -7 so Click retries.", action, failure);
+            return ClickShopApiResponse.failed(clickTransId, merchantTransId, ClickShopApiError.FAILED_TO_UPDATE_USER);
         }
 
         if (!decision.successful()) {
@@ -105,14 +97,12 @@ public class ClickShopApiController {
                     // -4 and -9 carry the id the transaction was given the first
                     // time, so that a replayed Complete is indistinguishable from
                     // the original in Click's own records.
-                    : ClickShopApiResponse.settled(clickTransId, merchantTransId,
-                            decision.merchantTransactionId(), decision.error());
+                    : ClickShopApiResponse.settled(
+                            clickTransId, merchantTransId, decision.merchantTransactionId(), decision.error());
         }
 
         return completing
-                ? ClickShopApiResponse.confirmed(clickTransId, merchantTransId,
-                        decision.merchantTransactionId())
-                : ClickShopApiResponse.prepared(clickTransId, merchantTransId,
-                        decision.merchantTransactionId());
+                ? ClickShopApiResponse.confirmed(clickTransId, merchantTransId, decision.merchantTransactionId())
+                : ClickShopApiResponse.prepared(clickTransId, merchantTransId, decision.merchantTransactionId());
     }
 }

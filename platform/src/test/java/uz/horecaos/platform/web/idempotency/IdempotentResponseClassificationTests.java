@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.config.BeanDefinition;
@@ -22,7 +21,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
 import uz.horecaos.platform.iam.api.protection.Classified;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
@@ -117,13 +115,11 @@ class IdempotentResponseClassificationTests {
             }
         }
 
-        assertThat(unreviewed)
-                .as("""
+        assertThat(unreviewed).as("""
                         A response type reflection cannot read is classified as clean, and
                         its body is then stored in plain text for a day. Answer with a
                         record so the classification is decided for you, or add the handler
-                        to REVIEWED_UNSCANNABLE with the reason it carries nothing personal.""")
-                .isEmpty();
+                        to REVIEWED_UNSCANNABLE with the reason it carries nothing personal.""").isEmpty();
     }
 
     @Test
@@ -177,8 +173,7 @@ class IdempotentResponseClassificationTests {
         List<String> classified = new ArrayList<>();
 
         for (Method handler : idempotentHandlers()) {
-            ResponseBodyProtection.classify(handler)
-                    .ifPresent(dataClass -> classified.add(nameOf(handler)));
+            ResponseBodyProtection.classify(handler).ifPresent(dataClass -> classified.add(nameOf(handler)));
         }
 
         assertThat(idempotentHandlers())
@@ -189,7 +184,8 @@ class IdempotentResponseClassificationTests {
                         These are the three responses built from a decrypt. If this list ever
                         shrinks, either an endpoint stopped returning personal data or the
                         classifier stopped seeing it, and only one of those is good news.""")
-                .contains("StorefrontCustomerController#addAddress",
+                .contains(
+                        "StorefrontCustomerController#addAddress",
                         "StorefrontCustomerController#updateAddress",
                         "StorefrontCustomerController#updateProfile");
         assertThat(classified)
@@ -198,8 +194,7 @@ class IdempotentResponseClassificationTests {
                         token is a bearer credential for a table, and a branch's address and
                         contact phone are the fields ADR 0029 classifies wherever they sit --
                         both were being stored in clear for the same reason the address was.""")
-                .contains("FloorPlanController#rotate",
-                        "TenantControlPlaneController#describeLocation");
+                .contains("FloorPlanController#rotate", "TenantControlPlaneController#describeLocation");
     }
 
     // ------------------------------------------------------- the classifier itself
@@ -207,13 +202,10 @@ class IdempotentResponseClassificationTests {
     @Test
     @DisplayName("the classifier reads through the containers a handler returns")
     void theClassifierUnwrapsResponseEntityAndList() {
-        assertThat(ResponseBodyProtection.responseTypeOf(
-                signature("wrapped").getGenericReturnType()))
-                .as("a check stopping at ResponseEntity would find nothing classified anywhere "
-                        + "and pass forever")
+        assertThat(ResponseBodyProtection.responseTypeOf(signature("wrapped").getGenericReturnType()))
+                .as("a check stopping at ResponseEntity would find nothing classified anywhere " + "and pass forever")
                 .isEqualTo(SampleAddress.class);
-        assertThat(ResponseBodyProtection.responseTypeOf(
-                signature("listed").getGenericReturnType()))
+        assertThat(ResponseBodyProtection.responseTypeOf(signature("listed").getGenericReturnType()))
                 .as("an address book is a list of addresses")
                 .isEqualTo(SampleAddress.class);
     }
@@ -286,14 +278,15 @@ class IdempotentResponseClassificationTests {
         }
     }
 
-    private record SampleAddress(UUID addressId, String line1) { }
+    private record SampleAddress(UUID addressId, String line1) {}
 
-    private record SampleOrder(UUID orderId, String status, long totalMinor) { }
+    private record SampleOrder(UUID orderId, String status, long totalMinor) {}
 
     private record SampleMixed(
             String phone,
+
             @Classified(value = DataClass.PERSONAL_SENSITIVE, reason = "an identity document")
-            String documentNumber) { }
+            String documentNumber) {}
 
     private static Method signature(String name) {
         for (Method method : Samples.class.getDeclaredMethods()) {
@@ -331,8 +324,7 @@ class IdempotentResponseClassificationTests {
     }
 
     private static List<Class<?>> controllers() {
-        ClassPathScanningCandidateComponentProvider scanner =
-                new ClassPathScanningCandidateComponentProvider(false);
+        ClassPathScanningCandidateComponentProvider scanner = new ClassPathScanningCandidateComponentProvider(false);
         scanner.addIncludeFilter(new AnnotationTypeFilter(RestController.class));
 
         List<Class<?>> controllers = new ArrayList<>();

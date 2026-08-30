@@ -1,5 +1,10 @@
 package uz.horecaos.platform.ordering;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -14,11 +19,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import javax.sql.DataSource;
-
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -30,27 +31,46 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
-
-import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
+import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.infrastructure.protection.DataEncryptionKeyProvider;
 import uz.horecaos.platform.iam.infrastructure.protection.EnvelopeFieldProtection;
 import uz.horecaos.platform.iam.infrastructure.secrets.EnvironmentSecretResolver;
 import uz.horecaos.platform.inventory.api.TrackingMode;
 import uz.horecaos.platform.inventory.application.InventoryService;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
+import uz.horecaos.platform.migration.application.MigrationOwnershipService;
+import uz.horecaos.platform.migration.infrastructure.persistence.JdbcMigrationScopeStore;
 import uz.horecaos.platform.ordering.api.OrderAwaitingApproval;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.OrderReceived;
 import uz.horecaos.platform.ordering.api.OrderingEvent;
-import uz.horecaos.platform.ordering.api.OrderSettlementPort;
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
+import uz.horecaos.platform.ordering.application.CartService;
+import uz.horecaos.platform.ordering.application.CheckoutService;
+import uz.horecaos.platform.ordering.application.OrderAcceptancePolicyService;
+import uz.horecaos.platform.ordering.application.OrderInventoryProcess;
+import uz.horecaos.platform.ordering.application.OrderQueryService;
+import uz.horecaos.platform.ordering.application.OrderStateService;
+import uz.horecaos.platform.ordering.domain.AcceptanceMode;
+import uz.horecaos.platform.ordering.domain.ApprovalChannel;
+import uz.horecaos.platform.ordering.domain.ApprovalTimeoutAction;
+import uz.horecaos.platform.ordering.domain.CartStatus;
+import uz.horecaos.platform.ordering.domain.OrderAcceptancePolicy;
+import uz.horecaos.platform.ordering.domain.OrderPromise;
+import uz.horecaos.platform.ordering.domain.OrderStateMachine;
+import uz.horecaos.platform.ordering.domain.OrderStatus;
+import uz.horecaos.platform.ordering.domain.PromiseBasis;
+import uz.horecaos.platform.ordering.infrastructure.catalog.JdbcOrderCatalogSnapshot;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCheckoutAttemptStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderDirectory;
-import uz.horecaos.platform.iam.api.secrets.SecretReference;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderProcessStore;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
+import uz.horecaos.platform.ordering.infrastructure.tenancy.JdbcOrderingTenantContext;
 import uz.horecaos.platform.payments.application.PaymentBindingResolver;
 import uz.horecaos.platform.payments.application.PaymentBusinessCalendar;
 import uz.horecaos.platform.payments.application.PaymentFiscalService;
@@ -73,42 +93,16 @@ import uz.horecaos.platform.payments.settlement.OrderRemedyService;
 import uz.horecaos.platform.payments.settlement.OrderSettlementService;
 import uz.horecaos.platform.payments.settlement.SettlementStatus;
 import uz.horecaos.platform.payments.settlement.TenderStatus;
-import uz.horecaos.platform.ordering.application.CartService;
-import uz.horecaos.platform.ordering.application.CheckoutService;
-import uz.horecaos.platform.ordering.application.OrderAcceptancePolicyService;
-import uz.horecaos.platform.ordering.application.OrderInventoryProcess;
-import uz.horecaos.platform.ordering.application.OrderQueryService;
-import uz.horecaos.platform.ordering.application.OrderStateService;
-import uz.horecaos.platform.ordering.domain.AcceptanceMode;
-import uz.horecaos.platform.ordering.domain.ApprovalChannel;
-import uz.horecaos.platform.ordering.domain.ApprovalTimeoutAction;
-import uz.horecaos.platform.ordering.domain.CartStatus;
-import uz.horecaos.platform.ordering.domain.OrderAcceptancePolicy;
-import uz.horecaos.platform.ordering.domain.OrderStateMachine;
-import uz.horecaos.platform.ordering.domain.OrderPromise;
-import uz.horecaos.platform.ordering.domain.OrderStatus;
-import uz.horecaos.platform.ordering.domain.PromiseBasis;
-import uz.horecaos.platform.ordering.infrastructure.catalog.JdbcOrderCatalogSnapshot;
-import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
-import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCheckoutAttemptStore;
-import uz.horecaos.platform.migration.application.MigrationOwnershipService;
-import uz.horecaos.platform.migration.infrastructure.persistence.JdbcMigrationScopeStore;
-import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderProcessStore;
-import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
-import uz.horecaos.platform.ordering.infrastructure.tenancy.JdbcOrderingTenantContext;
 import uz.horecaos.platform.pricing.application.PricingEngine;
 import uz.horecaos.platform.pricing.application.QuoteService;
 import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingContext;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
+import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.application.ServiceabilityService;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyResolver;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcServiceabilityStore;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * Stage four of the cutover: an order can be taken and approved (ADR 0019).
@@ -197,7 +191,8 @@ class CartCheckoutAndOrderTests {
 
     @BeforeAll
     static void startDatabase() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for cart, checkout and order tests");
         db = TestDatabase.migrated();
         jdbcUrl = db.jdbcUrl();
@@ -268,30 +263,29 @@ class CartCheckoutAndOrderTests {
         // and the real planner ordering calls. Nothing here is a stand-in, because
         // a stand-in is how this seam stayed broken — the settlement tests planned
         // settlements themselves and so never asked whether anything else did.
-        loyaltyStore = new uz.horecaos.platform.loyalty.infrastructure.persistence
-                .JdbcLoyaltyStore(jdbc);
+        loyaltyStore = new uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore(jdbc);
         var redemption = new uz.horecaos.platform.loyalty.application.PointsRedemptionService(
-                loyaltyStore,
-                new uz.horecaos.platform.loyalty.application.LoyaltyPolicyService(loyaltyStore),
-                clock);
+                loyaltyStore, new uz.horecaos.platform.loyalty.application.LoyaltyPolicyService(loyaltyStore), clock);
         loyaltyAdjustments = new uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService(
-                loyaltyStore, ALWAYS_APPROVES, new JdbcAuditRecorder(jdbc, objectMapper), clock,
-                100_000L);
+                loyaltyStore, ALWAYS_APPROVES, new JdbcAuditRecorder(jdbc, objectMapper), clock, 100_000L);
         settlementStore = new JdbcSettlementStore(jdbc);
         intentStore = new JdbcPaymentIntentStore(jdbc);
         paymentAttemptStore = new JdbcPaymentAttemptStore(jdbc);
         settlements = new OrderSettlementService(settlementStore, redemption, clock);
         settlementPlanner = new CheckoutSettlementPlanner(settlementStore, settlements, clock);
-        loyaltyBalances = new uz.horecaos.platform.loyalty.application.LoyaltyQueryService(
-                loyaltyStore, clock);
+        loyaltyBalances = new uz.horecaos.platform.loyalty.application.LoyaltyQueryService(loyaltyStore, clock);
         // The production sweep, over the production store. The hold this suite
         // takes at checkout is the hold this sweep decides about, and the two
         // were never in the same test before.
         loyaltySweep = new uz.horecaos.platform.loyalty.application.LoyaltyMaintenanceService(
-                loyaltyStore, redemption,
-                new uz.horecaos.platform.payments.settlement.HeldTenderProgress(settlementStore,
+                loyaltyStore,
+                redemption,
+                new uz.horecaos.platform.payments.settlement.HeldTenderProgress(
+                        settlementStore,
                         new JdbcOrderDirectory(new JdbcOrderStore(jdbc)),
-                        intentStore, paymentAttemptStore, clock),
+                        intentStore,
+                        paymentAttemptStore,
+                        clock),
                 clock);
         confirmationSettles = new OrderConfirmedSettlementTrigger(settlementPlanner);
         // A BEFORE_COMMIT listener in production; invoked here at publication,
@@ -319,8 +313,13 @@ class CartCheckoutAndOrderTests {
                 (origin, destination, installationId) -> java.util.Optional.empty(),
                 new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
 
-        quotes = new QuoteService(pricingStore, new PricingEngine(),
-                new JdbcCatalogPricingContext(jdbc, "uz"), channelStore, deliveryFees, clock);
+        quotes = new QuoteService(
+                pricingStore,
+                new PricingEngine(),
+                new JdbcCatalogPricingContext(jdbc, "uz"),
+                channelStore,
+                deliveryFees,
+                clock);
         var serviceability = new ServiceabilityService(serviceabilityStore, clock);
 
         cartStore = new JdbcCartStore(jdbc);
@@ -334,29 +333,44 @@ class CartCheckoutAndOrderTests {
         // rather than stubbed into agreeing with itself.
         protection = new EnvelopeFieldProtection(new DataEncryptionKeyProvider(
                 new EnvironmentSecretResolver(
-                        Map.of("horecaos.secrets.data_encryption.platform.kek", "a-test-kek")::get,
-                        clock),
+                        Map.of("horecaos.secrets.data_encryption.platform.kek", "a-test-kek")::get, clock),
                 "local"));
 
         var tenantContext = new JdbcOrderingTenantContext(jdbc);
         var catalogSnapshot = new JdbcOrderCatalogSnapshot(jdbc, "uz");
-        var policies = new OrderAcceptancePolicyService(
-                new JdbcPolicyResolver(jdbc, objectMapper));
+        var policies = new OrderAcceptancePolicyService(new JdbcPolicyResolver(jdbc, objectMapper));
 
-        carts = new CartService(cartStore, channelStore,
-                new uz.horecaos.platform.ordering.infrastructure.catalog.JdbcCartMenuRules(
-                        jdbc, objectMapper),
-                serviceability, tenantContext, quotes,
+        carts = new CartService(
+                cartStore,
+                channelStore,
+                new uz.horecaos.platform.ordering.infrastructure.catalog.JdbcCartMenuRules(jdbc, objectMapper),
+                serviceability,
+                tenantContext,
+                quotes,
                 new uz.horecaos.platform.ordering.infrastructure.customer.JdbcCustomerAddressBook(
                         jdbc, protection, objectMapper),
-                protection, objectMapper, clock);
+                protection,
+                objectMapper,
+                clock);
         inventoryProcess = new OrderInventoryProcess(processStore, inventory, objectMapper, clock);
-        orderState = new OrderStateService(orderStore, serviceability, inventoryProcess, policies,
-                settlementPlanner, new JdbcAuditRecorder(jdbc, objectMapper), published, clock);
-        remedies = new OrderRemedyService(new JdbcRemedyStore(jdbc), settlements,
+        orderState = new OrderStateService(
+                orderStore,
+                serviceability,
+                inventoryProcess,
+                policies,
+                settlementPlanner,
+                new JdbcAuditRecorder(jdbc, objectMapper),
+                published,
+                clock);
+        remedies = new OrderRemedyService(
+                new JdbcRemedyStore(jdbc),
+                settlements,
                 new JdbcOrderDirectory(orderStore),
-                (tenantId, orderId) -> deliveryFeeBasis, ALWAYS_APPROVES,
-                new JdbcAuditRecorder(jdbc, objectMapper), clock, 200_000L);
+                (tenantId, orderId) -> deliveryFeeBasis,
+                ALWAYS_APPROVES,
+                new JdbcAuditRecorder(jdbc, objectMapper),
+                clock,
+                200_000L);
         orderQuery = new OrderQueryService(orderStore, processStore, UNWIRED_PAYMENTS, protection);
         // The real ADR 0024 gate over the real scope table, not a stub that agrees
         // with itself. No scope row is seeded, so every checkout below runs through
@@ -367,14 +381,31 @@ class CartCheckoutAndOrderTests {
 
         // One factory, so the wired-payments tests below assemble a checkout that
         // differs from the one every other test uses in exactly one collaborator.
-        checkoutWith = port -> new CheckoutService(cartStore, orderStore, attemptStore, carts,
-                channelStore, serviceability, serviceability, quotes, inventory, catalogSnapshot,
-                tenantContext, policies, inventoryProcess, migrationOwnership, port,
-                settlementPlanner, protection, objectMapper, published, clock);
+        checkoutWith = port -> new CheckoutService(
+                cartStore,
+                orderStore,
+                attemptStore,
+                carts,
+                channelStore,
+                serviceability,
+                serviceability,
+                quotes,
+                inventory,
+                catalogSnapshot,
+                tenantContext,
+                policies,
+                inventoryProcess,
+                migrationOwnership,
+                port,
+                settlementPlanner,
+                protection,
+                objectMapper,
+                published,
+                clock);
 
         checkout = checkoutWith.apply(UNWIRED_PAYMENTS);
-        deliveryOrders = new uz.horecaos.platform.ordering.infrastructure.JdbcDeliveryOrderPort(
-                jdbc, protection, objectMapper);
+        deliveryOrders =
+                new uz.horecaos.platform.ordering.infrastructure.JdbcDeliveryOrderPort(jdbc, protection, objectMapper);
 
         seedTenancyAndCatalog();
         seedPricingAndStock();
@@ -409,8 +440,8 @@ class CartCheckoutAndOrderTests {
         putLine(cart, "a", burgerVariant, 2);
         tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
 
-        var rebuilt = tx(() -> carts.rebuildAtLocation(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart),
-                OTHER_LOCATION));
+        var rebuilt =
+                tx(() -> carts.rebuildAtLocation(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), OTHER_LOCATION));
 
         assertThat(rebuilt.cart().cartId()).isNotEqualTo(cart);
         assertThat(rebuilt.cart().locationId()).isEqualTo(OTHER_LOCATION);
@@ -430,9 +461,10 @@ class CartCheckoutAndOrderTests {
         // The application always rebuilds. This asserts the rule survives a
         // maintainer who implements the rebuild as an UPDATE, which would silently
         // reprice nothing and show prices from the wrong branch.
-        Throwable moved = catchThrowable(() -> jdbc.sql(
-                        "UPDATE ordering.carts SET location_id = :other WHERE id = :id")
-                .param("other", OTHER_LOCATION).param("id", cart).update());
+        Throwable moved = catchThrowable(() -> jdbc.sql("UPDATE ordering.carts SET location_id = :other WHERE id = :id")
+                .param("other", OTHER_LOCATION)
+                .param("id", cart)
+                .update());
 
         assertThat(moved).isNotNull();
         assertThat(moved.getMessage()).contains("rebuild and reprice");
@@ -450,12 +482,11 @@ class CartCheckoutAndOrderTests {
     void aRequiredGroupMustBeSatisfied() {
         var cart = openCart();
 
-        var refused = catchThrowable(() -> tx(() -> carts.putLine(TENANT, BRAND, CUSTOMER, cart,
-                cartVersion(cart), "pizza", pizzaVariant, 1, List.of(), null)));
+        var refused = catchThrowable(() -> tx(() -> carts.putLine(
+                TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "pizza", pizzaVariant, 1, List.of(), null)));
 
         assertThat(refused).isInstanceOf(CartService.CartRefusedException.class);
-        assertThat(((CartService.CartRefusedException) refused).code())
-                .isEqualTo("MODIFIER_GROUP_MINIMUM_NOT_MET");
+        assertThat(((CartService.CartRefusedException) refused).code()).isEqualTo("MODIFIER_GROUP_MINIMUM_NOT_MET");
         assertThat(carts.view(TENANT, BRAND, CUSTOMER, cart).orElseThrow().lines())
                 .as("and the line is not left behind by a rolled-back edit")
                 .isEmpty();
@@ -466,12 +497,19 @@ class CartCheckoutAndOrderTests {
     void aGroupsMaximumIsEnforced() {
         var cart = openCart();
 
-        var refused = catchThrowable(() -> tx(() -> carts.putLine(TENANT, BRAND, CUSTOMER, cart,
-                cartVersion(cart), "pizza", pizzaVariant, 1,
-                List.of(sizeSmall, sizeMedium, sizeLarge), null)));
+        var refused = catchThrowable(() -> tx(() -> carts.putLine(
+                TENANT,
+                BRAND,
+                CUSTOMER,
+                cart,
+                cartVersion(cart),
+                "pizza",
+                pizzaVariant,
+                1,
+                List.of(sizeSmall, sizeMedium, sizeLarge),
+                null)));
 
-        assertThat(((CartService.CartRefusedException) refused).code())
-                .isEqualTo("MODIFIER_GROUP_MAXIMUM_EXCEEDED");
+        assertThat(((CartService.CartRefusedException) refused).code()).isEqualTo("MODIFIER_GROUP_MAXIMUM_EXCEEDED");
     }
 
     /**
@@ -484,12 +522,19 @@ class CartCheckoutAndOrderTests {
     void optionsFromAnotherProductsGroupAreRefused() {
         var cart = openCart();
 
-        var refused = catchThrowable(() -> tx(() -> carts.putLine(TENANT, BRAND, CUSTOMER, cart,
-                cartVersion(cart), "pizza", pizzaVariant, 1,
-                List.of(sizeSmall, extrasBacon), null)));
+        var refused = catchThrowable(() -> tx(() -> carts.putLine(
+                TENANT,
+                BRAND,
+                CUSTOMER,
+                cart,
+                cartVersion(cart),
+                "pizza",
+                pizzaVariant,
+                1,
+                List.of(sizeSmall, extrasBacon),
+                null)));
 
-        assertThat(((CartService.CartRefusedException) refused).code())
-                .isEqualTo("MODIFIER_NOT_OFFERED");
+        assertThat(((CartService.CartRefusedException) refused).code()).isEqualTo("MODIFIER_NOT_OFFERED");
     }
 
     @Test
@@ -497,12 +542,19 @@ class CartCheckoutAndOrderTests {
     void repeatsAreRefusedWhereTheGroupForbidsThem() {
         var cart = openCart();
 
-        var refused = catchThrowable(() -> tx(() -> carts.putLine(TENANT, BRAND, CUSTOMER, cart,
-                cartVersion(cart), "pizza", pizzaVariant, 1,
-                List.of(sizeSmall, sizeSmall), null)));
+        var refused = catchThrowable(() -> tx(() -> carts.putLine(
+                TENANT,
+                BRAND,
+                CUSTOMER,
+                cart,
+                cartVersion(cart),
+                "pizza",
+                pizzaVariant,
+                1,
+                List.of(sizeSmall, sizeSmall),
+                null)));
 
-        assertThat(((CartService.CartRefusedException) refused).code())
-                .isEqualTo("MODIFIER_OPTION_NOT_REPEATABLE");
+        assertThat(((CartService.CartRefusedException) refused).code()).isEqualTo("MODIFIER_OPTION_NOT_REPEATABLE");
     }
 
     @Test
@@ -510,8 +562,8 @@ class CartCheckoutAndOrderTests {
     void aValidSelectionIsAccepted() {
         var cart = openCart();
 
-        var view = tx(() -> carts.putLine(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart),
-                "pizza", pizzaVariant, 1, List.of(sizeMedium), null));
+        var view = tx(() -> carts.putLine(
+                TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "pizza", pizzaVariant, 1, List.of(sizeMedium), null));
 
         assertThat(view.lines()).hasSize(1);
         assertThat(carts.modifierIdsOf(view.lines().getFirst())).containsExactly(sizeMedium);
@@ -536,14 +588,13 @@ class CartCheckoutAndOrderTests {
                         + "a stranger can enumerate")
                 .isEmpty();
 
-        var refused = catchThrowable(() -> tx(() -> carts.putLine(TENANT, BRAND, OTHER_CUSTOMER,
-                cart, cartVersion(cart), "b", burgerVariant, 5, List.of(), null)));
+        var refused = catchThrowable(() -> tx(() -> carts.putLine(
+                TENANT, BRAND, OTHER_CUSTOMER, cart, cartVersion(cart), "b", burgerVariant, 5, List.of(), null)));
         assertThat(((CartService.CartRefusedException) refused).code()).isEqualTo("CART_NOT_FOUND");
 
-        var unpriceable = catchThrowable(() -> tx(() -> carts.price(TENANT, BRAND, OTHER_CUSTOMER,
-                cart, cartVersion(cart))));
-        assertThat(((CartService.CartRefusedException) unpriceable).code())
-                .isEqualTo("CART_NOT_FOUND");
+        var unpriceable =
+                catchThrowable(() -> tx(() -> carts.price(TENANT, BRAND, OTHER_CUSTOMER, cart, cartVersion(cart))));
+        assertThat(((CartService.CartRefusedException) unpriceable).code()).isEqualTo("CART_NOT_FOUND");
 
         assertThat(carts.view(TENANT, BRAND, CUSTOMER, cart).orElseThrow().lines())
                 .as("and the owner's basket is untouched by any of it")
@@ -672,8 +723,12 @@ class CartCheckoutAndOrderTests {
                     starts_at, ends_at, duration_minutes)
                 VALUES (:id, :tenantId, :brandId, :locationId, :from, :to, :minutes)
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("locationId", LOCATION).param("from", from).param("to", to)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", LOCATION)
+                .param("from", from)
+                .param("to", to)
                 .param("minutes", minutes)
                 .update();
     }
@@ -685,8 +740,11 @@ class CartCheckoutAndOrderTests {
                 VALUES (:id, :tenantId, :brandId, :locationId, :variantId,
                     make_interval(secs => :seconds))
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("locationId", LOCATION).param("variantId", variantId)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", LOCATION)
+                .param("variantId", variantId)
                 .param("seconds", (double) override.toSeconds())
                 .update();
     }
@@ -718,8 +776,7 @@ class CartCheckoutAndOrderTests {
         assertThat(result.warnings()).contains(PaymentIntentPort.NOT_WIRED_WARNING);
         assertThat(orderQuery.detail(TENANT, result.orderId()).orElseThrow().warnings())
                 .contains(PaymentIntentPort.NOT_WIRED_WARNING);
-        assertThat(orderStore.find(TENANT, result.orderId()).orElseThrow()
-                .paymentStatusProjection())
+        assertThat(orderStore.find(TENANT, result.orderId()).orElseThrow().paymentStatusProjection())
                 .as("no order waits on a provider that does not exist")
                 .isEqualTo("NOT_REQUIRED");
     }
@@ -794,13 +851,11 @@ class CartCheckoutAndOrderTests {
      * payment branch the same order would leave checkout {@code CONFIRMED} and a
      * kitchen would start cooking against a card nobody has charged.
      */
-    private void assertProviderMethodWaitsForPayment(String methodCode,
-            PaymentProviderType provider) {
+    private void assertProviderMethodWaitsForPayment(String methodCode, PaymentProviderType provider) {
 
         var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
 
-        var result = tx(() -> wired.checkout(
-                checkoutCommand(readyCart(), "idem-" + methodCode, methodCode)));
+        var result = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-" + methodCode, methodCode)));
 
         assertThat(result.created()).isTrue();
         assertThat(result.status()).isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
@@ -820,8 +875,7 @@ class CartCheckoutAndOrderTests {
 
         assertThat(published.events)
                 .as("an order waiting on a card has neither been confirmed nor sent for approval")
-                .noneMatch(event -> event instanceof OrderConfirmed
-                        || event instanceof OrderAwaitingApproval);
+                .noneMatch(event -> event instanceof OrderConfirmed || event instanceof OrderAwaitingApproval);
     }
 
     /** No ADR 0038 assignment, which is what a real build resolves today. */
@@ -837,20 +891,32 @@ class CartCheckoutAndOrderTests {
      * cash fiscal document — is production code against production SQL.
      */
     private PaymentIntentPort realPayments(UUID sellerId) {
-        PaymentLegalEntityResolver sellers = (tenantId, locationId, businessDate) ->
-                Optional.ofNullable(sellerId);
+        PaymentLegalEntityResolver sellers = (tenantId, locationId, businessDate) -> Optional.ofNullable(sellerId);
 
         PaymentBindingResolver bindings = new PaymentBindingResolver() {
 
             @Override
-            public Optional<ProviderBinding> resolve(UUID tenantId, UUID legalEntityId,
-                    PaymentProviderType providerType, java.time.LocalDate businessDate) {
+            public Optional<ProviderBinding> resolve(
+                    UUID tenantId,
+                    UUID legalEntityId,
+                    PaymentProviderType providerType,
+                    java.time.LocalDate businessDate) {
                 return Optional.of(new ProviderBinding(
-                        UUID.randomUUID(), tenantId, legalEntityId, providerType,
-                        UUID.randomUUID(), UUID.randomUUID(), "merchant-account", null, null,
+                        UUID.randomUUID(),
+                        tenantId,
+                        legalEntityId,
+                        providerType,
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        "merchant-account",
+                        null,
+                        null,
                         SecretReference.parse("horecaos:local:provider_payment:tenant:secret"),
-                        "callback-segment", true, true,
-                        java.time.LocalDate.of(2020, 1, 1), null));
+                        "callback-segment",
+                        true,
+                        true,
+                        java.time.LocalDate.of(2020, 1, 1),
+                        null));
             }
 
             @Override
@@ -859,11 +925,17 @@ class CartCheckoutAndOrderTests {
             }
         };
 
-        PaymentBusinessCalendar calendar =
-                (tenantId, locationId, at) -> at.atZone(ZoneId.of("Asia/Tashkent")).toLocalDate();
+        PaymentBusinessCalendar calendar = (tenantId, locationId, at) ->
+                at.atZone(ZoneId.of("Asia/Tashkent")).toLocalDate();
 
-        return new PaymentIntentService(intentStore, new JdbcOrderDirectory(orderStore), sellers,
-                bindings, calendar, new PaymentFiscalService(fiscalStore, List.of()), clock);
+        return new PaymentIntentService(
+                intentStore,
+                new JdbcOrderDirectory(orderStore),
+                sellers,
+                bindings,
+                calendar,
+                new PaymentFiscalService(fiscalStore, List.of()),
+                clock);
     }
 
     @Test
@@ -876,8 +948,7 @@ class CartCheckoutAndOrderTests {
         var second = tx(() -> checkout.checkout(command));
 
         assertThat(second.orderId()).isEqualTo(first.orderId());
-        assertThat(second.outcome())
-                .isEqualTo(CheckoutService.CheckoutResult.Outcome.REPLAYED);
+        assertThat(second.outcome()).isEqualTo(CheckoutService.CheckoutResult.Outcome.REPLAYED);
         assertThat(countOrders()).isEqualTo(1L);
     }
 
@@ -919,7 +990,9 @@ class CartCheckoutAndOrderTests {
 
             var results = List.of(first.get(20, TimeUnit.SECONDS), second.get(20, TimeUnit.SECONDS));
 
-            assertThat(results).filteredOn(CheckoutService.CheckoutResult::created).hasSize(1);
+            assertThat(results)
+                    .filteredOn(CheckoutService.CheckoutResult::created)
+                    .hasSize(1);
             assertThat(results).filteredOn(result -> !result.created()).hasSize(1);
             assertThat(countOrders())
                     .as("one basket, one order, whichever thread the scheduler favours")
@@ -956,16 +1029,15 @@ class CartCheckoutAndOrderTests {
         // then lapsed. The quote is still live because the test moves only the
         // reservation on; the point is that checkout must not treat a dead hold as
         // a live one.
-        tx(() -> inventory.reserveForQuote(TENANT, BRAND, LOCATION, priced.quote().quoteId(),
-                Map.of(burgerVariant, 2)));
+        tx(() -> inventory.reserveForQuote(
+                TENANT, BRAND, LOCATION, priced.quote().quoteId(), Map.of(burgerVariant, 2)));
         jdbc.sql("UPDATE inventory.reservations SET status = 'EXPIRED'").update();
 
         var refused = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-dead-hold")));
 
         assertThat(refused.rejectionCode()).isEqualTo("ITEMS_UNAVAILABLE");
         assertThat(refused.unavailableItems())
-                .allSatisfy(item -> assertThat(item.reason())
-                        .isEqualTo("RESERVATION_NO_LONGER_HELD"));
+                .allSatisfy(item -> assertThat(item.reason()).isEqualTo("RESERVATION_NO_LONGER_HELD"));
         assertThat(countOrders()).isZero();
     }
 
@@ -1014,8 +1086,18 @@ class CartCheckoutAndOrderTests {
         var foreignHash = readCart(theirs).pricingContextHash();
 
         var refused = tx(() -> checkout.checkout(new CheckoutService.CheckoutCommand(
-                TENANT, BRAND, mine, cartVersion(mine), foreignQuote, foreignHash,
-                "idem-foreign", null, 0L, "CUSTOMER", CUSTOMER.toString(), null)));
+                TENANT,
+                BRAND,
+                mine,
+                cartVersion(mine),
+                foreignQuote,
+                foreignHash,
+                "idem-foreign",
+                null,
+                0L,
+                "CUSTOMER",
+                CUSTOMER.toString(),
+                null)));
 
         assertThat(refused.rejectionCode()).isEqualTo("QUOTE_NOT_BOUND_TO_CART");
         assertThat(countOrders()).isZero();
@@ -1034,7 +1116,9 @@ class CartCheckoutAndOrderTests {
 
         assertThat(countOrders()).isZero();
         assertThat(jdbc.sql("SELECT count(*) FROM pricing.quotes WHERE status = 'ACCEPTED'")
-                .query(Long.class).single()).isZero();
+                        .query(Long.class)
+                        .single())
+                .isZero();
         assertThat(jdbc.sql("""
                 SELECT count(*) FROM tenant.location_capacity_holds WHERE released_at IS NULL
                 """).query(Long.class).single()).isZero();
@@ -1048,13 +1132,14 @@ class CartCheckoutAndOrderTests {
         var result = placeOrder("idem-snapshot");
         var before = orderQuery.detail(TENANT, result.orderId()).orElseThrow();
 
-        assertThat(before.lines()).singleElement()
+        assertThat(before.lines())
+                .singleElement()
                 .satisfies(line -> assertThat(line.line().productName()).isEqualTo("Qo'y burger"));
 
         // Everything a republish could touch: the name, the price, and the
         // publication itself.
-        jdbc.sql("UPDATE catalog.translations SET name = 'Renamed burger' "
-                + "WHERE entity_type = 'PRODUCT'").update();
+        jdbc.sql("UPDATE catalog.translations SET name = 'Renamed burger' " + "WHERE entity_type = 'PRODUCT'")
+                .update();
         jdbc.sql("UPDATE pricing.prices SET amount_minor = 90000").update();
         jdbc.sql("UPDATE catalog.publications SET status = 'RETIRED'").update();
         seedPublication("STOREFRONT");
@@ -1084,8 +1169,17 @@ class CartCheckoutAndOrderTests {
     @DisplayName("a customer note is carried onto the order and stays readable there")
     void aCustomerNoteIsReEncryptedOntoTheOrder() {
         var cart = openCart();
-        tx(() -> carts.putLine(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "a", burgerVariant, 2,
-                List.of(), "No onions, ring the top bell"));
+        tx(() -> carts.putLine(
+                TENANT,
+                BRAND,
+                CUSTOMER,
+                cart,
+                cartVersion(cart),
+                "a",
+                burgerVariant,
+                2,
+                List.of(),
+                "No onions, ring the top bell"));
         tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
 
         var result = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-note")));
@@ -1143,27 +1237,30 @@ class CartCheckoutAndOrderTests {
             Future<OrderStateService.DecisionResult> approve = pool.submit(() -> {
                 bothReady.countDown();
                 awaitQuietly(bothReady);
-                return tx(() -> orderState.decide(TENANT, order,
-                        decision("d-approve", OrderStateService.DecisionAction.APPROVE)));
+                return tx(() -> orderState.decide(
+                        TENANT, order, decision("d-approve", OrderStateService.DecisionAction.APPROVE)));
             });
             Future<OrderStateService.DecisionResult> reject = pool.submit(() -> {
                 bothReady.countDown();
                 awaitQuietly(bothReady);
-                return tx(() -> orderState.decide(TENANT, order,
-                        decision("d-reject", OrderStateService.DecisionAction.REJECT)));
+                return tx(() -> orderState.decide(
+                        TENANT, order, decision("d-reject", OrderStateService.DecisionAction.REJECT)));
             });
 
-            var results = List.of(approve.get(20, TimeUnit.SECONDS),
-                    reject.get(20, TimeUnit.SECONDS));
+            var results = List.of(approve.get(20, TimeUnit.SECONDS), reject.get(20, TimeUnit.SECONDS));
 
-            assertThat(results).filteredOn(OrderStateService.DecisionResult::applied).hasSize(1);
+            assertThat(results)
+                    .filteredOn(OrderStateService.DecisionResult::applied)
+                    .hasSize(1);
 
             assertThat(jdbc.sql("SELECT count(*) FROM ordering.approval_decisions")
-                    .query(Long.class).single())
+                            .query(Long.class)
+                            .single())
                     .as("both commands are on record; only one is effective")
                     .isEqualTo(2L);
             assertThat(jdbc.sql("SELECT count(*) FROM ordering.approval_decisions WHERE effective")
-                    .query(Long.class).single())
+                            .query(Long.class)
+                            .single())
                     .isEqualTo(1L);
 
             var settled = orderStore.find(TENANT, order).orElseThrow();
@@ -1171,8 +1268,7 @@ class CartCheckoutAndOrderTests {
 
             // Both callers are told the same thing, so a second click gives the
             // same answer as the first rather than an error.
-            assertThat(results).allSatisfy(result ->
-                    assertThat(result.status()).isEqualTo(settled.status()));
+            assertThat(results).allSatisfy(result -> assertThat(result.status()).isEqualTo(settled.status()));
         } finally {
             pool.shutdownNow();
         }
@@ -1184,16 +1280,18 @@ class CartCheckoutAndOrderTests {
         requireApproval();
         var order = placeOrder("idem-repeat-decision").orderId();
 
-        var first = tx(() -> orderState.decide(TENANT, order,
-                decision("d-1", OrderStateService.DecisionAction.APPROVE)));
-        var second = tx(() -> orderState.decide(TENANT, order,
-                decision("d-1", OrderStateService.DecisionAction.APPROVE)));
+        var first =
+                tx(() -> orderState.decide(TENANT, order, decision("d-1", OrderStateService.DecisionAction.APPROVE)));
+        var second =
+                tx(() -> orderState.decide(TENANT, order, decision("d-1", OrderStateService.DecisionAction.APPROVE)));
 
         assertThat(first.applied()).isTrue();
         assertThat(second.status()).isEqualTo(OrderStatus.CONFIRMED);
         assertThat(second.orderVersion()).isEqualTo(first.orderVersion());
         assertThat(jdbc.sql("SELECT count(*) FROM ordering.approval_decisions")
-                .query(Long.class).single()).isEqualTo(1L);
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1L);
     }
 
     @Test
@@ -1226,13 +1324,14 @@ class CartCheckoutAndOrderTests {
         clock.advance(Duration.ofMinutes(6));
         tx(() -> orderState.approvalDeadlineReached(TENANT, order));
 
-        var late = tx(() -> orderState.decide(TENANT, order,
-                decision("d-late", OrderStateService.DecisionAction.APPROVE)));
+        var late = tx(
+                () -> orderState.decide(TENANT, order, decision("d-late", OrderStateService.DecisionAction.APPROVE)));
 
         assertThat(late.applied()).isFalse();
         assertThat(late.status()).isEqualTo(OrderStatus.EXPIRED);
         assertThat(jdbc.sql("SELECT count(*) FROM ordering.approval_decisions")
-                .query(Long.class).single())
+                        .query(Long.class)
+                        .single())
                 .as("the command is recorded even though it changed nothing")
                 .isEqualTo(1L);
     }
@@ -1243,10 +1342,8 @@ class CartCheckoutAndOrderTests {
         requireApproval();
         var order = placeOrder("idem-audited").orderId();
 
-        tx(() -> orderState.decide(TENANT, order,
-                decision("d-win", OrderStateService.DecisionAction.APPROVE)));
-        tx(() -> orderState.decide(TENANT, order,
-                decision("d-lose", OrderStateService.DecisionAction.REJECT)));
+        tx(() -> orderState.decide(TENANT, order, decision("d-win", OrderStateService.DecisionAction.APPROVE)));
+        tx(() -> orderState.decide(TENANT, order, decision("d-lose", OrderStateService.DecisionAction.REJECT)));
 
         // "Who tried to reject this order, and when" is asked after every dispute.
         // An audit trail that recorded only the winner could not answer it.
@@ -1254,8 +1351,7 @@ class CartCheckoutAndOrderTests {
                 SELECT outcome FROM audit.audit_events
                 WHERE action_code = 'ordering.order.approval-decision'
                 ORDER BY occurred_at, outcome
-                """).query(String.class).list())
-                .containsExactlyInAnyOrder("SUCCEEDED", "REJECTED");
+                """).query(String.class).list()).containsExactlyInAnyOrder("SUCCEEDED", "REJECTED");
     }
 
     // ------------------------------------------------- inventory process
@@ -1277,7 +1373,10 @@ class CartCheckoutAndOrderTests {
         assertThat(reservationStatus()).isEqualTo("COMMITTED");
         assertThat(jdbc.sql("""
                 SELECT status FROM ordering.order_process_states WHERE order_id = :order
-                """).param("order", result.orderId()).query(String.class).single())
+                """)
+                        .param("order", result.orderId())
+                        .query(String.class)
+                        .single())
                 .isEqualTo("COMPLETED");
     }
 
@@ -1302,12 +1401,11 @@ class CartCheckoutAndOrderTests {
         var order = placeOrder("idem-cancel").orderId();
         int version = orderStore.find(TENANT, order).orElseThrow().version();
 
-        tx(() -> orderState.cancel(TENANT, order, version, "CUSTOMER_CHANGED_MIND", "CUSTOMER",
-                CUSTOMER.toString(), null));
+        tx(() -> orderState.cancel(
+                TENANT, order, version, "CUSTOMER_CHANGED_MIND", "CUSTOMER", CUSTOMER.toString(), null));
         tx(() -> inventoryProcess.runOnce(10));
 
-        assertThat(orderStore.find(TENANT, order).orElseThrow().status())
-                .isEqualTo(OrderStatus.CANCELLED);
+        assertThat(orderStore.find(TENANT, order).orElseThrow().status()).isEqualTo(OrderStatus.CANCELLED);
         assertThat(reservationStatus()).isEqualTo("RELEASED");
         assertThat(jdbc.sql("""
                 SELECT count(*) FROM tenant.location_capacity_holds WHERE released_at IS NULL
@@ -1322,8 +1420,8 @@ class CartCheckoutAndOrderTests {
 
         // ADR 0039 owns amendment. Half-performing the payment, fiscal, POS and
         // fulfilment consequences here would leave state nobody could reconstruct.
-        assertThat(catchThrowable(() -> tx(() -> orderState.cancel(TENANT, result.orderId(),
-                version, "OPERATOR_ERROR", "USER", "someone", null))))
+        assertThat(catchThrowable(() -> tx(() -> orderState.cancel(
+                        TENANT, result.orderId(), version, "OPERATOR_ERROR", "USER", "someone", null))))
                 .isInstanceOf(OrderStateService.CancellationNotPermittedException.class);
     }
 
@@ -1338,8 +1436,7 @@ class CartCheckoutAndOrderTests {
         advance(order, OrderStatus.READY);
         advance(order, OrderStatus.COMPLETED);
 
-        assertThat(orderStore.find(TENANT, order).orElseThrow().status())
-                .isEqualTo(OrderStatus.COMPLETED);
+        assertThat(orderStore.find(TENANT, order).orElseThrow().status()).isEqualTo(OrderStatus.COMPLETED);
         assertThat(orderQuery.timeline(TENANT, order))
                 .extracting(row -> row.toStatus())
                 .containsExactly("RECEIVED", "CONFIRMED", "PREPARING", "READY", "COMPLETED");
@@ -1357,8 +1454,8 @@ class CartCheckoutAndOrderTests {
         // FULFILLING is delivery only. A pickup order allowed in would wait for a
         // courier that does not exist, which is one of the ways an order becomes
         // permanently stuck.
-        assertThat(catchThrowable(() -> tx(() -> orderState.advance(TENANT, order,
-                OrderStatus.FULFILLING, version, "DISPATCHED", "USER", "someone", null))))
+        assertThat(catchThrowable(() -> tx(() -> orderState.advance(
+                        TENANT, order, OrderStatus.FULFILLING, version, "DISPATCHED", "USER", "someone", null))))
                 .isInstanceOf(OrderStateMachine.IllegalTransitionException.class);
     }
 
@@ -1369,12 +1466,13 @@ class CartCheckoutAndOrderTests {
         // order lifecycle. There is no table to override and no policy key that
         // reaches it; the only enforcement is that this set is a constant.
         assertThat(OrderStateMachine.transitionsFrom(OrderStatus.AWAITING_APPROVAL))
-                .containsExactlyInAnyOrder(OrderStatus.CONFIRMED, OrderStatus.REJECTED,
-                        OrderStatus.EXPIRED, OrderStatus.CANCELLED);
+                .containsExactlyInAnyOrder(
+                        OrderStatus.CONFIRMED, OrderStatus.REJECTED, OrderStatus.EXPIRED, OrderStatus.CANCELLED);
         assertThat(OrderStateMachine.transitionsFrom(OrderStatus.COMPLETED))
                 .as("no transition leaves a terminal status; a correction is a new order")
                 .isEmpty();
-        assertThat(OrderStateMachine.permits(OrderStatus.CONFIRMED, OrderStatus.RECEIVED)).isFalse();
+        assertThat(OrderStateMachine.permits(OrderStatus.CONFIRMED, OrderStatus.RECEIVED))
+                .isFalse();
     }
 
     @Test
@@ -1384,9 +1482,9 @@ class CartCheckoutAndOrderTests {
 
         // The CHECK constraint and OrderStatus have to agree. If a later change
         // adds a status in one place only, this is what fails.
-        assertThat(catchThrowable(() -> jdbc.sql(
-                        "UPDATE ordering.orders SET status = 'ON_HOLD' WHERE id = :id")
-                .param("id", order).update()))
+        assertThat(catchThrowable(() -> jdbc.sql("UPDATE ordering.orders SET status = 'ON_HOLD' WHERE id = :id")
+                        .param("id", order)
+                        .update()))
                 .isNotNull();
     }
 
@@ -1425,8 +1523,18 @@ class CartCheckoutAndOrderTests {
                 .isEmpty();
 
         var refused = tx(() -> checkout.checkout(new CheckoutService.CheckoutCommand(
-                otherTenant, BRAND, cart, 1, UUID.randomUUID(), "hash", "idem-cross", null, 0L,
-                "CUSTOMER", CUSTOMER.toString(), null)));
+                otherTenant,
+                BRAND,
+                cart,
+                1,
+                UUID.randomUUID(),
+                "hash",
+                "idem-cross",
+                null,
+                0L,
+                "CUSTOMER",
+                CUSTOMER.toString(),
+                null)));
         assertThat(refused.rejectionCode()).isEqualTo("CART_NOT_FOUND");
     }
 
@@ -1448,8 +1556,7 @@ class CartCheckoutAndOrderTests {
         UUID cart = openDeliveryCart();
         putLine(cart, "a", burgerVariant, 1);
 
-        tx(() -> carts.setDestination(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart),
-                destinationCommand(address)));
+        tx(() -> carts.setDestination(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), destinationCommand(address)));
 
         assertThat(carts.destinationAddressId(TENANT, BRAND, CUSTOMER, cart))
                 .as("the cart reports the address id it was given and never the address")
@@ -1468,8 +1575,7 @@ class CartCheckoutAndOrderTests {
         tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
         assertThat(readCart(cart).pricingQuoteId()).isNotNull();
 
-        tx(() -> carts.setDestination(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart),
-                destinationCommand(address)));
+        tx(() -> carts.setDestination(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), destinationCommand(address)));
 
         assertThat(readCart(cart).pricingQuoteId())
                 .as("ADR 0037 prices delivery from the destination, so a basket priced to one "
@@ -1483,8 +1589,8 @@ class CartCheckoutAndOrderTests {
         UUID theirs = insertAddress(OTHER_CUSTOMER, "Their home", 41.5, 69.5);
         UUID cart = openDeliveryCart();
 
-        var refused = catchThrowable(() -> tx(() -> carts.setDestination(TENANT, BRAND, CUSTOMER,
-                cart, cartVersion(cart), destinationCommand(theirs))));
+        var refused = catchThrowable(() -> tx(() ->
+                carts.setDestination(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), destinationCommand(theirs))));
 
         assertThat(((CartService.CartRefusedException) refused).code())
                 .as("an address id must not be probeable by trying it on a cart")
@@ -1497,12 +1603,11 @@ class CartCheckoutAndOrderTests {
         UUID address = insertAddress(CUSTOMER, "Mahalla house", null, null);
         UUID cart = openDeliveryCart();
 
-        var refused = catchThrowable(() -> tx(() -> carts.setDestination(TENANT, BRAND, CUSTOMER,
-                cart, cartVersion(cart), destinationCommand(address))));
+        var refused = catchThrowable(() -> tx(() ->
+                carts.setDestination(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), destinationCommand(address))));
 
         assertThat(((CartService.CartRefusedException) refused).code())
-                .as("a partner booking carries primitive coordinates, and 0,0 is the Gulf of "
-                        + "Guinea")
+                .as("a partner booking carries primitive coordinates, and 0,0 is the Gulf of " + "Guinea")
                 .isEqualTo("DESTINATION_NOT_LOCATED");
     }
 
@@ -1512,11 +1617,10 @@ class CartCheckoutAndOrderTests {
         UUID address = insertAddress(CUSTOMER, "Home", 41.311081, 69.240562);
         UUID cart = openCart();
 
-        var refused = catchThrowable(() -> tx(() -> carts.setDestination(TENANT, BRAND, CUSTOMER,
-                cart, cartVersion(cart), destinationCommand(address))));
+        var refused = catchThrowable(() -> tx(() ->
+                carts.setDestination(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), destinationCommand(address))));
 
-        assertThat(((CartService.CartRefusedException) refused).code())
-                .isEqualTo("DESTINATION_NOT_APPLICABLE");
+        assertThat(((CartService.CartRefusedException) refused).code()).isEqualTo("DESTINATION_NOT_APPLICABLE");
     }
 
     /**
@@ -1560,11 +1664,12 @@ class CartCheckoutAndOrderTests {
 
         var delivery = deliveryOrders.deliveryOrder(TENANT, orderId).orElseThrow();
 
-        assertThat(delivery.orderReference()).isEqualTo(
-                orderStore.find(TENANT, orderId).orElseThrow().publicOrderNumber());
+        assertThat(delivery.orderReference())
+                .isEqualTo(orderStore.find(TENANT, orderId).orElseThrow().publicOrderNumber());
         assertThat(delivery.currency()).isEqualTo("UZS");
-        assertThat(delivery.preparation()).isEqualTo(Duration.ofMinutes(
-                orderStore.find(TENANT, orderId).orElseThrow().promise().prepMinutes()));
+        assertThat(delivery.preparation())
+                .isEqualTo(Duration.ofMinutes(
+                        orderStore.find(TENANT, orderId).orElseThrow().promise().prepMinutes()));
         assertThat(delivery.prepaid())
                 .as("nothing has been captured, so the courier collects at the door")
                 .isFalse();
@@ -1576,7 +1681,9 @@ class CartCheckoutAndOrderTests {
         var dropoff = delivery.dropoff();
         assertThat(dropoff.latitude()).isEqualTo(41.311081);
         assertThat(dropoff.longitude()).isEqualTo(69.240562);
-        assertThat(dropoff.address()).contains("Amir Temur 12").contains("Tashkent")
+        assertThat(dropoff.address())
+                .contains("Amir Temur 12")
+                .contains("Tashkent")
                 .as("the landmark locates the building and must reach the courier")
                 .contains("blue gate");
         assertThat(dropoff.entrance()).isEqualTo("2");
@@ -1595,7 +1702,8 @@ class CartCheckoutAndOrderTests {
 
         assertThat(delivery.dropoff().toString()).isEqualTo("Waypoint[REDACTED]");
         assertThat(delivery.toString())
-                .doesNotContain("Amir Temur").doesNotContain("+998901112233")
+                .doesNotContain("Amir Temur")
+                .doesNotContain("+998901112233")
                 .doesNotContain("Dilnoza");
     }
 
@@ -1611,7 +1719,8 @@ class CartCheckoutAndOrderTests {
         var placed = placeDeliveryOrder("archived");
 
         jdbc.sql("UPDATE customer.addresses SET status = 'ARCHIVED' WHERE tenant_id = :tenantId")
-                .param("tenantId", TENANT).update();
+                .param("tenantId", TENANT)
+                .update();
 
         var delivery = deliveryOrders.deliveryOrder(TENANT, placed.orderId()).orElseThrow();
         assertThat(delivery.dropoff().address()).contains("Amir Temur 12");
@@ -1624,13 +1733,13 @@ class CartCheckoutAndOrderTests {
         UUID address = insertAddress(CUSTOMER, "Home", 41.311081, 69.240562);
         UUID cart = openDeliveryCart();
         putLine(cart, "a", burgerVariant, 1);
-        tx(() -> carts.setDestination(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart),
-                destinationCommand(address)));
+        tx(() -> carts.setDestination(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), destinationCommand(address)));
 
-        var rebuilt = tx(() -> carts.rebuildAtLocation(TENANT, BRAND, CUSTOMER, cart,
-                cartVersion(cart), OTHER_LOCATION));
+        var rebuilt =
+                tx(() -> carts.rebuildAtLocation(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), OTHER_LOCATION));
 
-        assertThat(carts.destinationAddressId(TENANT, BRAND, CUSTOMER, rebuilt.cart().cartId()))
+        assertThat(carts.destinationAddressId(
+                        TENANT, BRAND, CUSTOMER, rebuilt.cart().cartId()))
                 .as("a customer who moved branch did not move house")
                 .contains(address);
         // Re-encrypted under the new cart's own associated data rather than copied:
@@ -1677,13 +1786,17 @@ class CartCheckoutAndOrderTests {
         String ciphertext = jdbc.sql("""
                 SELECT address_encrypted FROM ordering.order_customer_snapshots
                 WHERE tenant_id = :tenantId AND order_id = :orderId
-                """).param("tenantId", TENANT).param("orderId", placed.orderId())
-                .query(String.class).single();
+                """)
+                .param("tenantId", TENANT)
+                .param("orderId", placed.orderId())
+                .query(String.class)
+                .single();
 
-        Throwable misread = catchThrowable(() -> protection.reveal(TENANT,
+        Throwable misread = catchThrowable(() -> protection.reveal(
+                TENANT,
                 uz.horecaos.platform.iam.api.protection.ProtectedValue.deserialize(ciphertext),
-                new FieldProtection.RecordRef("ordering.order_customer_snapshots",
-                        "address_encrypted", UUID.randomUUID()),
+                new FieldProtection.RecordRef(
+                        "ordering.order_customer_snapshots", "address_encrypted", UUID.randomUUID()),
                 "TEST"));
 
         assertThat(misread).isNotNull();
@@ -1696,10 +1809,11 @@ class CartCheckoutAndOrderTests {
 
         assertThat(published.events)
                 .isNotEmpty()
-                .allSatisfy(event -> assertThat(event.toString() + event.payload().toString())
-                        .doesNotContain("Amir Temur")
-                        .doesNotContain("+998901112233")
-                        .doesNotContain("Dilnoza"));
+                .allSatisfy(
+                        event -> assertThat(event.toString() + event.payload().toString())
+                                .doesNotContain("Amir Temur")
+                                .doesNotContain("+998901112233")
+                                .doesNotContain("Dilnoza"));
     }
 
     /**
@@ -1721,8 +1835,9 @@ class CartCheckoutAndOrderTests {
         var placed = placeDeliveryOrder("planned");
         var order = orderStore.find(TENANT, placed.orderId()).orElseThrow();
 
-        var plan = deliveryPlanning().open(TENANT, BRAND, LOCATION, placed.orderId(),
-                order.confirmedAt()).orElseThrow();
+        var plan = deliveryPlanning()
+                .open(TENANT, BRAND, LOCATION, placed.orderId(), order.confirmedAt())
+                .orElseThrow();
 
         assertThat(plan.orderId()).isEqualTo(placed.orderId());
         assertThat(plan.currency()).isEqualTo("UZS");
@@ -1736,8 +1851,11 @@ class CartCheckoutAndOrderTests {
         assertThat(jdbc.sql("""
                 SELECT count(*) FROM fulfillment.delivery_sourcing_jobs
                 WHERE tenant_id = :tenantId AND delivery_plan_id = :planId
-                """).param("tenantId", TENANT).param("planId", plan.id())
-                .query(Long.class).single())
+                """)
+                        .param("tenantId", TENANT)
+                        .param("planId", plan.id())
+                        .query(Long.class)
+                        .single())
                 .as("and the durable alarm clock that wakes sourcing")
                 .isEqualTo(1L);
     }
@@ -1753,8 +1871,8 @@ class CartCheckoutAndOrderTests {
         var placed = placeDeliveryOrder("unplaced-branch");
         var order = orderStore.find(TENANT, placed.orderId()).orElseThrow();
 
-        assertThat(deliveryPlanning().open(TENANT, BRAND, LOCATION, placed.orderId(),
-                order.confirmedAt())).isEmpty();
+        assertThat(deliveryPlanning().open(TENANT, BRAND, LOCATION, placed.orderId(), order.confirmedAt()))
+                .isEmpty();
         assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().status())
                 .as("the order stands; a configuration gap is not a checkout outage")
                 .isEqualTo(OrderStatus.CONFIRMED);
@@ -1810,8 +1928,7 @@ class CartCheckoutAndOrderTests {
         assertThat(refundedMinor(placed.orderId())).isEqualTo(100_000L);
         // V0048's headroom, over a real order rather than a hand-planned one: a
         // third refund has nothing left to take.
-        assertThatThrownBy(() -> tx(() -> remedies.recordRefund(
-                refundOf(placed.orderId(), 1_000L))))
+        assertThatThrownBy(() -> tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 1_000L))))
                 .hasMessageContaining("cannot exceed what the tenders settled");
     }
 
@@ -1823,8 +1940,7 @@ class CartCheckoutAndOrderTests {
         handOver(placed.orderId());
         deliveryFeeBasis = java.util.OptionalLong.of(12_000L);
 
-        var outcome = tx(() -> remedies.recordDeliveryFeeReimbursement(
-                refundOf(placed.orderId(), 12_000L)));
+        var outcome = tx(() -> remedies.recordDeliveryFeeReimbursement(refundOf(placed.orderId(), 12_000L)));
 
         assertThat(outcome.recorded()).isTrue();
         assertThat(outcome.remedy().deliveryFeeBasisMinor()).isEqualTo(12_000L);
@@ -1847,14 +1963,21 @@ class CartCheckoutAndOrderTests {
         var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-grant", "CASH")));
         handOver(placed.orderId());
 
-        var outcome = tx(() -> remedies.grantFutureDiscount(
-                new OrderRemedyService.FutureDiscountCommand(TENANT, placed.orderId(),
-                        uz.horecaos.platform.payments.api.EntitlementScope.DELIVERY_FEE,
-                        uz.horecaos.platform.payments.api.EntitlementBenefit.FIXED_AMOUNT,
-                        null, 12_000L, null, 3, Duration.ofDays(30), "SERVICE_FAILURE",
-                        "Ninety minutes late",
-                        uz.horecaos.platform.audit.api.ActorRef.user("support-1", null),
-                        "k-grant", null)));
+        var outcome = tx(() -> remedies.grantFutureDiscount(new OrderRemedyService.FutureDiscountCommand(
+                TENANT,
+                placed.orderId(),
+                uz.horecaos.platform.payments.api.EntitlementScope.DELIVERY_FEE,
+                uz.horecaos.platform.payments.api.EntitlementBenefit.FIXED_AMOUNT,
+                null,
+                12_000L,
+                null,
+                3,
+                Duration.ofDays(30),
+                "SERVICE_FAILURE",
+                "Ninety minutes late",
+                uz.horecaos.platform.audit.api.ActorRef.user("support-1", null),
+                "k-grant",
+                null)));
 
         assertThat(outcome.recorded()).isTrue();
         assertThat(refundedMinor(placed.orderId())).isZero();
@@ -1885,10 +2008,8 @@ class CartCheckoutAndOrderTests {
 
         // Confirmed at checkout, with a courier yet to collect anything.
         assertThat(settlementStatus(placed.orderId())).isEqualTo(SettlementStatus.PLANNED);
-        assertThatThrownBy(() -> tx(() -> remedies.recordRefund(
-                refundOf(placed.orderId(), 10_000L))))
-                .as("refunding cash the tenant has never held is the failure this ordering "
-                        + "prevents")
+        assertThatThrownBy(() -> tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 10_000L))))
+                .as("refunding cash the tenant has never held is the failure this ordering " + "prevents")
                 .hasMessageContaining("cannot exceed what the tenders settled");
 
         handOver(placed.orderId());
@@ -1916,9 +2037,9 @@ class CartCheckoutAndOrderTests {
         seedRedemptionPolicy();
         seedBalance(20_000L);
         var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
-        var placed = tx(() -> wired.checkout(
-                checkoutCommand(readyCart(), "idem-card", "CLICK", 20_000L)));
-        UUID account = loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-card", "CLICK", 20_000L)));
+        UUID account =
+                loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
 
         // ADR 0013's BEFORE_CONFIRMATION timing: the order waits on the money, so
         // nothing has settled while it waits.
@@ -1942,8 +2063,7 @@ class CartCheckoutAndOrderTests {
         advance(placed.orderId(), OrderStatus.CONFIRMED);
 
         assertThat(settlementStatus(placed.orderId())).isEqualTo(SettlementStatus.SETTLED);
-        assertThat(tenderStatuses(placed.orderId()))
-                .containsExactly(TenderStatus.SETTLED, TenderStatus.SETTLED);
+        assertThat(tenderStatuses(placed.orderId())).containsExactly(TenderStatus.SETTLED, TenderStatus.SETTLED);
         var outcome = tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 100_000L)));
         assertThat(outcome.recorded()).isTrue();
     }
@@ -1971,9 +2091,9 @@ class CartCheckoutAndOrderTests {
         var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
 
         // t=0. 20 000 from points, 80 000 from Payme.
-        var placed = tx(() -> wired.checkout(
-                checkoutCommand(readyCart(), "idem-payme-split", "PAYME", 20_000L)));
-        UUID account = loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-payme-split", "PAYME", 20_000L)));
+        UUID account =
+                loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
 
         assertThat(placed.status()).isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
         assertThat(tenderAmounts(placed.orderId())).containsExactly(20_000L, 80_000L);
@@ -1981,9 +2101,10 @@ class CartCheckoutAndOrderTests {
                 .as("the hold is the debit: the points left the balance at checkout")
                 .isZero();
 
-        UUID attempt = reservedAttempt(placed.orderId(), PaymentProviderType.PAYME,
-                uz.horecaos.platform.payments.application.PaymentAttemptService
-                        .PAYME_TRANSACTION_TIMEOUT);
+        UUID attempt = reservedAttempt(
+                placed.orderId(),
+                PaymentProviderType.PAYME,
+                uz.horecaos.platform.payments.application.PaymentAttemptService.PAYME_TRANSACTION_TIMEOUT);
 
         // t=32min. The hold is past its thirty-minute lifetime and the sweep runs
         // on its two-minute cadence. It used to release here.
@@ -1995,8 +2116,7 @@ class CartCheckoutAndOrderTests {
                 .as("Payme is holding a transaction against this order; the customer has not "
                         + "abandoned anything and their points are not theirs to spend again")
                 .isZero();
-        assertThat(tenderStatuses(placed.orderId()))
-                .containsExactly(TenderStatus.RESERVED, TenderStatus.PLANNED);
+        assertThat(tenderStatuses(placed.orderId())).containsExactly(TenderStatus.RESERVED, TenderStatus.PLANNED);
 
         // t=40min. Well inside Payme's twelve hours, the customer pays.
         clock.advance(Duration.ofMinutes(8));
@@ -2030,9 +2150,9 @@ class CartCheckoutAndOrderTests {
         seedRedemptionPolicy();
         seedBalance(20_000L);
         var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
-        var placed = tx(() -> wired.checkout(
-                checkoutCommand(readyCart(), "idem-payme-abandoned", "PAYME", 20_000L)));
-        UUID account = loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-payme-abandoned", "PAYME", 20_000L)));
+        UUID account =
+                loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
 
         presentedAttempt(placed.orderId(), PaymentProviderType.PAYME);
 
@@ -2063,13 +2183,14 @@ class CartCheckoutAndOrderTests {
         seedRedemptionPolicy();
         seedBalance(20_000L);
         var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
-        var placed = tx(() -> wired.checkout(
-                checkoutCommand(readyCart(), "idem-payme-stale", "PAYME", 20_000L)));
-        UUID account = loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-payme-stale", "PAYME", 20_000L)));
+        UUID account =
+                loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
 
-        reservedAttempt(placed.orderId(), PaymentProviderType.PAYME,
-                uz.horecaos.platform.payments.application.PaymentAttemptService
-                        .PAYME_TRANSACTION_TIMEOUT);
+        reservedAttempt(
+                placed.orderId(),
+                PaymentProviderType.PAYME,
+                uz.horecaos.platform.payments.application.PaymentAttemptService.PAYME_TRANSACTION_TIMEOUT);
 
         clock.advance(Duration.ofHours(11));
         assertThat(tx(() -> loyaltySweep.releaseStaleHolds()))
@@ -2103,9 +2224,9 @@ class CartCheckoutAndOrderTests {
         seedRedemptionPolicy();
         seedBalance(20_000L);
         var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
-        var placed = tx(() -> wired.checkout(
-                checkoutCommand(readyCart(), "idem-payme-late", "PAYME", 20_000L)));
-        UUID account = loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-payme-late", "PAYME", 20_000L)));
+        UUID account =
+                loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
 
         // The tab looked closed, so the hold went back on the old cadence.
         presentedAttempt(placed.orderId(), PaymentProviderType.PAYME);
@@ -2118,16 +2239,16 @@ class CartCheckoutAndOrderTests {
         advance(placed.orderId(), OrderStatus.CONFIRMED);
 
         assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().status())
-                .as("an order whose money a provider captured must not be strandable by a "
-                        + "listener that throws")
+                .as("an order whose money a provider captured must not be strandable by a " + "listener that throws")
                 .isEqualTo(OrderStatus.CONFIRMED);
         assertThat(settlementStatus(placed.orderId()))
                 .as("half paid is not a healthy order and must not read as one")
                 .isEqualTo(SettlementStatus.PARTIALLY_SETTLED);
-        assertThat(tenderStatuses(placed.orderId()))
-                .containsExactly(TenderStatus.RELEASED, TenderStatus.SETTLED);
-        assertThat(settlementStore.findSettlement(TENANT, placed.orderId()).orElseThrow()
-                .settledMinor())
+        assertThat(tenderStatuses(placed.orderId())).containsExactly(TenderStatus.RELEASED, TenderStatus.SETTLED);
+        assertThat(settlementStore
+                        .findSettlement(TENANT, placed.orderId())
+                        .orElseThrow()
+                        .settledMinor())
                 .as("the money the platform actually has, to the som")
                 .isEqualTo(80_000L);
         assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor())
@@ -2137,8 +2258,8 @@ class CartCheckoutAndOrderTests {
 
         // The operator's worklist, which is what makes it resolvable rather than
         // merely recorded.
-        assertThat(settlementStore.settlementsRestingPartiallySettled(TENANT,
-                        clock.instant().plus(Duration.ofMinutes(1)), 10))
+        assertThat(settlementStore.settlementsRestingPartiallySettled(
+                        TENANT, clock.instant().plus(Duration.ofMinutes(1)), 10))
                 .extracting(JdbcSettlementStore.SettlementRow::orderId)
                 .containsExactly(placed.orderId());
 
@@ -2146,8 +2267,7 @@ class CartCheckoutAndOrderTests {
         // 80 000 is all that can go back out.
         var outcome = tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 80_000L)));
         assertThat(outcome.recorded()).isTrue();
-        assertThatThrownBy(() -> tx(() -> remedies.recordRefund(
-                refundOf(placed.orderId(), 1_000L))))
+        assertThatThrownBy(() -> tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 1_000L))))
                 .hasMessageContaining("cannot exceed what the tenders settled");
     }
 
@@ -2165,36 +2285,36 @@ class CartCheckoutAndOrderTests {
         seedRedemptionPolicy();
         seedBalance(20_000L);
         var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
-        var placed = tx(() -> wired.checkout(
-                checkoutCommand(readyCart(), "idem-payme-cancel", "PAYME", 20_000L)));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-payme-cancel", "PAYME", 20_000L)));
 
         presentedAttempt(placed.orderId(), PaymentProviderType.PAYME);
         clock.advance(Duration.ofMinutes(31));
         tx(() -> loyaltySweep.releaseStaleHolds());
         advance(placed.orderId(), OrderStatus.CONFIRMED);
 
-        tx(() -> settlementPlanner.recordTerminalOutcome(TENANT, placed.orderId(),
-                "ORDER_CANCELLED", "operator"));
+        tx(() -> settlementPlanner.recordTerminalOutcome(TENANT, placed.orderId(), "ORDER_CANCELLED", "operator"));
 
         assertThat(settlementStatus(placed.orderId())).isEqualTo(SettlementStatus.PARTIALLY_SETTLED);
-        assertThat(settlementStore.findSettlement(TENANT, placed.orderId()).orElseThrow()
-                .settledMinor()).isEqualTo(80_000L);
-        assertThat(tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 80_000L))).recorded())
+        assertThat(settlementStore
+                        .findSettlement(TENANT, placed.orderId())
+                        .orElseThrow()
+                        .settledMinor())
+                .isEqualTo(80_000L);
+        assertThat(tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 80_000L)))
+                        .recorded())
                 .as("the customer's money is still refundable, which failing the settlement "
                         + "would have made impossible")
                 .isTrue();
     }
 
     @Test
-    @DisplayName("points and cash settle one order, and a refund returns the money before "
-            + "the points")
+    @DisplayName("points and cash settle one order, and a refund returns the money before " + "the points")
     void aSplitTenderOrderIsPlannedAndSettled() {
         seedRedemptionPolicy();
         seedBalance(20_000L);
         var wired = checkoutWith.apply(realPayments(NO_SELLER));
 
-        var placed = tx(() -> wired.checkout(
-                checkoutCommand(readyCart(), "idem-split", "CASH", 20_000L)));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-split", "CASH", 20_000L)));
         handOver(placed.orderId());
 
         assertThat(tenderAmounts(placed.orderId()))
@@ -2231,9 +2351,9 @@ class CartCheckoutAndOrderTests {
         seedRedemptionPolicy();
         seedBalance(20_000L);
         var wired = checkoutWith.apply(realPayments(NO_SELLER));
-        var placed = tx(() -> wired.checkout(
-                checkoutCommand(readyCart(), "idem-slow-cash", "CASH", 20_000L)));
-        UUID account = loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-slow-cash", "CASH", 20_000L)));
+        UUID account =
+                loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
 
         assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor())
                 .as("the hold is the debit: the points left the balance at checkout")
@@ -2280,12 +2400,12 @@ class CartCheckoutAndOrderTests {
         seedRedemptionPolicy();
         seedBalance(20_000L);
         var placed = placeDeliveryOrder("idem-working-statuses", 20_000L);
-        UUID account = loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
+        UUID account =
+                loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
 
         assertThat(placed.status()).isEqualTo(OrderStatus.CONFIRMED);
 
-        for (OrderStatus status : List.of(OrderStatus.PREPARING, OrderStatus.READY,
-                OrderStatus.FULFILLING)) {
+        for (OrderStatus status : List.of(OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.FULFILLING)) {
             advance(placed.orderId(), status);
             clock.advance(Duration.ofMinutes(31));
 
@@ -2319,9 +2439,9 @@ class CartCheckoutAndOrderTests {
         seedRedemptionPolicy();
         seedBalance(20_000L);
         var wired = checkoutWith.apply(realPayments(NO_SELLER));
-        var placed = tx(() -> wired.checkout(
-                checkoutCommand(readyCart(), "idem-awaiting", "CASH", 20_000L)));
-        UUID account = loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-awaiting", "CASH", 20_000L)));
+        UUID account =
+                loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
 
         assertThat(placed.status()).isEqualTo(OrderStatus.AWAITING_APPROVAL);
 
@@ -2332,8 +2452,7 @@ class CartCheckoutAndOrderTests {
 
         assertThat(tx(() -> loyaltySweep.releaseStaleHolds())).isZero();
         assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor()).isZero();
-        assertThat(tenderStatuses(placed.orderId()))
-                .containsExactly(TenderStatus.RESERVED, TenderStatus.PLANNED);
+        assertThat(tenderStatuses(placed.orderId())).containsExactly(TenderStatus.RESERVED, TenderStatus.PLANNED);
     }
 
     @Test
@@ -2342,9 +2461,19 @@ class CartCheckoutAndOrderTests {
         allowGuestOrders();
         var cart = readyGuestCart();
         var command = guestCheckoutCommand(cart, "idem-guest-points");
-        var redeeming = new CheckoutService.CheckoutCommand(TENANT, BRAND, cart,
-                command.expectedCartVersion(), command.quoteId(), command.contextHash(),
-                "idem-guest-redeem", "CASH", 10_000L, "CUSTOMER", null, null);
+        var redeeming = new CheckoutService.CheckoutCommand(
+                TENANT,
+                BRAND,
+                cart,
+                command.expectedCartVersion(),
+                command.quoteId(),
+                command.contextHash(),
+                "idem-guest-redeem",
+                "CASH",
+                10_000L,
+                "CUSTOMER",
+                null,
+                null);
 
         var refused = tx(() -> checkout.checkout(redeeming));
 
@@ -2359,12 +2488,11 @@ class CartCheckoutAndOrderTests {
      * completable order with no settlement, no tenders and no refund path.
      */
     @Test
-    @DisplayName("a checkout that names no payment method is refused rather than creating an "
-            + "order nobody can refund")
+    @DisplayName(
+            "a checkout that names no payment method is refused rather than creating an " + "order nobody can refund")
     void aCheckoutMustNameAPaymentMethod() {
         var wired = checkoutWith.apply(realPayments(NO_SELLER));
-        var refused = tx(() -> wired.checkout(
-                checkoutCommand(readyCart(), "idem-no-method", null)));
+        var refused = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-no-method", null)));
 
         assertThat(refused.rejectionCode()).isEqualTo("PAYMENT_METHOD_REQUIRED");
         assertThat(countOrders())
@@ -2375,8 +2503,7 @@ class CartCheckoutAndOrderTests {
     @Test
     @DisplayName("a redemption that would cover the whole order is refused at checkout")
     void pointsCannotCoverTheWholeOrder() {
-        var refused = tx(() -> checkout.checkout(
-                checkoutCommand(readyCart(), "idem-all-points", "CASH", 100_000L)));
+        var refused = tx(() -> checkout.checkout(checkoutCommand(readyCart(), "idem-all-points", "CASH", 100_000L)));
 
         // ADR 0046's structural rule: an order with no money tender has no fiscal
         // path and nothing for a courier to collect.
@@ -2415,8 +2542,7 @@ class CartCheckoutAndOrderTests {
         seedBalance(20_000L);
         var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
 
-        var placed = tx(() -> wired.checkout(
-                checkoutCommand(readyCart(), "idem-split-intent", "PAYME", 20_000L)));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-split-intent", "PAYME", 20_000L)));
 
         assertThat(placed.status()).isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
         assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().totalMinor())
@@ -2445,8 +2571,8 @@ class CartCheckoutAndOrderTests {
         var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
 
         for (long redeemed : List.of(0L, 1L, 12_000L, 50_000L)) {
-            var placed = tx(() -> wired.checkout(
-                    checkoutCommand(readyCart(), "idem-leg-" + redeemed, "PAYME", redeemed)));
+            var placed =
+                    tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-leg-" + redeemed, "PAYME", redeemed)));
 
             assertThat(intentAmount(placed.orderId()))
                     .as("redeeming %d: the intent and the money tenders are one figure", redeemed)
@@ -2505,8 +2631,7 @@ class CartCheckoutAndOrderTests {
         seedBalance(20_000L);
         var wired = checkoutWith.apply(realPayments(NO_SELLER));
 
-        var placed = tx(() -> wired.checkout(
-                checkoutCommand(readyCart(), "idem-split-cash-intent", "CASH", 20_000L)));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-split-cash-intent", "CASH", 20_000L)));
 
         assertThat(placed.status()).isEqualTo(OrderStatus.CONFIRMED);
         assertThat(tenderAmounts(placed.orderId())).containsExactly(20_000L, 80_000L);
@@ -2533,13 +2658,13 @@ class CartCheckoutAndOrderTests {
         allowGuestOrders();
         var wired = checkoutWith.apply(realPayments(NO_SELLER));
 
-        var placed = tx(() -> wired.checkout(
-                guestCheckoutCommand(readyGuestCart(), "idem-guest-intent")));
+        var placed = tx(() -> wired.checkout(guestCheckoutCommand(readyGuestCart(), "idem-guest-intent")));
 
         assertThat(placed.created()).isTrue();
         assertThat(tenderAmounts(placed.orderId())).containsExactly(100_000L);
         assertThat(intentAmount(placed.orderId()))
-                .isEqualTo(orderStore.find(TENANT, placed.orderId()).orElseThrow().totalMinor());
+                .isEqualTo(
+                        orderStore.find(TENANT, placed.orderId()).orElseThrow().totalMinor());
         assertThat(intentAmount(placed.orderId())).isEqualTo(100_000L);
     }
 
@@ -2554,9 +2679,13 @@ class CartCheckoutAndOrderTests {
 
         assertThat(second.orderId()).isEqualTo(first.orderId());
         assertThat(jdbc.sql("SELECT count(*) FROM payments.order_settlements")
-                .query(Long.class).single()).isEqualTo(1L);
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1L);
         assertThat(jdbc.sql("SELECT count(*) FROM payments.tenders")
-                .query(Long.class).single()).isEqualTo(1L);
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1L);
     }
 
     @Test
@@ -2571,8 +2700,8 @@ class CartCheckoutAndOrderTests {
                 .as("an order id is a UUID somebody else can hold; the tenant predicate is what "
                         + "stands between it and another tenant's money")
                 .isEmpty();
-        assertThatThrownBy(() -> tx(() -> settlements.refund(otherTenant, placed.orderId(),
-                10_000L, "GOODWILL", "attacker")))
+        assertThatThrownBy(() ->
+                        tx(() -> settlements.refund(otherTenant, placed.orderId(), 10_000L, "GOODWILL", "attacker")))
                 .hasMessageContaining("The order has no settlement");
         assertThat(refundedMinor(placed.orderId())).isZero();
     }
@@ -2581,14 +2710,18 @@ class CartCheckoutAndOrderTests {
 
     private static final PaymentIntentPort UNWIRED_PAYMENTS = new PaymentIntentPort() {
         @Override
-        public boolean paymentRequiredBeforeConfirmation(UUID tenantId, UUID orderId,
-                String paymentMethodCode) {
+        public boolean paymentRequiredBeforeConfirmation(UUID tenantId, UUID orderId, String paymentMethodCode) {
             return false;
         }
 
         @Override
-        public UUID createIntent(UUID tenantId, UUID orderId, long amountMinor, String currency,
-                String paymentMethodCode, String idempotencyKey) {
+        public UUID createIntent(
+                UUID tenantId,
+                UUID orderId,
+                long amountMinor,
+                String currency,
+                String paymentMethodCode,
+                String idempotencyKey) {
             return null;
         }
 
@@ -2607,12 +2740,9 @@ class CartCheckoutAndOrderTests {
     private uz.horecaos.platform.fulfillment.application.DeliveryPlanningService deliveryPlanning() {
         return new uz.horecaos.platform.fulfillment.application.DeliveryPlanningService(
                 deliveryOrders,
-                new uz.horecaos.platform.fulfillment.infrastructure.persistence
-                        .JdbcDeliveryPlanStore(jdbc),
-                new uz.horecaos.platform.fulfillment.infrastructure.persistence
-                        .JdbcSourcingJobStore(jdbc),
-                new uz.horecaos.platform.fulfillment.infrastructure.persistence
-                        .JdbcDispatchBranchStore(jdbc),
+                new uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore(jdbc),
+                new uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcSourcingJobStore(jdbc),
+                new uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDispatchBranchStore(jdbc),
                 new JdbcPolicyResolver(jdbc, objectMapper),
                 clock);
     }
@@ -2627,8 +2757,8 @@ class CartCheckoutAndOrderTests {
     }
 
     private UUID openDeliveryCart() {
-        return tx(() -> carts.create(TENANT, BRAND, LOCATION, "STOREFRONT",
-                FulfillmentMode.DELIVERY, CUSTOMER, null)).cartId();
+        return tx(() -> carts.create(TENANT, BRAND, LOCATION, "STOREFRONT", FulfillmentMode.DELIVERY, CUSTOMER, null))
+                .cartId();
     }
 
     private CartService.DestinationCommand destinationCommand(UUID addressId) {
@@ -2659,16 +2789,19 @@ class CartCheckoutAndOrderTests {
                 "apartment", "41",
                 "landmark", "blue gate"));
 
-        String fields = protection.protect(TENANT,
+        String fields = protection
+                .protect(
+                        TENANT,
                         uz.horecaos.platform.iam.api.protection.DataClass.PERSONAL,
-                        new FieldProtection.RecordRef("customer.addresses", "encrypted_fields",
-                                addressId),
+                        new FieldProtection.RecordRef("customer.addresses", "encrypted_fields", addressId),
                         document)
                 .serialize();
-        String instructions = protection.protect(TENANT,
+        String instructions = protection
+                .protect(
+                        TENANT,
                         uz.horecaos.platform.iam.api.protection.DataClass.PERSONAL,
-                        new FieldProtection.RecordRef("customer.addresses",
-                                "delivery_instructions_encrypted", addressId),
+                        new FieldProtection.RecordRef(
+                                "customer.addresses", "delivery_instructions_encrypted", addressId),
                         "Ring the top bell")
                 .serialize();
 
@@ -2679,9 +2812,14 @@ class CartCheckoutAndOrderTests {
                 VALUES (:id, :tenantId, :accountId, :label, :fields, :instructions,
                     :latitude, :longitude, :source, 'ACTIVE', 1)
                 """)
-                .param("id", addressId).param("tenantId", TENANT).param("accountId", accountId)
-                .param("label", label).param("fields", fields).param("instructions", instructions)
-                .param("latitude", latitude).param("longitude", longitude)
+                .param("id", addressId)
+                .param("tenantId", TENANT)
+                .param("accountId", accountId)
+                .param("label", label)
+                .param("fields", fields)
+                .param("instructions", instructions)
+                .param("latitude", latitude)
+                .param("longitude", longitude)
                 .param("source", latitude == null ? "LANDMARK_ONLY" : "CUSTOMER_PIN")
                 .update();
         return addressId;
@@ -2693,30 +2831,29 @@ class CartCheckoutAndOrderTests {
     }
 
     /** The same, part-paid from the customer's balance. */
-    private CheckoutService.CheckoutResult placeDeliveryOrder(String idempotencyKey,
-            long redeemFromBalanceMinor) {
+    private CheckoutService.CheckoutResult placeDeliveryOrder(String idempotencyKey, long redeemFromBalanceMinor) {
         UUID address = insertAddress(CUSTOMER, "Home", 41.311081, 69.240562);
         UUID cart = openDeliveryCart();
         putLine(cart, "a", burgerVariant, 2);
-        tx(() -> carts.setDestination(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart),
-                destinationCommand(address)));
+        tx(() -> carts.setDestination(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), destinationCommand(address)));
         tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
-        return tx(() -> checkout.checkout(
-                checkoutCommand(cart, idempotencyKey, "CASH", redeemFromBalanceMinor)));
+        return tx(() -> checkout.checkout(checkoutCommand(cart, idempotencyKey, "CASH", redeemFromBalanceMinor)));
     }
 
     private long reservationCount() {
-        return jdbc.sql("SELECT count(*) FROM inventory.reservations").query(Long.class).single();
+        return jdbc.sql("SELECT count(*) FROM inventory.reservations")
+                .query(Long.class)
+                .single();
     }
 
     private UUID openCart() {
-        return tx(() -> carts.create(TENANT, BRAND, LOCATION, "STOREFRONT",
-                FulfillmentMode.PICKUP, CUSTOMER, null)).cartId();
+        return tx(() -> carts.create(TENANT, BRAND, LOCATION, "STOREFRONT", FulfillmentMode.PICKUP, CUSTOMER, null))
+                .cartId();
     }
 
     private void putLine(UUID cartId, String lineKey, UUID variantId, int quantity) {
-        tx(() -> carts.putLine(TENANT, BRAND, CUSTOMER, cartId, cartVersion(cartId), lineKey, variantId,
-                quantity, List.of(), null));
+        tx(() -> carts.putLine(
+                TENANT, BRAND, CUSTOMER, cartId, cartVersion(cartId), lineKey, variantId, quantity, List.of(), null));
     }
 
     /** A cart with two burgers, priced and ready to check out. */
@@ -2744,29 +2881,44 @@ class CartCheckoutAndOrderTests {
         return checkoutCommand(cartId, idempotencyKey, "CASH");
     }
 
-    private CheckoutService.CheckoutCommand checkoutCommand(UUID cartId, String idempotencyKey,
-            String paymentMethodCode) {
+    private CheckoutService.CheckoutCommand checkoutCommand(
+            UUID cartId, String idempotencyKey, String paymentMethodCode) {
         return checkoutCommand(cartId, idempotencyKey, paymentMethodCode, 0L);
     }
 
-    private CheckoutService.CheckoutCommand checkoutCommand(UUID cartId, String idempotencyKey,
-            String paymentMethodCode, long redeemFromBalanceMinor) {
+    private CheckoutService.CheckoutCommand checkoutCommand(
+            UUID cartId, String idempotencyKey, String paymentMethodCode, long redeemFromBalanceMinor) {
         var cart = readCart(cartId);
-        return new CheckoutService.CheckoutCommand(TENANT, BRAND, cartId, cart.version(),
-                cart.pricingQuoteId(), cart.pricingContextHash(), idempotencyKey,
-                paymentMethodCode, redeemFromBalanceMinor, "CUSTOMER", CUSTOMER.toString(), null);
+        return new CheckoutService.CheckoutCommand(
+                TENANT,
+                BRAND,
+                cartId,
+                cart.version(),
+                cart.pricingQuoteId(),
+                cart.pricingContextHash(),
+                idempotencyKey,
+                paymentMethodCode,
+                redeemFromBalanceMinor,
+                "CUSTOMER",
+                CUSTOMER.toString(),
+                null);
     }
 
-    private OrderStateService.DecisionCommand decision(String decisionId,
-            OrderStateService.DecisionAction action) {
-        return new OrderStateService.DecisionCommand(decisionId, action, "HORECAOS_OPERATIONS",
-                "USER", "operator", "OPERATOR_DECISION", clock.instant(), null);
+    private OrderStateService.DecisionCommand decision(String decisionId, OrderStateService.DecisionAction action) {
+        return new OrderStateService.DecisionCommand(
+                decisionId,
+                action,
+                "HORECAOS_OPERATIONS",
+                "USER",
+                "operator",
+                "OPERATOR_DECISION",
+                clock.instant(),
+                null);
     }
 
     private void advance(UUID orderId, OrderStatus target) {
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
-        tx(() -> orderState.advance(TENANT, orderId, target, version, "KITCHEN", "USER",
-                "operator", null));
+        tx(() -> orderState.advance(TENANT, orderId, target, version, "KITCHEN", "USER", "operator", null));
     }
 
     private JdbcCartStore.CartRow readCart(UUID cartId) {
@@ -2778,22 +2930,32 @@ class CartCheckoutAndOrderTests {
     }
 
     private long countOrders() {
-        return jdbc.sql("SELECT count(*) FROM ordering.orders").query(Long.class).single();
+        return jdbc.sql("SELECT count(*) FROM ordering.orders")
+                .query(Long.class)
+                .single();
     }
 
     private String reservationStatus() {
-        return jdbc.sql("SELECT status FROM inventory.reservations").query(String.class).single();
+        return jdbc.sql("SELECT status FROM inventory.reservations")
+                .query(String.class)
+                .single();
     }
 
     private long movementCount() {
-        return jdbc.sql("SELECT count(*) FROM inventory.movements").query(Long.class).single();
+        return jdbc.sql("SELECT count(*) FROM inventory.movements")
+                .query(Long.class)
+                .single();
     }
 
     /** Switches the location to RESTAURANT_APPROVAL with a five-minute deadline. */
     private void requireApproval() {
-        var policy = new OrderAcceptancePolicy(AcceptanceMode.RESTAURANT_APPROVAL,
-                ApprovalChannel.HORECAOS_OPERATIONS, 300, ApprovalTimeoutAction.AUTO_REJECT,
-                true, true);
+        var policy = new OrderAcceptancePolicy(
+                AcceptanceMode.RESTAURANT_APPROVAL,
+                ApprovalChannel.HORECAOS_OPERATIONS,
+                300,
+                ApprovalTimeoutAction.AUTO_REJECT,
+                true,
+                true);
         UUID policyId = UUID.randomUUID();
         var from = java.time.OffsetDateTime.ofInstant(NOW.minus(Duration.ofDays(1)), ZoneOffset.UTC);
 
@@ -2803,7 +2965,9 @@ class CartCheckoutAndOrderTests {
                 VALUES (:id, 'ordering.acceptance', 'LOCATION', :tenantId, :brandId, :locationId,
                     1, 'ACTIVE', CAST(:document AS jsonb), :hash, :from, 'test')
                 """)
-                .param("id", policyId).param("tenantId", TENANT).param("brandId", BRAND)
+                .param("id", policyId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
                 .param("locationId", LOCATION)
                 .param("document", JsonMapper.builder().build().writeValueAsString(policy))
                 .param("hash", "0".repeat(64))
@@ -2815,14 +2979,15 @@ class CartCheckoutAndOrderTests {
                 VALUES ('ordering.acceptance', 'LOCATION', :tenantId, :brandId, :locationId,
                     :policyId, 1, 'test')
                 """)
-                .param("tenantId", TENANT).param("brandId", BRAND).param("locationId", LOCATION)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", LOCATION)
                 .param("policyId", policyId)
                 .update();
     }
 
     private <T> T tx(java.util.function.Supplier<T> work) {
-        return new TransactionTemplate(new DataSourceTransactionManager(dataSource))
-                .execute(status -> work.get());
+        return new TransactionTemplate(new DataSourceTransactionManager(dataSource)).execute(status -> work.get());
     }
 
     private void tx(Runnable work) {
@@ -2880,26 +3045,36 @@ class CartCheckoutAndOrderTests {
                 VALUES (:code, 'PAYMENT', :provider, 'https://example.test', false, 'example.test')
                 ON CONFLICT (code) DO NOTHING
                 """)
-                .param("code", environment).param("provider", provider.name()).update();
+                .param("code", environment)
+                .param("provider", provider.name())
+                .update();
         jdbc.sql("""
                 INSERT INTO integration.installations (id, tenant_id, provider_category,
                     provider_type, environment_code, display_name, status)
                 VALUES (:id, :tenantId, 'PAYMENT', :provider, :environment, :provider, 'ACTIVE')
                 """)
-                .param("id", installation).param("tenantId", TENANT)
-                .param("provider", provider.name()).param("environment", environment).update();
+                .param("id", installation)
+                .param("tenantId", TENANT)
+                .param("provider", provider.name())
+                .param("environment", environment)
+                .update();
         jdbc.sql("""
                 INSERT INTO integration.bindings (id, tenant_id, installation_id, brand_id, status)
                 VALUES (:id, :tenantId, :installation, :brandId, 'ACTIVE')
                 """)
-                .param("id", binding).param("tenantId", TENANT)
-                .param("installation", installation).param("brandId", BRAND).update();
+                .param("id", binding)
+                .param("tenantId", TENANT)
+                .param("installation", installation)
+                .param("brandId", BRAND)
+                .update();
         jdbc.sql("""
                 INSERT INTO tenant.legal_entities (id, tenant_id, code, legal_name, tin, status)
                 VALUES (:id, :tenantId, :code, 'Sinov MCHJ', '123456789', 'ACTIVE')
                 """)
-                .param("id", legalEntity).param("tenantId", TENANT)
-                .param("code", "LE-" + provider.name()).update();
+                .param("id", legalEntity)
+                .param("tenantId", TENANT)
+                .param("code", "LE-" + provider.name())
+                .update();
         jdbc.sql("""
                 INSERT INTO payments.merchant_bindings (id, tenant_id, legal_entity_id,
                     provider_type, installation_id, binding_id, merchant_account_reference,
@@ -2908,11 +3083,16 @@ class CartCheckoutAndOrderTests {
                 VALUES (:id, :tenantId, :entity, :provider, :installation, :binding, 'service-1',
                     :secret, :segment, true, false, 'ACTIVE', :from)
                 """)
-                .param("id", merchantBinding).param("tenantId", TENANT)
-                .param("entity", legalEntity).param("provider", provider.name())
-                .param("installation", installation).param("binding", binding)
-                .param("secret", "horecaos:test:provider_payment:tenant:"
-                        + provider.name().toLowerCase(java.util.Locale.ROOT))
+                .param("id", merchantBinding)
+                .param("tenantId", TENANT)
+                .param("entity", legalEntity)
+                .param("provider", provider.name())
+                .param("installation", installation)
+                .param("binding", binding)
+                .param(
+                        "secret",
+                        "horecaos:test:provider_payment:tenant:"
+                                + provider.name().toLowerCase(java.util.Locale.ROOT))
                 .param("segment", "checkout-" + merchantBinding)
                 .param("from", java.time.LocalDate.of(2020, 1, 1))
                 .update();
@@ -2930,19 +3110,43 @@ class CartCheckoutAndOrderTests {
         var intent = intentStore.findLiveForOrder(TENANT, orderId).orElseThrow();
         UUID attemptId = UUID.randomUUID();
         paymentAttemptStore.insert(new uz.horecaos.platform.payments.domain.PaymentAttempt(
-                attemptId, TENANT, intent.id(), provider, seedMerchantBinding(provider),
+                attemptId,
+                TENANT,
+                intent.id(),
+                provider,
+                seedMerchantBinding(provider),
                 attemptId.toString().replace("-", ""),
                 clock.instant().atZone(ZoneId.of("Asia/Tashkent")).toLocalDate(),
-                null, null, intent.amount(),
+                null,
+                null,
+                intent.amount(),
                 uz.horecaos.platform.payments.domain.PaymentAttemptStatus.INITIATED,
-                null, null, null, null, null, null, 1, clock.instant(), null));
-        paymentAttemptStore.recordPresentation(TENANT, attemptId,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                1,
+                clock.instant(),
+                null));
+        paymentAttemptStore.recordPresentation(
+                TENANT,
+                attemptId,
                 uz.horecaos.platform.payments.domain.PresentationKind.PAYMENT_LINK,
-                "invoice-" + attemptId, null, clock.instant());
-        paymentAttemptStore.transition(TENANT, attemptId,
+                "invoice-" + attemptId,
+                null,
+                clock.instant());
+        paymentAttemptStore.transition(
+                TENANT,
+                attemptId,
                 uz.horecaos.platform.payments.domain.PaymentAttemptStatus.INITIATED,
                 uz.horecaos.platform.payments.domain.PaymentAttemptStatus.PRESENTED,
-                null, null, null, null, clock.instant());
+                null,
+                null,
+                null,
+                null,
+                clock.instant());
         return attemptId;
     }
 
@@ -2958,31 +3162,54 @@ class CartCheckoutAndOrderTests {
     private UUID reservedAttempt(UUID orderId, PaymentProviderType provider, Duration window) {
         UUID attemptId = presentedAttempt(orderId, provider);
         String providerTransaction = "px" + attemptId.toString().replace("-", "");
-        paymentAttemptStore.transition(TENANT, attemptId,
+        paymentAttemptStore.transition(
+                TENANT,
+                attemptId,
                 uz.horecaos.platform.payments.domain.PaymentAttemptStatus.PRESENTED,
                 uz.horecaos.platform.payments.domain.PaymentAttemptStatus.RESERVED,
                 new uz.horecaos.platform.payments.domain.ProviderEvidence("1", null, clock.instant()),
-                providerTransaction, null, null, clock.instant());
-        paymentAttemptStore.recordProviderCreation(TENANT, attemptId, providerTransaction,
-                clock.instant(), clock.instant().plus(window));
+                providerTransaction,
+                null,
+                null,
+                clock.instant());
+        paymentAttemptStore.recordProviderCreation(
+                TENANT,
+                attemptId,
+                providerTransaction,
+                clock.instant(),
+                clock.instant().plus(window));
         return attemptId;
     }
 
     /** The money lands: Payme's {@code PerformTransaction}, Click's Complete. */
     private void captureAttempt(UUID attemptId) {
-        paymentAttemptStore.transition(TENANT, attemptId,
+        paymentAttemptStore.transition(
+                TENANT,
+                attemptId,
                 uz.horecaos.platform.payments.domain.PaymentAttemptStatus.RESERVED,
                 uz.horecaos.platform.payments.domain.PaymentAttemptStatus.CAPTURED,
                 new uz.horecaos.platform.payments.domain.ProviderEvidence("2", null, clock.instant()),
-                null, null, null, clock.instant());
+                null,
+                null,
+                null,
+                clock.instant());
     }
 
     private OrderRemedyService.RefundCommand refundOf(UUID orderId, long amountMinor) {
-        return new OrderRemedyService.RefundCommand(TENANT, orderId, amountMinor, "UZS",
-                "GOODWILL", "Cold food, customer called", ExecutionChannel.CASH_DRAWER, null,
-                "cashier-7", clock.instant(),
+        return new OrderRemedyService.RefundCommand(
+                TENANT,
+                orderId,
+                amountMinor,
+                "UZS",
+                "GOODWILL",
+                "Cold food, customer called",
+                ExecutionChannel.CASH_DRAWER,
+                null,
+                "cashier-7",
+                clock.instant(),
                 uz.horecaos.platform.audit.api.ActorRef.user("support-1", null),
-                "k-" + UUID.randomUUID(), null);
+                "k-" + UUID.randomUUID(),
+                null);
     }
 
     private SettlementStatus settlementStatus(UUID orderId) {
@@ -2990,20 +3217,25 @@ class CartCheckoutAndOrderTests {
     }
 
     private List<TenderStatus> tenderStatuses(UUID orderId) {
-        UUID settlementId = settlementStore.findSettlement(TENANT, orderId).orElseThrow().id();
+        UUID settlementId =
+                settlementStore.findSettlement(TENANT, orderId).orElseThrow().id();
         return settlementStore.tendersOf(TENANT, settlementId).stream()
-                .map(JdbcSettlementStore.TenderRow::status).toList();
+                .map(JdbcSettlementStore.TenderRow::status)
+                .toList();
     }
 
     private List<Long> tenderAmounts(UUID orderId) {
-        UUID settlementId = settlementStore.findSettlement(TENANT, orderId).orElseThrow().id();
+        UUID settlementId =
+                settlementStore.findSettlement(TENANT, orderId).orElseThrow().id();
         return settlementStore.tendersOf(TENANT, settlementId).stream()
-                .map(JdbcSettlementStore.TenderRow::amountMinor).toList();
+                .map(JdbcSettlementStore.TenderRow::amountMinor)
+                .toList();
     }
 
     /** What the settlement says is to be collected in money, read back from the rows. */
     private long moneyTenderMinor(UUID orderId) {
-        UUID settlementId = settlementStore.findSettlement(TENANT, orderId).orElseThrow().id();
+        UUID settlementId =
+                settlementStore.findSettlement(TENANT, orderId).orElseThrow().id();
         return settlementStore.tendersOf(TENANT, settlementId).stream()
                 .filter(tender -> !tender.settlesFromBalance())
                 .mapToLong(JdbcSettlementStore.TenderRow::amountMinor)
@@ -3012,13 +3244,19 @@ class CartCheckoutAndOrderTests {
 
     /** What the payment intent asks for. */
     private long intentAmount(UUID orderId) {
-        return intentStore.findLiveForOrder(TENANT, orderId).orElseThrow().amount().value();
+        return intentStore
+                .findLiveForOrder(TENANT, orderId)
+                .orElseThrow()
+                .amount()
+                .value();
     }
 
     private long refundedMinor(UUID orderId) {
-        UUID settlementId = settlementStore.findSettlement(TENANT, orderId).orElseThrow().id();
+        UUID settlementId =
+                settlementStore.findSettlement(TENANT, orderId).orElseThrow().id();
         return settlementStore.tendersOf(TENANT, settlementId).stream()
-                .mapToLong(JdbcSettlementStore.TenderRow::refundedMinor).sum();
+                .mapToLong(JdbcSettlementStore.TenderRow::refundedMinor)
+                .sum();
     }
 
     /**
@@ -3042,12 +3280,13 @@ class CartCheckoutAndOrderTests {
                     allowed_channels, status, version, valid_from)
                 VALUES (:id, :tenantId, :brandId, :maxShare, :minOrder, true, '{}', 'ACTIVE', 1,
                     :validFrom)
-                """).param("id", UUID.randomUUID()).param("tenantId", TENANT)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
                 .param("brandId", BRAND)
-                .param("maxShare", maxShareBasisPoints).param("minOrder", minOrderMinor)
-                .param("validFrom",
-                        java.time.OffsetDateTime.ofInstant(NOW.minus(Duration.ofDays(1)),
-                                ZoneOffset.UTC))
+                .param("maxShare", maxShareBasisPoints)
+                .param("minOrder", minOrderMinor)
+                .param("validFrom", java.time.OffsetDateTime.ofInstant(NOW.minus(Duration.ofDays(1)), ZoneOffset.UTC))
                 .update();
     }
 
@@ -3058,18 +3297,23 @@ class CartCheckoutAndOrderTests {
      */
     private void seedBalance(long amountMinor) {
         tx(() -> loyaltyAdjustments.adjust(
-                new uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService
-                        .AdjustmentCommand(TENANT, BRAND, CUSTOMER, amountMinor, "UZS",
-                        uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService
-                                .REASON_LEGACY_OPENING_BALANCE,
+                new uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService.AdjustmentCommand(
+                        TENANT,
+                        BRAND,
+                        CUSTOMER,
+                        amountMinor,
+                        "UZS",
+                        uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService.REASON_LEGACY_OPENING_BALANCE,
                         "Seeded for the test",
                         uz.horecaos.platform.audit.api.ActorRef.user("seed-operator", "Seed"),
-                        "seed-" + UUID.randomUUID(), "corr-seed")));
+                        "seed-" + UUID.randomUUID(),
+                        "corr-seed")));
     }
 
     private void allowGuestOrders() {
         jdbc.sql("UPDATE tenant.sales_channels SET guest_orders_allowed = true WHERE id = :id")
-                .param("id", storefrontChannel).update();
+                .param("id", storefrontChannel)
+                .update();
     }
 
     /**
@@ -3088,16 +3332,28 @@ class CartCheckoutAndOrderTests {
                 UPDATE ordering.carts
                    SET customer_account_id = NULL, guest_reference_hash = :guest
                  WHERE id = :id
-                """).param("guest", "guest-" + UUID.randomUUID()).param("id", cart).update();
+                """)
+                .param("guest", "guest-" + UUID.randomUUID())
+                .param("id", cart)
+                .update();
         return cart;
     }
 
-    private CheckoutService.CheckoutCommand guestCheckoutCommand(UUID cartId,
-            String idempotencyKey) {
+    private CheckoutService.CheckoutCommand guestCheckoutCommand(UUID cartId, String idempotencyKey) {
         var cart = readCart(cartId);
-        return new CheckoutService.CheckoutCommand(TENANT, BRAND, cartId, cart.version(),
-                cart.pricingQuoteId(), cart.pricingContextHash(), idempotencyKey, "CASH", 0L,
-                "CUSTOMER", null, null);
+        return new CheckoutService.CheckoutCommand(
+                TENANT,
+                BRAND,
+                cartId,
+                cart.version(),
+                cart.pricingQuoteId(),
+                cart.pricingContextHash(),
+                idempotencyKey,
+                "CASH",
+                0L,
+                "CUSTOMER",
+                null,
+                null);
     }
 
     private static void awaitQuietly(CountDownLatch latch) {
@@ -3137,21 +3393,30 @@ class CartCheckoutAndOrderTests {
                     INSERT INTO tenant.sales_channel_locations (tenant_id, channel_id, location_id,
                         status)
                     VALUES (:tenantId, :channelId, :locationId, 'ACTIVE')
-                    """).param("tenantId", TENANT).param("channelId", storefrontChannel)
-                    .param("locationId", location).update();
+                    """)
+                    .param("tenantId", TENANT)
+                    .param("channelId", storefrontChannel)
+                    .param("locationId", location)
+                    .update();
             jdbc.sql("""
                     INSERT INTO tenant.location_service_state (location_id, tenant_id, brand_id, mode)
                     VALUES (:locationId, :tenantId, :brandId, 'FOLLOW_SCHEDULE')
-                    """).param("locationId", location).param("tenantId", TENANT)
-                    .param("brandId", BRAND).update();
+                    """)
+                    .param("locationId", location)
+                    .param("tenantId", TENANT)
+                    .param("brandId", BRAND)
+                    .update();
         }
         for (FulfillmentMode mode : List.of(FulfillmentMode.PICKUP, FulfillmentMode.DELIVERY)) {
             jdbc.sql("""
                     INSERT INTO tenant.channel_fulfillment_modes (tenant_id, channel_id,
                         fulfillment_mode, enabled)
                     VALUES (:tenantId, :channelId, :mode, true)
-                    """).param("tenantId", TENANT).param("channelId", storefrontChannel)
-                    .param("mode", mode.name()).update();
+                    """)
+                    .param("tenantId", TENANT)
+                    .param("channelId", storefrontChannel)
+                    .param("mode", mode.name())
+                    .update();
         }
 
         UUID scheduleId = UUID.randomUUID();
@@ -3159,15 +3424,22 @@ class CartCheckoutAndOrderTests {
                 INSERT INTO tenant.service_schedules (id, tenant_id, brand_id, name,
                     accepts_scheduled_orders)
                 VALUES (:id, :tenantId, :brandId, 'Standard hours', true)
-                """).param("id", scheduleId).param("tenantId", TENANT).param("brandId", BRAND)
+                """)
+                .param("id", scheduleId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
                 .update();
         for (int day = 1; day <= 7; day++) {
             jdbc.sql("""
                     INSERT INTO tenant.service_schedule_rules (schedule_id, sequence, day_of_week,
                         opens_at, closes_at)
                     VALUES (:scheduleId, :sequence, :day, :opens, :closes)
-                    """).param("scheduleId", scheduleId).param("sequence", day).param("day", day)
-                    .param("opens", LocalTime.of(9, 0)).param("closes", LocalTime.of(23, 0))
+                    """)
+                    .param("scheduleId", scheduleId)
+                    .param("sequence", day)
+                    .param("day", day)
+                    .param("opens", LocalTime.of(9, 0))
+                    .param("closes", LocalTime.of(23, 0))
                     .update();
         }
         for (UUID location : List.of(LOCATION, OTHER_LOCATION)) {
@@ -3176,9 +3448,13 @@ class CartCheckoutAndOrderTests {
                         INSERT INTO tenant.location_service_bindings (tenant_id, brand_id,
                             location_id, fulfillment_mode, schedule_id)
                         VALUES (:tenantId, :brandId, :locationId, :mode, :scheduleId)
-                        """).param("tenantId", TENANT).param("brandId", BRAND)
-                        .param("locationId", location).param("mode", mode.name())
-                        .param("scheduleId", scheduleId).update();
+                        """)
+                        .param("tenantId", TENANT)
+                        .param("brandId", BRAND)
+                        .param("locationId", location)
+                        .param("mode", mode.name())
+                        .param("scheduleId", scheduleId)
+                        .update();
             }
         }
 
@@ -3186,7 +3462,10 @@ class CartCheckoutAndOrderTests {
         jdbc.sql("""
                 INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
                 VALUES (:id, :tenantId, :brandId, 'MAIN', 'Main menu', 'ACTIVE')
-                """).param("id", catalogId).param("tenantId", TENANT).param("brandId", BRAND)
+                """)
+                .param("id", catalogId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
                 .update();
 
         burgerVariant = seedProduct("BURGER", "Qo'y burger");
@@ -3201,8 +3480,13 @@ class CartCheckoutAndOrderTests {
                     timezone, status, version)
                 VALUES (:id, :tenantId, :brandId, :code, :slug, 'Branch', 'Asia/Tashkent',
                     'ACTIVE', 0)
-                """).param("id", id).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("code", code).param("slug", slug).update();
+                """)
+                .param("id", id)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("code", code)
+                .param("slug", slug)
+                .update();
     }
 
     private void insertCustomer(UUID id) {
@@ -3219,8 +3503,12 @@ class CartCheckoutAndOrderTests {
                 INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel,
                     status, content_hash, activated_at)
                 VALUES (:id, :tenantId, :brandId, :catalogId, :channel, 'PUBLISHED', 'hash', now())
-                """).param("id", id).param("tenantId", TENANT)
-                .param("brandId", BRAND).param("catalogId", catalogId).param("channel", channel)
+                """)
+                .param("id", id)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("catalogId", catalogId)
+                .param("channel", channel)
                 .update();
         if ("STOREFRONT".equals(channel)) {
             publicationId = id;
@@ -3271,9 +3559,13 @@ class CartCheckoutAndOrderTests {
                     entity_type, entity_id, entity_version, immutable_content_json)
                 VALUES (:publicationId, :tenantId, :brandId, :entityType, :entityId, 1,
                     CAST(:content AS jsonb))
-                """).param("publicationId", publicationId).param("tenantId", TENANT)
-                .param("brandId", BRAND).param("entityType", entityType)
-                .param("entityId", entityId).param("content", content)
+                """)
+                .param("publicationId", publicationId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("entityType", entityType)
+                .param("entityId", entityId)
+                .param("content", content)
                 .update();
     }
 
@@ -3283,62 +3575,95 @@ class CartCheckoutAndOrderTests {
         jdbc.sql("""
                 INSERT INTO catalog.products (id, tenant_id, brand_id, code, status)
                 VALUES (:id, :tenantId, :brandId, :code, 'ACTIVE')
-                """).param("id", productId).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("code", code).update();
+                """)
+                .param("id", productId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("code", code)
+                .update();
         jdbc.sql("""
                 INSERT INTO catalog.variants (id, tenant_id, brand_id, product_id, sku, status)
                 VALUES (:id, :tenantId, :brandId, :productId, :sku, 'ACTIVE')
-                """).param("id", variantId).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("productId", productId).param("sku", "SKU-" + code).update();
+                """)
+                .param("id", variantId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("productId", productId)
+                .param("sku", "SKU-" + code)
+                .update();
         jdbc.sql("""
                 INSERT INTO catalog.catalog_products (tenant_id, brand_id, catalog_id, product_id)
                 VALUES (:tenantId, :brandId, :catalogId, :productId)
-                """).param("tenantId", TENANT).param("brandId", BRAND).param("catalogId", catalogId)
-                .param("productId", productId).update();
+                """)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("catalogId", catalogId)
+                .param("productId", productId)
+                .update();
         jdbc.sql("""
                 INSERT INTO catalog.translations (tenant_id, brand_id, entity_type, entity_id,
                     locale, name)
                 VALUES (:tenantId, :brandId, 'PRODUCT', :productId, 'uz', :name)
-                """).param("tenantId", TENANT).param("brandId", BRAND).param("productId", productId)
-                .param("name", name).update();
+                """)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("productId", productId)
+                .param("name", name)
+                .update();
         productIdByCode.put(code, productId);
         return variantId;
     }
 
     private void seedPricingAndStock() {
         UUID priceBook = UUID.randomUUID();
-        var validFrom = java.time.OffsetDateTime.ofInstant(
-                NOW.minus(Duration.ofDays(1)), ZoneOffset.UTC);
+        var validFrom = java.time.OffsetDateTime.ofInstant(NOW.minus(Duration.ofDays(1)), ZoneOffset.UTC);
 
         jdbc.sql("""
                 INSERT INTO pricing.price_books (id, tenant_id, brand_id, name, currency, status,
                     valid_from, priority)
                 VALUES (:id, :tenantId, :brandId, 'BRAND_MENU', 'UZS', 'ACTIVE', :from, 0)
-                """).param("id", priceBook).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("from", validFrom).update();
+                """)
+                .param("id", priceBook)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("from", validFrom)
+                .update();
         jdbc.sql("""
                 INSERT INTO pricing.price_book_assignments (id, tenant_id, brand_id, price_book_id,
                     scope_type, scope_id, valid_from, priority)
                 VALUES (:id, :tenantId, :brandId, :priceBookId, 'BRAND', NULL, :from, 0)
-                """).param("id", UUID.randomUUID()).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("priceBookId", priceBook).param("from", validFrom).update();
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("priceBookId", priceBook)
+                .param("from", validFrom)
+                .update();
         jdbc.sql("""
                 INSERT INTO pricing.prices (id, tenant_id, brand_id, price_book_id, priceable_type,
                     priceable_id, amount_minor, valid_from)
                 VALUES (:id, :tenantId, :brandId, :priceBookId, 'VARIANT', :variantId, 50000, :from)
-                """).param("id", UUID.randomUUID()).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("priceBookId", priceBook).param("variantId", burgerVariant)
-                .param("from", validFrom).update();
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("priceBookId", priceBook)
+                .param("variantId", burgerVariant)
+                .param("from", validFrom)
+                .update();
         jdbc.sql("""
                 INSERT INTO pricing.tax_profiles (id, tenant_id, brand_id, jurisdiction_code, mode,
                     rate_basis_points, valid_from)
                 VALUES (:id, :tenantId, :brandId, 'UZ', 'INCLUSIVE', 1200, :from)
-                """).param("id", UUID.randomUUID()).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("from", validFrom).update();
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("from", validFrom)
+                .update();
 
         for (UUID location : List.of(LOCATION, OTHER_LOCATION)) {
-            inventory.listVariantAtLocation(TENANT, BRAND, location, burgerVariant,
-                    TrackingMode.BINARY);
+            inventory.listVariantAtLocation(TENANT, BRAND, location, burgerVariant, TrackingMode.BINARY);
         }
         assertThat(pizzaVariant).isNotNull();
     }
@@ -3346,8 +3671,7 @@ class CartCheckoutAndOrderTests {
     /** Collects the ordering facts a transaction publishes, in order. */
     private static final class RecordingEventPublisher implements ApplicationEventPublisher {
 
-        private final List<OrderingEvent> events =
-                java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+        private final List<OrderingEvent> events = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
 
         /**
          * Stands in for the Spring dispatch a {@code BEFORE_COMMIT} listener gets.
@@ -3357,7 +3681,7 @@ class CartCheckoutAndOrderTests {
          * payments listener that settles a provider tender is production code
          * whose absence is exactly what a test must not paper over.
          */
-        private volatile java.util.function.Consumer<OrderConfirmed> onConfirmed = confirmed -> { };
+        private volatile java.util.function.Consumer<OrderConfirmed> onConfirmed = confirmed -> {};
 
         @Override
         public void publishEvent(Object event) {
@@ -3384,13 +3708,15 @@ class CartCheckoutAndOrderTests {
                 public uz.horecaos.platform.audit.api.ApprovalOutcome requireApproval(
                         uz.horecaos.platform.audit.api.ApprovalRequestCommand command) {
                     return new uz.horecaos.platform.audit.api.ApprovalOutcome.Approved(
-                            UUID.randomUUID(), "checker-1", () -> { });
+                            UUID.randomUUID(), "checker-1", () -> {});
                 }
 
                 @Override
-                public void decide(UUID requestId, Decision decision,
-                        uz.horecaos.platform.audit.api.ActorRef approver, String reason) {
-                }
+                public void decide(
+                        UUID requestId,
+                        Decision decision,
+                        uz.horecaos.platform.audit.api.ActorRef approver,
+                        String reason) {}
 
                 @Override
                 public int expireOverdue() {

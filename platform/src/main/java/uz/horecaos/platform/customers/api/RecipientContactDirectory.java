@@ -61,8 +61,8 @@ public interface RecipientContactDirectory {
      *                       "was anything sent to this number?" without the number
      *                       being stored outside {@code customer.contact_points}
      */
-    record ContactEndpoint(UUID contactPointId, ContactMethod method, String normalizedHash,
-            String verificationStatus) {
+    record ContactEndpoint(
+            UUID contactPointId, ContactMethod method, String normalizedHash, String verificationStatus) {
 
         public ContactEndpoint {
             Objects.requireNonNull(contactPointId, "A contact point id is required");

@@ -3,9 +3,7 @@ package uz.horecaos.platform.iam.api.protection;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.UUID;
-
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.iam.api.protection.ClassificationScanner.Source;
 
 /**
@@ -65,9 +63,7 @@ class ClassificationScannerTests {
     void classifyingATypeCoversEveryComponent() {
         var findings = ClassificationScanner.scan(WithClassifiedType.class, "Sample");
 
-        assertThat(findings)
-                .extracting(ClassificationScanner.Finding::path)
-                .containsExactly("Sample.postal");
+        assertThat(findings).extracting(ClassificationScanner.Finding::path).containsExactly("Sample.postal");
     }
 
     @Test
@@ -85,24 +81,26 @@ class ClassificationScannerTests {
 
     private record WithDeclaration(
             UUID id,
-            @Classified(value = DataClass.PERSONAL, reason = "a phone number under another name")
-            String recipientHandle) { }
 
-    private record WithoutDeclaration(UUID id, String customerPhone) { }
+            @Classified(value = DataClass.PERSONAL, reason = "a phone number under another name")
+            String recipientHandle) {}
+
+    private record WithoutDeclaration(UUID id, String customerPhone) {}
 
     private record DeclaredPublic(
             UUID id,
+
             @Classified(value = DataClass.PUBLIC, reason = "a brand's published contact address")
-            String address) { }
+            String address) {}
 
-    private record Contact(String email) { }
+    private record Contact(String email) {}
 
-    private record Nested(UUID id, Contact recipient) { }
+    private record Nested(UUID id, Contact recipient) {}
 
     @Classified(value = DataClass.PERSONAL, reason = "every component is part of one address")
-    private record PostalAddress(String line1, String city) { }
+    private record PostalAddress(String line1, String city) {}
 
-    private record WithClassifiedType(UUID id, PostalAddress postal) { }
+    private record WithClassifiedType(UUID id, PostalAddress postal) {}
 
-    private record Clean(UUID id, String status, int quantity) { }
+    private record Clean(UUID id, String status, int quantity) {}
 }

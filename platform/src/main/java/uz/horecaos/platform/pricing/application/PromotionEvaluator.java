@@ -9,13 +9,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.pricing.domain.Promotion;
-import uz.horecaos.platform.pricing.domain.TaxCalculation;
 import uz.horecaos.platform.pricing.domain.Promotion.Action;
 import uz.horecaos.platform.pricing.domain.Promotion.Condition;
+import uz.horecaos.platform.pricing.domain.TaxCalculation;
 
 /**
  * ADR 0018 stages 3 and 4: which promotions apply, and what they are worth.
@@ -58,8 +56,7 @@ public class PromotionEvaluator {
      * @param now compared against each promotion's window. Handed in rather than
      *        read, so this method answers identically on a second run.
      */
-    public Outcome evaluate(List<Promotion> promotions, Basket basket,
-            PromotionContext context, Instant now) {
+    public Outcome evaluate(List<Promotion> promotions, Basket basket, PromotionContext context, Instant now) {
 
         List<Promotion> live = promotions.stream()
                 .filter(promotion -> promotion.isInForceAt(now))
@@ -97,8 +94,8 @@ public class PromotionEvaluator {
     }
 
     /** Every promotion of one scope whose conditions hold, with what it is worth. */
-    private List<Candidate> candidates(List<Promotion> promotions, Promotion.Scope scope,
-            Basket basket, PromotionContext context) {
+    private List<Candidate> candidates(
+            List<Promotion> promotions, Promotion.Scope scope, Basket basket, PromotionContext context) {
 
         List<Candidate> candidates = new ArrayList<>();
         for (Promotion promotion : promotions) {
@@ -131,7 +128,8 @@ public class PromotionEvaluator {
         if (candidates.isEmpty()) {
             return List.of();
         }
-        List<Candidate> exclusive = candidates.stream().filter(c -> c.promotion().exclusive()).toList();
+        List<Candidate> exclusive =
+                candidates.stream().filter(c -> c.promotion().exclusive()).toList();
         if (!exclusive.isEmpty()) {
             return List.of(exclusive.stream().max(BY_BENEFIT).orElseThrow());
         }
@@ -140,7 +138,9 @@ public class PromotionEvaluator {
         // read back by people, and they should not shuffle between runs.
         Map<String, Candidate> best = new LinkedHashMap<>();
         for (Candidate candidate : candidates) {
-            best.merge(candidate.promotion().stackingGroup(), candidate,
+            best.merge(
+                    candidate.promotion().stackingGroup(),
+                    candidate,
                     (left, right) -> BY_BENEFIT.compare(left, right) >= 0 ? left : right);
         }
         return List.copyOf(best.values());
@@ -151,11 +151,10 @@ public class PromotionEvaluator {
      *
      * <p>The last clause is what makes this a total order. See the class comment.
      */
-    private static final Comparator<Candidate> BY_BENEFIT =
-            Comparator.comparingLong((Candidate candidate) -> candidate.benefit().totalMinor())
-                    .thenComparingInt(candidate -> candidate.promotion().priority())
-                    .thenComparing(candidate -> candidate.promotion().promotionId(),
-                            Comparator.reverseOrder());
+    private static final Comparator<Candidate> BY_BENEFIT = Comparator.comparingLong(
+                    (Candidate candidate) -> candidate.benefit().totalMinor())
+            .thenComparingInt(candidate -> candidate.promotion().priority())
+            .thenComparing(candidate -> candidate.promotion().promotionId(), Comparator.reverseOrder());
 
     /** Which of the basket's lines this promotion's item conditions name. */
     private Set<String> matchingLines(Promotion promotion, Basket basket, PromotionContext context) {
@@ -175,10 +174,12 @@ public class PromotionEvaluator {
                 }
                 case CATEGORY -> {
                     Set<UUID> ids = condition.operands().requireIds("categoryIds");
-                    matched.retainAll(idsOf(basket,
-                            line -> line.categoryIds().stream().anyMatch(ids::contains)));
+                    matched.retainAll(
+                            idsOf(basket, line -> line.categoryIds().stream().anyMatch(ids::contains)));
                 }
-                default -> { /* Not a line predicate. Handled in conditionsHold. */ }
+                default -> {
+                    /* Not a line predicate. Handled in conditionsHold. */
+                }
             }
         }
         return matched;
@@ -192,32 +193,38 @@ public class PromotionEvaluator {
     }
 
     /** Every condition must hold. There is no OR, by design — see {@link Promotion}. */
-    private boolean conditionsHold(Promotion promotion, Basket basket, PromotionContext context,
-            Set<String> matchedLines) {
+    private boolean conditionsHold(
+            Promotion promotion, Basket basket, PromotionContext context, Set<String> matchedLines) {
 
         for (Condition condition : promotion.conditions()) {
-            boolean holds = switch (condition.type()) {
-                // The three line predicates hold when anything survived the
-                // intersection above. A promotion naming a product the cart does
-                // not contain matches no line and therefore does not apply.
-                case PRODUCT, VARIANT, CATEGORY -> !matchedLines.isEmpty();
-                case QUANTITY_AT_LEAST -> quantityOf(basket, matchedLines)
-                        >= condition.operands().requireInt("quantity");
-                case SUBTOTAL_AT_LEAST -> basket.goodsSubtotalMinor()
-                        >= condition.operands().requireLong("amountMinor");
-                case CHANNEL -> condition.operands().requireStrings("channels")
-                        .contains(context.channel());
-                case LOCATION -> condition.operands().requireIds("locationIds")
-                        .contains(context.locationId());
-                case FULFILLMENT_MODE -> condition.operands().requireStrings("fulfillmentModes")
-                        .contains(context.fulfillmentMode());
-                case DAY_OF_WEEK -> condition.operands().requireInts("daysOfWeek")
-                        .contains(context.localDayOfWeek());
-                case TIME_OF_DAY -> withinWindow(condition, context.localMinuteOfDay());
-                case FIRST_ORDER -> context.firstOrder();
-                case CUSTOMER_SEGMENT -> condition.operands().requireStrings("segments").stream()
-                        .anyMatch(context.customerSegments()::contains);
-            };
+            boolean holds =
+                    switch (condition.type()) {
+                        // The three line predicates hold when anything survived the
+                        // intersection above. A promotion naming a product the cart does
+                        // not contain matches no line and therefore does not apply.
+                        case PRODUCT, VARIANT, CATEGORY -> !matchedLines.isEmpty();
+                        case QUANTITY_AT_LEAST ->
+                            quantityOf(basket, matchedLines)
+                                    >= condition.operands().requireInt("quantity");
+                        case SUBTOTAL_AT_LEAST ->
+                            basket.goodsSubtotalMinor() >= condition.operands().requireLong("amountMinor");
+                        case CHANNEL ->
+                            condition.operands().requireStrings("channels").contains(context.channel());
+                        case LOCATION ->
+                            condition.operands().requireIds("locationIds").contains(context.locationId());
+                        case FULFILLMENT_MODE ->
+                            condition
+                                    .operands()
+                                    .requireStrings("fulfillmentModes")
+                                    .contains(context.fulfillmentMode());
+                        case DAY_OF_WEEK ->
+                            condition.operands().requireInts("daysOfWeek").contains(context.localDayOfWeek());
+                        case TIME_OF_DAY -> withinWindow(condition, context.localMinuteOfDay());
+                        case FIRST_ORDER -> context.firstOrder();
+                        case CUSTOMER_SEGMENT ->
+                            condition.operands().requireStrings("segments").stream()
+                                    .anyMatch(context.customerSegments()::contains);
+                    };
             if (!holds) {
                 return false;
             }
@@ -234,9 +241,7 @@ public class PromotionEvaluator {
     private boolean withinWindow(Condition condition, int minuteOfDay) {
         int from = condition.operands().requireInt("fromMinuteOfDay");
         int to = condition.operands().requireInt("toMinuteOfDay");
-        return from <= to
-                ? minuteOfDay >= from && minuteOfDay < to
-                : minuteOfDay >= from || minuteOfDay < to;
+        return from <= to ? minuteOfDay >= from && minuteOfDay < to : minuteOfDay >= from || minuteOfDay < to;
     }
 
     private int quantityOf(Basket basket, Set<String> lineIds) {
@@ -263,8 +268,7 @@ public class PromotionEvaluator {
                 case ITEM_PERCENTAGE_DISCOUNT -> {
                     long basisPoints = action.operands().requireLong("basisPoints");
                     for (BasketLine line : basket.linesIn(matchedLines)) {
-                        perLine.merge(line.lineId(),
-                                percentageOf(line.lineGrossMinor(), basisPoints), Long::sum);
+                        perLine.merge(line.lineId(), percentageOf(line.lineGrossMinor(), basisPoints), Long::sum);
                     }
                 }
                 case ITEM_FIXED_DISCOUNT -> {
@@ -273,28 +277,28 @@ public class PromotionEvaluator {
                         // Capped at the line: a fixed discount larger than the
                         // item must not make the line negative, which ADR 0018
                         // rejects outright.
-                        perLine.merge(line.lineId(),
-                                Math.min(perUnit * line.quantity(), line.lineGrossMinor()),
-                                Long::sum);
+                        perLine.merge(
+                                line.lineId(), Math.min(perUnit * line.quantity(), line.lineGrossMinor()), Long::sum);
                     }
                 }
                 case ITEM_FIXED_PRICE -> {
                     long unitPrice = action.operands().requireLong("amountMinor");
                     for (BasketLine line : basket.linesIn(matchedLines)) {
                         long target = unitPrice * line.quantity();
-                        perLine.merge(line.lineId(),
-                                Math.max(0, line.lineGrossMinor() - target), Long::sum);
+                        perLine.merge(line.lineId(), Math.max(0, line.lineGrossMinor() - target), Long::sum);
                     }
                 }
-                case ORDER_PERCENTAGE_DISCOUNT -> orderMinor += percentageOf(
-                        basket.goodsSubtotalMinor(), action.operands().requireLong("basisPoints"));
-                case ORDER_FIXED_DISCOUNT -> orderMinor += Math.min(
-                        action.operands().requireLong("amountMinor"), basket.goodsSubtotalMinor());
+                case ORDER_PERCENTAGE_DISCOUNT ->
+                    orderMinor += percentageOf(
+                            basket.goodsSubtotalMinor(), action.operands().requireLong("basisPoints"));
+                case ORDER_FIXED_DISCOUNT ->
+                    orderMinor += Math.min(action.operands().requireLong("amountMinor"), basket.goodsSubtotalMinor());
                 case FREE_DELIVERY -> deliveryMinor += basket.deliveryFeeMinor();
                 case REDUCED_DELIVERY -> {
-                    long reduction = action.operands().optionalLong("amountMinor")
-                            .orElseGet(() -> percentageOf(basket.deliveryFeeMinor(),
-                                    action.operands().requireLong("basisPoints")));
+                    long reduction = action.operands()
+                            .optionalLong("amountMinor")
+                            .orElseGet(() -> percentageOf(
+                                    basket.deliveryFeeMinor(), action.operands().requireLong("basisPoints")));
                     deliveryMinor += Math.min(reduction, basket.deliveryFeeMinor());
                 }
                 case FREE_ITEM -> {
@@ -314,8 +318,7 @@ public class PromotionEvaluator {
             }
         }
 
-        long total = perLine.values().stream().mapToLong(Long::longValue).sum()
-                + orderMinor + deliveryMinor;
+        long total = perLine.values().stream().mapToLong(Long::longValue).sum() + orderMinor + deliveryMinor;
         if (promotion.maximumDiscountMinor() != null && total > promotion.maximumDiscountMinor()) {
             return capped(promotion, perLine, orderMinor, deliveryMinor, total);
         }
@@ -330,8 +333,8 @@ public class PromotionEvaluator {
      * a few minor units from the cap, and a quote whose adjustments do not sum to
      * its own discount is one nobody can reconcile.
      */
-    private Benefit capped(Promotion promotion, Map<String, Long> perLine, long orderMinor,
-            long deliveryMinor, long uncapped) {
+    private Benefit capped(
+            Promotion promotion, Map<String, Long> perLine, long orderMinor, long deliveryMinor, long uncapped) {
 
         long cap = promotion.maximumDiscountMinor();
         List<String> keys = new ArrayList<>(perLine.keySet());
@@ -369,16 +372,17 @@ public class PromotionEvaluator {
     private Map<String, Long> accumulateLineDiscounts(List<Candidate> chosen) {
         Map<String, Long> discounts = new LinkedHashMap<>();
         for (Candidate candidate : chosen) {
-            candidate.benefit().perLineMinor()
-                    .forEach((lineId, amount) -> discounts.merge(lineId, amount, Long::sum));
+            candidate.benefit().perLineMinor().forEach((lineId, amount) -> discounts.merge(lineId, amount, Long::sum));
         }
         return discounts;
     }
 
     private Outcome build(List<Candidate> chosen, Basket basket) {
         Map<String, Long> lineDiscounts = accumulateLineDiscounts(chosen);
-        long orderDiscount = chosen.stream().mapToLong(c -> c.benefit().orderMinor()).sum();
-        long deliveryBenefit = chosen.stream().mapToLong(c -> c.benefit().deliveryMinor()).sum();
+        long orderDiscount =
+                chosen.stream().mapToLong(c -> c.benefit().orderMinor()).sum();
+        long deliveryBenefit =
+                chosen.stream().mapToLong(c -> c.benefit().deliveryMinor()).sum();
 
         // The order discount cannot exceed what is left after item discounts. Two
         // promotions in different stacking groups can each be legitimate and
@@ -405,10 +409,9 @@ public class PromotionEvaluator {
     // ------------------------------------------------------------------ values
 
     /** One promotion that applies, and what it is worth. */
-    private record Candidate(Promotion promotion, Benefit benefit) { }
+    private record Candidate(Promotion promotion, Benefit benefit) {}
 
-    private record Benefit(Map<String, Long> perLineMinor, long orderMinor, long deliveryMinor,
-            long totalMinor) { }
+    private record Benefit(Map<String, Long> perLineMinor, long orderMinor, long deliveryMinor, long totalMinor) {}
 
     /**
      * The basket as priced by stages 1 and 2, plus what the catalog says the
@@ -418,8 +421,7 @@ public class PromotionEvaluator {
      * the pricing context port and arrive here as values, so this class never
      * learns what a catalog is.
      */
-    public record Basket(String currency, List<BasketLine> lines, long goodsSubtotalMinor,
-            long deliveryFeeMinor) {
+    public record Basket(String currency, List<BasketLine> lines, long goodsSubtotalMinor, long deliveryFeeMinor) {
 
         public Basket {
             lines = lines == null ? List.of() : List.copyOf(lines);
@@ -430,12 +432,20 @@ public class PromotionEvaluator {
         }
 
         List<BasketLine> linesIn(Set<String> lineIds) {
-            return lines.stream().filter(line -> lineIds.contains(line.lineId())).toList();
+            return lines.stream()
+                    .filter(line -> lineIds.contains(line.lineId()))
+                    .toList();
         }
     }
 
-    public record BasketLine(String lineId, UUID variantId, UUID productId, Set<UUID> categoryIds,
-            int quantity, long unitAmountMinor, long lineGrossMinor) {
+    public record BasketLine(
+            String lineId,
+            UUID variantId,
+            UUID productId,
+            Set<UUID> categoryIds,
+            int quantity,
+            long unitAmountMinor,
+            long lineGrossMinor) {
 
         public BasketLine {
             categoryIds = categoryIds == null ? Set.of() : Set.copyOf(categoryIds);
@@ -449,20 +459,29 @@ public class PromotionEvaluator {
      * IANA timezone, not computed here: a "lunchtime" promotion means lunchtime
      * where the branch is, and this class may not read a clock or a zone.
      */
-    public record PromotionContext(String channel, UUID locationId, String fulfillmentMode,
-            boolean firstOrder, Set<String> customerSegments, Set<UUID> presentedCouponPromotionIds,
-            int localDayOfWeek, int localMinuteOfDay) {
+    public record PromotionContext(
+            String channel,
+            UUID locationId,
+            String fulfillmentMode,
+            boolean firstOrder,
+            Set<String> customerSegments,
+            Set<UUID> presentedCouponPromotionIds,
+            int localDayOfWeek,
+            int localMinuteOfDay) {
 
         public PromotionContext {
             customerSegments = customerSegments == null ? Set.of() : Set.copyOf(customerSegments);
-            presentedCouponPromotionIds = presentedCouponPromotionIds == null
-                    ? Set.of() : Set.copyOf(presentedCouponPromotionIds);
+            presentedCouponPromotionIds =
+                    presentedCouponPromotionIds == null ? Set.of() : Set.copyOf(presentedCouponPromotionIds);
         }
     }
 
     /** What stages 3 and 4 decided, for the engine to apply and record. */
-    public record Outcome(Map<String, Long> lineDiscountsMinor, long orderDiscountMinor,
-            long deliveryBenefitMinor, List<AppliedPromotion> applied) {
+    public record Outcome(
+            Map<String, Long> lineDiscountsMinor,
+            long orderDiscountMinor,
+            long deliveryBenefitMinor,
+            List<AppliedPromotion> applied) {
 
         public Outcome {
             lineDiscountsMinor = lineDiscountsMinor == null ? Map.of() : Map.copyOf(lineDiscountsMinor);
@@ -474,13 +493,20 @@ public class PromotionEvaluator {
         }
 
         public long totalDiscountMinor() {
-            return lineDiscountsMinor.values().stream().mapToLong(Long::longValue).sum()
+            return lineDiscountsMinor.values().stream()
+                            .mapToLong(Long::longValue)
+                            .sum()
                     + orderDiscountMinor;
         }
     }
 
     /** One promotion that made it onto the quote, for the adjustment record. */
-    public record AppliedPromotion(UUID promotionId, String code, int definitionVersion,
-            Promotion.Scope scope, Map<String, Long> perLineMinor, long orderMinor,
-            long deliveryMinor) { }
+    public record AppliedPromotion(
+            UUID promotionId,
+            String code,
+            int definitionVersion,
+            Promotion.Scope scope,
+            Map<String, Long> perLineMinor,
+            long orderMinor,
+            long deliveryMinor) {}
 }

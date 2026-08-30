@@ -11,7 +11,6 @@ package uz.horecaos.platform.fulfillment.domain.tariff;
  * rather than from a courier.
  */
 public enum DistanceSource {
-
     RADIUS,
     ROAD,
 

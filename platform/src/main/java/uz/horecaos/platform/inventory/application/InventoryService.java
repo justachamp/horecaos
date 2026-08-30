@@ -9,16 +9,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.inventory.api.AvailabilityDecision;
+import uz.horecaos.platform.inventory.api.AvailabilityDecision.Unavailable;
 import uz.horecaos.platform.inventory.api.InventoryReservationPort;
 import uz.horecaos.platform.inventory.api.ReservationResult;
-import uz.horecaos.platform.inventory.api.AvailabilityDecision.Unavailable;
 import uz.horecaos.platform.inventory.api.TrackingMode;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore.StockItemRow;
@@ -56,8 +54,7 @@ public class InventoryService implements InventoryReservationPort {
     }
 
     @Transactional
-    public UUID listVariantAtLocation(UUID tenantId, UUID brandId, UUID locationId,
-            UUID variantId, TrackingMode mode) {
+    public UUID listVariantAtLocation(UUID tenantId, UUID brandId, UUID locationId, UUID variantId, TrackingMode mode) {
         if (mode == TrackingMode.QUANTITY) {
             throw new UnsupportedTrackingModeException(mode);
         }
@@ -73,8 +70,7 @@ public class InventoryService implements InventoryReservationPort {
      * order for a dish it does not make.
      */
     @Transactional(readOnly = true)
-    public AvailabilityDecision checkAvailability(UUID tenantId, UUID locationId,
-            Set<UUID> variantIds) {
+    public AvailabilityDecision checkAvailability(UUID tenantId, UUID locationId, Set<UUID> variantIds) {
 
         Map<UUID, StockItemRow> items = store.findStockItems(tenantId, locationId, variantIds);
         List<Unavailable> blocked = new ArrayList<>();
@@ -99,19 +95,17 @@ public class InventoryService implements InventoryReservationPort {
             }
         }
 
-        return blocked.isEmpty()
-                ? AvailabilityDecision.allAvailable()
-                : AvailabilityDecision.blockedBy(blocked);
+        return blocked.isEmpty() ? AvailabilityDecision.allAvailable() : AvailabilityDecision.blockedBy(blocked);
     }
 
     /** A kitchen marking a dish sold out, or back on. */
     @Transactional
-    public void setAvailability(UUID tenantId, UUID locationId, UUID variantId, boolean available,
-            String reasonCode, UUID actorId) {
+    public void setAvailability(
+            UUID tenantId, UUID locationId, UUID variantId, boolean available, String reasonCode, UUID actorId) {
 
         StockItemRow item = store.findStockItem(tenantId, locationId, variantId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Variant " + variantId + " is not stocked at this location"));
+                .orElseThrow(() ->
+                        new IllegalArgumentException("Variant " + variantId + " is not stocked at this location"));
 
         if (item.trackingMode() != TrackingMode.BINARY) {
             throw new IllegalStateException(
@@ -122,7 +116,10 @@ public class InventoryService implements InventoryReservationPort {
             // Already in this state, so nothing happened and nothing is recorded.
             // A movement per repeated tap would fill the ledger with events that
             // changed nothing and bury the ones that did.
-            log.debug("Variant {} at location {} is already {}", variantId, locationId,
+            log.debug(
+                    "Variant {} at location {} is already {}",
+                    variantId,
+                    locationId,
                     available ? "available" : "unavailable");
             return;
         }
@@ -130,15 +127,19 @@ public class InventoryService implements InventoryReservationPort {
         // Unique per real transition: the position sequence advances only when a
         // state actually changes, so a genuine flip back is never swallowed as a
         // duplicate while a concurrent repeat of this same transition is.
-        String idempotencyKey = "avail:%s:%s:%d".formatted(
-                variantId, available, item.positionSequence());
+        String idempotencyKey = "avail:%s:%s:%d".formatted(variantId, available, item.positionSequence());
 
-        store.setBinaryAvailability(tenantId, item.stockItemId(), available,
-                idempotencyKey, reasonCode, actorId == null ? "SERVICE" : "USER", actorId,
+        store.setBinaryAvailability(
+                tenantId,
+                item.stockItemId(),
+                available,
+                idempotencyKey,
+                reasonCode,
+                actorId == null ? "SERVICE" : "USER",
+                actorId,
                 clock.instant());
 
-        log.info("Variant {} at location {} marked {}", variantId, locationId,
-                available ? "available" : "unavailable");
+        log.info("Variant {} at location {} marked {}", variantId, locationId, available ? "available" : "unavailable");
     }
 
     /**
@@ -151,8 +152,8 @@ public class InventoryService implements InventoryReservationPort {
      */
     @Override
     @Transactional
-    public ReservationResult reserveForQuote(UUID tenantId, UUID brandId, UUID locationId,
-            UUID quoteId, Map<UUID, Integer> quantitiesByVariant) {
+    public ReservationResult reserveForQuote(
+            UUID tenantId, UUID brandId, UUID locationId, UUID quoteId, Map<UUID, Integer> quantitiesByVariant) {
 
         // ADR 0024 forbids a historical import from changing inventory, and this
         // is the movement it means: an order from 2021 holding stock a branch is
@@ -167,8 +168,7 @@ public class InventoryService implements InventoryReservationPort {
         // the live checkout path instead of importing a snapshot.
         ImportSuppression.refuse(ExternalEffect.INVENTORY_MOVEMENT, "reserve stock for a quote");
 
-        AvailabilityDecision decision =
-                checkAvailability(tenantId, locationId, quantitiesByVariant.keySet());
+        AvailabilityDecision decision = checkAvailability(tenantId, locationId, quantitiesByVariant.keySet());
         if (!decision.available()) {
             return ReservationResult.refused(decision);
         }
@@ -176,8 +176,8 @@ public class InventoryService implements InventoryReservationPort {
         Instant now = clock.instant();
         UUID reservationId = UUID.randomUUID();
 
-        boolean created = store.insertReservation(reservationId, tenantId, brandId, locationId,
-                OWNER_QUOTE, quoteId, now.plus(RESERVATION_TTL), now);
+        boolean created = store.insertReservation(
+                reservationId, tenantId, brandId, locationId, OWNER_QUOTE, quoteId, now.plus(RESERVATION_TTL), now);
 
         if (!created) {
             // A reservation row already exists for this quote. The uniqueness
@@ -194,12 +194,10 @@ public class InventoryService implements InventoryReservationPort {
                 // return false with nothing reserved. A lapsed hold is a refusal,
                 // and the customer re-prices rather than being sold a promise
                 // inventory never made.
-                log.info("Reservation for quote {} is {} and cannot be reused", quoteId,
-                        existing.status());
-                return ReservationResult.refused(AvailabilityDecision.blockedBy(
-                        quantitiesByVariant.keySet().stream()
-                                .map(Unavailable::holdExpired)
-                                .toList()));
+                log.info("Reservation for quote {} is {} and cannot be reused", quoteId, existing.status());
+                return ReservationResult.refused(AvailabilityDecision.blockedBy(quantitiesByVariant.keySet().stream()
+                        .map(Unavailable::holdExpired)
+                        .toList()));
             }
 
             // A live hold for this quote. Returning it rather than failing keeps a
@@ -208,11 +206,9 @@ public class InventoryService implements InventoryReservationPort {
             return ReservationResult.held(existing.id(), existing.expiresAt());
         }
 
-        Map<UUID, StockItemRow> items =
-                store.findStockItems(tenantId, locationId, quantitiesByVariant.keySet());
+        Map<UUID, StockItemRow> items = store.findStockItems(tenantId, locationId, quantitiesByVariant.keySet());
         quantitiesByVariant.forEach((variantId, quantity) -> store.insertReservationLine(
-                reservationId, tenantId, items.get(variantId).stockItemId(),
-                BigDecimal.valueOf(quantity)));
+                reservationId, tenantId, items.get(variantId).stockItemId(), BigDecimal.valueOf(quantity)));
 
         return ReservationResult.held(reservationId, now.plus(RESERVATION_TTL));
     }
@@ -228,8 +224,7 @@ public class InventoryService implements InventoryReservationPort {
 
         var reservation = store.findReservation(tenantId, OWNER_QUOTE, quoteId);
         return reservation.isPresent()
-                && store.transitionReservation(tenantId, reservation.get().id(), "COMMITTED",
-                        clock.instant());
+                && store.transitionReservation(tenantId, reservation.get().id(), "COMMITTED", clock.instant());
     }
 
     /** Frees a hold when a cart is abandoned or a checkout fails. */
@@ -240,8 +235,7 @@ public class InventoryService implements InventoryReservationPort {
 
         var reservation = store.findReservation(tenantId, OWNER_QUOTE, quoteId);
         return reservation.isPresent()
-                && store.transitionReservation(tenantId, reservation.get().id(), "RELEASED",
-                        clock.instant());
+                && store.transitionReservation(tenantId, reservation.get().id(), "RELEASED", clock.instant());
     }
 
     /** Sweeps abandoned holds so they stop reserving stock. */

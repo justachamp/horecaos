@@ -2,7 +2,6 @@ package uz.horecaos.platform.integration.camel.delivery.noor;
 
 import java.util.Locale;
 import java.util.Map;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,8 +52,7 @@ final class NoorStage {
             "FAILED", false,
             "UNKNOWN", false);
 
-    private NoorStage() {
-    }
+    private NoorStage() {}
 
     static String toShipmentState(String stage) {
         if (stage == null) {

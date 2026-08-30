@@ -1,18 +1,16 @@
 package uz.horecaos.platform.web.idempotency;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.BufferedReader;
-import java.nio.charset.StandardCharsets;
-
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
-
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
@@ -23,7 +21,6 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingResponseWrapper;
-
 import uz.horecaos.platform.web.CorrelationIdFilter;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -58,14 +55,12 @@ public class CachedBodyRequestFilter extends OncePerRequestFilter {
     private final int maxBodyBytes;
 
     public CachedBodyRequestFilter(
-            @Value("${horecaos.web.request-body.max-bytes:" + DEFAULT_MAX_BODY_BYTES + "}")
-            int maxBodyBytes) {
+            @Value("${horecaos.web.request-body.max-bytes:" + DEFAULT_MAX_BODY_BYTES + "}") int maxBodyBytes) {
         this.maxBodyBytes = maxBodyBytes;
     }
 
     @Override
-    protected void doFilterInternal(
-            HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws jakarta.servlet.ServletException, IOException {
 
         if (request.getContentLengthLong() > maxBodyBytes) {
@@ -124,9 +119,10 @@ public class CachedBodyRequestFilter extends OncePerRequestFilter {
                 "title":"Request body too large",\
                 "status":413,\
                 "code":"REQUEST_BODY_TOO_LARGE",\
-                "detail":"The request body exceeds the maximum accepted size"%s}"""
-                .formatted(correlationId == null || correlationId.isBlank()
-                        ? "" : ",\"correlationId\":\"%s\"".formatted(correlationId)));
+                "detail":"The request body exceeds the maximum accepted size"%s}""".formatted(
+                        correlationId == null || correlationId.isBlank()
+                                ? ""
+                                : ",\"correlationId\":\"%s\"".formatted(correlationId)));
     }
 
     @Override

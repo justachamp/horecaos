@@ -18,8 +18,7 @@ public final class BoundaryPolicy {
 
     private static final long BASIS_POINTS = 10_000L;
 
-    private BoundaryPolicy() {
-    }
+    private BoundaryPolicy() {}
 
     /**
      * Decides the boundary for a counted entitlement.
@@ -29,8 +28,7 @@ public final class BoundaryPolicy {
      * @param requested the increase about to be made, zero to ask where the tenant stands
      * @param mode      the mode to answer under
      */
-    public static Boundary decideCounted(
-            EntitlementValue value, long consumed, long requested, EnforcementMode mode) {
+    public static Boundary decideCounted(EntitlementValue value, long consumed, long requested, EnforcementMode mode) {
 
         Long limit = value.limit();
         if (limit == null) {
@@ -93,7 +91,6 @@ public final class BoundaryPolicy {
         if (threshold == null || limit <= 0) {
             return false;
         }
-        return Math.multiplyExact(projected, BASIS_POINTS)
-                >= Math.multiplyExact(limit, (long) threshold);
+        return Math.multiplyExact(projected, BASIS_POINTS) >= Math.multiplyExact(limit, (long) threshold);
     }
 }

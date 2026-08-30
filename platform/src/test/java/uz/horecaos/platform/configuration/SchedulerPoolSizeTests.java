@@ -8,7 +8,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
@@ -34,16 +33,18 @@ class SchedulerPoolSizeTests {
         int jobs = scheduledMethodCount();
 
         assertThat(SchedulingConfiguration.DEFAULT_POOL_SIZE)
-                .as("%d @Scheduled methods share this pool; a pool smaller than that lets an "
-                        + "unrelated module's sweeper delay the outbox relay", jobs)
+                .as(
+                        "%d @Scheduled methods share this pool; a pool smaller than that lets an "
+                                + "unrelated module's sweeper delay the outbox relay",
+                        jobs)
                 .isGreaterThanOrEqualTo(jobs);
     }
 
     @Test
     void theSchedulerIsNamedAndDrainsOnShutdown() {
-        ThreadPoolTaskScheduler scheduler = new SchedulingConfiguration().taskScheduler(
-                healthNothingWillReport(), SchedulingConfiguration.DEFAULT_POOL_SIZE,
-                Duration.ofSeconds(20));
+        ThreadPoolTaskScheduler scheduler = new SchedulingConfiguration()
+                .taskScheduler(
+                        healthNothingWillReport(), SchedulingConfiguration.DEFAULT_POOL_SIZE, Duration.ofSeconds(20));
         scheduler.initialize();
 
         try {
@@ -60,9 +61,9 @@ class SchedulerPoolSizeTests {
 
     @Test
     void aStalledJobDoesNotHoldUpAnUnrelatedOne() throws InterruptedException {
-        ThreadPoolTaskScheduler scheduler = new SchedulingConfiguration().taskScheduler(
-                healthNothingWillReport(), SchedulingConfiguration.DEFAULT_POOL_SIZE,
-                Duration.ofSeconds(1));
+        ThreadPoolTaskScheduler scheduler = new SchedulingConfiguration()
+                .taskScheduler(
+                        healthNothingWillReport(), SchedulingConfiguration.DEFAULT_POOL_SIZE, Duration.ofSeconds(1));
         scheduler.initialize();
 
         CountDownLatch release = new CountDownLatch(1);
@@ -96,7 +97,7 @@ class SchedulerPoolSizeTests {
      * subject; here it only has to exist, so the events go nowhere.
      */
     private static ProcessHealth healthNothingWillReport() {
-        return new ProcessHealth(event -> { });
+        return new ProcessHealth(event -> {});
     }
 
     /**
@@ -106,8 +107,8 @@ class SchedulerPoolSizeTests {
      */
     private static int scheduledMethodCount() throws IOException {
         MetadataReaderFactory metadata = new CachingMetadataReaderFactory();
-        Resource[] classes = new PathMatchingResourcePatternResolver()
-                .getResources("classpath*:uz/horecaos/platform/**/*.class");
+        Resource[] classes =
+                new PathMatchingResourcePatternResolver().getResources("classpath*:uz/horecaos/platform/**/*.class");
 
         // A set, because the same class can be reachable from more than one
         // classpath root and a job counted twice would inflate the pool silently.
@@ -116,8 +117,8 @@ class SchedulerPoolSizeTests {
             MetadataReader reader = metadata.getMetadataReader(candidate);
             reader.getAnnotationMetadata()
                     .getAnnotatedMethods(Scheduled.class.getName())
-                    .forEach(method -> found.add(
-                            reader.getClassMetadata().getClassName() + "#" + method.getMethodName()));
+                    .forEach(method ->
+                            found.add(reader.getClassMetadata().getClassName() + "#" + method.getMethodName()));
         }
 
         assertThat(found)

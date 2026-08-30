@@ -1,5 +1,9 @@
 package uz.horecaos.platform.media;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -18,10 +22,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.zip.CRC32;
 import java.util.zip.Deflater;
-
-import javax.sql.DataSource;
 import javax.imageio.ImageIO;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -31,13 +33,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
-
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
@@ -46,12 +46,7 @@ import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import tools.jackson.databind.json.JsonMapper;
-
-import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.integration.outbox.JdbcOutboxStore;
 import uz.horecaos.platform.integration.outbox.MediaOutboxEventListener;
 import uz.horecaos.platform.media.api.ImageDerivativeRenderer;
@@ -73,9 +68,7 @@ import uz.horecaos.platform.media.infrastructure.persistence.JdbcDerivativeJobSt
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcMediaAssetStore;
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcMediaDerivativeStore;
 import uz.horecaos.platform.media.infrastructure.storage.S3ObjectStorage;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import uz.horecaos.platform.support.TestDatabase;
 
 /**
  * The presigned upload lifecycle against a real S3-compatible store (ADR 0010).
@@ -97,6 +90,7 @@ class MediaLifecycleTests {
      * was precisely the hole: nothing looked inside the bytes.
      */
     private static final byte[] JPEG = encode("jpg", 640, 480);
+
     private static final byte[] PNG = encode("png", 320, 240);
     private static final byte[] HTML =
             "<html><script>fetch('https://evil.example')</script></html>".getBytes(StandardCharsets.UTF_8);
@@ -142,8 +136,8 @@ class MediaLifecycleTests {
 
     @BeforeAll
     static void startInfrastructure() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
-                "Docker is required for the media lifecycle tests");
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(), "Docker is required for the media lifecycle tests");
 
         db = TestDatabase.migrated();
         jdbcUrl = db.jdbcUrl();
@@ -159,14 +153,22 @@ class MediaLifecycleTests {
         minio.start();
 
         String endpoint = "http://" + minio.getHost() + ":" + minio.getMappedPort(9000);
-        var credentials = StaticCredentialsProvider.create(
-                AwsBasicCredentials.create("horecaos", "horecaos-local-secret"));
+        var credentials =
+                StaticCredentialsProvider.create(AwsBasicCredentials.create("horecaos", "horecaos-local-secret"));
         var pathStyle = S3Configuration.builder().pathStyleAccessEnabled(true).build();
 
-        s3 = S3Client.builder().endpointOverride(URI.create(endpoint)).region(Region.US_EAST_1)
-                .credentialsProvider(credentials).serviceConfiguration(pathStyle).build();
-        presigner = S3Presigner.builder().endpointOverride(URI.create(endpoint)).region(Region.US_EAST_1)
-                .credentialsProvider(credentials).serviceConfiguration(pathStyle).build();
+        s3 = S3Client.builder()
+                .endpointOverride(URI.create(endpoint))
+                .region(Region.US_EAST_1)
+                .credentialsProvider(credentials)
+                .serviceConfiguration(pathStyle)
+                .build();
+        presigner = S3Presigner.builder()
+                .endpointOverride(URI.create(endpoint))
+                .region(Region.US_EAST_1)
+                .credentialsProvider(credentials)
+                .serviceConfiguration(pathStyle)
+                .build();
 
         try {
             s3.createBucket(CreateBucketRequest.builder().bucket(BUCKET).build());
@@ -219,8 +221,7 @@ class MediaLifecycleTests {
         // file used to assert single-pass behaviour only.
         clock = new MovableClock(START);
         storage = new S3ObjectStorage(s3, presigner);
-        TransactionTemplate transactions =
-                new TransactionTemplate(new DataSourceTransactionManager(dataSource));
+        TransactionTemplate transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
 
         // Stands in for the @TransactionalEventListener(BEFORE_COMMIT) Spring
         // wires in production. finalize publishes from inside its own
@@ -234,8 +235,8 @@ class MediaLifecycleTests {
         ApplicationEventPublisher events = event -> outbox.append((MediaEvent) event);
 
         jobs = new JdbcDerivativeJobStore(jdbc);
-        media = new MediaAssetService(new JdbcMediaAssetStore(jdbc), jobs, storage,
-                transactions, events, clock, BUCKET);
+        media = new MediaAssetService(
+                new JdbcMediaAssetStore(jdbc), jobs, storage, transactions, events, clock, BUCKET);
 
         // Everything here is real: real originals, a real renderer, real objects
         // written to and read back from MinIO, and — since V0058 landed the table
@@ -243,22 +244,27 @@ class MediaLifecycleTests {
         // this suite used while that table was still only proposed.
         derivativeRows = new JdbcMediaDerivativeStore(jdbc);
         meters = new SimpleMeterRegistry();
-        derivatives = new MediaDerivativeService(new JdbcMediaAssetStore(jdbc), derivativeRows,
-                storage, new ImageIoDerivativeRenderer(), clock);
+        derivatives = new MediaDerivativeService(
+                new JdbcMediaAssetStore(jdbc), derivativeRows, storage, new ImageIoDerivativeRenderer(), clock);
         worker = workerOver(derivatives);
     }
 
     @Test
     @DisplayName("a complete upload becomes available and yields a working download URL")
     void completeUploadBecomesAvailable() throws Exception {
-        var ticket = media.requestUpload(TENANT_A, MediaOwner.brand(BRAND), MediaVisibility.PUBLIC,
-                "image/jpeg", JPEG.length, "burger.jpg", null);
+        var ticket = media.requestUpload(
+                TENANT_A,
+                MediaOwner.brand(BRAND),
+                MediaVisibility.PUBLIC,
+                "image/jpeg",
+                JPEG.length,
+                "burger.jpg",
+                null);
 
         int uploadStatus = put(ticket.uploadUrl(), ticket.requiredHeaders(), JPEG);
         assertThat(uploadStatus).isEqualTo(200);
 
-        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId()))
-                .isEqualTo(MediaAssetStatus.AVAILABLE);
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.AVAILABLE);
 
         URI download = media.downloadUrl(TENANT_A, ticket.assetId()).orElseThrow();
         assertThat(get(download)).isEqualTo(JPEG);
@@ -276,13 +282,18 @@ class MediaLifecycleTests {
         // the store echoes back image/jpeg because that is the header the
         // signature required. Only reading the bytes catches it — and serving
         // this from our own origin would be stored cross-site scripting.
-        var ticket = media.requestUpload(TENANT_A, MediaOwner.brand(BRAND), MediaVisibility.PUBLIC,
-                "image/jpeg", HTML.length, "burger.jpg", null);
+        var ticket = media.requestUpload(
+                TENANT_A,
+                MediaOwner.brand(BRAND),
+                MediaVisibility.PUBLIC,
+                "image/jpeg",
+                HTML.length,
+                "burger.jpg",
+                null);
 
         assertThat(put(ticket.uploadUrl(), ticket.requiredHeaders(), HTML)).isEqualTo(200);
 
-        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId()))
-                .isEqualTo(MediaAssetStatus.REJECTED);
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.REJECTED);
         assertThat(rejectionCode(ticket.assetId())).isEqualTo("CONTENT_NOT_AN_IMAGE");
         assertThat(media.downloadUrl(TENANT_A, ticket.assetId())).isEmpty();
     }
@@ -290,67 +301,86 @@ class MediaLifecycleTests {
     @Test
     @DisplayName("a real image of the wrong format is rejected rather than quietly relabelled")
     void contentOfADifferentImageFormatIsRejected() throws Exception {
-        var ticket = media.requestUpload(TENANT_A, MediaOwner.brand(BRAND), MediaVisibility.PUBLIC,
-                "image/jpeg", PNG.length, "burger.jpg", null);
+        var ticket = media.requestUpload(
+                TENANT_A,
+                MediaOwner.brand(BRAND),
+                MediaVisibility.PUBLIC,
+                "image/jpeg",
+                PNG.length,
+                "burger.jpg",
+                null);
 
         assertThat(put(ticket.uploadUrl(), ticket.requiredHeaders(), PNG)).isEqualTo(200);
 
         // The bytes are a perfectly good PNG. It is still not the upload that was
         // authorised, and the stored object's own metadata will keep telling every
         // future reader it is a JPEG.
-        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId()))
-                .isEqualTo(MediaAssetStatus.REJECTED);
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.REJECTED);
         assertThat(rejectionCode(ticket.assetId())).isEqualTo("TYPE_MISMATCH");
     }
 
     @Test
     @DisplayName("a PNG uploaded as a PNG becomes available with its dimensions recorded")
     void pngIsAcceptedOnItsOwnTerms() throws Exception {
-        var ticket = media.requestUpload(TENANT_A, MediaOwner.brand(BRAND), MediaVisibility.PUBLIC,
-                "image/png", PNG.length, "logo.png", null);
+        var ticket = media.requestUpload(
+                TENANT_A, MediaOwner.brand(BRAND), MediaVisibility.PUBLIC, "image/png", PNG.length, "logo.png", null);
 
         assertThat(put(ticket.uploadUrl(), ticket.requiredHeaders(), PNG)).isEqualTo(200);
 
-        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId()))
-                .isEqualTo(MediaAssetStatus.AVAILABLE);
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.AVAILABLE);
         assertThat(dimensions(ticket.assetId())).containsExactly(320, 240);
     }
 
     @Test
     @DisplayName("finalizing without uploading is rejected, not left pending")
     void finalizeWithoutUploadIsRejected() {
-        var ticket = media.requestUpload(TENANT_A, MediaOwner.brand(BRAND), MediaVisibility.PUBLIC,
-                "image/png", JPEG.length, "never-sent.png", null);
+        var ticket = media.requestUpload(
+                TENANT_A,
+                MediaOwner.brand(BRAND),
+                MediaVisibility.PUBLIC,
+                "image/png",
+                JPEG.length,
+                "never-sent.png",
+                null);
 
-        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId()))
-                .isEqualTo(MediaAssetStatus.REJECTED);
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.REJECTED);
         assertThat(rejectionCode(ticket.assetId())).isEqualTo("OBJECT_MISSING");
     }
 
     @Test
     @DisplayName("the store itself refuses an upload of a different size than declared")
     void sizeMismatchIsRefusedByTheSignature() throws Exception {
-        var ticket = media.requestUpload(TENANT_A, MediaOwner.brand(BRAND), MediaVisibility.PUBLIC,
-                "image/jpeg", JPEG.length, "short.jpg", null);
+        var ticket = media.requestUpload(
+                TENANT_A,
+                MediaOwner.brand(BRAND),
+                MediaVisibility.PUBLIC,
+                "image/jpeg",
+                JPEG.length,
+                "short.jpg",
+                null);
 
-        int uploadStatus = put(ticket.uploadUrl(), ticket.requiredHeaders(),
-                "tiny".getBytes(StandardCharsets.UTF_8));
+        int uploadStatus = put(ticket.uploadUrl(), ticket.requiredHeaders(), "tiny".getBytes(StandardCharsets.UTF_8));
 
         // The content length is part of the signature, so the store rejects the
         // request outright and writes nothing. This is what makes a presigned
         // URL a bounded capability rather than a write-anything token: a leaked
         // URL cannot be used to upload a gigabyte.
         assertThat(uploadStatus).isEqualTo(403);
-        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId()))
-                .isEqualTo(MediaAssetStatus.REJECTED);
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.REJECTED);
         assertThat(rejectionCode(ticket.assetId())).isEqualTo("OBJECT_MISSING");
     }
 
     @Test
     @DisplayName("a mismatched content type is refused by the signature too")
     void contentTypeMismatchIsRefusedByTheSignature() throws Exception {
-        var ticket = media.requestUpload(TENANT_A, MediaOwner.brand(BRAND), MediaVisibility.PUBLIC,
-                "image/jpeg", JPEG.length, "mislabelled.jpg", null);
+        var ticket = media.requestUpload(
+                TENANT_A,
+                MediaOwner.brand(BRAND),
+                MediaVisibility.PUBLIC,
+                "image/jpeg",
+                JPEG.length,
+                "mislabelled.jpg",
+                null);
 
         // Same bytes, different declared type. The service's own type check at
         // finalize stays as defence in depth against a store that does not
@@ -363,8 +393,14 @@ class MediaLifecycleTests {
     @Test
     @DisplayName("one tenant cannot finalize, read, or sign another tenant's asset")
     void assetsAreTenantIsolated() throws Exception {
-        var ticket = media.requestUpload(TENANT_A, MediaOwner.brand(BRAND), MediaVisibility.PRIVATE,
-                "image/jpeg", JPEG.length, "private.jpg", null);
+        var ticket = media.requestUpload(
+                TENANT_A,
+                MediaOwner.brand(BRAND),
+                MediaVisibility.PRIVATE,
+                "image/jpeg",
+                JPEG.length,
+                "private.jpg",
+                null);
         put(ticket.uploadUrl(), ticket.requiredHeaders(), JPEG);
         media.finalizeUpload(TENANT_A, ticket.assetId());
 
@@ -373,15 +409,21 @@ class MediaLifecycleTests {
         assertThat(media.find(TENANT_B, ticket.assetId())).isEmpty();
         assertThat(media.downloadUrl(TENANT_B, ticket.assetId())).isEmpty();
         assertThat(org.assertj.core.api.Assertions.catchThrowable(
-                () -> media.finalizeUpload(TENANT_B, ticket.assetId())))
+                        () -> media.finalizeUpload(TENANT_B, ticket.assetId())))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     @DisplayName("finalize is idempotent, so a retried call cannot un-publish an image")
     void finalizeIsIdempotent() throws Exception {
-        var ticket = media.requestUpload(TENANT_A, MediaOwner.brand(BRAND), MediaVisibility.PUBLIC,
-                "image/jpeg", JPEG.length, "repeat.jpg", null);
+        var ticket = media.requestUpload(
+                TENANT_A,
+                MediaOwner.brand(BRAND),
+                MediaVisibility.PUBLIC,
+                "image/jpeg",
+                JPEG.length,
+                "repeat.jpg",
+                null);
         put(ticket.uploadUrl(), ticket.requiredHeaders(), JPEG);
 
         assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.AVAILABLE);
@@ -393,19 +435,33 @@ class MediaLifecycleTests {
     void disallowedTypeNeverGetsAnUploadUrl() {
         // SVG is the one that matters: it is a document format that can carry
         // script, so serving user-supplied SVG from our origin is stored XSS.
-        assertThat(org.assertj.core.api.Assertions.catchThrowable(
-                () -> media.requestUpload(TENANT_A, MediaOwner.brand(BRAND), MediaVisibility.PUBLIC,
-                        "image/svg+xml", 1024, "logo.svg", null)))
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> media.requestUpload(
+                        TENANT_A,
+                        MediaOwner.brand(BRAND),
+                        MediaVisibility.PUBLIC,
+                        "image/svg+xml",
+                        1024,
+                        "logo.svg",
+                        null)))
                 .isInstanceOf(IllegalArgumentException.class);
 
-        assertThat(jdbc.sql("SELECT count(*) FROM media.assets").query(Long.class).single()).isZero();
+        assertThat(jdbc.sql("SELECT count(*) FROM media.assets")
+                        .query(Long.class)
+                        .single())
+                .isZero();
     }
 
     @Test
     @DisplayName("an unverified asset yields no download URL")
     void pendingAssetIsNotServable() {
-        var ticket = media.requestUpload(TENANT_A, MediaOwner.brand(BRAND), MediaVisibility.PUBLIC,
-                "image/jpeg", JPEG.length, "pending.jpg", null);
+        var ticket = media.requestUpload(
+                TENANT_A,
+                MediaOwner.brand(BRAND),
+                MediaVisibility.PUBLIC,
+                "image/jpeg",
+                JPEG.length,
+                "pending.jpg",
+                null);
 
         assertThat(media.downloadUrl(TENANT_A, ticket.assetId())).isEmpty();
         assertThat(media.allDisplayable(TENANT_A, Set.of(ticket.assetId()))).isFalse();
@@ -418,8 +474,8 @@ class MediaLifecycleTests {
 
         var report = derivatives.renderMissing(TENANT_A, assetId);
 
-        assertThat(report.created()).containsExactly(
-                DerivativeVariant.THUMBNAIL, DerivativeVariant.CARD, DerivativeVariant.DETAIL);
+        assertThat(report.created())
+                .containsExactly(DerivativeVariant.THUMBNAIL, DerivativeVariant.CARD, DerivativeVariant.DETAIL);
         assertThat(report.sourceUnsupported()).isFalse();
 
         // Read back from MinIO and probed, not trusted from the row. The row
@@ -467,8 +523,14 @@ class MediaLifecycleTests {
     @Test
     @DisplayName("an unverified asset gets no renditions and no orphaned objects")
     void unverifiedAssetsAreNotRendered() {
-        var ticket = media.requestUpload(TENANT_A, MediaOwner.brand(BRAND), MediaVisibility.PUBLIC,
-                "image/jpeg", JPEG.length, "pending.jpg", null);
+        var ticket = media.requestUpload(
+                TENANT_A,
+                MediaOwner.brand(BRAND),
+                MediaVisibility.PUBLIC,
+                "image/jpeg",
+                JPEG.length,
+                "pending.jpg",
+                null);
 
         var report = derivatives.renderMissing(TENANT_A, ticket.assetId());
 
@@ -481,8 +543,7 @@ class MediaLifecycleTests {
     void renderingIsTenantIsolated() throws Exception {
         MediaAssetId assetId = anAvailableAsset("image/jpeg", JPEG);
 
-        assertThat(org.assertj.core.api.Assertions.catchThrowable(
-                () -> derivatives.renderMissing(TENANT_B, assetId)))
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> derivatives.renderMissing(TENANT_B, assetId)))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(derivativeCount()).isZero();
     }
@@ -543,8 +604,7 @@ class MediaLifecycleTests {
 
         assertThat(derivatives.findAll(TENANT_A, assetId))
                 .extracting(MediaDerivative::variant)
-                .containsExactly(DerivativeVariant.THUMBNAIL, DerivativeVariant.CARD,
-                        DerivativeVariant.DETAIL);
+                .containsExactly(DerivativeVariant.THUMBNAIL, DerivativeVariant.CARD, DerivativeVariant.DETAIL);
         assertThat(storedDerivative(assetId, DerivativeVariant.CARD))
                 .isEqualTo(new ProbedImage("image/jpeg", 400, 300, 3));
         assertThat(jobStatus(assetId)).isEqualTo("COMPLETED");
@@ -557,7 +617,8 @@ class MediaLifecycleTests {
         assertThat(worker.renderOnce()).isEqualTo(1);
 
         var firstKeys = derivatives.findAll(TENANT_A, assetId).stream()
-                .map(MediaDerivative::objectKey).toList();
+                .map(MediaDerivative::objectKey)
+                .toList();
 
         // At-least-once is the ordinary case, not the exceptional one: a
         // redelivered availability event, an operator re-queueing a batch, a
@@ -607,7 +668,8 @@ class MediaLifecycleTests {
         // rendition of something nobody may see produces an orphaned object and
         // nothing else.
         jdbc.sql("UPDATE media.assets SET status = 'DELETED' WHERE asset_id = :id")
-                .param("id", assetId.value()).update();
+                .param("id", assetId.value())
+                .update();
 
         assertThat(worker.renderOnce()).isEqualTo(1);
 
@@ -630,10 +692,11 @@ class MediaLifecycleTests {
                 .isFalse();
 
         assertThat(jdbc.sql("SELECT count(*) FROM media.derivative_jobs WHERE asset_id = :id")
-                .param("id", assetId.value()).query(Long.class).single())
+                        .param("id", assetId.value())
+                        .query(Long.class)
+                        .single())
                 .isEqualTo(1);
     }
-
 
     // ------------------------------------------------------------------
     // What a render is allowed to cost, and what happens when it costs more
@@ -647,12 +710,18 @@ class MediaLifecycleTests {
         // dimension limit, forty megapixels against a strict forty-megapixel
         // ceiling, image/png on the allow-list, and the header's own type equal
         // to the stored type. The file is a real PNG and MinIO stores it.
-        var ticket = media.requestUpload(TENANT_A, MediaOwner.brand(BRAND), MediaVisibility.PUBLIC,
-                "image/png", RASTER_BOMB.length, "wallpaper.png", null);
-        assertThat(put(ticket.uploadUrl(), ticket.requiredHeaders(), RASTER_BOMB)).isEqualTo(200);
+        var ticket = media.requestUpload(
+                TENANT_A,
+                MediaOwner.brand(BRAND),
+                MediaVisibility.PUBLIC,
+                "image/png",
+                RASTER_BOMB.length,
+                "wallpaper.png",
+                null);
+        assertThat(put(ticket.uploadUrl(), ticket.requiredHeaders(), RASTER_BOMB))
+                .isEqualTo(200);
 
-        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId()))
-                .isEqualTo(MediaAssetStatus.REJECTED);
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.REJECTED);
         assertThat(rejectionCode(ticket.assetId())).isEqualTo("DIMENSIONS_EXCEEDED");
         // The reason names the quantity the verdict is actually about. 305MB,
         // from two bytes of IHDR that nothing used to read.
@@ -662,7 +731,9 @@ class MediaLifecycleTests {
 
         // And nothing was owed, so no worker ever meets those bytes.
         assertThat(jdbc.sql("SELECT count(*) FROM media.derivative_jobs")
-                .query(Long.class).single()).isZero();
+                        .query(Long.class)
+                        .single())
+                .isZero();
     }
 
     @Test
@@ -780,8 +851,8 @@ class MediaLifecycleTests {
         // Fails twice — an encode failure is the transient one: a temp-file or
         // object-store fault on the way out, not a property of the bytes — then
         // renders for real.
-        MediaDerivativeWorker flaky = workerOver(serviceOver(
-                new FailsThenRenders(2, new ImageDerivativeRenderer.Failed("ENCODE_FAILED"))));
+        MediaDerivativeWorker flaky =
+                workerOver(serviceOver(new FailsThenRenders(2, new ImageDerivativeRenderer.Failed("ENCODE_FAILED"))));
 
         assertThat(flaky.renderOnce()).isEqualTo(1);
         assertThat(jobStatus(assetId)).isEqualTo("PENDING");
@@ -871,9 +942,8 @@ class MediaLifecycleTests {
                 .as("no job may be left LEASED by a batch that will not come back for it")
                 .containsOnly("PENDING");
 
-        java.util.List<MediaAssetId> attempted = batch.stream()
-                .filter(asset -> jobErrorCode(asset) != null)
-                .toList();
+        java.util.List<MediaAssetId> attempted =
+                batch.stream().filter(asset -> jobErrorCode(asset) != null).toList();
         assertThat(attempted)
                 .as("exactly one job was in flight; the claim order the database returns is "
                         + "not fixed, so which one is not asserted")
@@ -916,18 +986,23 @@ class MediaLifecycleTests {
 
     /** Uploads and finalizes, so the asset under test reached AVAILABLE the way a real one does. */
     private MediaAssetId anAvailableAsset(String contentType, byte[] content) throws Exception {
-        var ticket = media.requestUpload(TENANT_A, MediaOwner.brand(BRAND), MediaVisibility.PUBLIC,
-                contentType, content.length, "dish" + contentType.hashCode(), null);
+        var ticket = media.requestUpload(
+                TENANT_A,
+                MediaOwner.brand(BRAND),
+                MediaVisibility.PUBLIC,
+                contentType,
+                content.length,
+                "dish" + contentType.hashCode(),
+                null);
         assertThat(put(ticket.uploadUrl(), ticket.requiredHeaders(), content)).isEqualTo(200);
-        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId()))
-                .isEqualTo(MediaAssetStatus.AVAILABLE);
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.AVAILABLE);
         return ticket.assetId();
     }
 
     private ProbedImage storedDerivative(MediaAssetId assetId, DerivativeVariant variant) {
         MediaDerivative row = derivativeRows.find(TENANT_A, assetId, variant).orElseThrow();
-        byte[] stored = new S3ObjectStorage(s3, presigner)
-                .readPrefix(row.bucket(), row.objectKey(), ImageProbe.PROBE_BYTES);
+        byte[] stored =
+                new S3ObjectStorage(s3, presigner).readPrefix(row.bucket(), row.objectKey(), ImageProbe.PROBE_BYTES);
         return ImageProbe.probe(stored).orElseThrow();
     }
 
@@ -938,9 +1013,7 @@ class MediaLifecycleTests {
                     default_timezone, status, version)
                 VALUES (:id, :slug, 'Media Test LLC', 'Media Test', 'UZS',
                     'Asia/Tashkent', 'ACTIVE', 0)
-                """)
-                .param("id", tenantId).param("slug", slug)
-                .update();
+                """).param("id", tenantId).param("slug", slug).update();
     }
 
     private String objectKey(MediaAssetId assetId) {
@@ -951,7 +1024,9 @@ class MediaLifecycleTests {
     }
 
     private long derivativeCount() {
-        return jdbc.sql("SELECT count(*) FROM media.derivatives").query(Long.class).single();
+        return jdbc.sql("SELECT count(*) FROM media.derivatives")
+                .query(Long.class)
+                .single();
     }
 
     private String jobStatus(MediaAssetId assetId) {
@@ -974,8 +1049,7 @@ class MediaLifecycleTests {
                 // Wrapped, because a null column is the assertion in the test
                 // that proves completing a job clears its error columns, and
                 // single() will not hand back a bare null.
-                .query((row, number) -> java.util.Optional.ofNullable(
-                        row.getString("last_error_code")))
+                .query((row, number) -> java.util.Optional.ofNullable(row.getString("last_error_code")))
                 .single()
                 .orElse(null);
     }
@@ -1005,16 +1079,22 @@ class MediaLifecycleTests {
                 .single();
     }
 
-
     private MediaDerivativeService serviceOver(ImageDerivativeRenderer renderer) {
-        return new MediaDerivativeService(new JdbcMediaAssetStore(jdbc), derivativeRows,
-                storage, renderer, clock);
+        return new MediaDerivativeService(new JdbcMediaAssetStore(jdbc), derivativeRows, storage, renderer, clock);
     }
 
     /** The production settings, except three attempts rather than six, so a budget is spendable. */
     private MediaDerivativeWorker workerOver(MediaDerivativeService service) {
-        return new MediaDerivativeWorker(jobs, service, clock, meters,
-                4, Duration.ofMinutes(5), Duration.ofSeconds(30), Duration.ofMinutes(15), 3,
+        return new MediaDerivativeWorker(
+                jobs,
+                service,
+                clock,
+                meters,
+                4,
+                Duration.ofMinutes(5),
+                Duration.ofSeconds(30),
+                Duration.ofMinutes(15),
+                3,
                 "media-lifecycle-tests");
     }
 
@@ -1027,14 +1107,18 @@ class MediaLifecycleTests {
      * existed. Faking the verdict rather than the object is the point; the
      * renderer is what is under test.
      */
-    private MediaAssetId anAssetTheGateWouldNowRefuse(String contentType, byte[] content)
-            throws Exception {
+    private MediaAssetId anAssetTheGateWouldNowRefuse(String contentType, byte[] content) throws Exception {
 
-        var ticket = media.requestUpload(TENANT_A, MediaOwner.brand(BRAND), MediaVisibility.PUBLIC,
-                contentType, content.length, "legacy" + contentType.hashCode(), null);
+        var ticket = media.requestUpload(
+                TENANT_A,
+                MediaOwner.brand(BRAND),
+                MediaVisibility.PUBLIC,
+                contentType,
+                content.length,
+                "legacy" + contentType.hashCode(),
+                null);
         assertThat(put(ticket.uploadUrl(), ticket.requiredHeaders(), content)).isEqualTo(200);
-        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId()))
-                .isEqualTo(MediaAssetStatus.REJECTED);
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.REJECTED);
 
         ProbedImage header = ImageProbe.probe(content).orElseThrow();
         jdbc.sql("""
@@ -1059,7 +1143,8 @@ class MediaLifecycleTests {
     }
 
     private double outcomeCount(String outcome) {
-        return meters.counter("horecaos.media.derivative.jobs", "outcome", outcome).count();
+        return meters.counter("horecaos.media.derivative.jobs", "outcome", outcome)
+                .count();
     }
 
     private int attemptCount(MediaAssetId assetId) {
@@ -1193,17 +1278,16 @@ class MediaLifecycleTests {
      * output is a valid file: signature, IHDR with the declared depth and colour
      * type, one IDAT of correctly-sized filtered scanlines, IEND.
      */
-    private static byte[] pngOfZeros(int width, int height, int bitDepth, int colourType,
-            int channels) {
+    private static byte[] pngOfZeros(int width, int height, int bitDepth, int colourType, int channels) {
 
         ByteArrayOutputStream header = new ByteArrayOutputStream();
         writeInt(header, width);
         writeInt(header, height);
         header.write(bitDepth);
         header.write(colourType);
-        header.write(0);   // deflate
-        header.write(0);   // adaptive filtering
-        header.write(0);   // no interlacing
+        header.write(0); // deflate
+        header.write(0); // adaptive filtering
+        header.write(0); // no interlacing
 
         long rowBytes = (long) width * channels * (bitDepth / 8) + 1;
         long remaining = rowBytes * height;
@@ -1233,7 +1317,7 @@ class MediaLifecycleTests {
         deflater.end();
 
         ByteArrayOutputStream file = new ByteArrayOutputStream();
-        file.writeBytes(new byte[]{(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A});
+        file.writeBytes(new byte[] {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A});
         file.writeBytes(chunk("IHDR", header.toByteArray()));
         file.writeBytes(chunk("IDAT", pixels.toByteArray()));
         file.writeBytes(chunk("IEND", new byte[0]));
@@ -1261,18 +1345,18 @@ class MediaLifecycleTests {
     }
 
     private static int put(URI url, Map<String, String> headers, byte[] body) throws IOException, InterruptedException {
-        HttpRequest.Builder request = HttpRequest.newBuilder(url)
-                .PUT(HttpRequest.BodyPublishers.ofByteArray(body));
+        HttpRequest.Builder request = HttpRequest.newBuilder(url).PUT(HttpRequest.BodyPublishers.ofByteArray(body));
         headers.forEach(request::header);
         try (HttpClient client = HttpClient.newHttpClient()) {
-            return client.send(request.build(), HttpResponse.BodyHandlers.discarding()).statusCode();
+            return client.send(request.build(), HttpResponse.BodyHandlers.discarding())
+                    .statusCode();
         }
     }
 
     private static byte[] get(URI url) throws IOException, InterruptedException {
         try (HttpClient client = HttpClient.newHttpClient()) {
-            return client.send(HttpRequest.newBuilder(url).GET().build(),
-                    HttpResponse.BodyHandlers.ofByteArray()).body();
+            return client.send(HttpRequest.newBuilder(url).GET().build(), HttpResponse.BodyHandlers.ofByteArray())
+                    .body();
         }
     }
 }

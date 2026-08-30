@@ -4,16 +4,14 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
+import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.tenancy.api.ResolutionTrace;
 import uz.horecaos.platform.tenancy.api.Resolved;
-import uz.horecaos.platform.iam.api.ResourceScope;
-import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.tenancy.domain.configuration.ScopeResolution;
 import uz.horecaos.platform.tenancy.domain.configuration.ScopedValue;
 
@@ -79,9 +77,11 @@ public class JdbcConfigurationResolver implements ConfigurationResolver {
 
         Map<ScopeType, ScopedValue> values = new EnumMap<>(ScopeType.class);
         for (Row row : rows) {
-            values.put(row.scopeType(), row.explicitNull()
-                    ? ScopedValue.explicitNull(row.scopeType())
-                    : ScopedValue.of(row.scopeType(), row.typedValue(key)));
+            values.put(
+                    row.scopeType(),
+                    row.explicitNull()
+                            ? ScopedValue.explicitNull(row.scopeType())
+                            : ScopedValue.of(row.scopeType(), row.typedValue(key)));
         }
         return values;
     }
@@ -96,14 +96,16 @@ public class JdbcConfigurationResolver implements ConfigurationResolver {
             boolean explicitNull) {
 
         Object typedValue(ConfigurationKey<?> key) {
-            Object raw = switch (valueType) {
-                case "BOOLEAN" -> booleanValue;
-                case "INTEGER" -> integerValue;
-                case "DECIMAL" -> decimalValue;
-                case "STRING" -> stringValue;
-                default -> throw new IllegalStateException(
-                        "Unsupported stored value type %s for %s".formatted(valueType, key.code()));
-            };
+            Object raw =
+                    switch (valueType) {
+                        case "BOOLEAN" -> booleanValue;
+                        case "INTEGER" -> integerValue;
+                        case "DECIMAL" -> decimalValue;
+                        case "STRING" -> stringValue;
+                        default ->
+                            throw new IllegalStateException(
+                                    "Unsupported stored value type %s for %s".formatted(valueType, key.code()));
+                    };
             // A stored INTEGER is a bigint; narrow it only when the key asks for one,
             // so a value that no longer fits fails loudly instead of wrapping.
             if (raw instanceof Long value && key.valueType() == Integer.class) {

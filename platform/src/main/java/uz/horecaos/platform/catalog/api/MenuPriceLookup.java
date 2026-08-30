@@ -33,8 +33,13 @@ public interface MenuPriceLookup {
      *         and channel. A menu with no price book is not a menu with free
      *         food: the caller renders it without prices rather than with zeros.
      */
-    Optional<MenuPrices> pricesFor(UUID tenantId, UUID brandId, UUID locationId,
-            String channelCode, Set<UUID> variantIds, Set<UUID> modifierOptionIds);
+    Optional<MenuPrices> pricesFor(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            String channelCode,
+            Set<UUID> variantIds,
+            Set<UUID> modifierOptionIds);
 
     /**
      * @param currency the price book's own currency. Every amount below is in its
@@ -43,13 +48,11 @@ public interface MenuPriceLookup {
      * @param variantPrices a variant absent from this map has no active price and
      *        is reported to the customer as unpriced rather than as free.
      */
-    record MenuPrices(String currency, Map<UUID, Long> variantPrices,
-            Map<UUID, Long> modifierOptionPrices) {
+    record MenuPrices(String currency, Map<UUID, Long> variantPrices, Map<UUID, Long> modifierOptionPrices) {
 
         public MenuPrices {
             variantPrices = variantPrices == null ? Map.of() : Map.copyOf(variantPrices);
-            modifierOptionPrices =
-                    modifierOptionPrices == null ? Map.of() : Map.copyOf(modifierOptionPrices);
+            modifierOptionPrices = modifierOptionPrices == null ? Map.of() : Map.copyOf(modifierOptionPrices);
         }
     }
 }

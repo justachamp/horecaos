@@ -3,7 +3,6 @@ package uz.horecaos.platform.integration.camel.pos;
 import org.apache.camel.Exchange;
 import org.apache.camel.ProducerTemplate;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.integration.api.pos.PosApiCall;
 import uz.horecaos.platform.integration.api.pos.PosApiTransport;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
@@ -31,11 +30,10 @@ public class CamelPosApiTransport implements PosApiTransport {
 
     @Override
     public ProviderOutcome exchange(PosApiCall call) {
-        Exchange result = producer.request(PosRouteBuilder.POS_API_ENDPOINT,
-                exchange -> exchange.getIn().setBody(call));
+        Exchange result = producer.request(
+                PosRouteBuilder.POS_API_ENDPOINT, exchange -> exchange.getIn().setBody(call));
 
-        ProviderOutcome outcome = result.getIn()
-                .getHeader(PosRouteBuilder.OUTCOME_HEADER, ProviderOutcome.class);
+        ProviderOutcome outcome = result.getIn().getHeader(PosRouteBuilder.OUTCOME_HEADER, ProviderOutcome.class);
         if (outcome != null) {
             return outcome;
         }
@@ -44,9 +42,9 @@ public class CamelPosApiTransport implements PosApiTransport {
         // there is no evidence the request did not reach the till, and inventing
         // some would be the one mistake this integration cannot afford.
         return call.effect() == PosApiCall.Effect.UNKEYED_CREATE
-                ? ProviderOutcome.uncertain("ROUTE_PRODUCED_NO_OUTCOME",
-                        "The POS route returned without classifying the call")
-                : ProviderOutcome.retryable("ROUTE_PRODUCED_NO_OUTCOME",
-                        "The POS route returned without classifying the call", null);
+                ? ProviderOutcome.uncertain(
+                        "ROUTE_PRODUCED_NO_OUTCOME", "The POS route returned without classifying the call")
+                : ProviderOutcome.retryable(
+                        "ROUTE_PRODUCED_NO_OUTCOME", "The POS route returned without classifying the call", null);
     }
 }

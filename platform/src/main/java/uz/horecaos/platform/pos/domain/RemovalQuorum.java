@@ -37,8 +37,7 @@ public final class RemovalQuorum {
      */
     public static final int REQUIRED_AGREEING_RUNS = 2;
 
-    private RemovalQuorum() {
-    }
+    private RemovalQuorum() {}
 
     /**
      * @param consecutiveAbsentRuns how many consecutive runs have failed to see
@@ -62,8 +61,8 @@ public final class RemovalQuorum {
     /** What to tell an operator about an absence that is not yet actionable. */
     public static String inconclusiveReason(int consecutiveAbsentRuns) {
         return ("Absent from %d of the %d consecutive runs a removal needs. "
-                + "The provider pages by offset, so a single absence may be a row the "
-                + "walk skipped rather than a product the restaurant deleted.")
+                        + "The provider pages by offset, so a single absence may be a row the "
+                        + "walk skipped rather than a product the restaurant deleted.")
                 .formatted(consecutiveAbsentRuns, REQUIRED_AGREEING_RUNS);
     }
 }

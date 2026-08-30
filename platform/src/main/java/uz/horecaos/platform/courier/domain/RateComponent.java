@@ -30,8 +30,7 @@ public record RateComponent(
             throw new IllegalArgumentException("A rate component cannot be negative: " + type);
         }
         if ((type == RateComponentType.PER_KM_BAND) != (bandFromMeters != null)) {
-            throw new IllegalArgumentException(
-                    "A distance band belongs to PER_KM_BAND and to nothing else: " + type);
+            throw new IllegalArgumentException("A distance band belongs to PER_KM_BAND and to nothing else: " + type);
         }
         if (bandFromMeters != null && bandToMeters != null && bandToMeters <= bandFromMeters) {
             throw new IllegalArgumentException("A band ends after it starts");

@@ -1,5 +1,7 @@
 package uz.horecaos.platform.fulfillment.application;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -9,24 +11,19 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.fulfillment.api.InternalFleetPort;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliverySourcingPolicy;
 import uz.horecaos.platform.fulfillment.domain.sourcing.PickupPlan;
 import uz.horecaos.platform.fulfillment.domain.sourcing.SourcingDecision;
 import uz.horecaos.platform.fulfillment.domain.sourcing.SourcingMode;
-import uz.horecaos.platform.fulfillment.domain.sourcing.SourcingProgress;
 import uz.horecaos.platform.fulfillment.domain.sourcing.SourcingRequest;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
 import uz.horecaos.platform.tenancy.api.PolicyResolver;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * One tick of sourcing, from the two ports to a partner call (ADR 0014).
@@ -44,18 +41,15 @@ class DeliverySourcingServiceTests {
     private static final UUID LOCATION = UUID.randomUUID();
     private static final UUID COURIER = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
-    private static final ShipmentBookingPort.PartnerOption NOOR =
-            new ShipmentBookingPort.PartnerOption(
-                    UUID.fromString("aaaaaaaa-0000-0000-0000-000000000002"),
-                    "noor-delivery", false, true);
+    private static final ShipmentBookingPort.PartnerOption NOOR = new ShipmentBookingPort.PartnerOption(
+            UUID.fromString("aaaaaaaa-0000-0000-0000-000000000002"), "noor-delivery", false, true);
 
     @Test
     @DisplayName("a free courier is offered the order and no partner is called at all")
     void anAvailableCourierKeepsThePartnerOut() {
         RecordingBookingPort bookings = new RecordingBookingPort(List.of(NOOR));
         DeliverySourcingService service = service(
-                fleetWith(new InternalFleetPort.FleetCandidate(COURIER, 60, 0, 2, 400, 1)),
-                bookings, sourceAt());
+                fleetWith(new InternalFleetPort.FleetCandidate(COURIER, 60, 0, 2, 400, 1)), bookings, sourceAt());
 
         DeliverySourcingService.Outcome outcome = service.source(request(SourcingMode.FLEET_FIRST));
 
@@ -88,8 +82,7 @@ class DeliverySourcingServiceTests {
     @DisplayName("the fleet is never asked about a partner-only plan")
     void partnerOnlyNeverTouchesTheFleet() {
         CountingFleetPort fleet = new CountingFleetPort();
-        DeliverySourcingService service = service(fleet,
-                new RecordingBookingPort(List.of(NOOR)), sourceAt());
+        DeliverySourcingService service = service(fleet, new RecordingBookingPort(List.of(NOOR)), sourceAt());
 
         service.source(request(SourcingMode.PARTNER_ONLY));
 
@@ -124,8 +117,7 @@ class DeliverySourcingServiceTests {
     @DisplayName("an uncertain booking stops the run rather than trying the next partner")
     void anUncertainBookingBlocksTheNextPartner() {
         ShipmentBookingPort.PartnerOption second = new ShipmentBookingPort.PartnerOption(
-                UUID.fromString("aaaaaaaa-0000-0000-0000-000000000003"),
-                "yandex-delivery", true, true);
+                UUID.fromString("aaaaaaaa-0000-0000-0000-000000000003"), "yandex-delivery", true, true);
         RecordingBookingPort bookings = new RecordingBookingPort(List.of(NOOR, second));
         bookings.status = ShipmentBookingPort.BookingStatus.UNCERTAIN;
         DeliverySourcingService service = service(emptyFleet(), bookings, sourceAt());
@@ -144,8 +136,7 @@ class DeliverySourcingServiceTests {
     @Test
     @DisplayName("nothing configured resolves to ADR 0014's provisional timings under a stable id")
     void unconfiguredPolicyIsRecordedAsDefaults() {
-        DeliverySourcingService service = service(emptyFleet(),
-                new RecordingBookingPort(List.of(NOOR)), sourceAt());
+        DeliverySourcingService service = service(emptyFleet(), new RecordingBookingPort(List.of(NOOR)), sourceAt());
 
         DeliverySourcingService.Outcome outcome = service.source(request(SourcingMode.FLEET_FIRST));
 
@@ -160,8 +151,8 @@ class DeliverySourcingServiceTests {
     }
 
     private static PickupPlan plan() {
-        return PickupPlan.forOrder(Instant.parse("2026-08-24T12:00:00Z"), Duration.ofHours(2),
-                TASHKENT, DeliverySourcingPolicy.DEFAULTS);
+        return PickupPlan.forOrder(
+                Instant.parse("2026-08-24T12:00:00Z"), Duration.ofHours(2), TASHKENT, DeliverySourcingPolicy.DEFAULTS);
     }
 
     private static SourcingRequest request(SourcingMode mode) {
@@ -170,20 +161,31 @@ class DeliverySourcingServiceTests {
         ShipmentBookingPort.Waypoint home = new ShipmentBookingPort.Waypoint(
                 41.325, 69.281, "home", "Customer", "+998900000002", null, "2", "5", "17");
 
-        return new SourcingRequest(TENANT, BRAND, LOCATION, UUID.randomUUID(),
-                UUID.fromString("99999999-9999-9999-9999-999999999999"), "QO-3003", plan(),
-                mode, 3_400, branch, home, true, 145_000L, "UZS", "corr-1");
+        return new SourcingRequest(
+                TENANT,
+                BRAND,
+                LOCATION,
+                UUID.randomUUID(),
+                UUID.fromString("99999999-9999-9999-9999-999999999999"),
+                "QO-3003",
+                plan(),
+                mode,
+                3_400,
+                branch,
+                home,
+                true,
+                145_000L,
+                "UZS",
+                "corr-1");
     }
 
-    private static DeliverySourcingService service(InternalFleetPort fleet,
-            ShipmentBookingPort bookings, Instant now) {
+    private static DeliverySourcingService service(InternalFleetPort fleet, ShipmentBookingPort bookings, Instant now) {
         return service(fleet, bookings, now, new RecordingSourcingJournal());
     }
 
-    private static DeliverySourcingService service(InternalFleetPort fleet,
-            ShipmentBookingPort bookings, Instant now, RecordingSourcingJournal journal) {
-        return new DeliverySourcingService(fleet, bookings, journal, unconfigured(),
-                Clock.fixed(now, ZoneOffset.UTC));
+    private static DeliverySourcingService service(
+            InternalFleetPort fleet, ShipmentBookingPort bookings, Instant now, RecordingSourcingJournal journal) {
+        return new DeliverySourcingService(fleet, bookings, journal, unconfigured(), Clock.fixed(now, ZoneOffset.UTC));
     }
 
     private static InternalFleetPort emptyFleet() {
@@ -203,8 +205,7 @@ class DeliverySourcingServiceTests {
             }
 
             @Override
-            public <P> Optional<ResolvedPolicy<P>> pinned(PolicyKey<P> key, UUID policyId,
-                    int policyVersion) {
+            public <P> Optional<ResolvedPolicy<P>> pinned(PolicyKey<P> key, UUID policyId, int policyVersion) {
                 return Optional.empty();
             }
         };
@@ -215,8 +216,7 @@ class DeliverySourcingServiceTests {
         private int calls;
 
         @Override
-        public List<FleetCandidate> candidates(UUID tenantId, UUID brandId, UUID locationId,
-                int distanceMeters) {
+        public List<FleetCandidate> candidates(UUID tenantId, UUID brandId, UUID locationId, int distanceMeters) {
             calls++;
             return List.of();
         }
@@ -241,8 +241,8 @@ class DeliverySourcingServiceTests {
         @Override
         public BookingReceipt book(BookingCommand command) {
             booked.add(command);
-            return BookingReceipt.of(status, command, "noor-delivery",
-                    status == BookingStatus.BOOKED ? "ext-1" : null, null, null);
+            return BookingReceipt.of(
+                    status, command, "noor-delivery", status == BookingStatus.BOOKED ? "ext-1" : null, null, null);
         }
     }
 }

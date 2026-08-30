@@ -8,7 +8,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -20,7 +19,6 @@ import org.springframework.http.MediaType;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
-
 import uz.horecaos.platform.iam.api.organizations.OrganizationDirectory;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
@@ -48,23 +46,22 @@ class KeycloakOrganizationIntegrationTests {
 
     private static final String BASE_URL =
             System.getenv().getOrDefault("HORECAOS_KEYCLOAK_BASE_URL", "http://localhost:8081");
-    private static final String REALM =
-            System.getenv().getOrDefault("HORECAOS_KEYCLOAK_REALM", "horecaos");
+    private static final String REALM = System.getenv().getOrDefault("HORECAOS_KEYCLOAK_REALM", "horecaos");
 
     /**
      * The realm import's development placeholders. Overridable, because a
      * deployment rotates them immediately after import and this test has to be
      * runnable against such a realm.
      */
-    private static final String PROVISIONING_SECRET = System.getenv().getOrDefault(
-            "HORECAOS_KEYCLOAK_PROVISIONING_SECRET", "development-only-not-a-secret-provisioning");
-    private static final String READER_SECRET = System.getenv().getOrDefault(
-            "HORECAOS_KEYCLOAK_READER_SECRET", "development-only-not-a-secret-reader");
+    private static final String PROVISIONING_SECRET = System.getenv()
+            .getOrDefault("HORECAOS_KEYCLOAK_PROVISIONING_SECRET", "development-only-not-a-secret-provisioning");
 
-    private static final ParameterizedTypeReference<Map<String, Object>> MAP =
-            new ParameterizedTypeReference<>() { };
+    private static final String READER_SECRET =
+            System.getenv().getOrDefault("HORECAOS_KEYCLOAK_READER_SECRET", "development-only-not-a-secret-reader");
+
+    private static final ParameterizedTypeReference<Map<String, Object>> MAP = new ParameterizedTypeReference<>() {};
     private static final ParameterizedTypeReference<List<Map<String, Object>>> LIST =
-            new ParameterizedTypeReference<>() { };
+            new ParameterizedTypeReference<>() {};
 
     private static RestClient admin;
 
@@ -81,20 +78,21 @@ class KeycloakOrganizationIntegrationTests {
         try {
             probe = clientFor("horecaos-provisioning", PROVISIONING_SECRET);
         } catch (RuntimeException unreachable) {
-            Assumptions.abort(
-                    "Keycloak at " + BASE_URL + " is not answering, or the service-account "
-                            + "credentials do not match the realm: " + unreachable.getMessage());
+            Assumptions.abort("Keycloak at " + BASE_URL + " is not answering, or the service-account "
+                    + "credentials do not match the realm: " + unreachable.getMessage());
             return;
         }
 
         // Authenticating is not the same as being able to do anything, and the
         // difference is exactly the current state of the checked-in realm.
         try {
-            probe.get().uri("/admin/realms/{realm}/organizations", REALM).retrieve().body(LIST);
+            probe.get()
+                    .uri("/admin/realms/{realm}/organizations", REALM)
+                    .retrieve()
+                    .body(LIST);
         } catch (RuntimeException forbidden) {
-            Assumptions.abort(
-                    "The " + REALM + " realm grants horecaos-provisioning no realm-management roles, so "
-                            + "the ADR 0009 Admin API calls are all forbidden: " + forbidden.getMessage());
+            Assumptions.abort("The " + REALM + " realm grants horecaos-provisioning no realm-management roles, so "
+                    + "the ADR 0009 Admin API calls are all forbidden: " + forbidden.getMessage());
         }
         admin = probe;
     }
@@ -134,8 +132,7 @@ class KeycloakOrganizationIntegrationTests {
         // relying on the recorded list alone leaves a user behind on exactly the
         // runs that matter — which is how the first run of this class left nine.
         usersToRemove.forEach(id -> delete("/admin/realms/{realm}/users/" + id));
-        usersWithEmail(alias + "@example.test")
-                .forEach(id -> delete("/admin/realms/{realm}/users/" + id));
+        usersWithEmail(alias + "@example.test").forEach(id -> delete("/admin/realms/{realm}/users/" + id));
         organizationsToRemove.forEach(id -> delete("/admin/realms/{realm}/organizations/" + id));
         usersToRemove.clear();
         organizationsToRemove.clear();
@@ -150,8 +147,7 @@ class KeycloakOrganizationIntegrationTests {
         organizationsToRemove.add(first.organizationId());
 
         var second = provisioner.ensureOrganization(
-                new OrganizationProvisioner.EnsureOrganization(
-                        tenantId, alias, "Acme", first.organizationId()));
+                new OrganizationProvisioner.EnsureOrganization(tenantId, alias, "Acme", first.organizationId()));
 
         assertThat(first.created()).isTrue();
         assertThat(second.created()).isFalse();
@@ -184,7 +180,7 @@ class KeycloakOrganizationIntegrationTests {
         String vanished = UUID.randomUUID().toString();
 
         assertThatThrownBy(() -> provisioner.ensureOrganization(
-                new OrganizationProvisioner.EnsureOrganization(tenantId, alias, "Acme", vanished)))
+                        new OrganizationProvisioner.EnsureOrganization(tenantId, alias, "Acme", vanished)))
                 .isInstanceOf(OrganizationProvisioner.OrganizationDriftException.class);
 
         assertThat(organizationsNamed(alias))
@@ -200,11 +196,11 @@ class KeycloakOrganizationIntegrationTests {
         organizationsToRemove.add(organization.organizationId());
         String email = alias + "@example.test";
 
-        var first = provisioner.ensureMembership(new OrganizationProvisioner.EnsureMembership(
-                organization.organizationId(), email, null));
+        var first = provisioner.ensureMembership(
+                new OrganizationProvisioner.EnsureMembership(organization.organizationId(), email, null));
         usersToRemove.add(first.subjectId());
-        var second = provisioner.ensureMembership(new OrganizationProvisioner.EnsureMembership(
-                organization.organizationId(), email, null));
+        var second = provisioner.ensureMembership(
+                new OrganizationProvisioner.EnsureMembership(organization.organizationId(), email, null));
 
         assertThat(first.created()).isTrue();
         assertThat(second.created()).isFalse();
@@ -299,20 +295,28 @@ class KeycloakOrganizationIntegrationTests {
 
     private List<String> organizationsNamed(String organizationAlias) {
         List<Map<String, Object>> all = admin.get()
-                .uri("/admin/realms/{realm}/organizations", REALM).retrieve().body(LIST);
-        return all == null ? List.of() : all.stream()
-                .filter(organization -> organizationAlias.equals(String.valueOf(organization.get("alias"))))
-                .map(organization -> String.valueOf(organization.get("id")))
-                .toList();
+                .uri("/admin/realms/{realm}/organizations", REALM)
+                .retrieve()
+                .body(LIST);
+        return all == null
+                ? List.of()
+                : all.stream()
+                        .filter(organization -> organizationAlias.equals(String.valueOf(organization.get("alias"))))
+                        .map(organization -> String.valueOf(organization.get("id")))
+                        .toList();
     }
 
     private List<String> usersWithEmail(String email) {
         try {
             List<Map<String, Object>> users = admin.get()
                     .uri(builder -> builder.path("/admin/realms/{realm}/users")
-                            .queryParam("email", email).queryParam("exact", true).build(REALM))
-                    .retrieve().body(LIST);
-            return users == null ? List.of()
+                            .queryParam("email", email)
+                            .queryParam("exact", true)
+                            .build(REALM))
+                    .retrieve()
+                    .body(LIST);
+            return users == null
+                    ? List.of()
                     : users.stream().map(user -> String.valueOf(user.get("id"))).toList();
         } catch (RuntimeException unavailable) {
             return List.of();
@@ -322,9 +326,13 @@ class KeycloakOrganizationIntegrationTests {
     private List<String> membersOf(String organizationId) {
         List<Map<String, Object>> members = admin.get()
                 .uri("/admin/realms/{realm}/organizations/{org}/members", REALM, organizationId)
-                .retrieve().body(LIST);
-        return members == null ? List.of()
-                : members.stream().map(member -> String.valueOf(member.get("id"))).toList();
+                .retrieve()
+                .body(LIST);
+        return members == null
+                ? List.of()
+                : members.stream()
+                        .map(member -> String.valueOf(member.get("id")))
+                        .toList();
     }
 
     private void delete(String path) {
@@ -371,7 +379,8 @@ class KeycloakOrganizationIntegrationTests {
         form.add("client_id", clientId);
         form.add("client_secret", clientSecret);
 
-        Map<String, Object> token = RestClient.create(BASE_URL).post()
+        Map<String, Object> token = RestClient.create(BASE_URL)
+                .post()
                 .uri("/realms/{realm}/protocol/openid-connect/token", REALM)
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                 .body(form)

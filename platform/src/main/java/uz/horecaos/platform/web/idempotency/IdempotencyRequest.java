@@ -38,7 +38,11 @@ public record IdempotencyRequest(
     public static IdempotencyRequest of(
             String scopeKey, String idempotencyKey, UUID tenantId, String principalSubject, String requestBody) {
         return new IdempotencyRequest(
-                scopeKey, idempotencyKey, tenantId, principalSubject, requestBody,
+                scopeKey,
+                idempotencyKey,
+                tenantId,
+                principalSubject,
+                requestBody,
                 IdempotencyService.DEFAULT_RETENTION);
     }
 }

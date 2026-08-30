@@ -33,8 +33,8 @@ public interface NotificationTransport {
      * bound at one of those scopes: asking at the tenant alone resolves nothing and
      * would leave every uncertain message stuck in uncertainty forever.
      */
-    DispatchOutcome reconcile(UUID tenantId, UUID brandId, UUID locationId, String channel,
-            String providerIdempotencyKey);
+    DispatchOutcome reconcile(
+            UUID tenantId, UUID brandId, UUID locationId, String channel, String providerIdempotencyKey);
 
     /**
      * Whether a real adapter is present for a channel.

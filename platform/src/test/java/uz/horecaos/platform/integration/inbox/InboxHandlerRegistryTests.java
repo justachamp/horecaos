@@ -5,10 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
 import java.util.Map;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.integration.api.ExternalEventEnvelope;
 import uz.horecaos.platform.integration.api.InboxHandler;
 import uz.horecaos.platform.integration.events.EventCatalog;
@@ -31,8 +29,7 @@ class InboxHandlerRegistryTests {
                 handler("tenancy-projection", "TenantCreated", 1),
                 handler("delivery-reconciliation", "ShipmentReconciliationRequested", 1)));
 
-        assertThat(registry.consumerNamesFor(EventCatalog.TENANCY_EVENTS_TOPIC))
-                .containsExactly("tenancy-projection");
+        assertThat(registry.consumerNamesFor(EventCatalog.TENANCY_EVENTS_TOPIC)).containsExactly("tenancy-projection");
         assertThat(registry.consumerNamesFor(EventCatalog.FULFILLMENT_COMMANDS_TOPIC))
                 .containsExactly("delivery-reconciliation");
     }
@@ -40,26 +37,23 @@ class InboxHandlerRegistryTests {
     @Test
     @DisplayName("an uncatalogued handler keeps the behaviour it had before topics were filtered")
     void anUncataloguedHandlerIsOfferedEveryRecord() {
-        InboxHandlerRegistry registry = new InboxHandlerRegistry(List.of(
-                handler("controlled-consumer", "ControlledCommandIssued", 1)));
+        InboxHandlerRegistry registry =
+                new InboxHandlerRegistry(List.of(handler("controlled-consumer", "ControlledCommandIssued", 1)));
 
         // The controlled route's type is deliberately absent from the catalogue,
         // and a filter that silently stopped feeding it would make the ADR 0007
         // exit-criteria suite pass for the wrong reason.
-        assertThat(registry.consumerNamesFor("anything.at.all"))
-                .containsExactly("controlled-consumer");
+        assertThat(registry.consumerNamesFor("anything.at.all")).containsExactly("controlled-consumer");
     }
 
     @Test
     void twoHandlersForOneKeyFailAtStartup() {
-        assertThatThrownBy(() -> new InboxHandlerRegistry(List.of(
-                handler("a", "TenantCreated", 1),
-                handler("a", "TenantCreated", 1))))
+        assertThatThrownBy(() -> new InboxHandlerRegistry(
+                        List.of(handler("a", "TenantCreated", 1), handler("a", "TenantCreated", 1))))
                 .isInstanceOf(IllegalStateException.class);
     }
 
-    private static InboxHandler<Map<String, Object>> handler(
-            String consumer, String eventType, int version) {
+    private static InboxHandler<Map<String, Object>> handler(String consumer, String eventType, int version) {
 
         return new InboxHandler<>() {
             @Override

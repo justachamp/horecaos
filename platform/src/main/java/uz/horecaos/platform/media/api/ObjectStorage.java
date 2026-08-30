@@ -21,8 +21,7 @@ public interface ObjectStorage {
      * never pass through the application, which is what keeps a large upload
      * from occupying a request thread.
      */
-    PresignedUpload presignUpload(String bucket, String key, String contentType,
-            long maxSizeBytes, Duration validFor);
+    PresignedUpload presignUpload(String bucket, String key, String contentType, long maxSizeBytes, Duration validFor);
 
     /**
      * A short-lived URL for reading a private object.
@@ -80,11 +79,11 @@ public interface ObjectStorage {
     void delete(String bucket, String key);
 
     /** @param requiredHeaders headers the client must send for the signature to hold */
-    record PresignedUpload(URI url, java.util.Map<String, String> requiredHeaders, java.time.Instant expiresAt) { }
+    record PresignedUpload(URI url, java.util.Map<String, String> requiredHeaders, java.time.Instant expiresAt) {}
 
     /**
      * @param checksumSha256 base64 SHA-256 if the store recorded one; empty when
      *                       the object was written without checksum support
      */
-    record StoredObject(long sizeBytes, String contentType, Optional<String> checksumSha256, String eTag) { }
+    record StoredObject(long sizeBytes, String contentType, Optional<String> checksumSha256, String eTag) {}
 }

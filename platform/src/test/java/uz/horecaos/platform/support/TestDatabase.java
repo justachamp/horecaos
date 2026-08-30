@@ -1,5 +1,7 @@
 package uz.horecaos.platform.support;
 
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -12,12 +14,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import javax.sql.DataSource;
-
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
-
 import org.flywaydb.core.Flyway;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.images.builder.ImageFromDockerfile;
@@ -151,8 +148,7 @@ public final class TestDatabase {
 
     private static final AtomicInteger SEQUENCE = new AtomicInteger();
 
-    private TestDatabase() {
-    }
+    private TestDatabase() {}
 
     // ------------------------------------------------------------------
     // The two ways in
@@ -246,9 +242,8 @@ public final class TestDatabase {
          * so there is no reason to build a second one, and one instance means one
          * place a debugger can watch.
          */
-        private final java.util.List<HikariDataSource> pools =
-                java.util.concurrent.CopyOnWriteArrayList.class.cast(
-                        new java.util.concurrent.CopyOnWriteArrayList<HikariDataSource>());
+        private final java.util.List<HikariDataSource> pools = java.util.concurrent.CopyOnWriteArrayList.class.cast(
+                new java.util.concurrent.CopyOnWriteArrayList<HikariDataSource>());
 
         public DataSource dataSource() {
             DataSource existing = dataSource;
@@ -327,8 +322,8 @@ public final class TestDatabase {
             try {
                 administer("DROP DATABASE IF EXISTS " + databaseName + " WITH (FORCE)");
             } catch (RuntimeException failure) {
-                System.err.println("TestDatabase: could not drop " + databaseName
-                        + " (" + failure.getMessage() + "). The container will take it.");
+                System.err.println("TestDatabase: could not drop " + databaseName + " (" + failure.getMessage()
+                        + "). The container will take it.");
             }
         }
     }
@@ -350,18 +345,22 @@ public final class TestDatabase {
         static final PostgreSQLContainer INSTANCE = start();
 
         private static PostgreSQLContainer start() {
-            PostgreSQLContainer container = new PostgreSQLContainer(DockerImageName.parse(IMAGE.get())
-                            .asCompatibleSubstituteFor("postgres"))
+            PostgreSQLContainer container = new PostgreSQLContainer(
+                            DockerImageName.parse(IMAGE.get()).asCompatibleSubstituteFor("postgres"))
                     .withDatabaseName(BOOTSTRAP_DATABASE)
                     .withUsername(MIGRATOR_ROLE)
                     .withPassword(MIGRATOR_ROLE)
                     // Durability buys nothing in a database that is deleted when
                     // the JVM exits, and it is most of the cost of CREATE
                     // DATABASE, which this design performs once per test class.
-                    .withCommand("postgres",
-                            "-c", "fsync=off",
-                            "-c", "synchronous_commit=off",
-                            "-c", "full_page_writes=off");
+                    .withCommand(
+                            "postgres",
+                            "-c",
+                            "fsync=off",
+                            "-c",
+                            "synchronous_commit=off",
+                            "-c",
+                            "full_page_writes=off");
             container.start();
             return container;
         }
@@ -390,13 +389,12 @@ public final class TestDatabase {
             administer("DROP DATABASE IF EXISTS " + TEMPLATE_DATABASE + " WITH (FORCE)");
             administer("CREATE DATABASE " + TEMPLATE_DATABASE);
 
-            DataSource migrating = new DriverManagerDataSource(
-                    url(TEMPLATE_DATABASE), MIGRATOR_ROLE, MIGRATOR_ROLE);
+            DataSource migrating = new DriverManagerDataSource(url(TEMPLATE_DATABASE), MIGRATOR_ROLE, MIGRATOR_ROLE);
             Flyway.configure().dataSource(migrating).load().migrate();
 
             administer("ALTER DATABASE " + TEMPLATE_DATABASE + " WITH ALLOW_CONNECTIONS false");
-            administer("SELECT pg_terminate_backend(pid) FROM pg_stat_activity"
-                    + " WHERE datname = '" + TEMPLATE_DATABASE + "' AND pid <> pg_backend_pid()");
+            administer("SELECT pg_terminate_backend(pid) FROM pg_stat_activity" + " WHERE datname = '"
+                    + TEMPLATE_DATABASE + "' AND pid <> pg_backend_pid()");
             return TEMPLATE_DATABASE;
         }
     }
@@ -474,8 +472,8 @@ public final class TestDatabase {
             query.setString(1, from);
             try (ResultSet rows = query.executeQuery()) {
                 while (rows.next()) {
-                    grants.add("GRANT " + rows.getString("privilege_type")
-                            + " ON DATABASE " + to + " TO " + rows.getString("grantee"));
+                    grants.add("GRANT " + rows.getString("privilege_type") + " ON DATABASE " + to + " TO "
+                            + rows.getString("grantee"));
                 }
             }
         } catch (SQLException failure) {
@@ -501,8 +499,7 @@ public final class TestDatabase {
      */
     private static String freshName() {
         String caller = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE)
-                .walk(frames -> frames
-                        .map(StackWalker.StackFrame::getDeclaringClass)
+                .walk(frames -> frames.map(StackWalker.StackFrame::getDeclaringClass)
                         .filter(type -> type != TestDatabase.class)
                         .map(Class::getSimpleName)
                         .findFirst()
@@ -534,8 +531,7 @@ public final class TestDatabase {
      * a test whose subject is the database being gone.
      */
     public static PostgreSQLContainer container() {
-        return new PostgreSQLContainer(DockerImageName.parse(IMAGE.get())
-                        .asCompatibleSubstituteFor("postgres"))
+        return new PostgreSQLContainer(DockerImageName.parse(IMAGE.get()).asCompatibleSubstituteFor("postgres"))
                 .withDatabaseName(BOOTSTRAP_DATABASE)
                 .withUsername(MIGRATOR_ROLE)
                 .withPassword(MIGRATOR_ROLE);

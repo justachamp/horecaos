@@ -1,22 +1,19 @@
 package uz.horecaos.platform.fulfillment.application;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Value;
-
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcSourcingJobStore;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * The scheduler's own arithmetic (ADR 0014).
@@ -41,8 +38,10 @@ class DeliverySourcingSchedulerTests {
         Duration tick = Duration.parse("PT" + defaults.get(2).toUpperCase(java.util.Locale.ROOT));
 
         assertThat(lease)
-                .as("a batch of %d ticks at %s each outlasts a %s lease, so a live worker would "
-                        + "lose its own claim mid-partner-call", batchSize, tick, lease)
+                .as(
+                        "a batch of %d ticks at %s each outlasts a %s lease, so a live worker would "
+                                + "lose its own claim mid-partner-call",
+                        batchSize, tick, lease)
                 .isGreaterThanOrEqualTo(tick.multipliedBy(batchSize).plusSeconds(5));
     }
 
@@ -50,11 +49,16 @@ class DeliverySourcingSchedulerTests {
     @DisplayName("a lease that cannot outlast its batch is refused rather than deployed")
     void anInconsistentLeaseIsRefused() {
         Throwable refusal = catchThrowable(() -> new DeliverySourcingScheduler(
-                new JdbcSourcingJobStore(null), null, Clock.systemUTC(), new SimpleMeterRegistry(),
-                20, Duration.ofSeconds(30), Duration.ofSeconds(30), "horecaos-platform"));
+                new JdbcSourcingJobStore(null),
+                null,
+                Clock.systemUTC(),
+                new SimpleMeterRegistry(),
+                20,
+                Duration.ofSeconds(30),
+                Duration.ofSeconds(30),
+                "horecaos-platform"));
 
-        assertThat(refusal).isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("lease");
+        assertThat(refusal).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("lease");
     }
 
     /** The {@code ${key:default}} halves of every {@code @Value} on the constructor. */
@@ -65,8 +69,7 @@ class DeliverySourcingSchedulerTests {
             for (Annotation annotation : onParameter) {
                 if (annotation instanceof Value value) {
                     String expression = value.value();
-                    defaults.add(expression.substring(expression.indexOf(':') + 1,
-                            expression.length() - 1));
+                    defaults.add(expression.substring(expression.indexOf(':') + 1, expression.length() - 1));
                 }
             }
         }

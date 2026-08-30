@@ -8,13 +8,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.notifications.domain.ContentHashes;
 import uz.horecaos.platform.notifications.domain.MessageLocale;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
@@ -41,14 +38,13 @@ import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcTemplat
 @Service
 public class NotificationTemplateService {
 
-    private static final TypeReference<Map<String, String>> SCHEMA_TYPE = new TypeReference<>() { };
+    private static final TypeReference<Map<String, String>> SCHEMA_TYPE = new TypeReference<>() {};
 
     private final JdbcTemplateStore templates;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
-    public NotificationTemplateService(JdbcTemplateStore templates, ObjectMapper objectMapper,
-            Clock clock) {
+    public NotificationTemplateService(JdbcTemplateStore templates, ObjectMapper objectMapper, Clock clock) {
         this.templates = templates;
         this.objectMapper = objectMapper;
         this.clock = clock;
@@ -65,13 +61,16 @@ public class NotificationTemplateService {
      *                       opt-in is the failure this parameter prevents
      */
     @Transactional
-    public UUID createTemplate(UUID tenantId, UUID brandId, String templateKey,
-            NotificationClass notificationClass, NotificationChannel channel,
+    public UUID createTemplate(
+            UUID tenantId,
+            UUID brandId,
+            String templateKey,
+            NotificationClass notificationClass,
+            NotificationChannel channel,
             String consentPurpose) {
 
         if (notificationClass.requiresConsent() && (consentPurpose == null || consentPurpose.isBlank())) {
-            throw new IllegalArgumentException(
-                    notificationClass + " needs a consent purpose to check against");
+            throw new IllegalArgumentException(notificationClass + " needs a consent purpose to check against");
         }
         if (!notificationClass.requiresConsent() && consentPurpose != null) {
             // Refused rather than ignored. A purpose recorded on a required
@@ -82,8 +81,15 @@ public class NotificationTemplateService {
         }
 
         UUID id = UUID.randomUUID();
-        templates.insertTemplate(id, tenantId, brandId, templateKey, notificationClass.name(),
-                channel.name(), consentPurpose, clock.instant());
+        templates.insertTemplate(
+                id,
+                tenantId,
+                brandId,
+                templateKey,
+                notificationClass.name(),
+                channel.name(),
+                consentPurpose,
+                clock.instant());
         return id;
     }
 
@@ -99,15 +105,16 @@ public class NotificationTemplateService {
      *         authors saving at once cannot collide
      */
     @Transactional
-    public int addVersion(UUID tenantId, UUID templateId, Map<MessageLocale, Wording> wordings,
-            Map<String, String> variablesSchema) {
+    public int addVersion(
+            UUID tenantId, UUID templateId, Map<MessageLocale, Wording> wordings, Map<String, String> variablesSchema) {
 
         // Read for its side effect: a template id from another tenant must not be
         // given a version here, and the composite foreign key alone would let the
         // insert through on a matching id.
-        templates.template(tenantId, templateId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "No template " + templateId + " belongs to this tenant"));
+        templates
+                .template(tenantId, templateId)
+                .orElseThrow(
+                        () -> new IllegalArgumentException("No template " + templateId + " belongs to this tenant"));
 
         List<MessageLocale> missing = MessageLocale.required().stream()
                 .filter(locale -> !wordings.containsKey(locale))
@@ -129,9 +136,17 @@ public class NotificationTemplateService {
             TemplateRenderer.validate(wording.subject(), declared);
             TemplateRenderer.validate(wording.body(), declared);
 
-            templates.insertVersion(UUID.randomUUID(), tenantId, templateId, versionNumber,
-                    locale.tag(), wording.subject(), wording.body(), schemaJson,
-                    contentHashOf(locale, wording), now);
+            templates.insertVersion(
+                    UUID.randomUUID(),
+                    tenantId,
+                    templateId,
+                    versionNumber,
+                    locale.tag(),
+                    wording.subject(),
+                    wording.body(),
+                    schemaJson,
+                    contentHashOf(locale, wording),
+                    now);
         }
 
         return versionNumber;
@@ -147,37 +162,34 @@ public class NotificationTemplateService {
      */
     @Transactional
     public void activate(UUID tenantId, UUID templateId, int versionNumber, String approvedBy) {
-        TemplateRow template = templates.template(tenantId, templateId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "No template " + templateId + " belongs to this tenant"));
+        TemplateRow template = templates
+                .template(tenantId, templateId)
+                .orElseThrow(
+                        () -> new IllegalArgumentException("No template " + templateId + " belongs to this tenant"));
 
         List<VersionRow> versions = templates.versions(tenantId, templateId, versionNumber);
-        List<MessageLocale> present = versions.stream()
-                .map(row -> MessageLocale.of(row.locale()))
-                .toList();
+        List<MessageLocale> present =
+                versions.stream().map(row -> MessageLocale.of(row.locale())).toList();
         List<MessageLocale> missing = MessageLocale.required().stream()
                 .filter(locale -> !present.contains(locale))
                 .toList();
 
         if (!missing.isEmpty()) {
             throw new IncompleteTranslationException(
-                    "Version %d of this template cannot be activated: %s missing"
-                            .formatted(versionNumber, missing));
+                    "Version %d of this template cannot be activated: %s missing".formatted(versionNumber, missing));
         }
 
-        int activated = templates.activateVersion(tenantId, templateId, versionNumber,
-                approvedBy, clock.instant());
+        int activated = templates.activateVersion(tenantId, templateId, versionNumber, approvedBy, clock.instant());
         if (activated != MessageLocale.required().size()) {
             // Some locale of this version was not a draft, which means another
             // operator activated or superseded it between the read above and this
             // update. Refusing is right: half of a version being live is worse
             // than the activation not happening.
-            throw new IllegalStateException(
-                    "Version %d was changed by someone else; %d of %d locales activated"
-                            .formatted(versionNumber, activated, MessageLocale.required().size()));
+            throw new IllegalStateException("Version %d was changed by someone else; %d of %d locales activated"
+                    .formatted(
+                            versionNumber, activated, MessageLocale.required().size()));
         }
-        if (!templates.markTemplateActive(tenantId, templateId, versionNumber,
-                template.version(), clock.instant())) {
+        if (!templates.markTemplateActive(tenantId, templateId, versionNumber, template.version(), clock.instant())) {
             throw new IllegalStateException("The template was changed by someone else");
         }
     }
@@ -193,17 +205,17 @@ public class NotificationTemplateService {
      * returns the same empty result for both.
      */
     @Transactional(readOnly = true)
-    public Resolution resolve(UUID tenantId, UUID brandId, String templateKey,
-            NotificationChannel channel, MessageLocale locale) {
+    public Resolution resolve(
+            UUID tenantId, UUID brandId, String templateKey, NotificationChannel channel, MessageLocale locale) {
 
-        Optional<TemplateRow> template = templates.activeTemplate(tenantId, brandId, templateKey,
-                channel.name());
+        Optional<TemplateRow> template = templates.activeTemplate(tenantId, brandId, templateKey, channel.name());
         if (template.isEmpty() || template.get().activeVersion() == null) {
             return Resolution.noTemplate();
         }
 
         TemplateRow row = template.get();
-        return templates.version(tenantId, row.id(), row.activeVersion(), locale.tag())
+        return templates
+                .version(tenantId, row.id(), row.activeVersion(), locale.tag())
                 .filter(version -> "ACTIVE".equals(version.status()))
                 .map(version -> Resolution.found(row, version))
                 .orElseGet(Resolution::noLocale);
@@ -211,7 +223,9 @@ public class NotificationTemplateService {
 
     /** The declared variable names of a stored version. */
     public Set<String> declaredVariables(VersionRow version) {
-        return objectMapper.readValue(version.variablesSchemaJson(), SCHEMA_TYPE).keySet();
+        return objectMapper
+                .readValue(version.variablesSchemaJson(), SCHEMA_TYPE)
+                .keySet();
     }
 
     @Transactional(readOnly = true)
@@ -251,7 +265,11 @@ public class NotificationTemplateService {
     /** Either the wording, or which of the two ways it was missing. */
     public record Resolution(TemplateRow template, VersionRow version, Outcome outcome) {
 
-        public enum Outcome { FOUND, NO_ACTIVE_TEMPLATE, NO_TEMPLATE_FOR_LOCALE }
+        public enum Outcome {
+            FOUND,
+            NO_ACTIVE_TEMPLATE,
+            NO_TEMPLATE_FOR_LOCALE
+        }
 
         static Resolution found(TemplateRow template, VersionRow version) {
             return new Resolution(template, version, Outcome.FOUND);

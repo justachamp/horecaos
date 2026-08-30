@@ -2,7 +2,6 @@ package uz.horecaos.platform.fulfillment.domain.sourcing;
 
 import java.time.Instant;
 import java.util.UUID;
-
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.BookingIntent;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.PartnerOption;
 
@@ -29,8 +28,7 @@ public sealed interface SourcingDecision {
      * whose unique index is the single-winner guarantee, so the caller can
      * decide and record but cannot yet durably offer.
      */
-    record OfferInternal(UUID courierId, Instant expiresAt, String reason)
-            implements SourcingDecision { }
+    record OfferInternal(UUID courierId, Instant expiresAt, String reason) implements SourcingDecision {}
 
     /**
      * Nothing to do until {@code retryAt}, because an offer is still live.
@@ -39,8 +37,7 @@ public sealed interface SourcingDecision {
      * on this one, and a caller that treats it as a fallback trigger turns every
      * in-flight offer into a partner booking.
      */
-    record WaitForInternal(UUID courierId, Instant retryAt, String reason)
-            implements SourcingDecision { }
+    record WaitForInternal(UUID courierId, Instant retryAt, String reason) implements SourcingDecision {}
 
     /**
      * Book with this partner.
@@ -49,8 +46,8 @@ public sealed interface SourcingDecision {
      *               holds. On a partner whose create is live — verified for Noor
      *               — this is always a booking, never a speculative one
      */
-    record BookPartner(PartnerOption partner, BookingIntent intent, Instant requestedPickupAt,
-            String reason) implements SourcingDecision { }
+    record BookPartner(PartnerOption partner, BookingIntent intent, Instant requestedPickupAt, String reason)
+            implements SourcingDecision {}
 
     /**
      * No automated path remains. ADR 0014: create {@code MANUAL_ACTION_REQUIRED},
@@ -59,7 +56,7 @@ public sealed interface SourcingDecision {
      * <p>The confirmed order is never cancelled by sourcing. A customer whose
      * food is cooking is not the right person to pay for a fleet being empty.
      */
-    record EscalateToOperations(String reason) implements SourcingDecision { }
+    record EscalateToOperations(String reason) implements SourcingDecision {}
 
     // Reason codes. Strings rather than an enum because they travel into events,
     // metrics tags and an operations screen, where a value that survives a

@@ -60,7 +60,7 @@ public interface ApprovalService {
     final class ApprovalNotConsumedException extends IllegalStateException {
         public ApprovalNotConsumedException(UUID requestId) {
             super(("Approval request %s authorised an action that never spent it. "
-                    + "Call ApprovalOutcome.consume() in the transaction that performs the action.")
+                            + "Call ApprovalOutcome.consume() in the transaction that performs the action.")
                     .formatted(requestId));
         }
     }

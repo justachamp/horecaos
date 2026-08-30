@@ -4,11 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.Set;
-
 import org.junit.jupiter.api.Test;
-
-import uz.horecaos.platform.tenancy.api.ConfigurationKey;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.tenancy.api.ConfigurationKey;
 
 /**
  * ADR 0030: keys are code-owned so an unknown or mistyped key fails at startup
@@ -47,7 +45,8 @@ class ConfigurationKeysTests {
 
     @Test
     void anUnsupportedValueTypeIsRejectedAtDeclaration() {
-        assertThatThrownBy(() -> ConfigurationKey.of("ordering.thing", Object.class).build())
+        assertThatThrownBy(() ->
+                        ConfigurationKey.of("ordering.thing", Object.class).build())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unsupported configuration value type");
     }
@@ -55,7 +54,7 @@ class ConfigurationKeysTests {
     @Test
     void aKeySettableNowhereIsRejectedAtDeclaration() {
         assertThatThrownBy(() -> new ConfigurationKey<>(
-                "ordering.thing", String.class, null, Set.of(), "ordering", false, false, ""))
+                        "ordering.thing", String.class, null, Set.of(), "ordering", false, false, ""))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("at least one scope");
     }
@@ -65,6 +64,7 @@ class ConfigurationKeysTests {
         assertThat(ConfigurationKeys.NOTIFICATION_QUIET_HOURS_START.isSettableAt(ScopeType.LOCATION))
                 .as("quiet hours are deliberately not settable per location")
                 .isFalse();
-        assertThat(ConfigurationKeys.NOTIFICATION_QUIET_HOURS_START.isSettableAt(ScopeType.BRAND)).isTrue();
+        assertThat(ConfigurationKeys.NOTIFICATION_QUIET_HOURS_START.isSettableAt(ScopeType.BRAND))
+                .isTrue();
     }
 }

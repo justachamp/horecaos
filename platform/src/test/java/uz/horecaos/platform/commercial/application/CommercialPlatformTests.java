@@ -1,7 +1,5 @@
 package uz.horecaos.platform.commercial.application;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -13,7 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -21,11 +19,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
@@ -154,27 +149,33 @@ class CommercialPlatformTests {
 
     @Test
     void aPlanVersionIsNotApprovedByItsOwnAuthor() {
-        UUID planId = plans.createPlan("NETWORK", "Network", ActorRef.user(AUTHOR, null),
-                "the price list", "corr");
+        UUID planId = plans.createPlan("NETWORK", "Network", ActorRef.user(AUTHOR, null), "the price list", "corr");
         UUID versionId = draftNetworkVersion(planId);
 
-        assertThatThrownBy(() -> plans.activate(versionId, ActorRef.user(AUTHOR, null),
-                "activating my own draft", "corr"))
+        assertThatThrownBy(
+                        () -> plans.activate(versionId, ActorRef.user(AUTHOR, null), "activating my own draft", "corr"))
                 .isInstanceOf(ApiException.class)
-                .as("the person who typed a price is the last person able to notice a "
-                        + "misplaced digit in it")
+                .as("the person who typed a price is the last person able to notice a " + "misplaced digit in it")
                 .hasMessageContaining("other than its author");
     }
 
     @Test
     void anUnknownEntitlementKeyFailsPlanActivation() {
-        UUID planId = plans.createPlan("BASIC", "Basic", ActorRef.user(AUTHOR, null),
-                "the price list", "corr");
+        UUID planId = plans.createPlan("BASIC", "Basic", ActorRef.user(AUTHOR, null), "the price list", "corr");
 
-        assertThatThrownBy(() -> plans.draftVersion(planId, "UZS", 1_200_000, "MONTHLY", null,
-                Map.of("locations.maxcount", PlanEntitlement.counted("locations.maxcount", 1,
-                        EnforcementMode.SOFT, ResetPeriod.NONE, null, null)),
-                ActorRef.user(AUTHOR, null), "typo", "corr"))
+        assertThatThrownBy(() -> plans.draftVersion(
+                        planId,
+                        "UZS",
+                        1_200_000,
+                        "MONTHLY",
+                        null,
+                        Map.of(
+                                "locations.maxcount",
+                                PlanEntitlement.counted(
+                                        "locations.maxcount", 1, EnforcementMode.SOFT, ResetPeriod.NONE, null, null)),
+                        ActorRef.user(AUTHOR, null),
+                        "typo",
+                        "corr"))
                 .isInstanceOf(ApiException.class)
                 .as("a key the code does not declare would sit in the table resolving to "
                         + "nothing, which reads as unlimited")
@@ -186,13 +187,12 @@ class CommercialPlatformTests {
     @Test
     @DisplayName("a redelivered event does not count twice")
     void duplicateMovementsDoNotDoubleCount() {
-        UsageMovement movement = UsageMovement.of(PILOT, EntitlementKeys.ORDERS_MONTHLY_INCLUDED,
-                1, "ordering.OrderConfirmed", "order-4711", NOW);
+        UsageMovement movement = UsageMovement.of(
+                PILOT, EntitlementKeys.ORDERS_MONTHLY_INCLUDED, 1, "ordering.OrderConfirmed", "order-4711", NOW);
 
         assertThat(metering.record(movement)).isTrue();
         assertThat(metering.record(movement))
-                .as("at-least-once delivery is the contract; a second recording is ignored "
-                        + "rather than rejected")
+                .as("at-least-once delivery is the contract; a second recording is ignored " + "rather than rejected")
                 .isFalse();
 
         assertThat(consumed("orders.monthly_included", "2026-08")).isEqualTo(1);
@@ -201,10 +201,11 @@ class CommercialPlatformTests {
     @Test
     @DisplayName("the ledger is append-only, at the database")
     void aRecordedMovementCannotBeEditedOrDeleted() {
-        metering.record(UsageMovement.of(PILOT, EntitlementKeys.ORDERS_MONTHLY_INCLUDED,
-                1, "ordering.OrderConfirmed", "order-1", NOW));
+        metering.record(UsageMovement.of(
+                PILOT, EntitlementKeys.ORDERS_MONTHLY_INCLUDED, 1, "ordering.OrderConfirmed", "order-1", NOW));
 
-        assertThatThrownBy(() -> jdbc.sql("UPDATE commercial.usage_events SET quantity = 500").update())
+        assertThatThrownBy(() -> jdbc.sql("UPDATE commercial.usage_events SET quantity = 500")
+                        .update())
                 .hasMessageContaining("append-only");
         assertThatThrownBy(() -> jdbc.sql("DELETE FROM commercial.usage_events").update())
                 .as("a disputed figure must not be quietly repaired into an undisputed one")
@@ -214,11 +215,23 @@ class CommercialPlatformTests {
     @Test
     void aRebuildReproducesTheLiveAggregateIncludingAdjustments() {
         for (int index = 0; index < 40; index++) {
-            metering.record(UsageMovement.of(PILOT, EntitlementKeys.ORDERS_MONTHLY_INCLUDED,
-                    1, "ordering.OrderConfirmed", "order-" + index, NOW));
+            metering.record(UsageMovement.of(
+                    PILOT,
+                    EntitlementKeys.ORDERS_MONTHLY_INCLUDED,
+                    1,
+                    "ordering.OrderConfirmed",
+                    "order-" + index,
+                    NOW));
         }
-        metering.adjust(PILOT, EntitlementKeys.ORDERS_MONTHLY_INCLUDED, "2026-08", -5,
-                "duplicated by a consumer bug on 21 August", "INC-114", AUTHOR, APPROVER);
+        metering.adjust(
+                PILOT,
+                EntitlementKeys.ORDERS_MONTHLY_INCLUDED,
+                "2026-08",
+                -5,
+                "duplicated by a consumer bug on 21 August",
+                "INC-114",
+                AUTHOR,
+                APPROVER);
 
         long before = consumed("orders.monthly_included", "2026-08");
 
@@ -240,24 +253,28 @@ class CommercialPlatformTests {
 
     @Test
     void aStandingCountFallsWhenSomethingIsRemoved() {
-        metering.record(UsageMovement.of(PILOT, EntitlementKeys.LOCATIONS_MAX_COUNT,
-                1, "tenancy.LocationCreated", "loc-1", NOW));
-        metering.record(UsageMovement.of(PILOT, EntitlementKeys.LOCATIONS_MAX_COUNT,
-                1, "tenancy.LocationCreated", "loc-2", NOW));
-        metering.record(UsageMovement.of(PILOT, EntitlementKeys.LOCATIONS_MAX_COUNT,
-                -1, "tenancy.LocationClosed", "loc-2", NOW));
+        metering.record(UsageMovement.of(
+                PILOT, EntitlementKeys.LOCATIONS_MAX_COUNT, 1, "tenancy.LocationCreated", "loc-1", NOW));
+        metering.record(UsageMovement.of(
+                PILOT, EntitlementKeys.LOCATIONS_MAX_COUNT, 1, "tenancy.LocationCreated", "loc-2", NOW));
+        metering.record(UsageMovement.of(
+                PILOT, EntitlementKeys.LOCATIONS_MAX_COUNT, -1, "tenancy.LocationClosed", "loc-2", NOW));
 
         assertThat(consumed("locations.max_count", "LIFETIME"))
-                .as("a branch that closed is a movement of minus one, not the deletion of "
-                        + "the row that opened it")
+                .as("a branch that closed is a movement of minus one, not the deletion of " + "the row that opened it")
                 .isEqualTo(1);
     }
 
     @Test
     void aMovementCannotCarryADimensionOutsideTheAllowlist() {
-        assertThatThrownBy(() -> new UsageMovement(PILOT, EntitlementKeys.ORDERS_MONTHLY_INCLUDED,
-                1, "ordering.OrderConfirmed", "order-1", NOW,
-                Map.of("customer_id", UUID.randomUUID().toString())))
+        assertThatThrownBy(() -> new UsageMovement(
+                        PILOT,
+                        EntitlementKeys.ORDERS_MONTHLY_INCLUDED,
+                        1,
+                        "ordering.OrderConfirmed",
+                        "order-1",
+                        NOW,
+                        Map.of("customer_id", UUID.randomUUID().toString())))
                 .isInstanceOf(IllegalArgumentException.class)
                 .as("the ledger is append-only, so anything personal that reaches it can "
                         + "never be scrubbed (ADR 0029)")
@@ -270,16 +287,14 @@ class CommercialPlatformTests {
     @DisplayName("a meter-only tenant is never refused, at any multiple of its limit")
     void meterOnlyNeverRefuses() {
         UUID versionId = activateNetworkPlan();
-        subscriptions.start(PILOT, versionId, null, ActorRef.user(AUTHOR, null),
-                "pilot onboarding", "corr");
+        subscriptions.start(PILOT, versionId, null, ActorRef.user(AUTHOR, null), "pilot onboarding", "corr");
 
         recordLocations(PILOT, 200);
 
         LimitCheck check = entitlements.check(PILOT, EntitlementKeys.LOCATIONS_MAX_COUNT, 1);
 
         assertThatCode(() -> entitlements.require(PILOT, EntitlementKeys.LOCATIONS_MAX_COUNT, 1))
-                .as("an entitlement check that starts refusing things mid-pilot is a "
-                        + "self-inflicted outage")
+                .as("an entitlement check that starts refusing things mid-pilot is a " + "self-inflicted outage")
                 .doesNotThrowAnyException();
         assertThat(check.value().effectiveMode()).isEqualTo(EnforcementMode.METER_ONLY);
         assertThat(check.boundary().allowed()).isTrue();
@@ -310,8 +325,7 @@ class CommercialPlatformTests {
                 .as("five extra branches at 250 000 so'm; a minor unit of UZS is one whole som")
                 .isEqualTo(1_250_000L);
         assertThat(untouched.boundary())
-                .as("a ceiling is per tenant; enabling enforcement for a pilot must not "
-                        + "enforce the whole estate")
+                .as("a ceiling is per tenant; enabling enforcement for a pilot must not " + "enforce the whole estate")
                 .isEqualTo(Boundary.OVER_UNBILLED);
         assertThat(untouched.overageChargeMinor()).isNull();
     }
@@ -343,15 +357,24 @@ class CommercialPlatformTests {
         recordLocations(PILOT, 20);
         setCeiling(PILOT, "HARD");
 
-        subscriptions.override(PILOT, EntitlementKeys.LOCATIONS_MAX_COUNT.code(), 40L, null,
-                NOW.plusSeconds(86_400), ActorRef.user(AUTHOR, null), APPROVER,
-                "acquisition closes on Monday and the contract is being redrawn", "corr");
+        subscriptions.override(
+                PILOT,
+                EntitlementKeys.LOCATIONS_MAX_COUNT.code(),
+                40L,
+                null,
+                NOW.plusSeconds(86_400),
+                ActorRef.user(AUTHOR, null),
+                APPROVER,
+                "acquisition closes on Monday and the contract is being redrawn",
+                "corr");
 
         LimitCheck check = entitlements.check(PILOT, EntitlementKeys.LOCATIONS_MAX_COUNT, 1);
 
         assertThat(check.boundary()).isEqualTo(Boundary.WITHIN);
         assertThat(check.value().source()).isEqualTo(EntitlementSource.TENANT_OVERRIDE);
-        assertThat(entitlements.check(OTHER, EntitlementKeys.LOCATIONS_MAX_COUNT, 1).limit())
+        assertThat(entitlements
+                        .check(OTHER, EntitlementKeys.LOCATIONS_MAX_COUNT, 1)
+                        .limit())
                 .as("an override is one tenant's exception, never a change to the plan")
                 .isNull();
     }
@@ -365,9 +388,15 @@ class CommercialPlatformTests {
         recordLocations(PILOT, 5);
         setCeiling(PILOT, "HARD");
 
-        subscriptions.transition(PILOT, SubscriptionStatus.SUSPENDED, 1,
-                "three invoices unpaid at ninety days", null, ActorRef.user(AUTHOR, null),
-                "collections decision of 23 August", "corr");
+        subscriptions.transition(
+                PILOT,
+                SubscriptionStatus.SUSPENDED,
+                1,
+                "three invoices unpaid at ninety days",
+                null,
+                ActorRef.user(AUTHOR, null),
+                "collections decision of 23 August",
+                "corr");
 
         assertThatThrownBy(() -> entitlements.require(PILOT, EntitlementKeys.LOCATIONS_MAX_COUNT, 1))
                 .isInstanceOf(ApiException.class);
@@ -376,7 +405,9 @@ class CommercialPlatformTests {
                         + "data over a commercial dispute")
                 .isEqualTo(5);
         assertThat(jdbc.sql("SELECT status FROM tenant.tenants WHERE id = :id")
-                .param("id", PILOT).query(String.class).single())
+                        .param("id", PILOT)
+                        .query(String.class)
+                        .single())
                 .as("and the tenant itself is not suspended by a billing decision")
                 .isEqualTo("ACTIVE");
     }
@@ -385,11 +416,25 @@ class CommercialPlatformTests {
     void anImpossibleTransitionIsRefusedRatherThanRecorded() {
         UUID versionId = activateNetworkPlan();
         subscriptions.start(PILOT, versionId, null, ActorRef.user(AUTHOR, null), "pilot", "corr");
-        subscriptions.transition(PILOT, SubscriptionStatus.TERMINATED, 1, null, null,
-                ActorRef.user(AUTHOR, null), "the restaurant closed", "corr");
+        subscriptions.transition(
+                PILOT,
+                SubscriptionStatus.TERMINATED,
+                1,
+                null,
+                null,
+                ActorRef.user(AUTHOR, null),
+                "the restaurant closed",
+                "corr");
 
-        assertThatThrownBy(() -> subscriptions.transition(PILOT, SubscriptionStatus.ACTIVE, 2,
-                null, null, ActorRef.user(AUTHOR, null), "reinstate", "corr"))
+        assertThatThrownBy(() -> subscriptions.transition(
+                        PILOT,
+                        SubscriptionStatus.ACTIVE,
+                        2,
+                        null,
+                        null,
+                        ActorRef.user(AUTHOR, null),
+                        "reinstate",
+                        "corr"))
                 .isInstanceOf(ApiException.class)
                 .as("a terminated subscription is restarted by starting a new one, so the "
                         + "terms it restarts under are recorded rather than assumed")
@@ -402,11 +447,16 @@ class CommercialPlatformTests {
         subscriptions.start(PILOT, versionId, null, ActorRef.user(AUTHOR, null), "pilot", "corr");
 
         assertThat(audit.facts.stream().map(AuditFact::actionCode))
-                .contains("commercial.plan.created", "commercial.plan_version.drafted",
-                        "commercial.plan_version.activated", "commercial.subscription.started");
+                .contains(
+                        "commercial.plan.created",
+                        "commercial.plan_version.drafted",
+                        "commercial.plan_version.activated",
+                        "commercial.subscription.started");
         assertThat(audit.facts.stream()
-                .filter(fact -> fact.actionCode().equals("commercial.subscription.started"))
-                .findFirst().orElseThrow().changeDocument())
+                        .filter(fact -> fact.actionCode().equals("commercial.subscription.started"))
+                        .findFirst()
+                        .orElseThrow()
+                        .changeDocument())
                 .as("\"the tenant was on Growth\" is not a defence; the hash of what it was "
                         + "actually entitled to is")
                 .containsKey("entitlementHash");
@@ -421,7 +471,9 @@ class CommercialPlatformTests {
         recordLocations(OTHER, 30);
 
         assertThat(consumed("locations.max_count", "LIFETIME")).isZero();
-        assertThat(entitlements.check(PILOT, EntitlementKeys.LOCATIONS_MAX_COUNT, 0).consumed())
+        assertThat(entitlements
+                        .check(PILOT, EntitlementKeys.LOCATIONS_MAX_COUNT, 0)
+                        .consumed())
                 .isZero();
         assertThat(entitlements.snapshot(PILOT).subscriptionId())
                 .as("a tenant with no subscription reads none of its neighbour's")
@@ -431,8 +483,7 @@ class CommercialPlatformTests {
     // ------------------------------------------------------------- fixtures
 
     private UUID activateNetworkPlan() {
-        UUID planId = plans.createPlan("NETWORK", "Network", ActorRef.user(AUTHOR, null),
-                "the price list", "corr");
+        UUID planId = plans.createPlan("NETWORK", "Network", ActorRef.user(AUTHOR, null), "the price list", "corr");
         UUID versionId = draftNetworkVersion(planId);
         plans.activate(versionId, ActorRef.user(APPROVER, null), "signed off by finance", "corr");
         return versionId;
@@ -440,33 +491,67 @@ class CommercialPlatformTests {
 
     /** The console prototype's Network line, priced exactly as it shows it. */
     private UUID draftNetworkVersion(UUID planId) {
-        return plans.draftVersion(planId, "UZS", 9_000_000, "MONTHLY", "TERMS-2026-NETWORK",
+        return plans.draftVersion(
+                planId,
+                "UZS",
+                9_000_000,
+                "MONTHLY",
+                "TERMS-2026-NETWORK",
                 Map.of(
-                        EntitlementKeys.LOCATIONS_MAX_COUNT.code(), PlanEntitlement.counted(
-                                EntitlementKeys.LOCATIONS_MAX_COUNT.code(), 20,
-                                EnforcementMode.SOFT, ResetPeriod.NONE, 8_000, 250_000L),
-                        EntitlementKeys.ORDERS_MONTHLY_INCLUDED.code(), PlanEntitlement.counted(
-                                EntitlementKeys.ORDERS_MONTHLY_INCLUDED.code(), 20_000,
-                                EnforcementMode.SOFT, ResetPeriod.BILLING_PERIOD, 8_000, 500L)),
-                ActorRef.user(AUTHOR, null), "the 2026 price list", "corr");
+                        EntitlementKeys.LOCATIONS_MAX_COUNT.code(),
+                                PlanEntitlement.counted(
+                                        EntitlementKeys.LOCATIONS_MAX_COUNT.code(),
+                                        20,
+                                        EnforcementMode.SOFT,
+                                        ResetPeriod.NONE,
+                                        8_000,
+                                        250_000L),
+                        EntitlementKeys.ORDERS_MONTHLY_INCLUDED.code(),
+                                PlanEntitlement.counted(
+                                        EntitlementKeys.ORDERS_MONTHLY_INCLUDED.code(),
+                                        20_000,
+                                        EnforcementMode.SOFT,
+                                        ResetPeriod.BILLING_PERIOD,
+                                        8_000,
+                                        500L)),
+                ActorRef.user(AUTHOR, null),
+                "the 2026 price list",
+                "corr");
     }
 
     private UUID activateHardLimitPlan() {
-        UUID planId = plans.createPlan("BASIC", "Basic", ActorRef.user(AUTHOR, null),
-                "the price list", "corr");
-        UUID versionId = plans.draftVersion(planId, "UZS", 1_200_000, "MONTHLY", null,
-                Map.of(EntitlementKeys.LOCATIONS_MAX_COUNT.code(), PlanEntitlement.counted(
-                        EntitlementKeys.LOCATIONS_MAX_COUNT.code(), 20,
-                        EnforcementMode.HARD, ResetPeriod.NONE, 8_000, null)),
-                ActorRef.user(AUTHOR, null), "the 2026 price list", "corr");
+        UUID planId = plans.createPlan("BASIC", "Basic", ActorRef.user(AUTHOR, null), "the price list", "corr");
+        UUID versionId = plans.draftVersion(
+                planId,
+                "UZS",
+                1_200_000,
+                "MONTHLY",
+                null,
+                Map.of(
+                        EntitlementKeys.LOCATIONS_MAX_COUNT.code(),
+                        PlanEntitlement.counted(
+                                EntitlementKeys.LOCATIONS_MAX_COUNT.code(),
+                                20,
+                                EnforcementMode.HARD,
+                                ResetPeriod.NONE,
+                                8_000,
+                                null)),
+                ActorRef.user(AUTHOR, null),
+                "the 2026 price list",
+                "corr");
         plans.activate(versionId, ActorRef.user(APPROVER, null), "signed off by finance", "corr");
         return versionId;
     }
 
     private void recordLocations(UUID tenantId, int count) {
         for (int index = 0; index < count; index++) {
-            metering.record(UsageMovement.of(tenantId, EntitlementKeys.LOCATIONS_MAX_COUNT,
-                    1, "tenancy.LocationCreated", tenantId + "-loc-" + index, NOW));
+            metering.record(UsageMovement.of(
+                    tenantId,
+                    EntitlementKeys.LOCATIONS_MAX_COUNT,
+                    1,
+                    "tenancy.LocationCreated",
+                    tenantId + "-loc-" + index,
+                    NOW));
         }
     }
 
@@ -477,7 +562,9 @@ class CommercialPlatformTests {
                 VALUES (:id, 'commercial.enforcement_ceiling', 'TENANT', :tenantId, 'STRING',
                     :value, 'test', 'staged rollout')
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", tenantId).param("value", mode)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("value", mode)
                 .update();
     }
 
@@ -486,7 +573,9 @@ class CommercialPlatformTests {
                 SELECT COALESCE(SUM(consumed_quantity), 0) FROM commercial.usage_aggregates
                  WHERE tenant_id = :tenantId AND entitlement_key = :key AND period_key = :periodKey
                 """)
-                .param("tenantId", PILOT).param("key", entitlementKey).param("periodKey", periodKey)
+                .param("tenantId", PILOT)
+                .param("key", entitlementKey)
+                .param("periodKey", periodKey)
                 .query(Long.class)
                 .single();
     }
@@ -496,9 +585,7 @@ class CommercialPlatformTests {
                 INSERT INTO tenant.tenants (id, slug, legal_name, display_name, default_currency,
                     default_timezone, status, version)
                 VALUES (:id, :slug, :name, :name, 'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
-                """)
-                .param("id", id).param("slug", slug).param("name", name)
-                .update();
+                """).param("id", id).param("slug", slug).param("name", name).update();
     }
 
     /** Keeps the facts so a test can assert what was recorded, not merely that something was. */

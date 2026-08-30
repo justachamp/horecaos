@@ -1,12 +1,12 @@
 package uz.horecaos.platform.audit.web;
 
-import java.util.List;
-import java.util.UUID;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-
+import java.util.List;
+import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -14,10 +14,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.application.ApprovalDecisionService;
@@ -64,8 +60,7 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  */
 @RestController
 @RequestMapping("/api/v1/control-plane/tenants/{tenantId}/approval-requests")
-@Tag(name = "Approval requests",
-        description = "The maker-checker queue: actions waiting for a second signature")
+@Tag(name = "Approval requests", description = "The maker-checker queue: actions waiting for a second signature")
 public class ApprovalRequestController {
 
     private final ApprovalDecisionService decisions;
@@ -78,7 +73,8 @@ public class ApprovalRequestController {
 
     @GetMapping
     @RequiresCapability(value = Capability.APPROVAL_DECIDE, scope = ScopeType.TENANT)
-    @Operation(summary = "List the requests waiting for a second signature",
+    @Operation(
+            summary = "List the requests waiting for a second signature",
             description = "Oldest first, so the request closest to lapsing is the one on top. "
                     + "Lapsed requests are excluded whether or not the expiry sweep has reached "
                     + "them yet. The maker's free-text reason is deliberately not returned: it is "
@@ -89,18 +85,17 @@ public class ApprovalRequestController {
             @RequestParam(required = false) String actionCode,
             @RequestParam(required = false) Integer limit) {
 
-        List<PendingApprovalResponse> waiting = decisions
-                .pending(tenantId, actionCode, Page.limitOrDefault(limit), subject())
-                .stream()
-                .map(PendingApprovalResponse::of)
-                .toList();
+        List<PendingApprovalResponse> waiting =
+                decisions.pending(tenantId, actionCode, Page.limitOrDefault(limit), subject()).stream()
+                        .map(PendingApprovalResponse::of)
+                        .toList();
         return Page.last(waiting);
     }
 
     @PostMapping("/{requestId}/decision")
-    @RequiresCapability(value = Capability.APPROVAL_DECIDE, scope = ScopeType.TENANT,
-            mutating = true)
-    @Operation(summary = "Approve or decline a pending request",
+    @RequiresCapability(value = Capability.APPROVAL_DECIDE, scope = ScopeType.TENANT, mutating = true)
+    @Operation(
+            summary = "Approve or decline a pending request",
             description = "Refused unless the caller holds the capability the governing policy "
                     + "version named as the second signature, and refused outright if the caller "
                     + "is the person who raised the request. An approval lets the maker's "
@@ -109,16 +104,12 @@ public class ApprovalRequestController {
                     + "needing a new signature. A decline blocks it with the reason given here. "
                     + "Both refusals and decisions are audited.")
     DecisionResponse decide(
-            @PathVariable UUID tenantId,
-            @PathVariable UUID requestId,
-            @Valid @RequestBody DecisionRequest body) {
+            @PathVariable UUID tenantId, @PathVariable UUID requestId, @Valid @RequestBody DecisionRequest body) {
 
-        var decided = decisions.decide(
-                tenantId, requestId, decisionOf(body.decision()), actor(), body.reason());
+        var decided = decisions.decide(tenantId, requestId, decisionOf(body.decision()), actor(), body.reason());
 
         return new DecisionResponse(
-                decided.id(), decided.actionCode(), decided.status(),
-                decided.decidedBy(), decided.decidedAt());
+                decided.id(), decided.actionCode(), decided.status(), decided.decidedBy(), decided.decidedAt());
     }
 
     private ActorRef actor() {
@@ -133,8 +124,7 @@ public class ApprovalRequestController {
         try {
             return ApprovalService.Decision.valueOf(value);
         } catch (IllegalArgumentException notADecision) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "decision is one of APPROVE or DECLINE");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "decision is one of APPROVE or DECLINE");
         }
     }
 
@@ -147,8 +137,9 @@ public class ApprovalRequestController {
      */
     public record DecisionRequest(
             @NotBlank String decision,
-            @NotBlank @Size(max = ApprovalDecisionService.MAXIMUM_REASON_LENGTH) String reason) {
-    }
+
+            @NotBlank @Size(max = ApprovalDecisionService.MAXIMUM_REASON_LENGTH)
+            String reason) {}
 
     /**
      * @param mayDecide whether the caller could decide this row. False for the
@@ -171,19 +162,22 @@ public class ApprovalRequestController {
 
         static PendingApprovalResponse of(PendingApproval view) {
             return new PendingApprovalResponse(
-                    view.id(), view.actionCode(), view.parametersHash(), view.scopeType(),
-                    view.scopeId(), view.thresholdDescription(), view.policyVersion(),
-                    view.requiredApproverCapability(), view.requestedBy(), view.requestedAt(),
-                    view.expiresAt(), view.mayDecide());
+                    view.id(),
+                    view.actionCode(),
+                    view.parametersHash(),
+                    view.scopeType(),
+                    view.scopeId(),
+                    view.thresholdDescription(),
+                    view.policyVersion(),
+                    view.requiredApproverCapability(),
+                    view.requestedBy(),
+                    view.requestedAt(),
+                    view.expiresAt(),
+                    view.mayDecide());
         }
     }
 
     /** @param status APPROVED or DECLINED */
     public record DecisionResponse(
-            UUID id,
-            String actionCode,
-            String status,
-            String decidedBy,
-            java.time.Instant decidedAt) {
-    }
+            UUID id, String actionCode, String status, String decidedBy, java.time.Instant decidedAt) {}
 }

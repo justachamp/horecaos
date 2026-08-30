@@ -7,9 +7,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
-
 import org.springframework.core.env.Environment;
-
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
 import uz.horecaos.platform.iam.api.secrets.SecretValue;
@@ -75,11 +73,12 @@ public class EnvironmentSecretResolver implements SecretResolver {
      * format leaks into configuration keys beyond a predictable transform.
      */
     static String propertyNameFor(SecretReference reference) {
-        return "horecaos.secrets.%s.%s.%s".formatted(
-                reference.category().name().toLowerCase(Locale.ROOT),
-                reference.ownerScope(),
-                reference.opaqueId());
+        return "horecaos.secrets.%s.%s.%s"
+                .formatted(
+                        reference.category().name().toLowerCase(Locale.ROOT),
+                        reference.ownerScope(),
+                        reference.opaqueId());
     }
 
-    private record CachedSecret(SecretValue value, Instant expiresAt) { }
+    private record CachedSecret(SecretValue value, Instant expiresAt) {}
 }

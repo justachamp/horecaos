@@ -34,7 +34,12 @@ public record QuoteSnapshot(
         List<Line> lines,
         List<Adjustment> adjustments) {
 
-    public enum Status { ACTIVE, ACCEPTED, EXPIRED, SUPERSEDED }
+    public enum Status {
+        ACTIVE,
+        ACCEPTED,
+        EXPIRED,
+        SUPERSEDED
+    }
 
     public QuoteSnapshot {
         lines = List.copyOf(lines);
@@ -50,7 +55,7 @@ public record QuoteSnapshot(
             long unitAmountMinor,
             long baseAmountMinor,
             long finalAmountMinor,
-            long taxAmountMinor) { }
+            long taxAmountMinor) {}
 
     /**
      * One step of the calculation, in the order it was applied.
@@ -67,5 +72,5 @@ public record QuoteSnapshot(
             UUID sourceId,
             Integer sourceVersion,
             long amountMinor,
-            String descriptionCode) { }
+            String descriptionCode) {}
 }

@@ -6,16 +6,13 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.migration.api.ExternalEffect;
 import uz.horecaos.platform.migration.api.ImportSuppression;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
@@ -52,6 +49,7 @@ public class OrderNotificationTrigger {
 
     /** The semantic template keys a tenant authors wording against. */
     public static final String ORDER_CONFIRMED = "ORDER_CONFIRMED";
+
     public static final String ORDER_REJECTED = "ORDER_REJECTED";
 
     static final String SUBJECT_TYPE = "Order";
@@ -64,7 +62,9 @@ public class OrderNotificationTrigger {
     private final NotificationChannel channel;
     private final Duration expiry;
 
-    public OrderNotificationTrigger(JdbcNotificationStore notifications, ObjectMapper objectMapper,
+    public OrderNotificationTrigger(
+            JdbcNotificationStore notifications,
+            ObjectMapper objectMapper,
             Clock clock,
             @Value("${horecaos.notifications.order-channel:SMS}") String channel,
             // An open input on ADR 0020: how long an unsent confirmation is still
@@ -81,22 +81,30 @@ public class OrderNotificationTrigger {
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onOrderingEvent(OrderingEvent event) {
         switch (event) {
-            case OrderConfirmed confirmed -> create(confirmed, ORDER_CONFIRMED,
-                    confirmed.brandId(), confirmed.locationId(), Map.of());
-            case OrderRejected rejected -> create(rejected, ORDER_REJECTED,
-                    rejected.brandId(), rejected.locationId(),
-                    // The only thing that exists on the event and nowhere else. A
-                    // reason code read from the order row later would be missing,
-                    // because ordering stores the decision, not the message.
-                    reasonVariables(rejected.reasonCode()));
+            case OrderConfirmed confirmed ->
+                create(confirmed, ORDER_CONFIRMED, confirmed.brandId(), confirmed.locationId(), Map.of());
+            case OrderRejected rejected ->
+                create(
+                        rejected,
+                        ORDER_REJECTED,
+                        rejected.brandId(),
+                        rejected.locationId(),
+                        // The only thing that exists on the event and nowhere else. A
+                        // reason code read from the order row later would be missing,
+                        // because ordering stores the decision, not the message.
+                        reasonVariables(rejected.reasonCode()));
             // Every other ordering fact is deliberately silent. Adding a case here
             // is adding a message a customer receives, which is a product decision
             // and should look like one in a diff.
-            default -> { }
+            default -> {}
         }
     }
 
-    private void create(OrderingEvent event, String templateKey, UUID brandId, UUID locationId,
+    private void create(
+            OrderingEvent event,
+            String templateKey,
+            UUID brandId,
+            UUID locationId,
             Map<String, String> triggerVariables) {
 
         // ADR 0024's headline suppression, and the one the ADR names first:
@@ -110,8 +118,7 @@ public class OrderNotificationTrigger {
         // and does not follow work handed to a pool. An intent written under an
         // import and left in the table is a message with a stamped send-by time
         // and nothing on it that says not to send.
-        if (ImportSuppression.suppress(ExternalEffect.CUSTOMER_NOTIFICATION,
-                SUBJECT_TYPE, event.orderId())) {
+        if (ImportSuppression.suppress(ExternalEffect.CUSTOMER_NOTIFICATION, SUBJECT_TYPE, event.orderId())) {
             return;
         }
 
@@ -123,8 +130,7 @@ public class OrderNotificationTrigger {
         // second confirmation for the same order — which is the visible failure
         // ADR 0020 names. One message per order per template per channel, for as
         // long as the row exists.
-        String idempotencyKey = "%s:%s:%s:%s".formatted(
-                templateKey, SUBJECT_TYPE, event.orderId(), channel.name());
+        String idempotencyKey = "%s:%s:%s:%s".formatted(templateKey, SUBJECT_TYPE, event.orderId(), channel.name());
 
         boolean created = notifications.createIntent(new NewNotification(
                 UUID.randomUUID(),

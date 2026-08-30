@@ -9,7 +9,6 @@ package uz.horecaos.platform.fulfillment.domain.sourcing;
  * present, so a mixed row is unreachable rather than merely unlikely.
  */
 public enum SourceType {
-
     INTERNAL,
     PARTNER
 }

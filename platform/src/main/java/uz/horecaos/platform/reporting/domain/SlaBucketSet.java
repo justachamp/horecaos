@@ -35,8 +35,7 @@ public final class SlaBucketSet {
 
         boolean contains(long seconds) {
             long minutes = seconds / 60;
-            return minutes >= fromMinutes
-                    && (toMinutesExclusive == null || minutes < toMinutesExclusive);
+            return minutes >= fromMinutes && (toMinutesExclusive == null || minutes < toMinutesExclusive);
         }
     }
 
@@ -48,8 +47,7 @@ public final class SlaBucketSet {
             new Bucket("M50_60", 50, 60),
             new Bucket("OVER_60", 60, null));
 
-    private SlaBucketSet() {
-    }
+    private SlaBucketSet() {}
 
     public static List<Bucket> buckets() {
         return V1;
@@ -64,13 +62,12 @@ public final class SlaBucketSet {
      */
     public static Bucket bucketFor(long elapsedSeconds) {
         if (elapsedSeconds < 0) {
-            throw new IllegalArgumentException(
-                    "An order cannot close before it opened: " + elapsedSeconds + "s");
+            throw new IllegalArgumentException("An order cannot close before it opened: " + elapsedSeconds + "s");
         }
         return V1.stream()
                 .filter(bucket -> bucket.contains(elapsedSeconds))
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException(
-                        "The bucket set is no longer exhaustive at " + elapsedSeconds + "s"));
+                .orElseThrow(() ->
+                        new IllegalStateException("The bucket set is no longer exhaustive at " + elapsedSeconds + "s"));
     }
 }

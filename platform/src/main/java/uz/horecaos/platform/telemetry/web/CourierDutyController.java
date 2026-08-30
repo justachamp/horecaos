@@ -1,9 +1,7 @@
 package uz.horecaos.platform.telemetry.web;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -11,7 +9,9 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 import org.slf4j.MDC;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,10 +19,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
@@ -63,7 +59,8 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  */
 @RestController
 @RequestMapping("/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/courier")
-@Tag(name = "Courier duty and telemetry",
+@Tag(
+        name = "Courier duty and telemetry",
         description = "Opening and closing the window in which a courier's position is collected")
 public class CourierDutyController {
 
@@ -71,17 +68,17 @@ public class CourierDutyController {
     private final TelemetryIngestService ingest;
     private final CurrentActor currentActor;
 
-    public CourierDutyController(DutySessionService sessions, TelemetryIngestService ingest,
-            CurrentActor currentActor) {
+    public CourierDutyController(
+            DutySessionService sessions, TelemetryIngestService ingest, CurrentActor currentActor) {
         this.sessions = sessions;
         this.ingest = ingest;
         this.currentActor = currentActor;
     }
 
     @PostMapping("/duty-sessions")
-    @RequiresCapability(value = Capability.COURIER_DUTY_MANAGE, scope = ScopeType.LOCATION,
-            mutating = true)
-    @Operation(summary = "Open the window in which this courier is tracked",
+    @RequiresCapability(value = Capability.COURIER_DUTY_MANAGE, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "Open the window in which this courier is tracked",
             description = "Refused unless ADR 0042 reports an open shift for this courier at this "
                     + "branch with a valid self-employment registration. Both refusals are "
                     + "deliberate: a courier with no shift is not working, and an expired "
@@ -89,67 +86,84 @@ public class CourierDutyController {
                     + "twice returns the session already open, because a reconnecting handset, a "
                     + "swapped device, and a force-closed app all post this.")
     public ResponseEntity<DutySessionResponse> open(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId,
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
             @Valid @RequestBody OpenRequest body) {
 
         DutySessionRow session = sessions.open(new OpenCommand(
-                tenantId, body.courierId(), locationId, body.deviceId(),
+                tenantId,
+                body.courierId(),
+                locationId,
+                body.deviceId(),
                 CollectionGate.find(body.collectionGate()).orElse(CollectionGate.ON_DUTY),
                 ActorRef.user(currentActor.get().subject(), null),
-                body.reason(), Capability.COURIER_DUTY_MANAGE.code(), correlationId()));
+                body.reason(),
+                Capability.COURIER_DUTY_MANAGE.code(),
+                correlationId()));
 
         return ResponseEntity.ok(DutySessionResponse.of(session));
     }
 
     @PostMapping("/duty-sessions/{sessionId}/breaks")
-    @RequiresCapability(value = Capability.COURIER_DUTY_MANAGE, scope = ScopeType.LOCATION,
-            mutating = true)
-    @Operation(summary = "A break began; collection stops",
+    @RequiresCapability(value = Capability.COURIER_DUTY_MANAGE, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "A break began; collection stops",
             description = "ADR 0042's break, applied here. A courier on break is not assignable, "
                     + "so the pin had no operational use and the honest thing is to stop "
                     + "collecting rather than keep a dot nobody may act on.")
     public ResponseEntity<Void> suspend(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId,
-            @PathVariable UUID locationId, @PathVariable UUID sessionId) {
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID sessionId) {
 
         sessions.suspend(tenantId, sessionId);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/duty-sessions/{sessionId}/break-endings")
-    @RequiresCapability(value = Capability.COURIER_DUTY_MANAGE, scope = ScopeType.LOCATION,
-            mutating = true)
+    @RequiresCapability(value = Capability.COURIER_DUTY_MANAGE, scope = ScopeType.LOCATION, mutating = true)
     @Operation(summary = "The break ended; collection resumes")
     public ResponseEntity<Void> resume(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId,
-            @PathVariable UUID locationId, @PathVariable UUID sessionId) {
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID sessionId) {
 
         sessions.resume(tenantId, sessionId);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/duty-sessions/{sessionId}/closures")
-    @RequiresCapability(value = Capability.COURIER_DUTY_MANAGE, scope = ScopeType.LOCATION,
-            mutating = true)
-    @Operation(summary = "Sign off; collection stops and the pin expires within the hour",
+    @RequiresCapability(value = Capability.COURIER_DUTY_MANAGE, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "Sign off; collection stops and the pin expires within the hour",
             description = "The live row survives one more hour so a dispatcher finishing a call "
                     + "can still see where the courier was, and is then deleted by the retention "
                     + "sweeper. The track stays until its daily partition is dropped.")
     public ResponseEntity<Void> close(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId,
-            @PathVariable UUID locationId, @PathVariable UUID sessionId,
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID sessionId,
             @Valid @RequestBody CloseRequest body) {
 
-        sessions.close(tenantId, sessionId, body.endReason(),
+        sessions.close(
+                tenantId,
+                sessionId,
+                body.endReason(),
                 ActorRef.user(currentActor.get().subject(), null),
-                body.reason(), Capability.COURIER_DUTY_MANAGE.code(), correlationId());
+                body.reason(),
+                Capability.COURIER_DUTY_MANAGE.code(),
+                correlationId());
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/telemetry/observations")
-    @RequiresCapability(value = Capability.COURIER_DUTY_MANAGE, scope = ScopeType.LOCATION,
-            mutating = true)
-    @Operation(summary = "A batch of buffered observations from one handset",
+    @RequiresCapability(value = Capability.COURIER_DUTY_MANAGE, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "A batch of buffered observations from one handset",
             description = "Posted every ten seconds while a duty session is open, carrying the "
                     + "readings buffered since the last batch so a lift, a basement kitchen, or a "
                     + "tunnel produces a late batch rather than a gap. A batch arriving with no "
@@ -159,20 +173,28 @@ public class CourierDutyController {
                     + "Idempotent on a natural key rather than on an Idempotency-Key record, "
                     + "which is a narrow exemption ADR 0045 names here and nowhere else.")
     public ResponseEntity<IngestResponse> observations(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId,
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
             @Valid @RequestBody ObservationBatchRequest body) {
 
-        IngestOutcome outcome = ingest.ingest(tenantId, body.courierId(),
+        IngestOutcome outcome = ingest.ingest(
+                tenantId,
+                body.courierId(),
                 body.activeAssignmentCount() == null ? 0 : body.activeAssignmentCount(),
                 body.observations().stream().map(ObservationRequest::toDomain).toList());
 
-        return ResponseEntity.accepted().body(new IngestResponse(
-                outcome.observationsAccepted(), outcome.windowsWritten(),
-                outcome.livePositionMoved(), outcome.gate().name(), outcome.suspended(),
-                // The device's next cadence, sent on every response so the platform
-                // keeps the one lever it has over battery, data cost, and write
-                // volume rather than leaving it to the handset.
-                (int) LivePositionRules.BATCH_CADENCE.toSeconds()));
+        return ResponseEntity.accepted()
+                .body(new IngestResponse(
+                        outcome.observationsAccepted(),
+                        outcome.windowsWritten(),
+                        outcome.livePositionMoved(),
+                        outcome.gate().name(),
+                        outcome.suspended(),
+                        // The device's next cadence, sent on every response so the platform
+                        // keeps the one lever it has over battery, data cost, and write
+                        // volume rather than leaving it to the handset.
+                        (int) LivePositionRules.BATCH_CADENCE.toSeconds()));
     }
 
     private static String correlationId() {
@@ -184,20 +206,18 @@ public class CourierDutyController {
             @NotNull UUID courierId,
             @NotBlank @Size(max = 128) String deviceId,
             @Size(max = 16) String collectionGate,
-            @NotBlank @Size(max = 500) String reason) {
-    }
+            @NotBlank @Size(max = 500) String reason) {}
 
     public record CloseRequest(
             @NotBlank @Size(max = 32) String endReason,
-            @NotBlank @Size(max = 500) String reason) {
-    }
+            @NotBlank @Size(max = 500) String reason) {}
 
     public record ObservationBatchRequest(
             @NotNull UUID courierId,
             @Min(0) @Max(50) Integer activeAssignmentCount,
+
             @NotEmpty @Size(max = LivePositionRules.MAXIMUM_BATCH_SIZE)
-            List<@Valid ObservationRequest> observations) {
-    }
+            List<@Valid ObservationRequest> observations) {}
 
     /**
      * One reading.
@@ -220,8 +240,15 @@ public class CourierDutyController {
 
         TrackObservation toDomain() {
             try {
-                return new TrackObservation(capturedAt, latitude, longitude, accuracyMeters,
-                        headingDegrees, speedMps, batteryPercent, deviceCharging);
+                return new TrackObservation(
+                        capturedAt,
+                        latitude,
+                        longitude,
+                        accuracyMeters,
+                        headingDegrees,
+                        speedMps,
+                        batteryPercent,
+                        deviceCharging);
             } catch (IllegalArgumentException invalid) {
                 throw new ApiException(ErrorCode.VALIDATION_FAILED, invalid.getMessage());
             }
@@ -229,13 +256,25 @@ public class CourierDutyController {
     }
 
     public record DutySessionResponse(
-            UUID id, UUID courierId, UUID shiftId, String status, String collectionGate,
-            Instant startedAt, Instant registrationCheckedAt, String registrationValidUntil) {
+            UUID id,
+            UUID courierId,
+            UUID shiftId,
+            String status,
+            String collectionGate,
+            Instant startedAt,
+            Instant registrationCheckedAt,
+            String registrationValidUntil) {
 
         static DutySessionResponse of(DutySessionRow session) {
-            return new DutySessionResponse(session.id(), session.courierId(), session.shiftId(),
-                    session.status().name(), session.collectionGate().name(), session.startedAt(),
-                    session.registrationCheckedAt(), session.registrationValidUntil().toString());
+            return new DutySessionResponse(
+                    session.id(),
+                    session.courierId(),
+                    session.shiftId(),
+                    session.status().name(),
+                    session.collectionGate().name(),
+                    session.startedAt(),
+                    session.registrationCheckedAt(),
+                    session.registrationValidUntil().toString());
         }
     }
 
@@ -246,7 +285,10 @@ public class CourierDutyController {
      *                  signs off can see that it stopped.
      */
     public record IngestResponse(
-            int observationsAccepted, int windowsWritten, boolean livePositionMoved,
-            String collectionGate, boolean suspended, int nextBatchAfterSeconds) {
-    }
+            int observationsAccepted,
+            int windowsWritten,
+            boolean livePositionMoved,
+            String collectionGate,
+            boolean suspended,
+            int nextBatchAfterSeconds) {}
 }

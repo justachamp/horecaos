@@ -1,7 +1,5 @@
 package uz.horecaos.platform.tenancy.infrastructure.persistence;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -9,7 +7,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Currency;
 import java.util.UUID;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -17,9 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.BrandId;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
@@ -116,7 +112,10 @@ class JdbcTenantControlPlaneStoreTests {
                 .isEqualTo("keycloak-organization-a");
         assertThat(store.findCurrentCustomerIdentityMode(tenant.id(), NOW))
                 .contains(CustomerIdentityMode.TENANT_SHARED);
-        assertThat(store.findBrands(tenant.id())).singleElement().extracting(Brand::id).isEqualTo(brand.id());
+        assertThat(store.findBrands(tenant.id()))
+                .singleElement()
+                .extracting(Brand::id)
+                .isEqualTo(brand.id());
         assertThat(store.findLocations(brand))
                 .singleElement()
                 .satisfies(saved -> assertThat(saved.brandId()).isEqualTo(brand.id()));
@@ -161,9 +160,7 @@ class JdbcTenantControlPlaneStoreTests {
                 UPDATE tenant.customer_identity_policies
                 SET superseded_at = timestamptz '2026-08-20T00:00:00Z'
                 WHERE tenant_id = :tenantId AND version = 1
-                """)
-                .param("tenantId", tenant.id().value())
-                .update();
+                """).param("tenantId", tenant.id().value()).update();
         store.insertCustomerIdentityPolicy(supersededBy(
                 UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120282"),
                 tenant.id(),
@@ -226,8 +223,7 @@ class JdbcTenantControlPlaneStoreTests {
         CustomerIdentityMode previous = nextMode == CustomerIdentityMode.TENANT_SHARED
                 ? CustomerIdentityMode.BRAND_ISOLATED
                 : CustomerIdentityMode.TENANT_SHARED;
-        return CustomerIdentityPolicy
-                .initial(UUID.randomUUID(), tenantId, previous, changedAt)
+        return CustomerIdentityPolicy.initial(UUID.randomUUID(), tenantId, previous, changedAt)
                 .supersede(nextId, nextMode, changedAt, false, false);
     }
 
@@ -235,9 +231,7 @@ class JdbcTenantControlPlaneStoreTests {
         return jdbc.sql("""
                 SELECT column_name FROM information_schema.columns
                 WHERE table_schema = 'tenant' AND table_name = 'tenants'
-                """)
-                .query(String.class)
-                .list();
+                """).query(String.class).list();
     }
 
     @Test
@@ -246,12 +240,19 @@ class JdbcTenantControlPlaneStoreTests {
         store.insertTenant(tenant);
         Brand brand = Brand.draft(
                 new BrandId(UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120261")),
-                tenant.id(), "BRAND_P", new Slug("brand-p"), "Brand P");
+                tenant.id(),
+                "BRAND_P",
+                new Slug("brand-p"),
+                "Brand P");
         store.insertBrand(brand);
 
         Location location = Location.draft(
                 new LocationId(UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120262")),
-                tenant.id(), brand.id(), "LOCATION_P", new Slug("location-p"), "Chilonzor filiali",
+                tenant.id(),
+                brand.id(),
+                "LOCATION_P",
+                new Slug("location-p"),
+                "Chilonzor filiali",
                 ZoneId.of("Asia/Tashkent"));
         store.insertLocation(location);
 
@@ -263,9 +264,13 @@ class JdbcTenantControlPlaneStoreTests {
         });
 
         location.describePlace(new LocationPlace(
-                "Chilonzor ko'chasi 9-kvartal, 42-uy", "Chilonzor", "Toshkent",
-                "Metro Chilonzor yonida", "+998712000000",
-                new GeoPoint(41.275300, 69.204400), CoordinateSource.MERCHANT_PIN));
+                "Chilonzor ko'chasi 9-kvartal, 42-uy",
+                "Chilonzor",
+                "Toshkent",
+                "Metro Chilonzor yonida",
+                "+998712000000",
+                new GeoPoint(41.275300, 69.204400),
+                CoordinateSource.MERCHANT_PIN));
         store.updateLocationPlace(location);
 
         assertThat(store.findLocations(brand)).singleElement().satisfies(saved -> {
@@ -294,12 +299,20 @@ class JdbcTenantControlPlaneStoreTests {
         store.insertTenant(tenant);
         Brand brand = Brand.draft(
                 new BrandId(UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120271")),
-                tenant.id(), "BRAND_C", new Slug("brand-c"), "Brand C");
+                tenant.id(),
+                "BRAND_C",
+                new Slug("brand-c"),
+                "Brand C");
         store.insertBrand(brand);
         UUID locationId = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120272");
         store.insertLocation(Location.draft(
-                new LocationId(locationId), tenant.id(), brand.id(), "LOCATION_C",
-                new Slug("location-c"), "Location C", ZoneId.of("Asia/Tashkent")));
+                new LocationId(locationId),
+                tenant.id(),
+                brand.id(),
+                "LOCATION_C",
+                new Slug("location-c"),
+                "Location C",
+                ZoneId.of("Asia/Tashkent")));
 
         assertThatThrownBy(() -> jdbc.sql("""
                 UPDATE tenant.locations SET latitude = 41.3, coordinate_source = 'MERCHANT_PIN'
@@ -340,10 +353,10 @@ class JdbcTenantControlPlaneStoreTests {
                             'Wrong Scope', 'Asia/Tashkent', 'DRAFT'
                         )
                         """)
-                .param("id", UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120213"))
-                .param("tenantId", secondTenant.id().value())
-                .param("brandId", brand.id().value())
-                .update())
+                        .param("id", UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120213"))
+                        .param("tenantId", secondTenant.id().value())
+                        .param("brandId", brand.id().value())
+                        .update())
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 

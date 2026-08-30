@@ -2,16 +2,13 @@ package uz.horecaos.platform.integration.outbox;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
-
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.integration.events.EventCatalog;
 import uz.horecaos.platform.integration.events.EventContract;
 import uz.horecaos.platform.media.api.MediaEvent;
@@ -62,8 +59,7 @@ public class MediaOutboxEventListener {
         // for images that have been on menus for years. The derivative job is
         // written regardless — the renditions genuinely are owed — and only the
         // external announcement is suppressed.
-        if (ImportSuppression.suppress(ExternalEffect.OUTBOX_PUBLICATION,
-                event.aggregateType(), event.aggregateId())) {
+        if (ImportSuppression.suppress(ExternalEffect.OUTBOX_PUBLICATION, event.aggregateType(), event.aggregateId())) {
             return;
         }
 

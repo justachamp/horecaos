@@ -6,7 +6,6 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -34,8 +33,7 @@ public class JdbcOrderProcessStore {
      * inventory process a second instruction, and the row carries the latest one
      * rather than accumulating a queue whose order nobody controls.
      */
-    public void enqueue(UUID orderId, UUID tenantId, String processName, String checkpointJson,
-            Instant now) {
+    public void enqueue(UUID orderId, UUID tenantId, String processName, String checkpointJson, Instant now) {
         jdbc.sql("""
                 INSERT INTO ordering.order_process_states (
                     order_id, process_name, tenant_id, status, checkpoint,
@@ -51,8 +49,10 @@ public class JdbcOrderProcessStore {
                     version = ordering.order_process_states.version + 1,
                     updated_at = EXCLUDED.updated_at
                 """)
-                .param("orderId", orderId).param("process", processName)
-                .param("tenantId", tenantId).param("checkpoint", checkpointJson)
+                .param("orderId", orderId)
+                .param("process", processName)
+                .param("tenantId", tenantId)
+                .param("checkpoint", checkpointJson)
                 .param("now", utc(now))
                 .update();
     }
@@ -75,7 +75,8 @@ public class JdbcOrderProcessStore {
                 FOR UPDATE SKIP LOCKED
                 LIMIT :batchSize
                 """)
-                .param("process", processName).param("now", utc(now))
+                .param("process", processName)
+                .param("now", utc(now))
                 .param("batchSize", batchSize)
                 .query((row, number) -> new ProcessRow(
                         row.getObject("order_id", UUID.class),
@@ -95,7 +96,8 @@ public class JdbcOrderProcessStore {
                 FROM ordering.order_process_states
                 WHERE order_id = :orderId AND process_name = :process
                 """)
-                .param("orderId", orderId).param("process", processName)
+                .param("orderId", orderId)
+                .param("process", processName)
                 .query((row, number) -> new ProcessRow(
                         row.getObject("order_id", UUID.class),
                         row.getString("process_name"),
@@ -115,8 +117,15 @@ public class JdbcOrderProcessStore {
      * instruction with the outcome of the old one — which is how a process
      * manager reports "committed" for an order that has since been cancelled.
      */
-    public boolean settle(UUID orderId, String processName, int expectedVersion, String status,
-            String checkpointJson, Instant nextAttemptAt, String lastError, Instant now) {
+    public boolean settle(
+            UUID orderId,
+            String processName,
+            int expectedVersion,
+            String status,
+            String checkpointJson,
+            Instant nextAttemptAt,
+            String lastError,
+            Instant now) {
         return jdbc.sql("""
                 UPDATE ordering.order_process_states
                 SET status = :status,
@@ -128,12 +137,16 @@ public class JdbcOrderProcessStore {
                     updated_at = :now
                 WHERE order_id = :orderId AND process_name = :process AND version = :expectedVersion
                 """)
-                .param("orderId", orderId).param("process", processName)
-                .param("expectedVersion", expectedVersion).param("status", status)
-                .param("checkpoint", checkpointJson)
-                .param("nextAttemptAt", nextAttemptAt == null ? null : utc(nextAttemptAt))
-                .param("lastError", lastError).param("now", utc(now))
-                .update() == 1;
+                        .param("orderId", orderId)
+                        .param("process", processName)
+                        .param("expectedVersion", expectedVersion)
+                        .param("status", status)
+                        .param("checkpoint", checkpointJson)
+                        .param("nextAttemptAt", nextAttemptAt == null ? null : utc(nextAttemptAt))
+                        .param("lastError", lastError)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /** Everything an operator needs to answer "which processes are stuck". */
@@ -147,7 +160,8 @@ public class JdbcOrderProcessStore {
                 ORDER BY updated_at
                 LIMIT :limit
                 """)
-                .param("tenantId", tenantId).param("limit", limit)
+                .param("tenantId", tenantId)
+                .param("limit", limit)
                 .query((row, number) -> new ProcessRow(
                         row.getObject("order_id", UUID.class),
                         row.getString("process_name"),
@@ -163,6 +177,12 @@ public class JdbcOrderProcessStore {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
-    public record ProcessRow(UUID orderId, String processName, UUID tenantId, String status,
-            String checkpointJson, int attemptCount, int version) { }
+    public record ProcessRow(
+            UUID orderId,
+            String processName,
+            UUID tenantId,
+            String status,
+            String checkpointJson,
+            int attemptCount,
+            int version) {}
 }

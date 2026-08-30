@@ -5,13 +5,11 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -66,10 +64,15 @@ public class OrderStateService {
     private final ApplicationEventPublisher events;
     private final Clock clock;
 
-    public OrderStateService(JdbcOrderStore orders, LocationCapacityPort capacity,
+    public OrderStateService(
+            JdbcOrderStore orders,
+            LocationCapacityPort capacity,
             OrderInventoryProcess inventoryProcess,
-            OrderAcceptancePolicyService acceptancePolicies, OrderSettlementPort settlements,
-            AuditRecorder audit, ApplicationEventPublisher events, Clock clock) {
+            OrderAcceptancePolicyService acceptancePolicies,
+            OrderSettlementPort settlements,
+            AuditRecorder audit,
+            ApplicationEventPublisher events,
+            Clock clock) {
         this.orders = orders;
         this.capacity = capacity;
         this.inventoryProcess = inventoryProcess;
@@ -92,74 +95,122 @@ public class OrderStateService {
     public DecisionResult decide(UUID tenantId, UUID orderId, DecisionCommand command) {
         Instant now = clock.instant();
 
-        OrderRow order = orders.find(tenantId, orderId)
-                .orElseThrow(() -> new OrderNotFoundException(orderId));
+        OrderRow order = orders.find(tenantId, orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
 
         // A repeat of one human decision. Returning the settled outcome rather
         // than applying it again is what makes a retried click harmless.
-        Optional<ApprovalDecisionRow> alreadySeen =
-                orders.findDecision(tenantId, orderId, command.decisionId());
+        Optional<ApprovalDecisionRow> alreadySeen = orders.findDecision(tenantId, orderId, command.decisionId());
         if (alreadySeen.isPresent()) {
             return settledOutcome(tenantId, orderId, alreadySeen.get(), order);
         }
 
         UUID decisionRowId = UUID.randomUUID();
-        orders.insertApprovalDecision(decisionRowId, tenantId, orderId, command.decisionId(),
-                command.action().name(), command.decisionChannel(), command.actorType(),
-                command.actorId(), command.reasonCode(), command.issuedAt());
+        orders.insertApprovalDecision(
+                decisionRowId,
+                tenantId,
+                orderId,
+                command.decisionId(),
+                command.action().name(),
+                command.decisionChannel(),
+                command.actorType(),
+                command.actorId(),
+                command.reasonCode(),
+                command.issuedAt());
 
         if (order.status() != OrderStatus.AWAITING_APPROVAL) {
             // The order settled some other way — a timeout, a cancellation, or an
             // earlier decision. The command is on record and inert, and audited,
             // because a restaurant asking "I did reject that order" is asking about
             // exactly this case.
-            recordAudit(order, "ordering.order.approval-decision", command.actorType(),
-                    command.actorId(), command.reasonCode(), order.version(),
-                    Map.of("action", command.action().name(), "decisionId", command.decisionId(),
-                            "channel", command.decisionChannel(),
-                            "settledStatus", order.status().name()),
-                    AuditFact.Outcome.REJECTED, command.correlationId(), now);
-            return new DecisionResult(false, order.status(), order.version(),
+            recordAudit(
+                    order,
+                    "ordering.order.approval-decision",
+                    command.actorType(),
+                    command.actorId(),
+                    command.reasonCode(),
+                    order.version(),
+                    Map.of(
+                            "action",
+                            command.action().name(),
+                            "decisionId",
+                            command.decisionId(),
+                            "channel",
+                            command.decisionChannel(),
+                            "settledStatus",
+                            order.status().name()),
+                    AuditFact.Outcome.REJECTED,
+                    command.correlationId(),
+                    now);
+            return new DecisionResult(
+                    false,
+                    order.status(),
+                    order.version(),
                     orders.findEffectiveDecision(tenantId, orderId).orElse(null));
         }
 
-        OrderStatus target = command.action() == DecisionAction.APPROVE
-                ? OrderStatus.CONFIRMED : OrderStatus.REJECTED;
+        OrderStatus target = command.action() == DecisionAction.APPROVE ? OrderStatus.CONFIRMED : OrderStatus.REJECTED;
         OrderStateMachine.require(OrderStatus.AWAITING_APPROVAL, target);
 
         // ADR 0039: whoever approves is who accepted the order, and the fact is
         // written by the same statement that moves the status. Two statements
         // could commit apart, and an order confirmed by nobody is exactly the gap
         // the column exists to close.
-        Optional<Integer> won = orders.transition(tenantId, orderId,
-                OrderStatus.AWAITING_APPROVAL, target, now,
-                command.actorType(), command.actorId());
+        Optional<Integer> won = orders.transition(
+                tenantId, orderId, OrderStatus.AWAITING_APPROVAL, target, now, command.actorType(), command.actorId());
 
         if (won.isEmpty()) {
             // Somebody else moved the order between the read above and this
             // statement. Their outcome stands; this decision remains on record as
             // not effective.
             OrderRow settled = orders.find(tenantId, orderId).orElseThrow();
-            log.info("Decision {} on order {} lost the race; order is {}", command.decisionId(),
-                    orderId, settled.status());
+            log.info(
+                    "Decision {} on order {} lost the race; order is {}",
+                    command.decisionId(),
+                    orderId,
+                    settled.status());
             // The losing command is audited too. "Who tried to reject this order,
             // and when" is asked after every dispute, and an audit trail that
             // records only the winner cannot answer it.
-            recordAudit(settled, "ordering.order.approval-decision", command.actorType(),
-                    command.actorId(), command.reasonCode(), settled.version(),
-                    Map.of("action", command.action().name(), "decisionId", command.decisionId(),
-                            "channel", command.decisionChannel(),
-                            "settledStatus", settled.status().name()),
-                    AuditFact.Outcome.REJECTED, command.correlationId(), now);
-            return new DecisionResult(false, settled.status(), settled.version(),
+            recordAudit(
+                    settled,
+                    "ordering.order.approval-decision",
+                    command.actorType(),
+                    command.actorId(),
+                    command.reasonCode(),
+                    settled.version(),
+                    Map.of(
+                            "action",
+                            command.action().name(),
+                            "decisionId",
+                            command.decisionId(),
+                            "channel",
+                            command.decisionChannel(),
+                            "settledStatus",
+                            settled.status().name()),
+                    AuditFact.Outcome.REJECTED,
+                    command.correlationId(),
+                    now);
+            return new DecisionResult(
+                    false,
+                    settled.status(),
+                    settled.version(),
                     orders.findEffectiveDecision(tenantId, orderId).orElse(null));
         }
 
         int version = won.get();
         orders.markDecisionEffective(tenantId, decisionRowId);
-        orders.recordTransition(tenantId, orderId, version, OrderStatus.AWAITING_APPROVAL, target,
-                TransitionTrigger.APPROVAL_DECISION, command.reasonCode(), command.actorType(),
-                command.actorId(), command.correlationId(), now);
+        orders.recordTransition(
+                tenantId,
+                orderId,
+                version,
+                OrderStatus.AWAITING_APPROVAL,
+                target,
+                TransitionTrigger.APPROVAL_DECISION,
+                command.reasonCode(),
+                command.actorType(),
+                command.actorId(),
+                command.correlationId(),
+                now);
         orders.cancelTimer(tenantId, orderId, CheckoutService.APPROVAL_TIMER, now);
 
         // ADR 0039: a rejection is its own commercial fact, not a cancellation
@@ -167,22 +218,54 @@ public class OrderStateService {
         // cooked and before the hold was committed, so the stock always goes back
         // and the tenant carries whatever the refusal cost.
         OrderOutcome outcome = target == OrderStatus.REJECTED
-                ? new OrderOutcome(TerminalOutcomeKind.REJECTED,
-                        OutcomeSystemCategory.RESTAURANT_REFUSED, null, null, null,
-                        StockDisposition.RELEASE, LiabilityParty.TENANT, CustomerRefund.FULL,
-                        reservationCommitted(order), null)
+                ? new OrderOutcome(
+                        TerminalOutcomeKind.REJECTED,
+                        OutcomeSystemCategory.RESTAURANT_REFUSED,
+                        null,
+                        null,
+                        null,
+                        StockDisposition.RELEASE,
+                        LiabilityParty.TENANT,
+                        CustomerRefund.FULL,
+                        reservationCommitted(order),
+                        null)
                 : null;
 
-        applyConsequences(order, target, version, command.reasonCode(),
-                command.decisionChannel(), command.actorType(), command.actorId(), outcome, now);
+        applyConsequences(
+                order,
+                target,
+                version,
+                command.reasonCode(),
+                command.decisionChannel(),
+                command.actorType(),
+                command.actorId(),
+                outcome,
+                now);
 
-        recordAudit(order, "ordering.order.approval-decision", command.actorType(),
-                command.actorId(), command.reasonCode(), version,
-                Map.of("action", command.action().name(), "decisionId", command.decisionId(),
-                        "channel", command.decisionChannel(), "toStatus", target.name()),
-                AuditFact.Outcome.SUCCEEDED, command.correlationId(), now);
+        recordAudit(
+                order,
+                "ordering.order.approval-decision",
+                command.actorType(),
+                command.actorId(),
+                command.reasonCode(),
+                version,
+                Map.of(
+                        "action",
+                        command.action().name(),
+                        "decisionId",
+                        command.decisionId(),
+                        "channel",
+                        command.decisionChannel(),
+                        "toStatus",
+                        target.name()),
+                AuditFact.Outcome.SUCCEEDED,
+                command.correlationId(),
+                now);
 
-        return new DecisionResult(true, target, version,
+        return new DecisionResult(
+                true,
+                target,
+                version,
                 orders.findEffectiveDecision(tenantId, orderId).orElse(null));
     }
 
@@ -201,49 +284,70 @@ public class OrderStateService {
     @Transactional
     public DecisionResult approvalDeadlineReached(UUID tenantId, UUID orderId) {
         Instant now = clock.instant();
-        OrderRow order = orders.find(tenantId, orderId)
-                .orElseThrow(() -> new OrderNotFoundException(orderId));
+        OrderRow order = orders.find(tenantId, orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
 
         if (order.status() != OrderStatus.AWAITING_APPROVAL) {
-            return new DecisionResult(false, order.status(), order.version(),
+            return new DecisionResult(
+                    false,
+                    order.status(),
+                    order.version(),
                     orders.findEffectiveDecision(tenantId, orderId).orElse(null));
         }
 
         // The policy the order was created under, not the one in force now. A
         // manager who switched the branch to auto-confirm this afternoon has not
         // thereby changed what this morning's order was permitted to do.
-        var policy = acceptancePolicies.pinned(order.acceptancePolicyId(),
-                order.acceptancePolicyVersion());
+        var policy = acceptancePolicies.pinned(order.acceptancePolicyId(), order.acceptancePolicyVersion());
 
         OrderStatus target = policy.timeoutAction() == ApprovalTimeoutAction.AUTO_CONFIRM
-                ? OrderStatus.CONFIRMED : OrderStatus.EXPIRED;
+                ? OrderStatus.CONFIRMED
+                : OrderStatus.EXPIRED;
 
         // A machine principal appears as one, so an auto-confirmed order shows
         // "система" rather than an empty cell. The legacy dashboard rendered
         // "Оператор: (Не указан)" in red on every order nobody typed, which
         // trained staff to ignore the field.
-        Optional<Integer> won = orders.transition(tenantId, orderId,
-                OrderStatus.AWAITING_APPROVAL, target, now,
-                "SYSTEM_JOB", "order-approval-timeout");
+        Optional<Integer> won = orders.transition(
+                tenantId, orderId, OrderStatus.AWAITING_APPROVAL, target, now, "SYSTEM_JOB", "order-approval-timeout");
         if (won.isEmpty()) {
             OrderRow settled = orders.find(tenantId, orderId).orElseThrow();
-            return new DecisionResult(false, settled.status(), settled.version(),
+            return new DecisionResult(
+                    false,
+                    settled.status(),
+                    settled.version(),
                     orders.findEffectiveDecision(tenantId, orderId).orElse(null));
         }
 
         int version = won.get();
-        orders.recordTransition(tenantId, orderId, version, OrderStatus.AWAITING_APPROVAL, target,
-                TransitionTrigger.APPROVAL_TIMEOUT, "APPROVAL_DEADLINE_REACHED", "SYSTEM_JOB",
-                "order-approval-timeout", null, now);
+        orders.recordTransition(
+                tenantId,
+                orderId,
+                version,
+                OrderStatus.AWAITING_APPROVAL,
+                target,
+                TransitionTrigger.APPROVAL_TIMEOUT,
+                "APPROVAL_DEADLINE_REACHED",
+                "SYSTEM_JOB",
+                "order-approval-timeout",
+                null,
+                now);
 
         if (target == OrderStatus.CONFIRMED) {
             // An auto-confirm on timeout is a decision in every sense that matters
             // to an audit, so it is recorded as one — with SYSTEM_TIMEOUT as its
             // channel, so nobody later mistakes it for a person's click.
             UUID decisionRowId = UUID.randomUUID();
-            orders.insertApprovalDecision(decisionRowId, tenantId, orderId,
-                    "timeout:" + orderId, "APPROVE", "SYSTEM_TIMEOUT", "SYSTEM_JOB",
-                    "order-approval-timeout", "APPROVAL_DEADLINE_REACHED", now);
+            orders.insertApprovalDecision(
+                    decisionRowId,
+                    tenantId,
+                    orderId,
+                    "timeout:" + orderId,
+                    "APPROVE",
+                    "SYSTEM_TIMEOUT",
+                    "SYSTEM_JOB",
+                    "order-approval-timeout",
+                    "APPROVAL_DEADLINE_REACHED",
+                    now);
             orders.markDecisionEffective(tenantId, decisionRowId);
         }
 
@@ -253,17 +357,35 @@ public class OrderStateService {
         // reason. Inventing one would put a tenant's wording on a fact they had no
         // part in.
         OrderOutcome outcome = target == OrderStatus.EXPIRED
-                ? new OrderOutcome(TerminalOutcomeKind.EXPIRED,
-                        OutcomeSystemCategory.APPROVAL_DEADLINE_LAPSED, null, null, null,
-                        StockDisposition.RELEASE, LiabilityParty.TENANT, CustomerRefund.FULL,
-                        reservationCommitted(order), null)
+                ? new OrderOutcome(
+                        TerminalOutcomeKind.EXPIRED,
+                        OutcomeSystemCategory.APPROVAL_DEADLINE_LAPSED,
+                        null,
+                        null,
+                        null,
+                        StockDisposition.RELEASE,
+                        LiabilityParty.TENANT,
+                        CustomerRefund.FULL,
+                        reservationCommitted(order),
+                        null)
                 : null;
 
-        applyConsequences(order, target, version, "APPROVAL_DEADLINE_REACHED", "SYSTEM_TIMEOUT",
-                "SYSTEM_JOB", "order-approval-timeout", outcome, now);
+        applyConsequences(
+                order,
+                target,
+                version,
+                "APPROVAL_DEADLINE_REACHED",
+                "SYSTEM_TIMEOUT",
+                "SYSTEM_JOB",
+                "order-approval-timeout",
+                outcome,
+                now);
 
         log.info("Order {} reached its approval deadline and is now {}", orderId, target);
-        return new DecisionResult(true, target, version,
+        return new DecisionResult(
+                true,
+                target,
+                version,
                 orders.findEffectiveDecision(tenantId, orderId).orElse(null));
     }
 
@@ -275,11 +397,16 @@ public class OrderStateService {
      * where it would wait for a courier that does not exist.
      */
     @Transactional
-    public DecisionResult advance(UUID tenantId, UUID orderId, OrderStatus target,
-            int expectedVersion, String reasonCode, String actorType, String actorId,
+    public DecisionResult advance(
+            UUID tenantId,
+            UUID orderId,
+            OrderStatus target,
+            int expectedVersion,
+            String reasonCode,
+            String actorType,
+            String actorId,
             String correlationId) {
-        return advance(tenantId, orderId, target, expectedVersion, reasonCode, actorType, actorId,
-                correlationId, null);
+        return advance(tenantId, orderId, target, expectedVersion, reasonCode, actorType, actorId, correlationId, null);
     }
 
     /**
@@ -298,13 +425,19 @@ public class OrderStateService {
      *                   people to click through dialogs
      */
     @Transactional
-    public DecisionResult advance(UUID tenantId, UUID orderId, OrderStatus target,
-            int expectedVersion, String reasonCode, String actorType, String actorId,
-            String correlationId, OrderOutcome completion) {
+    public DecisionResult advance(
+            UUID tenantId,
+            UUID orderId,
+            OrderStatus target,
+            int expectedVersion,
+            String reasonCode,
+            String actorType,
+            String actorId,
+            String correlationId,
+            OrderOutcome completion) {
 
         Instant now = clock.instant();
-        OrderRow order = orders.find(tenantId, orderId)
-                .orElseThrow(() -> new OrderNotFoundException(orderId));
+        OrderRow order = orders.find(tenantId, orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
 
         if (order.version() != expectedVersion) {
             throw new StaleOrderException(expectedVersion, order.version());
@@ -320,23 +453,48 @@ public class OrderStateService {
         }
 
         int version = requireCallersVersion(expectedVersion, won.get());
-        orders.recordTransition(tenantId, orderId, version, order.status(), target,
-                TransitionTrigger.OPERATIONS_ACTION, reasonCode, actorType, actorId,
-                correlationId, now);
+        orders.recordTransition(
+                tenantId,
+                orderId,
+                version,
+                order.status(),
+                target,
+                TransitionTrigger.OPERATIONS_ACTION,
+                reasonCode,
+                actorType,
+                actorId,
+                correlationId,
+                now);
 
         OrderOutcome outcome = null;
         if (target == OrderStatus.COMPLETED) {
-            outcome = completion != null ? completion : new OrderOutcome(
-                    TerminalOutcomeKind.COMPLETED,
-                    OutcomeSystemCategory.defaultCompletionFor(order.fulfillmentMode()),
-                    null, null, null, StockDisposition.NO_EFFECT, null, null, true, null);
+            outcome = completion != null
+                    ? completion
+                    : new OrderOutcome(
+                            TerminalOutcomeKind.COMPLETED,
+                            OutcomeSystemCategory.defaultCompletionFor(order.fulfillmentMode()),
+                            null,
+                            null,
+                            null,
+                            StockDisposition.NO_EFFECT,
+                            null,
+                            null,
+                            true,
+                            null);
         }
 
-        applyConsequences(order, target, version, reasonCode, null, actorType, actorId, outcome,
-                now);
-        recordAudit(order, "ordering.order.state-action", actorType, actorId, reasonCode, version,
+        applyConsequences(order, target, version, reasonCode, null, actorType, actorId, outcome, now);
+        recordAudit(
+                order,
+                "ordering.order.state-action",
+                actorType,
+                actorId,
+                reasonCode,
+                version,
                 Map.of("fromStatus", order.status().name(), "toStatus", target.name()),
-                AuditFact.Outcome.SUCCEEDED, correlationId, now);
+                AuditFact.Outcome.SUCCEEDED,
+                correlationId,
+                now);
         return new DecisionResult(true, target, version, null);
     }
 
@@ -369,8 +527,14 @@ public class OrderStateService {
      * replay is answered with what happened the first time.
      */
     @Transactional
-    public ProgressProposal proposeProgress(UUID tenantId, UUID orderId, OrderStatus target,
-            String idempotencyKey, String reasonCode, String actorType, String actorId,
+    public ProgressProposal proposeProgress(
+            UUID tenantId,
+            UUID orderId,
+            OrderStatus target,
+            String idempotencyKey,
+            String reasonCode,
+            String actorType,
+            String actorId,
             String correlationId) {
 
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
@@ -383,11 +547,9 @@ public class OrderStateService {
         Instant now = clock.instant();
         // AuditFact refuses a USER actor with no reason, and a proposal that blew
         // up on the audit would take a cook's station advance with it.
-        String reason = reasonCode == null || reasonCode.isBlank()
-                ? "ORDER_PROGRESS_PROPOSAL" : reasonCode;
+        String reason = reasonCode == null || reasonCode.isBlank() ? "ORDER_PROGRESS_PROPOSAL" : reasonCode;
 
-        Optional<JdbcOrderStore.ProgressProposalRow> seen =
-                orders.findProgressProposal(tenantId, idempotencyKey);
+        Optional<JdbcOrderStore.ProgressProposalRow> seen = orders.findProgressProposal(tenantId, idempotencyKey);
         if (seen.isPresent()) {
             return replayOf(seen.get(), orderId, idempotencyKey);
         }
@@ -397,22 +559,27 @@ public class OrderStateService {
             // Not an exception. An order that does not exist for this tenant is
             // an order this kitchen cannot move, which is what REFUSED means, and
             // the ticket carries on holding the food it actually has.
-            log.warn("A progress proposal named order {}, which does not belong to tenant {}",
-                    orderId, tenantId);
+            log.warn("A progress proposal named order {}, which does not belong to tenant {}", orderId, tenantId);
             return ProgressProposal.REFUSED;
         }
         OrderRow order = found.get();
 
-        Optional<UUID> claimed = orders.claimProgressProposal(tenantId, orderId, idempotencyKey,
-                target, reason, actorType == null ? "SERVICE" : actorType, actorId, correlationId,
+        Optional<UUID> claimed = orders.claimProgressProposal(
+                tenantId,
+                orderId,
+                idempotencyKey,
+                target,
+                reason,
+                actorType == null ? "SERVICE" : actorType,
+                actorId,
+                correlationId,
                 now);
         if (claimed.isEmpty()) {
             // The pre-check found nothing and the claim still conflicted, so an
             // identical proposal is in flight in another transaction and will
             // apply whatever is applicable. Producing a second effect is the one
             // thing this must not do.
-            log.debug("A twin of proposal {} is in flight; this one applies nothing",
-                    idempotencyKey);
+            log.debug("A twin of proposal {} is in flight; this one applies nothing", idempotencyKey);
             return ProgressProposal.ALREADY_THERE;
         }
 
@@ -426,35 +593,47 @@ public class OrderStateService {
         } else if (!OrderStateMachine.permits(order.status(), target, order.fulfillmentMode())) {
             // ADR 0019 does not have this edge from where the order actually is.
             // The ticket is not rolled back: the food is where the food is.
-            log.info("Order {} is {} and refuses a kitchen proposal of {}", orderId,
-                    order.status(), target);
+            log.info("Order {} is {} and refuses a kitchen proposal of {}", orderId, order.status(), target);
             outcome = ProgressProposal.REFUSED;
         } else {
-            Optional<Integer> won = orders.transition(tenantId, orderId, order.status(), target,
-                    now);
+            Optional<Integer> won = orders.transition(tenantId, orderId, order.status(), target, now);
             if (won.isEmpty()) {
                 OrderRow settled = orders.find(tenantId, orderId).orElseThrow();
                 version = settled.version();
-                outcome = settled.status() == target
-                        ? ProgressProposal.ALREADY_THERE : ProgressProposal.REFUSED;
+                outcome = settled.status() == target ? ProgressProposal.ALREADY_THERE : ProgressProposal.REFUSED;
             } else {
                 version = won.get();
-                orders.recordTransition(tenantId, orderId, version, order.status(), target,
-                        TransitionTrigger.KITCHEN_PROGRESS, reason, actorType, actorId,
-                        correlationId, now);
+                orders.recordTransition(
+                        tenantId,
+                        orderId,
+                        version,
+                        order.status(),
+                        target,
+                        TransitionTrigger.KITCHEN_PROGRESS,
+                        reason,
+                        actorType,
+                        actorId,
+                        correlationId,
+                        now);
 
                 // A pickup handover is a completion in every sense ADR 0039
                 // means, so it records the same outcome an operator's completion
                 // records rather than a thinner one that no report can read.
                 OrderOutcome completion = target == OrderStatus.COMPLETED
-                        ? new OrderOutcome(TerminalOutcomeKind.COMPLETED,
+                        ? new OrderOutcome(
+                                TerminalOutcomeKind.COMPLETED,
                                 OutcomeSystemCategory.defaultCompletionFor(order.fulfillmentMode()),
-                                null, null, null, StockDisposition.NO_EFFECT, null, null, true,
+                                null,
+                                null,
+                                null,
+                                StockDisposition.NO_EFFECT,
+                                null,
+                                null,
+                                true,
                                 null)
                         : null;
 
-                applyConsequences(order, target, version, reason, null, actorType, actorId,
-                        completion, now);
+                applyConsequences(order, target, version, reason, null, actorType, actorId, completion, now);
                 outcome = ProgressProposal.APPLIED;
             }
         }
@@ -466,12 +645,25 @@ public class OrderStateService {
         // after a customer is told their order is still being prepared while they
         // are holding it, and an audit trail that records only what worked cannot
         // answer it.
-        recordAudit(order, "ordering.order.kitchen-progress", actorType, actorId, reason, version,
-                Map.of("fromStatus", order.status().name(), "proposedStatus", target.name(),
-                        "outcome", outcome.name(), "idempotencyKey", idempotencyKey),
-                outcome == ProgressProposal.REFUSED
-                        ? AuditFact.Outcome.REJECTED : AuditFact.Outcome.SUCCEEDED,
-                correlationId, now);
+        recordAudit(
+                order,
+                "ordering.order.kitchen-progress",
+                actorType,
+                actorId,
+                reason,
+                version,
+                Map.of(
+                        "fromStatus",
+                        order.status().name(),
+                        "proposedStatus",
+                        target.name(),
+                        "outcome",
+                        outcome.name(),
+                        "idempotencyKey",
+                        idempotencyKey),
+                outcome == ProgressProposal.REFUSED ? AuditFact.Outcome.REJECTED : AuditFact.Outcome.SUCCEEDED,
+                correlationId,
+                now);
 
         return outcome;
     }
@@ -484,12 +676,14 @@ public class OrderStateService {
      * settled outcome answer a proposal about another would turn a caller's
      * key-building bug into an order that moved for a reason nobody can find.
      */
-    private ProgressProposal replayOf(JdbcOrderStore.ProgressProposalRow seen, UUID orderId,
-            String idempotencyKey) {
+    private ProgressProposal replayOf(JdbcOrderStore.ProgressProposalRow seen, UUID orderId, String idempotencyKey) {
 
         if (!seen.orderId().equals(orderId)) {
-            log.warn("Progress proposal key {} is already recorded against order {} and cannot "
-                    + "answer for order {}", idempotencyKey, seen.orderId(), orderId);
+            log.warn(
+                    "Progress proposal key {} is already recorded against order {} and cannot " + "answer for order {}",
+                    idempotencyKey,
+                    seen.orderId(),
+                    orderId);
             return ProgressProposal.REFUSED;
         }
         // Only reachable if a row were committed without its outcome, which
@@ -511,10 +705,15 @@ public class OrderStateService {
      * reason is permitted there; this one is not.
      */
     @Transactional
-    public DecisionResult cancel(UUID tenantId, UUID orderId, int expectedVersion,
-            String reasonCode, String actorType, String actorId, String correlationId) {
-        return cancel(tenantId, orderId, expectedVersion, reasonCode, actorType, actorId,
-                correlationId, null);
+    public DecisionResult cancel(
+            UUID tenantId,
+            UUID orderId,
+            int expectedVersion,
+            String reasonCode,
+            String actorType,
+            String actorId,
+            String correlationId) {
+        return cancel(tenantId, orderId, expectedVersion, reasonCode, actorType, actorId, correlationId, null);
     }
 
     /**
@@ -533,59 +732,91 @@ public class OrderStateService {
      *                 pre-confirmation path with no reason
      */
     @Transactional
-    public DecisionResult cancel(UUID tenantId, UUID orderId, int expectedVersion,
-            String reasonCode, String actorType, String actorId, String correlationId,
+    public DecisionResult cancel(
+            UUID tenantId,
+            UUID orderId,
+            int expectedVersion,
+            String reasonCode,
+            String actorType,
+            String actorId,
+            String correlationId,
             OrderOutcome prepared) {
 
         Instant now = clock.instant();
-        OrderRow order = orders.find(tenantId, orderId)
-                .orElseThrow(() -> new OrderNotFoundException(orderId));
+        OrderRow order = orders.find(tenantId, orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
 
         if (order.version() != expectedVersion) {
             throw new StaleOrderException(expectedVersion, order.version());
         }
         if (prepared == null
                 && (order.status() == OrderStatus.CONFIRMED
-                    || order.status() == OrderStatus.PREPARING
-                    || order.status() == OrderStatus.READY
-                    || order.status() == OrderStatus.FULFILLING)) {
+                        || order.status() == OrderStatus.PREPARING
+                        || order.status() == OrderStatus.READY
+                        || order.status() == OrderStatus.FULFILLING)) {
             throw new CancellationNotPermittedException(order.status());
         }
         if (!OrderStateMachine.permits(order.status(), OrderStatus.CANCELLED)) {
-            throw new OrderStateMachine.IllegalTransitionException(order.status(),
-                    OrderStatus.CANCELLED);
+            throw new OrderStateMachine.IllegalTransitionException(order.status(), OrderStatus.CANCELLED);
         }
 
-        Optional<Integer> won = orders.transition(tenantId, orderId, order.status(),
-                OrderStatus.CANCELLED, now);
+        Optional<Integer> won = orders.transition(tenantId, orderId, order.status(), OrderStatus.CANCELLED, now);
         if (won.isEmpty()) {
             OrderRow settled = orders.find(tenantId, orderId).orElseThrow();
             throw new StaleOrderException(expectedVersion, settled.version());
         }
 
         int version = requireCallersVersion(expectedVersion, won.get());
-        orders.recordTransition(tenantId, orderId, version, order.status(), OrderStatus.CANCELLED,
-                "CUSTOMER".equals(actorType) ? TransitionTrigger.CUSTOMER_ACTION
-                        : TransitionTrigger.OPERATIONS_ACTION,
-                reasonCode, actorType, actorId, correlationId, now);
+        orders.recordTransition(
+                tenantId,
+                orderId,
+                version,
+                order.status(),
+                OrderStatus.CANCELLED,
+                "CUSTOMER".equals(actorType) ? TransitionTrigger.CUSTOMER_ACTION : TransitionTrigger.OPERATIONS_ACTION,
+                reasonCode,
+                actorType,
+                actorId,
+                correlationId,
+                now);
         orders.cancelTimer(tenantId, orderId, CheckoutService.APPROVAL_TIMER, now);
 
         // With no registry reason the order was still unconfirmed, so the hold was
         // never committed: it goes back, and the tenant carries the cost of an
         // order nobody cooked.
-        OrderOutcome outcome = prepared != null ? prepared : new OrderOutcome(
-                TerminalOutcomeKind.CANCELLED, OutcomeSystemCategory.OTHER, null, null, null,
-                StockDisposition.RELEASE, LiabilityParty.TENANT, CustomerRefund.FULL,
-                reservationCommitted(order), null);
+        OrderOutcome outcome = prepared != null
+                ? prepared
+                : new OrderOutcome(
+                        TerminalOutcomeKind.CANCELLED,
+                        OutcomeSystemCategory.OTHER,
+                        null,
+                        null,
+                        null,
+                        StockDisposition.RELEASE,
+                        LiabilityParty.TENANT,
+                        CustomerRefund.FULL,
+                        reservationCommitted(order),
+                        null);
 
-        applyConsequences(order, OrderStatus.CANCELLED, version, reasonCode, null, actorType,
-                actorId, outcome, now);
-        recordAudit(order, "ordering.order.cancel", actorType, actorId, reasonCode, version,
-                Map.of("fromStatus", order.status().name(),
-                        "systemCategory", outcome.systemCategory().name(),
-                        "stockDisposition", outcome.disposition().name(),
-                        "reservationCommitted", outcome.reservationCommitted()),
-                AuditFact.Outcome.SUCCEEDED, correlationId, now);
+        applyConsequences(order, OrderStatus.CANCELLED, version, reasonCode, null, actorType, actorId, outcome, now);
+        recordAudit(
+                order,
+                "ordering.order.cancel",
+                actorType,
+                actorId,
+                reasonCode,
+                version,
+                Map.of(
+                        "fromStatus",
+                        order.status().name(),
+                        "systemCategory",
+                        outcome.systemCategory().name(),
+                        "stockDisposition",
+                        outcome.disposition().name(),
+                        "reservationCommitted",
+                        outcome.reservationCommitted()),
+                AuditFact.Outcome.SUCCEEDED,
+                correlationId,
+                now);
         return new DecisionResult(true, OrderStatus.CANCELLED, version, null);
     }
 
@@ -644,17 +875,29 @@ public class OrderStateService {
      * commit stock could roll back a confirmation the customer had already been
      * shown.
      */
-    private void applyConsequences(OrderRow order, OrderStatus target, int version,
-            String reasonCode, String decisionChannel, String actorType, String actorId,
-            OrderOutcome outcome, Instant now) {
+    private void applyConsequences(
+            OrderRow order,
+            OrderStatus target,
+            int version,
+            String reasonCode,
+            String decisionChannel,
+            String actorType,
+            String actorId,
+            OrderOutcome outcome,
+            Instant now) {
 
         // ADR 0039: every order ends in exactly one recorded outcome, written in
         // the same transaction as the transition. The table is primary-keyed on
         // the order, so a second attempt fails rather than producing an order with
         // two contradictory endings.
         if (outcome != null) {
-            orders.insertOutcome(order.tenantId(), order.orderId(), outcome,
-                    actorType == null ? "SERVICE" : actorType, actorId, now);
+            orders.insertOutcome(
+                    order.tenantId(),
+                    order.orderId(),
+                    outcome,
+                    actorType == null ? "SERVICE" : actorType,
+                    actorId,
+                    now);
         }
 
         // ADR 0017, and the reason the disposition is recorded rather than acted
@@ -665,11 +908,9 @@ public class OrderStateService {
         // expose. Until it does, the outcome row is the record and the movement is
         // an open item on ADR 0039's checklist rather than a silent no-op.
         if (target.releasesInventory()) {
-            inventoryProcess.enqueueRelease(order.orderId(), order.tenantId(),
-                    order.pricingQuoteId(), now);
+            inventoryProcess.enqueueRelease(order.orderId(), order.tenantId(), order.pricingQuoteId(), now);
         } else if (target == OrderStatus.CONFIRMED) {
-            inventoryProcess.enqueueCommit(order.orderId(), order.tenantId(),
-                    order.pricingQuoteId(), now);
+            inventoryProcess.enqueueCommit(order.orderId(), order.tenantId(), order.pricingQuoteId(), now);
         }
 
         // The ADR 0036 kitchen slot is freed the moment the order stops occupying
@@ -698,38 +939,78 @@ public class OrderStateService {
         // terminal() rather than on a list of statuses, so a terminal status added
         // later cannot be the one somebody forgets.
         if (target == OrderStatus.COMPLETED) {
-            settlements.recordHandover(order.tenantId(), order.orderId(),
-                    actorId == null ? actorType : actorId);
+            settlements.recordHandover(order.tenantId(), order.orderId(), actorId == null ? actorType : actorId);
         } else if (target.terminal()) {
-            settlements.recordTerminalOutcome(order.tenantId(), order.orderId(),
+            settlements.recordTerminalOutcome(
+                    order.tenantId(),
+                    order.orderId(),
                     reasonCode == null ? target.name() : reasonCode,
                     actorId == null ? actorType : actorId);
         }
 
         TenantId tenant = new TenantId(order.tenantId());
         switch (target) {
-            case CONFIRMED -> events.publishEvent(new OrderConfirmed(UUID.randomUUID(), tenant,
-                    order.orderId(), now, order.brandId(), order.locationId(),
-                    order.acceptanceMode(), decisionChannel, now, order.currency(),
-                    order.totalMinor(), target.name(), version));
-            case REJECTED -> events.publishEvent(new OrderRejected(UUID.randomUUID(), tenant,
-                    order.orderId(), now, order.brandId(), order.locationId(), decisionChannel,
-                    reasonCode, target.name(), version));
-            case EXPIRED -> events.publishEvent(new OrderExpired(UUID.randomUUID(), tenant,
-                    order.orderId(), now, order.brandId(), order.locationId(),
-                    order.approvalDeadlineAt(), target.name(), version));
+            case CONFIRMED ->
+                events.publishEvent(new OrderConfirmed(
+                        UUID.randomUUID(),
+                        tenant,
+                        order.orderId(),
+                        now,
+                        order.brandId(),
+                        order.locationId(),
+                        order.acceptanceMode(),
+                        decisionChannel,
+                        now,
+                        order.currency(),
+                        order.totalMinor(),
+                        target.name(),
+                        version));
+            case REJECTED ->
+                events.publishEvent(new OrderRejected(
+                        UUID.randomUUID(),
+                        tenant,
+                        order.orderId(),
+                        now,
+                        order.brandId(),
+                        order.locationId(),
+                        decisionChannel,
+                        reasonCode,
+                        target.name(),
+                        version));
+            case EXPIRED ->
+                events.publishEvent(new OrderExpired(
+                        UUID.randomUUID(),
+                        tenant,
+                        order.orderId(),
+                        now,
+                        order.brandId(),
+                        order.locationId(),
+                        order.approvalDeadlineAt(),
+                        target.name(),
+                        version));
             // ADR 0039 additive fields under ADR 0032. The category, the
             // disposition and the liable party are what a report needs and what a
             // reason code alone cannot give it — and none of the three says
             // anything about a person, which is why they may travel on an event
             // while the internal reason text may not.
-            case CANCELLED -> events.publishEvent(new OrderCancelled(UUID.randomUUID(), tenant,
-                    order.orderId(), now, order.brandId(), order.locationId(), actorType,
-                    reasonCode, order.status().name(), target.name(), version,
-                    outcome == null ? null : outcome.systemCategory().name(),
-                    outcome == null ? null : outcome.disposition().name(),
-                    outcome == null || outcome.liabilityParty() == null
-                            ? null : outcome.liabilityParty().name()));
+            case CANCELLED ->
+                events.publishEvent(new OrderCancelled(
+                        UUID.randomUUID(),
+                        tenant,
+                        order.orderId(),
+                        now,
+                        order.brandId(),
+                        order.locationId(),
+                        actorType,
+                        reasonCode,
+                        order.status().name(),
+                        target.name(),
+                        version,
+                        outcome == null ? null : outcome.systemCategory().name(),
+                        outcome == null ? null : outcome.disposition().name(),
+                        outcome == null || outcome.liabilityParty() == null
+                                ? null
+                                : outcome.liabilityParty().name()));
             default -> {
                 // PREPARING, READY, FULFILLING and COMPLETED have no external
                 // consumer in this slice. They are recorded in the state history
@@ -746,19 +1027,28 @@ public class OrderStateService {
      * that never happened, so an audit failure fails the transition rather than
      * being swallowed.
      */
-    private void recordAudit(OrderRow order, String actionCode, String actorType, String actorId,
-            String reasonCode, int version, Map<String, Object> changed,
-            AuditFact.Outcome outcome, String correlationId, Instant now) {
+    private void recordAudit(
+            OrderRow order,
+            String actionCode,
+            String actorType,
+            String actorId,
+            String reasonCode,
+            int version,
+            Map<String, Object> changed,
+            AuditFact.Outcome outcome,
+            String correlationId,
+            Instant now) {
 
-        ActorRef actor = switch (actorType == null ? "SERVICE" : actorType) {
-            case "USER" -> ActorRef.user(actorId, null);
-            case "SYSTEM_JOB" -> ActorRef.systemJob(actorId == null ? "ordering" : actorId);
-            // A customer is a person, but not a platform user: recording them as
-            // USER would put them in the same population as staff in every audit
-            // query, and "which operator cancelled this" would start returning
-            // customers.
-            default -> ActorRef.service(actorId == null ? "ordering" : actorId);
-        };
+        ActorRef actor =
+                switch (actorType == null ? "SERVICE" : actorType) {
+                    case "USER" -> ActorRef.user(actorId, null);
+                    case "SYSTEM_JOB" -> ActorRef.systemJob(actorId == null ? "ordering" : actorId);
+                    // A customer is a person, but not a platform user: recording them as
+                    // USER would put them in the same population as staff in every audit
+                    // query, and "which operator cancelled this" would start returning
+                    // customers.
+                    default -> ActorRef.service(actorId == null ? "ordering" : actorId);
+                };
 
         audit.record(AuditFact.of(actionCode, AuditClass.BUSINESS)
                 .by(actor)
@@ -776,14 +1066,19 @@ public class OrderStateService {
                 .build());
     }
 
-    private DecisionResult settledOutcome(UUID tenantId, UUID orderId, ApprovalDecisionRow seen,
-            OrderRow order) {
+    private DecisionResult settledOutcome(UUID tenantId, UUID orderId, ApprovalDecisionRow seen, OrderRow order) {
         log.debug("Decision {} on order {} was already recorded", seen.decisionId(), orderId);
-        return new DecisionResult(seen.effective(), order.status(), order.version(),
+        return new DecisionResult(
+                seen.effective(),
+                order.status(),
+                order.version(),
                 orders.findEffectiveDecision(tenantId, orderId).orElse(seen));
     }
 
-    public enum DecisionAction { APPROVE, REJECT }
+    public enum DecisionAction {
+        APPROVE,
+        REJECT
+    }
 
     /**
      * What ordering did with a proposal (ADR 0041).
@@ -792,7 +1087,11 @@ public class OrderStateService {
      * kitchen, minus {@code NOT_WIRED}, which is what the port says when nothing
      * implements it and therefore something this class can never be.
      */
-    public enum ProgressProposal { APPLIED, ALREADY_THERE, REFUSED }
+    public enum ProgressProposal {
+        APPLIED,
+        ALREADY_THERE,
+        REFUSED
+    }
 
     /**
      * @param decisionId stable across retries of one human decision, so the same
@@ -800,17 +1099,23 @@ public class OrderStateService {
      * @param issuedAt   when the operator decided, not when the command arrived;
      *                   the two differ by however long a POS channel was offline
      */
-    public record DecisionCommand(String decisionId, DecisionAction action, String decisionChannel,
-            String actorType, String actorId, String reasonCode, Instant issuedAt,
-            String correlationId) { }
+    public record DecisionCommand(
+            String decisionId,
+            DecisionAction action,
+            String decisionChannel,
+            String actorType,
+            String actorId,
+            String reasonCode,
+            Instant issuedAt,
+            String correlationId) {}
 
     /**
      * @param applied whether this caller's command is the one that moved the order
      * @param effectiveDecision the decision that actually settled it, which may be
      *                          somebody else's
      */
-    public record DecisionResult(boolean applied, OrderStatus status, int orderVersion,
-            ApprovalDecisionRow effectiveDecision) { }
+    public record DecisionResult(
+            boolean applied, OrderStatus status, int orderVersion, ApprovalDecisionRow effectiveDecision) {}
 
     public static class OrderNotFoundException extends RuntimeException {
         public OrderNotFoundException(UUID orderId) {
@@ -843,8 +1148,9 @@ public class OrderStateService {
     public static class CancellationNotPermittedException extends RuntimeException {
         public CancellationNotPermittedException(OrderStatus status) {
             super(("An order that is %s cannot be cancelled in this release: payment, fiscal, POS "
-                    + "and fulfilment consequences are owned by ADR 0039. Create a replacement "
-                    + "order instead.").formatted(status));
+                            + "and fulfilment consequences are owned by ADR 0039. Create a replacement "
+                            + "order instead.")
+                    .formatted(status));
         }
     }
 }

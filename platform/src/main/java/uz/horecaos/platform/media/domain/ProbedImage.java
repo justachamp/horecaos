@@ -15,8 +15,7 @@ package uz.horecaos.platform.media.domain;
  *                              the format's own parser knows what its decoder
  *                              will allocate
  */
-public record ProbedImage(String contentType, int widthPx, int heightPx,
-        int decodedBytesPerPixel) {
+public record ProbedImage(String contentType, int widthPx, int heightPx, int decodedBytesPerPixel) {
 
     public long pixels() {
         return (long) widthPx * heightPx;

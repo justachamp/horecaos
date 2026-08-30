@@ -4,9 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.courier.application.CourierDispatchGate;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore.FleetRow;
@@ -75,8 +73,11 @@ public class InternalFleetAdapter implements InternalFleetPort {
     private final ActiveAssignments assignments;
     private final CourierProximityPort proximity;
 
-    public InternalFleetAdapter(JdbcCourierShiftStore shifts, CourierDispatchGate gate,
-            ActiveAssignments assignments, CourierProximityPort proximity) {
+    public InternalFleetAdapter(
+            JdbcCourierShiftStore shifts,
+            CourierDispatchGate gate,
+            ActiveAssignments assignments,
+            CourierProximityPort proximity) {
         this.shifts = shifts;
         this.gate = gate;
         this.assignments = assignments;
@@ -84,8 +85,7 @@ public class InternalFleetAdapter implements InternalFleetPort {
     }
 
     @Override
-    public List<FleetCandidate> candidates(UUID tenantId, UUID brandId, UUID locationId,
-            int distanceMeters) {
+    public List<FleetCandidate> candidates(UUID tenantId, UUID brandId, UUID locationId, int distanceMeters) {
 
         List<FleetRow> onShift = shifts.fleetOnShiftAt(tenantId, brandId, locationId);
         if (onShift.isEmpty()) {

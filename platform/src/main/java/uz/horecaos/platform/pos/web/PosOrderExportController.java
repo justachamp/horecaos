@@ -1,14 +1,14 @@
 package uz.horecaos.platform.pos.web;
 
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,10 +17,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -57,8 +53,7 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  */
 @RestController
 @RequestMapping("/api/v1/control-plane/tenants/{tenantId}/pos-exports")
-@Tag(name = "POS order exports",
-        description = "Exports to a point of sale, and the ones a person has to settle")
+@Tag(name = "POS order exports", description = "Exports to a point of sale, and the ones a person has to settle")
 public class PosOrderExportController {
 
     private final PosOrderExportService exports;
@@ -66,8 +61,8 @@ public class PosOrderExportController {
     private final CurrentActor currentActor;
     private final java.time.Clock clock;
 
-    public PosOrderExportController(PosOrderExportService exports, AuditRecorder audit,
-            CurrentActor currentActor, java.time.Clock clock) {
+    public PosOrderExportController(
+            PosOrderExportService exports, AuditRecorder audit, CurrentActor currentActor, java.time.Clock clock) {
         this.exports = exports;
         this.audit = audit;
         this.currentActor = currentActor;
@@ -76,11 +71,11 @@ public class PosOrderExportController {
 
     @GetMapping
     @RequiresCapability(Capability.POS_EXPORT_READ)
-    @Operation(summary = "Exports waiting on a decision",
+    @Operation(
+            summary = "Exports waiting on a decision",
             description = "Exports whose outcome the platform could not establish. An empty list is "
                     + "the ordinary state; a growing one means a till or a network is unwell.")
-    Page<ExportView> awaitingOperator(@PathVariable UUID tenantId,
-            @RequestParam(defaultValue = "50") int limit) {
+    Page<ExportView> awaitingOperator(@PathVariable UUID tenantId, @RequestParam(defaultValue = "50") int limit) {
 
         List<ExportView> rows = exports.awaitingOperator(tenantId, Math.min(limit, 200)).stream()
                 .map(PosOrderExportController::toView)
@@ -90,7 +85,8 @@ public class PosOrderExportController {
 
     @GetMapping("/{exportId}/candidates")
     @RequiresCapability(Capability.POS_EXPORT_READ)
-    @Operation(summary = "What the recovery read found",
+    @Operation(
+            summary = "What the recovery read found",
             description = "Provider orders that resemble this export. Resemblance is not identity: "
                     + "unless the provider echoed our own reference, none of these is proof.")
     Page<CandidateView> candidates(@PathVariable UUID tenantId, @PathVariable UUID exportId) {
@@ -102,11 +98,11 @@ public class PosOrderExportController {
 
     @PostMapping("/{exportId}/discovery")
     @RequiresCapability(value = Capability.POS_EXPORT_RESOLVE, mutating = true)
-    @Operation(summary = "Read the provider to find out what happened",
+    @Operation(
+            summary = "Read the provider to find out what happened",
             description = "Side-effect free. It searches the provider and attaches what it found; "
                     + "it never re-sends the order.")
-    ResponseEntity<Map<String, Object>> discover(
-            @PathVariable UUID tenantId, @PathVariable UUID exportId) {
+    ResponseEntity<Map<String, Object>> discover(@PathVariable UUID tenantId, @PathVariable UUID exportId) {
 
         var outcome = exports.discoverOutcome(tenantId, exportId);
         return ResponseEntity.ok(Map.of(
@@ -117,18 +113,23 @@ public class PosOrderExportController {
 
     @PostMapping("/{exportId}/resolution")
     @RequiresCapability(value = Capability.POS_EXPORT_RESOLVE, mutating = true)
-    @Operation(summary = "Settle an export a person had to decide",
+    @Operation(
+            summary = "Settle an export a person had to decide",
             description = "LANDED requires the provider order it landed as, because everything "
                     + "downstream — the fiscal write-back, the reconciliation — keys on it. "
                     + "ABSENT permits one further export attempt. ABANDON does not.")
     ResponseEntity<Map<String, Object>> resolve(
-            @PathVariable UUID tenantId, @PathVariable UUID exportId,
-            @Valid @RequestBody ResolutionRequest request) {
+            @PathVariable UUID tenantId, @PathVariable UUID exportId, @Valid @RequestBody ResolutionRequest request) {
 
         boolean changed;
         try {
-            changed = exports.settleByOperator(tenantId, exportId, request.decision(),
-                    request.externalOrderId(), request.reason(), currentActor.get().subject());
+            changed = exports.settleByOperator(
+                    tenantId,
+                    exportId,
+                    request.decision(),
+                    request.externalOrderId(),
+                    request.reason(),
+                    currentActor.get().subject());
         } catch (IllegalArgumentException incomplete) {
             throw new ApiException(ErrorCode.INVALID_REQUEST, incomplete.getMessage());
         }
@@ -144,32 +145,42 @@ public class PosOrderExportController {
                     .target("PosOrderExport", exportId)
                     .because(request.reason())
                     .changed(Map.of(
-                            "decision", request.decision().name(),
-                            "externalOrderId", request.externalOrderId() == null
-                                    ? "" : request.externalOrderId()))
+                            "decision",
+                            request.decision().name(),
+                            "externalOrderId",
+                            request.externalOrderId() == null ? "" : request.externalOrderId()))
                     .usingCapability(Capability.POS_EXPORT_RESOLVE.code())
                     .correlatedBy(exportId.toString())
                     .occurredAt(clock.instant())
                     .build());
         }
 
-        return ResponseEntity.ok(Map.of(
-                "changed", changed,
-                "outcome", changed ? "resolved" : "no_change"));
+        return ResponseEntity.ok(Map.of("changed", changed, "outcome", changed ? "resolved" : "no_change"));
     }
 
     private static ExportView toView(JdbcPosExportStore.ExportRow row) {
-        return new ExportView(row.id(), row.orderId(), row.state().name(), row.attemptCount(),
-                row.correlationReference(), row.externalOrderId(), row.externalVenueReference(),
+        return new ExportView(
+                row.id(),
+                row.orderId(),
+                row.state().name(),
+                row.attemptCount(),
+                row.correlationReference(),
+                row.externalOrderId(),
+                row.externalVenueReference(),
                 row.requestedAt().toString());
     }
 
     private static CandidateView toView(ExportCandidate candidate) {
         return new CandidateView(
-                candidate.externalOrderId(), candidate.externalStatus(),
-                candidate.externalCreatedAt() == null ? null : candidate.externalCreatedAt().toString(),
-                candidate.correlationEchoed(), candidate.phoneMatches(),
-                candidate.fingerprintMatches(), candidate.timeDeltaSeconds());
+                candidate.externalOrderId(),
+                candidate.externalStatus(),
+                candidate.externalCreatedAt() == null
+                        ? null
+                        : candidate.externalCreatedAt().toString(),
+                candidate.correlationEchoed(),
+                candidate.phoneMatches(),
+                candidate.fingerprintMatches(),
+                candidate.timeDeltaSeconds());
     }
 
     /**
@@ -179,12 +190,18 @@ public class PosOrderExportController {
     public record ResolutionRequest(
             @NotNull OperatorDecision decision,
             @Size(max = 64) String externalOrderId,
-            @NotBlank @Size(max = 1000) String reason) { }
+            @NotBlank @Size(max = 1000) String reason) {}
 
     /** Carries no customer detail. The order id is the way to an authorized read. */
     public record ExportView(
-            UUID exportId, UUID orderId, String state, int attemptCount,
-            String correlationReference, String externalOrderId, String venue, String requestedAt) { }
+            UUID exportId,
+            UUID orderId,
+            String state,
+            int attemptCount,
+            String correlationReference,
+            String externalOrderId,
+            String venue,
+            String requestedAt) {}
 
     /**
      * @param correlationEchoed the only field here that decides anything. Where it
@@ -192,7 +209,11 @@ public class PosOrderExportController {
      *                          where it is false the rest is resemblance
      */
     public record CandidateView(
-            String externalOrderId, String externalStatus, String externalCreatedAt,
-            boolean correlationEchoed, boolean phoneMatches, boolean fingerprintMatches,
-            Integer timeDeltaSeconds) { }
+            String externalOrderId,
+            String externalStatus,
+            String externalCreatedAt,
+            boolean correlationEchoed,
+            boolean phoneMatches,
+            boolean fingerprintMatches,
+            Integer timeDeltaSeconds) {}
 }

@@ -1,17 +1,15 @@
 package uz.horecaos.platform.payments.infrastructure.persistence;
 
+import static uz.horecaos.platform.payments.infrastructure.persistence.PaymentTimestamps.utc;
+
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.payments.domain.CallbackKind;
 import uz.horecaos.platform.payments.domain.PaymentProviderType;
-
-import static uz.horecaos.platform.payments.infrastructure.persistence.PaymentTimestamps.utc;
 
 /**
  * The provider-shaped inbox (ADR 0005, ADR 0013).
@@ -43,11 +41,20 @@ public class JdbcProviderCallbackStore {
      *
      * @return true when this arrival had not been seen before
      */
-    public boolean record(UUID id, UUID tenantId, PaymentProviderType providerType,
-            UUID merchantBindingId, CallbackKind kind, String providerReference,
-            String requestBodyHash, boolean signatureValid, UUID attemptId,
-            String responseCode, Instant receivedAt,
-            String protectedRequestReference, String protectedResponseReference) {
+    public boolean record(
+            UUID id,
+            UUID tenantId,
+            PaymentProviderType providerType,
+            UUID merchantBindingId,
+            CallbackKind kind,
+            String providerReference,
+            String requestBodyHash,
+            boolean signatureValid,
+            UUID attemptId,
+            String responseCode,
+            Instant receivedAt,
+            String protectedRequestReference,
+            String protectedResponseReference) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("id", id);
         parameters.put("tenantId", tenantId);
@@ -75,9 +82,7 @@ public class JdbcProviderCallbackStore {
                     :responseCode, :receivedAt,
                     :protectedRequest, :protectedResponse)
                 ON CONFLICT ON CONSTRAINT uq_provider_callback_delivery DO NOTHING
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
 
         return inserted == 1;
     }
@@ -96,7 +101,8 @@ public class JdbcProviderCallbackStore {
                 WHERE tenant_id = :tenantId AND merchant_binding_id = :bindingId
                   AND NOT signature_valid AND received_at >= :since
                 """)
-                .param("tenantId", tenantId).param("bindingId", merchantBindingId)
+                .param("tenantId", tenantId)
+                .param("bindingId", merchantBindingId)
                 .param("since", utc(since))
                 .query(Integer.class)
                 .single();

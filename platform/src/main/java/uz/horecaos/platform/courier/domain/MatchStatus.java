@@ -2,7 +2,6 @@ package uz.horecaos.platform.courier.domain;
 
 /** How a partner invoice line reconciles against HorecaOS's shipments (ADR 0042). */
 public enum MatchStatus {
-
     PENDING,
     MATCHED,
 

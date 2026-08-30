@@ -5,10 +5,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.notifications.domain.NotificationStatus;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore.AttemptRow;
@@ -41,7 +39,8 @@ public class NotificationQueryService {
 
     @Transactional(readOnly = true)
     public Optional<NotificationDetail> detail(UUID tenantId, UUID notificationId) {
-        return notifications.find(tenantId, notificationId)
+        return notifications
+                .find(tenantId, notificationId)
                 .map(row -> new NotificationDetail(row, attemptDetails(tenantId, row.id())));
     }
 
@@ -81,8 +80,7 @@ public class NotificationQueryService {
 
     private List<AttemptDetail> attemptDetails(UUID tenantId, UUID notificationId) {
         return notifications.attempts(tenantId, notificationId).stream()
-                .map(attempt -> new AttemptDetail(attempt,
-                        notifications.statusEvents(tenantId, attempt.id())))
+                .map(attempt -> new AttemptDetail(attempt, notifications.statusEvents(tenantId, attempt.id())))
                 .toList();
     }
 
@@ -93,7 +91,7 @@ public class NotificationQueryService {
      * needs {@code CUSTOMER_PII_REVEAL} and a stated purpose in the customers
      * module, which is where that decision belongs.
      */
-    public record NotificationDetail(NotificationRow notification, List<AttemptDetail> attempts) { }
+    public record NotificationDetail(NotificationRow notification, List<AttemptDetail> attempts) {}
 
-    public record AttemptDetail(AttemptRow attempt, List<StatusEventRow> statusEvents) { }
+    public record AttemptDetail(AttemptRow attempt, List<StatusEventRow> statusEvents) {}
 }

@@ -7,12 +7,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.loyalty.api.PointsRedemptionPort;
 import uz.horecaos.platform.loyalty.domain.AccountStatus;
 import uz.horecaos.platform.loyalty.domain.EntryType;
@@ -82,8 +80,7 @@ public class PointsRedemptionService implements PointsRedemptionPort {
     private final LoyaltyPolicyService policies;
     private final Clock clock;
 
-    public PointsRedemptionService(JdbcLoyaltyStore store, LoyaltyPolicyService policies,
-            Clock clock) {
+    public PointsRedemptionService(JdbcLoyaltyStore store, LoyaltyPolicyService policies, Clock clock) {
         this.store = store;
         this.policies = policies;
         this.clock = clock;
@@ -92,36 +89,33 @@ public class PointsRedemptionService implements PointsRedemptionPort {
     @Override
     @Transactional(readOnly = true)
     public RedemptionOffer quote(RedemptionQuery query) {
-        Optional<AccountRow> account = store.findAccount(
-                query.tenantId(), query.brandId(), query.customerAccountId());
+        Optional<AccountRow> account = store.findAccount(query.tenantId(), query.brandId(), query.customerAccountId());
         if (account.isEmpty()) {
             return new RedemptionOffer(null, 0L, 0L, query.currency(), "NO_ACCOUNT");
         }
         AccountRow row = account.get();
 
         Instant now = clock.instant();
-        Optional<RedemptionPolicyRow> policy = policies.redemptionPolicy(
-                query.tenantId(), query.brandId(), now);
+        Optional<RedemptionPolicyRow> policy = policies.redemptionPolicy(query.tenantId(), query.brandId(), now);
         if (policy.isEmpty()) {
             // No policy is not a permissive default. Redemption is enabled for a
             // brand by a deliberate act, and until then the answer is no.
-            return new RedemptionOffer(row.id(), row.balanceMinor(), 0L, row.currency(),
-                    "REDEMPTION_NOT_ENABLED");
+            return new RedemptionOffer(row.id(), row.balanceMinor(), 0L, row.currency(), "REDEMPTION_NOT_ENABLED");
         }
         RedemptionPolicyRow rules = policy.get();
 
-        if (!rules.allowedChannels().isEmpty()
-                && !rules.allowedChannels().contains(query.channelCode())) {
-            return new RedemptionOffer(row.id(), row.balanceMinor(), 0L, row.currency(),
-                    "CHANNEL_NOT_ELIGIBLE");
+        if (!rules.allowedChannels().isEmpty() && !rules.allowedChannels().contains(query.channelCode())) {
+            return new RedemptionOffer(row.id(), row.balanceMinor(), 0L, row.currency(), "CHANNEL_NOT_ELIGIBLE");
         }
         if (row.status() != AccountStatus.ACTIVE) {
-            return new RedemptionOffer(row.id(), row.balanceMinor(), 0L, row.currency(),
-                    "ACCOUNT_NOT_ACTIVE");
+            return new RedemptionOffer(row.id(), row.balanceMinor(), 0L, row.currency(), "ACCOUNT_NOT_ACTIVE");
         }
 
-        long cap = RedemptionLimit.maximumRedeemable(query.orderTotalMinor(),
-                query.deliveryFeeMinor(), rules.maxShareBasisPoints(), rules.minOrderMinor(),
+        long cap = RedemptionLimit.maximumRedeemable(
+                query.orderTotalMinor(),
+                query.deliveryFeeMinor(),
+                rules.maxShareBasisPoints(),
+                rules.minOrderMinor(),
                 rules.excludesDeliveryFee());
 
         // Spendable, not the balance. A lot inside its earn delay is in the
@@ -130,8 +124,7 @@ public class PointsRedemptionService implements PointsRedemptionPort {
         long spendable = store.spendableMinor(query.tenantId(), row.id(), now);
 
         long maximum = Math.min(cap, spendable);
-        String refusal = maximum > 0 ? null
-                : (cap == 0 ? "ORDER_NOT_ELIGIBLE" : "INSUFFICIENT_BALANCE");
+        String refusal = maximum > 0 ? null : (cap == 0 ? "ORDER_NOT_ELIGIBLE" : "INSUFFICIENT_BALANCE");
         return new RedemptionOffer(row.id(), spendable, maximum, row.currency(), refusal);
     }
 
@@ -140,42 +133,40 @@ public class PointsRedemptionService implements PointsRedemptionPort {
     public PointsHold reserve(ReserveCommand command) {
         Instant now = clock.instant();
 
-        AccountRow account = store.findAccount(command.tenantId(), command.brandId(),
-                        command.customerAccountId())
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "The customer holds no points account at this brand"));
+        AccountRow account = store.findAccount(command.tenantId(), command.brandId(), command.customerAccountId())
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.RESOURCE_NOT_FOUND, "The customer holds no points account at this brand"));
 
         OrderFacts order = store.orderFacts(command.tenantId(), command.orderId())
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "The order does not exist"));
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "The order does not exist"));
 
         // Non-transferability, checked against the order rather than the request.
-        if (order.customerAccountId() == null
-                || !order.customerAccountId().equals(account.customerAccountId())) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "Points are redeemable only against their own customer's order");
+        if (order.customerAccountId() == null || !order.customerAccountId().equals(account.customerAccountId())) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "Points are redeemable only against their own customer's order");
         }
         // The cross-brand rule, at the one place a checkout could cross it.
         if (!order.brandId().equals(account.brandId())) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "Points earned at one brand cannot be spent at another");
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "Points earned at one brand cannot be spent at another");
         }
         if (!order.currency().equalsIgnoreCase(account.currency())) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "The order and the points account are in different currencies");
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "The order and the points account are in different currencies");
         }
 
-        RedemptionPolicyRow policy = policies
-                .redemptionPolicy(command.tenantId(), command.brandId(), now)
-                .orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_FAILED,
-                        "Redemption is not enabled for this brand"));
+        RedemptionPolicyRow policy = policies.redemptionPolicy(command.tenantId(), command.brandId(), now)
+                .orElseThrow(() ->
+                        new ApiException(ErrorCode.VALIDATION_FAILED, "Redemption is not enabled for this brand"));
 
-        long cap = RedemptionLimit.maximumRedeemable(order.totalMinor(), order.feeMinor(),
-                policy.maxShareBasisPoints(), policy.minOrderMinor(),
+        long cap = RedemptionLimit.maximumRedeemable(
+                order.totalMinor(),
+                order.feeMinor(),
+                policy.maxShareBasisPoints(),
+                policy.minOrderMinor(),
                 policy.excludesDeliveryFee());
         if (command.amountMinor() <= 0 || command.amountMinor() > cap) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "The redemption exceeds what this order permits");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "The redemption exceeds what this order permits");
         }
 
         // The lots, then the debit. The debit is the gate: if it does not match a
@@ -184,8 +175,7 @@ public class PointsRedemptionService implements PointsRedemptionPort {
         List<LotConsumption> plan;
         try {
             plan = LotConsumption.plan(
-                    store.availableLots(command.tenantId(), account.id(), now),
-                    command.amountMinor());
+                    store.availableLots(command.tenantId(), account.id(), now), command.amountMinor());
         } catch (LotConsumption.InsufficientBalanceException shortfall) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "INSUFFICIENT_BALANCE");
         }
@@ -197,20 +187,27 @@ public class PointsRedemptionService implements PointsRedemptionPort {
         }
 
         UUID reservationId = UUID.randomUUID();
-        store.insertReservation(new ReservationRow(reservationId, command.tenantId(), account.id(),
-                        command.orderId(), command.tenderId(), command.amountMinor(),
-                        ReservationStatus.HELD, now.plus(HOLD_LIFETIME), 1),
-                command.idempotencyKey(), now);
+        store.insertReservation(
+                new ReservationRow(
+                        reservationId,
+                        command.tenantId(),
+                        account.id(),
+                        command.orderId(),
+                        command.tenderId(),
+                        command.amountMinor(),
+                        ReservationStatus.HELD,
+                        now.plus(HOLD_LIFETIME),
+                        1),
+                command.idempotencyKey(),
+                now);
 
         long running = account.balanceMinor();
         for (LotConsumption consumption : plan) {
-            if (!store.consumeLot(command.tenantId(), consumption.lotId(),
-                    consumption.amountMinor(), now)) {
-                throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
-                        "A lot was consumed by another redemption");
+            if (!store.consumeLot(command.tenantId(), consumption.lotId(), consumption.amountMinor(), now)) {
+                throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "A lot was consumed by another redemption");
             }
-            store.recordReservationLot(reservationId, consumption.lotId(), command.tenantId(),
-                    consumption.amountMinor());
+            store.recordReservationLot(
+                    reservationId, consumption.lotId(), command.tenantId(), consumption.amountMinor());
 
             running -= consumption.amountMinor();
             // One entry per lot. A redemption spanning three lots is three
@@ -224,15 +221,28 @@ public class PointsRedemptionService implements PointsRedemptionPort {
             // already happened: if the argument above ever stops holding, the
             // failure has to be this transaction rolling back, not a spent
             // balance with no redemption behind it.
-            store.requireEntry(new JdbcLoyaltyStore.NewEntry(UUID.randomUUID(), command.tenantId(),
-                    account.id(), EntryType.REDEMPTION, -consumption.amountMinor(), running,
-                    consumption.lotId(), command.orderId(), command.tenderId(), null, null,
-                    "ORDER_REDEMPTION", command.actor(), null,
-                    command.idempotencyKey() + ":" + consumption.lotId(), now), now);
+            store.requireEntry(
+                    new JdbcLoyaltyStore.NewEntry(
+                            UUID.randomUUID(),
+                            command.tenantId(),
+                            account.id(),
+                            EntryType.REDEMPTION,
+                            -consumption.amountMinor(),
+                            running,
+                            consumption.lotId(),
+                            command.orderId(),
+                            command.tenderId(),
+                            null,
+                            null,
+                            "ORDER_REDEMPTION",
+                            command.actor(),
+                            null,
+                            command.idempotencyKey() + ":" + consumption.lotId(),
+                            now),
+                    now);
         }
 
-        return new PointsHold(reservationId, account.id(), command.amountMinor(), running,
-                plan.size());
+        return new PointsHold(reservationId, account.id(), command.amountMinor(), running, plan.size());
     }
 
     /**
@@ -259,14 +269,15 @@ public class PointsRedemptionService implements PointsRedemptionPort {
         // No entry. The points left the balance when the hold was taken, and
         // writing a second debit here would double-count the redemption on every
         // report that sums the ledger.
-        if (!store.transitionReservation(tenantId, reservation.id(), ReservationStatus.HELD,
-                ReservationStatus.SETTLED, now)) {
+        if (!store.transitionReservation(
+                tenantId, reservation.id(), ReservationStatus.HELD, ReservationStatus.SETTLED, now)) {
             // The hold moved between the read above and this statement — the sweep
             // released it, or a concurrent settlement won. Failing here rolls the
             // caller's transaction back, which is the point: a settlement that
             // claims to be whole while one of its tenders never settled is worse
             // than a handover that refuses.
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
                     "The points hold for that tender was released or settled concurrently");
         }
         store.clearHold(tenantId, reservation.accountId(), reservation.amountMinor(), now);
@@ -284,32 +295,37 @@ public class PointsRedemptionService implements PointsRedemptionPort {
     @Transactional
     public void release(UUID tenantId, UUID tenderId, String reasonCode, String actor) {
         ReservationRow reservation = store.findReservationByTender(tenantId, tenderId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No points hold exists for that tender"));
+                .orElseThrow(
+                        () -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No points hold exists for that tender"));
         Instant now = clock.instant();
 
-        if (!store.transitionReservation(tenantId, reservation.id(), ReservationStatus.HELD,
-                ReservationStatus.RELEASED, now)) {
+        if (!store.transitionReservation(
+                tenantId, reservation.id(), ReservationStatus.HELD, ReservationStatus.RELEASED, now)) {
             // Somebody else released or settled it first. Returning the points
             // again would credit them twice.
             return;
         }
         // The hold is released along with the points, which is why the second
         // amount is not zero: reserved_minor comes down by what was held.
-        returnPoints(tenantId, reservation, reservation.amountMinor(), EntryType.RELEASE,
-                reasonCode, actor, now, reservation.amountMinor());
+        returnPoints(
+                tenantId,
+                reservation,
+                reservation.amountMinor(),
+                EntryType.RELEASE,
+                reasonCode,
+                actor,
+                now,
+                reservation.amountMinor());
     }
 
     @Override
     @Transactional
-    public void reverse(UUID tenantId, UUID tenderId, long amountMinor, String reasonCode,
-            String actor) {
+    public void reverse(UUID tenantId, UUID tenderId, long amountMinor, String reasonCode, String actor) {
         ReservationRow reservation = store.findReservationByTender(tenantId, tenderId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No points were tendered on that tender"));
+                .orElseThrow(
+                        () -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No points were tendered on that tender"));
         if (reservation.status() != ReservationStatus.SETTLED) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
-                    "Only a settled points tender can be reversed");
+            throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "Only a settled points tender can be reversed");
         }
 
         // A refund never returns more than the tender settled. This is the cap
@@ -319,18 +335,16 @@ public class PointsRedemptionService implements PointsRedemptionPort {
         long alreadyReturned = returnedSoFar(tenantId, tenderId);
         long refundable = reservation.amountMinor() - alreadyReturned;
         if (amountMinor <= 0 || amountMinor > refundable) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "A points tender refunds at most what it settled");
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A points tender refunds at most what it settled");
         }
 
         Instant now = clock.instant();
         // Nothing is held any more — the tender settled — so no hold comes down.
-        returnPoints(tenantId, reservation, amountMinor, EntryType.REVERSAL, reasonCode, actor,
-                now, 0L);
+        returnPoints(tenantId, reservation, amountMinor, EntryType.REVERSAL, reasonCode, actor, now, 0L);
 
         if (amountMinor == refundable) {
-            store.transitionReservation(tenantId, reservation.id(), ReservationStatus.SETTLED,
-                    ReservationStatus.REVERSED, now);
+            store.transitionReservation(
+                    tenantId, reservation.id(), ReservationStatus.SETTLED, ReservationStatus.REVERSED, now);
         }
     }
 
@@ -338,8 +352,7 @@ public class PointsRedemptionService implements PointsRedemptionPort {
      * A lot the points came back to that cannot keep them, and the key of the
      * entry that returned them, from which the closing entry's key is derived.
      */
-    private record ReturnedLot(UUID lotId, String returnKey) {
-    }
+    private record ReturnedLot(UUID lotId, String returnKey) {}
 
     /**
      * Puts points back on the lots they came from, at their original expiry, and
@@ -393,14 +406,19 @@ public class PointsRedemptionService implements PointsRedemptionPort {
      *                     frees — the whole hold on a release, nothing on a
      *                     reversal, whose tender already settled
      */
-    private void returnPoints(UUID tenantId, ReservationRow reservation, long amountMinor,
-            EntryType entryType, String reasonCode, String actor, Instant now,
+    private void returnPoints(
+            UUID tenantId,
+            ReservationRow reservation,
+            long amountMinor,
+            EntryType entryType,
+            String reasonCode,
+            String actor,
+            Instant now,
             long releasedHold) {
 
         AccountRow account = store.findAccountById(tenantId, reservation.accountId())
                 .orElseThrow(() -> new IllegalStateException(
-                        "The hold names an account that does not exist: "
-                                + reservation.accountId()));
+                        "The hold names an account that does not exist: " + reservation.accountId()));
         boolean closed = account.status() == AccountStatus.CLOSED;
 
         // Read before anything moves, because the guard at the end of this method
@@ -428,22 +446,36 @@ public class PointsRedemptionService implements PointsRedemptionPort {
         for (int index = taken.size() - 1; index >= 0 && outstanding > 0; index--) {
             LotConsumption consumption = taken.get(index);
             long returned = Math.min(outstanding, consumption.amountMinor());
-            JdbcLoyaltyStore.RestoredLot restored =
-                    store.restoreLot(tenantId, consumption.lotId(), returned, now);
+            JdbcLoyaltyStore.RestoredLot restored = store.restoreLot(tenantId, consumption.lotId(), returned, now);
 
             running += returned;
-            String key = entryType.name() + ":" + reservation.tenderId() + ":"
-                    + consumption.lotId() + ":" + returned + ":" + sequence++;
+            String key = entryType.name() + ":" + reservation.tenderId() + ":" + consumption.lotId() + ":" + returned
+                    + ":" + sequence++;
             // The credit below is this entry's other half, and the two are one
             // act. Discarding this answer is what turned a colliding key into a
             // balance the ledger could not explain, so a refusal rolls the whole
             // return back rather than moving value silently. It is the store's
             // rule now rather than this method's, because the same answer was
             // being discarded in eight other places.
-            store.requireEntry(new JdbcLoyaltyStore.NewEntry(UUID.randomUUID(), tenantId,
-                    reservation.accountId(), entryType, returned, running, consumption.lotId(),
-                    reservation.orderId(), reservation.tenderId(), null, null, reasonCode, actor,
-                    null, key, now), now);
+            store.requireEntry(
+                    new JdbcLoyaltyStore.NewEntry(
+                            UUID.randomUUID(),
+                            tenantId,
+                            reservation.accountId(),
+                            entryType,
+                            returned,
+                            running,
+                            consumption.lotId(),
+                            reservation.orderId(),
+                            reservation.tenderId(),
+                            null,
+                            null,
+                            reasonCode,
+                            actor,
+                            null,
+                            key,
+                            now),
+                    now);
             credited = Math.addExact(credited, returned);
 
             // A closed account first, because forfeiture is the stronger fact: on
@@ -458,8 +490,7 @@ public class PointsRedemptionService implements PointsRedemptionPort {
         }
 
         if (outstanding > 0) {
-            throw new IllegalStateException(
-                    "The hold's lots do not account for the amount being returned");
+            throw new IllegalStateException("The hold's lots do not account for the amount being returned");
         }
 
         // What the entries say, not what the caller asked for. They are equal
@@ -468,12 +499,10 @@ public class PointsRedemptionService implements PointsRedemptionPort {
         store.creditBalance(tenantId, reservation.accountId(), credited, releasedHold, now);
 
         for (ReturnedLot lapse : lapsed) {
-            running = Math.subtractExact(running,
-                    expireOnReturn(tenantId, reservation, lapse, running, now));
+            running = Math.subtractExact(running, expireOnReturn(tenantId, reservation, lapse, running, now));
         }
         for (ReturnedLot lost : unclaimable) {
-            running = Math.subtractExact(running,
-                    forfeitOnReturn(tenantId, reservation, lost, closed, running, now));
+            running = Math.subtractExact(running, forfeitOnReturn(tenantId, reservation, lost, closed, running, now));
         }
 
         // The invariant the ledger could not state for itself. expireLots guards
@@ -489,16 +518,17 @@ public class PointsRedemptionService implements PointsRedemptionPort {
         // adding to the problem.
         long unbackedAfter = store.unbackedValueMinor(tenantId, reservation.accountId());
         if (unbackedAfter > unbackedBefore) {
-            throw new IllegalStateException(
-                    "This return would add " + (unbackedAfter - unbackedBefore)
-                            + " to value that can neither be spent nor expired, on account "
-                            + reservation.accountId());
+            throw new IllegalStateException("This return would add " + (unbackedAfter - unbackedBefore)
+                    + " to value that can neither be spent nor expired, on account "
+                    + reservation.accountId());
         }
         if (unbackedBefore > 0) {
-            log.warn("Points account {} already carries {} on lots that can neither be spent nor "
-                    + "expired. This return did not add to it and is not the place to refuse; "
-                    + "the expiry sweep's repair arm is what clears it.",
-                    reservation.accountId(), unbackedBefore);
+            log.warn(
+                    "Points account {} already carries {} on lots that can neither be spent nor "
+                            + "expired. This return did not add to it and is not the place to refuse; "
+                            + "the expiry sweep's repair arm is what clears it.",
+                    reservation.accountId(),
+                    unbackedBefore);
         }
     }
 
@@ -508,36 +538,47 @@ public class PointsRedemptionService implements PointsRedemptionPort {
      * @return what was destroyed, so the caller's running balance stays the
      *         balance the next entry will claim
      */
-    private long expireOnReturn(UUID tenantId, ReservationRow reservation, ReturnedLot lapse,
-            long running, Instant now) {
+    private long expireOnReturn(
+            UUID tenantId, ReservationRow reservation, ReturnedLot lapse, long running, Instant now) {
 
         long remaining = store.findLot(tenantId, lapse.lotId())
                 .map(JdbcLoyaltyStore.LotRow::remainingMinor)
-                .orElseThrow(() -> new IllegalStateException(
-                        "The lot the points were returned to has gone: " + lapse.lotId()));
+                .orElseThrow(() ->
+                        new IllegalStateException("The lot the points were returned to has gone: " + lapse.lotId()));
         if (remaining <= 0) {
             return 0L;
         }
         if (!store.expireLot(tenantId, lapse.lotId(), remaining, now)) {
-            throw new IllegalStateException(
-                    "The lapsed lot moved inside the returning transaction: " + lapse.lotId());
+            throw new IllegalStateException("The lapsed lot moved inside the returning transaction: " + lapse.lotId());
         }
         if (!store.destroyBalance(tenantId, reservation.accountId(), remaining, now)) {
-            throw new IllegalStateException(
-                    "A lapsed lot holds more than its account's balance: " + lapse.lotId());
+            throw new IllegalStateException("A lapsed lot holds more than its account's balance: " + lapse.lotId());
         }
         // Derived from the return key, which requireEntry has just proved was
         // free, so this cannot collide either. Required all the same: the lot has
         // been closed and the balance reduced two statements ago.
-        store.requireEntry(new JdbcLoyaltyStore.NewEntry(UUID.randomUUID(), tenantId,
-                reservation.accountId(), EntryType.EXPIRY, -remaining,
-                Math.subtractExact(running, remaining),
-                lapse.lotId(), reservation.orderId(), reservation.tenderId(), null, null,
-                // Distinct from the sweep's LOT_EXPIRED so a liability report can
-                // tell points that lapsed on the shelf from points that lapsed
-                // while an order held them, which is a different operational story.
-                "LOT_EXPIRED_ON_RETURN", "loyalty-return", null,
-                "EXPIRY:" + lapse.returnKey(), now), now);
+        store.requireEntry(
+                new JdbcLoyaltyStore.NewEntry(
+                        UUID.randomUUID(),
+                        tenantId,
+                        reservation.accountId(),
+                        EntryType.EXPIRY,
+                        -remaining,
+                        Math.subtractExact(running, remaining),
+                        lapse.lotId(),
+                        reservation.orderId(),
+                        reservation.tenderId(),
+                        null,
+                        null,
+                        // Distinct from the sweep's LOT_EXPIRED so a liability report can
+                        // tell points that lapsed on the shelf from points that lapsed
+                        // while an order held them, which is a different operational story.
+                        "LOT_EXPIRED_ON_RETURN",
+                        "loyalty-return",
+                        null,
+                        "EXPIRY:" + lapse.returnKey(),
+                        now),
+                now);
         return remaining;
     }
 
@@ -568,13 +609,18 @@ public class PointsRedemptionService implements PointsRedemptionPort {
      * @return what was destroyed, so the caller's running balance stays the
      *         balance the next entry will claim
      */
-    private long forfeitOnReturn(UUID tenantId, ReservationRow reservation, ReturnedLot lost,
-            boolean accountClosed, long running, Instant now) {
+    private long forfeitOnReturn(
+            UUID tenantId,
+            ReservationRow reservation,
+            ReturnedLot lost,
+            boolean accountClosed,
+            long running,
+            Instant now) {
 
         long remaining = store.findLot(tenantId, lost.lotId())
                 .map(JdbcLoyaltyStore.LotRow::remainingMinor)
-                .orElseThrow(() -> new IllegalStateException(
-                        "The lot the points were returned to has gone: " + lost.lotId()));
+                .orElseThrow(() ->
+                        new IllegalStateException("The lot the points were returned to has gone: " + lost.lotId()));
         if (remaining <= 0) {
             return 0L;
         }
@@ -583,17 +629,29 @@ public class PointsRedemptionService implements PointsRedemptionPort {
                     "The forfeited lot moved inside the returning transaction: " + lost.lotId());
         }
         if (!store.destroyBalance(tenantId, reservation.accountId(), remaining, now)) {
-            throw new IllegalStateException(
-                    "A forfeited lot holds more than its account's balance: " + lost.lotId());
+            throw new IllegalStateException("A forfeited lot holds more than its account's balance: " + lost.lotId());
         }
         // As in expireOnReturn: derived from a key just proved free, and required
         // rather than read because the movement is already behind it.
-        store.requireEntry(new JdbcLoyaltyStore.NewEntry(UUID.randomUUID(), tenantId,
-                reservation.accountId(), EntryType.FORFEITURE, -remaining,
-                Math.subtractExact(running, remaining),
-                lost.lotId(), reservation.orderId(), reservation.tenderId(), null, null,
-                accountClosed ? "RETURNED_TO_CLOSED_ACCOUNT" : "RETURNED_TO_FORFEITED_LOT",
-                "loyalty-return", null, "FORFEITURE:" + lost.returnKey(), now), now);
+        store.requireEntry(
+                new JdbcLoyaltyStore.NewEntry(
+                        UUID.randomUUID(),
+                        tenantId,
+                        reservation.accountId(),
+                        EntryType.FORFEITURE,
+                        -remaining,
+                        Math.subtractExact(running, remaining),
+                        lost.lotId(),
+                        reservation.orderId(),
+                        reservation.tenderId(),
+                        null,
+                        null,
+                        accountClosed ? "RETURNED_TO_CLOSED_ACCOUNT" : "RETURNED_TO_FORFEITED_LOT",
+                        "loyalty-return",
+                        null,
+                        "FORFEITURE:" + lost.returnKey(),
+                        now),
+                now);
         return remaining;
     }
 
@@ -613,12 +671,12 @@ public class PointsRedemptionService implements PointsRedemptionPort {
      */
     private ReservationRow requireHold(UUID tenantId, UUID tenderId) {
         ReservationRow reservation = store.findReservationByTender(tenantId, tenderId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "No points hold exists for that tender"));
+                .orElseThrow(
+                        () -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No points hold exists for that tender"));
         if (reservation.status() != ReservationStatus.HELD) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
-                    "The points hold for that tender is " + reservation.status()
-                            + " and no longer holds anything");
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "The points hold for that tender is " + reservation.status() + " and no longer holds anything");
         }
         return reservation;
     }

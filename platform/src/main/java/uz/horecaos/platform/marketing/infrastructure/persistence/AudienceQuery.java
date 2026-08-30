@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-
 import uz.horecaos.platform.marketing.domain.AudiencePredicate;
 import uz.horecaos.platform.marketing.domain.PredicateOperator;
 import uz.horecaos.platform.marketing.domain.PredicateType;
@@ -33,11 +32,10 @@ final class AudienceQuery {
     /** {@code MM-DD}, matching the derived selector's stored shape. */
     private static final DateTimeFormatter MONTH_DAY = DateTimeFormatter.ofPattern("MM-dd");
 
-    private AudienceQuery() {
-    }
+    private AudienceQuery() {}
 
     /** One compiled statement and the parameters it binds. */
-    record Compiled(String sql, Map<String, Object> parameters) { }
+    record Compiled(String sql, Map<String, Object> parameters) {}
 
     /**
      * The candidate query: every projection row this audience's predicates match.
@@ -52,8 +50,7 @@ final class AudienceQuery {
      *              so a birthday window is evaluated in the brand's timezone and
      *              not the server's
      */
-    static Compiled candidates(UUID tenantId, UUID brandId, List<AudiencePredicate> predicates,
-            LocalDate today) {
+    static Compiled candidates(UUID tenantId, UUID brandId, List<AudiencePredicate> predicates, LocalDate today) {
 
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
@@ -94,8 +91,8 @@ final class AudienceQuery {
         return new Compiled(sql.toString(), parameters);
     }
 
-    private static String clauseFor(AudiencePredicate predicate, String name,
-            Map<String, Object> parameters, UUID tenantId, LocalDate today) {
+    private static String clauseFor(
+            AudiencePredicate predicate, String name, Map<String, Object> parameters, UUID tenantId, LocalDate today) {
 
         if (predicate.type() == PredicateType.BIRTHDAY_WITHIN_DAYS) {
             return birthdayClause(predicate, name, parameters, today);
@@ -119,8 +116,8 @@ final class AudienceQuery {
                     // Unreachable: AudiencePredicate refuses a set operator on a
                     // numeric type at construction. Stated rather than defaulted,
                     // so adding an operator to the enum breaks the build here.
-                    case IN, NOT_IN -> throw new IllegalStateException(
-                            "A numeric predicate cannot use " + predicate.operator());
+                    case IN, NOT_IN ->
+                        throw new IllegalStateException("A numeric predicate cannot use " + predicate.operator());
                 };
             }
             case DATE_RANGE -> {
@@ -155,8 +152,8 @@ final class AudienceQuery {
      * window into at most a few hundred literals also lets the partial index on
      * {@code birth_month_day} serve the query.
      */
-    private static String birthdayClause(AudiencePredicate predicate, String name,
-            Map<String, Object> parameters, LocalDate today) {
+    private static String birthdayClause(
+            AudiencePredicate predicate, String name, Map<String, Object> parameters, LocalDate today) {
 
         int window = Math.toIntExact(predicate.numericLow());
         if (window < 0 || window > 182) {
@@ -182,8 +179,8 @@ final class AudienceQuery {
      * unrepresentable, and it also means the referenced set is one an approver can
      * look at rather than a recursion whose cost nobody can predict.
      */
-    private static String membershipClause(AudiencePredicate predicate, String name,
-            Map<String, Object> parameters, UUID tenantId) {
+    private static String membershipClause(
+            AudiencePredicate predicate, String name, Map<String, Object> parameters, UUID tenantId) {
 
         parameters.put(name + "Audience", predicate.audienceId());
         parameters.put(name + "Tenant", tenantId);

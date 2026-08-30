@@ -8,18 +8,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.fulfillment.api.OrderProgressPort;
 import uz.horecaos.platform.fulfillment.api.OrderProgressPort.OrderProgress;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource;
 import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource.OrderForKitchen;
 import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource.OrderLineForKitchen;
@@ -32,7 +31,6 @@ import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.ResolvedStation;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketItemRow;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketRow;
-import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -73,8 +71,12 @@ public class KitchenTicketService {
     private final AuditRecorder audit;
     private final Clock clock;
 
-    public KitchenTicketService(JdbcKitchenStore kitchen, KitchenOrderSource orders,
-            OrderProgressPort orderProgress, AuditRecorder audit, Clock clock) {
+    public KitchenTicketService(
+            JdbcKitchenStore kitchen,
+            KitchenOrderSource orders,
+            OrderProgressPort orderProgress,
+            AuditRecorder audit,
+            Clock clock) {
         this.kitchen = kitchen;
         this.orders = orders;
         this.orderProgress = orderProgress;
@@ -106,13 +108,14 @@ public class KitchenTicketService {
         // commitment nobody made. The kitchen refuses rather than trusting its
         // caller, because the caller is an event consumer and events are replayed.
         if (!"CONFIRMED".equals(order.status()) && !"PREPARING".equals(order.status())) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST,
-                    "A production ticket is built from a confirmed order, and this one is "
-                            + order.status());
+            throw new ApiException(
+                    ErrorCode.INVALID_REQUEST,
+                    "A production ticket is built from a confirmed order, and this one is " + order.status());
         }
 
         UUID fallbackStation = kitchen.findFallbackStation(tenantId, order.locationId())
-                .orElseThrow(() -> new ApiException(ErrorCode.INVALID_REQUEST,
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.INVALID_REQUEST,
                         "This branch has no fallback station, so a line that matches no rule "
                                 + "would have nowhere to go. Configure the branch's stations "
                                 + "before it runs a kitchen screen (ADR 0041)."));
@@ -123,33 +126,73 @@ public class KitchenTicketService {
         Release release = decideRelease(requestedMode, targetReadyAt, prepSeconds, now);
 
         UUID ticketId = UUID.randomUUID();
-        TicketRow ticket = new TicketRow(ticketId, tenantId, order.brandId(), order.locationId(),
-                orderId, order.publicOrderNumber(), order.fulfillmentMode(), order.channelCode(),
-                TicketStatus.HELD, release.mode(), release.releaseAt(), null, prepSeconds,
-                targetReadyAt, null, null, null, ROUTING_VERSION, 1, now);
+        TicketRow ticket = new TicketRow(
+                ticketId,
+                tenantId,
+                order.brandId(),
+                order.locationId(),
+                orderId,
+                order.publicOrderNumber(),
+                order.fulfillmentMode(),
+                order.channelCode(),
+                TicketStatus.HELD,
+                release.mode(),
+                release.releaseAt(),
+                null,
+                prepSeconds,
+                targetReadyAt,
+                null,
+                null,
+                null,
+                ROUTING_VERSION,
+                1,
+                now);
         kitchen.insertTicket(ticket);
 
         List<String> unresolved = routeLines(order, ticketId, fallbackStation, now);
 
-        kitchen.recordEvent(tenantId, ticketId, null, null, TicketStatus.HELD.name(),
-                "ORDER_CONFIRMED", "SERVICE", "kitchen", null, orderId.toString(), now);
+        kitchen.recordEvent(
+                tenantId,
+                ticketId,
+                null,
+                null,
+                TicketStatus.HELD.name(),
+                "ORDER_CONFIRMED",
+                "SERVICE",
+                "kitchen",
+                null,
+                orderId.toString(),
+                now);
 
         for (String line : unresolved) {
             // KitchenRoutingUnresolved. Recorded per line rather than per ticket,
             // because the fix is per line: somebody has to map that dish, and a
             // ticket-level count does not say which one.
-            kitchen.recordEvent(tenantId, ticketId, null, null, TicketStatus.HELD.name(),
-                    "ROUTING_UNRESOLVED", "SERVICE", "kitchen", "KITCHEN_ROUTING_UNRESOLVED",
-                    line, now);
+            kitchen.recordEvent(
+                    tenantId,
+                    ticketId,
+                    null,
+                    null,
+                    TicketStatus.HELD.name(),
+                    "ROUTING_UNRESOLVED",
+                    "SERVICE",
+                    "kitchen",
+                    "KITCHEN_ROUTING_UNRESOLVED",
+                    line,
+                    now);
         }
         if (!unresolved.isEmpty()) {
-            log.warn("{} line(s) on ticket {} matched no routing rule and went to the fallback "
-                    + "station at location {}", unresolved.size(), ticketId, order.locationId());
+            log.warn(
+                    "{} line(s) on ticket {} matched no routing rule and went to the fallback "
+                            + "station at location {}",
+                    unresolved.size(),
+                    ticketId,
+                    order.locationId());
         }
 
         if (release.fireNow()) {
-            return fire(tenantId, ticketId, "ORDER_CONFIRMED", "SERVICE", "kitchen", null,
-                    orderId.toString(), now).orElse(ticket);
+            return fire(tenantId, ticketId, "ORDER_CONFIRMED", "SERVICE", "kitchen", null, orderId.toString(), now)
+                    .orElse(ticket);
         }
         return ticket;
     }
@@ -175,8 +218,7 @@ public class KitchenTicketService {
             return null;
         }
         Integer travel = order.promiseTravelMinutes();
-        return travel == null ? order.promisedAt()
-                : order.promisedAt().minus(Duration.ofMinutes(travel));
+        return travel == null ? order.promisedAt() : order.promisedAt().minus(Duration.ofMinutes(travel));
     }
 
     /**
@@ -203,8 +245,8 @@ public class KitchenTicketService {
      * by accident is food nobody cooks, while a ticket fired early is food cooked
      * early, and only one of those has a customer waiting at the end of it.
      */
-    private static Release decideRelease(ReleaseMode requested, Instant targetReadyAt,
-            Integer prepSeconds, Instant now) {
+    private static Release decideRelease(
+            ReleaseMode requested, Instant targetReadyAt, Integer prepSeconds, Instant now) {
 
         if (requested == ReleaseMode.MANUAL_HOLD) {
             return new Release(ReleaseMode.MANUAL_HOLD, null, false);
@@ -220,13 +262,12 @@ public class KitchenTicketService {
     }
 
     /** Resolves every line onto a station, and returns the ones nothing matched. */
-    private List<String> routeLines(OrderForKitchen order, UUID ticketId, UUID fallbackStation,
-            Instant now) {
+    private List<String> routeLines(OrderForKitchen order, UUID ticketId, UUID fallbackStation, Instant now) {
 
         List<String> unresolved = new ArrayList<>();
         for (OrderLineForKitchen line : order.lines()) {
-            Optional<ResolvedStation> resolved = kitchen.resolveStation(order.tenantId(),
-                    order.brandId(), order.locationId(), line.variantId(), line.productId());
+            Optional<ResolvedStation> resolved = kitchen.resolveStation(
+                    order.tenantId(), order.brandId(), order.locationId(), line.variantId(), line.productId());
 
             UUID stationId = resolved.map(ResolvedStation::stationId).orElse(fallbackStation);
             RoutingLevel level = resolved.map(ResolvedStation::level).orElse(RoutingLevel.FALLBACK);
@@ -234,9 +275,21 @@ public class KitchenTicketService {
                 unresolved.add(line.orderLineId().toString());
             }
 
-            kitchen.insertItem(new TicketItemRow(UUID.randomUUID(), order.tenantId(), ticketId,
-                    order.locationId(), line.orderLineId(), stationId, line.quantity(), level,
-                    TicketItemStatus.QUEUED, null, null, null, 1, now));
+            kitchen.insertItem(new TicketItemRow(
+                    UUID.randomUUID(),
+                    order.tenantId(),
+                    ticketId,
+                    order.locationId(),
+                    line.orderLineId(),
+                    stationId,
+                    line.quantity(),
+                    level,
+                    TicketItemStatus.QUEUED,
+                    null,
+                    null,
+                    null,
+                    1,
+                    now));
         }
         return unresolved;
     }
@@ -251,24 +304,45 @@ public class KitchenTicketService {
      *         which is not an error
      */
     @Transactional
-    public Optional<TicketRow> fire(UUID tenantId, UUID ticketId, String trigger, String actorType,
-            String actorId, String reasonCode, String correlationId, Instant now) {
+    public Optional<TicketRow> fire(
+            UUID tenantId,
+            UUID ticketId,
+            String trigger,
+            String actorType,
+            String actorId,
+            String reasonCode,
+            String correlationId,
+            Instant now) {
 
-        Optional<Integer> won = kitchen.transitionTicket(tenantId, ticketId, TicketStatus.HELD,
-                TicketStatus.FIRED, now);
+        Optional<Integer> won =
+                kitchen.transitionTicket(tenantId, ticketId, TicketStatus.HELD, TicketStatus.FIRED, now);
         if (won.isEmpty()) {
             return Optional.empty();
         }
-        kitchen.recordEvent(tenantId, ticketId, null, TicketStatus.HELD.name(),
-                TicketStatus.FIRED.name(), trigger, actorType, actorId, reasonCode, correlationId,
+        kitchen.recordEvent(
+                tenantId,
+                ticketId,
+                null,
+                TicketStatus.HELD.name(),
+                TicketStatus.FIRED.name(),
+                trigger,
+                actorType,
+                actorId,
+                reasonCode,
+                correlationId,
                 now);
         return kitchen.findTicket(tenantId, ticketId);
     }
 
     /** A person at the branch pressing "release now" on a buffered ticket. */
     @Transactional
-    public TicketRow releaseNow(UUID tenantId, UUID ticketId, int expectedVersion,
-            String reasonCode, String actorId, String correlationId) {
+    public TicketRow releaseNow(
+            UUID tenantId,
+            UUID ticketId,
+            int expectedVersion,
+            String reasonCode,
+            String actorId,
+            String correlationId) {
 
         Instant now = clock.instant();
         TicketRow ticket = require(tenantId, ticketId);
@@ -279,8 +353,8 @@ public class KitchenTicketService {
             // caller wanted the ticket on a screen and it is on a screen.
             return ticket;
         }
-        return fire(tenantId, ticketId, "RELEASE_COMMAND", "USER", actorId, reasonCode,
-                correlationId, now).orElse(ticket);
+        return fire(tenantId, ticketId, "RELEASE_COMMAND", "USER", actorId, reasonCode, correlationId, now)
+                .orElse(ticket);
     }
 
     /**
@@ -299,61 +373,88 @@ public class KitchenTicketService {
      * somebody has to reconstruct later.
      */
     @Transactional
-    public TicketRow reschedule(UUID tenantId, UUID ticketId, int expectedVersion,
-            ReleaseMode mode, Instant releaseAt, boolean overrideGranted, String reasonCode,
-            String actorId, String correlationId) {
+    public TicketRow reschedule(
+            UUID tenantId,
+            UUID ticketId,
+            int expectedVersion,
+            ReleaseMode mode,
+            Instant releaseAt,
+            boolean overrideGranted,
+            String reasonCode,
+            String actorId,
+            String correlationId) {
 
         Instant now = clock.instant();
         TicketRow ticket = require(tenantId, ticketId);
         requireVersion(ticket, expectedVersion);
 
         if (ticket.status() != TicketStatus.HELD) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
                     "This ticket has already been released; a fire time for food that is already "
                             + "cooking describes nothing");
         }
         if (mode.requiresInstant() == (releaseAt == null)) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
-                    "SCHEDULED needs a fire time and the other modes must not carry one");
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "SCHEDULED needs a fire time and the other modes must not carry one");
         }
 
-        boolean pastThePromise = releaseAt != null && latestHonestRelease(ticket) != null
+        boolean pastThePromise = releaseAt != null
+                && latestHonestRelease(ticket) != null
                 && releaseAt.isAfter(latestHonestRelease(ticket));
         // MANUAL_HOLD on a ticket with a promise is the same act as pushing the
         // fire time past it — it pushes it to never — and is bounded identically.
-        boolean heldPastThePromise = mode == ReleaseMode.MANUAL_HOLD
-                && latestHonestRelease(ticket) != null;
+        boolean heldPastThePromise = mode == ReleaseMode.MANUAL_HOLD && latestHonestRelease(ticket) != null;
 
         if (pastThePromise || heldPastThePromise) {
             if (!overrideGranted) {
-                throw ApiException.insufficientCapability("kitchen.ticket.release.override",
-                        "LOCATION");
+                throw ApiException.insufficientCapability("kitchen.ticket.release.override", "LOCATION");
             }
             if (reasonCode == null || reasonCode.isBlank()) {
-                throw new ApiException(ErrorCode.VALIDATION_FAILED,
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED,
                         "Firing later than the promise permits requires a reason (ADR 0041)");
             }
         }
 
         Optional<Integer> won = kitchen.rescheduleRelease(tenantId, ticketId, mode, releaseAt, now);
         if (won.isEmpty()) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
-                    "The ticket was released while this change was being made");
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT, "The ticket was released while this change was being made");
         }
 
-        kitchen.recordEvent(tenantId, ticketId, null, TicketStatus.HELD.name(),
-                TicketStatus.HELD.name(), "RELEASE_COMMAND", "USER", actorId, reasonCode,
-                correlationId, now);
+        kitchen.recordEvent(
+                tenantId,
+                ticketId,
+                null,
+                TicketStatus.HELD.name(),
+                TicketStatus.HELD.name(),
+                "RELEASE_COMMAND",
+                "USER",
+                actorId,
+                reasonCode,
+                correlationId,
+                now);
 
         if (pastThePromise || heldPastThePromise) {
             // ADR 0027: the decision that matters here is not "the fire time
             // changed" but "somebody chose to be late", and it is audited in the
             // same transaction as the change it describes.
-            recordAudit(ticket, "kitchen.ticket.release-override", actorId, reasonCode,
-                    Map.of("releaseMode", mode.name(),
-                            "releaseAt", String.valueOf(releaseAt),
-                            "latestHonestRelease", String.valueOf(latestHonestRelease(ticket))),
-                    AuditFact.Outcome.SUCCEEDED, correlationId, now);
+            recordAudit(
+                    ticket,
+                    "kitchen.ticket.release-override",
+                    actorId,
+                    reasonCode,
+                    Map.of(
+                            "releaseMode",
+                            mode.name(),
+                            "releaseAt",
+                            String.valueOf(releaseAt),
+                            "latestHonestRelease",
+                            String.valueOf(latestHonestRelease(ticket))),
+                    AuditFact.Outcome.SUCCEEDED,
+                    correlationId,
+                    now);
             log.warn("Ticket {} was re-timed past the promise by {}", ticketId, actorId);
         }
         return require(tenantId, ticketId);
@@ -382,8 +483,16 @@ public class KitchenTicketService {
         Instant now = clock.instant();
         int fired = 0;
         for (TicketRow ticket : kitchen.claimDueForRelease(now, batchSize)) {
-            if (fire(ticket.tenantId(), ticket.id(), "RELEASE_SCHEDULED", "SYSTEM_JOB",
-                    "kitchen-release", null, ticket.orderId().toString(), now).isPresent()) {
+            if (fire(
+                            ticket.tenantId(),
+                            ticket.id(),
+                            "RELEASE_SCHEDULED",
+                            "SYSTEM_JOB",
+                            "kitchen-release",
+                            null,
+                            ticket.orderId().toString(),
+                            now)
+                    .isPresent()) {
                 fired++;
             }
         }
@@ -395,8 +504,7 @@ public class KitchenTicketService {
     /** A cook starting one line at one station. */
     @Transactional
     public ItemOutcome start(UUID tenantId, UUID itemId, String actorId, String correlationId) {
-        return advanceItem(tenantId, itemId, TicketItemStatus.STARTED, false, actorId, null,
-                correlationId);
+        return advanceItem(tenantId, itemId, TicketItemStatus.STARTED, false, actorId, null, correlationId);
     }
 
     /**
@@ -413,11 +521,9 @@ public class KitchenTicketService {
         TicketItemRow item = kitchen.findItem(tenantId, itemId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such item"));
         if (item.status() == TicketItemStatus.QUEUED) {
-            advanceItem(tenantId, itemId, TicketItemStatus.STARTED, false, actorId, null,
-                    correlationId);
+            advanceItem(tenantId, itemId, TicketItemStatus.STARTED, false, actorId, null, correlationId);
         }
-        return advanceItem(tenantId, itemId, TicketItemStatus.READY, false, actorId, null,
-                correlationId);
+        return advanceItem(tenantId, itemId, TicketItemStatus.READY, false, actorId, null, correlationId);
     }
 
     /**
@@ -431,8 +537,7 @@ public class KitchenTicketService {
      * exactly the fact an operational exception is about.
      */
     @Transactional
-    public ItemOutcome recall(UUID tenantId, UUID itemId, String reasonCode, String actorId,
-            String correlationId) {
+    public ItemOutcome recall(UUID tenantId, UUID itemId, String reasonCode, String actorId, String correlationId) {
 
         if (reasonCode == null || reasonCode.isBlank()) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "A recall requires a reason");
@@ -443,20 +548,35 @@ public class KitchenTicketService {
 
         if (ticket.status() == TicketStatus.HANDED_OVER) {
             Instant now = clock.instant();
-            kitchen.recordEvent(tenantId, ticket.id(), itemId, ticket.status().name(),
-                    ticket.status().name(), "STATION_ACTION", "USER", actorId,
-                    "KITCHEN_RECALL_AFTER_READY", correlationId, now);
-            recordAudit(ticket, "kitchen.ticket.recall", actorId, reasonCode,
+            kitchen.recordEvent(
+                    tenantId,
+                    ticket.id(),
+                    itemId,
+                    ticket.status().name(),
+                    ticket.status().name(),
+                    "STATION_ACTION",
+                    "USER",
+                    actorId,
+                    "KITCHEN_RECALL_AFTER_READY",
+                    correlationId,
+                    now);
+            recordAudit(
+                    ticket,
+                    "kitchen.ticket.recall",
+                    actorId,
+                    reasonCode,
                     Map.of("ticketItemId", itemId.toString(), "refused", "AFTER_HANDOVER"),
-                    AuditFact.Outcome.REJECTED, correlationId, now);
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
+                    AuditFact.Outcome.REJECTED,
+                    correlationId,
+                    now);
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
                     "This ticket was handed over. The food has left the pass, so recalling it "
                             + "here would leave the order reading READY to a customer who is "
                             + "holding it. Raise an ADR 0039 order amendment instead.",
                     Map.of("exceptionCode", "KitchenRecallAfterReady"));
         }
-        return advanceItem(tenantId, itemId, TicketItemStatus.STARTED, true, actorId, reasonCode,
-                correlationId);
+        return advanceItem(tenantId, itemId, TicketItemStatus.STARTED, true, actorId, reasonCode, correlationId);
     }
 
     /**
@@ -467,8 +587,14 @@ public class KitchenTicketService {
      * {@code READY} and the conditional update lets exactly one of them apply it.
      * That is what makes exactly one order-level {@code READY} proposal happen.
      */
-    private ItemOutcome advanceItem(UUID tenantId, UUID itemId, TicketItemStatus target,
-            boolean recalling, String actorId, String reasonCode, String correlationId) {
+    private ItemOutcome advanceItem(
+            UUID tenantId,
+            UUID itemId,
+            TicketItemStatus target,
+            boolean recalling,
+            String actorId,
+            String reasonCode,
+            String correlationId) {
 
         Instant now = clock.instant();
         TicketItemRow item = kitchen.findItem(tenantId, itemId)
@@ -480,8 +606,7 @@ public class KitchenTicketService {
         // start it queued before the ready it also queued, has not asked to undo
         // anything, and treating it as a recall would silently un-ready food on the
         // pass. Recall is a separate button behind a separate capability.
-        if (!recalling && item.status() == TicketItemStatus.READY
-                && target == TicketItemStatus.STARTED) {
+        if (!recalling && item.status() == TicketItemStatus.READY && target == TicketItemStatus.STARTED) {
             return new ItemOutcome(false, item, require(tenantId, item.ticketId()));
         }
 
@@ -491,13 +616,15 @@ public class KitchenTicketService {
             return new ItemOutcome(false, item, require(tenantId, item.ticketId()));
         }
         if (!KitchenStateMachine.permits(item.status(), target)) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
                     "This line is %s and cannot become %s".formatted(item.status(), target));
         }
 
         TicketRow ticket = require(tenantId, item.ticketId());
         if (ticket.status() == TicketStatus.HELD) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
                     "This ticket is still in the buffer. Release it before cooking from it, or "
                             + "the food is ready before the branch meant to start it.");
         }
@@ -510,16 +637,25 @@ public class KitchenTicketService {
             return new ItemOutcome(false, settled, require(tenantId, item.ticketId()));
         }
 
-        kitchen.recordEvent(tenantId, ticket.id(), itemId, item.status().name(), target.name(),
-                "STATION_ACTION", "USER", actorId, reasonCode, correlationId, now);
+        kitchen.recordEvent(
+                tenantId,
+                ticket.id(),
+                itemId,
+                item.status().name(),
+                target.name(),
+                "STATION_ACTION",
+                "USER",
+                actorId,
+                reasonCode,
+                correlationId,
+                now);
 
         TicketRow after = rollUp(tenantId, ticket, actorId, correlationId, now);
         return new ItemOutcome(true, kitchen.findItem(tenantId, itemId).orElseThrow(), after);
     }
 
     /** Applies the ticket status the items now imply, and proposes what it means. */
-    private TicketRow rollUp(UUID tenantId, TicketRow ticket, String actorId, String correlationId,
-            Instant now) {
+    private TicketRow rollUp(UUID tenantId, TicketRow ticket, String actorId, String correlationId, Instant now) {
 
         List<TicketItemStatus> statuses = kitchen.itemsOf(tenantId, ticket.id()).stream()
                 .map(TicketItemRow::status)
@@ -534,19 +670,31 @@ public class KitchenTicketService {
             // assumed: the ticket constraints in V0030 would refuse a ticket that
             // was ready without ever having started, and a violation there is far
             // harder to read than this line.
-            log.error("Roll-up implied {} for ticket {} which is {}; refusing the transition",
-                    implied, ticket.id(), ticket.status());
+            log.error(
+                    "Roll-up implied {} for ticket {} which is {}; refusing the transition",
+                    implied,
+                    ticket.id(),
+                    ticket.status());
             return ticket;
         }
-        Optional<Integer> won = kitchen.transitionTicket(tenantId, ticket.id(), ticket.status(),
-                implied, now);
+        Optional<Integer> won = kitchen.transitionTicket(tenantId, ticket.id(), ticket.status(), implied, now);
         if (won.isEmpty()) {
             // Another station's roll-up got there first, which is the normal
             // outcome when three finish together. Exactly one proposal is made.
             return require(tenantId, ticket.id());
         }
-        kitchen.recordEvent(tenantId, ticket.id(), null, ticket.status().name(), implied.name(),
-                "ITEM_ROLLUP", "USER", actorId, null, correlationId, now);
+        kitchen.recordEvent(
+                tenantId,
+                ticket.id(),
+                null,
+                ticket.status().name(),
+                implied.name(),
+                "ITEM_ROLLUP",
+                "USER",
+                actorId,
+                null,
+                correlationId,
+                now);
 
         propose(ticket, ticket.status(), implied, actorId, correlationId, now);
         return require(tenantId, ticket.id());
@@ -568,8 +716,13 @@ public class KitchenTicketService {
      * now disagree, and the person who has to reconcile them is at the branch,
      * reading the ticket — not reading a server log they have no access to.
      */
-    private void propose(TicketRow ticket, TicketStatus from, TicketStatus implied,
-            String actorId, String correlationId, Instant now) {
+    private void propose(
+            TicketRow ticket,
+            TicketStatus from,
+            TicketStatus implied,
+            String actorId,
+            String correlationId,
+            Instant now) {
 
         // A recall moves the ticket backwards, and ADR 0041 is explicit that a
         // recall never moves the order backwards: ADR 0019 forbids it and would
@@ -580,35 +733,56 @@ public class KitchenTicketService {
             return;
         }
 
-        OrderProgress progress = switch (implied) {
-            case IN_PRODUCTION -> OrderProgress.PREPARING;
-            case READY -> OrderProgress.READY;
-            default -> null;
-        };
+        OrderProgress progress =
+                switch (implied) {
+                    case IN_PRODUCTION -> OrderProgress.PREPARING;
+                    case READY -> OrderProgress.READY;
+                    default -> null;
+                };
         if (progress == null) {
             return;
         }
 
-        var outcome = orderProgress.propose(ticket.tenantId(), ticket.orderId(), progress,
+        var outcome = orderProgress.propose(
+                ticket.tenantId(),
+                ticket.orderId(),
+                progress,
                 "kitchen-ticket:%s:%s".formatted(ticket.id(), progress),
-                "KITCHEN_" + progress.name(), "USER", actorId,
+                "KITCHEN_" + progress.name(),
+                "USER",
+                actorId,
                 correlationId == null ? ticket.orderId().toString() : correlationId);
 
-        kitchen.recordEvent(ticket.tenantId(), ticket.id(), null, implied.name(), implied.name(),
-                "ORDER_PROPOSAL", "SERVICE", "kitchen",
-                "ORDER_PROGRESS_" + outcome.name(), correlationId, now);
+        kitchen.recordEvent(
+                ticket.tenantId(),
+                ticket.id(),
+                null,
+                implied.name(),
+                implied.name(),
+                "ORDER_PROPOSAL",
+                "SERVICE",
+                "kitchen",
+                "ORDER_PROGRESS_" + outcome.name(),
+                correlationId,
+                now);
 
         if (outcome == OrderProgressPort.ProposalOutcome.REFUSED) {
-            log.warn("Order {} refused the kitchen's {} proposal from ticket {}",
-                    ticket.orderId(), progress, ticket.id());
+            log.warn(
+                    "Order {} refused the kitchen's {} proposal from ticket {}",
+                    ticket.orderId(),
+                    progress,
+                    ticket.id());
         }
     }
 
     // -------------------------------------------------------------------- reading
 
     public List<TicketRow> board(UUID tenantId, UUID locationId, List<String> statuses, int limit) {
-        return kitchen.board(tenantId, locationId,
-                statuses.isEmpty() ? List.of("FIRED", "IN_PRODUCTION", "READY") : statuses, limit);
+        return kitchen.board(
+                tenantId,
+                locationId,
+                statuses.isEmpty() ? List.of("FIRED", "IN_PRODUCTION", "READY") : statuses,
+                limit);
     }
 
     public List<TicketItemRow> items(UUID tenantId, UUID ticketId) {
@@ -631,14 +805,19 @@ public class KitchenTicketService {
         }
     }
 
-    private void recordAudit(TicketRow ticket, String actionCode, String actorId,
-            String reasonCode, Map<String, Object> changed, AuditFact.Outcome outcome,
-            String correlationId, Instant now) {
+    private void recordAudit(
+            TicketRow ticket,
+            String actionCode,
+            String actorId,
+            String reasonCode,
+            Map<String, Object> changed,
+            AuditFact.Outcome outcome,
+            String correlationId,
+            Instant now) {
 
         audit.record(AuditFact.of(actionCode, AuditClass.BUSINESS)
                 .by(ActorRef.user(actorId, null))
-                .at(ResourceScope.location(ticket.tenantId(), ticket.brandId(),
-                        ticket.locationId()))
+                .at(ResourceScope.location(ticket.tenantId(), ticket.brandId(), ticket.locationId()))
                 .target("kitchen.ticket", ticket.id())
                 .targetVersion((long) ticket.version())
                 .outcome(outcome)
@@ -653,7 +832,7 @@ public class KitchenTicketService {
      * @param applied whether this caller's command is the one that moved the item.
      *                False is a settled outcome, not a failure
      */
-    public record ItemOutcome(boolean applied, TicketItemRow item, TicketRow ticket) { }
+    public record ItemOutcome(boolean applied, TicketItemRow item, TicketRow ticket) {}
 
-    private record Release(ReleaseMode mode, Instant releaseAt, boolean fireNow) { }
+    private record Release(ReleaseMode mode, Instant releaseAt, boolean fireNow) {}
 }

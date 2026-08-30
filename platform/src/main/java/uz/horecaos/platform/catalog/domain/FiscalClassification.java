@@ -69,8 +69,8 @@ public record FiscalClassification(
      */
     public static final int FISCAL_NAME_LIMIT = 63;
 
-    private static final FiscalClassification UNCLASSIFIED = new FiscalClassification(
-            null, null, null, null, null, false, MarkingScheme.NONE, false, null, null);
+    private static final FiscalClassification UNCLASSIFIED =
+            new FiscalClassification(null, null, null, null, null, false, MarkingScheme.NONE, false, null, null);
 
     /** How a marked good's per-unit identifiers are encoded. */
     public enum MarkingScheme {
@@ -106,7 +106,7 @@ public record FiscalClassification(
         if (fiscalName != null && fiscalName.length() > FISCAL_NAME_LIMIT) {
             throw new IllegalArgumentException(
                     "A fiscal name is capped at %d characters by Click's Name field; \"%s\" is %d. "
-                            .formatted(FISCAL_NAME_LIMIT, fiscalName, fiscalName.length())
+                                    .formatted(FISCAL_NAME_LIMIT, fiscalName, fiscalName.length())
                             + "Shorten it deliberately rather than letting a receipt line be "
                             + "truncated at fiscalization time");
         }
@@ -116,9 +116,8 @@ public record FiscalClassification(
                             .formatted(markingRequired, markingScheme));
         }
         if (fiscalUnitCode != null && fiscalUnitCode <= 0) {
-            throw new IllegalArgumentException(
-                    "A fiscal unit code is an identifier from the tax authority's list, so "
-                            + fiscalUnitCode + " is not one");
+            throw new IllegalArgumentException("A fiscal unit code is an identifier from the tax authority's list, so "
+                    + fiscalUnitCode + " is not one");
         }
     }
 
@@ -133,10 +132,10 @@ public record FiscalClassification(
      * <p>The common case, and the one a bulk assignment tool writes: an ordinary
      * dish is not marked, not excisable and not age restricted.
      */
-    public static FiscalClassification of(String mxikCode, String packageCode,
-            Integer fiscalUnitCode, String fiscalName) {
-        return new FiscalClassification(mxikCode, packageCode, fiscalUnitCode, fiscalName,
-                null, false, MarkingScheme.NONE, false, null, null);
+    public static FiscalClassification of(
+            String mxikCode, String packageCode, Integer fiscalUnitCode, String fiscalName) {
+        return new FiscalClassification(
+                mxikCode, packageCode, fiscalUnitCode, fiscalName, null, false, MarkingScheme.NONE, false, null, null);
     }
 
     /** Whether anything at all has been recorded about this node. */
@@ -211,10 +210,10 @@ public record FiscalClassification(
                 fiscalUnitCode != null ? fiscalUnitCode : fallback.fiscalUnitCode(),
                 fiscalName != null ? fiscalName : fallback.fiscalName(),
                 barcode != null ? barcode : fallback.barcode(),
-                marking, scheme,
+                marking,
+                scheme,
                 excisable || fallback.excisable(),
-                alcoholByVolumeBasisPoints != null
-                        ? alcoholByVolumeBasisPoints : fallback.alcoholByVolumeBasisPoints(),
+                alcoholByVolumeBasisPoints != null ? alcoholByVolumeBasisPoints : fallback.alcoholByVolumeBasisPoints(),
                 stricterAge(ageRestrictionYears, fallback.ageRestrictionYears()));
     }
 

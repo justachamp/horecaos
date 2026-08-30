@@ -9,10 +9,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditClass;
@@ -163,16 +161,12 @@ public class ApprovalDecisionService {
      *         decided it first
      */
     public DecidedApproval decide(
-            UUID tenantId,
-            UUID requestId,
-            ApprovalService.Decision decision,
-            ActorRef approver,
-            String reason) {
+            UUID tenantId, UUID requestId, ApprovalService.Decision decision, ActorRef approver, String reason) {
 
         String decisionReason = requireReason(reason);
-        RequestRow request = load(tenantId, requestId).orElseThrow(() -> new ApiException(
-                ErrorCode.RESOURCE_NOT_FOUND,
-                "No approval request %s in this tenant".formatted(requestId)));
+        RequestRow request = load(tenantId, requestId)
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.RESOURCE_NOT_FOUND, "No approval request %s in this tenant".formatted(requestId)));
 
         // Four eyes with one pair of eyes is not a control, so this is checked
         // before anything the caller holds can matter. The database repeats it in
@@ -181,38 +175,42 @@ public class ApprovalDecisionService {
         // service can refuse the attempt with an answer and a record.
         if (request.requestedBy().equals(approver.subject())) {
             recordRefusal(request, approver, "SELF_APPROVAL", decisionReason);
-            throw new ApiException(ErrorCode.INSUFFICIENT_CAPABILITY,
-                    "The person who raised an approval request can never decide it. "
-                            + "A second person has to.");
+            throw new ApiException(
+                    ErrorCode.INSUFFICIENT_CAPABILITY,
+                    "The person who raised an approval request can never decide it. " + "A second person has to.");
         }
 
-        Capability required = Capability.find(request.requiredApproverCapability()).orElseThrow(() -> {
-            // The authoring surface refuses an unknown capability, so this can
-            // only be a policy written before that check or a capability removed
-            // in a release. Either way nobody can be the second signature, and
-            // saying so beats a blanket refusal nobody can act on.
-            recordRefusal(request, approver, "UNKNOWN_APPROVER_CAPABILITY", decisionReason);
-            return new ApiException(ErrorCode.UNPROCESSABLE_STATE,
-                    "The governing policy requires a capability this platform no longer declares; "
-                            + "publish a new policy version naming a current one");
-        });
+        Capability required = Capability.find(request.requiredApproverCapability())
+                .orElseThrow(() -> {
+                    // The authoring surface refuses an unknown capability, so this can
+                    // only be a policy written before that check or a capability removed
+                    // in a release. Either way nobody can be the second signature, and
+                    // saying so beats a blanket refusal nobody can act on.
+                    recordRefusal(request, approver, "UNKNOWN_APPROVER_CAPABILITY", decisionReason);
+                    return new ApiException(
+                            ErrorCode.UNPROCESSABLE_STATE,
+                            "The governing policy requires a capability this platform no longer declares; "
+                                    + "publish a new policy version naming a current one");
+                });
 
         ResourceScope judgedAt = scopeOf(request);
         if (!authorization.has(approver.subject(), required, judgedAt)) {
             recordRefusal(request, approver, "MISSING_APPROVER_CAPABILITY", decisionReason);
-            throw ApiException.insufficientCapability(required.code(), judgedAt.type().name());
+            throw ApiException.insufficientCapability(
+                    required.code(), judgedAt.type().name());
         }
 
         if (!PENDING.equals(request.status())) {
-            throw new ApiException(ErrorCode.UNPROCESSABLE_STATE,
-                    "This approval request is already %s".formatted(request.status()));
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE, "This approval request is already %s".formatted(request.status()));
         }
         if (!request.expiresAt().isAfter(clock.instant())) {
             // Lapsed requests are not decidable, and re-opening one would let a
             // signature be given against a threshold that has had a day to change
             // underneath it. The maker resubmits, which raises a fresh request
             // under whatever policy governs now.
-            throw new ApiException(ErrorCode.UNPROCESSABLE_STATE,
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
                     "This approval request lapsed at %s; the requester has to raise it again"
                             .formatted(request.expiresAt()));
         }
@@ -220,22 +218,21 @@ public class ApprovalDecisionService {
         try {
             approvals.decide(requestId, decision, approver, decisionReason);
         } catch (ApprovalService.SelfApprovalException selfApproval) {
-            throw new ApiException(ErrorCode.INSUFFICIENT_CAPABILITY,
-                    "The person who raised an approval request can never decide it. "
-                            + "A second person has to.");
+            throw new ApiException(
+                    ErrorCode.INSUFFICIENT_CAPABILITY,
+                    "The person who raised an approval request can never decide it. " + "A second person has to.");
         } catch (IllegalStateException raced) {
             // The optimistic version guard in the store. Two approvers pressing
             // at once leave one winner and this answer for the other.
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
-                    "This approval request was decided by somebody else; re-read it");
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT, "This approval request was decided by somebody else; re-read it");
         }
 
         return load(tenantId, requestId)
                 .map(decided -> new DecidedApproval(
-                        decided.id(), decided.actionCode(), decided.status(),
-                        decided.decidedBy(), decided.decidedAt()))
-                .orElseThrow(() -> new ApiException(
-                        ErrorCode.RESOURCE_NOT_FOUND, "No approval request %s".formatted(requestId)));
+                        decided.id(), decided.actionCode(), decided.status(), decided.decidedBy(), decided.decidedAt()))
+                .orElseThrow(() ->
+                        new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No approval request %s".formatted(requestId)));
     }
 
     /**
@@ -309,12 +306,14 @@ public class ApprovalDecisionService {
 
     private static String requireReason(String reason) {
         if (reason == null || reason.isBlank()) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
                     "A decision requires a reason: an approval with no recorded why is a signature "
                             + "nobody can account for");
         }
         if (reason.length() > MAXIMUM_REASON_LENGTH) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED,
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
                     "A decision reason is at most %d characters".formatted(MAXIMUM_REASON_LENGTH));
         }
         return reason;
@@ -339,8 +338,7 @@ public class ApprovalDecisionService {
         };
     }
 
-    private static RequestRow mapRequest(java.sql.ResultSet rs, int rowNumber)
-            throws java.sql.SQLException {
+    private static RequestRow mapRequest(java.sql.ResultSet rs, int rowNumber) throws java.sql.SQLException {
         return new RequestRow(
                 rs.getObject("id", UUID.class),
                 rs.getObject("tenant_id", UUID.class),
@@ -381,11 +379,21 @@ public class ApprovalDecisionService {
     }
 
     private record RequestRow(
-            UUID id, UUID tenantId, String actionCode, String parametersHash,
-            String scopeType, UUID scopeId, String thresholdDescription, int policyVersion,
-            String requiredApproverCapability, String status, String requestedBy,
-            Instant requestedAt, Instant expiresAt, String decidedBy, Instant decidedAt) {
-    }
+            UUID id,
+            UUID tenantId,
+            String actionCode,
+            String parametersHash,
+            String scopeType,
+            UUID scopeId,
+            String thresholdDescription,
+            int policyVersion,
+            String requiredApproverCapability,
+            String status,
+            String requestedBy,
+            Instant requestedAt,
+            Instant expiresAt,
+            String decidedBy,
+            Instant decidedAt) {}
 
     /**
      * One request waiting for a second signature.
@@ -419,15 +427,21 @@ public class ApprovalDecisionService {
 
         static PendingApproval of(RequestRow row, boolean mayDecide) {
             return new PendingApproval(
-                    row.id(), row.actionCode(), row.parametersHash(), row.scopeType(),
-                    row.scopeId(), row.thresholdDescription(), row.policyVersion(),
-                    row.requiredApproverCapability(), row.requestedBy(), row.requestedAt(),
-                    row.expiresAt(), mayDecide);
+                    row.id(),
+                    row.actionCode(),
+                    row.parametersHash(),
+                    row.scopeType(),
+                    row.scopeId(),
+                    row.thresholdDescription(),
+                    row.policyVersion(),
+                    row.requiredApproverCapability(),
+                    row.requestedBy(),
+                    row.requestedAt(),
+                    row.expiresAt(),
+                    mayDecide);
         }
     }
 
     /** The outcome of a decision, as the approver's console sees it. */
-    public record DecidedApproval(
-            UUID id, String actionCode, String status, String decidedBy, Instant decidedAt) {
-    }
+    public record DecidedApproval(UUID id, String actionCode, String status, String decidedBy, Instant decidedAt) {}
 }

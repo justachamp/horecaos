@@ -6,14 +6,11 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import tools.jackson.databind.ObjectMapper;
-
 import uz.horecaos.platform.inventory.api.InventoryReservationPort;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderProcessStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderProcessStore.ProcessRow;
@@ -50,8 +47,11 @@ public class OrderInventoryProcess {
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
-    public OrderInventoryProcess(JdbcOrderProcessStore processes,
-            InventoryReservationPort inventory, ObjectMapper objectMapper, Clock clock) {
+    public OrderInventoryProcess(
+            JdbcOrderProcessStore processes,
+            InventoryReservationPort inventory,
+            ObjectMapper objectMapper,
+            Clock clock) {
         this.processes = processes;
         this.inventory = inventory;
         this.objectMapper = objectMapper;
@@ -116,16 +116,23 @@ public class OrderInventoryProcess {
         String action = String.valueOf(checkpoint.get("action"));
         UUID quoteId = UUID.fromString(String.valueOf(checkpoint.get("quoteId")));
 
-        boolean applied = switch (action) {
-            case COMMIT -> inventory.commit(row.tenantId(), quoteId);
-            case RELEASE -> inventory.release(row.tenantId(), quoteId);
-            default -> throw new IllegalStateException(
-                    "Unknown inventory process action " + action);
-        };
+        boolean applied =
+                switch (action) {
+                    case COMMIT -> inventory.commit(row.tenantId(), quoteId);
+                    case RELEASE -> inventory.release(row.tenantId(), quoteId);
+                    default -> throw new IllegalStateException("Unknown inventory process action " + action);
+                };
 
         if (applied) {
-            processes.settle(row.orderId(), PROCESS_NAME, row.version(), "COMPLETED",
-                    result(action, quoteId, "APPLIED"), null, null, now);
+            processes.settle(
+                    row.orderId(),
+                    PROCESS_NAME,
+                    row.version(),
+                    "COMPLETED",
+                    result(action, quoteId, "APPLIED"),
+                    null,
+                    null,
+                    now);
             return;
         }
 
@@ -137,20 +144,37 @@ public class OrderInventoryProcess {
         // never actually taken.
         boolean needsAttention = COMMIT.equals(action);
         if (needsAttention && row.attemptCount() + 1 < MAX_ATTEMPTS) {
-            processes.settle(row.orderId(), PROCESS_NAME, row.version(), "FAILED_RETRYABLE",
-                    result(action, quoteId, "NO_LIVE_HOLD"), now.plus(RETRY_BACKOFF),
-                    "No held reservation to commit", now);
+            processes.settle(
+                    row.orderId(),
+                    PROCESS_NAME,
+                    row.version(),
+                    "FAILED_RETRYABLE",
+                    result(action, quoteId, "NO_LIVE_HOLD"),
+                    now.plus(RETRY_BACKOFF),
+                    "No held reservation to commit",
+                    now);
             log.warn("Order {} has no live reservation to commit; retrying", row.orderId());
         } else if (needsAttention) {
-            processes.settle(row.orderId(), PROCESS_NAME, row.version(),
-                    "MANUAL_ACTION_REQUIRED", result(action, quoteId, "NO_LIVE_HOLD"), null,
-                    "The reservation could not be committed after %d attempts"
-                            .formatted(MAX_ATTEMPTS), now);
-            log.error("Order {} could not commit its reservation; manual action required",
-                    row.orderId());
+            processes.settle(
+                    row.orderId(),
+                    PROCESS_NAME,
+                    row.version(),
+                    "MANUAL_ACTION_REQUIRED",
+                    result(action, quoteId, "NO_LIVE_HOLD"),
+                    null,
+                    "The reservation could not be committed after %d attempts".formatted(MAX_ATTEMPTS),
+                    now);
+            log.error("Order {} could not commit its reservation; manual action required", row.orderId());
         } else {
-            processes.settle(row.orderId(), PROCESS_NAME, row.version(), "COMPLETED",
-                    result(action, quoteId, "NOTHING_TO_RELEASE"), null, null, now);
+            processes.settle(
+                    row.orderId(),
+                    PROCESS_NAME,
+                    row.version(),
+                    "COMPLETED",
+                    result(action, quoteId, "NOTHING_TO_RELEASE"),
+                    null,
+                    null,
+                    now);
         }
     }
 
@@ -166,25 +190,29 @@ public class OrderInventoryProcess {
         String detail = failure.getClass().getSimpleName() + ": " + failure.getMessage();
         boolean retry = row.attemptCount() + 1 < MAX_ATTEMPTS;
 
-        processes.settle(row.orderId(), PROCESS_NAME, row.version(),
+        processes.settle(
+                row.orderId(),
+                PROCESS_NAME,
+                row.version(),
                 retry ? "FAILED_RETRYABLE" : "MANUAL_ACTION_REQUIRED",
                 row.checkpointJson(),
                 retry ? now.plus(RETRY_BACKOFF) : null,
-                detail, now);
+                detail,
+                now);
 
         if (retry) {
-            log.warn("The inventory process could not run order {}; retrying", row.orderId(),
-                    failure);
+            log.warn("The inventory process could not run order {}; retrying", row.orderId(), failure);
         } else {
-            log.error("The inventory process could not run order {} after {} attempts; "
-                    + "manual action required", row.orderId(), MAX_ATTEMPTS, failure);
+            log.error(
+                    "The inventory process could not run order {} after {} attempts; " + "manual action required",
+                    row.orderId(),
+                    MAX_ATTEMPTS,
+                    failure);
         }
     }
 
     private String checkpoint(String action, UUID quoteId) {
-        return objectMapper.writeValueAsString(Map.of(
-                "action", action,
-                "quoteId", quoteId.toString()));
+        return objectMapper.writeValueAsString(Map.of("action", action, "quoteId", quoteId.toString()));
     }
 
     /**

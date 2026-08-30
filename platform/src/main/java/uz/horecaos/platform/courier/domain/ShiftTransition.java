@@ -14,7 +14,6 @@ import java.util.Set;
  * a reason, and approve the hours afterwards.
  */
 public enum ShiftTransition {
-
     OPEN(Set.of(ShiftActor.COURIER)),
     START_BREAK(Set.of(ShiftActor.COURIER)),
     END_BREAK(Set.of(ShiftActor.COURIER)),

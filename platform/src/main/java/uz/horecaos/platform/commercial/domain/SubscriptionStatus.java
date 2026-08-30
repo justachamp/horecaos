@@ -44,8 +44,7 @@ public enum SubscriptionStatus {
 
     /** Whether this status makes the plan's entitlements apply at all. */
     public boolean grantsPlanEntitlements() {
-        return this == TRIALING || this == ACTIVE || this == PAST_DUE
-                || this == CANCELLATION_SCHEDULED;
+        return this == TRIALING || this == ACTIVE || this == PAST_DUE || this == CANCELLATION_SCHEDULED;
     }
 
     /**

@@ -4,7 +4,6 @@ import java.time.LocalDate;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 
 /**
@@ -84,8 +83,7 @@ public record ProviderBinding(
      * merchant Click infers, which would be another restaurant's account.
      */
     public Optional<String> merchantId() {
-        return Optional.ofNullable(merchantIdReference)
-                .filter(reference -> !reference.isBlank());
+        return Optional.ofNullable(merchantIdReference).filter(reference -> !reference.isBlank());
     }
 
     public boolean effectiveOn(LocalDate businessDate) {
@@ -102,7 +100,6 @@ public record ProviderBinding(
      */
     @Override
     public String toString() {
-        return "ProviderBinding[" + providerType + " binding=" + bindingId
-                + " legalEntity=" + legalEntityId + "]";
+        return "ProviderBinding[" + providerType + " binding=" + bindingId + " legalEntity=" + legalEntityId + "]";
     }
 }

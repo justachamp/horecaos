@@ -13,7 +13,6 @@ package uz.horecaos.platform.fulfillment.domain.sourcing;
  * booking a fallback while the first provider may have accepted.
  */
 public enum AttemptStatus {
-
     REQUESTED,
     OFFERED,
     ACCEPTED,

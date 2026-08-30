@@ -14,7 +14,8 @@ public record LocationCreated(
         String slug,
         String displayName,
         String timezone,
-        String status) implements TenancyEvent {
+        String status)
+        implements TenancyEvent {
 
     public LocationCreated {
         Objects.requireNonNull(eventId, "Event ID is required");
@@ -57,5 +58,5 @@ public record LocationCreated(
             String slug,
             String displayName,
             String timezone,
-            String status) { }
+            String status) {}
 }

@@ -7,7 +7,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Stream;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -88,9 +87,7 @@ class PosModuleBoundaryTests {
     }
 
     private static boolean imports(Path source, String prefix) {
-        return read(source).lines()
-                .filter(line -> line.startsWith("import "))
-                .anyMatch(line -> line.contains(prefix));
+        return read(source).lines().filter(line -> line.startsWith("import ")).anyMatch(line -> line.contains(prefix));
     }
 
     private static String read(Path path) {

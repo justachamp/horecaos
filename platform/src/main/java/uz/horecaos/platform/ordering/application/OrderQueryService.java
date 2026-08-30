@@ -7,10 +7,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
@@ -43,8 +41,11 @@ public class OrderQueryService {
     private final PaymentIntentPort payments;
     private final FieldProtection protection;
 
-    public OrderQueryService(JdbcOrderStore orders, JdbcOrderProcessStore processes,
-            PaymentIntentPort payments, FieldProtection protection) {
+    public OrderQueryService(
+            JdbcOrderStore orders,
+            JdbcOrderProcessStore processes,
+            PaymentIntentPort payments,
+            FieldProtection protection) {
         this.orders = orders;
         this.processes = processes;
         this.payments = payments;
@@ -60,10 +61,11 @@ public class OrderQueryService {
      * everywhere would put personal data on every screen in the branch.
      */
     @Transactional(readOnly = true)
-    public Optional<String> revealLineNote(UUID tenantId, UUID orderId, UUID lineId,
-            String purpose) {
+    public Optional<String> revealLineNote(UUID tenantId, UUID orderId, UUID lineId, String purpose) {
         return orders.lineNote(tenantId, orderId, lineId)
-                .map(stored -> protection.reveal(tenantId, ProtectedValue.deserialize(stored),
+                .map(stored -> protection.reveal(
+                        tenantId,
+                        ProtectedValue.deserialize(stored),
                         new FieldProtection.RecordRef(ORDER_LINE_TABLE, NOTE_COLUMN, lineId),
                         purpose));
     }
@@ -87,13 +89,12 @@ public class OrderQueryService {
     public Optional<OrderDetail> detail(UUID tenantId, UUID orderId, Integer revision) {
         return orders.find(tenantId, orderId).map(order -> {
             List<OrderLineRow> lines = orders.lines(tenantId, orderId, revision);
-            Map<UUID, List<OrderModifierRow>> modifiers = orders.lineModifiers(tenantId, orderId)
-                    .stream()
+            Map<UUID, List<OrderModifierRow>> modifiers = orders.lineModifiers(tenantId, orderId).stream()
                     .collect(Collectors.groupingBy(OrderModifierRow::orderLineId));
 
             List<DetailLine> detailLines = new ArrayList<>(lines.size());
-            lines.forEach(line -> detailLines.add(new DetailLine(line,
-                    modifiers.getOrDefault(line.lineId(), List.of()))));
+            lines.forEach(
+                    line -> detailLines.add(new DetailLine(line, modifiers.getOrDefault(line.lineId(), List.of()))));
 
             return new OrderDetail(order, detailLines, warnings());
         });
@@ -108,21 +109,19 @@ public class OrderQueryService {
      * somebody else's order.
      */
     @Transactional(readOnly = true)
-    public Optional<OrderDetail> detailForCustomer(UUID tenantId, UUID orderId,
-            UUID customerAccountId, String guestReferenceHash) {
+    public Optional<OrderDetail> detailForCustomer(
+            UUID tenantId, UUID orderId, UUID customerAccountId, String guestReferenceHash) {
         return detail(tenantId, orderId).filter(found -> {
             OrderRow order = found.order();
             if (customerAccountId != null) {
                 return customerAccountId.equals(order.customerAccountId());
             }
-            return guestReferenceHash != null
-                    && guestReferenceHash.equals(order.guestReferenceHash());
+            return guestReferenceHash != null && guestReferenceHash.equals(order.guestReferenceHash());
         });
     }
 
     @Transactional(readOnly = true)
-    public List<OrderRow> forLocation(UUID tenantId, UUID brandId, UUID locationId,
-            List<String> statuses, int limit) {
+    public List<OrderRow> forLocation(UUID tenantId, UUID brandId, UUID locationId, List<String> statuses, int limit) {
         return orders.listForLocation(tenantId, brandId, locationId, statuses, limit);
     }
 
@@ -147,8 +146,8 @@ public class OrderQueryService {
      *                                is somebody else's, which answers identically
      */
     @Transactional(readOnly = true)
-    public List<JdbcOrderStore.CustomerOrderRow> forCustomer(UUID tenantId, UUID brandId,
-            UUID accountId, UUID cursorOrderId, int limit) {
+    public List<JdbcOrderStore.CustomerOrderRow> forCustomer(
+            UUID tenantId, UUID brandId, UUID accountId, UUID cursorOrderId, int limit) {
 
         Instant before = null;
         if (cursorOrderId != null) {
@@ -199,7 +198,7 @@ public class OrderQueryService {
         return payments.isWired() ? List.of() : List.of(PaymentIntentPort.NOT_WIRED_WARNING);
     }
 
-    public record OrderDetail(OrderRow order, List<DetailLine> lines, List<String> warnings) { }
+    public record OrderDetail(OrderRow order, List<DetailLine> lines, List<String> warnings) {}
 
-    public record DetailLine(OrderLineRow line, List<OrderModifierRow> modifiers) { }
+    public record DetailLine(OrderLineRow line, List<OrderModifierRow> modifiers) {}
 }

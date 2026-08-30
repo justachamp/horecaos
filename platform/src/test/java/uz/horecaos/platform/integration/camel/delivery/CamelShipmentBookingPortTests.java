@@ -1,5 +1,8 @@
 package uz.horecaos.platform.integration.camel.delivery;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -8,16 +11,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-
 import org.apache.camel.CamelContext;
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.BookingCommand;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.BookingIntent;
@@ -36,8 +35,6 @@ import uz.horecaos.platform.integration.api.provider.ProviderCategory;
 import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 /**
  * The producer ADR 0014's checklist said did not exist (ADR 0007, ADR 0014).
  *
@@ -52,10 +49,8 @@ class CamelShipmentBookingPortTests {
     private static final UUID BRAND = UUID.randomUUID();
     private static final UUID LOCATION = UUID.randomUUID();
     private static final UUID INSTALLATION = UUID.randomUUID();
-    private static final UUID ONE_PHASE_BINDING =
-            UUID.fromString("bbbbbbbb-0000-0000-0000-000000000001");
-    private static final UUID TWO_PHASE_BINDING =
-            UUID.fromString("bbbbbbbb-0000-0000-0000-000000000002");
+    private static final UUID ONE_PHASE_BINDING = UUID.fromString("bbbbbbbb-0000-0000-0000-000000000001");
+    private static final UUID TWO_PHASE_BINDING = UUID.fromString("bbbbbbbb-0000-0000-0000-000000000002");
 
     private CamelContext camel;
 
@@ -76,13 +71,16 @@ class CamelShipmentBookingPortTests {
         // The binding row records what a tenant enabled; the adapter records
         // what the partner documented. It is the second that decides whether a
         // create is a hold or a courier already on a scooter.
-        assertThat(partners).extracting(PartnerOption::providerType)
+        assertThat(partners)
+                .extracting(PartnerOption::providerType)
                 .containsExactlyInAnyOrder("noor-like", "yandex-like");
-        assertThat(partners).filteredOn(option -> "noor-like".equals(option.providerType()))
+        assertThat(partners)
+                .filteredOn(option -> "noor-like".equals(option.providerType()))
                 .singleElement()
                 .returns(false, PartnerOption::supportsHold)
                 .returns(true, PartnerOption::supportsScheduling);
-        assertThat(partners).filteredOn(option -> "yandex-like".equals(option.providerType()))
+        assertThat(partners)
+                .filteredOn(option -> "yandex-like".equals(option.providerType()))
                 .singleElement()
                 .returns(true, PartnerOption::supportsHold);
     }
@@ -218,9 +216,21 @@ class CamelShipmentBookingPortTests {
         ShipmentBookingPort port = port(noor);
         Instant pickup = Instant.parse("2026-08-24T14:00:00Z");
 
-        port.book(new BookingCommand(UUID.randomUUID(), TENANT, BRAND, LOCATION,
-                ONE_PHASE_BINDING, BookingIntent.BOOK_FOR_PICKUP_WINDOW, "QO-3003",
-                branch(), home(), pickup, true, 145_000L, "UZS", "corr-1"));
+        port.book(new BookingCommand(
+                UUID.randomUUID(),
+                TENANT,
+                BRAND,
+                LOCATION,
+                ONE_PHASE_BINDING,
+                BookingIntent.BOOK_FOR_PICKUP_WINDOW,
+                "QO-3003",
+                branch(),
+                home(),
+                pickup,
+                true,
+                145_000L,
+                "UZS",
+                "corr-1"));
 
         assertThat(noor.lastRequest.requestedPickupAt()).isEqualTo(pickup);
     }
@@ -229,8 +239,10 @@ class CamelShipmentBookingPortTests {
         List<DeliveryPartner> registered = List.of(partners);
         SimpleMeterRegistry meters = new SimpleMeterRegistry();
         DeliveryGateway gateway = new DeliveryGateway(registered, lookup(), fixedResolver());
-        DeliveryProcessor processor = new DeliveryProcessor(gateway,
-                new DeliveryCircuitBreakers(meters, Clock.systemUTC()), meters,
+        DeliveryProcessor processor = new DeliveryProcessor(
+                gateway,
+                new DeliveryCircuitBreakers(meters, Clock.systemUTC()),
+                meters,
                 new RecordingReconciliationOutbox());
 
         camel = new DefaultCamelContext();
@@ -242,46 +254,65 @@ class CamelShipmentBookingPortTests {
     }
 
     private static BookingCommand command(UUID bindingId, BookingIntent intent) {
-        return new BookingCommand(UUID.randomUUID(), TENANT, BRAND, LOCATION, bindingId, intent,
-                "QO-3003", branch(), home(), null, true, 145_000L, "UZS", "corr-1");
+        return new BookingCommand(
+                UUID.randomUUID(),
+                TENANT,
+                BRAND,
+                LOCATION,
+                bindingId,
+                intent,
+                "QO-3003",
+                branch(),
+                home(),
+                null,
+                true,
+                145_000L,
+                "UZS",
+                "corr-1");
     }
 
     private static Waypoint branch() {
-        return new Waypoint(41.311, 69.240, "branch", "Kitchen", "+998900000001",
-                null, null, null, null);
+        return new Waypoint(41.311, 69.240, "branch", "Kitchen", "+998900000001", null, null, null, null);
     }
 
     private static Waypoint home() {
-        return new Waypoint(41.325, 69.281, "home", "Customer", "+998900000002",
-                "gate code 12", "2", "5", "17");
+        return new Waypoint(41.325, 69.281, "home", "Customer", "+998900000002", "gate code 12", "2", "5", "17");
     }
 
     private static ScriptedPartner onePhase() {
-        return new ScriptedPartner("noor-like", "noor-1", Set.of(
-                DeliveryCapability.QUOTE_DELIVERY,
-                DeliveryCapability.CREATE_ON_DEMAND_SHIPMENT,
-                DeliveryCapability.SCHEDULE_SHIPMENT,
-                DeliveryCapability.CANCEL_SHIPMENT,
-                DeliveryCapability.QUERY_SHIPMENT), true);
+        return new ScriptedPartner(
+                "noor-like",
+                "noor-1",
+                Set.of(
+                        DeliveryCapability.QUOTE_DELIVERY,
+                        DeliveryCapability.CREATE_ON_DEMAND_SHIPMENT,
+                        DeliveryCapability.SCHEDULE_SHIPMENT,
+                        DeliveryCapability.CANCEL_SHIPMENT,
+                        DeliveryCapability.QUERY_SHIPMENT),
+                true);
     }
 
     private static ScriptedPartner twoPhase() {
-        return new ScriptedPartner("yandex-like", "yandex-1", Set.of(
-                DeliveryCapability.QUOTE_DELIVERY,
-                DeliveryCapability.RESERVE_SHIPMENT,
-                DeliveryCapability.CONFIRM_SHIPMENT,
-                DeliveryCapability.SCHEDULE_SHIPMENT,
-                DeliveryCapability.CANCEL_SHIPMENT,
-                DeliveryCapability.QUERY_SHIPMENT), false);
+        return new ScriptedPartner(
+                "yandex-like",
+                "yandex-1",
+                Set.of(
+                        DeliveryCapability.QUOTE_DELIVERY,
+                        DeliveryCapability.RESERVE_SHIPMENT,
+                        DeliveryCapability.CONFIRM_SHIPMENT,
+                        DeliveryCapability.SCHEDULE_SHIPMENT,
+                        DeliveryCapability.CANCEL_SHIPMENT,
+                        DeliveryCapability.QUERY_SHIPMENT),
+                false);
     }
 
     private static ProviderInstallationLookup lookup() {
         SecretReference reference =
                 new SecretReference("local", SecretCategory.PROVIDER_DELIVERY, "tenant", "scripted");
-        BindingRef onePhase = new BindingRef(ONE_PHASE_BINDING, INSTALLATION, TENANT,
-                ProviderCategory.DELIVERY, "noor-like", BRAND, LOCATION);
-        BindingRef twoPhase = new BindingRef(TWO_PHASE_BINDING, INSTALLATION, TENANT,
-                ProviderCategory.DELIVERY, "yandex-like", BRAND, LOCATION);
+        BindingRef onePhase = new BindingRef(
+                ONE_PHASE_BINDING, INSTALLATION, TENANT, ProviderCategory.DELIVERY, "noor-like", BRAND, LOCATION);
+        BindingRef twoPhase = new BindingRef(
+                TWO_PHASE_BINDING, INSTALLATION, TENANT, ProviderCategory.DELIVERY, "yandex-like", BRAND, LOCATION);
 
         return new ProviderInstallationLookup() {
             @Override
@@ -307,9 +338,15 @@ class CamelShipmentBookingPortTests {
 
             @Override
             public Optional<InstallationSnapshot> installation(UUID tenantId, UUID installationId) {
-                return Optional.of(new InstallationSnapshot(INSTALLATION, ProviderCategory.DELIVERY,
-                        "scripted", "local", "http://127.0.0.1:1", "ACTIVE",
-                        reference.toString(), "v1"));
+                return Optional.of(new InstallationSnapshot(
+                        INSTALLATION,
+                        ProviderCategory.DELIVERY,
+                        "scripted",
+                        "local",
+                        "http://127.0.0.1:1",
+                        "ACTIVE",
+                        reference.toString(),
+                        "v1"));
             }
         };
     }
@@ -348,8 +385,8 @@ class CamelShipmentBookingPortTests {
         private int creates;
         private int confirms;
 
-        ScriptedPartner(String providerType, String reference,
-                Set<DeliveryCapability> capabilities, boolean createIsLive) {
+        ScriptedPartner(
+                String providerType, String reference, Set<DeliveryCapability> capabilities, boolean createIsLive) {
             this.providerType = providerType;
             this.reference = reference;
             this.capabilities = capabilities;
@@ -394,8 +431,7 @@ class CamelShipmentBookingPortTests {
         }
 
         @Override
-        public ProviderOutcome cancelShipment(String externalReference, String reason,
-                ProviderCall call) {
+        public ProviderOutcome cancelShipment(String externalReference, String reason, ProviderCall call) {
             return ProviderOutcome.success(Map.of(), externalReference);
         }
 

@@ -1,14 +1,12 @@
 package uz.horecaos.platform.integration.camel.notification;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.camel.Exchange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
-
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 
 /**
@@ -58,9 +56,11 @@ public class NotificationProcessor {
             // Set as an outcome rather than thrown: an unsupported channel is an
             // answer for the notifications module, not a route failure for an
             // engineer, and throwing would dead-letter it into a human's queue.
-            exchange.getIn().setHeader(NotificationRouteBuilder.OUTCOME_HEADER,
-                    ProviderOutcome.rejected("CHANNEL_UNSUPPORTED",
-                            "No adapter is registered for " + operation.channel()));
+            exchange.getIn()
+                    .setHeader(
+                            NotificationRouteBuilder.OUTCOME_HEADER,
+                            ProviderOutcome.rejected(
+                                    "CHANNEL_UNSUPPORTED", "No adapter is registered for " + operation.channel()));
             exchange.setRouteStop(true);
         }
     }
@@ -68,12 +68,17 @@ public class NotificationProcessor {
     public void invoke(Exchange exchange) {
         NotificationSendOperation operation = operation(exchange);
 
-        ProviderOutcome outcome = switch (operation.kind()) {
-            case SEND -> gateway.send(operation.dispatch());
-            case QUERY_STATUS -> gateway.queryStatus(operation.tenantId(), operation.brandId(),
-                    operation.locationId(), operation.channel(),
-                    operation.providerIdempotencyKey());
-        };
+        ProviderOutcome outcome =
+                switch (operation.kind()) {
+                    case SEND -> gateway.send(operation.dispatch());
+                    case QUERY_STATUS ->
+                        gateway.queryStatus(
+                                operation.tenantId(),
+                                operation.brandId(),
+                                operation.locationId(),
+                                operation.channel(),
+                                operation.providerIdempotencyKey());
+                };
 
         count(operation, outcome);
         exchange.getIn().setHeader(NotificationRouteBuilder.OUTCOME_HEADER, outcome);
@@ -94,12 +99,14 @@ public class NotificationProcessor {
         // The class name only. A provider exception message can echo the request
         // back, and the request holds a phone number and the text of the message.
         String detail = failure == null ? "unknown" : failure.getClass().getSimpleName();
-        log.error("Notification route failed for tenant {} on {}: {}",
+        log.error(
+                "Notification route failed for tenant {} on {}: {}",
                 operation == null ? "unknown" : operation.tenantId(),
-                operation == null ? "unknown" : operation.channel(), detail);
+                operation == null ? "unknown" : operation.channel(),
+                detail);
 
-        exchange.getIn().setHeader(NotificationRouteBuilder.OUTCOME_HEADER,
-                ProviderOutcome.uncertain("ROUTE_FAILURE", detail));
+        exchange.getIn()
+                .setHeader(NotificationRouteBuilder.OUTCOME_HEADER, ProviderOutcome.uncertain("ROUTE_FAILURE", detail));
     }
 
     private void count(NotificationSendOperation operation, ProviderOutcome outcome) {

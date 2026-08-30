@@ -5,19 +5,17 @@ import java.sql.SQLException;
 import java.sql.Types;
 import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.Currency;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.tenancy.api.BrandId;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 import uz.horecaos.platform.tenancy.api.LocationId;
@@ -102,8 +100,7 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
                 .param("tenantId", tenant.id().value())
                 .update();
         if (updated != 1) {
-            throw new OptimisticLockingFailureException(
-                    "Tenant organization link changed concurrently");
+            throw new OptimisticLockingFailureException("Tenant organization link changed concurrently");
         }
     }
 

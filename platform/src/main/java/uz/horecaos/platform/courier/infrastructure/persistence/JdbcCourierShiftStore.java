@@ -9,10 +9,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.courier.domain.DutyState;
 import uz.horecaos.platform.courier.domain.ShiftEnforcement;
 import uz.horecaos.platform.courier.domain.ShiftStatus;
@@ -65,14 +63,13 @@ public class JdbcCourierShiftStore {
                     'OPEN', 'AVAILABLE', :openedAt, 'COURIER', :openPoint,
                     0, :enforcementMode, :policyId, :policyVersion, :periodId,
                     1, :now, :now)
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     public Optional<ShiftRow> findShift(UUID tenantId, UUID shiftId) {
         return jdbc.sql(SELECT_SHIFT + " WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", shiftId)
+                .param("tenantId", tenantId)
+                .param("id", shiftId)
                 .query(JdbcCourierShiftStore::mapShift)
                 .optional();
     }
@@ -82,7 +79,8 @@ public class JdbcCourierShiftStore {
                  WHERE tenant_id = :tenantId AND courier_id = :courierId
                    AND status IN ('OPEN', 'CLOSE_REQUESTED', 'RECONCILING')
                 """)
-                .param("tenantId", tenantId).param("courierId", courierId)
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
                 .query(JdbcCourierShiftStore::mapShift)
                 .optional();
     }
@@ -158,8 +156,7 @@ public class JdbcCourierShiftStore {
                 .list();
     }
 
-    public boolean setDutyState(UUID tenantId, UUID shiftId, DutyState from, DutyState to,
-            Instant now) {
+    public boolean setDutyState(UUID tenantId, UUID shiftId, DutyState from, DutyState to, Instant now) {
 
         return jdbc.sql("""
                 UPDATE fulfillment.courier_shifts
@@ -167,10 +164,13 @@ public class JdbcCourierShiftStore {
                  WHERE tenant_id = :tenantId AND id = :id
                    AND status = 'OPEN' AND duty_state = :from
                 """)
-                .param("tenantId", tenantId).param("id", shiftId)
-                .param("from", from.name()).param("to", to.name())
-                .param("now", JdbcCourierStore.utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", shiftId)
+                        .param("from", from.name())
+                        .param("to", to.name())
+                        .param("now", JdbcCourierStore.utc(now))
+                        .update()
+                == 1;
     }
 
     /**
@@ -178,9 +178,16 @@ public class JdbcCourierShiftStore {
      * caller. Conditional on the shift still being live, so a manager close and
      * a sweeper auto-close cannot both land.
      */
-    public boolean close(UUID tenantId, UUID shiftId, ShiftStatus status, String closeSource,
-            String closeReasonCode, String protectedClosePoint, long paidSeconds,
-            long breakSeconds, Instant closedAt) {
+    public boolean close(
+            UUID tenantId,
+            UUID shiftId,
+            ShiftStatus status,
+            String closeSource,
+            String closeReasonCode,
+            String protectedClosePoint,
+            long paidSeconds,
+            long breakSeconds,
+            Instant closedAt) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
@@ -207,9 +214,7 @@ public class JdbcCourierShiftStore {
                        updated_at = :closedAt
                  WHERE tenant_id = :tenantId AND id = :id
                    AND status IN ('OPEN', 'CLOSE_REQUESTED', 'RECONCILING')
-                """)
-                .params(params)
-                .update() == 1;
+                """).params(params).update() == 1;
     }
 
     public boolean approveHours(UUID tenantId, UUID shiftId, UUID approvalRequestId, Instant now) {
@@ -227,9 +232,7 @@ public class JdbcCourierShiftStore {
                        updated_at = :now
                  WHERE tenant_id = :tenantId AND id = :id
                    AND status IN ('AWAITING_APPROVAL', 'AUTO_CLOSED')
-                """)
-                .params(params)
-                .update() == 1;
+                """).params(params).update() == 1;
     }
 
     // ------------------------------------------------------------------- breaks
@@ -240,7 +243,9 @@ public class JdbcCourierShiftStore {
                     id, tenant_id, shift_id, started_at)
                 VALUES (:id, :tenantId, :shiftId, :startedAt)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("shiftId", shiftId)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("shiftId", shiftId)
                 .param("startedAt", JdbcCourierStore.utc(startedAt))
                 .update();
     }
@@ -256,10 +261,12 @@ public class JdbcCourierShiftStore {
                    SET ended_at = :endedAt, ended_by_source = :source
                  WHERE tenant_id = :tenantId AND shift_id = :shiftId AND ended_at IS NULL
                 """)
-                .param("tenantId", tenantId).param("shiftId", shiftId)
-                .param("source", endedBySource)
-                .param("endedAt", JdbcCourierStore.utc(endedAt))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("shiftId", shiftId)
+                        .param("source", endedBySource)
+                        .param("endedAt", JdbcCourierStore.utc(endedAt))
+                        .update()
+                == 1;
     }
 
     /**
@@ -272,7 +279,8 @@ public class JdbcCourierShiftStore {
                   FROM fulfillment.courier_shift_breaks
                  WHERE tenant_id = :tenantId AND shift_id = :shiftId
                 """)
-                .param("tenantId", tenantId).param("shiftId", shiftId)
+                .param("tenantId", tenantId)
+                .param("shiftId", shiftId)
                 .param("asOf", JdbcCourierStore.utc(asOf))
                 .query(Long.class)
                 .single();
@@ -286,7 +294,8 @@ public class JdbcCourierShiftStore {
                  WHERE tenant_id = :tenantId AND shift_id = :shiftId
                  ORDER BY started_at
                 """)
-                .param("tenantId", tenantId).param("shiftId", shiftId)
+                .param("tenantId", tenantId)
+                .param("shiftId", shiftId)
                 .query((ResultSet rs, int rowNumber) -> new BreakRow(
                         rs.getObject("id", UUID.class),
                         rs.getObject("shift_id", UUID.class),
@@ -315,21 +324,21 @@ public class JdbcCourierShiftStore {
                     expected_minor, created_at, updated_at)
                 VALUES (:id, :tenantId, :shiftId, :courierId, :locationId, 'PENDING', :currency,
                     :expected, :now, :now)
-                """)
-                .params(params)
-                .update();
+                """).params(params).update();
     }
 
     public Optional<HandoverRow> findHandover(UUID tenantId, UUID handoverId) {
         return jdbc.sql(SELECT_HANDOVER + " WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", handoverId)
+                .param("tenantId", tenantId)
+                .param("id", handoverId)
                 .query(JdbcCourierShiftStore::mapHandover)
                 .optional();
     }
 
     public Optional<HandoverRow> findHandoverByShift(UUID tenantId, UUID shiftId) {
         return jdbc.sql(SELECT_HANDOVER + " WHERE tenant_id = :tenantId AND shift_id = :shiftId")
-                .param("tenantId", tenantId).param("shiftId", shiftId)
+                .param("tenantId", tenantId)
+                .param("shiftId", shiftId)
                 .query(JdbcCourierShiftStore::mapHandover)
                 .optional();
     }
@@ -341,14 +350,23 @@ public class JdbcCourierShiftStore {
                        status = 'DECLARED', updated_at = :declaredAt
                  WHERE tenant_id = :tenantId AND id = :id AND status = 'PENDING'
                 """)
-                .param("tenantId", tenantId).param("id", handoverId)
-                .param("declared", declaredMinor)
-                .param("declaredAt", JdbcCourierStore.utc(declaredAt))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", handoverId)
+                        .param("declared", declaredMinor)
+                        .param("declaredAt", JdbcCourierStore.utc(declaredAt))
+                        .update()
+                == 1;
     }
 
-    public boolean confirm(UUID tenantId, UUID handoverId, long confirmedMinor, long varianceMinor,
-            String status, String reasonCode, String confirmedBy, Instant confirmedAt) {
+    public boolean confirm(
+            UUID tenantId,
+            UUID handoverId,
+            long confirmedMinor,
+            long varianceMinor,
+            String status,
+            String reasonCode,
+            String confirmedBy,
+            Instant confirmedAt) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
@@ -367,23 +385,36 @@ public class JdbcCourierShiftStore {
                        confirmed_by = :confirmedBy, confirmed_at = :confirmedAt,
                        updated_at = :confirmedAt
                  WHERE tenant_id = :tenantId AND id = :id AND status = 'DECLARED'
-                """)
-                .params(params)
-                .update() == 1;
+                """).params(params).update() == 1;
     }
 
     // -------------------------------------------------------------------- rows
 
-    public record ShiftRow(UUID id, UUID tenantId, UUID brandId, UUID locationId, UUID courierId,
-            UUID engagementId, ShiftStatus status, DutyState dutyState, Instant openedAt,
-            Instant closedAt, String openSource, String closeSource, String closeReasonCode,
-            String protectedOpenPoint, Long paidSeconds, long breakSeconds,
-            ShiftEnforcement enforcementMode, UUID enforcementPolicyId,
-            Integer enforcementPolicyVersion, UUID approvalRequestId, UUID settlementPeriodId,
-            int version) { }
+    public record ShiftRow(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID courierId,
+            UUID engagementId,
+            ShiftStatus status,
+            DutyState dutyState,
+            Instant openedAt,
+            Instant closedAt,
+            String openSource,
+            String closeSource,
+            String closeReasonCode,
+            String protectedOpenPoint,
+            Long paidSeconds,
+            long breakSeconds,
+            ShiftEnforcement enforcementMode,
+            UUID enforcementPolicyId,
+            Integer enforcementPolicyVersion,
+            UUID approvalRequestId,
+            UUID settlementPeriodId,
+            int version) {}
 
-    public record BreakRow(UUID id, UUID shiftId, Instant startedAt, Instant endedAt,
-            String endedBySource) { }
+    public record BreakRow(UUID id, UUID shiftId, Instant startedAt, Instant endedAt, String endedBySource) {}
 
     /**
      * One courier on shift at one branch, as dispatch needs to see them.
@@ -393,13 +424,25 @@ public class JdbcCourierShiftStore {
      * boundary, and the cheapest way to keep personal data off that boundary is
      * for it never to be selected in the first place.
      */
-    public record FleetRow(UUID courierId, UUID shiftId, int offerTtlSeconds,
-            int concurrencyCeiling, int deliveriesThisShift) { }
+    public record FleetRow(
+            UUID courierId, UUID shiftId, int offerTtlSeconds, int concurrencyCeiling, int deliveriesThisShift) {}
 
-    public record HandoverRow(UUID id, UUID tenantId, UUID shiftId, UUID courierId, UUID locationId,
-            String status, String currency, long expectedMinor, Long declaredMinor,
-            Long confirmedMinor, Long varianceMinor, Instant declaredAt, String confirmedBy,
-            Instant confirmedAt, String reasonCode) { }
+    public record HandoverRow(
+            UUID id,
+            UUID tenantId,
+            UUID shiftId,
+            UUID courierId,
+            UUID locationId,
+            String status,
+            String currency,
+            long expectedMinor,
+            Long declaredMinor,
+            Long confirmedMinor,
+            Long varianceMinor,
+            Instant declaredAt,
+            String confirmedBy,
+            Instant confirmedAt,
+            String reasonCode) {}
 
     // ----------------------------------------------------------------- mapping
 

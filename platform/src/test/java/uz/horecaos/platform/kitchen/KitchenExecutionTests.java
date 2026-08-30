@@ -1,6 +1,7 @@
 package uz.horecaos.platform.kitchen;
 
-import javax.sql.DataSource;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -12,7 +13,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -20,12 +21,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.DockerClientFactory;
-
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.fulfillment.api.OrderProgressPort;
@@ -56,9 +54,6 @@ import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.LocationCapacityPort;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyResolver;
 import uz.horecaos.platform.web.api.ApiException;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * Kitchen execution, production routing, and kitchen release (ADR 0041).
@@ -103,6 +98,7 @@ class KitchenExecutionTests {
      * be the test agreeing with itself about a transition ADR 0019 owns.
      */
     private KitchenTicketService wiredTickets;
+
     private JdbcOrderStore orderStore;
     private RecordingSettlements settlements;
     private List<UUID> capacityReleases;
@@ -123,8 +119,8 @@ class KitchenExecutionTests {
 
     @BeforeAll
     static void startDatabase() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
-                "Docker is required for kitchen execution tests");
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(), "Docker is required for kitchen execution tests");
         db = TestDatabase.migrated();
         jdbcUrl = db.jdbcUrl();
         username = db.username();
@@ -144,15 +140,17 @@ class KitchenExecutionTests {
         jdbc = JdbcClient.create(dataSource);
 
         jdbc.sql("TRUNCATE TABLE kitchen.ticket_events, kitchen.ticket_items, kitchen.tickets, "
-                + "kitchen.location_routing_rules, kitchen.brand_routing_rules, "
-                + "kitchen.stations CASCADE").update();
+                        + "kitchen.location_routing_rules, kitchen.brand_routing_rules, "
+                        + "kitchen.stations CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE ordering.order_lines, ordering.order_revisions, "
-                + "ordering.orders, ordering.carts CASCADE")
+                        + "ordering.orders, ordering.carts CASCADE")
                 .update();
         jdbc.sql("TRUNCATE TABLE pricing.quotes CASCADE").update();
         jdbc.sql("TRUNCATE TABLE catalog.publication_items, catalog.publications, "
-                + "catalog.category_products, catalog.categories, catalog.catalog_products, "
-                + "catalog.variants, catalog.products, catalog.catalogs CASCADE").update();
+                        + "catalog.category_products, catalog.categories, catalog.catalog_products, "
+                        + "catalog.variants, catalog.products, catalog.catalogs CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
 
         Clock clock = Clock.fixed(NOON, ZoneOffset.UTC);
@@ -160,8 +158,7 @@ class KitchenExecutionTests {
         proposals = new RecordingOrderProgressPort();
         audit = new RecordingAuditRecorder();
         stationService = new KitchenStationService(store, clock);
-        tickets = new KitchenTicketService(store, new JdbcKitchenOrderSource(jdbc), proposals,
-                audit, clock);
+        tickets = new KitchenTicketService(store, new JdbcKitchenOrderSource(jdbc), proposals, audit, clock);
 
         ObjectMapper objectMapper = JsonMapper.builder().build();
         orderStore = new JdbcOrderStore(jdbc);
@@ -172,13 +169,17 @@ class KitchenExecutionTests {
         // stubbed into silence: releasing a slot and settling a handover are the
         // consequences of a COMPLETED proposal, and a test that could not see
         // them would pass while ADR 0036's ceiling stayed held for ever.
-        var orderState = new OrderStateService(orderStore, new RecordingCapacity(),
-                new OrderInventoryProcess(new JdbcOrderProcessStore(jdbc), REFUSES_INVENTORY,
-                        objectMapper, clock),
+        var orderState = new OrderStateService(
+                orderStore,
+                new RecordingCapacity(),
+                new OrderInventoryProcess(new JdbcOrderProcessStore(jdbc), REFUSES_INVENTORY, objectMapper, clock),
                 new OrderAcceptancePolicyService(new JdbcPolicyResolver(jdbc, objectMapper)),
-                settlements, audit, event -> { }, clock);
-        wiredTickets = new KitchenTicketService(store, new JdbcKitchenOrderSource(jdbc),
-                new OrderProgressAdapter(orderState), audit, clock);
+                settlements,
+                audit,
+                event -> {},
+                clock);
+        wiredTickets = new KitchenTicketService(
+                store, new JdbcKitchenOrderSource(jdbc), new OrderProgressAdapter(orderState), audit, clock);
 
         seedTenancy();
         seedCatalogue();
@@ -206,18 +207,15 @@ class KitchenExecutionTests {
 
         // Level 3: any location override outranks every brand rule.
         locationRule(null, null, burger.categoryId(), grillStation);
-        assertThat(resolve(burger))
-                .isEqualTo(new Resolution(grillStation, RoutingLevel.LOCATION_CATEGORY));
+        assertThat(resolve(burger)).isEqualTo(new Resolution(grillStation, RoutingLevel.LOCATION_CATEGORY));
 
         // Level 2.
         locationRule(null, burger.productId(), null, coldStation);
-        assertThat(resolve(burger))
-                .isEqualTo(new Resolution(coldStation, RoutingLevel.LOCATION_PRODUCT));
+        assertThat(resolve(burger)).isEqualTo(new Resolution(coldStation, RoutingLevel.LOCATION_PRODUCT));
 
         // Level 1. The narrowest rule at the narrowest scope wins outright.
         locationRule(burger.variantId(), null, null, grillStation);
-        assertThat(resolve(burger))
-                .isEqualTo(new Resolution(grillStation, RoutingLevel.LOCATION_VARIANT));
+        assertThat(resolve(burger)).isEqualTo(new Resolution(grillStation, RoutingLevel.LOCATION_VARIANT));
     }
 
     @Test
@@ -257,7 +255,8 @@ class KitchenExecutionTests {
         assertThat(resolve(burger).stationId()).isEqualTo(grillStation);
 
         jdbc.sql("UPDATE kitchen.stations SET status = 'ARCHIVED' WHERE id = :id")
-                .param("id", grillStation).update();
+                .param("id", grillStation)
+                .update();
 
         assertThat(resolve(burger))
                 .as("an archived station is indistinguishable from losing the dish")
@@ -267,9 +266,8 @@ class KitchenExecutionTests {
     @Test
     @DisplayName("a branch cannot have two active stations carrying one role")
     void oneActiveStationPerRole() {
-        Throwable failure = catchThrowable(() -> stationService.create(
-                new KitchenStationService.NewStation(TENANT, BRAND, branch, "GRILL2",
-                        StationRole.GRILL, "Гриль 2", "Gril 2", "Grill 2", 9, false)));
+        Throwable failure = catchThrowable(() -> stationService.create(new KitchenStationService.NewStation(
+                TENANT, BRAND, branch, "GRILL2", StationRole.GRILL, "Гриль 2", "Gril 2", "Grill 2", 9, false)));
 
         assertThat(failure)
                 .as("a brand rule resolves a role to \"the location's station carrying it\", "
@@ -291,8 +289,7 @@ class KitchenExecutionTests {
 
         List<TicketItemRow> items = store.itemsOf(TENANT, ticket.id());
         items.forEach(item -> tickets.start(TENANT, item.id(), "cook", null));
-        assertThat(tickets.require(TENANT, ticket.id()).status())
-                .isEqualTo(TicketStatus.IN_PRODUCTION);
+        assertThat(tickets.require(TENANT, ticket.id()).status()).isEqualTo(TicketStatus.IN_PRODUCTION);
         assertThat(proposals.of(orderId)).containsExactly(OrderProgressPort.OrderProgress.PREPARING);
 
         items.forEach(item -> tickets.ready(TENANT, item.id(), "cook", null));
@@ -301,8 +298,7 @@ class KitchenExecutionTests {
         assertThat(proposals.of(orderId))
                 .as("the roll-up is a function of the item set, so only the update that "
                         + "actually moved the ticket proposes anything")
-                .containsExactly(OrderProgressPort.OrderProgress.PREPARING,
-                        OrderProgressPort.OrderProgress.READY);
+                .containsExactly(OrderProgressPort.OrderProgress.PREPARING, OrderProgressPort.OrderProgress.READY);
     }
 
     @Test
@@ -325,13 +321,11 @@ class KitchenExecutionTests {
                         + "tap gets tapped a third time")
                 .isEqualTo(TicketItemStatus.READY);
         assertThat(proposals.of(orderId))
-                .containsExactly(OrderProgressPort.OrderProgress.PREPARING,
-                        OrderProgressPort.OrderProgress.READY);
+                .containsExactly(OrderProgressPort.OrderProgress.PREPARING, OrderProgressPort.OrderProgress.READY);
     }
 
     @Test
-    @DisplayName("an offline client replaying twelve queued advances produces twelve "
-            + "transitions, not twenty-four")
+    @DisplayName("an offline client replaying twelve queued advances produces twelve " + "transitions, not twenty-four")
     void replayedAdvancesSettleOnce() {
         brandRule(null, burger.productId(), null, StationRole.GRILL);
         brandRule(null, salad.productId(), null, StationRole.COLD);
@@ -350,9 +344,7 @@ class KitchenExecutionTests {
         long stationEvents = store.eventsOf(TENANT, ticket.id()).stream()
                 .filter(event -> "STATION_ACTION".equals(event.trigger()))
                 .count();
-        assertThat(stationEvents)
-                .as("a blind retry must settle, not double")
-                .isEqualTo(items.size() * 2L);
+        assertThat(stationEvents).as("a blind retry must settle, not double").isEqualTo(items.size() * 2L);
     }
 
     // -------------------------------------------------------------------- recall
@@ -379,10 +371,8 @@ class KitchenExecutionTests {
                         + "was ready; every lateness figure derives from it")
                 .isNull();
         assertThat(proposals.of(orderId))
-                .as("ADR 0041: a recall never moves the order backwards, so nothing is even "
-                        + "proposed")
-                .containsExactly(OrderProgressPort.OrderProgress.PREPARING,
-                        OrderProgressPort.OrderProgress.READY);
+                .as("ADR 0041: a recall never moves the order backwards, so nothing is even " + "proposed")
+                .containsExactly(OrderProgressPort.OrderProgress.PREPARING, OrderProgressPort.OrderProgress.READY);
     }
 
     @Test
@@ -398,15 +388,12 @@ class KitchenExecutionTests {
         // Handover itself is not built in this slice, so the terminal state is
         // reached directly. The rule under test is about the state, not the route
         // to it.
-        store.transitionTicket(TENANT, ticket.id(), TicketStatus.READY, TicketStatus.HANDED_OVER,
-                NOON);
+        store.transitionTicket(TENANT, ticket.id(), TicketStatus.READY, TicketStatus.HANDED_OVER, NOON);
 
-        Throwable failure = catchThrowable(
-                () -> tickets.recall(TENANT, item.id(), "WRONG_TICKET", "expo", null));
+        Throwable failure = catchThrowable(() -> tickets.recall(TENANT, item.id(), "WRONG_TICKET", "expo", null));
 
         assertThat(failure).isInstanceOf(ApiException.class);
-        assertThat(((ApiException) failure).properties())
-                .containsEntry("exceptionCode", "KitchenRecallAfterReady");
+        assertThat(((ApiException) failure).properties()).containsEntry("exceptionCode", "KitchenRecallAfterReady");
         assertThat(store.eventsOf(TENANT, ticket.id()))
                 .as("somebody tried to recall food that had already left; that is exactly "
                         + "what an operational exception is about")
@@ -434,8 +421,7 @@ class KitchenExecutionTests {
                 .isEqualTo(TicketStatus.HELD);
         assertThat(ticket.releaseMode()).isEqualTo(ReleaseMode.SCHEDULED);
         assertThat(ticket.targetReadyAt()).isEqualTo(promisedAt.minus(Duration.ofMinutes(20)));
-        assertThat(ticket.releaseAt())
-                .isEqualTo(promisedAt.minus(Duration.ofMinutes(45)));
+        assertThat(ticket.releaseAt()).isEqualTo(promisedAt.minus(Duration.ofMinutes(45)));
         assertThat(proposals.of(orderId)).isEmpty();
 
         // Nothing is due at noon.
@@ -449,8 +435,11 @@ class KitchenExecutionTests {
         UUID orderId = seedConfirmedOrder("A-041", NOON.plus(Duration.ofHours(9)), 25, 20, burger);
         TicketRow ticket = tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
 
-        KitchenTicketService later = new KitchenTicketService(store,
-                new JdbcKitchenOrderSource(jdbc), proposals, audit,
+        KitchenTicketService later = new KitchenTicketService(
+                store,
+                new JdbcKitchenOrderSource(jdbc),
+                proposals,
+                audit,
                 Clock.fixed(ticket.releaseAt().plusSeconds(1), ZoneOffset.UTC));
 
         assertThat(later.releaseDue(50)).isEqualTo(1);
@@ -461,8 +450,7 @@ class KitchenExecutionTests {
     }
 
     @Test
-    @DisplayName("an order with no promise fires immediately rather than waiting for a "
-            + "number nobody set")
+    @DisplayName("an order with no promise fires immediately rather than waiting for a " + "number nobody set")
     void anUnpromisedOrderFiresImmediately() {
         brandRule(null, burger.productId(), null, StationRole.GRILL);
         UUID orderId = seedConfirmedOrder("A-042", null, null, null, burger);
@@ -475,8 +463,8 @@ class KitchenExecutionTests {
     }
 
     @Test
-    @DisplayName("firing later than the promise permits needs the override capability, a "
-            + "reason, and an audit fact")
+    @DisplayName(
+            "firing later than the promise permits needs the override capability, a " + "reason, and an audit fact")
     void firingLateIsBoundedAndAudited() {
         brandRule(null, burger.productId(), null, StationRole.GRILL);
         Instant promisedAt = NOON.plus(Duration.ofHours(9));
@@ -485,16 +473,16 @@ class KitchenExecutionTests {
 
         Instant tooLate = ticket.releaseAt().plus(Duration.ofMinutes(30));
 
-        Throwable refused = catchThrowable(() -> tickets.reschedule(TENANT, ticket.id(),
-                ticket.version(), ReleaseMode.SCHEDULED, tooLate, false, "RUSH", "manager", null));
+        Throwable refused = catchThrowable(() -> tickets.reschedule(
+                TENANT, ticket.id(), ticket.version(), ReleaseMode.SCHEDULED, tooLate, false, "RUSH", "manager", null));
         assertThat(refused).isInstanceOf(ApiException.class);
 
-        Throwable noReason = catchThrowable(() -> tickets.reschedule(TENANT, ticket.id(),
-                ticket.version(), ReleaseMode.SCHEDULED, tooLate, true, null, "manager", null));
+        Throwable noReason = catchThrowable(() -> tickets.reschedule(
+                TENANT, ticket.id(), ticket.version(), ReleaseMode.SCHEDULED, tooLate, true, null, "manager", null));
         assertThat(noReason).isInstanceOf(ApiException.class);
 
-        TicketRow after = tickets.reschedule(TENANT, ticket.id(), ticket.version(),
-                ReleaseMode.SCHEDULED, tooLate, true, "RUSH", "manager", null);
+        TicketRow after = tickets.reschedule(
+                TENANT, ticket.id(), ticket.version(), ReleaseMode.SCHEDULED, tooLate, true, "RUSH", "manager", null);
 
         assertThat(after.releaseAt()).isEqualTo(tooLate);
         assertThat(audit.facts)
@@ -511,8 +499,8 @@ class KitchenExecutionTests {
         TicketRow ticket = tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
 
         Instant earlier = ticket.releaseAt().minus(Duration.ofMinutes(30));
-        TicketRow after = tickets.reschedule(TENANT, ticket.id(), ticket.version(),
-                ReleaseMode.SCHEDULED, earlier, false, null, "manager", null);
+        TicketRow after = tickets.reschedule(
+                TENANT, ticket.id(), ticket.version(), ReleaseMode.SCHEDULED, earlier, false, null, "manager", null);
 
         assertThat(after.releaseAt()).isEqualTo(earlier);
         assertThat(audit.facts).isEmpty();
@@ -536,8 +524,7 @@ class KitchenExecutionTests {
     @DisplayName("a ticket item cannot name a station at a sibling location, at SQL")
     void anItemCannotReachASiblingBranchesStation() {
         StationRow siblingGrill = stationService.create(new KitchenStationService.NewStation(
-                TENANT, BRAND, siblingBranch, "GRILL", StationRole.GRILL, "Гриль", "Gril", "Grill",
-                1, true));
+                TENANT, BRAND, siblingBranch, "GRILL", StationRole.GRILL, "Гриль", "Gril", "Grill", 1, true));
 
         brandRule(null, burger.productId(), null, StationRole.GRILL);
         UUID orderId = seedConfirmedOrder("A-050", null, null, null, burger);
@@ -546,7 +533,10 @@ class KitchenExecutionTests {
         Throwable failure = catchThrowable(() -> jdbc.sql("""
                 UPDATE kitchen.ticket_items SET station_id = :station
                 WHERE ticket_id = :ticket
-                """).param("station", siblingGrill.id()).param("ticket", ticket.id()).update());
+                """)
+                .param("station", siblingGrill.id())
+                .param("ticket", ticket.id())
+                .update());
 
         assertThat(failure)
                 .as("the composite key binds a ticket item's station to its ticket's branch, so "
@@ -581,11 +571,11 @@ class KitchenExecutionTests {
     @DisplayName("a branch with no fallback station cannot open a ticket")
     void aBranchWithoutAFallbackRefusesTickets() {
         jdbc.sql("UPDATE kitchen.stations SET is_fallback = false WHERE location_id = :id")
-                .param("id", branch).update();
+                .param("id", branch)
+                .update();
         UUID orderId = seedConfirmedOrder("A-053", null, null, null, burger);
 
-        assertThat(catchThrowable(
-                () -> tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM)))
+        assertThat(catchThrowable(() -> tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM)))
                 .as("a branch with nowhere to put an unmapped dish must not run a screen")
                 .isInstanceOf(ApiException.class);
     }
@@ -614,13 +604,11 @@ class KitchenExecutionTests {
                 .as("recorded as the kitchen's own transitions, not as an operator's, so a "
                         + "rollback of the pilot can tell which orders the screen drove")
                 .containsExactly("CONFIRMED->PREPARING", "PREPARING->READY");
-        assertThat(proposalEventsOf(ticket.id()))
-                .containsExactly("ORDER_PROGRESS_APPLIED", "ORDER_PROGRESS_APPLIED");
+        assertThat(proposalEventsOf(ticket.id())).containsExactly("ORDER_PROGRESS_APPLIED", "ORDER_PROGRESS_APPLIED");
     }
 
     @Test
-    @DisplayName("a proposal the order refuses is refused cleanly, and the food stays where "
-            + "the food is")
+    @DisplayName("a proposal the order refuses is refused cleanly, and the food stays where " + "the food is")
     void aProposalTheOrderRefusesIsRefusedCleanly() {
         brandRule(null, burger.productId(), null, StationRole.GRILL);
         UUID orderId = seedConfirmedOrder("A-061", null, null, null, burger);
@@ -629,8 +617,9 @@ class KitchenExecutionTests {
 
         // An operator cancelled the order while the ticket was on the line. There
         // is no CANCELLED -> PREPARING edge, and there should not be one.
-        jdbc.sql("UPDATE ordering.orders SET status = 'CANCELLED', version = version + 1 "
-                + "WHERE id = :id").param("id", orderId).update();
+        jdbc.sql("UPDATE ordering.orders SET status = 'CANCELLED', version = version + 1 " + "WHERE id = :id")
+                .param("id", orderId)
+                .update();
 
         var outcome = wiredTickets.start(TENANT, item.id(), "cook", null);
 
@@ -647,8 +636,7 @@ class KitchenExecutionTests {
     }
 
     @Test
-    @DisplayName("a replayed advance against an order that has moved on produces one effect "
-            + "and no false refusal")
+    @DisplayName("a replayed advance against an order that has moved on produces one effect " + "and no false refusal")
     void aReplayedAdvanceProducesOneEffect() {
         brandRule(null, burger.productId(), null, StationRole.GRILL);
         brandRule(null, salad.productId(), null, StationRole.COLD);
@@ -659,10 +647,8 @@ class KitchenExecutionTests {
         // An offline client's queue: every start, then every ready, then the whole
         // queue again because the acknowledgement never arrived.
         List<Runnable> queued = new ArrayList<>();
-        items.forEach(item -> queued.add(() -> wiredTickets.start(TENANT, item.id(), "offline",
-                null)));
-        items.forEach(item -> queued.add(() -> wiredTickets.ready(TENANT, item.id(), "offline",
-                null)));
+        items.forEach(item -> queued.add(() -> wiredTickets.start(TENANT, item.id(), "offline", null)));
+        items.forEach(item -> queued.add(() -> wiredTickets.ready(TENANT, item.id(), "offline", null)));
         queued.forEach(Runnable::run);
         queued.forEach(Runnable::run);
 
@@ -673,8 +659,10 @@ class KitchenExecutionTests {
         assertThat(orderStore.find(TENANT, orderId).orElseThrow().version())
                 .as("a replay that moved nothing must not bump the version either")
                 .isEqualTo(3);
-        assertThat(jdbc.sql("SELECT count(*) FROM ordering.order_progress_proposals "
-                        + "WHERE order_id = :id").param("id", orderId).query(Long.class).single())
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.order_progress_proposals " + "WHERE order_id = :id")
+                        .param("id", orderId)
+                        .query(Long.class)
+                        .single())
                 .as("one ledger row per kitchen fact, because the key is the ticket and the "
                         + "transition rather than the request")
                 .isEqualTo(2L);
@@ -695,25 +683,37 @@ class KitchenExecutionTests {
 
         // The port called directly, because this is the offline client's replay
         // and the ticket itself will not roll up twice.
-        var port = new OrderProgressAdapter(new OrderStateService(orderStore,
+        var port = new OrderProgressAdapter(new OrderStateService(
+                orderStore,
                 new RecordingCapacity(),
-                new OrderInventoryProcess(new JdbcOrderProcessStore(jdbc), REFUSES_INVENTORY,
-                        JsonMapper.builder().build(), Clock.fixed(NOON, ZoneOffset.UTC)),
-                new OrderAcceptancePolicyService(new JdbcPolicyResolver(jdbc,
-                        JsonMapper.builder().build())),
-                settlements, audit, event -> { }, Clock.fixed(NOON, ZoneOffset.UTC)));
+                new OrderInventoryProcess(
+                        new JdbcOrderProcessStore(jdbc),
+                        REFUSES_INVENTORY,
+                        JsonMapper.builder().build(),
+                        Clock.fixed(NOON, ZoneOffset.UTC)),
+                new OrderAcceptancePolicyService(
+                        new JdbcPolicyResolver(jdbc, JsonMapper.builder().build())),
+                settlements,
+                audit,
+                event -> {},
+                Clock.fixed(NOON, ZoneOffset.UTC)));
 
-        var replay = port.propose(TENANT, orderId, OrderProgressPort.OrderProgress.PREPARING,
-                "kitchen-ticket:%s:PREPARING".formatted(ticket.id()), "KITCHEN_PREPARING", "USER",
-                "offline", null);
+        var replay = port.propose(
+                TENANT,
+                orderId,
+                OrderProgressPort.OrderProgress.PREPARING,
+                "kitchen-ticket:%s:PREPARING".formatted(ticket.id()),
+                "KITCHEN_PREPARING",
+                "USER",
+                "offline",
+                null);
 
         assertThat(replay)
                 .as("a status comparison would say REFUSED here, and a refusal that is really "
                         + "a replay is a false alarm on a board")
                 .isEqualTo(OrderProgressPort.ProposalOutcome.APPLIED);
         assertThat(statusOf(orderId)).isEqualTo(OrderStatus.READY);
-        assertThat(kitchenHistoryOf(orderId))
-                .containsExactly("CONFIRMED->PREPARING", "PREPARING->READY");
+        assertThat(kitchenHistoryOf(orderId)).containsExactly("CONFIRMED->PREPARING", "PREPARING->READY");
     }
 
     @Test
@@ -724,7 +724,8 @@ class KitchenExecutionTests {
         UUID pickup = seedConfirmedOrder("A-064", null, null, null, burger);
         UUID delivery = seedConfirmedOrder("A-065", null, null, null, burger);
         jdbc.sql("UPDATE ordering.orders SET fulfillment_mode = 'DELIVERY' WHERE id = :id")
-                .param("id", delivery).update();
+                .param("id", delivery)
+                .update();
 
         for (UUID orderId : List.of(pickup, delivery)) {
             TicketRow ticket = wiredTickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
@@ -733,18 +734,39 @@ class KitchenExecutionTests {
             wiredTickets.ready(TENANT, item.id(), "cook", null);
         }
 
-        var port = new OrderProgressAdapter(new OrderStateService(orderStore,
+        var port = new OrderProgressAdapter(new OrderStateService(
+                orderStore,
                 new RecordingCapacity(),
-                new OrderInventoryProcess(new JdbcOrderProcessStore(jdbc), REFUSES_INVENTORY,
-                        JsonMapper.builder().build(), Clock.fixed(NOON, ZoneOffset.UTC)),
-                new OrderAcceptancePolicyService(new JdbcPolicyResolver(jdbc,
-                        JsonMapper.builder().build())),
-                settlements, audit, event -> { }, Clock.fixed(NOON, ZoneOffset.UTC)));
+                new OrderInventoryProcess(
+                        new JdbcOrderProcessStore(jdbc),
+                        REFUSES_INVENTORY,
+                        JsonMapper.builder().build(),
+                        Clock.fixed(NOON, ZoneOffset.UTC)),
+                new OrderAcceptancePolicyService(
+                        new JdbcPolicyResolver(jdbc, JsonMapper.builder().build())),
+                settlements,
+                audit,
+                event -> {},
+                Clock.fixed(NOON, ZoneOffset.UTC)));
 
-        var completed = port.propose(TENANT, pickup, OrderProgressPort.OrderProgress.COMPLETED,
-                "handover:" + pickup, "KITCHEN_COMPLETED", "USER", "expo", null);
-        var refused = port.propose(TENANT, delivery, OrderProgressPort.OrderProgress.COMPLETED,
-                "handover:" + delivery, "KITCHEN_COMPLETED", "USER", "expo", null);
+        var completed = port.propose(
+                TENANT,
+                pickup,
+                OrderProgressPort.OrderProgress.COMPLETED,
+                "handover:" + pickup,
+                "KITCHEN_COMPLETED",
+                "USER",
+                "expo",
+                null);
+        var refused = port.propose(
+                TENANT,
+                delivery,
+                OrderProgressPort.OrderProgress.COMPLETED,
+                "handover:" + delivery,
+                "KITCHEN_COMPLETED",
+                "USER",
+                "expo",
+                null);
 
         assertThat(completed).isEqualTo(OrderProgressPort.ProposalOutcome.APPLIED);
         assertThat(statusOf(pickup)).isEqualTo(OrderStatus.COMPLETED);
@@ -769,24 +791,39 @@ class KitchenExecutionTests {
         brandRule(null, burger.productId(), null, StationRole.GRILL);
         UUID orderId = seedConfirmedOrder("A-066", null, null, null, burger);
 
-        var port = new OrderProgressAdapter(new OrderStateService(orderStore,
+        var port = new OrderProgressAdapter(new OrderStateService(
+                orderStore,
                 new RecordingCapacity(),
-                new OrderInventoryProcess(new JdbcOrderProcessStore(jdbc), REFUSES_INVENTORY,
-                        JsonMapper.builder().build(), Clock.fixed(NOON, ZoneOffset.UTC)),
-                new OrderAcceptancePolicyService(new JdbcPolicyResolver(jdbc,
-                        JsonMapper.builder().build())),
-                settlements, audit, event -> { }, Clock.fixed(NOON, ZoneOffset.UTC)));
+                new OrderInventoryProcess(
+                        new JdbcOrderProcessStore(jdbc),
+                        REFUSES_INVENTORY,
+                        JsonMapper.builder().build(),
+                        Clock.fixed(NOON, ZoneOffset.UTC)),
+                new OrderAcceptancePolicyService(
+                        new JdbcPolicyResolver(jdbc, JsonMapper.builder().build())),
+                settlements,
+                audit,
+                event -> {},
+                Clock.fixed(NOON, ZoneOffset.UTC)));
 
         UUID stranger = UUID.randomUUID();
-        var outcome = port.propose(stranger, orderId, OrderProgressPort.OrderProgress.PREPARING,
-                "kitchen-ticket:cross-tenant:PREPARING", "KITCHEN_PREPARING", "USER", "cook", null);
+        var outcome = port.propose(
+                stranger,
+                orderId,
+                OrderProgressPort.OrderProgress.PREPARING,
+                "kitchen-ticket:cross-tenant:PREPARING",
+                "KITCHEN_PREPARING",
+                "USER",
+                "cook",
+                null);
 
         assertThat(outcome).isEqualTo(OrderProgressPort.ProposalOutcome.REFUSED);
         assertThat(statusOf(orderId))
                 .as("an order id alone authorises nothing; the tenant is the boundary")
                 .isEqualTo(OrderStatus.CONFIRMED);
         assertThat(jdbc.sql("SELECT count(*) FROM ordering.order_progress_proposals")
-                        .query(Long.class).single())
+                        .query(Long.class)
+                        .single())
                 .as("a refused cross-tenant proposal must not even claim the key, or one "
                         + "tenant could burn another's idempotency keys")
                 .isEqualTo(0L);
@@ -797,8 +834,8 @@ class KitchenExecutionTests {
     @Test
     @DisplayName("a ticket whose every line was cancelled does not report itself ready")
     void aFullyCancelledTicketIsNotReady() {
-        TicketStatus rolled = KitchenStateMachine.rollUp(TicketStatus.IN_PRODUCTION,
-                List.of(TicketItemStatus.CANCELLED, TicketItemStatus.CANCELLED));
+        TicketStatus rolled = KitchenStateMachine.rollUp(
+                TicketStatus.IN_PRODUCTION, List.of(TicketItemStatus.CANCELLED, TicketItemStatus.CANCELLED));
 
         assertThat(rolled)
                 .as("there is no food; saying ready would put an empty bag on the pass")
@@ -853,8 +890,13 @@ class KitchenExecutionTests {
                     timezone, status, version)
                 VALUES (:id, :tenantId, :brandId, :code, :slug, :code, 'Asia/Tashkent',
                         'ACTIVE', 0)
-                """).param("id", id).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("code", code).param("slug", slug).update();
+                """)
+                .param("id", id)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("code", code)
+                .param("slug", slug)
+                .update();
         return id;
     }
 
@@ -863,7 +905,10 @@ class KitchenExecutionTests {
         jdbc.sql("""
                 INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
                 VALUES (:id, :tenantId, :brandId, 'MAIN', 'Main menu', 'ACTIVE')
-                """).param("id", catalogId).param("tenantId", TENANT).param("brandId", BRAND)
+                """)
+                .param("id", catalogId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
                 .update();
 
         publicationId = UUID.randomUUID();
@@ -872,8 +917,12 @@ class KitchenExecutionTests {
                     status, content_hash, activated_at)
                 VALUES (:id, :tenantId, :brandId, :catalogId, 'STOREFRONT', 'PUBLISHED', 'hash',
                         now())
-                """).param("id", publicationId).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("catalogId", catalogId).update();
+                """)
+                .param("id", publicationId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("catalogId", catalogId)
+                .update();
 
         burger = seedProduct("BURGER", "HOT_FOOD");
         salad = seedProduct("SALAD", "COLD_FOOD");
@@ -888,45 +937,69 @@ class KitchenExecutionTests {
         jdbc.sql("""
                 INSERT INTO catalog.products (id, tenant_id, brand_id, code, status)
                 VALUES (:id, :tenantId, :brandId, :code, 'ACTIVE')
-                """).param("id", productId).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("code", code).update();
+                """)
+                .param("id", productId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("code", code)
+                .update();
         jdbc.sql("""
                 INSERT INTO catalog.variants (id, tenant_id, brand_id, product_id, sku, status)
                 VALUES (:id, :tenantId, :brandId, :productId, :sku, 'ACTIVE')
-                """).param("id", variantId).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("productId", productId).param("sku", "SKU-" + code).update();
+                """)
+                .param("id", variantId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("productId", productId)
+                .param("sku", "SKU-" + code)
+                .update();
         jdbc.sql("""
                 INSERT INTO catalog.catalog_products (tenant_id, brand_id, catalog_id, product_id)
                 VALUES (:tenantId, :brandId, :catalogId, :productId)
-                """).param("tenantId", TENANT).param("brandId", BRAND).param("catalogId", catalogId)
-                .param("productId", productId).update();
+                """)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("catalogId", catalogId)
+                .param("productId", productId)
+                .update();
         jdbc.sql("""
                 INSERT INTO catalog.categories (id, tenant_id, brand_id, catalog_id, code,
                     sort_order, status)
                 VALUES (:id, :tenantId, :brandId, :catalogId, :code, 0, 'ACTIVE')
-                """).param("id", categoryIdentifier).param("tenantId", TENANT)
-                .param("brandId", BRAND).param("catalogId", catalogId).param("code", categoryCode)
+                """)
+                .param("id", categoryIdentifier)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("catalogId", catalogId)
+                .param("code", categoryCode)
                 .update();
         jdbc.sql("""
                 INSERT INTO catalog.category_products (tenant_id, brand_id, category_id,
                     product_id)
                 VALUES (:tenantId, :brandId, :categoryId, :productId)
-                """).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("categoryId", categoryIdentifier).param("productId", productId).update();
+                """)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("categoryId", categoryIdentifier)
+                .param("productId", productId)
+                .update();
 
         return new Catalogue(productId, variantId, categoryIdentifier);
     }
 
     private void seedStations() {
-        grillStation = stationService.create(new KitchenStationService.NewStation(
-                TENANT, BRAND, branch, "GRILL", StationRole.GRILL, "Гриль", "Gril", "Grill",
-                1, false)).id();
-        coldStation = stationService.create(new KitchenStationService.NewStation(
-                TENANT, BRAND, branch, "COLD", StationRole.COLD, "Холодный", "Sovuq", "Cold line",
-                2, false)).id();
-        fallbackStation = stationService.create(new KitchenStationService.NewStation(
-                TENANT, BRAND, branch, "PASS", StationRole.EXPO, "Раздача", "Tarqatish", "Pass",
-                3, true)).id();
+        grillStation = stationService
+                .create(new KitchenStationService.NewStation(
+                        TENANT, BRAND, branch, "GRILL", StationRole.GRILL, "Гриль", "Gril", "Grill", 1, false))
+                .id();
+        coldStation = stationService
+                .create(new KitchenStationService.NewStation(
+                        TENANT, BRAND, branch, "COLD", StationRole.COLD, "Холодный", "Sovuq", "Cold line", 2, false))
+                .id();
+        fallbackStation = stationService
+                .create(new KitchenStationService.NewStation(
+                        TENANT, BRAND, branch, "PASS", StationRole.EXPO, "Раздача", "Tarqatish", "Pass", 3, true))
+                .id();
     }
 
     /**
@@ -934,8 +1007,8 @@ class KitchenExecutionTests {
      * out. Checkout is ADR 0019's own suite; what this suite needs from an order
      * is its lines, its promise, and its status.
      */
-    private UUID seedConfirmedOrder(String number, Instant promisedAt, Integer prepMinutes,
-            Integer travelMinutes, Catalogue... lines) {
+    private UUID seedConfirmedOrder(
+            String number, Instant promisedAt, Integer prepMinutes, Integer travelMinutes, Catalogue... lines) {
 
         UUID orderId = UUID.randomUUID();
         UUID quoteId = UUID.randomUUID();
@@ -947,17 +1020,27 @@ class KitchenExecutionTests {
                     tax_minor, total_minor, expires_at)
                 VALUES (:id, :tenantId, :brandId, :locationId, 'UZS', :publicationId, 1, 'hash',
                         50000, 0, 50000, now() + interval '1 hour')
-                """).param("id", quoteId).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("locationId", branch).param("publicationId", publicationId).update();
+                """)
+                .param("id", quoteId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", branch)
+                .param("publicationId", publicationId)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO ordering.carts (id, tenant_id, brand_id, location_id, channel_id,
                     fulfillment_mode, currency, status, guest_reference_hash, expires_at)
                 VALUES (:id, :tenantId, :brandId, :locationId, :channelId, 'PICKUP', 'UZS',
                         'ACTIVE', :guest, now() + interval '1 hour')
-                """).param("id", cartId).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("locationId", branch).param("channelId", channelId)
-                .param("guest", "guest-" + number).update();
+                """)
+                .param("id", cartId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", branch)
+                .param("channelId", channelId)
+                .param("guest", "guest-" + number)
+                .update();
 
         Map<String, Object> order = new java.util.HashMap<>();
         order.put("id", orderId);
@@ -970,8 +1053,9 @@ class KitchenExecutionTests {
         order.put("cartId", cartId);
         order.put("publicationId", publicationId);
         order.put("guest", "guest-" + number);
-        order.put("promisedAt", promisedAt == null ? null
-                : java.time.OffsetDateTime.ofInstant(promisedAt, ZoneOffset.UTC));
+        order.put(
+                "promisedAt",
+                promisedAt == null ? null : java.time.OffsetDateTime.ofInstant(promisedAt, ZoneOffset.UTC));
         order.put("basis", promisedAt == null ? "NOT_PROMISED" : "PREPARATION_BAND");
         order.put("prepMinutes", prepMinutes);
         order.put("travelMinutes", travelMinutes);
@@ -999,7 +1083,10 @@ class KitchenExecutionTests {
                     total_minor)
                 VALUES (:orderId, 1, :tenantId, 'CHECKOUT', :quoteId, 'hash', 'UZS', 50000, 0,
                         50000)
-                """).param("orderId", orderId).param("tenantId", TENANT).param("quoteId", quoteId)
+                """)
+                .param("orderId", orderId)
+                .param("tenantId", TENANT)
+                .param("quoteId", quoteId)
                 .update();
 
         int lineNumber = 1;
@@ -1010,17 +1097,21 @@ class KitchenExecutionTests {
                         unit_amount_minor, base_amount_minor, final_amount_minor, tax_amount_minor)
                     VALUES (:id, :tenantId, :orderId, :lineNumber, :productId, :variantId,
                         'Dish', 1, 50000, 50000, 50000, 0)
-                    """).param("id", UUID.randomUUID()).param("tenantId", TENANT)
-                    .param("orderId", orderId).param("lineNumber", lineNumber++)
-                    .param("productId", line.productId()).param("variantId", line.variantId())
+                    """)
+                    .param("id", UUID.randomUUID())
+                    .param("tenantId", TENANT)
+                    .param("orderId", orderId)
+                    .param("lineNumber", lineNumber++)
+                    .param("productId", line.productId())
+                    .param("variantId", line.variantId())
                     .update();
         }
         return orderId;
     }
 
-    private record Catalogue(UUID productId, UUID variantId, UUID categoryId) { }
+    private record Catalogue(UUID productId, UUID variantId, UUID categoryId) {}
 
-    private record Resolution(UUID stationId, RoutingLevel level) { }
+    private record Resolution(UUID stationId, RoutingLevel level) {}
 
     private OrderStatus statusOf(UUID orderId) {
         return orderStore.find(TENANT, orderId).orElseThrow().status();
@@ -1045,32 +1136,30 @@ class KitchenExecutionTests {
      * recorded fact. A proposal that reached inventory would be a change nobody
      * meant to make, and a stand-in that quietly answered it would hide it.
      */
-    private static final InventoryReservationPort REFUSES_INVENTORY =
-            new InventoryReservationPort() {
+    private static final InventoryReservationPort REFUSES_INVENTORY = new InventoryReservationPort() {
 
-                @Override
-                public ReservationResult reserveForQuote(UUID tenantId, UUID brandId,
-                        UUID locationId, UUID quoteId, Map<UUID, Integer> quantitiesByVariant) {
-                    throw new AssertionError("A kitchen proposal must not reserve stock");
-                }
+        @Override
+        public ReservationResult reserveForQuote(
+                UUID tenantId, UUID brandId, UUID locationId, UUID quoteId, Map<UUID, Integer> quantitiesByVariant) {
+            throw new AssertionError("A kitchen proposal must not reserve stock");
+        }
 
-                @Override
-                public boolean commit(UUID tenantId, UUID quoteId) {
-                    throw new AssertionError("A kitchen proposal must not commit a reservation");
-                }
+        @Override
+        public boolean commit(UUID tenantId, UUID quoteId) {
+            throw new AssertionError("A kitchen proposal must not commit a reservation");
+        }
 
-                @Override
-                public boolean release(UUID tenantId, UUID quoteId) {
-                    throw new AssertionError("A kitchen proposal must not release a reservation");
-                }
-            };
+        @Override
+        public boolean release(UUID tenantId, UUID quoteId) {
+            throw new AssertionError("A kitchen proposal must not release a reservation");
+        }
+    };
 
     /** ADR 0036's ceiling. A completion frees the slot; nothing else does. */
     private final class RecordingCapacity implements LocationCapacityPort {
 
         @Override
-        public CapacityOutcome claimCapacity(UUID tenantId, UUID brandId, UUID locationId,
-                UUID holdId) {
+        public CapacityOutcome claimCapacity(UUID tenantId, UUID brandId, UUID locationId, UUID holdId) {
             throw new AssertionError("A kitchen proposal must not claim capacity");
         }
 
@@ -1098,8 +1187,7 @@ class KitchenExecutionTests {
         }
 
         @Override
-        public void recordTerminalOutcome(UUID tenantId, UUID orderId, String reasonCode,
-                String actor) {
+        public void recordTerminalOutcome(UUID tenantId, UUID orderId, String reasonCode, String actor) {
             terminals.add(orderId);
         }
     }
@@ -1111,11 +1199,18 @@ class KitchenExecutionTests {
         private final List<String> keys = new CopyOnWriteArrayList<>();
 
         @Override
-        public ProposalOutcome propose(UUID tenantId, UUID orderId, OrderProgress progress,
-                String idempotencyKey, String reasonCode, String actorType, String actorId,
+        public ProposalOutcome propose(
+                UUID tenantId,
+                UUID orderId,
+                OrderProgress progress,
+                String idempotencyKey,
+                String reasonCode,
+                String actorType,
+                String actorId,
                 String correlationId) {
             keys.add(idempotencyKey);
-            proposed.computeIfAbsent(orderId, key -> new CopyOnWriteArrayList<>()).add(progress);
+            proposed.computeIfAbsent(orderId, key -> new CopyOnWriteArrayList<>())
+                    .add(progress);
             return ProposalOutcome.APPLIED;
         }
 

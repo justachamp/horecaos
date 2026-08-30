@@ -8,10 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
@@ -93,16 +91,21 @@ public class JdbcPosOrderSource implements PosOrderSource {
         List<ExportableOrder.Line> lines = readLines(tenantId, orderId);
 
         return Optional.of(new ExportableOrder(
-                found.id(), found.tenantId(), found.brandId(), found.locationId(),
-                found.publicOrderNumber(), found.status(), found.acceptanceMode(),
-                found.fulfillmentMode(), found.currency(), found.totalMinor(), found.placedAt(),
+                found.id(),
+                found.tenantId(),
+                found.brandId(),
+                found.locationId(),
+                found.publicOrderNumber(),
+                found.status(),
+                found.acceptanceMode(),
+                found.fulfillmentMode(),
+                found.currency(),
+                found.totalMinor(),
+                found.placedAt(),
                 found.customerAccountId(),
-                reveal(tenantId, orderId, "display_name_encrypted",
-                        found.displayNameEncrypted(), revealPurpose),
-                reveal(tenantId, orderId, "contact_encrypted",
-                        found.contactEncrypted(), revealPurpose),
-                reveal(tenantId, orderId, "address_encrypted",
-                        found.addressEncrypted(), revealPurpose),
+                reveal(tenantId, orderId, "display_name_encrypted", found.displayNameEncrypted(), revealPurpose),
+                reveal(tenantId, orderId, "contact_encrypted", found.contactEncrypted(), revealPurpose),
+                reveal(tenantId, orderId, "address_encrypted", found.addressEncrypted(), revealPurpose),
                 lines));
     }
 
@@ -119,8 +122,7 @@ public class JdbcPosOrderSource implements PosOrderSource {
                 .param("tenantId", tenantId)
                 .param("orderId", orderId)
                 .query((row, number) -> Map.entry(
-                        row.getObject("order_line_id", UUID.class),
-                        row.getObject("source_option_id", UUID.class)))
+                        row.getObject("order_line_id", UUID.class), row.getObject("source_option_id", UUID.class)))
                 .list()
                 .forEach(entry -> modifiersByLine
                         .computeIfAbsent(entry.getKey(), key -> new ArrayList<>())
@@ -158,8 +160,11 @@ public class JdbcPosOrderSource implements PosOrderSource {
         if (stored == null || stored.isBlank()) {
             return null;
         }
-        return protection.reveal(tenantId, ProtectedValue.deserialize(stored),
-                new FieldProtection.RecordRef(SNAPSHOT_TABLE, column, orderId), purpose);
+        return protection.reveal(
+                tenantId,
+                ProtectedValue.deserialize(stored),
+                new FieldProtection.RecordRef(SNAPSHOT_TABLE, column, orderId),
+                purpose);
     }
 
     private static Instant instant(OffsetDateTime value) {
@@ -168,11 +173,22 @@ public class JdbcPosOrderSource implements PosOrderSource {
 
     /** The row as read, before anything is decrypted. */
     private record Header(
-            UUID id, UUID tenantId, UUID brandId, UUID locationId, String publicOrderNumber,
-            String status, String acceptanceMode, String fulfillmentMode, String currency,
-            long totalMinor, Instant placedAt, UUID customerAccountId,
-            String displayNameEncrypted, String contactEncrypted, String addressEncrypted,
-            boolean anonymized) { }
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            String publicOrderNumber,
+            String status,
+            String acceptanceMode,
+            String fulfillmentMode,
+            String currency,
+            long totalMinor,
+            Instant placedAt,
+            UUID customerAccountId,
+            String displayNameEncrypted,
+            String contactEncrypted,
+            String addressEncrypted,
+            boolean anonymized) {}
 
     /**
      * The classification these three columns carry, stated here so the reason the

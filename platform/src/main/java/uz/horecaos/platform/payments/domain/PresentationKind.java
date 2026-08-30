@@ -11,7 +11,6 @@ package uz.horecaos.platform.payments.domain;
  * for analytics, and no state ever moves because of it.
  */
 public enum PresentationKind {
-
     PAYMENT_LINK,
 
     CARD_FORM,

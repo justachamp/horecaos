@@ -41,6 +41,5 @@ public final class PaymeCancellationReason {
 
     public static final int UNKNOWN = 10;
 
-    private PaymeCancellationReason() {
-    }
+    private PaymeCancellationReason() {}
 }

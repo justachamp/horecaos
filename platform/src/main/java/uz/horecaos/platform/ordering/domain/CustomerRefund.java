@@ -8,7 +8,6 @@ package uz.horecaos.platform.ordering.domain;
  * what a report groups by.
  */
 public enum CustomerRefund {
-
     FULL,
     NONE,
 

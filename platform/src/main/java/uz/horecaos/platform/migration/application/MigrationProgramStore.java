@@ -39,8 +39,14 @@ public interface MigrationProgramStore {
      *
      * @return the new version, or empty when another writer moved first
      */
-    Optional<Integer> updateStatus(UUID programId, ProgramStatus from, ProgramStatus to,
-            int expectedVersion, Instant startedAt, Instant completedAt, Instant now);
+    Optional<Integer> updateStatus(
+            UUID programId,
+            ProgramStatus from,
+            ProgramStatus to,
+            int expectedVersion,
+            Instant startedAt,
+            Instant completedAt,
+            Instant now);
 
     /**
      * One migration of one source environment into one target environment.
@@ -58,5 +64,5 @@ public interface MigrationProgramStore {
             int policyVersion,
             Instant startedAt,
             Instant completedAt,
-            int version) { }
+            int version) {}
 }

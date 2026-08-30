@@ -20,6 +20,20 @@
     <properties>
         <horecaos.test.forks>4</horecaos.test.forks>
         <java.version>25</java.version>
+        <!-- ADR 0054. The coverage floor may only rise. Raise it when coverage
+             rises; never lower it to admit a change. Measured 0.7879 line
+             coverage at adoption (2026-08-30) on the final, spotless-formatted
+             tree — reformatting shifts JaCoCo's line count, so the floor is
+             pinned to post-format coverage, not the pre-format reading.
+             Floor set to that value rounded down to the next lower 0.5
+             percentage point. -->
+        <horecaos.coverage.floor>0.785</horecaos.coverage.floor>
+        <jacoco.version>0.8.15</jacoco.version>
+        <spotless.version>3.10.1</spotless.version>
+        <palantir-java-format.version>2.97.0</palantir-java-format.version>
+        <error-prone.version>2.50.0</error-prone.version>
+        <nullaway.version>0.14.1</nullaway.version>
+        <dependency-check.version>13.0.0</dependency-check.version>
         <maven.compiler.parameters>true</maven.compiler.parameters>
         <project.build.outputTimestamp>2026-08-18T00:00:00Z</project.build.outputTimestamp>
         <spring-modulith.version>2.1.0</spring-modulith.version>
@@ -215,6 +229,73 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
             <plugin>
+                <!-- ADR 0054. Error Prone + NullAway on every compile, all
+                     findings demoted to warnings (-XepAllErrorsAsWarnings,
+                     which also covers NullAway's own default ERROR severity).
+                     Promotion to build-failing errors is a follow-up change
+                     per check family, made when its warning count is zero.
+                     NullAway is scoped to this codebase's own packages so it
+                     does not report on framework or library code it cannot
+                     annotate. The JDK export/opens flags Error Prone's javac
+                     plugin needs live in .mvn/jvm.config. -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <compilerArgs>
+                        <arg>-XDcompilePolicy=simple</arg>
+                        <!-- Required alongside -XDcompilePolicy=simple: without it,
+                             javac's default ifError=INIT stop policy runs before
+                             the Error Prone plugin gets a chance to see the tree. -->
+                        <arg>--should-stop=ifError=FLOW</arg>
+                        <arg>-Xplugin:ErrorProne -XepAllErrorsAsWarnings -XepOpt:NullAway:AnnotatedPackages=uz.horecaos.platform</arg>
+                    </compilerArgs>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>com.google.errorprone</groupId>
+                            <artifactId>error_prone_core</artifactId>
+                            <version>${error-prone.version}</version>
+                        </path>
+                        <path>
+                            <groupId>com.uber.nullaway</groupId>
+                            <artifactId>nullaway</artifactId>
+                            <version>${nullaway.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <!-- ADR 0054. One whole-tree spotless:apply commit, then
+                     spotless:check bound to verify, absolute (no ratchet).
+                     `make format` runs spotless:apply. -->
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>${spotless.version}</version>
+                <configuration>
+                    <java>
+                        <includes>
+                            <include>src/main/java/**/*.java</include>
+                            <include>src/test/java/**/*.java</include>
+                        </includes>
+                        <palantirJavaFormat>
+                            <version>${palantir-java-format.version}</version>
+                        </palantirJavaFormat>
+                        <importOrder/>
+                        <removeUnusedImports/>
+                        <trimTrailingWhitespace/>
+                        <endWithNewline/>
+                    </java>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>spotless-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
@@ -248,7 +329,58 @@
                     -->
                     <forkCount>${horecaos.test.forks}</forkCount>
                     <reuseForks>true</reuseForks>
+                    <!-- ADR 0054. jacoco:prepare-agent below sets the "argLine"
+                         property to its javaagent flag; @{argLine} defers
+                         resolution until surefire actually forks, which is what
+                         lets JaCoCo's instrumentation compose with (rather than
+                         be clobbered by) whatever else ends up in argLine. -->
+                    <argLine>@{argLine}</argLine>
                 </configuration>
+            </plugin>
+            <plugin>
+                <!-- ADR 0054. Coverage measured on every `verify`. prepare-agent
+                     instruments the 4 surefire forks above via the argLine
+                     composition; report renders it; check enforces the
+                     one-way floor recorded in horecaos.coverage.floor. -->
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <id>jacoco-prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>${horecaos.coverage.floor}</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -268,6 +400,19 @@
                                 <requireMavenVersion>
                                     <version>[3.9,)</version>
                                 </requireMavenVersion>
+                                <!-- ADR 0054. Two managed versions for the same
+                                     dependency in dependencyManagement mean one
+                                     silently shadows the other. -->
+                                <banDuplicatePomDependencyVersions/>
+                                <!-- ADR 0054. Passes clean out of the box; kept
+                                     as a floor against future divergence.
+                                     requireUpperBoundDeps was tried too but
+                                     fails today on real conflicts (httpclient5/
+                                     httpcore5 via the AWS SDK's apache5-client,
+                                     io.prometheus:prometheus-metrics-* via
+                                     micrometer) and is left out rather than
+                                     added to the pom unmet. -->
+                                <dependencyConvergence/>
                             </rules>
                         </configuration>
                     </execution>
@@ -275,4 +420,47 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <!-- ADR 0054. OWASP dependency-check against live NVD data. Kept out
+                 of the per-commit path — NVD pulls add minutes per build for
+                 information that changes daily, not per commit — and run
+                 instead by the weekly .github/workflows/security-audit.yml via
+                 `./mvnw -Psecurity-audit dependency-check:check`. -->
+            <id>security-audit</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.owasp</groupId>
+                        <artifactId>dependency-check-maven</artifactId>
+                        <version>${dependency-check.version}</version>
+                        <configuration>
+                            <failBuildOnCVSS>7</failBuildOnCVSS>
+                            <!-- nvdApiKeyEnvironmentVariable (not nvdApiKey
+                                 directly) is the documented mechanism for an
+                                 optional key: the plugin reads the named
+                                 environment variable itself at run time, so an
+                                 unset NVD_API_KEY is absence, not an explicit
+                                 empty key. Passing an explicit empty string
+                                 through ${env.NVD_API_KEY} instead fails hard
+                                 ("Invalid API Key, length of 0") — this is the
+                                 fix for that. Unset, the plugin runs
+                                 unauthenticated and more slowly; NVD throttles
+                                 unkeyed requests heavily enough that a full
+                                 scan may not finish in CI without a key. -->
+                            <nvdApiKeyEnvironmentVariable>NVD_API_KEY</nvdApiKeyEnvironmentVariable>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

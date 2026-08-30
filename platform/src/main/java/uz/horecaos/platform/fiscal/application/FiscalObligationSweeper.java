@@ -1,14 +1,12 @@
 package uz.horecaos.platform.fiscal.application;
 
 import java.util.List;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.fiscal.api.PartnerFiscalizationPort;
 import uz.horecaos.platform.fiscal.application.FiscalObligationService.ClaimedSubmission;
 
@@ -45,8 +43,7 @@ import uz.horecaos.platform.fiscal.application.FiscalObligationService.ClaimedSu
  * {@code ExternalCallTransactionBoundaryTests} exists to keep.
  */
 @Component
-@ConditionalOnProperty(name = "horecaos.fiscal.obligation-opener.enabled", havingValue = "true",
-        matchIfMissing = true)
+@ConditionalOnProperty(name = "horecaos.fiscal.obligation-opener.enabled", havingValue = "true", matchIfMissing = true)
 public class FiscalObligationSweeper {
 
     private static final Logger log = LoggerFactory.getLogger(FiscalObligationSweeper.class);
@@ -55,7 +52,8 @@ public class FiscalObligationSweeper {
     private final PartnerFiscalizationPort partner;
     private final int batchSize;
 
-    public FiscalObligationSweeper(FiscalObligationService obligations,
+    public FiscalObligationSweeper(
+            FiscalObligationService obligations,
             PartnerFiscalizationPort partner,
             @Value("${horecaos.fiscal.obligation-opener.batch-size:200}") int batchSize) {
         this.obligations = obligations;
@@ -112,8 +110,8 @@ public class FiscalObligationSweeper {
 
         for (ClaimedSubmission claim : claimed) {
             try {
-                PartnerFiscalizationPort.Outcome outcome = partner.submit(
-                        claim.tenantId(), claim.documentId(), claim.idempotencyKey());
+                PartnerFiscalizationPort.Outcome outcome =
+                        partner.submit(claim.tenantId(), claim.documentId(), claim.idempotencyKey());
                 obligations.settle(claim, outcome);
             } catch (RuntimeException failure) {
                 // The document stays SUBMITTED. Deliberately: the request may have
@@ -121,9 +119,12 @@ public class FiscalObligationSweeper {
                 // never returned to the queue. The reporting sweeper blocks it on
                 // its deadline, which is a person looking at it rather than a
                 // second submission.
-                log.error("Fiscal document {} for order {} was claimed and its outcome is "
+                log.error(
+                        "Fiscal document {} for order {} was claimed and its outcome is "
                                 + "unknown; it stays SUBMITTED and will be swept on its deadline.",
-                        claim.documentId(), claim.orderId(), failure);
+                        claim.documentId(),
+                        claim.orderId(),
+                        failure);
             }
         }
     }

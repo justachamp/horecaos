@@ -4,10 +4,8 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.integration.api.ExternalEventEnvelope;
 import uz.horecaos.platform.integration.api.InboxHandler;
 
@@ -168,8 +166,7 @@ public abstract class TenantSummaryProjection<T> implements InboxHandler<T> {
      * partitions, so the increment creates a placeholder rather than failing.
      * The tenant event will fill in the detail when it arrives.
      */
-    private static void incrementCount(
-            JdbcClient jdbc, String column, UUID tenantId, OffsetDateTime occurredAt) {
+    private static void incrementCount(JdbcClient jdbc, String column, UUID tenantId, OffsetDateTime occurredAt) {
 
         jdbc.sql("""
                 INSERT INTO reporting.tenant_summaries (

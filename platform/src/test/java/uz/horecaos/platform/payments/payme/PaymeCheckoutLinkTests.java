@@ -1,18 +1,16 @@
 package uz.horecaos.platform.payments.payme;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Map;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.payments.domain.SomAmount;
 import uz.horecaos.platform.payments.domain.TiyinAmount;
 import uz.horecaos.platform.payments.infrastructure.payme.PaymeCheckoutLink;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * The outbound half of Payme, pinned.
@@ -38,8 +36,7 @@ class PaymeCheckoutLinkTests {
     @Test
     @DisplayName("reproduces Payme's own documented checkout link exactly")
     void reproducesTheDocumentedExample() {
-        String payload = PaymeCheckoutLink.payload(
-                "587f72c72cac0d162c722ae2", "197", new TiyinAmount(500, "UZS"));
+        String payload = PaymeCheckoutLink.payload("587f72c72cac0d162c722ae2", "197", new TiyinAmount(500, "UZS"));
 
         assertThat(payload).isEqualTo("m=587f72c72cac0d162c722ae2;ac.order_id=197;a=500");
         assertThat(PaymeCheckoutLink.encode(payload))
@@ -82,15 +79,15 @@ class PaymeCheckoutLinkTests {
     @Test
     @DisplayName("standard base64: the padding is kept")
     void keepsBase64Padding() {
-        String payload = PaymeCheckoutLink.payload("a4c123b1612dd272d1371c17",
-                "149d439536b3216fdaeeb975729fae92", new TiyinAmount(123801, "UZS"));
+        String payload = PaymeCheckoutLink.payload(
+                "a4c123b1612dd272d1371c17", "149d439536b3216fdaeeb975729fae92", new TiyinAmount(123801, "UZS"));
 
         assertThat(payload.length() % 3).isNotZero();
-        assertThat(PaymeCheckoutLink.encode(payload)).isEqualTo(
-                "bT1hNGMxMjNiMTYxMmRkMjcyZDEzNzFjMTc7YWMub3JkZXJfaWQ9MTQ5ZDQzOTUzNmIz"
+        assertThat(PaymeCheckoutLink.encode(payload))
+                .isEqualTo("bT1hNGMxMjNiMTYxMmRkMjcyZDEzNzFjMTc7YWMub3JkZXJfaWQ9MTQ5ZDQzOTUzNmIz"
                         + "MjE2ZmRhZWViOTc1NzI5ZmFlOTI7YT0xMjM4MDE=");
-        assertThat(new String(Base64.getDecoder().decode(PaymeCheckoutLink.encode(payload)),
-                StandardCharsets.US_ASCII)).isEqualTo(payload);
+        assertThat(new String(Base64.getDecoder().decode(PaymeCheckoutLink.encode(payload)), StandardCharsets.US_ASCII))
+                .isEqualTo(payload);
     }
 
     /**
@@ -139,8 +136,7 @@ class PaymeCheckoutLinkTests {
 
         for (int amount = 1; amount <= 4000; amount++) {
             String encoded = PaymeCheckoutLink.encode(PaymeCheckoutLink.payload(
-                    hexadecimal(amount, 24), hexadecimal(amount * 31L + 7, 32),
-                    new TiyinAmount(amount, "UZS")));
+                    hexadecimal(amount, 24), hexadecimal(amount * 31L + 7, 32), new TiyinAmount(amount, "UZS")));
 
             assertThat(encoded).doesNotContain("+").doesNotContain("/");
             sawPadding |= encoded.endsWith("=");
@@ -164,9 +160,13 @@ class PaymeCheckoutLinkTests {
     @Test
     @DisplayName("the POST form carries the account in bracket notation and omits what is absent")
     void buildsThePostForm() {
-        Map<String, String> fields = PaymeCheckoutLink.formFields("587f72c72cac0d162c722ae2",
-                "149d439536b3216fdaeeb975729fae92", new TiyinAmount(150000, "UZS"),
-                "ru", null, "eyJ4IjoxfQ==");
+        Map<String, String> fields = PaymeCheckoutLink.formFields(
+                "587f72c72cac0d162c722ae2",
+                "149d439536b3216fdaeeb975729fae92",
+                new TiyinAmount(150000, "UZS"),
+                "ru",
+                null,
+                "eyJ4IjoxfQ==");
 
         assertThat(fields)
                 .containsEntry("merchant", "587f72c72cac0d162c722ae2")
@@ -186,8 +186,8 @@ class PaymeCheckoutLinkTests {
     @Test
     @DisplayName("a zero-amount link is refused before it is built")
     void refusesAZeroAmount() {
-        assertThatThrownBy(() -> PaymeCheckoutLink.payload(
-                "587f72c72cac0d162c722ae2", "197", new TiyinAmount(0, "UZS")))
+        assertThatThrownBy(
+                        () -> PaymeCheckoutLink.payload("587f72c72cac0d162c722ae2", "197", new TiyinAmount(0, "UZS")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("greater than zero");
     }

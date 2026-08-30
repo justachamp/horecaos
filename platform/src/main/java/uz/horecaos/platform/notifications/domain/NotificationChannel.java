@@ -12,7 +12,6 @@ import uz.horecaos.platform.customers.api.RecipientContactDirectory.ContactMetho
  * rather than a message that is created, resolved, and then never sent.
  */
 public enum NotificationChannel {
-
     SMS(true, ContactMethod.PHONE),
     EMAIL(false, ContactMethod.EMAIL),
     PUSH(false, null),

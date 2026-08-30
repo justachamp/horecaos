@@ -15,8 +15,7 @@ import java.util.UUID;
  */
 public final class ReportingFacts {
 
-    private ReportingFacts() {
-    }
+    private ReportingFacts() {}
 
     /**
      * One order, on its business date.
@@ -71,8 +70,7 @@ public final class ReportingFacts {
             // because a constraint violation surfacing at the end of a batch is a
             // far worse diagnostic than a failure at the row that caused it.
             if (netRevenueSom != grossRevenueSom - discountSom) {
-                throw new IllegalArgumentException(
-                        "Net revenue is gross less discount, not " + netRevenueSom);
+                throw new IllegalArgumentException("Net revenue is gross less discount, not " + netRevenueSom);
             }
             // Mirrors ck_fact_order_lateness_pairing.
             if ((promisedAt != null && closedAt != null) != (secondsLate != null)) {
@@ -140,8 +138,7 @@ public final class ReportingFacts {
             int quantity,
             long grossSom,
             long discountSom,
-            long netSom) {
-    }
+            long netSom) {}
 
     /**
      * The slice a branch-day aggregate is keyed by.
@@ -156,8 +153,7 @@ public final class ReportingFacts {
             UUID locationId,
             UUID legalEntityId,
             String channelCode,
-            String fulfilmentType) {
-    }
+            String fulfilmentType) {}
 
     /**
      * One aggregate row.
@@ -182,8 +178,7 @@ public final class ReportingFacts {
             int promisedCount,
             int lateCount,
             int distinctCustomers,
-            int newCustomers) {
-    }
+            int newCustomers) {}
 
     /** One bucket of the fixed SLA distribution, for one location on one day. */
     public record SlaBucketAggregate(
@@ -194,6 +189,5 @@ public final class ReportingFacts {
             int bucketSetVersion,
             String bucketCode,
             int orderCount,
-            int shareBasisPoints) {
-    }
+            int shareBasisPoints) {}
 }

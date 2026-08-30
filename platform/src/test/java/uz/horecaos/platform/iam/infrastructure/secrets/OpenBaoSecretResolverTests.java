@@ -6,14 +6,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
-
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
@@ -33,8 +31,8 @@ class OpenBaoSecretResolverTests {
     private static final String TOKEN = System.getenv().getOrDefault("HORECAOS_OPENBAO_TOKEN", "horecaos-local-root");
     private static final String MOUNT = "horecaos";
 
-    private static final SecretReference KEK = new SecretReference(
-            "local", SecretCategory.DATA_ENCRYPTION, "platform", "kek");
+    private static final SecretReference KEK =
+            new SecretReference("local", SecretCategory.DATA_ENCRYPTION, "platform", "kek");
 
     private OpenBaoSecretResolver resolver;
 
@@ -57,8 +55,7 @@ class OpenBaoSecretResolverTests {
 
     @Test
     void aMissingSecretFailsRatherThanReturningEmpty() {
-        SecretReference missing = new SecretReference(
-                "local", SecretCategory.PROVIDER_PAYMENT, "nobody", "nothing");
+        SecretReference missing = new SecretReference("local", SecretCategory.PROVIDER_PAYMENT, "nobody", "nothing");
 
         assertThatThrownBy(() -> resolver.resolve(missing))
                 .isInstanceOf(SecretResolver.SecretNotFoundException.class)
@@ -74,12 +71,12 @@ class OpenBaoSecretResolverTests {
 
     @Test
     void theEnvelopeKeyProviderResolvesThroughOpenBao() {
-        var keys = new uz.horecaos.platform.iam.infrastructure.protection.DataEncryptionKeyProvider(
-                resolver, "local");
+        var keys = new uz.horecaos.platform.iam.infrastructure.protection.DataEncryptionKeyProvider(resolver, "local");
         var protection = new uz.horecaos.platform.iam.infrastructure.protection.EnvelopeFieldProtection(keys);
 
         var record = new uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef(
-                "customer.contact_points", "encrypted_value",
+                "customer.contact_points",
+                "encrypted_value",
                 java.util.UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120f01"));
         var tenant = java.util.UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120f02");
 

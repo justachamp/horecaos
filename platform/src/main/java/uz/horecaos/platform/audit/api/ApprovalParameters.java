@@ -60,8 +60,7 @@ import java.util.UUID;
  */
 public final class ApprovalParameters {
 
-    private ApprovalParameters() {
-    }
+    private ApprovalParameters() {}
 
     /**
      * Hashes the components of a command record.
@@ -89,8 +88,7 @@ public final class ApprovalParameters {
      * already covered by then — this exists to make the change visible, not to
      * be the thing that makes it safe.
      */
-    public static List<String> coveredComponents(Class<? extends Record> type,
-            String... excluded) {
+    public static List<String> coveredComponents(Class<? extends Record> type, String... excluded) {
         Set<String> skip = validatedExclusions(type, excluded);
         return Arrays.stream(type.getRecordComponents())
                 .map(RecordComponent::getName)
@@ -98,8 +96,7 @@ public final class ApprovalParameters {
                 .toList();
     }
 
-    private static Set<String> validatedExclusions(Class<? extends Record> type,
-            String... excluded) {
+    private static Set<String> validatedExclusions(Class<? extends Record> type, String... excluded) {
         Set<String> declared = Arrays.stream(type.getRecordComponents())
                 .map(RecordComponent::getName)
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
@@ -109,9 +106,8 @@ public final class ApprovalParameters {
                 // A rename that left the exclusion behind would otherwise widen
                 // the hash silently, which is the harmless direction, or leave a
                 // renamed field excluded under its old name, which is not.
-                throw new IllegalArgumentException(
-                        "%s has no component named %s; the exclusions are %s"
-                                .formatted(type.getSimpleName(), name, declared));
+                throw new IllegalArgumentException("%s has no component named %s; the exclusions are %s"
+                        .formatted(type.getSimpleName(), name, declared));
             }
             skip.add(name);
         }
@@ -162,11 +158,10 @@ public final class ApprovalParameters {
             StringBuilder material = new StringBuilder();
             if (command != null) {
                 if (excluded == null) {
-                    throw new IllegalStateException(
-                            "Call excluding(...) before hash(), with no arguments when every "
-                                    + "component of " + recordType(command).getSimpleName()
-                                    + " is covered. Silence about the exclusions is how a hash "
-                                    + "loses a field.");
+                    throw new IllegalStateException("Call excluding(...) before hash(), with no arguments when every "
+                            + "component of " + recordType(command).getSimpleName()
+                            + " is covered. Silence about the exclusions is how a hash "
+                            + "loses a field.");
                 }
                 material.append(recordType(command).getName());
                 for (RecordComponent component : recordType(command).getRecordComponents()) {
@@ -186,8 +181,7 @@ public final class ApprovalParameters {
                 accessor.setAccessible(true);
                 return accessor.invoke(command);
             } catch (ReflectiveOperationException failure) {
-                throw new IllegalStateException(
-                        "Could not read component " + component.getName(), failure);
+                throw new IllegalStateException("Could not read component " + component.getName(), failure);
             }
         }
 
@@ -237,17 +231,17 @@ public final class ApprovalParameters {
             case Duration duration -> duration.toString();
             case LocalDate date -> date.toString();
             case LocalTime time -> time.toString();
-            default -> throw new IllegalArgumentException(
-                    ("Component %s is a %s, which has no canonical form an approval hash can be "
-                            + "built from. Give it one here, or exclude it and say why.")
-                            .formatted(name, value.getClass().getName()));
+            default ->
+                throw new IllegalArgumentException(
+                        ("Component %s is a %s, which has no canonical form an approval hash can be "
+                                        + "built from. Give it one here, or exclude it and say why.")
+                                .formatted(name, value.getClass().getName()));
         };
     }
 
     private static String digest(String material) {
         try {
-            byte[] hashed = MessageDigest.getInstance("SHA-256")
-                    .digest(material.getBytes(StandardCharsets.UTF_8));
+            byte[] hashed = MessageDigest.getInstance("SHA-256").digest(material.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hashed);
         } catch (NoSuchAlgorithmException required) {
             throw new IllegalStateException("SHA-256 is required by the platform", required);

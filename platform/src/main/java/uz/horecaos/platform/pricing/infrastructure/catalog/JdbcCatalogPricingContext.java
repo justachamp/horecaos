@@ -5,11 +5,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.pricing.application.CatalogPricingContext;
 import uz.horecaos.platform.pricing.application.PriceableType;
 
@@ -28,8 +26,8 @@ public class JdbcCatalogPricingContext implements CatalogPricingContext {
     private final JdbcClient jdbc;
     private final String defaultLocale;
 
-    public JdbcCatalogPricingContext(JdbcClient jdbc,
-            @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale) {
+    public JdbcCatalogPricingContext(
+            JdbcClient jdbc, @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale) {
         this.jdbc = jdbc;
         this.defaultLocale = defaultLocale;
     }
@@ -44,7 +42,9 @@ public class JdbcCatalogPricingContext implements CatalogPricingContext {
                 WHERE tenant_id = :tenantId AND brand_id = :brandId
                   AND channel = :channel AND status = 'PUBLISHED'
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId).param("channel", channelCode)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("channel", channelCode)
                 .query(UUID.class)
                 .optional();
     }
@@ -71,37 +71,41 @@ public class JdbcCatalogPricingContext implements CatalogPricingContext {
                 WHERE v.tenant_id = :tenantId AND v.brand_id = :brandId
                   AND v.id = ANY(:ids)
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("locale", defaultLocale)
                 .param("ids", variantIds.toArray(UUID[]::new))
-                .query((row, number) -> Map.entry(
-                        row.getObject("variant_id", UUID.class), row.getString("display_name")))
+                .query((row, number) ->
+                        Map.entry(row.getObject("variant_id", UUID.class), row.getString("display_name")))
                 .list()
                 .forEach(entry -> names.put(entry.getKey(), entry.getValue()));
         return names;
     }
 
     @Override
-    public boolean priceableExists(UUID tenantId, UUID brandId, PriceableType type,
-            UUID priceableId) {
+    public boolean priceableExists(UUID tenantId, UUID brandId, PriceableType type, UUID priceableId) {
         // The authoring tables, not the published snapshot: a price is set on a
         // draft dish long before the menu carrying it goes live, and reading the
         // publication here would refuse every price an operator writes first.
-        String sql = switch (type) {
-            case VARIANT -> """
+        String sql =
+                switch (type) {
+                    case VARIANT -> """
                     SELECT count(*) FROM catalog.variants
                     WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :id
                       AND status <> 'ARCHIVED'
                     """;
-            case MODIFIER_OPTION -> """
+                    case MODIFIER_OPTION -> """
                     SELECT count(*) FROM catalog.modifier_options
                     WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :id
                       AND status <> 'ARCHIVED'
                     """;
-        };
+                };
         return jdbc.sql(sql)
-                .param("tenantId", tenantId).param("brandId", brandId).param("id", priceableId)
-                .query(Long.class)
-                .single() > 0;
+                        .param("tenantId", tenantId)
+                        .param("brandId", brandId)
+                        .param("id", priceableId)
+                        .query(Long.class)
+                        .single()
+                > 0;
     }
 }

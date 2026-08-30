@@ -36,7 +36,6 @@ public record Subscription(
      * the difference as arbitrary.
      */
     public boolean trialLapsed(Instant instant) {
-        return status == SubscriptionStatus.TRIALING
-                && trialEndAt != null && !instant.isBefore(trialEndAt);
+        return status == SubscriptionStatus.TRIALING && trialEndAt != null && !instant.isBefore(trialEndAt);
     }
 }

@@ -20,8 +20,7 @@ import java.util.Objects;
  * zero-pads, and collapsing them would make one unfindable rather than two
  * findable.
  */
-public record ExternalReference(
-        ExternalReferenceType type, String value, String normalisedValue, String issuedBy) {
+public record ExternalReference(ExternalReferenceType type, String value, String normalisedValue, String issuedBy) {
 
     public ExternalReference {
         Objects.requireNonNull(type, "A reference type is required");
@@ -53,8 +52,7 @@ public record ExternalReference(
         }
         String result = normalised.toString().toUpperCase(Locale.ROOT);
         if (result.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "A reference that normalises to nothing cannot be searched for");
+            throw new IllegalArgumentException("A reference that normalises to nothing cannot be searched for");
         }
         return result;
     }

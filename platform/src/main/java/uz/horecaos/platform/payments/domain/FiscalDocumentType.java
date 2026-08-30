@@ -11,7 +11,6 @@ package uz.horecaos.platform.payments.domain;
  * the only record that the sale was ever fiscalized.
  */
 public enum FiscalDocumentType {
-
     SALE,
 
     REFUND,

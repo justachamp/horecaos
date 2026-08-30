@@ -1,12 +1,11 @@
 package uz.horecaos.platform.configuration;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
-
 import uz.horecaos.platform.support.TestDatabase;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /** Proves the local-only Flyway location yields a coherent, browseable demo tenant. */
 class LocalFixtureMigrationTests {
@@ -43,7 +42,8 @@ class LocalFixtureMigrationTests {
                     SELECT ST_Covers(area, ST_SetSRID(ST_MakePoint(69.2410, 41.3120), 4326)::geography)
                     FROM fulfillment.service_zone_versions
                     WHERE tenant_id = '%s'::uuid AND status = 'ACTIVE'
-                    """.formatted(TENANT_ID), Boolean.class)).isTrue();
+                    """.formatted(TENANT_ID), Boolean.class))
+                    .isTrue();
         }
     }
 

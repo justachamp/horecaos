@@ -16,13 +16,12 @@ import java.util.UUID;
 public interface CourierNotificationPort {
 
     /** @param daysRemaining the ladder rung: 30, 14, 7, 1, or 0 for the lapse */
-    void registrationExpiring(UUID tenantId, UUID courierId, LocalDate validUntil,
-            int daysRemaining, Audience audience);
+    void registrationExpiring(
+            UUID tenantId, UUID courierId, LocalDate validUntil, int daysRemaining, Audience audience);
 
     void registrationLapsed(UUID tenantId, UUID courierId, LocalDate validUntil);
 
     enum Audience {
-
         COURIER,
 
         /**

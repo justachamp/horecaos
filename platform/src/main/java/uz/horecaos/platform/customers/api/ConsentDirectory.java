@@ -28,8 +28,7 @@ public interface ConsentDirectory {
      * @return empty when nobody ever asked. Absence is not consent, and the caller
      *         must treat it as withheld rather than as permission
      */
-    Optional<ConsentState> consentFor(UUID tenantId, UUID accountId, UUID brandId,
-            String purpose, String channel);
+    Optional<ConsentState> consentFor(UUID tenantId, UUID accountId, UUID brandId, String purpose, String channel);
 
     /**
      * What a caller may hold about a decision.
@@ -38,5 +37,5 @@ public interface ConsentDirectory {
      * was asked, and a module that only needs to know whether to send does not
      * need them.
      */
-    record ConsentState(boolean granted, String policyVersion, Instant decidedAt) { }
+    record ConsentState(boolean granted, String policyVersion, Instant decidedAt) {}
 }

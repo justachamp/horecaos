@@ -1,12 +1,13 @@
 package uz.horecaos.platform.configuration;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.availability.AvailabilityChangeEvent;
@@ -15,10 +16,7 @@ import org.springframework.boot.availability.LivenessState;
 import org.springframework.boot.availability.ReadinessState;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
-
 import uz.horecaos.platform.media.domain.DecodeError;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * What actually happens when a background task throws, pinned so nobody writes
@@ -62,14 +60,16 @@ class ProcessFatalErrorTests {
         CountDownLatch ticked = new CountDownLatch(5);
 
         try {
-            scheduler.scheduleWithFixedDelay(() -> {
-                ticks.incrementAndGet();
-                ticked.countDown();
-                // Metaspace, not heap space: the one an image decoder's failed
-                // allocation is not, and the one that means the next task will
-                // meet the same wall.
-                throw new OutOfMemoryError("Metaspace");
-            }, TICK);
+            scheduler.scheduleWithFixedDelay(
+                    () -> {
+                        ticks.incrementAndGet();
+                        ticked.countDown();
+                        // Metaspace, not heap space: the one an image decoder's failed
+                        // allocation is not, and the one that means the next task will
+                        // meet the same wall.
+                        throw new OutOfMemoryError("Metaspace");
+                    },
+                    TICK);
 
             assertThat(ticked.await(PATIENCE.toSeconds(), TimeUnit.SECONDS))
                     .as("a task that throws an Error on every run went on running; that is the "
@@ -91,10 +91,12 @@ class ProcessFatalErrorTests {
         CountDownLatch ticked = new CountDownLatch(3);
 
         try {
-            scheduler.scheduleWithFixedDelay(() -> {
-                ticked.countDown();
-                throw new OutOfMemoryError("Metaspace");
-            }, TICK);
+            scheduler.scheduleWithFixedDelay(
+                    () -> {
+                        ticked.countDown();
+                        throw new OutOfMemoryError("Metaspace");
+                    },
+                    TICK);
             assertThat(ticked.await(PATIENCE.toSeconds(), TimeUnit.SECONDS)).isTrue();
 
             // REFUSING_TRAFFIC is the whole mechanism: application.yml puts
@@ -129,13 +131,15 @@ class ProcessFatalErrorTests {
         CountDownLatch ticked = new CountDownLatch(3);
 
         try {
-            scheduler.scheduleWithFixedDelay(() -> {
-                ticked.countDown();
-                // One tenant's malformed row, a query that timed out, a provider
-                // that answered 500. The schedule continuing is the correct
-                // policy for all of them.
-                throw new IllegalStateException("one tenant's row is bad");
-            }, TICK);
+            scheduler.scheduleWithFixedDelay(
+                    () -> {
+                        ticked.countDown();
+                        // One tenant's malformed row, a query that timed out, a provider
+                        // that answered 500. The schedule continuing is the correct
+                        // policy for all of them.
+                        throw new IllegalStateException("one tenant's row is bad");
+                    },
+                    TICK);
             assertThat(ticked.await(PATIENCE.toSeconds(), TimeUnit.SECONDS)).isTrue();
 
             assertThat(published.states())
@@ -152,23 +156,29 @@ class ProcessFatalErrorTests {
     void theClassifierDrawsTheLineWhereTheProcessIsActuallyFinished() {
         // Survivable: the allocation did not happen, nothing was retained, and
         // unwinding the frame gave the memory back.
-        assertThat(ProcessHealth.isProcessFatal(new OutOfMemoryError("Java heap space"))).isFalse();
-        assertThat(ProcessHealth.isProcessFatal(
-                new OutOfMemoryError("Requested array size exceeds VM limit"))).isFalse();
+        assertThat(ProcessHealth.isProcessFatal(new OutOfMemoryError("Java heap space")))
+                .isFalse();
+        assertThat(ProcessHealth.isProcessFatal(new OutOfMemoryError("Requested array size exceeds VM limit")))
+                .isFalse();
         assertThat(ProcessHealth.isProcessFatal(new StackOverflowError())).isFalse();
         // A defect in a sweeper, not a reason to recreate the container.
-        assertThat(ProcessHealth.isProcessFatal(new AssertionError("a sweeper's own bug"))).isFalse();
-        assertThat(ProcessHealth.isProcessFatal(new IllegalStateException("a bad row"))).isFalse();
+        assertThat(ProcessHealth.isProcessFatal(new AssertionError("a sweeper's own bug")))
+                .isFalse();
+        assertThat(ProcessHealth.isProcessFatal(new IllegalStateException("a bad row")))
+                .isFalse();
 
         // Process-wide: the next task meets the same wall.
-        assertThat(ProcessHealth.isProcessFatal(new OutOfMemoryError("Metaspace"))).isTrue();
-        assertThat(ProcessHealth.isProcessFatal(
-                new OutOfMemoryError("unable to create native thread"))).isTrue();
-        assertThat(ProcessHealth.isProcessFatal(
-                new OutOfMemoryError("GC overhead limit exceeded"))).isTrue();
+        assertThat(ProcessHealth.isProcessFatal(new OutOfMemoryError("Metaspace")))
+                .isTrue();
+        assertThat(ProcessHealth.isProcessFatal(new OutOfMemoryError("unable to create native thread")))
+                .isTrue();
+        assertThat(ProcessHealth.isProcessFatal(new OutOfMemoryError("GC overhead limit exceeded")))
+                .isTrue();
         assertThat(ProcessHealth.isProcessFatal(new OutOfMemoryError())).isTrue();
-        assertThat(ProcessHealth.isProcessFatal(new NoClassDefFoundError("a codec"))).isTrue();
-        assertThat(ProcessHealth.isProcessFatal(new InternalError("the VM is unwell"))).isTrue();
+        assertThat(ProcessHealth.isProcessFatal(new NoClassDefFoundError("a codec")))
+                .isTrue();
+        assertThat(ProcessHealth.isProcessFatal(new InternalError("the VM is unwell")))
+                .isTrue();
     }
 
     @Test
@@ -179,11 +189,11 @@ class ProcessFatalErrorTests {
         // driver wraps a failed direct-buffer allocation in whatever it throws.
         // Classifying on the top frame alone would let both through as ordinary.
         assertThat(ProcessHealth.isProcessFatal(
-                new IllegalStateException("could not run the sweep",
-                        new NoClassDefFoundError("a codec")))).isTrue();
-        assertThat(ProcessHealth.isProcessFatal(
-                new RuntimeException("wrapped", new IllegalStateException("also wrapped",
-                        new OutOfMemoryError("Java heap space"))))).isFalse();
+                        new IllegalStateException("could not run the sweep", new NoClassDefFoundError("a codec"))))
+                .isTrue();
+        assertThat(ProcessHealth.isProcessFatal(new RuntimeException(
+                        "wrapped", new IllegalStateException("also wrapped", new OutOfMemoryError("Java heap space")))))
+                .isFalse();
     }
 
     @Test
@@ -226,8 +236,7 @@ class ProcessFatalErrorTests {
 
         for (Error error : errors) {
             assertThat(ProcessHealth.isProcessFatal(error))
-                    .as("%s: DecodeError says recoverable=%s", error,
-                            DecodeError.isRecoverable(error))
+                    .as("%s: DecodeError says recoverable=%s", error, DecodeError.isRecoverable(error))
                     .isEqualTo(!DecodeError.isRecoverable(error));
         }
     }
@@ -235,8 +244,8 @@ class ProcessFatalErrorTests {
     private static ThreadPoolTaskScheduler schedulerWith(ProcessHealth health) {
         // Two threads rather than the platform's twenty-nine: this fixture runs
         // one task, and the pool size is SchedulerPoolSizeTests' subject.
-        ThreadPoolTaskScheduler scheduler = new SchedulingConfiguration()
-                .taskScheduler(health, 2, Duration.ofSeconds(1));
+        ThreadPoolTaskScheduler scheduler =
+                new SchedulingConfiguration().taskScheduler(health, 2, Duration.ofSeconds(1));
         scheduler.initialize();
         return scheduler;
     }

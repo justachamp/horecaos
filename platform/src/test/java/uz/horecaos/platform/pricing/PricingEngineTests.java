@@ -1,22 +1,20 @@
 package uz.horecaos.platform.pricing;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.pricing.application.PricingEngine;
 import uz.horecaos.platform.pricing.application.PricingEngine.PricingInputs;
 import uz.horecaos.platform.pricing.application.PricingEngine.TaxMode;
 import uz.horecaos.platform.pricing.domain.Quote;
 import uz.horecaos.platform.pricing.domain.QuoteRequest;
 import uz.horecaos.platform.pricing.domain.TaxCalculation;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * The pricing arithmetic (ADR 0018).
@@ -63,14 +61,22 @@ class PricingEngineTests {
         // Deliberately awkward amounts: three lines whose individual tax shares
         // do not divide evenly, which is where a naive per-line rounding leaves
         // a remainder and the total stops matching the sum of its parts.
-        var request = new QuoteRequest(TENANT, BRAND, LOCATION, null, "STOREFRONT", List.of(
-                new QuoteRequest.Line("a", BURGER, 3, List.of()),
-                new QuoteRequest.Line("b", PIZZA, 1, List.of())), null);
+        var request = new QuoteRequest(
+                TENANT,
+                BRAND,
+                LOCATION,
+                null,
+                "STOREFRONT",
+                List.of(
+                        new QuoteRequest.Line("a", BURGER, 3, List.of()),
+                        new QuoteRequest.Line("b", PIZZA, 1, List.of())),
+                null);
 
-        var result = engine.price(request,
-                inputs(Map.of(BURGER, 33_333L, PIZZA, 17L)), NOW);
+        var result = engine.price(request, inputs(Map.of(BURGER, 33_333L, PIZZA, 17L)), NOW);
 
-        long summed = result.lines().stream().mapToLong(line -> line.taxAmount().minor()).sum();
+        long summed = result.lines().stream()
+                .mapToLong(line -> line.taxAmount().minor())
+                .sum();
         assertThat(summed)
                 .as("a total that differs from the sum of its lines is what an accountant finds "
                         + "and nobody can explain")
@@ -91,11 +97,17 @@ class PricingEngineTests {
     @Test
     @DisplayName("modifiers are priced into the line and shown as their own adjustment")
     void modifiersArePricedAndVisible() {
-        var request = new QuoteRequest(TENANT, BRAND, LOCATION, null, "STOREFRONT", List.of(
-                new QuoteRequest.Line("a", BURGER, 2, List.of(EXTRA_CHEESE))), null);
+        var request = new QuoteRequest(
+                TENANT,
+                BRAND,
+                LOCATION,
+                null,
+                "STOREFRONT",
+                List.of(new QuoteRequest.Line("a", BURGER, 2, List.of(EXTRA_CHEESE))),
+                null);
 
-        var result = engine.price(request, inputsWithModifiers(
-                Map.of(BURGER, 50_000L), Map.of(EXTRA_CHEESE, 5_000L)), NOW);
+        var result =
+                engine.price(request, inputsWithModifiers(Map.of(BURGER, 50_000L), Map.of(EXTRA_CHEESE, 5_000L)), NOW);
 
         assertThat(result.total().minor()).isEqualTo(110_000L);
         // "Why is this 110,000" has an answer: 2 × 50,000 base plus 2 × 5,000
@@ -110,16 +122,25 @@ class PricingEngineTests {
     @DisplayName("an item with no active price is refused, never priced at zero")
     void anUnpricedItemIsRefused() {
         // Pricing a missing item as free is how a restaurant gives away food.
-        assertThat(catchThrowable(() ->
-                engine.price(cart(BURGER, 1), inputs(Map.of(PIZZA, 10_000L)), NOW)))
+        assertThat(catchThrowable(() -> engine.price(cart(BURGER, 1), inputs(Map.of(PIZZA, 10_000L)), NOW)))
                 .isInstanceOf(PricingEngine.UnpricedItemException.class);
     }
 
     @Test
     @DisplayName("an exclusive tax profile is refused rather than approximated")
     void exclusiveTaxModeIsRefused() {
-        var exclusive = new PricingInputs("UZS", PUBLICATION, PRICE_BOOK, 1, TAX_PROFILE, 1,
-                1_200, TaxMode.EXCLUSIVE, Map.of(BURGER, 50_000L), Map.of(), Map.of());
+        var exclusive = new PricingInputs(
+                "UZS",
+                PUBLICATION,
+                PRICE_BOOK,
+                1,
+                TAX_PROFILE,
+                1,
+                1_200,
+                TaxMode.EXCLUSIVE,
+                Map.of(BURGER, 50_000L),
+                Map.of(),
+                Map.of());
 
         // A half-implemented mode producing plausible wrong totals is worse than
         // an error nobody can ignore.
@@ -130,12 +151,26 @@ class PricingEngineTests {
     @Test
     @DisplayName("the same cart prices identically however its lines are ordered")
     void theContextHashIgnoresLineOrder() {
-        var ascending = new QuoteRequest(TENANT, BRAND, LOCATION, null, "STOREFRONT", List.of(
-                new QuoteRequest.Line("a", BURGER, 1, List.of()),
-                new QuoteRequest.Line("b", PIZZA, 2, List.of())), null);
-        var descending = new QuoteRequest(TENANT, BRAND, LOCATION, null, "STOREFRONT", List.of(
-                new QuoteRequest.Line("b", PIZZA, 2, List.of()),
-                new QuoteRequest.Line("a", BURGER, 1, List.of())), null);
+        var ascending = new QuoteRequest(
+                TENANT,
+                BRAND,
+                LOCATION,
+                null,
+                "STOREFRONT",
+                List.of(
+                        new QuoteRequest.Line("a", BURGER, 1, List.of()),
+                        new QuoteRequest.Line("b", PIZZA, 2, List.of())),
+                null);
+        var descending = new QuoteRequest(
+                TENANT,
+                BRAND,
+                LOCATION,
+                null,
+                "STOREFRONT",
+                List.of(
+                        new QuoteRequest.Line("b", PIZZA, 2, List.of()),
+                        new QuoteRequest.Line("a", BURGER, 1, List.of())),
+                null);
 
         var prices = inputs(Map.of(BURGER, 50_000L, PIZZA, 70_000L));
 
@@ -151,17 +186,19 @@ class PricingEngineTests {
     @DisplayName("changing any priced input changes the context hash")
     void theContextHashCoversEveryInputThatMovesTheTotal() {
         var request = cart(BURGER, 1);
-        String baseline = engine.price(request, inputs(Map.of(BURGER, 50_000L)), NOW).contextHash();
+        String baseline =
+                engine.price(request, inputs(Map.of(BURGER, 50_000L)), NOW).contextHash();
 
         // A changed price book, tax rate, publication, or quantity must all
         // invalidate the quote — otherwise checkout would honour a stale price.
         assertThat(engine.price(request, withPriceBookVersion(2), NOW).contextHash())
                 .isNotEqualTo(baseline);
-        assertThat(engine.price(request, withTaxRate(1_500), NOW).contextHash())
+        assertThat(engine.price(request, withTaxRate(1_500), NOW).contextHash()).isNotEqualTo(baseline);
+        assertThat(engine.price(request, withPublication(UUID.randomUUID()), NOW)
+                        .contextHash())
                 .isNotEqualTo(baseline);
-        assertThat(engine.price(request, withPublication(UUID.randomUUID()), NOW).contextHash())
-                .isNotEqualTo(baseline);
-        assertThat(engine.price(cart(BURGER, 2), inputs(Map.of(BURGER, 50_000L)), NOW).contextHash())
+        assertThat(engine.price(cart(BURGER, 2), inputs(Map.of(BURGER, 50_000L)), NOW)
+                        .contextHash())
                 .isNotEqualTo(baseline);
     }
 
@@ -172,8 +209,10 @@ class PricingEngineTests {
         // amount, so changing a price without versioning the book would leave a
         // stale quote acceptable. Recorded here as the invariant a price edit
         // must maintain: editing a price bumps the book's version.
-        String cheap = engine.price(cart(BURGER, 1), inputs(Map.of(BURGER, 50_000L)), NOW).contextHash();
-        String expensive = engine.price(cart(BURGER, 1), inputs(Map.of(BURGER, 60_000L)), NOW).contextHash();
+        String cheap = engine.price(cart(BURGER, 1), inputs(Map.of(BURGER, 50_000L)), NOW)
+                .contextHash();
+        String expensive = engine.price(cart(BURGER, 1), inputs(Map.of(BURGER, 60_000L)), NOW)
+                .contextHash();
 
         assertThat(expensive).isEqualTo(cheap);
         assertThat(engine.price(cart(BURGER, 1), withPriceBookVersion(2), NOW).contextHash())
@@ -201,45 +240,100 @@ class PricingEngineTests {
     void apportionmentIsExactAndStable() {
         // Equal weights: the remainder goes to the first of the tied largest, so
         // the split is reproducible rather than merely fair.
-        assertThat(TaxCalculation.apportion(100L, new long[] { 1L, 1L, 1L }))
-                .containsExactly(34L, 33L, 33L);
+        assertThat(TaxCalculation.apportion(100L, new long[] {1L, 1L, 1L})).containsExactly(34L, 33L, 33L);
 
         // Unequal weights: the largest line absorbs it.
-        long[] shares = TaxCalculation.apportion(100L, new long[] { 1L, 8L, 1L });
+        long[] shares = TaxCalculation.apportion(100L, new long[] {1L, 8L, 1L});
         assertThat(shares).containsExactly(10L, 80L, 10L);
         assertThat(java.util.Arrays.stream(shares).sum()).isEqualTo(100L);
         // Nothing to split is not an error; it is an empty split.
-        assertThat(TaxCalculation.apportion(0L, new long[] { 5L, 5L })).containsExactly(0L, 0L);
-        assertThat(TaxCalculation.apportion(100L, new long[] { 0L, 0L })).containsExactly(0L, 0L);
+        assertThat(TaxCalculation.apportion(0L, new long[] {5L, 5L})).containsExactly(0L, 0L);
+        assertThat(TaxCalculation.apportion(100L, new long[] {0L, 0L})).containsExactly(0L, 0L);
     }
 
     private static QuoteRequest cart(UUID variantId, int quantity) {
-        return new QuoteRequest(TENANT, BRAND, LOCATION, null, "STOREFRONT",
-                List.of(new QuoteRequest.Line("a", variantId, quantity, List.of())), null);
+        return new QuoteRequest(
+                TENANT,
+                BRAND,
+                LOCATION,
+                null,
+                "STOREFRONT",
+                List.of(new QuoteRequest.Line("a", variantId, quantity, List.of())),
+                null);
     }
 
     private static PricingInputs inputs(Map<UUID, Long> variantPrices) {
-        return new PricingInputs("UZS", PUBLICATION, PRICE_BOOK, 1, TAX_PROFILE, 1,
-                1_200, TaxMode.INCLUSIVE, variantPrices, Map.of(), Map.of());
+        return new PricingInputs(
+                "UZS",
+                PUBLICATION,
+                PRICE_BOOK,
+                1,
+                TAX_PROFILE,
+                1,
+                1_200,
+                TaxMode.INCLUSIVE,
+                variantPrices,
+                Map.of(),
+                Map.of());
     }
 
     private static PricingInputs inputsWithModifiers(Map<UUID, Long> variants, Map<UUID, Long> modifiers) {
-        return new PricingInputs("UZS", PUBLICATION, PRICE_BOOK, 1, TAX_PROFILE, 1,
-                1_200, TaxMode.INCLUSIVE, variants, modifiers, Map.of());
+        return new PricingInputs(
+                "UZS",
+                PUBLICATION,
+                PRICE_BOOK,
+                1,
+                TAX_PROFILE,
+                1,
+                1_200,
+                TaxMode.INCLUSIVE,
+                variants,
+                modifiers,
+                Map.of());
     }
 
     private static PricingInputs withPriceBookVersion(int version) {
-        return new PricingInputs("UZS", PUBLICATION, PRICE_BOOK, version, TAX_PROFILE, 1,
-                1_200, TaxMode.INCLUSIVE, Map.of(BURGER, 50_000L), Map.of(), Map.of());
+        return new PricingInputs(
+                "UZS",
+                PUBLICATION,
+                PRICE_BOOK,
+                version,
+                TAX_PROFILE,
+                1,
+                1_200,
+                TaxMode.INCLUSIVE,
+                Map.of(BURGER, 50_000L),
+                Map.of(),
+                Map.of());
     }
 
     private static PricingInputs withTaxRate(int rateBasisPoints) {
-        return new PricingInputs("UZS", PUBLICATION, PRICE_BOOK, 1, TAX_PROFILE, 1,
-                rateBasisPoints, TaxMode.INCLUSIVE, Map.of(BURGER, 50_000L), Map.of(), Map.of());
+        return new PricingInputs(
+                "UZS",
+                PUBLICATION,
+                PRICE_BOOK,
+                1,
+                TAX_PROFILE,
+                1,
+                rateBasisPoints,
+                TaxMode.INCLUSIVE,
+                Map.of(BURGER, 50_000L),
+                Map.of(),
+                Map.of());
     }
 
     private static PricingInputs withPublication(UUID publicationId) {
-        return new PricingInputs("UZS", publicationId, PRICE_BOOK, 1, TAX_PROFILE, 1,
-                1_200, TaxMode.INCLUSIVE, Map.of(BURGER, 50_000L), Map.of(), Map.of());
+        return new PricingInputs(
+                "UZS",
+                publicationId,
+                PRICE_BOOK,
+                1,
+                TAX_PROFILE,
+                1,
+                1_200,
+                TaxMode.INCLUSIVE,
+                Map.of(BURGER, 50_000L),
+                Map.of(),
+                Map.of());
     }
 }

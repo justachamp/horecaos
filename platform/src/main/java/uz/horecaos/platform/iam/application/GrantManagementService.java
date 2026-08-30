@@ -10,15 +10,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.iam.api.AuthorizationService;
-import uz.horecaos.platform.iam.api.GrantChanged;
 import uz.horecaos.platform.iam.api.Capability;
+import uz.horecaos.platform.iam.api.GrantChanged;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.infrastructure.authorization.JdbcAuthorizationService;
@@ -109,11 +107,19 @@ public class GrantManagementService {
                 .update();
 
         evictAndPublish(new GrantChanged(
-                grantId, GrantChanged.Change.GRANTED, command.principalSubject(), command.scope(),
-                granterSubject, command.reason(),
-                Map.of("role", role.code(),
-                        "scope", command.scope().type().name(),
-                        "validUntil", String.valueOf(command.validUntil())),
+                grantId,
+                GrantChanged.Change.GRANTED,
+                command.principalSubject(),
+                command.scope(),
+                granterSubject,
+                command.reason(),
+                Map.of(
+                        "role",
+                        role.code(),
+                        "scope",
+                        command.scope().type().name(),
+                        "validUntil",
+                        String.valueOf(command.validUntil())),
                 now));
         return grantId;
     }
@@ -161,9 +167,14 @@ public class GrantManagementService {
         if (updated == 1) {
             RevokedGrant grant = existing.get();
             evictAndPublish(new GrantChanged(
-                    grantId, GrantChanged.Change.REVOKED, grant.principalSubject(),
-                    ResourceScope.tenant(grant.tenantId()), revokerSubject, reason,
-                    Map.of("scope", grant.scopeType()), clock.instant()));
+                    grantId,
+                    GrantChanged.Change.REVOKED,
+                    grant.principalSubject(),
+                    ResourceScope.tenant(grant.tenantId()),
+                    revokerSubject,
+                    reason,
+                    Map.of("scope", grant.scopeType()),
+                    clock.instant()));
         }
         return updated == 1;
     }
@@ -249,8 +260,7 @@ public class GrantManagementService {
         if (platformRole.isPresent()) {
             PlatformRole role = platformRole.get();
             return new ResolvedRole(
-                    RoleRegistrySynchronizer.platformRoleId(role), role.code(), role.capabilities(),
-                    true);
+                    RoleRegistrySynchronizer.platformRoleId(role), role.code(), role.capabilities(), true);
         }
 
         // A platform-scope grant belongs to no tenant, so there is no tenant whose
@@ -279,14 +289,9 @@ public class GrantManagementService {
         // above, which is the point of resolving to one shape here.
         Set<Capability> capabilities = jdbc.sql("""
                 SELECT capability_code FROM iam.role_capabilities WHERE role_id = :roleId
-                """)
-                .param("roleId", roleId)
-                .query(String.class)
-                .list()
-                .stream()
+                """).param("roleId", roleId).query(String.class).list().stream()
                 .map(Capability::require)
-                .collect(java.util.stream.Collectors.toCollection(
-                        () -> EnumSet.noneOf(Capability.class)));
+                .collect(java.util.stream.Collectors.toCollection(() -> EnumSet.noneOf(Capability.class)));
 
         return new ResolvedRole(roleId, roleCode, capabilities, false);
     }
@@ -341,17 +346,20 @@ public class GrantManagementService {
      *                        does not match the role is refused by the key rather
      *                        than trusted.
      */
-    private record ResolvedRole(UUID id, String code, Set<Capability> capabilities,
-            boolean platformDefined) { }
+    private record ResolvedRole(UUID id, String code, Set<Capability> capabilities, boolean platformDefined) {}
 
     /** @param validUntil null for an open-ended grant; set it for support access */
     public record GrantCommand(
-            String principalSubject, String roleCode, ResourceScope scope,
-            String reason, Instant validUntil) { }
+            String principalSubject, String roleCode, ResourceScope scope, String reason, Instant validUntil) {}
 
     public record GrantView(
-            UUID id, String principalSubject, String roleCode,
-            String scopeType, UUID scopeId, String status, String grantedBy) { }
+            UUID id,
+            String principalSubject,
+            String roleCode,
+            String scopeType,
+            UUID scopeId,
+            String status,
+            String grantedBy) {}
 
-    private record RevokedGrant(String principalSubject, UUID tenantId, String scopeType, UUID scopeId) { }
+    private record RevokedGrant(String principalSubject, UUID tenantId, String scopeType, UUID scopeId) {}
 }

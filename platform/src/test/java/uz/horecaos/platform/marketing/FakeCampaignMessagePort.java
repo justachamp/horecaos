@@ -5,7 +5,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import uz.horecaos.platform.marketing.api.CampaignMessagePort;
 
 /**
@@ -36,13 +35,11 @@ final class FakeCampaignMessagePort implements CampaignMessagePort {
     @Override
     public UUID enqueue(MarketingMessage message) {
         sent.add(message);
-        return byIdempotencyKey.computeIfAbsent(message.idempotencyKey(),
-                key -> UUID.randomUUID());
+        return byIdempotencyKey.computeIfAbsent(message.idempotencyKey(), key -> UUID.randomUUID());
     }
 
     @Override
-    public Map<String, String> templateBodies(UUID tenantId, UUID brandId, String templateKey,
-            String channel) {
+    public Map<String, String> templateBodies(UUID tenantId, UUID brandId, String templateKey, String channel) {
         return Map.copyOf(bodies);
     }
 

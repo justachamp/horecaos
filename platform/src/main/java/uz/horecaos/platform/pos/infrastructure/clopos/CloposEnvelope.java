@@ -4,7 +4,6 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
 import uz.horecaos.platform.integration.api.pos.PosApiCall;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 
@@ -42,12 +41,9 @@ public final class CloposEnvelope {
      * <p>Not the restaurant's problem and not fixable by the restaurant. These
      * page an engineer rather than emailing a branch manager.
      */
-    private static final List<String> PLATFORM_WIDE = List.of(
-            "invalid integrator_id",
-            "integrator is in test mode");
+    private static final List<String> PLATFORM_WIDE = List.of("invalid integrator_id", "integrator is in test mode");
 
-    private CloposEnvelope() {
-    }
+    private CloposEnvelope() {}
 
     /**
      * Turns a transport outcome into a Clopos outcome.
@@ -71,8 +67,7 @@ public final class CloposEnvelope {
             // configuration fault — a test integrator against a production brand,
             // a disabled client — and none of them improves by being sent again.
             return ProviderOutcome.rejected(
-                    isPlatformWide(error) ? "CLOPOS_INTEGRATOR_INVALID" : "CLOPOS_REFUSED",
-                    describe(error, message));
+                    isPlatformWide(error) ? "CLOPOS_INTEGRATOR_INVALID" : "CLOPOS_REFUSED", describe(error, message));
         }
         return transportOutcome;
     }
@@ -86,15 +81,16 @@ public final class CloposEnvelope {
         }
         String detail = outcome.detail() == null ? "" : outcome.detail();
         if (isPlatformWide(detail)) {
-            return ProviderOutcome.rejected("CLOPOS_INTEGRATOR_INVALID",
+            return ProviderOutcome.rejected(
+                    "CLOPOS_INTEGRATOR_INVALID",
                     "HorecaOS's integrator registration was refused, which affects every brand "
                             + "rather than this one: " + trim(detail));
         }
         if (detail.toLowerCase(java.util.Locale.ROOT).contains("client is disabled")) {
             // The restaurant switched the Open API module off in their own back
             // office. Fixable by them in thirty seconds, and by nobody else.
-            return ProviderOutcome.rejected("CLOPOS_CLIENT_DISABLED",
-                    "The restaurant has disabled the Open API module for these credentials");
+            return ProviderOutcome.rejected(
+                    "CLOPOS_CLIENT_DISABLED", "The restaurant has disabled the Open API module for these credentials");
         }
         if (detail.toLowerCase(java.util.Locale.ROOT).contains("token expired")) {
             // The only genuinely retryable 401. The session token aged out; a new

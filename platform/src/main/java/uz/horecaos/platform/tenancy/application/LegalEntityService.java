@@ -6,11 +6,9 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.tenancy.api.FiscalSeller;
 import uz.horecaos.platform.tenancy.api.LegalEntityId;
 import uz.horecaos.platform.tenancy.api.TenantId;
@@ -111,8 +109,8 @@ public class LegalEntityService {
     public LegalEntity require(UUID tenantId, UUID entityId) {
         requireSchema();
         return store.find(tenantId, entityId)
-                .orElseThrow(() -> new TenantResourceNotFoundException(
-                        "No legal entity " + entityId + " for this tenant"));
+                .orElseThrow(
+                        () -> new TenantResourceNotFoundException("No legal entity " + entityId + " for this tenant"));
     }
 
     // -------------------------------------------------------------- assignment
@@ -138,8 +136,7 @@ public class LegalEntityService {
         LegalEntity entity = require(tenantId, command.legalEntityId());
         if (!entity.canSell()) {
             throw new TenantResourceConflictException(
-                    "Legal entity %s is %s and cannot be named as a seller"
-                            .formatted(entity.code(), entity.status()));
+                    "Legal entity %s is %s and cannot be named as a seller".formatted(entity.code(), entity.status()));
         }
 
         Instant now = clock.instant();
@@ -153,9 +150,16 @@ public class LegalEntityService {
         store.closeOpenAssignment(tenantId, command.locationId(), command.effectiveFrom(), now);
 
         LocationFiscalAssignment assignment = new LocationFiscalAssignment(
-                UUID.randomUUID(), tenantId, command.brandId(), command.locationId(),
-                command.legalEntityId(), command.effectiveFrom(), null,
-                command.approvedBy(), command.approvalReference(), 1);
+                UUID.randomUUID(),
+                tenantId,
+                command.brandId(),
+                command.locationId(),
+                command.legalEntityId(),
+                command.effectiveFrom(),
+                null,
+                command.approvedBy(),
+                command.approvalReference(),
+                1);
 
         try {
             store.insertAssignment(assignment, now);
@@ -181,14 +185,13 @@ public class LegalEntityService {
         return store.sellerFor(tenantId, locationId, businessDate);
     }
 
-    private LegalEntity transition(UUID tenantId, UUID entityId, int expectedVersion,
-            java.util.function.Consumer<LegalEntity> change) {
+    private LegalEntity transition(
+            UUID tenantId, UUID entityId, int expectedVersion, java.util.function.Consumer<LegalEntity> change) {
         LegalEntity entity = require(tenantId, entityId);
         change.accept(entity);
         if (!store.update(entity, expectedVersion, clock.instant())) {
             throw new TenantResourceConflictException(
-                    "Legal entity %s has moved on from version %d"
-                            .formatted(entityId, expectedVersion));
+                    "Legal entity %s has moved on from version %d".formatted(entityId, expectedVersion));
         }
         return entity;
     }
@@ -220,8 +223,7 @@ public class LegalEntityService {
             String vatCertificateReference,
             UUID taxProfileId,
             String registeredAddress,
-            String contactPhone) {
-    }
+            String contactPhone) {}
 
     /**
      * @param approvedBy ADR 0027 evidence, required. Which company sells at a
@@ -234,8 +236,7 @@ public class LegalEntityService {
             UUID legalEntityId,
             LocalDate effectiveFrom,
             String approvedBy,
-            String approvalReference) {
-    }
+            String approvalReference) {}
 
     /** Exposed so a console can render what an unbuilt stage 1 means for a tenant. */
     public boolean schemaAvailable() {

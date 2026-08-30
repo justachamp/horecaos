@@ -11,7 +11,6 @@ package uz.horecaos.platform.courier.domain;
  * an arrival.
  */
 public enum CostBasis {
-
     ACCRUED,
     INVOICED,
     SETTLED;

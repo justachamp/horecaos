@@ -7,10 +7,8 @@ import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -51,8 +49,7 @@ public class DutySessionService {
     private final AuditRecorder audit;
     private final Clock clock;
 
-    public DutySessionService(JdbcTelemetryStore store, CourierShiftPort shifts,
-            AuditRecorder audit, Clock clock) {
+    public DutySessionService(JdbcTelemetryStore store, CourierShiftPort shifts, AuditRecorder audit, Clock clock) {
         this.store = store;
         this.shifts = shifts;
         this.audit = audit;
@@ -76,15 +73,17 @@ public class DutySessionService {
         }
 
         if (!shifts.isWired()) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
                     "A duty session cannot open until ADR 0042 supplies the shift and registration "
                             + "check. Collection without it is not something this platform does.",
                     Map.of("reason", CourierShiftPort.NOT_WIRED_REASON));
         }
 
-        CourierShiftPort.OpenShift shift = shifts
-                .openShift(command.tenantId(), command.courierId(), command.locationId())
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_CONFLICT,
+        CourierShiftPort.OpenShift shift = shifts.openShift(
+                        command.tenantId(), command.courierId(), command.locationId())
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.RESOURCE_CONFLICT,
                         "This courier has no open shift at this branch, so there is nothing to "
                                 + "collect for. A shift is the courier's own declaration that they "
                                 + "are working (ADR 0042).",
@@ -93,21 +92,36 @@ public class DutySessionService {
         Instant now = clock.instant();
         LocalDate today = LocalDate.ofInstant(now, ZoneOffset.UTC);
         if (shift.registrationValidUntil().isBefore(today)) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
                     "This courier's self-employment registration expired on %s. New work and new "
                             + "collection are refused until it is renewed; work already accepted is "
-                            + "unaffected (ADR 0042)."
-                            .formatted(shift.registrationValidUntil()),
-                    Map.of("reason", "REGISTRATION_LAPSED",
-                            "registrationValidUntil", shift.registrationValidUntil().toString()));
+                            + "unaffected (ADR 0042).".formatted(shift.registrationValidUntil()),
+                    Map.of(
+                            "reason",
+                            "REGISTRATION_LAPSED",
+                            "registrationValidUntil",
+                            shift.registrationValidUntil().toString()));
         }
 
         DutySessionRow session = new DutySessionRow(
-                UUID.randomUUID(), command.tenantId(), shift.brandId(), shift.locationId(),
-                command.courierId(), shift.shiftId(), command.deviceId(),
-                DutySessionStatus.OPEN, command.collectionGate(),
-                now, shift.registrationValidUntil(), command.actor().subject(),
-                now, null, null, null, 1);
+                UUID.randomUUID(),
+                command.tenantId(),
+                shift.brandId(),
+                shift.locationId(),
+                command.courierId(),
+                shift.shiftId(),
+                command.deviceId(),
+                DutySessionStatus.OPEN,
+                command.collectionGate(),
+                now,
+                shift.registrationValidUntil(),
+                command.actor().subject(),
+                now,
+                null,
+                null,
+                null,
+                1);
 
         store.insertDutySession(session);
 
@@ -133,20 +147,20 @@ public class DutySessionService {
     /** A break began. Collection stops; the pin goes stale and then goes. */
     @Transactional
     public void suspend(UUID tenantId, UUID sessionId) {
-        if (!store.transitionSession(tenantId, sessionId,
-                DutySessionStatus.OPEN, DutySessionStatus.SUSPENDED, clock.instant())) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
-                    "This duty session is not open, so there is no collection to suspend");
+        if (!store.transitionSession(
+                tenantId, sessionId, DutySessionStatus.OPEN, DutySessionStatus.SUSPENDED, clock.instant())) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT, "This duty session is not open, so there is no collection to suspend");
         }
     }
 
     /** The break ended. ADR 0042 owns that decision; this only follows it. */
     @Transactional
     public void resume(UUID tenantId, UUID sessionId) {
-        if (!store.transitionSession(tenantId, sessionId,
-                DutySessionStatus.SUSPENDED, DutySessionStatus.OPEN, clock.instant())) {
-            throw new ApiException(ErrorCode.RESOURCE_CONFLICT,
-                    "This duty session is not suspended, so there is no break to end");
+        if (!store.transitionSession(
+                tenantId, sessionId, DutySessionStatus.SUSPENDED, DutySessionStatus.OPEN, clock.instant())) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT, "This duty session is not suspended, so there is no break to end");
         }
     }
 
@@ -155,8 +169,14 @@ public class DutySessionService {
      * call can still see where the courier was; the retention sweeper removes it.
      */
     @Transactional
-    public void close(UUID tenantId, UUID sessionId, String endReason, ActorRef actor,
-            String reason, String capabilityUsed, String correlationId) {
+    public void close(
+            UUID tenantId,
+            UUID sessionId,
+            String endReason,
+            ActorRef actor,
+            String reason,
+            String capabilityUsed,
+            String correlationId) {
 
         DutySessionRow session = store.findSession(tenantId, sessionId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such duty session"));
@@ -192,8 +212,13 @@ public class DutySessionService {
      *                       because the courier's phone died" are different facts
      */
     public record OpenCommand(
-            UUID tenantId, UUID courierId, UUID locationId, String deviceId,
-            CollectionGate collectionGate, ActorRef actor, String reason,
-            String capabilityUsed, String correlationId) {
-    }
+            UUID tenantId,
+            UUID courierId,
+            UUID locationId,
+            String deviceId,
+            CollectionGate collectionGate,
+            ActorRef actor,
+            String reason,
+            String capabilityUsed,
+            String correlationId) {}
 }

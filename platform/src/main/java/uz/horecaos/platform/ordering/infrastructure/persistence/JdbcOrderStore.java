@@ -11,10 +11,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.ordering.domain.OrderOutcome;
 import uz.horecaos.platform.ordering.domain.OrderPromise;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
@@ -62,7 +60,8 @@ public class JdbcOrderStore {
                 SET last_value = ordering.order_number_counters.last_value + 1
                 RETURNING last_value
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
                 .param("businessDate", businessDate)
                 .query(Integer.class)
                 .single();
@@ -95,9 +94,12 @@ public class JdbcOrderStore {
                     :promiseTravelMinutes, :createdByActorType, :createdByActorId,
                     1, :now)
                 """)
-                .param("id", order.orderId()).param("number", order.publicOrderNumber())
-                .param("tenantId", order.tenantId()).param("brandId", order.brandId())
-                .param("locationId", order.locationId()).param("channelId", order.channelId())
+                .param("id", order.orderId())
+                .param("number", order.publicOrderNumber())
+                .param("tenantId", order.tenantId())
+                .param("brandId", order.brandId())
+                .param("locationId", order.locationId())
+                .param("channelId", order.channelId())
                 .param("channelCode", order.channelCode())
                 .param("customerId", order.customerAccountId())
                 .param("guestHash", order.guestReferenceHash())
@@ -107,22 +109,26 @@ public class JdbcOrderStore {
                 .param("policyVersion", order.acceptancePolicyVersion())
                 .param("approvalChannel", order.approvalChannel())
                 .param("timeoutAction", order.approvalTimeoutAction())
-                .param("approvalDeadline", order.approvalDeadlineAt() == null
-                        ? null : utc(order.approvalDeadlineAt()))
+                .param("approvalDeadline", order.approvalDeadlineAt() == null ? null : utc(order.approvalDeadlineAt()))
                 .param("status", order.status().name())
                 .param("paymentProjection", order.paymentStatusProjection())
                 .param("fulfillmentProjection", order.fulfillmentStatusProjection())
                 .param("currency", order.currency())
-                .param("subtotal", order.subtotalMinor()).param("tax", order.taxMinor())
-                .param("discount", order.discountMinor()).param("fee", order.feeMinor())
+                .param("subtotal", order.subtotalMinor())
+                .param("tax", order.taxMinor())
+                .param("discount", order.discountMinor())
+                .param("fee", order.feeMinor())
                 .param("total", order.totalMinor())
                 .param("quoteId", order.pricingQuoteId())
                 .param("contextHash", order.pricingContextHash())
                 .param("publicationId", order.catalogPublicationId())
                 .param("cartId", order.cartId())
                 .param("idempotencyKey", order.idempotencyKey())
-                .param("promisedAt", order.promise().promisedAt() == null
-                        ? null : utc(order.promise().promisedAt()))
+                .param(
+                        "promisedAt",
+                        order.promise().promisedAt() == null
+                                ? null
+                                : utc(order.promise().promisedAt()))
                 .param("promiseBasis", order.promise().basis().name())
                 .param("promisePrepMinutes", order.promise().prepMinutes())
                 .param("promiseTravelMinutes", order.promise().travelMinutes())
@@ -155,14 +161,18 @@ public class JdbcOrderStore {
                     :fee, :total, :delta, :actorType,
                     :actorId, :now)
                 """)
-                .param("orderId", revision.orderId()).param("revision", revision.revision())
-                .param("tenantId", revision.tenantId()).param("source", revision.source())
+                .param("orderId", revision.orderId())
+                .param("revision", revision.revision())
+                .param("tenantId", revision.tenantId())
+                .param("source", revision.source())
                 .param("amendmentId", revision.amendmentId())
                 .param("quoteId", revision.pricingQuoteId())
                 .param("contextHash", revision.pricingContextHash())
                 .param("currency", revision.currency())
-                .param("subtotal", revision.subtotalMinor()).param("tax", revision.taxMinor())
-                .param("discount", revision.discountMinor()).param("fee", revision.feeMinor())
+                .param("subtotal", revision.subtotalMinor())
+                .param("tax", revision.taxMinor())
+                .param("discount", revision.discountMinor())
+                .param("fee", revision.feeMinor())
                 .param("total", revision.totalMinor())
                 .param("delta", revision.deltaTotalMinor())
                 .param("actorType", revision.createdByActorType())
@@ -181,7 +191,8 @@ public class JdbcOrderStore {
                 WHERE tenant_id = :tenantId AND order_id = :orderId
                 ORDER BY revision
                 """)
-                .param("tenantId", tenantId).param("orderId", orderId)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
                 .query((row, number) -> new RevisionRow(
                         row.getObject("order_id", UUID.class),
                         row.getInt("revision"),
@@ -213,8 +224,14 @@ public class JdbcOrderStore {
      *
      * @return the new order version when this caller won, or empty when it lost
      */
-    public Optional<Integer> applyRevision(UUID tenantId, UUID orderId, int expectedVersion,
-            int newRevision, OrderFieldPatch patch, String resolvedBy, Instant now) {
+    public Optional<Integer> applyRevision(
+            UUID tenantId,
+            UUID orderId,
+            int expectedVersion,
+            int newRevision,
+            OrderFieldPatch patch,
+            String resolvedBy,
+            Instant now) {
 
         // A HashMap rather than Map.of, because every value in the patch may
         // legitimately be null and Map.of refuses one.
@@ -226,8 +243,7 @@ public class JdbcOrderStore {
         params.put("setKitchenNote", patch.kitchenNote() != null);
         params.put("kitchenNote", patch.kitchenNote());
         params.put("setCallback", patch.callbackRequested() != null);
-        params.put("callbackRequested", patch.callbackRequested() != null
-                && patch.callbackRequested());
+        params.put("callbackRequested", patch.callbackRequested() != null && patch.callbackRequested());
         params.put("resolvedBy", resolvedBy);
         params.put("setCash", patch.cashTenderedExpectedMinor() != null);
         params.put("cashTendered", patch.cashTenderedExpectedMinor());
@@ -254,10 +270,7 @@ public class JdbcOrderStore {
                         THEN :cashTendered::bigint ELSE cash_tendered_expected_minor END
                 WHERE tenant_id = :tenantId AND id = :orderId AND version = :expectedVersion
                 RETURNING version
-                """)
-                .params(params)
-                .query(Integer.class)
-                .optional();
+                """).params(params).query(Integer.class).optional();
     }
 
     // ---------------------------------------------------------- terminal outcome
@@ -269,8 +282,8 @@ public class JdbcOrderStore {
      * is primary-keyed on the order, so a second attempt fails rather than
      * producing an order with two contradictory endings.
      */
-    public void insertOutcome(UUID tenantId, UUID orderId, OrderOutcome outcome, String actorType,
-            String actorId, Instant occurredAt) {
+    public void insertOutcome(
+            UUID tenantId, UUID orderId, OrderOutcome outcome, String actorType, String actorId, Instant occurredAt) {
         jdbc.sql("""
                 INSERT INTO ordering.order_outcomes (
                     order_id, tenant_id, kind, system_category, reason_id, reason_version,
@@ -280,18 +293,26 @@ public class JdbcOrderStore {
                     :snapshot::jsonb, :actorType, :actorId, :disposition, :liability,
                     :refund, :committed, :note, :occurredAt)
                 """)
-                .param("orderId", orderId).param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .param("tenantId", tenantId)
                 .param("kind", outcome.kind().name())
                 .param("category", outcome.systemCategory().name())
                 .param("reasonId", outcome.reasonId())
                 .param("reasonVersion", outcome.reasonVersion())
                 .param("snapshot", outcome.reasonSnapshot())
-                .param("actorType", actorType).param("actorId", actorId)
+                .param("actorType", actorType)
+                .param("actorId", actorId)
                 .param("disposition", outcome.disposition().name())
-                .param("liability", outcome.liabilityParty() == null
-                        ? null : outcome.liabilityParty().name())
-                .param("refund", outcome.customerRefund() == null
-                        ? null : outcome.customerRefund().name())
+                .param(
+                        "liability",
+                        outcome.liabilityParty() == null
+                                ? null
+                                : outcome.liabilityParty().name())
+                .param(
+                        "refund",
+                        outcome.customerRefund() == null
+                                ? null
+                                : outcome.customerRefund().name())
                 .param("committed", outcome.reservationCommitted())
                 .param("note", outcome.noteEncrypted())
                 .param("occurredAt", utc(occurredAt))
@@ -307,7 +328,8 @@ public class JdbcOrderStore {
                 FROM ordering.order_outcomes
                 WHERE tenant_id = :tenantId AND order_id = :orderId
                 """)
-                .param("tenantId", tenantId).param("orderId", orderId)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
                 .query((row, number) -> new OutcomeRow(
                         row.getString("kind"),
                         row.getString("system_category"),
@@ -336,10 +358,22 @@ public class JdbcOrderStore {
      * associated data binds the note's ciphertext to the row it belongs to: the id
      * has to exist before the note can be encrypted for it.
      */
-    public void insertLine(UUID lineId, UUID tenantId, UUID orderId, int lineNumber,
-            UUID sourceProductId, UUID sourceVariantId, String productName, String variantName,
-            String sku, int quantity, long unitMinor, long baseMinor, long finalMinor,
-            long taxMinor, String noteEncrypted) {
+    public void insertLine(
+            UUID lineId,
+            UUID tenantId,
+            UUID orderId,
+            int lineNumber,
+            UUID sourceProductId,
+            UUID sourceVariantId,
+            String productName,
+            String variantName,
+            String sku,
+            int quantity,
+            long unitMinor,
+            long baseMinor,
+            long finalMinor,
+            long taxMinor,
+            String noteEncrypted) {
         jdbc.sql("""
                 INSERT INTO ordering.order_lines (
                     id, tenant_id, order_id, line_number, source_product_id, source_variant_id,
@@ -350,19 +384,34 @@ public class JdbcOrderStore {
                     :productName, :variantName, :sku, :quantity,
                     :unit, :base, :finalAmount, :tax, :note)
                 """)
-                .param("id", lineId).param("tenantId", tenantId).param("orderId", orderId)
-                .param("lineNumber", lineNumber).param("productId", sourceProductId)
-                .param("variantId", sourceVariantId).param("productName", productName)
-                .param("variantName", variantName).param("sku", sku)
-                .param("quantity", quantity).param("unit", unitMinor).param("base", baseMinor)
-                .param("finalAmount", finalMinor).param("tax", taxMinor)
+                .param("id", lineId)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .param("lineNumber", lineNumber)
+                .param("productId", sourceProductId)
+                .param("variantId", sourceVariantId)
+                .param("productName", productName)
+                .param("variantName", variantName)
+                .param("sku", sku)
+                .param("quantity", quantity)
+                .param("unit", unitMinor)
+                .param("base", baseMinor)
+                .param("finalAmount", finalMinor)
+                .param("tax", taxMinor)
                 .param("note", noteEncrypted)
                 .update();
     }
 
-    public void insertLineModifier(UUID tenantId, UUID orderLineId, UUID sourceGroupId,
-            UUID sourceOptionId, String groupName, String optionName, int quantity,
-            long unitMinor, long finalMinor) {
+    public void insertLineModifier(
+            UUID tenantId,
+            UUID orderLineId,
+            UUID sourceGroupId,
+            UUID sourceOptionId,
+            String groupName,
+            String optionName,
+            int quantity,
+            long unitMinor,
+            long finalMinor) {
         jdbc.sql("""
                 INSERT INTO ordering.order_line_modifiers (
                     id, tenant_id, order_line_id, source_group_id, source_option_id,
@@ -371,17 +420,30 @@ public class JdbcOrderStore {
                 VALUES (:id, :tenantId, :lineId, :groupId, :optionId,
                     :groupName, :optionName, :quantity, :unit, :finalAmount)
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", tenantId)
-                .param("lineId", orderLineId).param("groupId", sourceGroupId)
-                .param("optionId", sourceOptionId).param("groupName", groupName)
-                .param("optionName", optionName).param("quantity", quantity)
-                .param("unit", unitMinor).param("finalAmount", finalMinor)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("lineId", orderLineId)
+                .param("groupId", sourceGroupId)
+                .param("optionId", sourceOptionId)
+                .param("groupName", groupName)
+                .param("optionName", optionName)
+                .param("quantity", quantity)
+                .param("unit", unitMinor)
+                .param("finalAmount", finalMinor)
                 .update();
     }
 
-    public void insertAdjustment(UUID tenantId, UUID orderId, int sequence, UUID orderLineId,
-            String adjustmentType, String sourceType, UUID sourceId, Integer sourceVersion,
-            String descriptionCode, long amountMinor) {
+    public void insertAdjustment(
+            UUID tenantId,
+            UUID orderId,
+            int sequence,
+            UUID orderLineId,
+            String adjustmentType,
+            String sourceType,
+            UUID sourceId,
+            Integer sourceVersion,
+            String descriptionCode,
+            long amountMinor) {
         jdbc.sql("""
                 INSERT INTO ordering.order_adjustments (
                     order_id, sequence, tenant_id, order_line_id, adjustment_type,
@@ -389,16 +451,27 @@ public class JdbcOrderStore {
                 VALUES (:orderId, :sequence, :tenantId, :lineId, :type,
                     :sourceType, :sourceId, :sourceVersion, :code, :amount)
                 """)
-                .param("orderId", orderId).param("sequence", sequence).param("tenantId", tenantId)
-                .param("lineId", orderLineId).param("type", adjustmentType)
-                .param("sourceType", sourceType).param("sourceId", sourceId)
-                .param("sourceVersion", sourceVersion).param("code", descriptionCode)
+                .param("orderId", orderId)
+                .param("sequence", sequence)
+                .param("tenantId", tenantId)
+                .param("lineId", orderLineId)
+                .param("type", adjustmentType)
+                .param("sourceType", sourceType)
+                .param("sourceId", sourceId)
+                .param("sourceVersion", sourceVersion)
+                .param("code", descriptionCode)
                 .param("amount", amountMinor)
                 .update();
     }
 
-    public void insertCustomerSnapshot(UUID tenantId, UUID orderId, String displayName,
-            String contact, String address, String instructions, boolean transactionalAllowed) {
+    public void insertCustomerSnapshot(
+            UUID tenantId,
+            UUID orderId,
+            String displayName,
+            String contact,
+            String address,
+            String instructions,
+            boolean transactionalAllowed) {
         jdbc.sql("""
                 INSERT INTO ordering.order_customer_snapshots (
                     order_id, tenant_id, display_name_encrypted, contact_encrypted,
@@ -407,37 +480,43 @@ public class JdbcOrderStore {
                 VALUES (:orderId, :tenantId, :displayName, :contact, :address,
                     :instructions, :allowed)
                 """)
-                .param("orderId", orderId).param("tenantId", tenantId)
-                .param("displayName", displayName).param("contact", contact)
-                .param("address", address).param("instructions", instructions)
+                .param("orderId", orderId)
+                .param("tenantId", tenantId)
+                .param("displayName", displayName)
+                .param("contact", contact)
+                .param("address", address)
+                .param("instructions", instructions)
                 .param("allowed", transactionalAllowed)
                 .update();
     }
 
     public Optional<OrderRow> find(UUID tenantId, UUID orderId) {
         return jdbc.sql(SELECT_ORDER + " WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", orderId)
+                .param("tenantId", tenantId)
+                .param("id", orderId)
                 .query(JdbcOrderStore::mapOrder)
                 .optional();
     }
 
     public Optional<OrderRow> findByIdempotencyKey(UUID tenantId, String idempotencyKey) {
         return jdbc.sql(SELECT_ORDER + " WHERE tenant_id = :tenantId AND idempotency_key = :key")
-                .param("tenantId", tenantId).param("key", idempotencyKey)
+                .param("tenantId", tenantId)
+                .param("key", idempotencyKey)
                 .query(JdbcOrderStore::mapOrder)
                 .optional();
     }
 
     /** The operations list for one location, newest first. */
-    public List<OrderRow> listForLocation(UUID tenantId, UUID brandId, UUID locationId,
-            List<String> statuses, int limit) {
+    public List<OrderRow> listForLocation(
+            UUID tenantId, UUID brandId, UUID locationId, List<String> statuses, int limit) {
         return jdbc.sql(SELECT_ORDER + """
                  WHERE tenant_id = :tenantId AND brand_id = :brandId AND location_id = :locationId
                    AND (:statusFilterEmpty OR status = ANY(:statuses))
                  ORDER BY created_at DESC
                  LIMIT :limit
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("locationId", locationId)
                 .param("statusFilterEmpty", statuses.isEmpty())
                 .param("statuses", statuses.toArray(String[]::new))
@@ -473,8 +552,8 @@ public class JdbcOrderStore {
      * @param beforeCreatedAt the previous page's last order's instant, or null to
      *                        start at the newest
      */
-    public List<CustomerOrderRow> listForCustomer(UUID tenantId, UUID brandId, UUID accountId,
-            Instant beforeCreatedAt, UUID beforeId, int limit) {
+    public List<CustomerOrderRow> listForCustomer(
+            UUID tenantId, UUID brandId, UUID accountId, Instant beforeCreatedAt, UUID beforeId, int limit) {
         return jdbc.sql("""
                 SELECT id, public_order_number, location_id, fulfillment_mode, status,
                        payment_status_projection, fulfillment_status_projection, currency,
@@ -488,14 +567,16 @@ public class JdbcOrderStore {
                 ORDER BY created_at DESC, id DESC
                 LIMIT :limit
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .param("accountId", accountId)
                 .param("unbounded", beforeCreatedAt == null)
                 // Cast in the statement rather than typed here, so the null a first
                 // page sends is a typed null the row comparison can be planned
                 // against instead of an untyped one the driver has to guess at.
-                .param("beforeCreatedAt", beforeCreatedAt == null ? null
-                        : OffsetDateTime.ofInstant(beforeCreatedAt, ZoneOffset.UTC))
+                .param(
+                        "beforeCreatedAt",
+                        beforeCreatedAt == null ? null : OffsetDateTime.ofInstant(beforeCreatedAt, ZoneOffset.UTC))
                 .param("beforeId", beforeId == null ? null : beforeId.toString())
                 .param("limit", limit)
                 .query((row, number) -> new CustomerOrderRow(
@@ -524,16 +605,18 @@ public class JdbcOrderStore {
      * into their history, and the caller is told the cursor is unusable in exactly
      * the same words as one that was never an order at all.
      */
-    public Optional<Instant> customerOrderCursor(UUID tenantId, UUID brandId, UUID accountId,
-            UUID orderId) {
+    public Optional<Instant> customerOrderCursor(UUID tenantId, UUID brandId, UUID accountId, UUID orderId) {
         return jdbc.sql("""
                 SELECT created_at FROM ordering.orders
                 WHERE tenant_id = :tenantId AND brand_id = :brandId
                   AND customer_account_id = :accountId AND id = :orderId
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
-                .param("accountId", accountId).param("orderId", orderId)
-                .query((row, number) -> row.getObject("created_at", OffsetDateTime.class).toInstant())
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("accountId", accountId)
+                .param("orderId", orderId)
+                .query((row, number) ->
+                        row.getObject("created_at", OffsetDateTime.class).toInstant())
                 .optional();
     }
 
@@ -548,8 +631,7 @@ public class JdbcOrderStore {
      *
      * @return the new version when this caller won, or empty when it lost
      */
-    public Optional<Integer> transition(UUID tenantId, UUID orderId, OrderStatus from,
-            OrderStatus to, Instant now) {
+    public Optional<Integer> transition(UUID tenantId, UUID orderId, OrderStatus from, OrderStatus to, Instant now) {
         return transition(tenantId, orderId, from, to, now, null, null);
     }
 
@@ -564,8 +646,14 @@ public class JdbcOrderStore {
      * close. A trigger refuses any later rewrite; the {@code accepted_at IS NULL}
      * guard here means the write is also idempotent against a replay.
      */
-    public Optional<Integer> transition(UUID tenantId, UUID orderId, OrderStatus from,
-            OrderStatus to, Instant now, String acceptedByActorType, String acceptedByActorId) {
+    public Optional<Integer> transition(
+            UUID tenantId,
+            UUID orderId,
+            OrderStatus from,
+            OrderStatus to,
+            Instant now,
+            String acceptedByActorType,
+            String acceptedByActorId) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
@@ -595,16 +683,22 @@ public class JdbcOrderStore {
                     closed_at = CASE WHEN :terminal THEN :now ELSE closed_at END
                 WHERE tenant_id = :tenantId AND id = :id AND status = :from
                 RETURNING version
-                """)
-                .params(params)
-                .query(Integer.class)
-                .optional();
+                """).params(params).query(Integer.class).optional();
     }
 
     /** Records a transition that already happened. Append-only; never updated. */
-    public void recordTransition(UUID tenantId, UUID orderId, int sequenceNumber,
-            OrderStatus from, OrderStatus to, TransitionTrigger trigger, String reasonCode,
-            String actorType, String actorId, String correlationId, Instant occurredAt) {
+    public void recordTransition(
+            UUID tenantId,
+            UUID orderId,
+            int sequenceNumber,
+            OrderStatus from,
+            OrderStatus to,
+            TransitionTrigger trigger,
+            String reasonCode,
+            String actorType,
+            String actorId,
+            String correlationId,
+            Instant occurredAt) {
         jdbc.sql("""
                 INSERT INTO ordering.order_state_history (
                     id, tenant_id, order_id, sequence_number, from_status, to_status,
@@ -612,12 +706,18 @@ public class JdbcOrderStore {
                 VALUES (:id, :tenantId, :orderId, :sequence, :from, :to,
                     :trigger, :reason, :actorType, :actorId, :correlationId, :occurredAt)
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", tenantId)
-                .param("orderId", orderId).param("sequence", sequenceNumber)
-                .param("from", from == null ? null : from.name()).param("to", to.name())
-                .param("trigger", trigger.name()).param("reason", reasonCode)
-                .param("actorType", actorType).param("actorId", actorId)
-                .param("correlationId", correlationId).param("occurredAt", utc(occurredAt))
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .param("sequence", sequenceNumber)
+                .param("from", from == null ? null : from.name())
+                .param("to", to.name())
+                .param("trigger", trigger.name())
+                .param("reason", reasonCode)
+                .param("actorType", actorType)
+                .param("actorId", actorId)
+                .param("correlationId", correlationId)
+                .param("occurredAt", utc(occurredAt))
                 .update();
     }
 
@@ -629,7 +729,8 @@ public class JdbcOrderStore {
                 WHERE tenant_id = :tenantId AND order_id = :orderId
                 ORDER BY sequence_number
                 """)
-                .param("tenantId", tenantId).param("orderId", orderId)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
                 .query((row, number) -> new TransitionRow(
                         row.getInt("sequence_number"),
                         row.getString("from_status"),
@@ -701,7 +802,9 @@ public class JdbcOrderStore {
                 SELECT note_encrypted FROM ordering.order_lines
                 WHERE tenant_id = :tenantId AND order_id = :orderId AND id = :lineId
                 """)
-                .param("tenantId", tenantId).param("orderId", orderId).param("lineId", lineId)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .param("lineId", lineId)
                 .query(String.class)
                 .optional();
     }
@@ -716,7 +819,8 @@ public class JdbcOrderStore {
                 WHERE m.tenant_id = :tenantId AND l.order_id = :orderId
                 ORDER BY l.line_number, m.option_name_snapshot
                 """)
-                .param("tenantId", tenantId).param("orderId", orderId)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
                 .query((row, number) -> new OrderModifierRow(
                         row.getObject("order_line_id", UUID.class),
                         row.getObject("source_group_id", UUID.class),
@@ -731,9 +835,17 @@ public class JdbcOrderStore {
 
     // ------------------------------------------------------------ approvals
 
-    public void insertApprovalDecision(UUID decisionRowId, UUID tenantId, UUID orderId,
-            String decisionId, String action, String decisionChannel, String actorType,
-            String actorId, String reasonCode, Instant issuedAt) {
+    public void insertApprovalDecision(
+            UUID decisionRowId,
+            UUID tenantId,
+            UUID orderId,
+            String decisionId,
+            String action,
+            String decisionChannel,
+            String actorType,
+            String actorId,
+            String reasonCode,
+            Instant issuedAt) {
         jdbc.sql("""
                 INSERT INTO ordering.approval_decisions (
                     id, tenant_id, order_id, decision_id, action, decision_channel,
@@ -741,10 +853,15 @@ public class JdbcOrderStore {
                 VALUES (:id, :tenantId, :orderId, :decisionId, :action, :channel,
                     :actorType, :actorId, :reason, false, :issuedAt)
                 """)
-                .param("id", decisionRowId).param("tenantId", tenantId).param("orderId", orderId)
-                .param("decisionId", decisionId).param("action", action)
-                .param("channel", decisionChannel).param("actorType", actorType)
-                .param("actorId", actorId).param("reason", reasonCode)
+                .param("id", decisionRowId)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .param("decisionId", decisionId)
+                .param("action", action)
+                .param("channel", decisionChannel)
+                .param("actorType", actorType)
+                .param("actorId", actorId)
+                .param("reason", reasonCode)
                 .param("issuedAt", utc(issuedAt))
                 .update();
     }
@@ -756,7 +873,8 @@ public class JdbcOrderStore {
                 FROM ordering.approval_decisions
                 WHERE tenant_id = :tenantId AND order_id = :orderId AND decision_id = :decisionId
                 """)
-                .param("tenantId", tenantId).param("orderId", orderId)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
                 .param("decisionId", decisionId)
                 .query(JdbcOrderStore::mapDecision)
                 .optional();
@@ -769,7 +887,8 @@ public class JdbcOrderStore {
                 FROM ordering.approval_decisions
                 WHERE tenant_id = :tenantId AND order_id = :orderId AND effective
                 """)
-                .param("tenantId", tenantId).param("orderId", orderId)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
                 .query(JdbcOrderStore::mapDecision)
                 .optional();
     }
@@ -788,8 +907,10 @@ public class JdbcOrderStore {
                 SET effective = true
                 WHERE tenant_id = :tenantId AND id = :id AND NOT effective
                 """)
-                .param("tenantId", tenantId).param("id", decisionRowId)
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("id", decisionRowId)
+                        .update()
+                == 1;
     }
 
     // ------------------------------------------------- kitchen progress proposals
@@ -812,9 +933,16 @@ public class JdbcOrderStore {
      *
      * @return the claimed row's id, or empty when the key was already taken
      */
-    public Optional<UUID> claimProgressProposal(UUID tenantId, UUID orderId, String idempotencyKey,
-            OrderStatus proposedStatus, String reasonCode, String actorType, String actorId,
-            String correlationId, Instant now) {
+    public Optional<UUID> claimProgressProposal(
+            UUID tenantId,
+            UUID orderId,
+            String idempotencyKey,
+            OrderStatus proposedStatus,
+            String reasonCode,
+            String actorType,
+            String actorId,
+            String correlationId,
+            Instant now) {
 
         return jdbc.sql("""
                 INSERT INTO ordering.order_progress_proposals (
@@ -825,26 +953,33 @@ public class JdbcOrderStore {
                 ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
                 RETURNING id
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", tenantId)
-                .param("orderId", orderId).param("key", idempotencyKey)
-                .param("status", proposedStatus.name()).param("reason", reasonCode)
-                .param("actorType", actorType).param("actorId", actorId)
-                .param("correlationId", correlationId).param("now", utc(now))
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .param("key", idempotencyKey)
+                .param("status", proposedStatus.name())
+                .param("reason", reasonCode)
+                .param("actorType", actorType)
+                .param("actorId", actorId)
+                .param("correlationId", correlationId)
+                .param("now", utc(now))
                 .query(UUID.class)
                 .optional();
     }
 
     /** Writes what ordering did with a claimed proposal, in the same transaction. */
-    public void settleProgressProposal(UUID tenantId, UUID proposalId, OrderStatus fromStatus,
-            String outcome, Instant now) {
+    public void settleProgressProposal(
+            UUID tenantId, UUID proposalId, OrderStatus fromStatus, String outcome, Instant now) {
         jdbc.sql("""
                 UPDATE ordering.order_progress_proposals
                 SET outcome = :outcome, from_status = :from, settled_at = :now
                 WHERE tenant_id = :tenantId AND id = :id AND outcome IS NULL
                 """)
-                .param("tenantId", tenantId).param("id", proposalId)
+                .param("tenantId", tenantId)
+                .param("id", proposalId)
                 .param("from", fromStatus == null ? null : fromStatus.name())
-                .param("outcome", outcome).param("now", utc(now))
+                .param("outcome", outcome)
+                .param("now", utc(now))
                 .update();
     }
 
@@ -854,14 +989,14 @@ public class JdbcOrderStore {
      * <p>Keyed on the tenant as well as the string, because the key is supplied
      * by a caller and one tenant's ticket must never answer another's proposal.
      */
-    public Optional<ProgressProposalRow> findProgressProposal(UUID tenantId,
-            String idempotencyKey) {
+    public Optional<ProgressProposalRow> findProgressProposal(UUID tenantId, String idempotencyKey) {
         return jdbc.sql("""
                 SELECT id, order_id, proposed_status, outcome
                 FROM ordering.order_progress_proposals
                 WHERE tenant_id = :tenantId AND idempotency_key = :key
                 """)
-                .param("tenantId", tenantId).param("key", idempotencyKey)
+                .param("tenantId", tenantId)
+                .param("key", idempotencyKey)
                 .query((row, number) -> new ProgressProposalRow(
                         row.getObject("id", UUID.class),
                         row.getObject("order_id", UUID.class),
@@ -877,8 +1012,11 @@ public class JdbcOrderStore {
                 INSERT INTO ordering.order_timers (id, tenant_id, order_id, timer_type, due_at)
                 VALUES (:id, :tenantId, :orderId, :type, :dueAt)
                 """)
-                .param("id", UUID.randomUUID()).param("tenantId", tenantId)
-                .param("orderId", orderId).param("type", timerType).param("dueAt", utc(dueAt))
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .param("type", timerType)
+                .param("dueAt", utc(dueAt))
                 .update();
     }
 
@@ -903,7 +1041,8 @@ public class JdbcOrderStore {
                 WHERE timer.id = due.id
                 RETURNING timer.id, timer.tenant_id, timer.order_id, timer.timer_type
                 """)
-                .param("now", utc(now)).param("batchSize", batchSize)
+                .param("now", utc(now))
+                .param("batchSize", batchSize)
                 .query((row, number) -> new DueTimerRow(
                         row.getObject("id", UUID.class),
                         row.getObject("tenant_id", UUID.class),
@@ -920,9 +1059,12 @@ public class JdbcOrderStore {
                 WHERE tenant_id = :tenantId AND order_id = :orderId
                   AND timer_type = :type AND status = 'PENDING'
                 """)
-                .param("tenantId", tenantId).param("orderId", orderId)
-                .param("type", timerType).param("now", utc(now))
-                .update() == 1;
+                        .param("tenantId", tenantId)
+                        .param("orderId", orderId)
+                        .param("type", timerType)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     private static final String SELECT_ORDER = """
@@ -1044,16 +1186,40 @@ public class JdbcOrderStore {
      *                           nothing
      */
     public record NewOrder(
-            UUID orderId, String publicOrderNumber, UUID tenantId, UUID brandId, UUID locationId,
-            UUID channelId, String channelCode, UUID customerAccountId, String guestReferenceHash,
-            FulfillmentMode fulfillmentMode, String acceptanceMode, UUID acceptancePolicyId,
-            int acceptancePolicyVersion, String approvalChannel, String approvalTimeoutAction,
-            Instant approvalDeadlineAt, OrderStatus status, String paymentStatusProjection,
-            String fulfillmentStatusProjection, String currency, long subtotalMinor, long taxMinor,
-            long discountMinor, long feeMinor, long totalMinor, UUID pricingQuoteId,
-            String pricingContextHash, UUID catalogPublicationId, UUID cartId,
-            String idempotencyKey, OrderPromise promise, String createdByActorType,
-            String createdByActorId, Instant createdAt) { }
+            UUID orderId,
+            String publicOrderNumber,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID channelId,
+            String channelCode,
+            UUID customerAccountId,
+            String guestReferenceHash,
+            FulfillmentMode fulfillmentMode,
+            String acceptanceMode,
+            UUID acceptancePolicyId,
+            int acceptancePolicyVersion,
+            String approvalChannel,
+            String approvalTimeoutAction,
+            Instant approvalDeadlineAt,
+            OrderStatus status,
+            String paymentStatusProjection,
+            String fulfillmentStatusProjection,
+            String currency,
+            long subtotalMinor,
+            long taxMinor,
+            long discountMinor,
+            long feeMinor,
+            long totalMinor,
+            UUID pricingQuoteId,
+            String pricingContextHash,
+            UUID catalogPublicationId,
+            UUID cartId,
+            String idempotencyKey,
+            OrderPromise promise,
+            String createdByActorType,
+            String createdByActorId,
+            Instant createdAt) {}
 
     /**
      * One appended revision.
@@ -1066,17 +1232,41 @@ public class JdbcOrderStore {
      *                      a report may have filtered differently
      */
     public record NewRevision(
-            UUID orderId, int revision, UUID tenantId, String source, UUID amendmentId,
-            UUID pricingQuoteId, String pricingContextHash, String currency, long subtotalMinor,
-            long taxMinor, long discountMinor, long feeMinor, long totalMinor,
-            long deltaTotalMinor, String createdByActorType, String createdByActorId,
-            Instant createdAt) { }
+            UUID orderId,
+            int revision,
+            UUID tenantId,
+            String source,
+            UUID amendmentId,
+            UUID pricingQuoteId,
+            String pricingContextHash,
+            String currency,
+            long subtotalMinor,
+            long taxMinor,
+            long discountMinor,
+            long feeMinor,
+            long totalMinor,
+            long deltaTotalMinor,
+            String createdByActorType,
+            String createdByActorId,
+            Instant createdAt) {}
 
     public record RevisionRow(
-            UUID orderId, int revision, String source, UUID amendmentId, UUID pricingQuoteId,
-            String pricingContextHash, String currency, long subtotalMinor, long taxMinor,
-            long discountMinor, long feeMinor, long totalMinor, long deltaTotalMinor,
-            String createdByActorType, String createdByActorId, Instant createdAt) { }
+            UUID orderId,
+            int revision,
+            String source,
+            UUID amendmentId,
+            UUID pricingQuoteId,
+            String pricingContextHash,
+            String currency,
+            long subtotalMinor,
+            long taxMinor,
+            long discountMinor,
+            long feeMinor,
+            long totalMinor,
+            long deltaTotalMinor,
+            String createdByActorType,
+            String createdByActorId,
+            Instant createdAt) {}
 
     /**
      * The order-level fields one amendment changes.
@@ -1086,35 +1276,76 @@ public class JdbcOrderStore {
      * an earlier one recorded, and a patch record with three optional fields is
      * how that stays true without three separate conditional statements.
      */
-    public record OrderFieldPatch(String kitchenNote, Boolean callbackRequested,
-            Long cashTenderedExpectedMinor) {
+    public record OrderFieldPatch(String kitchenNote, Boolean callbackRequested, Long cashTenderedExpectedMinor) {
 
         public static OrderFieldPatch none() {
             return new OrderFieldPatch(null, null, null);
         }
     }
 
-    public record OutcomeRow(String kind, String systemCategory, UUID reasonId,
-            Integer reasonVersion, String reasonSnapshot, String actorType, String actorId,
-            String stockDisposition, String liabilityParty, String customerRefund,
-            boolean reservationCommitted, UUID inventoryMovementId, UUID refundId,
-            Instant occurredAt) { }
+    public record OutcomeRow(
+            String kind,
+            String systemCategory,
+            UUID reasonId,
+            Integer reasonVersion,
+            String reasonSnapshot,
+            String actorType,
+            String actorId,
+            String stockDisposition,
+            String liabilityParty,
+            String customerRefund,
+            boolean reservationCommitted,
+            UUID inventoryMovementId,
+            UUID refundId,
+            Instant occurredAt) {}
 
     public record OrderRow(
-            UUID orderId, String publicOrderNumber, UUID tenantId, UUID brandId, UUID locationId,
-            UUID channelId, String channelCode, UUID customerAccountId, String guestReferenceHash,
-            FulfillmentMode fulfillmentMode, String acceptanceMode, UUID acceptancePolicyId,
-            int acceptancePolicyVersion, String approvalChannel, String approvalTimeoutAction,
-            Instant approvalDeadlineAt, OrderStatus status, String paymentStatusProjection,
-            String fulfillmentStatusProjection, String currency, long subtotalMinor, long taxMinor,
-            long discountMinor, long feeMinor, long totalMinor, UUID pricingQuoteId,
-            String pricingContextHash, UUID catalogPublicationId, UUID cartId,
-            String idempotencyKey, OrderPromise promise, int version, Instant createdAt,
-            Instant confirmedAt, Instant closedAt, int currentRevision,
-            String createdByActorType, String createdByActorId, String acceptedByActorType,
-            String acceptedByActorId, Instant acceptedAt, boolean callbackRequested,
-            Instant callbackResolvedAt, String callbackResolvedBy,
-            Long cashTenderedExpectedMinor, String kitchenNote) { }
+            UUID orderId,
+            String publicOrderNumber,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID channelId,
+            String channelCode,
+            UUID customerAccountId,
+            String guestReferenceHash,
+            FulfillmentMode fulfillmentMode,
+            String acceptanceMode,
+            UUID acceptancePolicyId,
+            int acceptancePolicyVersion,
+            String approvalChannel,
+            String approvalTimeoutAction,
+            Instant approvalDeadlineAt,
+            OrderStatus status,
+            String paymentStatusProjection,
+            String fulfillmentStatusProjection,
+            String currency,
+            long subtotalMinor,
+            long taxMinor,
+            long discountMinor,
+            long feeMinor,
+            long totalMinor,
+            UUID pricingQuoteId,
+            String pricingContextHash,
+            UUID catalogPublicationId,
+            UUID cartId,
+            String idempotencyKey,
+            OrderPromise promise,
+            int version,
+            Instant createdAt,
+            Instant confirmedAt,
+            Instant closedAt,
+            int currentRevision,
+            String createdByActorType,
+            String createdByActorId,
+            String acceptedByActorType,
+            String acceptedByActorId,
+            Instant acceptedAt,
+            boolean callbackRequested,
+            Instant callbackResolvedAt,
+            String callbackResolvedBy,
+            Long cashTenderedExpectedMinor,
+            String kitchenNote) {}
 
     /**
      * The twelve columns a customer's own order list needs, and no others.
@@ -1123,10 +1354,19 @@ public class JdbcOrderStore {
      * widened to the full row is one that will be, and the fields left out here are
      * left out for a reason rather than for brevity.
      */
-    public record CustomerOrderRow(UUID orderId, String publicOrderNumber, UUID locationId,
-            FulfillmentMode fulfillmentMode, OrderStatus status, String paymentStatusProjection,
-            String fulfillmentStatusProjection, String currency, long totalMinor,
-            Instant promisedAt, int version, Instant createdAt) { }
+    public record CustomerOrderRow(
+            UUID orderId,
+            String publicOrderNumber,
+            UUID locationId,
+            FulfillmentMode fulfillmentMode,
+            OrderStatus status,
+            String paymentStatusProjection,
+            String fulfillmentStatusProjection,
+            String currency,
+            long totalMinor,
+            Instant promisedAt,
+            int version,
+            Instant createdAt) {}
 
     /**
      * @param noteEncrypted the stored ciphertext, never rendered. Callers ask
@@ -1134,35 +1374,64 @@ public class JdbcOrderStore {
      *                      should show a note marker, and reveal it separately
      *                      with a recorded purpose
      */
-    public record OrderLineRow(UUID lineId, int lineNumber, UUID sourceProductId,
-            UUID sourceVariantId, String productName, String variantName, String sku,
-            int quantity, long unitAmountMinor, long baseAmountMinor, long finalAmountMinor,
-            long taxAmountMinor, String noteEncrypted) {
+    public record OrderLineRow(
+            UUID lineId,
+            int lineNumber,
+            UUID sourceProductId,
+            UUID sourceVariantId,
+            String productName,
+            String variantName,
+            String sku,
+            int quantity,
+            long unitAmountMinor,
+            long baseAmountMinor,
+            long finalAmountMinor,
+            long taxAmountMinor,
+            String noteEncrypted) {
 
         public boolean hasNote() {
             return noteEncrypted != null;
         }
     }
 
-    public record OrderModifierRow(UUID orderLineId, UUID sourceGroupId, UUID sourceOptionId,
-            String groupName, String optionName, int quantity, long unitAmountMinor,
-            long finalAmountMinor) { }
+    public record OrderModifierRow(
+            UUID orderLineId,
+            UUID sourceGroupId,
+            UUID sourceOptionId,
+            String groupName,
+            String optionName,
+            int quantity,
+            long unitAmountMinor,
+            long finalAmountMinor) {}
 
-    public record TransitionRow(int sequenceNumber, String fromStatus, String toStatus,
-            String trigger, String reasonCode, String actorType, String actorId,
-            String correlationId, Instant occurredAt) { }
+    public record TransitionRow(
+            int sequenceNumber,
+            String fromStatus,
+            String toStatus,
+            String trigger,
+            String reasonCode,
+            String actorType,
+            String actorId,
+            String correlationId,
+            Instant occurredAt) {}
 
-    public record ApprovalDecisionRow(UUID id, String decisionId, String action,
-            String decisionChannel, String actorType, String actorId, String reasonCode,
-            boolean effective, Instant issuedAt) { }
+    public record ApprovalDecisionRow(
+            UUID id,
+            String decisionId,
+            String action,
+            String decisionChannel,
+            String actorType,
+            String actorId,
+            String reasonCode,
+            boolean effective,
+            Instant issuedAt) {}
 
-    public record DueTimerRow(UUID timerId, UUID tenantId, UUID orderId, String timerType) { }
+    public record DueTimerRow(UUID timerId, UUID tenantId, UUID orderId, String timerType) {}
 
     /**
      * @param outcome null only for a proposal whose transaction has not finished,
      *                which is never visible to another one — a committed row
      *                always carries an outcome, and V0087 constrains it
      */
-    public record ProgressProposalRow(UUID id, UUID orderId, String proposedStatus,
-            String outcome) { }
+    public record ProgressProposalRow(UUID id, UUID orderId, String proposedStatus, String outcome) {}
 }

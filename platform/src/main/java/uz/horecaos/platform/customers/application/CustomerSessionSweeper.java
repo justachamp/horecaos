@@ -2,7 +2,6 @@ package uz.horecaos.platform.customers.application;
 
 import java.time.Clock;
 import java.time.Duration;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,8 +29,7 @@ import org.springframework.stereotype.Component;
  * ordinary page view occasionally pay for a bulk delete.
  */
 @Component
-@ConditionalOnProperty(name = "horecaos.customers.session.sweep.enabled",
-        havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = "horecaos.customers.session.sweep.enabled", havingValue = "true", matchIfMissing = true)
 public class CustomerSessionSweeper {
 
     private static final Logger log = LoggerFactory.getLogger(CustomerSessionSweeper.class);

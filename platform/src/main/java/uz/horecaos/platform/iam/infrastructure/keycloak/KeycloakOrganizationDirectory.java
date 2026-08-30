@@ -3,10 +3,8 @@ package uz.horecaos.platform.iam.infrastructure.keycloak;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.web.client.RestClient;
-
 import uz.horecaos.platform.iam.api.organizations.OrganizationDirectory;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner.OrganizationSnapshot;
 
@@ -24,10 +22,9 @@ import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner.Organi
  */
 public class KeycloakOrganizationDirectory implements OrganizationDirectory {
 
-    private static final ParameterizedTypeReference<Map<String, Object>> MAP =
-            new ParameterizedTypeReference<>() { };
+    private static final ParameterizedTypeReference<Map<String, Object>> MAP = new ParameterizedTypeReference<>() {};
     private static final ParameterizedTypeReference<List<Map<String, Object>>> LIST =
-            new ParameterizedTypeReference<>() { };
+            new ParameterizedTypeReference<>() {};
 
     private final RestClient client;
     private final String realm;

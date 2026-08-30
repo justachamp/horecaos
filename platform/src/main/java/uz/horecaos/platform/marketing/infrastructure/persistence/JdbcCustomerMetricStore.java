@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -41,6 +40,7 @@ public class JdbcCustomerMetricStore {
      * revision restates this projection; it does not reshape it.
      */
     private static final String COMPLETED = "'COMPLETED'";
+
     private static final String ABANDONED = "'CANCELLED', 'REJECTED', 'EXPIRED'";
 
     private final JdbcClient jdbc;
@@ -68,9 +68,7 @@ public class JdbcCustomerMetricStore {
         parameters.put("asOf", utc(asOf));
         parameters.put("metricVersion", metricDefinitionVersion);
 
-        return jdbc.sql(RECOMPUTE_SQL)
-                .params(parameters)
-                .update();
+        return jdbc.sql(RECOMPUTE_SQL).params(parameters).update();
     }
 
     /**
@@ -91,9 +89,7 @@ public class JdbcCustomerMetricStore {
         parameters.put("asOf", utc(asOf));
         parameters.put("metricVersion", metricDefinitionVersion);
 
-        return jdbc.sql(DRIFT_SQL)
-                .params(parameters)
-                .update();
+        return jdbc.sql(DRIFT_SQL).params(parameters).update();
     }
 
     /**
@@ -112,8 +108,7 @@ public class JdbcCustomerMetricStore {
      * @param asOf the moment recency is measured from, passed in rather than taken
      *             from {@code now()} so the observation and the rebuild agree
      */
-    public SweepCounts sweep(UUID tenantId, UUID brandId, Instant asOf,
-            int metricDefinitionVersion) {
+    public SweepCounts sweep(UUID tenantId, UUID brandId, Instant asOf, int metricDefinitionVersion) {
 
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
@@ -123,9 +118,8 @@ public class JdbcCustomerMetricStore {
 
         return jdbc.sql(SWEEP_SQL)
                 .params(parameters)
-                .query((ResultSet row, int number) -> new SweepCounts(
-                        row.getInt("metric_rows"),
-                        row.getInt("drift_rows")))
+                .query((ResultSet row, int number) ->
+                        new SweepCounts(row.getInt("metric_rows"), row.getInt("drift_rows")))
                 .single();
     }
 
@@ -220,9 +214,7 @@ public class JdbcCustomerMetricStore {
                  WHERE m.tenant_id = :tenantId
                    AND m.brand_id = :brandId
                    AND m.customer_account_id = counted.customer_account_id
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
     }
 
     /**
@@ -406,12 +398,10 @@ public class JdbcCustomerMetricStore {
              WHERE projected IS DISTINCT FROM recomputed
             """;
 
-    private static final String RECOMPUTE_SQL =
-            "WITH recomputed AS (%s)\n%s".formatted(RECOMPUTED, UPSERT);
+    private static final String RECOMPUTE_SQL = "WITH recomputed AS (%s)\n%s".formatted(RECOMPUTED, UPSERT);
 
     private static final String DRIFT_SQL =
-            "WITH recomputed AS (%s),\ncompared AS (%s)\n%s"
-                    .formatted(RECOMPUTED, COMPARED, DRIFT_INSERT);
+            "WITH recomputed AS (%s),\ncompared AS (%s)\n%s".formatted(RECOMPUTED, COMPARED, DRIFT_INSERT);
 
     /**
      * Observe and recompute in one statement, over one aggregation.
@@ -443,15 +433,28 @@ public class JdbcCustomerMetricStore {
         return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
-    public record MetricRow(int orderCount, int completedOrderCount, int cancelledOrderCount,
-            long grossSpendMinor, long netSpendMinor, long averageCheckMinor,
-            Integer daysSinceLastOrder, String preferredLocale, String birthMonthDay,
-            int marketingMessages7d, int marketingMessages30d, int metricDefinitionVersion,
-            Instant watermarkEventAt) { }
+    public record MetricRow(
+            int orderCount,
+            int completedOrderCount,
+            int cancelledOrderCount,
+            long grossSpendMinor,
+            long netSpendMinor,
+            long averageCheckMinor,
+            Integer daysSinceLastOrder,
+            String preferredLocale,
+            String birthMonthDay,
+            int marketingMessages7d,
+            int marketingMessages30d,
+            int metricDefinitionVersion,
+            Instant watermarkEventAt) {}
 
-    public record DriftRow(UUID customerAccountId, String metricName, String projectedValue,
-            String recomputedValue, Instant observedAt) { }
+    public record DriftRow(
+            UUID customerAccountId,
+            String metricName,
+            String projectedValue,
+            String recomputedValue,
+            Instant observedAt) {}
 
     /** What one {@link #sweep} rebuilt, and what it refused to fix. */
-    public record SweepCounts(int rowsRecomputed, int driftObservations) { }
+    public record SweepCounts(int rowsRecomputed, int driftObservations) {}
 }

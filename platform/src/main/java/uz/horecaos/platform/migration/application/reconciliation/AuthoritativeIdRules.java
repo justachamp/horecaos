@@ -4,9 +4,8 @@ import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
-import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.api.ExtractionSpec;
+import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.domain.ReconciliationSeverity;
 
 /**
@@ -35,12 +34,10 @@ import uz.horecaos.platform.migration.domain.ReconciliationSeverity;
  */
 public final class AuthoritativeIdRules {
 
-    private AuthoritativeIdRules() {
-    }
+    private AuthoritativeIdRules() {}
 
     /** Both halves for one entity family. */
-    public static List<ReconciliationRule> forEntity(ExtractionSpec spec,
-            MigrationCapability capability) {
+    public static List<ReconciliationRule> forEntity(ExtractionSpec spec, MigrationCapability capability) {
         return List.of(new IdCount(spec, capability), new IdChecksum(spec, capability));
     }
 
@@ -142,9 +139,8 @@ public final class AuthoritativeIdRules {
 
         @Override
         public List<Measurement> evaluate(RuleContext context) {
-            BigInteger expected = context.legacy()
-                    .exactInteger(legacyCount(spec), Map.of())
-                    .orElse(BigInteger.ZERO);
+            BigInteger expected =
+                    context.legacy().exactInteger(legacyCount(spec), Map.of()).orElse(BigInteger.ZERO);
             BigInteger actual = context.target()
                     .exactInteger(CROSSWALK_COUNT, crosswalkParameters(context))
                     .orElse(BigInteger.ZERO);
@@ -152,8 +148,8 @@ public final class AuthoritativeIdRules {
             // meaningful default — and defensive in the safe direction: a missing
             // legacy count reads as "nothing was there", which fails the rule
             // against any target that holds rows.
-            return List.of(new Measurement("", Measurement.MeasureKind.COUNT,
-                    expected, actual, null, null, null, null));
+            return List.of(
+                    new Measurement("", Measurement.MeasureKind.COUNT, expected, actual, null, null, null, null));
         }
     }
 
@@ -201,8 +197,7 @@ public final class AuthoritativeIdRules {
         @Override
         public List<Measurement> evaluate(RuleContext context) {
             Optional<String> expected = context.legacy().text(legacyChecksum(spec), Map.of());
-            Optional<String> actual =
-                    context.target().text(CROSSWALK_CHECKSUM, crosswalkParameters(context));
+            Optional<String> actual = context.target().text(CROSSWALK_CHECKSUM, crosswalkParameters(context));
             if (expected.isEmpty() || actual.isEmpty()) {
                 // Nothing measured, rather than a comparison that agreed. The
                 // Measurement constructor would reject a null digest, and reporting

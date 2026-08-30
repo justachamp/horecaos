@@ -1,5 +1,8 @@
 package uz.horecaos.platform.payments.infrastructure.persistence;
 
+import static uz.horecaos.platform.payments.infrastructure.persistence.PaymentTimestamps.instant;
+import static uz.horecaos.platform.payments.infrastructure.persistence.PaymentTimestamps.utc;
+
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -7,10 +10,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.payments.domain.CaptureTiming;
 import uz.horecaos.platform.payments.domain.PaymentIntent;
 import uz.horecaos.platform.payments.domain.PaymentIntentStatus;
@@ -18,9 +19,6 @@ import uz.horecaos.platform.payments.domain.PaymentMethod;
 import uz.horecaos.platform.payments.domain.PaymentProviderType;
 import uz.horecaos.platform.payments.domain.PaymentTender;
 import uz.horecaos.platform.payments.domain.SomAmount;
-
-import static uz.horecaos.platform.payments.infrastructure.persistence.PaymentTimestamps.instant;
-import static uz.horecaos.platform.payments.infrastructure.persistence.PaymentTimestamps.utc;
 
 /**
  * Payment intent persistence (ADR 0013).
@@ -60,7 +58,8 @@ public class JdbcPaymentIntentStore {
         parameters.put("legalEntityId", intent.legalEntityId());
         parameters.put("tender", intent.tender().name());
         parameters.put("methodCode", intent.method().code());
-        parameters.put("providerType",
+        parameters.put(
+                "providerType",
                 intent.providerType() == null ? null : intent.providerType().name());
         parameters.put("amount", intent.amount().value());
         parameters.put("currency", intent.amount().currency());
@@ -80,14 +79,13 @@ public class JdbcPaymentIntentStore {
                     :id, :tenantId, :orderId, :brandId, :locationId, :tenderId, :legalEntityId,
                     :tender, :methodCode, :providerType, :amount, :currency,
                     :status, :captureTiming, :idempotencyKey, 1, :createdAt, :createdAt)
-                """)
-                .params(parameters)
-                .update();
+                """).params(parameters).update();
     }
 
     public Optional<PaymentIntent> find(UUID tenantId, UUID intentId) {
         return jdbc.sql(SELECT + " WHERE tenant_id = :tenantId AND id = :id")
-                .param("tenantId", tenantId).param("id", intentId)
+                .param("tenantId", tenantId)
+                .param("id", intentId)
                 .query(JdbcPaymentIntentStore::map)
                 .optional();
     }
@@ -98,7 +96,8 @@ public class JdbcPaymentIntentStore {
      */
     public Optional<PaymentIntent> findByIdempotencyKey(UUID tenantId, String idempotencyKey) {
         return jdbc.sql(SELECT + " WHERE tenant_id = :tenantId AND idempotency_key = :key")
-                .param("tenantId", tenantId).param("key", idempotencyKey)
+                .param("tenantId", tenantId)
+                .param("key", idempotencyKey)
                 .query(JdbcPaymentIntentStore::map)
                 .optional();
     }
@@ -114,7 +113,8 @@ public class JdbcPaymentIntentStore {
                  WHERE tenant_id = :tenantId AND order_id = :orderId
                    AND status IN ('PENDING', 'AUTHORIZING', 'PAID')
                 """)
-                .param("tenantId", tenantId).param("orderId", orderId)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
                 .query(JdbcPaymentIntentStore::map)
                 .optional();
     }
@@ -124,8 +124,13 @@ public class JdbcPaymentIntentStore {
      *
      * @return the new version when this caller won, or empty when it lost
      */
-    public Optional<Integer> transition(UUID tenantId, UUID intentId, PaymentIntentStatus from,
-            PaymentIntentStatus to, int expectedVersion, Instant now) {
+    public Optional<Integer> transition(
+            UUID tenantId,
+            UUID intentId,
+            PaymentIntentStatus from,
+            PaymentIntentStatus to,
+            int expectedVersion,
+            Instant now) {
         return jdbc.sql("""
                 UPDATE payments.payment_intents
                 SET status = :to,
@@ -136,8 +141,10 @@ public class JdbcPaymentIntentStore {
                   AND status = :from AND version = :expectedVersion
                 RETURNING version
                 """)
-                .param("tenantId", tenantId).param("id", intentId)
-                .param("from", from.name()).param("to", to.name())
+                .param("tenantId", tenantId)
+                .param("id", intentId)
+                .param("from", from.name())
+                .param("to", to.name())
                 .param("open", to.open())
                 .param("expectedVersion", expectedVersion)
                 .param("now", utc(now))
@@ -157,8 +164,9 @@ public class JdbcPaymentIntentStore {
                 row.getObject("tender_id", UUID.class),
                 row.getObject("legal_entity_id", UUID.class),
                 PaymentTender.valueOf(row.getString("tender")),
-                PaymentMethod.fromCode(methodCode).orElseThrow(() -> new IllegalStateException(
-                        "Stored payment method " + methodCode + " is not one this build implements")),
+                PaymentMethod.fromCode(methodCode)
+                        .orElseThrow(() -> new IllegalStateException(
+                                "Stored payment method " + methodCode + " is not one this build implements")),
                 providerType == null ? null : PaymentProviderType.valueOf(providerType),
                 new SomAmount(row.getLong("requested_amount_minor"), row.getString("currency")),
                 PaymentIntentStatus.valueOf(row.getString("status")),

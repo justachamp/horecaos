@@ -4,12 +4,10 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.marketing.domain.MetricDefinitions;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCustomerMetricStore;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCustomerMetricStore.DriftRow;
@@ -68,8 +66,7 @@ public class CustomerMetricProjectionService {
     public SweepResult sweep(UUID tenantId, UUID brandId) {
         Instant now = clock.instant();
 
-        int drifted = metrics.observeDrift(tenantId, brandId, now,
-                MetricDefinitions.CURRENT_VERSION);
+        int drifted = metrics.observeDrift(tenantId, brandId, now, MetricDefinitions.CURRENT_VERSION);
         int rows = metrics.recompute(tenantId, brandId, now, MetricDefinitions.CURRENT_VERSION);
         metrics.refreshFrequencyCounters(tenantId, brandId, now);
 
@@ -77,8 +74,7 @@ public class CustomerMetricProjectionService {
             // At warn rather than info. A projection that disagrees with its own
             // source is a bug somebody has to look at, and the count is here so it
             // can be alerted on without reading the table.
-            log.warn("Marketing projection drift for brand {}: {} disagreements recorded",
-                    brandId, drifted);
+            log.warn("Marketing projection drift for brand {}: {} disagreements recorded", brandId, drifted);
         }
         return new SweepResult(rows, drifted);
     }
@@ -101,5 +97,5 @@ public class CustomerMetricProjectionService {
     }
 
     /** What one sweep did, and what it refused to fix. */
-    public record SweepResult(int rowsRecomputed, int driftObservations) { }
+    public record SweepResult(int rowsRecomputed, int driftObservations) {}
 }

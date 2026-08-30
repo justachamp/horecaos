@@ -31,9 +31,7 @@ public record LotConsumption(UUID lotId, long amountMinor, Instant expiresAt) {
     }
 
     /** A lot as the planner sees it: an amount available and the two sort keys. */
-    public record AvailableLot(UUID lotId, long remainingMinor, Instant expiresAt,
-            Instant grantedAt) {
-    }
+    public record AvailableLot(UUID lotId, long remainingMinor, Instant expiresAt, Instant grantedAt) {}
 
     /**
      * Plans the consumption of {@code amountMinor} across the available lots.
@@ -72,8 +70,7 @@ public record LotConsumption(UUID lotId, long amountMinor, Instant expiresAt) {
 
         if (outstanding > 0) {
             throw new InsufficientBalanceException(
-                    "The available lots cover " + (amountMinor - outstanding)
-                            + " of a requested " + amountMinor);
+                    "The available lots cover " + (amountMinor - outstanding) + " of a requested " + amountMinor);
         }
         return List.copyOf(plan);
     }

@@ -26,22 +26,14 @@ public interface OnboardingStepHandler {
      *                          that far
      */
     record StepContext(
-            UUID runId,
-            UUID tenantId,
-            Map<String, Object> input,
-            String externalReference,
-            int attemptCount) { }
+            UUID runId, UUID tenantId, Map<String, Object> input, String externalReference, int attemptCount) {}
 
     /**
      * @param externalReference persisted so the next attempt reconciles instead
      *                          of recreating
      */
     record StepResult(
-            Outcome outcome,
-            Map<String, Object> result,
-            String externalReference,
-            String errorCode,
-            String detail) {
+            Outcome outcome, Map<String, Object> result, String externalReference, String errorCode, String detail) {
 
         public enum Outcome {
             COMPLETED,

@@ -1,21 +1,18 @@
 package uz.horecaos.platform.integration.camel.sms;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.ProviderCall;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.integration.camel.common.ProviderExceptionClassifier;
 import uz.horecaos.platform.integration.camel.common.ProviderHttpClient;
 import uz.horecaos.platform.integration.provider.SmsAccountLookup.SmsAccount;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * What this adapter puts on the wire, and what it concludes from what comes back
@@ -27,8 +24,8 @@ class VasSmsGatewayAdapterTests {
     private static final String CODE = "482913";
     private static final Instant ISSUED = Instant.parse("2026-08-25T09:15:00Z");
 
-    private final ProviderHttpClient http = new ProviderHttpClient(
-            JsonMapper.builder().build(), new ProviderExceptionClassifier());
+    private final ProviderHttpClient http =
+            new ProviderHttpClient(JsonMapper.builder().build(), new ProviderExceptionClassifier());
     private final VasSmsGatewayAdapter adapter = new VasSmsGatewayAdapter(http);
 
     @Test
@@ -123,7 +120,9 @@ class VasSmsGatewayAdapterTests {
         try (RecordingSmsGateway gateway = RecordingSmsGateway.start()) {
             gateway.stallAfterReceiving("/send", 400);
 
-            ProviderOutcome outcome = adapter.send(sendOperation(), ACCOUNT,
+            ProviderOutcome outcome = adapter.send(
+                    sendOperation(),
+                    ACCOUNT,
                     new ProviderCall(gateway.baseUrl(), "the-key", null, Duration.ofMillis(150)));
 
             assertThat(outcome.status()).isEqualTo(ProviderOutcome.Status.UNCERTAIN);
@@ -230,14 +229,12 @@ class VasSmsGatewayAdapterTests {
         try (RecordingSmsGateway gateway = RecordingSmsGateway.start()) {
             // A provider echoing the request back inside its error is exactly the
             // failure ADR 0029 names; this one echoes both fields.
-            gateway.reply("/send", 400,
-                    """
+            gateway.reply("/send", 400, """
                     {"error":"rejected 998901112233 text 'HorecaOS code 482913'"}""");
 
             ProviderOutcome outcome = adapter.send(sendOperation(), ACCOUNT, call(gateway));
 
-            assertThat(String.valueOf(outcome.errorCode()) + outcome.detail()
-                    + outcome.normalized())
+            assertThat(String.valueOf(outcome.errorCode()) + outcome.detail() + outcome.normalized())
                     .doesNotContain("998901112233")
                     .doesNotContain(CODE);
         }
@@ -247,15 +244,17 @@ class VasSmsGatewayAdapterTests {
     @DisplayName("neither the operation nor a request body prints its own contents")
     void nothingCarryingTheCodePrintsIt() {
         SmsVerificationOperation operation = sendOperation();
-        SmsGateBody.Send body = new SmsGateBody.Send("horecaos", "the-key", "16888",
-                "998901112233", "HorecaOS code " + CODE);
+        SmsGateBody.Send body =
+                new SmsGateBody.Send("horecaos", "the-key", "16888", "998901112233", "HorecaOS code " + CODE);
         SmsGateBody.Search search = new SmsGateBody.Search("horecaos", "the-key", "998901112233", 1);
 
         // Camel prints exchange bodies into route logs and into the messages of the
         // exceptions it wraps, so a generated toString here is a credential and a
         // live one-time code in a log file for its whole retention period.
         assertThat(operation.toString()).doesNotContain(CODE).doesNotContain("998901112233");
-        assertThat(body.toString()).doesNotContain(CODE).doesNotContain("the-key")
+        assertThat(body.toString())
+                .doesNotContain(CODE)
+                .doesNotContain("the-key")
                 .doesNotContain("998901112233");
         assertThat(search.toString()).doesNotContain("the-key").doesNotContain("998901112233");
     }
@@ -276,9 +275,15 @@ class VasSmsGatewayAdapterTests {
     }
 
     private static SmsVerificationOperation sendOperation() {
-        return new SmsVerificationOperation(SmsVerificationOperation.Kind.SEND,
-                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                "998901112233", CODE, "HorecaOS code " + CODE, ISSUED);
+        return new SmsVerificationOperation(
+                SmsVerificationOperation.Kind.SEND,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "998901112233",
+                CODE,
+                "HorecaOS code " + CODE,
+                ISSUED);
     }
 
     private static SmsVerificationOperation resolveOperation() {

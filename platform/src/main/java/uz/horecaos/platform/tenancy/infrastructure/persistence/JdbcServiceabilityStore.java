@@ -11,10 +11,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
-
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.domain.channel.ServiceMode;
 import uz.horecaos.platform.tenancy.domain.channel.WeeklySchedule;
@@ -46,7 +44,8 @@ public class JdbcServiceabilityStore {
                 SELECT timezone FROM tenant.locations
                 WHERE tenant_id = :tenantId AND id = :locationId
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
                 .query(String.class)
                 .optional()
                 .map(ZoneId::of);
@@ -65,11 +64,14 @@ public class JdbcServiceabilityStore {
                 FROM tenant.sales_channels c
                 WHERE c.tenant_id = :tenantId AND c.id = :channelId
                 """)
-                .param("tenantId", tenantId).param("channelId", channelId)
+                .param("tenantId", tenantId)
+                .param("channelId", channelId)
                 .param("locationId", locationId)
                 .query((row, number) -> new ChannelAtLocation(
-                        true, row.getBoolean("channel_active"),
-                        row.getBoolean("enabled_here"), row.getString("channel_code")))
+                        true,
+                        row.getBoolean("channel_active"),
+                        row.getBoolean("enabled_here"),
+                        row.getString("channel_code")))
                 .optional()
                 // A channel id that names no row of this tenant is not an error to
                 // throw: it is exactly the CHANNEL_NOT_ENABLED answer, and treating
@@ -91,9 +93,12 @@ public class JdbcServiceabilityStore {
                 WHERE tenant_id = :tenantId AND channel_id = :channelId
                   AND fulfillment_mode = :mode AND enabled
                 """)
-                .param("tenantId", tenantId).param("channelId", channelId)
-                .param("mode", mode.name())
-                .query(Long.class).single() > 0;
+                        .param("tenantId", tenantId)
+                        .param("channelId", channelId)
+                        .param("mode", mode.name())
+                        .query(Long.class)
+                        .single()
+                > 0;
     }
 
     /** Resolver rule 4 and rule 8's ceiling. Absent means FOLLOW_SCHEDULE, uncapped. */
@@ -103,7 +108,8 @@ public class JdbcServiceabilityStore {
                 FROM tenant.location_service_state
                 WHERE tenant_id = :tenantId AND location_id = :locationId
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
                 .query((row, number) -> new ServiceState(
                         ServiceMode.valueOf(row.getString("mode")),
                         row.getString("reason_code"),
@@ -124,15 +130,18 @@ public class JdbcServiceabilityStore {
                 WHERE b.tenant_id = :tenantId AND b.location_id = :locationId
                   AND b.fulfillment_mode = :mode
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
                 .param("mode", mode.name())
-                .query((row, number) -> new ScheduleHeader(
-                        row.getObject("id", UUID.class),
-                        row.getBoolean("accepts_scheduled_orders")))
+                .query((row, number) ->
+                        new ScheduleHeader(row.getObject("id", UUID.class), row.getBoolean("accepts_scheduled_orders")))
                 .optional();
 
-        return header.map(found -> new BoundSchedule(found.scheduleId(),
-                new WeeklySchedule(rulesOf(found.scheduleId()), exceptionsOf(found.scheduleId()),
+        return header.map(found -> new BoundSchedule(
+                found.scheduleId(),
+                new WeeklySchedule(
+                        rulesOf(found.scheduleId()),
+                        exceptionsOf(found.scheduleId()),
                         found.acceptsScheduledOrders())));
     }
 
@@ -143,9 +152,12 @@ public class JdbcServiceabilityStore {
                 WHERE tenant_id = :tenantId AND brand_id = :brandId
                   AND channel = :channel AND status = 'PUBLISHED'
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
-                .param("channel", channelCode)
-                .query(Long.class).single() > 0;
+                        .param("tenantId", tenantId)
+                        .param("brandId", brandId)
+                        .param("channel", channelCode)
+                        .query(Long.class)
+                        .single()
+                > 0;
     }
 
     /**
@@ -156,8 +168,8 @@ public class JdbcServiceabilityStore {
      * first. Two runs of the same order quoting different times is the defect this
      * ordering exists to prevent.
      */
-    public Optional<Integer> preparationMinutes(UUID tenantId, UUID locationId,
-            FulfillmentMode mode, int dayOfWeek, LocalTime localTime) {
+    public Optional<Integer> preparationMinutes(
+            UUID tenantId, UUID locationId, FulfillmentMode mode, int dayOfWeek, LocalTime localTime) {
         return jdbc.sql("""
                 SELECT duration_minutes
                 FROM tenant.preparation_bands
@@ -171,8 +183,10 @@ public class JdbcServiceabilityStore {
                          id
                 LIMIT 1
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
-                .param("mode", mode.name()).param("dayOfWeek", dayOfWeek)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("mode", mode.name())
+                .param("dayOfWeek", dayOfWeek)
                 .param("localTime", localTime)
                 .query(Integer.class)
                 .optional();
@@ -183,21 +197,26 @@ public class JdbcServiceabilityStore {
                 SELECT count(*) FROM tenant.location_capacity_holds
                 WHERE tenant_id = :tenantId AND location_id = :locationId AND released_at IS NULL
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
-                .query(Long.class).single();
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .query(Long.class)
+                .single();
     }
 
     // ------------------------------------------------------------------ writes
 
-    public void insertSchedule(UUID id, UUID tenantId, UUID brandId, String name,
-            boolean acceptsScheduledOrders, Instant now) {
+    public void insertSchedule(
+            UUID id, UUID tenantId, UUID brandId, String name, boolean acceptsScheduledOrders, Instant now) {
         jdbc.sql("""
                 INSERT INTO tenant.service_schedules (
                     id, tenant_id, brand_id, name, accepts_scheduled_orders, created_at, updated_at)
                 VALUES (:id, :tenantId, :brandId, :name, :accepts, :now, :now)
                 """)
-                .param("id", id).param("tenantId", tenantId).param("brandId", brandId)
-                .param("name", name).param("accepts", acceptsScheduledOrders)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("name", name)
+                .param("accepts", acceptsScheduledOrders)
                 .param("now", timestamp(now))
                 .update();
     }
@@ -218,7 +237,9 @@ public class JdbcServiceabilityStore {
                 SELECT 1 FROM tenant.service_schedules
                  WHERE id = :scheduleId AND tenant_id = :tenantId AND brand_id = :brandId
                 """)
-                .param("scheduleId", scheduleId).param("tenantId", tenantId).param("brandId", brandId)
+                .param("scheduleId", scheduleId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
                 .query(Integer.class)
                 .optional()
                 .isPresent();
@@ -235,15 +256,24 @@ public class JdbcServiceabilityStore {
                         schedule_id, sequence, day_of_week, opens_at, closes_at)
                     VALUES (:scheduleId, :sequence, :dayOfWeek, :opensAt, :closesAt)
                     """)
-                    .param("scheduleId", scheduleId).param("sequence", sequence++)
+                    .param("scheduleId", scheduleId)
+                    .param("sequence", sequence++)
                     .param("dayOfWeek", (short) rule.dayOfWeek())
-                    .param("opensAt", rule.opensAt()).param("closesAt", rule.closesAt())
+                    .param("opensAt", rule.opensAt())
+                    .param("closesAt", rule.closesAt())
                     .update();
         }
     }
 
-    public void upsertException(UUID scheduleId, LocalDate date, boolean closedAllDay,
-            LocalTime opensAt, LocalTime closesAt, String label, String reason, UUID actorId) {
+    public void upsertException(
+            UUID scheduleId,
+            LocalDate date,
+            boolean closedAllDay,
+            LocalTime opensAt,
+            LocalTime closesAt,
+            String label,
+            String reason,
+            UUID actorId) {
         jdbc.sql("""
                 INSERT INTO tenant.service_schedule_exceptions (
                     id, schedule_id, exception_date, closed_all_day, opens_at, closes_at,
@@ -258,15 +288,20 @@ public class JdbcServiceabilityStore {
                     created_by = EXCLUDED.created_by,
                     reason = EXCLUDED.reason
                 """)
-                .param("id", UUID.randomUUID()).param("scheduleId", scheduleId)
-                .param("date", date).param("closedAllDay", closedAllDay)
-                .param("opensAt", opensAt).param("closesAt", closesAt)
-                .param("label", label).param("actorId", actorId).param("reason", reason)
+                .param("id", UUID.randomUUID())
+                .param("scheduleId", scheduleId)
+                .param("date", date)
+                .param("closedAllDay", closedAllDay)
+                .param("opensAt", opensAt)
+                .param("closesAt", closesAt)
+                .param("label", label)
+                .param("actorId", actorId)
+                .param("reason", reason)
                 .update();
     }
 
-    public void bindSchedule(UUID tenantId, UUID brandId, UUID locationId,
-            FulfillmentMode mode, UUID scheduleId, Instant now) {
+    public void bindSchedule(
+            UUID tenantId, UUID brandId, UUID locationId, FulfillmentMode mode, UUID scheduleId, Instant now) {
         jdbc.sql("""
                 INSERT INTO tenant.location_service_bindings (
                     tenant_id, brand_id, location_id, fulfillment_mode, schedule_id,
@@ -277,9 +312,12 @@ public class JdbcServiceabilityStore {
                     version = tenant.location_service_bindings.version + 1,
                     updated_at = EXCLUDED.updated_at
                 """)
-                .param("tenantId", tenantId).param("brandId", brandId)
-                .param("locationId", locationId).param("mode", mode.name())
-                .param("scheduleId", scheduleId).param("now", timestamp(now))
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("mode", mode.name())
+                .param("scheduleId", scheduleId)
+                .param("now", timestamp(now))
                 .update();
     }
 
@@ -291,9 +329,16 @@ public class JdbcServiceabilityStore {
      * rather than only "closed". The mandatory reason is enforced by
      * {@code ck_location_service_reason} in V0020 as well as here.
      */
-    public void upsertServiceState(UUID tenantId, UUID brandId, UUID locationId,
-            ServiceMode mode, String reasonCode, String note, Instant effectiveUntil,
-            UUID actorId, Instant now) {
+    public void upsertServiceState(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            ServiceMode mode,
+            String reasonCode,
+            String note,
+            Instant effectiveUntil,
+            UUID actorId,
+            Instant now) {
         jdbc.sql("""
                 INSERT INTO tenant.location_service_state (
                     location_id, tenant_id, brand_id, mode, reason_code, note,
@@ -309,17 +354,20 @@ public class JdbcServiceabilityStore {
                     changed_at = EXCLUDED.changed_at,
                     version = tenant.location_service_state.version + 1
                 """)
-                .param("locationId", locationId).param("tenantId", tenantId)
-                .param("brandId", brandId).param("mode", mode.name())
-                .param("reasonCode", reasonCode).param("note", note)
+                .param("locationId", locationId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("mode", mode.name())
+                .param("reasonCode", reasonCode)
+                .param("note", note)
                 .param("effectiveUntil", effectiveUntil == null ? null : timestamp(effectiveUntil))
-                .param("actorId", actorId).param("now", timestamp(now))
+                .param("actorId", actorId)
+                .param("now", timestamp(now))
                 .update();
     }
 
     /** Sets the ceiling without touching the open/closed override or its reason. */
-    public void setCapacity(UUID tenantId, UUID brandId, UUID locationId,
-            Integer maxConcurrentOrders, Instant now) {
+    public void setCapacity(UUID tenantId, UUID brandId, UUID locationId, Integer maxConcurrentOrders, Instant now) {
         jdbc.sql("""
                 INSERT INTO tenant.location_service_state (
                     location_id, tenant_id, brand_id, mode, max_concurrent_orders, changed_at)
@@ -328,17 +376,18 @@ public class JdbcServiceabilityStore {
                     max_concurrent_orders = EXCLUDED.max_concurrent_orders,
                     version = tenant.location_service_state.version + 1
                 """)
-                .param("locationId", locationId).param("tenantId", tenantId)
-                .param("brandId", brandId).param("cap", maxConcurrentOrders)
+                .param("locationId", locationId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("cap", maxConcurrentOrders)
                 .param("now", timestamp(now))
                 .update();
     }
 
-    public void replacePreparationBands(UUID tenantId, UUID brandId, UUID locationId,
-            List<Band> bands, Instant now) {
-        jdbc.sql("DELETE FROM tenant.preparation_bands "
-                        + "WHERE tenant_id = :tenantId AND location_id = :locationId")
-                .param("tenantId", tenantId).param("locationId", locationId)
+    public void replacePreparationBands(UUID tenantId, UUID brandId, UUID locationId, List<Band> bands, Instant now) {
+        jdbc.sql("DELETE FROM tenant.preparation_bands " + "WHERE tenant_id = :tenantId AND location_id = :locationId")
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
                 .update();
         for (Band band : bands) {
             jdbc.sql("""
@@ -348,12 +397,18 @@ public class JdbcServiceabilityStore {
                     VALUES (:id, :tenantId, :brandId, :locationId, :mode, :dayOfWeek,
                         :startsAt, :endsAt, :duration, :priority, :now, :now)
                     """)
-                    .param("id", UUID.randomUUID()).param("tenantId", tenantId)
-                    .param("brandId", brandId).param("locationId", locationId)
+                    .param("id", UUID.randomUUID())
+                    .param("tenantId", tenantId)
+                    .param("brandId", brandId)
+                    .param("locationId", locationId)
                     .param("mode", band.mode() == null ? null : band.mode().name())
-                    .param("dayOfWeek", band.dayOfWeek() == null ? null : band.dayOfWeek().shortValue())
-                    .param("startsAt", band.startsAt()).param("endsAt", band.endsAt())
-                    .param("duration", band.durationMinutes()).param("priority", band.priority())
+                    .param(
+                            "dayOfWeek",
+                            band.dayOfWeek() == null ? null : band.dayOfWeek().shortValue())
+                    .param("startsAt", band.startsAt())
+                    .param("endsAt", band.endsAt())
+                    .param("duration", band.durationMinutes())
+                    .param("priority", band.priority())
                     .param("now", timestamp(now))
                     .update();
         }
@@ -380,7 +435,8 @@ public class JdbcServiceabilityStore {
                   AND max_concurrent_orders IS NOT NULL
                 FOR UPDATE
                 """)
-                .param("tenantId", tenantId).param("locationId", locationId)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
                 .query(Integer.class)
                 .optional();
     }
@@ -399,8 +455,11 @@ public class JdbcServiceabilityStore {
                 VALUES (:id, :tenantId, :brandId, :locationId, :now)
                 ON CONFLICT (id) DO UPDATE SET released_at = NULL
                 """)
-                .param("id", holdId).param("tenantId", tenantId).param("brandId", brandId)
-                .param("locationId", locationId).param("now", timestamp(now))
+                .param("id", holdId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("now", timestamp(now))
                 .update();
     }
 
@@ -409,8 +468,11 @@ public class JdbcServiceabilityStore {
                 UPDATE tenant.location_capacity_holds SET released_at = :now
                 WHERE id = :id AND tenant_id = :tenantId AND released_at IS NULL
                 """)
-                .param("id", holdId).param("tenantId", tenantId).param("now", timestamp(now))
-                .update() == 1;
+                        .param("id", holdId)
+                        .param("tenantId", tenantId)
+                        .param("now", timestamp(now))
+                        .update()
+                == 1;
     }
 
     public boolean holdsCapacity(UUID holdId, UUID tenantId) {
@@ -418,17 +480,19 @@ public class JdbcServiceabilityStore {
                 SELECT count(*) FROM tenant.location_capacity_holds
                 WHERE id = :id AND tenant_id = :tenantId AND released_at IS NULL
                 """)
-                .param("id", holdId).param("tenantId", tenantId)
-                .query(Long.class).single() == 1;
+                        .param("id", holdId)
+                        .param("tenantId", tenantId)
+                        .query(Long.class)
+                        .single()
+                == 1;
     }
 
     // --------------------------------------------------------------- row types
 
-    public record ChannelAtLocation(boolean exists, boolean active, boolean enabledAtLocation,
-            String channelCode) { }
+    public record ChannelAtLocation(boolean exists, boolean active, boolean enabledAtLocation, String channelCode) {}
 
-    public record ServiceState(ServiceMode mode, String reasonCode, Instant effectiveUntil,
-            Integer maxConcurrentOrders, int version) {
+    public record ServiceState(
+            ServiceMode mode, String reasonCode, Instant effectiveUntil, Integer maxConcurrentOrders, int version) {
 
         static ServiceState followingSchedule() {
             return new ServiceState(ServiceMode.FOLLOW_SCHEDULE, null, null, null, 1);
@@ -446,18 +510,21 @@ public class JdbcServiceabilityStore {
             if (mode == ServiceMode.FOLLOW_SCHEDULE) {
                 return ServiceMode.FOLLOW_SCHEDULE;
             }
-            return effectiveUntil != null && !effectiveUntil.isAfter(at)
-                    ? ServiceMode.FOLLOW_SCHEDULE
-                    : mode;
+            return effectiveUntil != null && !effectiveUntil.isAfter(at) ? ServiceMode.FOLLOW_SCHEDULE : mode;
         }
     }
 
-    public record BoundSchedule(UUID scheduleId, WeeklySchedule schedule) { }
+    public record BoundSchedule(UUID scheduleId, WeeklySchedule schedule) {}
 
-    public record Band(FulfillmentMode mode, Integer dayOfWeek, LocalTime startsAt,
-            LocalTime endsAt, int durationMinutes, int priority) { }
+    public record Band(
+            FulfillmentMode mode,
+            Integer dayOfWeek,
+            LocalTime startsAt,
+            LocalTime endsAt,
+            int durationMinutes,
+            int priority) {}
 
-    private record ScheduleHeader(UUID scheduleId, boolean acceptsScheduledOrders) { }
+    private record ScheduleHeader(UUID scheduleId, boolean acceptsScheduledOrders) {}
 
     private List<WeeklySchedule.Rule> rulesOf(UUID scheduleId) {
         return jdbc.sql("""

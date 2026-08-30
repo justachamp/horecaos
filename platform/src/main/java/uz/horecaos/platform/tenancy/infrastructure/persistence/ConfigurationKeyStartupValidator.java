@@ -1,12 +1,10 @@
 package uz.horecaos.platform.tenancy.infrastructure.persistence;
 
 import java.util.List;
-
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.tenancy.domain.configuration.ConfigurationKeys;
 
 /**
@@ -31,20 +29,15 @@ public class ConfigurationKeyStartupValidator implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         List<String> unknown = jdbc.sql("""
                 SELECT DISTINCT key_code FROM tenant.configuration_values
-                """)
-                .query(String.class)
-                .list()
-                .stream()
+                """).query(String.class).list().stream()
                 .filter(code -> ConfigurationKeys.find(code).isEmpty())
                 .sorted()
                 .toList();
 
         if (!unknown.isEmpty()) {
-            throw new ConfigurationKeys.UnknownConfigurationKeyException(
-                    """
+            throw new ConfigurationKeys.UnknownConfigurationKeyException("""
                     Stored configuration keys have no code-owned declaration: %s.
-                    Either restore the declaration in ConfigurationKeys or migrate the rows away (ADR 0030)."""
-                            .formatted(unknown));
+                    Either restore the declaration in ConfigurationKeys or migrate the rows away (ADR 0030).""".formatted(unknown));
         }
     }
 }

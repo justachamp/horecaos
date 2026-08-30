@@ -40,29 +40,31 @@ public record TariffTimeRule(
         long surchargeMinor) {
 
     /** A rule that only surcharges, leaving the base table in force. */
-    public TariffTimeRule(int sequence, int priority, int dayMask, LocalTime fromTime,
-            LocalTime toTime, int multiplierBasisPoints, long surchargeMinor) {
-        this(sequence, priority, dayMask, fromTime, toTime, null,
-                multiplierBasisPoints, surchargeMinor);
+    public TariffTimeRule(
+            int sequence,
+            int priority,
+            int dayMask,
+            LocalTime fromTime,
+            LocalTime toTime,
+            int multiplierBasisPoints,
+            long surchargeMinor) {
+        this(sequence, priority, dayMask, fromTime, toTime, null, multiplierBasisPoints, surchargeMinor);
     }
 
     public TariffTimeRule {
         if (dayMask < 1 || dayMask > 127) {
-            throw new IllegalArgumentException(
-                    "A day mask must select at least one day, was " + dayMask);
+            throw new IllegalArgumentException("A day mask must select at least one day, was " + dayMask);
         }
         if (!toTime.isAfter(fromTime)) {
             throw new IllegalArgumentException(
-                    "A time rule must not wrap midnight; author two rules instead of "
-                            + fromTime + " to " + toTime);
+                    "A time rule must not wrap midnight; author two rules instead of " + fromTime + " to " + toTime);
         }
         if (multiplierBasisPoints <= 0 || surchargeMinor < 0) {
             throw new IllegalArgumentException("A time rule cannot reduce a fee below zero");
         }
         if (bandSet != null && (bandSet.isBlank() || TariffBand.BASE_SET.equals(bandSet))) {
-            throw new IllegalArgumentException(
-                    "A rule that substitutes the base set for itself substitutes nothing; "
-                            + "leave the band set unset instead");
+            throw new IllegalArgumentException("A rule that substitutes the base set for itself substitutes nothing; "
+                    + "leave the band set unset instead");
         }
     }
 

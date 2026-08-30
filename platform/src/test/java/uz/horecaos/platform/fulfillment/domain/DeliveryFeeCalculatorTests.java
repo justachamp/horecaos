@@ -1,13 +1,14 @@
 package uz.horecaos.platform.fulfillment.domain;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
+
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.fulfillment.domain.tariff.DeliveryFeeCalculator;
 import uz.horecaos.platform.fulfillment.domain.tariff.DeliveryTariff;
 import uz.horecaos.platform.fulfillment.domain.tariff.DistanceMode;
@@ -15,9 +16,6 @@ import uz.horecaos.platform.fulfillment.domain.tariff.FeeSource;
 import uz.horecaos.platform.fulfillment.domain.tariff.TariffBand;
 import uz.horecaos.platform.fulfillment.domain.tariff.TariffTimeRule;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * The fee arithmetic, on literals (ADR 0037).
@@ -54,7 +52,7 @@ class DeliveryFeeCalculatorTests {
         // paying for a whole further kilometre is explainable at the door; a
         // fraction of a som is not, and there is no coin for it.
         assertThat(DeliveryFeeCalculator.compute(tashkentTariff(), 3_100, NOON_TUESDAY)
-                .finalFeeMinor())
+                        .finalFeeMinor())
                 .isEqualTo(12_000L);
     }
 
@@ -65,7 +63,7 @@ class DeliveryFeeCalculatorTests {
         // the branch instead would bill five, charging the first three kilometres
         // twice — once inside the base and once again by distance.
         assertThat(DeliveryFeeCalculator.compute(tashkentTariff(), 5_000, NOON_TUESDAY)
-                .finalFeeMinor())
+                        .finalFeeMinor())
                 .isEqualTo(14_000L);
     }
 
@@ -83,46 +81,69 @@ class DeliveryFeeCalculatorTests {
     @Test
     @DisplayName("a peak window is half-open, so its closing minute is already off-peak")
     void theWindowIsHalfOpenAtItsClose() {
-        assertThat(DeliveryFeeCalculator.compute(tashkentTariff(), 1_000,
-                LocalDateTime.parse("2026-08-25T18:00:00")).rule()).isNotNull();
+        assertThat(DeliveryFeeCalculator.compute(tashkentTariff(), 1_000, LocalDateTime.parse("2026-08-25T18:00:00"))
+                        .rule())
+                .isNotNull();
         // Two adjacent windows must not both claim 22:00, or the higher-priority
         // one wins a minute it was never meant to cover.
-        assertThat(DeliveryFeeCalculator.compute(tashkentTariff(), 1_000,
-                LocalDateTime.parse("2026-08-25T22:00:00")).rule()).isNull();
+        assertThat(DeliveryFeeCalculator.compute(tashkentTariff(), 1_000, LocalDateTime.parse("2026-08-25T22:00:00"))
+                        .rule())
+                .isNull();
     }
 
     @Test
     @DisplayName("a rule that does not name today does not apply")
     void theDayMaskIsHonoured() {
         // The mask selects Monday to Friday. 2026-08-30 is a Sunday.
-        assertThat(DeliveryFeeCalculator.compute(tashkentTariff(), 1_000,
-                LocalDateTime.parse("2026-08-30T19:00:00")).finalFeeMinor())
+        assertThat(DeliveryFeeCalculator.compute(tashkentTariff(), 1_000, LocalDateTime.parse("2026-08-30T19:00:00"))
+                        .finalFeeMinor())
                 .isEqualTo(10_000L);
     }
 
     @Test
     @DisplayName("the multiplier applies before the surcharge, and rounding happens once")
     void theMultiplierPrecedesTheSurcharge() {
-        DeliveryTariff tariff = new DeliveryTariff(TARIFF, 1, VersionStatus.ACTIVE, "UZS",
-                FeeSource.TARIFF, DistanceMode.RADIUS, 13_000, null, 15_000, 0L, null,
+        DeliveryTariff tariff = new DeliveryTariff(
+                TARIFF,
+                1,
+                VersionStatus.ACTIVE,
+                "UZS",
+                FeeSource.TARIFF,
+                DistanceMode.RADIUS,
+                13_000,
+                null,
+                15_000,
+                0L,
+                null,
                 bands(),
-                List.of(new TariffTimeRule(0, 10, WEEKDAYS, LocalTime.of(18, 0), LocalTime.of(22, 0),
-                        12_000, 5_000L)));
+                List.of(new TariffTimeRule(0, 10, WEEKDAYS, LocalTime.of(18, 0), LocalTime.of(22, 0), 12_000, 5_000L)));
 
         // 12,000 × 1.2 = 14,400, then + 5,000 = 19,400. Multiplying the surcharge
         // too would give 20,400, and both are defensible readings of "a 20% peak
         // uplift and a 5,000 surcharge" — which is exactly why ADR 0037 states the
         // order and why this test exists to hold it.
-        assertThat(DeliveryFeeCalculator.compute(tariff, 3_100, SEVEN_PM_TUESDAY).finalFeeMinor())
+        assertThat(DeliveryFeeCalculator.compute(tariff, 3_100, SEVEN_PM_TUESDAY)
+                        .finalFeeMinor())
                 .isEqualTo(19_400L);
     }
 
     @Test
     @DisplayName("the cap decides the fee, and the uncapped figure is still recorded")
     void theCapClampsAndTheComputedFeeSurvives() {
-        DeliveryTariff capped = new DeliveryTariff(TARIFF, 1, VersionStatus.ACTIVE, "UZS",
-                FeeSource.TARIFF, DistanceMode.RADIUS, 13_000, null, 15_000, 0L, 20_000L,
-                bands(), List.of());
+        DeliveryTariff capped = new DeliveryTariff(
+                TARIFF,
+                1,
+                VersionStatus.ACTIVE,
+                "UZS",
+                FeeSource.TARIFF,
+                DistanceMode.RADIUS,
+                13_000,
+                null,
+                15_000,
+                0L,
+                20_000L,
+                bands(),
+                List.of());
 
         var computation = DeliveryFeeCalculator.compute(capped, 14_999, NOON_TUESDAY);
 
@@ -135,9 +156,20 @@ class DeliveryFeeCalculatorTests {
     @Test
     @DisplayName("the minimum lifts a fee the bands priced below it")
     void theMinimumLifts() {
-        DeliveryTariff floored = new DeliveryTariff(TARIFF, 1, VersionStatus.ACTIVE, "UZS",
-                FeeSource.TARIFF, DistanceMode.RADIUS, 13_000, null, 15_000, 8_000L, null,
-                List.of(new TariffBand(0, 0, 15_000, 5_000L, 0L)), List.of());
+        DeliveryTariff floored = new DeliveryTariff(
+                TARIFF,
+                1,
+                VersionStatus.ACTIVE,
+                "UZS",
+                FeeSource.TARIFF,
+                DistanceMode.RADIUS,
+                13_000,
+                null,
+                15_000,
+                8_000L,
+                null,
+                List.of(new TariffBand(0, 0, 15_000, 5_000L, 0L)),
+                List.of());
 
         assertThat(DeliveryFeeCalculator.compute(floored, 500, NOON_TUESDAY).finalFeeMinor())
                 .isEqualTo(8_000L);
@@ -146,10 +178,19 @@ class DeliveryFeeCalculatorTests {
     @Test
     @DisplayName("a distance no band covers refuses rather than pricing at zero")
     void aHoleInTheTilingRefuses() {
-        DeliveryTariff holed = new DeliveryTariff(TARIFF, 1, VersionStatus.ACTIVE, "UZS",
-                FeeSource.TARIFF, DistanceMode.RADIUS, 13_000, null, 15_000, 0L, null,
-                List.of(new TariffBand(0, 0, 3_000, 10_000L, 0L),
-                        new TariffBand(1, 5_000, 15_000, 10_000L, 2_000L)),
+        DeliveryTariff holed = new DeliveryTariff(
+                TARIFF,
+                1,
+                VersionStatus.ACTIVE,
+                "UZS",
+                FeeSource.TARIFF,
+                DistanceMode.RADIUS,
+                13_000,
+                null,
+                15_000,
+                0L,
+                null,
+                List.of(new TariffBand(0, 0, 3_000, 10_000L, 0L), new TariffBand(1, 5_000, 15_000, 10_000L, 2_000L)),
                 List.of());
 
         // A zero here would be indistinguishable from free delivery, which is the
@@ -161,10 +202,19 @@ class DeliveryFeeCalculatorTests {
     @Test
     @DisplayName("activation names every tiling fault at once, including the one at 4,700 m")
     void activationReportsEveryTilingFault() {
-        DeliveryTariff holed = new DeliveryTariff(TARIFF, 1, VersionStatus.DRAFT, "UZS",
-                FeeSource.TARIFF, DistanceMode.RADIUS, 13_000, null, 15_000, 0L, null,
-                List.of(new TariffBand(0, 500, 3_000, 10_000L, 0L),
-                        new TariffBand(1, 5_000, 10_000, 10_000L, 2_000L)),
+        DeliveryTariff holed = new DeliveryTariff(
+                TARIFF,
+                1,
+                VersionStatus.DRAFT,
+                "UZS",
+                FeeSource.TARIFF,
+                DistanceMode.RADIUS,
+                13_000,
+                null,
+                15_000,
+                0L,
+                null,
+                List.of(new TariffBand(0, 500, 3_000, 10_000L, 0L), new TariffBand(1, 5_000, 10_000, 10_000L, 2_000L)),
                 List.of());
 
         assertThat(holed.activationProblems())
@@ -177,9 +227,20 @@ class DeliveryFeeCalculatorTests {
     @Test
     @DisplayName("ROAD distance without a routing binding cannot be activated")
     void roadWithoutRoutingIsRefused() {
-        DeliveryTariff road = new DeliveryTariff(TARIFF, 1, VersionStatus.DRAFT, "UZS",
-                FeeSource.TARIFF, DistanceMode.ROAD, 13_000, null, 15_000, 0L, null,
-                bands(), List.of());
+        DeliveryTariff road = new DeliveryTariff(
+                TARIFF,
+                1,
+                VersionStatus.DRAFT,
+                "UZS",
+                FeeSource.TARIFF,
+                DistanceMode.ROAD,
+                13_000,
+                null,
+                15_000,
+                0L,
+                null,
+                bands(),
+                List.of());
 
         assertThat(road.activationProblems())
                 .anySatisfy(problem -> assertThat(problem).contains("routing binding"));
@@ -200,8 +261,7 @@ class DeliveryFeeCalculatorTests {
         // kilometres on a straight line. The assertion is tight because the whole
         // reason for computing this here rather than in PostGIS is that it can be
         // pinned and re-derived without a database.
-        int meters = Haversine.metersBetween(
-                new GeoPoint(41.311081, 69.240562), new GeoPoint(41.326500, 69.234100));
+        int meters = Haversine.metersBetween(new GeoPoint(41.311081, 69.240562), new GeoPoint(41.326500, 69.234100));
 
         assertThat(meters).isBetween(1_700, 1_800);
     }
@@ -213,8 +273,7 @@ class DeliveryFeeCalculatorTests {
         GeoPoint chorsu = new GeoPoint(41.326500, 69.234100);
 
         assertThat(Haversine.metersBetween(square, square)).isZero();
-        assertThat(Haversine.metersBetween(square, chorsu))
-                .isEqualTo(Haversine.metersBetween(chorsu, square));
+        assertThat(Haversine.metersBetween(square, chorsu)).isEqualTo(Haversine.metersBetween(chorsu, square));
     }
 
     @Test
@@ -222,8 +281,7 @@ class DeliveryFeeCalculatorTests {
     void anUnlocatedBranchIsRefused() {
         UUID branch = UUID.randomUUID();
 
-        Throwable refusal = catchThrowable(
-                () -> BranchOrigin.of(branch, null, null, "NOT_GEOCODED"));
+        Throwable refusal = catchThrowable(() -> BranchOrigin.of(branch, null, null, "NOT_GEOCODED"));
 
         assertThat(refusal)
                 .isInstanceOf(BranchOrigin.UnlocatedBranchException.class)
@@ -258,11 +316,20 @@ class DeliveryFeeCalculatorTests {
     private static final int WEEKDAYS = 0b0011111;
 
     private static DeliveryTariff tashkentTariff() {
-        return new DeliveryTariff(TARIFF, 1, VersionStatus.ACTIVE, "UZS",
-                FeeSource.TARIFF, DistanceMode.RADIUS, 13_000, null, 15_000, 0L, 40_000L,
+        return new DeliveryTariff(
+                TARIFF,
+                1,
+                VersionStatus.ACTIVE,
+                "UZS",
+                FeeSource.TARIFF,
+                DistanceMode.RADIUS,
+                13_000,
+                null,
+                15_000,
+                0L,
+                40_000L,
                 bands(),
-                List.of(new TariffTimeRule(0, 10, WEEKDAYS, LocalTime.of(18, 0), LocalTime.of(22, 0),
-                        10_000, 5_000L)));
+                List.of(new TariffTimeRule(0, 10, WEEKDAYS, LocalTime.of(18, 0), LocalTime.of(22, 0), 10_000, 5_000L)));
     }
 
     private static List<TariffBand> bands() {

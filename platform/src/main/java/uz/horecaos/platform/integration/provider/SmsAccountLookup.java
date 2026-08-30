@@ -1,7 +1,6 @@
 package uz.horecaos.platform.integration.provider;
 
 import java.util.Optional;
-
 import uz.horecaos.platform.integration.api.provider.BindingRef;
 
 /**

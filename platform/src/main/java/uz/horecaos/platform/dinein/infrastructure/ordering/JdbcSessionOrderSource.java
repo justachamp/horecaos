@@ -2,10 +2,8 @@ package uz.horecaos.platform.dinein.infrastructure.ordering;
 
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.dinein.application.port.SessionOrderSource;
 
 /**
@@ -50,7 +48,8 @@ public class JdbcSessionOrderSource implements SessionOrderSource {
                 FROM ordering.orders
                 WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("id", orderId)
+                .param("tenantId", tenantId)
+                .param("id", orderId)
                 .query((row, number) -> new OrderForSession(
                         row.getObject("id", UUID.class),
                         row.getObject("tenant_id", UUID.class),
@@ -75,7 +74,8 @@ public class JdbcSessionOrderSource implements SessionOrderSource {
                 JOIN ordering.orders o ON o.id = so.order_id AND o.tenant_id = so.tenant_id
                 WHERE so.tenant_id = :tenantId AND so.session_id = :sessionId
                 """.formatted(BILLABLE))
-                .param("tenantId", tenantId).param("sessionId", sessionId)
+                .param("tenantId", tenantId)
+                .param("sessionId", sessionId)
                 .query((row, number) -> new SessionBill(
                         // Null exactly when the session has no rounds yet. A
                         // currency read as an empty string there would be a

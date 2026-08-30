@@ -1,7 +1,5 @@
 package uz.horecaos.platform.telemetry;
 
-import javax.sql.DataSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
@@ -16,7 +14,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
-
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -24,26 +22,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.testcontainers.DockerClientFactory;
 import org.springframework.mock.env.MockEnvironment;
-
+import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.iam.api.ResourceScope;
-import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.infrastructure.protection.DataEncryptionKeyProvider;
 import uz.horecaos.platform.iam.infrastructure.protection.EnvelopeFieldProtection;
 import uz.horecaos.platform.iam.infrastructure.secrets.EnvironmentSecretResolver;
 import uz.horecaos.platform.support.TestDatabase;
-import uz.horecaos.platform.tenancy.api.ConfigurationKey;
-import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
-import uz.horecaos.platform.tenancy.api.ResolutionTrace;
-import uz.horecaos.platform.tenancy.api.Resolved;
 import uz.horecaos.platform.telemetry.api.CourierShiftPort;
 import uz.horecaos.platform.telemetry.api.RealtimeSignal;
 import uz.horecaos.platform.telemetry.api.RealtimeSignalPublisher;
@@ -66,6 +56,10 @@ import uz.horecaos.platform.telemetry.infrastructure.persistence.JdbcTelemetrySt
 import uz.horecaos.platform.telemetry.infrastructure.persistence.JdbcTelemetryStore.LivePositionRow;
 import uz.horecaos.platform.telemetry.infrastructure.persistence.TrackRetentionSweeper;
 import uz.horecaos.platform.telemetry.infrastructure.startup.TrackRetentionFloorCheck;
+import uz.horecaos.platform.tenancy.api.ConfigurationKey;
+import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
+import uz.horecaos.platform.tenancy.api.ResolutionTrace;
+import uz.horecaos.platform.tenancy.api.Resolved;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.cache.RateLimiter;
@@ -93,6 +87,7 @@ class CourierTelemetryTests {
 
     /** Chorsu, and a point about a kilometre from it. */
     private static final double CHORSU_LAT = 41.325600;
+
     private static final double CHORSU_LON = 69.234100;
 
     private static TestDatabase.Handle db;
@@ -119,8 +114,8 @@ class CourierTelemetryTests {
 
     @BeforeAll
     static void startDatabase() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
-                "Docker is required for courier telemetry tests");
+        Assumptions.assumeTrue(
+                DockerClientFactory.instance().isDockerAvailable(), "Docker is required for courier telemetry tests");
         db = TestDatabase.migrated();
         jdbcUrl = db.jdbcUrl();
         username = db.username();
@@ -140,8 +135,9 @@ class CourierTelemetryTests {
         jdbc = JdbcClient.create(dataSource);
 
         jdbc.sql("TRUNCATE TABLE fulfillment.courier_track_summaries, "
-                + "fulfillment.courier_location_tracks, fulfillment.courier_positions_live, "
-                + "fulfillment.courier_duty_sessions CASCADE").update();
+                        + "fulfillment.courier_location_tracks, fulfillment.courier_positions_live, "
+                        + "fulfillment.courier_duty_sessions CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE tenant.configuration_values CASCADE").update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
 
@@ -153,18 +149,24 @@ class CourierTelemetryTests {
 
         FieldProtection protection = new EnvelopeFieldProtection(new DataEncryptionKeyProvider(
                 new EnvironmentSecretResolver(
-                        Map.of("horecaos.secrets.data_encryption.platform.kek",
-                                "a-test-key-encryption-key")::get,
+                        Map.of("horecaos.secrets.data_encryption.platform.kek", "a-test-key-encryption-key")::get,
                         clock),
                 "local"));
 
         store = new JdbcTelemetryStore(jdbc);
         sessions = new DutySessionService(store, shifts, audit, clock);
-        ingest = new TelemetryIngestService(store, sessions, protection, configuration,
-                signals, new AlwaysAllowRateLimiter(), JsonMapper.builder().build(), clock);
+        ingest = new TelemetryIngestService(
+                store,
+                sessions,
+                protection,
+                configuration,
+                signals,
+                new AlwaysAllowRateLimiter(),
+                JsonMapper.builder().build(),
+                clock);
         positions = new CourierPositionQueryService(store);
-        reveals = new CourierTrackRevealService(store, protection, audit,
-                JsonMapper.builder().build(), clock);
+        reveals = new CourierTrackRevealService(
+                store, protection, audit, JsonMapper.builder().build(), clock);
         sweeper = new TrackRetentionSweeper(jdbc, store, clock, false, 30);
 
         seedTenancy();
@@ -197,8 +199,8 @@ class CourierTelemetryTests {
         // collect without a valid one. An expired registration turns a compliant
         // arrangement into an undeclared one, and the platform is the only party
         // positioned to notice.
-        shifts.openShift = Optional.of(new CourierShiftPort.OpenShift(
-                UUID.randomUUID(), branch, BRAND, LocalDate.of(2026, 8, 1)));
+        shifts.openShift =
+                Optional.of(new CourierShiftPort.OpenShift(UUID.randomUUID(), branch, BRAND, LocalDate.of(2026, 8, 1)));
 
         Throwable refusal = catchThrowable(this::openSession);
 
@@ -218,8 +220,7 @@ class CourierTelemetryTests {
 
         Throwable refusal = catchThrowable(this::openSession);
 
-        assertThat(((ApiException) refusal).properties())
-                .containsEntry("reason", CourierShiftPort.NOT_WIRED_REASON);
+        assertThat(((ApiException) refusal).properties()).containsEntry("reason", CourierShiftPort.NOT_WIRED_REASON);
         assertThat(openSessions()).isZero();
     }
 
@@ -243,8 +244,14 @@ class CourierTelemetryTests {
         positions.fleetAt(TENANT, branch, NOON);
         positions.fleetAt(TENANT, branch, NOON);
 
-        sessions.close(TENANT, session.id(), "SIGNED_OFF", ActorRef.user("dispatcher", null),
-                "end of shift", "courier.duty.manage", "corr-1");
+        sessions.close(
+                TENANT,
+                session.id(),
+                "SIGNED_OFF",
+                ActorRef.user("dispatcher", null),
+                "end of shift",
+                "courier.duty.manage",
+                "corr-1");
 
         // Two acts recorded, and not one row for the map refreshes in between:
         // auditing a five-second map produces more rows than the tenant has
@@ -258,15 +265,13 @@ class CourierTelemetryTests {
     @Test
     @DisplayName("an observation with no open duty session is refused with 422 and stored nowhere")
     void collectionAfterSignOffFailsLoudly() {
-        Throwable refusal = catchThrowable(() ->
-                ingestBatch(observation(NOON, CHORSU_LAT, CHORSU_LON, 12)));
+        Throwable refusal = catchThrowable(() -> ingestBatch(observation(NOON, CHORSU_LAT, CHORSU_LON, 12)));
 
         assertThat(((ApiException) refusal).errorCode())
                 .as("the batch is valid and the state refuses it; a 400 would tell the app to "
                         + "fix a payload that is already right")
                 .isEqualTo(ErrorCode.UNPROCESSABLE_STATE);
-        assertThat(((ApiException) refusal).properties())
-                .containsEntry("reason", "NO_OPEN_DUTY_SESSION");
+        assertThat(((ApiException) refusal).properties()).containsEntry("reason", "NO_OPEN_DUTY_SESSION");
         assertThat(trackRowCount()).isZero();
         assertThat(livePositionCount()).isZero();
     }
@@ -296,15 +301,14 @@ class CourierTelemetryTests {
         configuration.gate = CollectionGate.ON_ASSIGNMENT;
         openSession();
 
-        IngestOutcome idle = ingest.ingest(TENANT, COURIER, 0,
-                List.of(observation(NOON, CHORSU_LAT, CHORSU_LON, 12)));
+        IngestOutcome idle = ingest.ingest(TENANT, COURIER, 0, List.of(observation(NOON, CHORSU_LAT, CHORSU_LON, 12)));
         assertThat(idle.observationsAccepted()).isZero();
         assertThat(trackRowCount()).isZero();
 
         // Carrying an order, the same courier is collected. Both gates work, so a
         // narrower answer from legal is a configuration change and not a redesign.
-        IngestOutcome carrying = ingest.ingest(TENANT, COURIER, 1,
-                List.of(observation(NOON, CHORSU_LAT, CHORSU_LON, 12)));
+        IngestOutcome carrying =
+                ingest.ingest(TENANT, COURIER, 1, List.of(observation(NOON, CHORSU_LAT, CHORSU_LON, 12)));
         assertThat(carrying.observationsAccepted()).isOne();
         assertThat(trackRowCount()).isOne();
     }
@@ -326,7 +330,9 @@ class CourierTelemetryTests {
         // add six rows a minute per courier to the ADR 0031 table for no benefit.
         assertThat(trackRowCount()).isOne();
         assertThat(jdbc.sql("SELECT observation_count FROM fulfillment.courier_location_tracks")
-                .query(Integer.class).single()).isEqualTo(3);
+                        .query(Integer.class)
+                        .single())
+                .isEqualTo(3);
     }
 
     @Test
@@ -334,13 +340,19 @@ class CourierTelemetryTests {
     void aLaterBatchCompletingAMinuteWins() {
         openSession();
         ingest.ingest(TENANT, COURIER, 1, List.of(observation(NOON, CHORSU_LAT, CHORSU_LON, 12)));
-        ingest.ingest(TENANT, COURIER, 1, List.of(
-                observation(NOON, CHORSU_LAT, CHORSU_LON, 12),
-                observation(NOON.plusSeconds(30), CHORSU_LAT + 0.001, CHORSU_LON, 12)));
+        ingest.ingest(
+                TENANT,
+                COURIER,
+                1,
+                List.of(
+                        observation(NOON, CHORSU_LAT, CHORSU_LON, 12),
+                        observation(NOON.plusSeconds(30), CHORSU_LAT + 0.001, CHORSU_LON, 12)));
 
         assertThat(trackRowCount()).isOne();
         assertThat(jdbc.sql("SELECT observation_count FROM fulfillment.courier_location_tracks")
-                .query(Integer.class).single()).isEqualTo(2);
+                        .query(Integer.class)
+                        .single())
+                .isEqualTo(2);
     }
 
     @Test
@@ -354,9 +366,13 @@ class CourierTelemetryTests {
         // The device was in a basement and posts its backlog. The readings are
         // genuine and they are older, and replaying them in order would send the
         // courier's dot back across Tashkent while a dispatcher watches.
-        ingest.ingest(TENANT, COURIER, 1, List.of(
-                observation(NOON.minusSeconds(120), CHORSU_LAT + 0.02, CHORSU_LON, 12),
-                observation(NOON.minusSeconds(60), CHORSU_LAT + 0.01, CHORSU_LON, 12)));
+        ingest.ingest(
+                TENANT,
+                COURIER,
+                1,
+                List.of(
+                        observation(NOON.minusSeconds(120), CHORSU_LAT + 0.02, CHORSU_LON, 12),
+                        observation(NOON.minusSeconds(60), CHORSU_LAT + 0.01, CHORSU_LON, 12)));
 
         assertThat(livePosition().latitude()).isEqualTo(pinnedLatitude);
         assertThat(livePosition().capturedAt()).isEqualTo(NOON);
@@ -379,8 +395,7 @@ class CourierTelemetryTests {
 
         // And the board says the courier exists rather than letting them vanish.
         ingestBatch(observation(NOON.plusSeconds(60), CHORSU_LAT, CHORSU_LON, 40));
-        ingest.ingest(TENANT, COURIER, 1,
-                List.of(observation(NOON.plusSeconds(120), CHORSU_LAT, CHORSU_LON, 900)));
+        ingest.ingest(TENANT, COURIER, 1, List.of(observation(NOON.plusSeconds(120), CHORSU_LAT, CHORSU_LON, 900)));
 
         FleetView fleet = positions.fleetAt(TENANT, branch, NOON.plusSeconds(120));
         assertThat(fleet.pins()).hasSize(1);
@@ -401,8 +416,11 @@ class CourierTelemetryTests {
     @Test
     void batteryIsOnTheLiveRowAndNeverInTheTrack() {
         openSession();
-        ingest.ingest(TENANT, COURIER, 1, List.of(new TrackObservation(
-                NOON, CHORSU_LAT, CHORSU_LON, 12, 180.0, 4.2, 14, false)));
+        ingest.ingest(
+                TENANT,
+                COURIER,
+                1,
+                List.of(new TrackObservation(NOON, CHORSU_LAT, CHORSU_LON, 12, 180.0, 4.2, 14, false)));
 
         assertThat(livePosition().batteryPercent())
                 .as("a dispatcher needs to know a phone will die mid-delivery")
@@ -472,11 +490,25 @@ class CourierTelemetryTests {
         audit.recorded.clear();
 
         Throwable blank = catchThrowable(() -> reveals.reveal(new RevealCommand(
-                TENANT, BRAND, branch, COURIER, NOON.minusSeconds(60), NOON.plusSeconds(600),
-                "   ", ActorRef.user("investigator", null), "corr-2")));
+                TENANT,
+                BRAND,
+                branch,
+                COURIER,
+                NOON.minusSeconds(60),
+                NOON.plusSeconds(600),
+                "   ",
+                ActorRef.user("investigator", null),
+                "corr-2")));
         Throwable tooShort = catchThrowable(() -> reveals.reveal(new RevealCommand(
-                TENANT, BRAND, branch, COURIER, NOON.minusSeconds(60), NOON.plusSeconds(600),
-                "checking", ActorRef.user("investigator", null), "corr-3")));
+                TENANT,
+                BRAND,
+                branch,
+                COURIER,
+                NOON.minusSeconds(60),
+                NOON.plusSeconds(600),
+                "checking",
+                ActorRef.user("investigator", null),
+                "corr-3")));
 
         assertThat(((ApiException) blank).errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED);
         assertThat(((ApiException) tooShort).errorCode())
@@ -493,8 +525,15 @@ class CourierTelemetryTests {
         openSession();
 
         Throwable unbounded = catchThrowable(() -> reveals.reveal(new RevealCommand(
-                TENANT, BRAND, branch, COURIER, NOON.minus(Duration.ofDays(400)), NOON,
-                "an unbounded request for a movement history", ActorRef.user("x", null), "corr")));
+                TENANT,
+                BRAND,
+                branch,
+                COURIER,
+                NOON.minus(Duration.ofDays(400)),
+                NOON,
+                "an unbounded request for a movement history",
+                ActorRef.user("x", null),
+                "corr")));
 
         assertThat(((ApiException) unbounded).errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED);
     }
@@ -506,8 +545,14 @@ class CourierTelemetryTests {
     void thePinExpiresWithTheGraceThatPaysForStoringItInCleartext() {
         DutySessionRow session = openSession();
         ingestBatch(observation(NOON, CHORSU_LAT, CHORSU_LON, 12));
-        sessions.close(TENANT, session.id(), "SIGNED_OFF", ActorRef.user("dispatcher", null),
-                "end of shift", "courier.duty.manage", "corr-4");
+        sessions.close(
+                TENANT,
+                session.id(),
+                "SIGNED_OFF",
+                ActorRef.user("dispatcher", null),
+                "end of shift",
+                "courier.duty.manage",
+                "corr-4");
 
         // Half an hour later a dispatcher is still on the phone about the last
         // delivery, and the pin is still there.
@@ -532,16 +577,25 @@ class CourierTelemetryTests {
 
         DutySessionRow session = openSession();
         ingestBatch(observation(longAgo, CHORSU_LAT, CHORSU_LON, 12));
-        ingest.ingest(TENANT, COURIER, 1,
-                List.of(observation(longAgo.plusSeconds(90), CHORSU_LAT + 0.01, CHORSU_LON, 12)));
+        ingest.ingest(
+                TENANT, COURIER, 1, List.of(observation(longAgo.plusSeconds(90), CHORSU_LAT + 0.01, CHORSU_LON, 12)));
 
         // What ADR 0042 will settle against once the track is gone: a distance and
         // two times, neither of which is personal data.
         var aggregate = store.aggregateForSession(TENANT, session.id()).orElseThrow();
         store.insertSummary(new JdbcTelemetryStore.TrackSummaryRow(
-                UUID.randomUUID(), TENANT, COURIER, session.id(), null,
-                aggregate.distanceMeters(), aggregate.observationCount(),
-                aggregate.firstObservedAt(), aggregate.lastObservedAt(), null, null, longAgo));
+                UUID.randomUUID(),
+                TENANT,
+                COURIER,
+                session.id(),
+                null,
+                aggregate.distanceMeters(),
+                aggregate.observationCount(),
+                aggregate.firstObservedAt(),
+                aggregate.lastObservedAt(),
+                null,
+                null,
+                longAgo));
 
         List<String> dropped = sweeper.dropExpiredPartitions();
 
@@ -551,7 +605,8 @@ class CourierTelemetryTests {
                         + "movement archive of identified people")
                 .isZero();
         assertThat(jdbc.sql("SELECT count(*) FROM fulfillment.courier_track_summaries")
-                .query(Long.class).single())
+                        .query(Long.class)
+                        .single())
                 .as("the figure a settlement dispute is argued with outlives the path it came from")
                 .isOne();
     }
@@ -566,8 +621,14 @@ class CourierTelemetryTests {
 
         DutySessionRow session = openSession();
         ingestBatch(observation(longAgo, CHORSU_LAT, CHORSU_LON, 12));
-        sessions.close(TENANT, session.id(), "SIGNED_OFF", ActorRef.user("dispatcher", null),
-                "end of shift", "courier.duty.manage", "corr-5");
+        sessions.close(
+                TENANT,
+                session.id(),
+                "SIGNED_OFF",
+                ActorRef.user("dispatcher", null),
+                "end of shift",
+                "courier.duty.manage",
+                "corr-5");
 
         assertThat(reportOnly.dropExpiredPartitions()).isNotEmpty();
         assertThat(reportOnly.expireLivePositions()).isZero();
@@ -582,8 +643,7 @@ class CourierTelemetryTests {
         clock.moveTo(NOON.plus(Duration.ofDays(400)));
         sweeper.ensurePartitions();
 
-        assertThat(sweeper.dropExpiredPartitions())
-                .noneMatch(table -> table.endsWith("_default"));
+        assertThat(sweeper.dropExpiredPartitions()).noneMatch(table -> table.endsWith("_default"));
         assertThat(sweeper.defaultPartitionRowCount()).isZero();
     }
 
@@ -621,11 +681,10 @@ class CourierTelemetryTests {
     void reportOnlyIsAnOptOutForOneDeploymentRatherThanASilentDefault() {
         storeRetention(10);
 
-        TrackRetentionFloorCheck reportOnly = new TrackRetentionFloorCheck(
-                jdbc, new PilotCalendar(), productionEnvironment(), "REPORT_ONLY");
+        TrackRetentionFloorCheck reportOnly =
+                new TrackRetentionFloorCheck(jdbc, new PilotCalendar(), productionEnvironment(), "REPORT_ONLY");
 
-        assertThat(reportOnly.check())
-                .anyMatch(verdict -> verdict.refusesStartup());
+        assertThat(reportOnly.check()).anyMatch(verdict -> verdict.refusesStartup());
     }
 
     @Test
@@ -640,9 +699,9 @@ class CourierTelemetryTests {
         // Forty-five days old by the clock that decides — V0075's function reads
         // the database's current_date and not this class's movable one, so the
         // day is asked for rather than assumed.
-        LocalDate day = jdbc.sql("SELECT current_date - 45").query(LocalDate.class).single();
-        String partition = "courier_location_tracks_"
-                + day.format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE);
+        LocalDate day =
+                jdbc.sql("SELECT current_date - 45").query(LocalDate.class).single();
+        String partition = "courier_location_tracks_" + day.format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE);
         sweeper.ensurePartition(day);
 
         storeRetention(60);
@@ -678,8 +737,10 @@ class CourierTelemetryTests {
      */
     private Instant aDayEveryRetentionWindowHasPassed() {
         return jdbc.sql("SELECT current_date - 400")
-                .query(LocalDate.class).single()
-                .atTime(12, 0).toInstant(ZoneOffset.UTC);
+                .query(LocalDate.class)
+                .single()
+                .atTime(12, 0)
+                .toInstant(ZoneOffset.UTC);
     }
 
     private void storeRetention(int days) {
@@ -722,24 +783,37 @@ class CourierTelemetryTests {
     // -------------------------------------------------------------------- fixtures
 
     private DutySessionRow openSession() {
-        return sessions.open(new OpenCommand(TENANT, COURIER, branch, "device-1",
-                CollectionGate.ON_DUTY, ActorRef.user("dispatcher", null),
-                "the courier signed on", "courier.duty.manage", "corr-open"));
+        return sessions.open(new OpenCommand(
+                TENANT,
+                COURIER,
+                branch,
+                "device-1",
+                CollectionGate.ON_DUTY,
+                ActorRef.user("dispatcher", null),
+                "the courier signed on",
+                "courier.duty.manage",
+                "corr-open"));
     }
 
     private IngestOutcome ingestBatch(TrackObservation... observations) {
         return ingest.ingest(TENANT, COURIER, 1, List.of(observations));
     }
 
-    private static TrackObservation observation(Instant at, double latitude, double longitude,
-            double accuracyMeters) {
+    private static TrackObservation observation(Instant at, double latitude, double longitude, double accuracyMeters) {
         return new TrackObservation(at, latitude, longitude, accuracyMeters, null, null, null, null);
     }
 
     private RevealCommand revealCommand(Instant from, Instant to) {
-        return new RevealCommand(TENANT, BRAND, branch, COURIER, from, to,
+        return new RevealCommand(
+                TENANT,
+                BRAND,
+                branch,
+                COURIER,
+                from,
+                to,
                 "a customer says the order never arrived and the courier says it was handed over",
-                ActorRef.user("investigator", null), "corr-reveal");
+                ActorRef.user("investigator", null),
+                "corr-reveal");
     }
 
     private LivePositionRow livePosition() {
@@ -748,17 +822,20 @@ class CourierTelemetryTests {
 
     private long livePositionCount() {
         return jdbc.sql("SELECT count(*) FROM fulfillment.courier_positions_live")
-                .query(Long.class).single();
+                .query(Long.class)
+                .single();
     }
 
     private long trackRowCount() {
         return jdbc.sql("SELECT count(*) FROM fulfillment.courier_location_tracks")
-                .query(Long.class).single();
+                .query(Long.class)
+                .single();
     }
 
     private long openSessions() {
         return jdbc.sql("SELECT count(*) FROM fulfillment.courier_duty_sessions WHERE ended_at IS NULL")
-                .query(Long.class).single();
+                .query(Long.class)
+                .single();
     }
 
     private void seedTenancy() {
@@ -776,8 +853,8 @@ class CourierTelemetryTests {
         branch = insertLocation("CENTRE", "centre");
         siblingBranch = insertLocation("NORTH", "north");
 
-        shifts.openShift = Optional.of(new CourierShiftPort.OpenShift(
-                UUID.randomUUID(), branch, BRAND, LocalDate.of(2027, 1, 1)));
+        shifts.openShift =
+                Optional.of(new CourierShiftPort.OpenShift(UUID.randomUUID(), branch, BRAND, LocalDate.of(2027, 1, 1)));
     }
 
     private UUID insertLocation(String code, String slug) {
@@ -787,8 +864,13 @@ class CourierTelemetryTests {
                     timezone, status, version)
                 VALUES (:id, :tenantId, :brandId, :code, :slug, :code, 'Asia/Tashkent',
                         'ACTIVE', 0)
-                """).param("id", id).param("tenantId", TENANT).param("brandId", BRAND)
-                .param("code", code).param("slug", slug).update();
+                """)
+                .param("id", id)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("code", code)
+                .param("slug", slug)
+                .update();
         return id;
     }
 
@@ -828,8 +910,11 @@ class CourierTelemetryTests {
         }
 
         private static ResolutionTrace trace() {
-            return new ResolutionTrace(TelemetryConfigurationKeys.COLLECTION_GATE_CODE,
-                    ResolutionTrace.Source.CODE_DEFAULT, null, List.of());
+            return new ResolutionTrace(
+                    TelemetryConfigurationKeys.COLLECTION_GATE_CODE,
+                    ResolutionTrace.Source.CODE_DEFAULT,
+                    null,
+                    List.of());
         }
     }
 

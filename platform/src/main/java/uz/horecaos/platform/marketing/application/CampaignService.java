@@ -5,10 +5,8 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -51,9 +49,14 @@ public class CampaignService {
     private final AuditRecorder audit;
     private final Clock clock;
 
-    public CampaignService(JdbcCampaignStore campaigns, JdbcEngagementStore engagement,
-            AudienceService audiences, CampaignCostEstimator estimator,
-            CampaignMessagePort messages, AuditRecorder audit, Clock clock) {
+    public CampaignService(
+            JdbcCampaignStore campaigns,
+            JdbcEngagementStore engagement,
+            AudienceService audiences,
+            CampaignCostEstimator estimator,
+            CampaignMessagePort messages,
+            AuditRecorder audit,
+            Clock clock) {
         this.campaigns = campaigns;
         this.engagement = engagement;
         this.audiences = audiences;
@@ -74,25 +77,47 @@ public class CampaignService {
      *                       invent one
      */
     @Transactional
-    public UUID create(UUID tenantId, UUID brandId, String name, MarketingChannel channel,
-            String consentPurpose, UUID audienceId, String templateKey, int recipientCap,
-            Long costCeilingMinor, String currency, UUID benefitOfferId,
-            UUID loyaltyAccrualRuleId, UUID authorId) {
+    public UUID create(
+            UUID tenantId,
+            UUID brandId,
+            String name,
+            MarketingChannel channel,
+            String consentPurpose,
+            UUID audienceId,
+            String templateKey,
+            int recipientCap,
+            Long costCeilingMinor,
+            String currency,
+            UUID benefitOfferId,
+            UUID loyaltyAccrualRuleId,
+            UUID authorId) {
 
         if (channel.carriesMarginalCost() && costCeilingMinor == null) {
             throw new IllegalArgumentException(
-                    "A %s campaign needs a cost ceiling: this channel bills per segment and the "
-                            .formatted(channel)
+                    "A %s campaign needs a cost ceiling: this channel bills per segment and the ".formatted(channel)
                             + "mistake is unrecoverable");
         }
 
         EngagementPolicy policy = engagement.resolvePolicy(tenantId, brandId);
         UUID id = UUID.randomUUID();
 
-        campaigns.insertCampaign(new NewCampaign(id, tenantId, brandId, name, channel.name(),
-                consentPurpose, audienceId, templateKey, recipientCap, costCeilingMinor,
-                currency, policy.timezone().getId(), benefitOfferId, loyaltyAccrualRuleId,
-                authorId, clock.instant()));
+        campaigns.insertCampaign(new NewCampaign(
+                id,
+                tenantId,
+                brandId,
+                name,
+                channel.name(),
+                consentPurpose,
+                audienceId,
+                templateKey,
+                recipientCap,
+                costCeilingMinor,
+                currency,
+                policy.timezone().getId(),
+                benefitOfferId,
+                loyaltyAccrualRuleId,
+                authorId,
+                clock.instant()));
         return id;
     }
 
@@ -109,31 +134,42 @@ public class CampaignService {
     public Estimate prepare(UUID tenantId, UUID campaignId, ActorRef actor, String correlationId) {
         CampaignRow campaign = require(tenantId, campaignId);
         if (campaign.status() != CampaignStatus.DRAFT) {
-            throw new IllegalStateException(
-                    "A campaign is estimated while it is a draft, not in " + campaign.status());
+            throw new IllegalStateException("A campaign is estimated while it is a draft, not in " + campaign.status());
         }
 
         MarketingChannel channel = MarketingChannel.valueOf(campaign.channel());
         // The campaign's brand, so a campaign cannot be estimated against a
         // sibling brand's audience even if one is named on the row.
-        var snapshot = audiences.buildSnapshot(tenantId, campaign.brandId(),
-                campaign.audienceId(), channel, campaign.consentPurpose(), actor, correlationId);
+        var snapshot = audiences.buildSnapshot(
+                tenantId,
+                campaign.brandId(),
+                campaign.audienceId(),
+                channel,
+                campaign.consentPurpose(),
+                actor,
+                correlationId);
 
         EngagementPolicy policy = engagement.resolvePolicy(tenantId, campaign.brandId());
         Map<String, Integer> localeCounts = audiences.memberLocales(tenantId, snapshot.snapshotId());
-        Map<String, String> bodies = messages.templateBodies(tenantId, campaign.brandId(),
-                campaign.templateKey(), channel.name());
+        Map<String, String> bodies =
+                messages.templateBodies(tenantId, campaign.brandId(), campaign.templateKey(), channel.name());
 
-        Optional<CampaignCostEstimator.Estimate> cost = estimator.estimate(channel, bodies,
-                localeCounts, policy.smsPricePerSegmentMinor(), campaign.currency());
+        Optional<CampaignCostEstimator.Estimate> cost = estimator.estimate(
+                channel, bodies, localeCounts, policy.smsPricePerSegmentMinor(), campaign.currency());
 
-        campaigns.recordEstimate(tenantId, campaignId, snapshot.snapshotId(),
+        campaigns.recordEstimate(
+                tenantId,
+                campaignId,
+                snapshot.snapshotId(),
                 snapshot.memberCount(),
                 cost.map(CampaignCostEstimator.Estimate::lowMinor).orElse(null),
                 cost.map(CampaignCostEstimator.Estimate::highMinor).orElse(null),
                 clock.instant());
 
-        return new Estimate(snapshot.snapshotId(), snapshot.memberCount(), snapshot.candidateCount(),
+        return new Estimate(
+                snapshot.snapshotId(),
+                snapshot.memberCount(),
+                snapshot.candidateCount(),
                 cost.map(CampaignCostEstimator.Estimate::lowMinor).orElse(null),
                 cost.map(CampaignCostEstimator.Estimate::highMinor).orElse(null),
                 campaign.currency());
@@ -147,8 +183,8 @@ public class CampaignService {
                     "A campaign is reviewed against a snapshot and an estimate, and this one has "
                             + "neither: nothing has been approved until somebody has seen a number");
         }
-        return campaigns.transition(tenantId, campaignId, CampaignStatus.DRAFT,
-                CampaignStatus.IN_REVIEW, clock.instant());
+        return campaigns.transition(
+                tenantId, campaignId, CampaignStatus.DRAFT, CampaignStatus.IN_REVIEW, clock.instant());
     }
 
     /**
@@ -159,13 +195,18 @@ public class CampaignService {
      *         audited as {@code REJECTED} so a repeated attempt is visible
      */
     @Transactional
-    public boolean approve(UUID tenantId, UUID campaignId, UUID approverId, UUID approvalId,
-            ActorRef actor, String reason, String correlationId) {
+    public boolean approve(
+            UUID tenantId,
+            UUID campaignId,
+            UUID approverId,
+            UUID approvalId,
+            ActorRef actor,
+            String reason,
+            String correlationId) {
 
         CampaignRow campaign = require(tenantId, campaignId);
         Instant now = clock.instant();
-        boolean approved =
-                campaigns.approve(tenantId, campaignId, approverId, approvalId, now);
+        boolean approved = campaigns.approve(tenantId, campaignId, approverId, approvalId, now);
 
         audit.record(AuditFact.of("MARKETING_CAMPAIGN_APPROVED", AuditClass.BUSINESS)
                 .by(actor)
@@ -177,9 +218,12 @@ public class CampaignService {
                 .changed(Map.of(
                         "estimatedRecipients",
                         campaign.estimatedRecipients() == null ? 0 : campaign.estimatedRecipients(),
-                        "costCeilingMinor", String.valueOf(campaign.costCeilingMinor()),
-                        "recipientCap", campaign.recipientCap(),
-                        "authorIsApprover", approverId.equals(campaign.createdBy())))
+                        "costCeilingMinor",
+                        String.valueOf(campaign.costCeilingMinor()),
+                        "recipientCap",
+                        campaign.recipientCap(),
+                        "authorIsApprover",
+                        approverId.equals(campaign.createdBy())))
                 .underApproval(approvalId)
                 .usingCapability("campaign.approve")
                 .correlatedBy(correlationId)
@@ -196,8 +240,7 @@ public class CampaignService {
         if (!campaign.status().canTransitionTo(CampaignStatus.SENDING)) {
             return false;
         }
-        return campaigns.transition(tenantId, campaignId, campaign.status(),
-                CampaignStatus.SENDING, clock.instant());
+        return campaigns.transition(tenantId, campaignId, campaign.status(), CampaignStatus.SENDING, clock.instant());
     }
 
     /**
@@ -210,13 +253,12 @@ public class CampaignService {
      * approval.
      */
     @Transactional
-    public boolean halt(UUID tenantId, UUID campaignId, ActorRef actor, String reason,
-            String correlationId) {
+    public boolean halt(UUID tenantId, UUID campaignId, ActorRef actor, String reason, String correlationId) {
 
         CampaignRow campaign = require(tenantId, campaignId);
         Instant now = clock.instant();
-        boolean halted = campaigns.halt(tenantId, campaignId, campaign.status(),
-                CampaignStatus.HALTED_OPERATOR, reason, now);
+        boolean halted =
+                campaigns.halt(tenantId, campaignId, campaign.status(), CampaignStatus.HALTED_OPERATOR, reason, now);
 
         audit.record(AuditFact.of("MARKETING_CAMPAIGN_HALTED", AuditClass.BUSINESS)
                 .by(actor)
@@ -237,9 +279,10 @@ public class CampaignService {
     }
 
     public CampaignRow require(UUID tenantId, UUID campaignId) {
-        return campaigns.find(tenantId, campaignId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "No campaign %s belongs to this tenant".formatted(campaignId)));
+        return campaigns
+                .find(tenantId, campaignId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("No campaign %s belongs to this tenant".formatted(campaignId)));
     }
 
     /**
@@ -252,6 +295,6 @@ public class CampaignService {
      *                 configured price per segment. Null rather than zero, because
      *                 zero passes every ceiling check there is
      */
-    public record Estimate(UUID snapshotId, int memberCount, int candidateCount, Long lowMinor,
-            Long highMinor, String currency) { }
+    public record Estimate(
+            UUID snapshotId, int memberCount, int candidateCount, Long lowMinor, Long highMinor, String currency) {}
 }

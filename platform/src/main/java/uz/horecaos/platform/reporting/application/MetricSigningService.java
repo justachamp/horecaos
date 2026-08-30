@@ -3,10 +3,8 @@ package uz.horecaos.platform.reporting.application;
 import java.time.Clock;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -46,8 +44,7 @@ public class MetricSigningService {
     public MetricDefinition sign(String metricCode, ActorRef actor, String reason) {
         MetricDefinition definition = MetricRegistry.require(metricCode);
 
-        int updated = store.sign(definition.id().name(), definition.id().version(),
-                actor.subject(), clock.instant());
+        int updated = store.sign(definition.id().name(), definition.id().version(), actor.subject(), clock.instant());
         if (updated == 0) {
             throw new AlreadySignedException(metricCode);
         }
@@ -59,8 +56,10 @@ public class MetricSigningService {
                 // is what identifies the exact wording that was signed. Recording
                 // it is what lets an auditor prove the signature covers the text
                 // in the release rather than whatever the registry says today.
-                .target("MetricDefinition", UUID.nameUUIDFromBytes(
-                        definition.id().code().getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                .target(
+                        "MetricDefinition",
+                        UUID.nameUUIDFromBytes(
+                                definition.id().code().getBytes(java.nio.charset.StandardCharsets.UTF_8)))
                 .outcome(AuditFact.Outcome.SUCCEEDED)
                 .because(reason)
                 .changed(Map.of(
@@ -81,7 +80,8 @@ public class MetricSigningService {
 
         public AlreadySignedException(String metricCode) {
             super(("%s is already signed. A definition change is a new version (ADR 0043), so "
-                    + "sign that rather than re-signing this one.").formatted(metricCode));
+                            + "sign that rather than re-signing this one.")
+                    .formatted(metricCode));
         }
     }
 }

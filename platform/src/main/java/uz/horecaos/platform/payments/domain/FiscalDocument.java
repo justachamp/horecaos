@@ -64,8 +64,7 @@ public record FiscalDocument(
             Instant registeredAt,
             String receiptUrl,
             String providerStatusCode,
-            String providerMessage) {
-    }
+            String providerMessage) {}
 
     public FiscalDocument {
         Objects.requireNonNull(id, "A document id is required");
@@ -73,14 +72,12 @@ public record FiscalDocument(
         Objects.requireNonNull(orderId, "An order id is required");
         Objects.requireNonNull(documentType, "A document type is required");
         Objects.requireNonNull(status, "A fiscal status is required");
-        Objects.requireNonNull(reasonCode,
-                "A fiscal reason is required in every status; a null would mean unknown");
+        Objects.requireNonNull(reasonCode, "A fiscal reason is required in every status; a null would mean unknown");
         Objects.requireNonNull(reasonNote, "A fiscal reason note is required");
         lines = lines == null ? List.of() : List.copyOf(lines);
 
         if (status == FiscalStatus.NOT_APPLICABLE && providerType != null) {
-            throw new IllegalArgumentException(
-                    "A document that is not applicable has no provider to have issued it");
+            throw new IllegalArgumentException("A document that is not applicable has no provider to have issued it");
         }
         if (documentType.corrects() && correctsDocumentId == null) {
             throw new IllegalArgumentException(
@@ -95,12 +92,25 @@ public record FiscalDocument(
      * state. Click's {@code received_cash} is not an alternative: it is a tender
      * split inside a CLICK payment, and a cash order has no CLICK payment to split.
      */
-    public static FiscalDocument notApplicableForCash(UUID id, UUID tenantId, UUID orderId,
-            UUID legalEntityId, UUID paymentIntentId, Instant createdAt) {
-        return new FiscalDocument(id, tenantId, orderId, legalEntityId, paymentIntentId, null,
-                null, FiscalDocumentType.SALE, null, FiscalStatus.NOT_APPLICABLE,
-                FiscalReason.CASH_TENDER_NO_PROVIDER_FISCALIZATION, FiscalReason.CASH_TENDER_NOTE,
-                List.of(), null, 1, createdAt);
+    public static FiscalDocument notApplicableForCash(
+            UUID id, UUID tenantId, UUID orderId, UUID legalEntityId, UUID paymentIntentId, Instant createdAt) {
+        return new FiscalDocument(
+                id,
+                tenantId,
+                orderId,
+                legalEntityId,
+                paymentIntentId,
+                null,
+                null,
+                FiscalDocumentType.SALE,
+                null,
+                FiscalStatus.NOT_APPLICABLE,
+                FiscalReason.CASH_TENDER_NO_PROVIDER_FISCALIZATION,
+                FiscalReason.CASH_TENDER_NOTE,
+                List.of(),
+                null,
+                1,
+                createdAt);
     }
 
     public Optional<FiscalEvidence> fiscalEvidence() {

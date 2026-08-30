@@ -8,7 +8,6 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Map;
-
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -25,8 +24,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 final class MigrationColumns {
 
-    private MigrationColumns() {
-    }
+    private MigrationColumns() {}
 
     static OffsetDateTime utc(Instant instant) {
         return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
@@ -52,7 +50,7 @@ final class MigrationColumns {
         return value == null ? null : value.toBigIntegerExact();
     }
 
-    private static final TypeReference<Map<String, Object>> DOCUMENT = new TypeReference<>() { };
+    private static final TypeReference<Map<String, Object>> DOCUMENT = new TypeReference<>() {};
 
     /**
      * Reads a {@code jsonb} object column as the map the application ports carry.
@@ -67,8 +65,7 @@ final class MigrationColumns {
      * an absent document means and a null is only reachable through a column that
      * is not one of those two.
      */
-    static Map<String, Object> documentOrEmpty(ObjectMapper mapper, ResultSet row, String column)
-            throws SQLException {
+    static Map<String, Object> documentOrEmpty(ObjectMapper mapper, ResultSet row, String column) throws SQLException {
         String json = row.getString(column);
         if (json == null || json.isBlank()) {
             return Map.of();

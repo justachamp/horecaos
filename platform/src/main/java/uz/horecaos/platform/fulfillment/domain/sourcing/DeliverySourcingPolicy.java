@@ -65,17 +65,17 @@ public record DeliverySourcingPolicy(
      * the in-house lane. Change one of these numbers without the others and that
      * margin is the thing that disappears.
      */
-    public static final DeliverySourcingPolicy DEFAULTS =
-            new DeliverySourcingPolicy(600, 900, 300, 900, 2, 90, 900);
+    public static final DeliverySourcingPolicy DEFAULTS = new DeliverySourcingPolicy(600, 900, 300, 900, 2, 90, 900);
 
     public DeliverySourcingPolicy {
-        if (preparationLeadSeconds < 0 || partnerLeadSeconds < 0 || safetyBufferSeconds < 0
+        if (preparationLeadSeconds < 0
+                || partnerLeadSeconds < 0
+                || safetyBufferSeconds < 0
                 || latestAssignmentSlackSeconds < 0) {
             throw new IllegalArgumentException("Sourcing lead times cannot be negative");
         }
         if (pickupToleranceSeconds < 1) {
-            throw new IllegalArgumentException(
-                    "A pickup window of zero width is a single instant no courier can hit");
+            throw new IllegalArgumentException("A pickup window of zero width is a single instant no courier can hit");
         }
         if (offerRounds < 1) {
             // Zero rounds is not "prefer partners", it is "never use the fleet",

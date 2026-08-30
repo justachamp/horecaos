@@ -5,13 +5,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import uz.horecaos.platform.customers.application.CustomerProfileService.ContactType;
 import uz.horecaos.platform.customers.application.VerificationChallengeStore.IssuanceWindow;
 import uz.horecaos.platform.customers.application.VerificationChallengeStore.NewChallenge;
@@ -96,8 +94,8 @@ public class VerificationChallengeIssuer {
      *             two chances for them to disagree
      */
     @Transactional
-    public Opened open(UUID tenantId, UUID brandId, String destination, String destinationHash,
-            VerificationCodeSource.Code code) {
+    public Opened open(
+            UUID tenantId, UUID brandId, String destination, String destinationHash, VerificationCodeSource.Code code) {
 
         Instant now = clock.instant();
 
@@ -114,8 +112,7 @@ public class VerificationChallengeIssuer {
         // profile and a non-local profile refuses to start with its configuration
         // present. See PresetVerificationCodeSource and its guard.
         if (code.requiresDelivery()) {
-            IssuanceWindow window = challenges.issuanceWindow(
-                    tenantId, destinationHash, now.minus(destinationWindow));
+            IssuanceWindow window = challenges.issuanceWindow(tenantId, destinationHash, now.minus(destinationWindow));
 
             window.lastIssuedAt()
                     .filter(last -> last.plus(resendInterval).isAfter(now))
@@ -132,16 +129,14 @@ public class VerificationChallengeIssuer {
                 // nothing — lies to an honest customer standing at a till, and what is
                 // actually being protected is a bill somebody pays per message.
                 throw tooManyRequests(
-                        "Too many codes have been requested for this number. Try again later.",
-                        destinationWindow);
+                        "Too many codes have been requested for this number. Try again later.", destinationWindow);
             }
         }
 
         // Any earlier live challenge dies here. Without this, three requests leave
         // three live challenges with five attempts each, and the attempt limit
         // becomes whatever an attacker is willing to pay for extra messages.
-        int superseded = challenges.supersedePending(
-                tenantId, ContactType.PHONE.name(), destinationHash, now);
+        int superseded = challenges.supersedePending(tenantId, ContactType.PHONE.name(), destinationHash, now);
 
         UUID challengeId = UUID.randomUUID();
         Instant expiresAt = now.plus(codeTtl);
@@ -153,9 +148,13 @@ public class VerificationChallengeIssuer {
                 SIGN_IN_PURPOSE,
                 ContactType.PHONE.name(),
                 destinationHash,
-                protection.protect(tenantId, DataClass.PERSONAL,
-                        new RecordRef(CHALLENGE_TABLE, "destination_encrypted", challengeId),
-                        destination).serialize(),
+                protection
+                        .protect(
+                                tenantId,
+                                DataClass.PERSONAL,
+                                new RecordRef(CHALLENGE_TABLE, "destination_encrypted", challengeId),
+                                destination)
+                        .serialize(),
                 codes.hash(tenantId, challengeId, code.value()),
                 maxAttempts,
                 now,
@@ -163,15 +162,19 @@ public class VerificationChallengeIssuer {
 
         // The challenge id and the tenant, and nothing else. Not the number, not
         // its hash, not the code (ADR 0029, and ADR 0028 on one-time codes).
-        log.info("Issued verification challenge {} for tenant {}; superseded {} live challenge(s)",
-                challengeId, tenantId, superseded);
+        log.info(
+                "Issued verification challenge {} for tenant {}; superseded {} live challenge(s)",
+                challengeId,
+                tenantId,
+                superseded);
 
-        return new Opened(challengeId, code.value(), code.requiresDelivery(), expiresAt,
-                maxAttempts, codeTtl);
+        return new Opened(challengeId, code.value(), code.requiresDelivery(), expiresAt, maxAttempts, codeTtl);
     }
 
     static ApiException tooManyRequests(String message, Duration retryAfter) {
-        return new ApiException(ErrorCode.RATE_LIMIT_EXCEEDED, message,
+        return new ApiException(
+                ErrorCode.RATE_LIMIT_EXCEEDED,
+                message,
                 Map.of("retryAfterSeconds", Math.max(1, retryAfter.toSeconds())));
     }
 
@@ -181,8 +184,13 @@ public class VerificationChallengeIssuer {
      * <p>The code is here only so the caller can hand it straight to the transport.
      * It is on no row, in no log, and in no response.
      */
-    public record Opened(UUID challengeId, String code, boolean requiresDelivery,
-            Instant expiresAt, int attemptsAllowed, Duration validFor) {
+    public record Opened(
+            UUID challengeId,
+            String code,
+            boolean requiresDelivery,
+            Instant expiresAt,
+            int attemptsAllowed,
+            Duration validFor) {
 
         @Override
         public String toString() {

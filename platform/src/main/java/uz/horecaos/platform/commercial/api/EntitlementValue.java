@@ -48,8 +48,7 @@ public record EntitlementValue(
         // An overage rate is a currency amount, and a currency amount without a
         // currency is the bug this codebase has already shipped once.
         if ((overageUnitPriceMinor == null) != (currency == null)) {
-            throw new IllegalArgumentException(
-                    "An overage price and its currency travel together: " + key.code());
+            throw new IllegalArgumentException("An overage price and its currency travel together: " + key.code());
         }
     }
 

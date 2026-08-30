@@ -3,7 +3,6 @@ package uz.horecaos.platform.commercial.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.commercial.api.CommercialConfigurationKeys;
 import uz.horecaos.platform.commercial.api.EnforcementMode;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
@@ -26,8 +25,8 @@ class EnforcementCeilingKeyTests {
 
     @Test
     void theRegistryAndTheCommercialModuleDeclareTheSameKey() {
-        ConfigurationKey<?> registered = ConfigurationKeys
-                .require(CommercialConfigurationKeys.ENFORCEMENT_CEILING_CODE);
+        ConfigurationKey<?> registered =
+                ConfigurationKeys.require(CommercialConfigurationKeys.ENFORCEMENT_CEILING_CODE);
         ConfigurationKey<String> used = CommercialConfigurationKeys.ENFORCEMENT_CEILING;
 
         assertThat(registered.valueType()).isEqualTo(used.valueType());
@@ -45,9 +44,10 @@ class EnforcementCeilingKeyTests {
         assertThat(CommercialConfigurationKeys.ENFORCEMENT_CEILING.defaultValue())
                 .isEqualTo(EnforcementMode.METER_ONLY.name());
         assertThat(EnforcementMode.valueOf(
-                ConfigurationKeys.require(CommercialConfigurationKeys.ENFORCEMENT_CEILING_CODE)
-                        .defaultValue().toString())
-                .canRefuse())
+                                ConfigurationKeys.require(CommercialConfigurationKeys.ENFORCEMENT_CEILING_CODE)
+                                        .defaultValue()
+                                        .toString())
+                        .canRefuse())
                 .as("a default that could refuse would enforce limits nobody has approved")
                 .isFalse();
     }

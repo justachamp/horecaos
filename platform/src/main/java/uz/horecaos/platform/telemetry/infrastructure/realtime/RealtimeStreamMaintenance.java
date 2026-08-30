@@ -1,7 +1,6 @@
 package uz.horecaos.platform.telemetry.infrastructure.realtime;
 
 import java.time.Clock;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -9,7 +8,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
-
 import uz.horecaos.platform.iam.api.GrantChanged;
 
 /**
@@ -34,8 +32,7 @@ import uz.horecaos.platform.iam.api.GrantChanged;
  * happen for a grant change that then rolls back.
  */
 @Component
-@ConditionalOnProperty(name = "horecaos.realtime.streams.enabled",
-        havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = "horecaos.realtime.streams.enabled", havingValue = "true", matchIfMissing = true)
 public class RealtimeStreamMaintenance {
 
     private static final Logger log = LoggerFactory.getLogger(RealtimeStreamMaintenance.class);
@@ -65,8 +62,10 @@ public class RealtimeStreamMaintenance {
     public void onGrantChanged(GrantChanged event) {
         int closed = registry.closeForPrincipal(event.principalSubject(), "GRANTS_CHANGED");
         if (closed > 0) {
-            log.info("Closed {} streams after a grant change; the client reconnects and is "
-                    + "re-authorized against its new grants", closed);
+            log.info(
+                    "Closed {} streams after a grant change; the client reconnects and is "
+                            + "re-authorized against its new grants",
+                    closed);
         }
     }
 }

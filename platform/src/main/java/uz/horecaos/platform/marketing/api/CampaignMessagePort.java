@@ -58,8 +58,7 @@ public interface CampaignMessagePort {
      *         empty map means the cost is unknown, which is not the same as zero
      *         and must not be reported as a number
      */
-    Map<String, String> templateBodies(UUID tenantId, UUID brandId, String templateKey,
-            String channel);
+    Map<String, String> templateBodies(UUID tenantId, UUID brandId, String templateKey, String channel);
 
     /**
      * Whether a real delivery path is present.

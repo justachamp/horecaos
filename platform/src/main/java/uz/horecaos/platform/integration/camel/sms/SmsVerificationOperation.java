@@ -3,7 +3,6 @@ package uz.horecaos.platform.integration.camel.sms;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
-
 import uz.horecaos.platform.customers.spi.VerificationCodeTransport.VerificationMessage;
 
 /**
@@ -38,7 +37,10 @@ public record SmsVerificationOperation(
         String text,
         Instant issuedAt) {
 
-    public enum Kind { SEND, RESOLVE }
+    public enum Kind {
+        SEND,
+        RESOLVE
+    }
 
     public SmsVerificationOperation {
         Objects.requireNonNull(kind, "A kind is required");
@@ -58,15 +60,21 @@ public record SmsVerificationOperation(
     }
 
     static SmsVerificationOperation send(VerificationMessage message, String text) {
-        return new SmsVerificationOperation(Kind.SEND, message.tenantId(), message.brandId(),
-                message.challengeId(), message.destination(), message.code(), text,
+        return new SmsVerificationOperation(
+                Kind.SEND,
+                message.tenantId(),
+                message.brandId(),
+                message.challengeId(),
+                message.destination(),
+                message.code(),
+                text,
                 message.issuedAt());
     }
 
     /** The same message, asked about rather than sent. Never sends anything. */
     SmsVerificationOperation resolving() {
-        return new SmsVerificationOperation(Kind.RESOLVE, tenantId, brandId, challengeId,
-                destination, code, text, issuedAt);
+        return new SmsVerificationOperation(
+                Kind.RESOLVE, tenantId, brandId, challengeId, destination, code, text, issuedAt);
     }
 
     @Override

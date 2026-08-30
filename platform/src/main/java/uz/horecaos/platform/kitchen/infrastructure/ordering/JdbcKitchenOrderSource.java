@@ -5,10 +5,8 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
-
 import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource;
 
 /**
@@ -47,7 +45,8 @@ public class JdbcKitchenOrderSource implements KitchenOrderSource {
                 FROM ordering.orders
                 WHERE tenant_id = :tenantId AND id = :id
                 """)
-                .param("tenantId", tenantId).param("id", orderId)
+                .param("tenantId", tenantId)
+                .param("id", orderId)
                 .query((row, number) -> new Header(
                         row.getObject("id", UUID.class),
                         row.getObject("tenant_id", UUID.class),
@@ -73,7 +72,8 @@ public class JdbcKitchenOrderSource implements KitchenOrderSource {
                 WHERE tenant_id = :tenantId AND order_id = :orderId
                 ORDER BY line_number
                 """)
-                .param("tenantId", tenantId).param("orderId", orderId)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
                 .query((row, number) -> new OrderLineForKitchen(
                         row.getObject("id", UUID.class),
                         row.getInt("line_number"),
@@ -84,17 +84,37 @@ public class JdbcKitchenOrderSource implements KitchenOrderSource {
                 .list();
 
         Header found = header.get();
-        return Optional.of(new OrderForKitchen(found.id(), found.tenantId(), found.brandId(),
-                found.locationId(), found.publicOrderNumber(), found.fulfillmentMode(),
-                found.channelCode(), found.status(), found.promisedAt(), found.prepMinutes(),
-                found.travelMinutes(), found.version(), lines));
+        return Optional.of(new OrderForKitchen(
+                found.id(),
+                found.tenantId(),
+                found.brandId(),
+                found.locationId(),
+                found.publicOrderNumber(),
+                found.fulfillmentMode(),
+                found.channelCode(),
+                found.status(),
+                found.promisedAt(),
+                found.prepMinutes(),
+                found.travelMinutes(),
+                found.version(),
+                lines));
     }
 
     private static Instant instant(OffsetDateTime value) {
         return value == null ? null : value.toInstant();
     }
 
-    private record Header(UUID id, UUID tenantId, UUID brandId, UUID locationId,
-            String publicOrderNumber, String fulfillmentMode, String channelCode, String status,
-            Instant promisedAt, Integer prepMinutes, Integer travelMinutes, int version) { }
+    private record Header(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            String publicOrderNumber,
+            String fulfillmentMode,
+            String channelCode,
+            String status,
+            Instant promisedAt,
+            Integer prepMinutes,
+            Integer travelMinutes,
+            int version) {}
 }

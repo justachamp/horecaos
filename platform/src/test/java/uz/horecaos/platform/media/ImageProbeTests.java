@@ -1,19 +1,16 @@
 package uz.horecaos.platform.media;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-
 import javax.imageio.ImageIO;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import uz.horecaos.platform.media.domain.ImageProbe;
 import uz.horecaos.platform.media.domain.ProbedImage;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Reading an image's own header (ADR 0010).
@@ -46,7 +43,8 @@ class ImageProbeTests {
         // that counts pixels — and differ by the two bytes a probe that stopped
         // at byte 24 never read.
         ProbedImage eightBitRgb = ImageProbe.probe(pngHeader(8000, 5000, 8, 2)).orElseThrow();
-        ProbedImage sixteenBitRgba = ImageProbe.probe(pngHeader(8000, 5000, 16, 6)).orElseThrow();
+        ProbedImage sixteenBitRgba =
+                ImageProbe.probe(pngHeader(8000, 5000, 16, 6)).orElseThrow();
 
         assertThat(eightBitRgb.pixels()).isEqualTo(sixteenBitRgba.pixels());
         assertThat(eightBitRgb.decodedBytes()).isEqualTo(120_000_000L);
@@ -196,18 +194,17 @@ class ImageProbeTests {
     void readsAvifBitDepth() {
         // ispe is dimensions and nothing else, so an AVIF probe that stopped
         // there would have exactly the hole IHDR's bytes 24 and 25 closed.
-        assertThat(bytesPerPixel(avifWith(0x00))).isEqualTo(4);          // 8-bit colour
-        assertThat(bytesPerPixel(avifWith(0x40))).isEqualTo(8);          // 10-bit colour
-        assertThat(bytesPerPixel(avifWith(0x60))).isEqualTo(8);          // 12-bit colour
-        assertThat(bytesPerPixel(avifWith(0x10))).isEqualTo(1);          // 8-bit monochrome
-        assertThat(bytesPerPixel(avifWith(0x50))).isEqualTo(2);          // 10-bit monochrome
+        assertThat(bytesPerPixel(avifWith(0x00))).isEqualTo(4); // 8-bit colour
+        assertThat(bytesPerPixel(avifWith(0x40))).isEqualTo(8); // 10-bit colour
+        assertThat(bytesPerPixel(avifWith(0x60))).isEqualTo(8); // 12-bit colour
+        assertThat(bytesPerPixel(avifWith(0x10))).isEqualTo(1); // 8-bit monochrome
+        assertThat(bytesPerPixel(avifWith(0x50))).isEqualTo(2); // 10-bit monochrome
     }
 
     @Test
     @DisplayName("HTML is not an image however it is labelled")
     void rejectsHtml() {
-        byte[] html = "<html><script>fetch('https://evil.example')</script></html>"
-                .getBytes(StandardCharsets.UTF_8);
+        byte[] html = "<html><script>fetch('https://evil.example')</script></html>".getBytes(StandardCharsets.UTF_8);
 
         assertThat(ImageProbe.probe(html)).isEmpty();
     }
@@ -226,8 +223,8 @@ class ImageProbeTests {
     void rejectsTruncatedPng() {
         // The signature is eight bytes anyone can copy. Without a parseable IHDR
         // there is nothing to serve, so a header-only file is not an image.
-        byte[] truncated = new byte[]{(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A,
-            0, 0, 0, 13, 'I', 'H', 'D', 'R'};
+        byte[] truncated =
+                new byte[] {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 'I', 'H', 'D', 'R'};
 
         assertThat(ImageProbe.probe(truncated)).isEmpty();
     }
@@ -264,9 +261,37 @@ class ImageProbeTests {
 
     /** A signature and an IHDR: the twenty-six bytes every cost decision is made from. */
     private static byte[] pngHeader(int width, int height, int bitDepth, int colourType) {
-        byte[] png = new byte[]{(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A,
-            0, 0, 0, 13, 'I', 'H', 'D', 'R',
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+        byte[] png = new byte[] {
+            (byte) 0x89,
+            'P',
+            'N',
+            'G',
+            0x0D,
+            0x0A,
+            0x1A,
+            0x0A,
+            0,
+            0,
+            0,
+            13,
+            'I',
+            'H',
+            'D',
+            'R',
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        };
         writeInt(png, 16, width);
         writeInt(png, 20, height);
         png[24] = (byte) bitDepth;
@@ -283,9 +308,9 @@ class ImageProbeTests {
         writeInt(avif, 48, 1024);
         writeInt(avif, 52, 768);
         write(avif, 60, "av1C");
-        avif[64] = (byte) 0x81;              // marker and version
-        avif[65] = 0x00;                     // seq_profile and level
-        avif[66] = (byte) av1cFlags;         // tier, high_bitdepth, twelve_bit, monochrome
+        avif[64] = (byte) 0x81; // marker and version
+        avif[65] = 0x00; // seq_profile and level
+        avif[66] = (byte) av1cFlags; // tier, high_bitdepth, twelve_bit, monochrome
         return avif;
     }
 

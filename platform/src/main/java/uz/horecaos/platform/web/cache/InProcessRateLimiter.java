@@ -6,7 +6,6 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -139,8 +138,11 @@ public class InProcessRateLimiter implements RateLimiter {
     private Decision saturated(Policy policy, Instant now) {
         Instant due = nextSaturationLog.get();
         if (!now.isBefore(due) && nextSaturationLog.compareAndSet(due, now.plus(SWEEP_INTERVAL))) {
-            log.warn("Rate limiter is holding its ceiling of {} depleted buckets; limits are "
-                    + "failing {} until it drains", MAXIMUM_BUCKETS, policy.failOpen() ? "open" : "closed");
+            log.warn(
+                    "Rate limiter is holding its ceiling of {} depleted buckets; limits are "
+                            + "failing {} until it drains",
+                    MAXIMUM_BUCKETS,
+                    policy.failOpen() ? "open" : "closed");
         }
         return policy.failOpen() ? Decision.allowed(0) : Decision.denied(retryAfter(policy));
     }
@@ -162,5 +164,5 @@ public class InProcessRateLimiter implements RateLimiter {
      * holder, so both the consume and the eviction can be a compare-and-set
      * against the exact state that was read.
      */
-    private record Bucket(Policy policy, double tokens, Instant lastRefill) { }
+    private record Bucket(Policy policy, double tokens, Instant lastRefill) {}
 }
