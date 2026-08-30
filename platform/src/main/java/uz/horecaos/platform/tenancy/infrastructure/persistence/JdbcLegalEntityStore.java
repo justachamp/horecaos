@@ -17,6 +17,7 @@ import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.tenancy.api.FiscalSeller;
 import uz.horecaos.platform.tenancy.api.LegalEntityDirectory;
 import uz.horecaos.platform.tenancy.api.LegalEntityId;
+import uz.horecaos.platform.tenancy.api.LegalEntitySummary;
 import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.domain.LegalEntity;
 import uz.horecaos.platform.tenancy.domain.LocationFiscalAssignment;
@@ -128,6 +129,35 @@ public class JdbcLegalEntityStore implements LegalEntityDirectory {
                 .param("locationId", locationId)
                 .param("businessDate", businessDate)
                 .query(JdbcLegalEntityStore::toSeller)
+                .optional();
+    }
+
+    /**
+     * The narrow, id-keyed answer {@link LegalEntityDirectory#summary} promises.
+     *
+     * <p>A separate query rather than a call to {@link #find}, deliberately:
+     * {@link #find} returns the full mutable {@link LegalEntity} aggregate that
+     * only {@code tenancy.application} may hold, and reusing it here would put a
+     * domain type on the interface another module implements against. This reads
+     * only the two columns {@link LegalEntitySummary} carries.
+     */
+    @Override
+    public Optional<LegalEntitySummary> summary(UUID tenantId, UUID legalEntityId) {
+        if (!isWired()) {
+            return Optional.empty();
+        }
+        return jdbc.sql("""
+                SELECT id, tenant_id, code, status
+                  FROM tenant.legal_entities
+                 WHERE tenant_id = :tenantId AND id = :id
+                """)
+                .param("tenantId", tenantId)
+                .param("id", legalEntityId)
+                .query((row, number) -> new LegalEntitySummary(
+                        row.getObject("id", UUID.class),
+                        row.getObject("tenant_id", UUID.class),
+                        row.getString("code"),
+                        OperatingUnitStatus.valueOf(row.getString("status")) == OperatingUnitStatus.ACTIVE))
                 .optional();
     }
 
