@@ -1,0 +1,385 @@
+{
+  "components" : {
+    "schemas" : {
+      "Line" : {
+        "properties" : {
+          "externalItemReference" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "lineAmountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "name" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "quantity" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "taxMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "unitAmountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "externalItemReference", "lineAmountMinor", "name", "unitAmountMinor" ],
+        "type" : "object"
+      },
+      "PushRequest" : {
+        "properties" : {
+          "discountFunding" : {
+            "type" : "string"
+          },
+          "displayCode" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "externalOrderId" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "fulfillmentMode" : {
+            "maxLength" : 16,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "handoverCode" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Line"
+            },
+            "maxItems" : 2147483647,
+            "minItems" : 1,
+            "type" : "array"
+          },
+          "pickupExpectedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "totals" : {
+            "$ref" : "#/components/schemas/Totals"
+          },
+          "venueReference" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "externalOrderId", "fulfillmentMode", "lines", "totals", "venueReference" ],
+        "type" : "object"
+      },
+      "PushResponse" : {
+        "properties" : {
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "publicOrderNumber" : {
+            "type" : "string"
+          },
+          "rejectionCode" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "unmappedItems" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "Totals" : {
+        "properties" : {
+          "currency" : {
+            "maxLength" : 3,
+            "minLength" : 3,
+            "type" : "string"
+          },
+          "discountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "feeMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "subtotalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "taxMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "currency", "subtotalMinor", "totalMinor" ],
+        "type" : "object"
+      }
+    },
+    "securitySchemes" : {
+      "bearerAuth" : {
+        "bearerFormat" : "JWT",
+        "description" : "Keycloak access token issued for the horecaos-api audience",
+        "scheme" : "bearer",
+        "type" : "http"
+      }
+    }
+  },
+  "info" : {
+    "description" : "Tenant-aware APIs for the HorecaOS SaaS commerce and delivery platform.",
+    "title" : "HorecaOS Platform API",
+    "version" : "v1"
+  },
+  "openapi" : "3.1.0",
+  "paths" : {
+    "/api/v1/partner/tenants/{tenantId}/orders" : {
+      "post" : {
+        "description" : "Idempotent on (venue, externalOrderId). A repeat returns the order the first push created, with 200 rather than 201, and never creates a second.",
+        "operationId" : "push",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PushRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PushResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Push an order",
+        "tags" : [ "Partner API" ]
+      }
+    },
+    "/providers/payme/{binding}" : {
+      "delete" : {
+        "operationId" : "handle_3",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "binding",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "payme-merchant-api-controller" ]
+      },
+      "get" : {
+        "operationId" : "handle",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "binding",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "payme-merchant-api-controller" ]
+      },
+      "head" : {
+        "operationId" : "handle_5",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "binding",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "payme-merchant-api-controller" ]
+      },
+      "options" : {
+        "operationId" : "handle_6",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "binding",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "payme-merchant-api-controller" ]
+      },
+      "patch" : {
+        "operationId" : "handle_4",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "binding",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "payme-merchant-api-controller" ]
+      },
+      "post" : {
+        "operationId" : "handle_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "binding",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "payme-merchant-api-controller" ]
+      },
+      "put" : {
+        "operationId" : "handle_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "binding",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : { },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "payme-merchant-api-controller" ]
+      }
+    }
+  },
+  "security" : [ {
+    "bearerAuth" : [ ]
+  } ],
+  "servers" : [ {
+    "description" : "Generated server url",
+    "url" : "http://localhost"
+  } ],
+  "tags" : [ {
+    "description" : "Inbound aggregator orders (ADR 0040)",
+    "name" : "Partner API"
+  } ]
+}

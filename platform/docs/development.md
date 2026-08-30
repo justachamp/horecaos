@@ -88,6 +88,12 @@ http://localhost:8080/v3/api-docs
 http://localhost:8080/v3/api-docs.yaml
 ```
 
+Swagger UI's group selector (and `/v3/api-docs/<group>`) also serves four
+additive, filtered views of the same document — `storefront`, `control-plane`,
+`operations`, `providers` — each with its own baseline and generated
+TypeScript client. See [api/README.md](../api/README.md#per-surface-groups)
+for the group-to-frontend mapping and the one-group-per-path rule.
+
 Health and API-documentation endpoints are public. Business endpoints require
 a JWT issued by the local `horecaos` realm for the `horecaos-api` audience. Swagger
 UI accepts that token through **Authorize** and deliberately does not retain it

@@ -1,0 +1,71 @@
+package uz.horecaos.platform.configuration;
+
+import java.util.List;
+
+/**
+ * The path-prefix membership of each per-surface OpenAPI document (ADR 0031).
+ *
+ * <p>{@link OpenApiConfiguration} registers one Springdoc {@code GroupedOpenApi} bean per
+ * constant here, published at {@code /v3/api-docs/<id>} alongside the full, unchanged v1
+ * document at {@code /v3/api-docs}. {@code OpenApiContractTests} asserts every path in the full
+ * document is covered by exactly one constant, so a controller landing under an uncategorised
+ * prefix fails the build instead of silently missing from every per-surface document and its
+ * generated TypeScript client.
+ *
+ * <p>The four groups fold ADR 0031's five stated surfaces (platform-admin, control-plane,
+ * operations, storefront, customer) plus the partner surface (ADR 0040) down to the three
+ * frontends that exist today (storefront, operations, control-plane) plus a fourth for every
+ * externally-initiated integration (payment provider callbacks and inbound partner/marketplace
+ * traffic). {@code platform-admin} and the courier's own self-service endpoints have no
+ * dedicated frontend yet, so they fall into {@code operations} by elimination — see
+ * {@code api/README.md} for the reasoning and the open question of whether that should change.
+ */
+enum OpenApiSurface {
+
+    /** Public and customer-authenticated commerce; the {@code storefront} Angular app and mobile. */
+    STOREFRONT("storefront", "/api/v1/storefront/**"),
+
+    /** Tenant administration; the {@code control-plane} Angular app. */
+    CONTROL_PLANE("control-plane", "/api/v1/control-plane/**"),
+
+    /**
+     * Externally-initiated integration traffic: payment provider callbacks (Click, Payme) and
+     * inbound partner/marketplace order pushes (ADR 0040). No frontend consumes this group; it
+     * exists so the contract of every non-tenant-staff, non-customer caller is reviewed and
+     * versioned like every other surface.
+     */
+    PROVIDERS("providers", "/providers/**", "/api/v1/partner/**"),
+
+    /**
+     * Brand and location staff, plus everything operator-facing that is not one of the other
+     * three groups: today {@code /api/v1/tenants/**} (kitchen, dine-in, inventory, orders,
+     * reporting, and more), {@code /api/v1/session/**}, the {@code operations} Angular app's own
+     * {@code /api/v1/operations/**}, the platform-staff {@code /api/v1/platform-admin/**}, and
+     * the courier's own {@code /api/v1/courier/**}.
+     */
+    OPERATIONS(
+            "operations",
+            "/api/v1/tenants/**",
+            "/api/v1/session/**",
+            "/api/v1/operations/**",
+            "/api/v1/courier/**",
+            "/api/v1/platform-admin/**");
+
+    private final String id;
+    private final List<String> pathPatterns;
+
+    OpenApiSurface(String id, String... pathPatterns) {
+        this.id = id;
+        this.pathPatterns = List.of(pathPatterns);
+    }
+
+    /** The stable group identifier; also the URL segment at {@code /v3/api-docs/<id>}. */
+    String id() {
+        return id;
+    }
+
+    /** Ant-style path patterns, as passed to Springdoc's {@code GroupedOpenApi.pathsToMatch}. */
+    List<String> pathPatterns() {
+        return pathPatterns;
+    }
+}

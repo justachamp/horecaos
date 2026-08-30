@@ -1,0 +1,3344 @@
+{
+  "components" : {
+    "schemas" : {
+      "AddressFields" : {
+        "properties" : {
+          "apartment" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "city" : {
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "district" : {
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "entrance" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "floor" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "landmark" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "line1" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "line2" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "postalCode" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "AddressResponse" : {
+        "properties" : {
+          "addressId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "coordinateSource" : {
+            "enum" : [ "NOT_GEOCODED", "LANDMARK_ONLY", "GEOCODER", "CUSTOMER_PIN", "OPERATOR_PIN", "LEGACY_UNSOURCED" ],
+            "type" : "string"
+          },
+          "deliveryInstructions" : {
+            "type" : "string"
+          },
+          "fields" : {
+            "$ref" : "#/components/schemas/AddressFields"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "latitude" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "longitude" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "AdmissionResponse" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "guestToken" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "mode" : {
+            "type" : "string"
+          },
+          "openSessionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tableCode" : {
+            "type" : "string"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ApiMoney" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "currency" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "BalanceResponse" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "balance" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "held" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "nextExpiryAmount" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "nextExpiryAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "spendable" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          }
+        },
+        "type" : "object"
+      },
+      "CancelRequest" : {
+        "properties" : {
+          "reasonCode" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reasonCode" ],
+        "type" : "object"
+      },
+      "CartLineResponse" : {
+        "properties" : {
+          "hasCustomerNote" : {
+            "type" : "boolean"
+          },
+          "lineKey" : {
+            "type" : "string"
+          },
+          "quantity" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CartResponse" : {
+        "properties" : {
+          "cartId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "contextHash" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "fulfillmentMode" : {
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CartLineResponse"
+            },
+            "type" : "array"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "quoteId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "ChallengeResponse" : {
+        "properties" : {
+          "attemptsAllowed" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "challengeId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "codeLength" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CheckoutRequest" : {
+        "properties" : {
+          "cartId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "cartVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "contextHash" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "paymentMethodCode" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "quoteId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "redeemFromBalanceMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "cartId", "contextHash", "paymentMethodCode", "quoteId" ],
+        "type" : "object"
+      },
+      "CheckoutResponse" : {
+        "properties" : {
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "outcome" : {
+            "type" : "string"
+          },
+          "publicOrderNumber" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "warnings" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "ContactPointSummary" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "primary" : {
+            "type" : "boolean"
+          },
+          "type" : {
+            "enum" : [ "PHONE", "EMAIL" ],
+            "type" : "string"
+          },
+          "verificationStatus" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CreateCartRequest" : {
+        "properties" : {
+          "channel" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "fulfillmentMode" : {
+            "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "channel", "fulfillmentMode", "locationId" ],
+        "type" : "object"
+      },
+      "CustomerSessionResponse" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "created" : {
+            "type" : "boolean"
+          },
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "token" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "DeliveryFeeView" : {
+        "properties" : {
+          "available" : {
+            "type" : "boolean"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "distanceMeters" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "distanceSource" : {
+            "type" : "string"
+          },
+          "feeMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "freeDeliveryFromMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "minBasketMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "outcome" : {
+            "type" : "string"
+          },
+          "reasonCode" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "DestinationRequest" : {
+        "properties" : {
+          "addressId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "deliveryNote" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "recipientName" : {
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "recipientPhone" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "addressId", "recipientName", "recipientPhone" ],
+        "type" : "object"
+      },
+      "DestinationResponse" : {
+        "properties" : {
+          "addressId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "cartId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "EntryResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "balanceAfterMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "occurredAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reasonCode" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ExchangeRequest" : {
+        "properties" : {
+          "tableToken" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "tableToken" ],
+        "type" : "object"
+      },
+      "FaqEntryResponse" : {
+        "properties" : {
+          "answer" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "entryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "question" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "FaqResponse" : {
+        "properties" : {
+          "categoryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "entries" : {
+            "items" : {
+              "$ref" : "#/components/schemas/FaqEntryResponse"
+            },
+            "type" : "array"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "FavouritesResponse" : {
+        "properties" : {
+          "productIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "GrantResponse" : {
+        "properties" : {
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "grant" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "GuestBillResponse" : {
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "orderIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "roundCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "sessionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "totalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "MenuCategory" : {
+        "properties" : {
+          "categoryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "parentCategoryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "productIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "MenuModifierGroup" : {
+        "properties" : {
+          "allowSameOptionMultipleTimes" : {
+            "type" : "boolean"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "maximumSelections" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "minimumSelections" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "modifierGroupId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "options" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuModifierOption"
+            },
+            "type" : "array"
+          },
+          "required" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "MenuModifierOption" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "maximumQuantity" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "optionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "MenuProduct" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "imageUrls" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "mediaAssetIds" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "modifierGroupIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "productId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "variants" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuVariant"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "MenuVariant" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "isDefault" : {
+            "type" : "boolean"
+          },
+          "orderable" : {
+            "type" : "boolean"
+          },
+          "sku" : {
+            "type" : "string"
+          },
+          "unitCode" : {
+            "type" : "string"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "MoveLocationRequest" : {
+        "properties" : {
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "locationId" ],
+        "type" : "object"
+      },
+      "OrderLineResponse" : {
+        "properties" : {
+          "finalAmountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "lineNumber" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "modifiers" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "productName" : {
+            "type" : "string"
+          },
+          "quantity" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "unitAmountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "variantName" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "OrderResponse" : {
+        "properties" : {
+          "confirmedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OrderLineResponse"
+            },
+            "type" : "array"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "publicOrderNumber" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "subtotalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "taxMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "warnings" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "OrderStateResponse" : {
+        "properties" : {
+          "applied" : {
+            "type" : "boolean"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "OrderSummaryResponse" : {
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "fulfillmentMode" : {
+            "type" : "string"
+          },
+          "fulfillmentStatus" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "paymentStatus" : {
+            "type" : "string"
+          },
+          "placedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "promisedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "publicOrderNumber" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "totalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "PageOrderSummaryResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OrderSummaryResponse"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PaymentMethodsResponse" : {
+        "properties" : {
+          "cartId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "channelId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "fulfillmentMode" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "methodCodes" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "warnings" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "PaymentSessionRequest" : {
+        "properties" : {
+          "language" : {
+            "maxLength" : 2,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "presentation" : {
+            "maxLength" : 24,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "pushRecipient" : {
+            "maxLength" : 12,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "returnUrl" : {
+            "maxLength" : 512,
+            "minLength" : 0,
+            "pattern" : "^https://.*",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PaymentSessionResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "attemptId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "checkoutUrl" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "merchantTransId" : {
+            "type" : "string"
+          },
+          "presentation" : {
+            "type" : "string"
+          },
+          "presentationCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "provider" : {
+            "type" : "string"
+          },
+          "qrPayload" : {
+            "type" : "string"
+          },
+          "rePresented" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "PickupLocation" : {
+        "properties" : {
+          "acceptsScheduledOrders" : {
+            "type" : "boolean"
+          },
+          "addressLine" : {
+            "type" : "string"
+          },
+          "available" : {
+            "type" : "boolean"
+          },
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "brandName" : {
+            "type" : "string"
+          },
+          "city" : {
+            "type" : "string"
+          },
+          "distanceMeters" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "district" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationName" : {
+            "type" : "string"
+          },
+          "preparationMinutes" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PickupLocations" : {
+        "properties" : {
+          "locations" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PickupLocation"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "PricedCartResponse" : {
+        "properties" : {
+          "cartId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "cartVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "contextHash" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "quoteId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "subtotalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "taxMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "ProfileResponse" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "contactPoints" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ContactPointSummary"
+            },
+            "type" : "array"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "identityMode" : {
+            "type" : "string"
+          },
+          "identityPolicyVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "preferredLocale" : {
+            "type" : "string"
+          },
+          "preferredTimezone" : {
+            "type" : "string"
+          },
+          "profileScope" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "PutLineRequest" : {
+        "properties" : {
+          "customerNote" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "modifierOptionIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "maxItems" : 20,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "quantity" : {
+            "format" : "int32",
+            "maximum" : 999,
+            "type" : "integer"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "variantId" ],
+        "type" : "object"
+      },
+      "RegisterRequest" : {
+        "properties" : {
+          "grant" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "grant" ],
+        "type" : "object"
+      },
+      "RegistrationResponse" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "created" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "RequestCodeRequest" : {
+        "properties" : {
+          "phone" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "phone" ],
+        "type" : "object"
+      },
+      "SaveAddressRequest" : {
+        "properties" : {
+          "coordinateSource" : {
+            "enum" : [ "NOT_GEOCODED", "LANDMARK_ONLY", "GEOCODER", "CUSTOMER_PIN", "OPERATOR_PIN", "LEGACY_UNSOURCED" ],
+            "type" : "string"
+          },
+          "deliveryInstructions" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "fields" : {
+            "$ref" : "#/components/schemas/AddressFields"
+          },
+          "label" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "latitude" : {
+            "format" : "double",
+            "maximum" : 90,
+            "minimum" : -90,
+            "type" : "number"
+          },
+          "longitude" : {
+            "format" : "double",
+            "maximum" : 180,
+            "minimum" : -180,
+            "type" : "number"
+          }
+        },
+        "required" : [ "coordinateSource", "fields" ],
+        "type" : "object"
+      },
+      "ServiceabilityView" : {
+        "properties" : {
+          "acceptsScheduledOrders" : {
+            "type" : "boolean"
+          },
+          "available" : {
+            "type" : "boolean"
+          },
+          "nextAvailableAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "preparationMinutes" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "reason" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "SignInRequest" : {
+        "properties" : {
+          "grant" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "grant" ],
+        "type" : "object"
+      },
+      "SocialLinkResponse" : {
+        "properties" : {
+          "imageUrl" : {
+            "type" : "string"
+          },
+          "linkId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "platform" : {
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "StorefrontMenu" : {
+        "properties" : {
+          "categories" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuCategory"
+            },
+            "type" : "array"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "locale" : {
+            "type" : "string"
+          },
+          "modifierGroups" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuModifierGroup"
+            },
+            "type" : "array"
+          },
+          "products" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuProduct"
+            },
+            "type" : "array"
+          },
+          "publicationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "SubmitCodeRequest" : {
+        "properties" : {
+          "code" : {
+            "maxLength" : 16,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "code" ],
+        "type" : "object"
+      },
+      "UpdateProfileRequest" : {
+        "properties" : {
+          "displayName" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "preferredLocale" : {
+            "maxLength" : 16,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "preferredTimezone" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      }
+    },
+    "securitySchemes" : {
+      "bearerAuth" : {
+        "bearerFormat" : "JWT",
+        "description" : "Keycloak access token issued for the horecaos-api audience",
+        "scheme" : "bearer",
+        "type" : "http"
+      }
+    }
+  },
+  "info" : {
+    "description" : "Tenant-aware APIs for the HorecaOS SaaS commerce and delivery platform.",
+    "title" : "HorecaOS Platform API",
+    "version" : "v1"
+  },
+  "openapi" : "3.1.0",
+  "paths" : {
+    "/api/v1/storefront/dine-in/qr/token-exchanges" : {
+      "post" : {
+        "description" : "Scanning authorises nothing by itself. The printed token is exchanged once for a short-lived, table-scoped token, and that is what every subsequent call carries. Rotating the table's code revokes every token minted from it in the same transaction. Every failure — unknown, rotated, archived, branch not configured — answers identically, so a caller holding a guessed value learns nothing from the difference.",
+        "operationId" : "exchange",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ExchangeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AdmissionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Exchange a scanned table code for a guest token",
+        "tags" : [ "QR dine-in" ]
+      }
+    },
+    "/api/v1/storefront/dine-in/sessions/{sessionId}" : {
+      "get" : {
+        "description" : "The session id is checked against the table the guest's token was minted for, not merely parsed. A guest who edits it reaches nothing.",
+        "operationId" : "bill",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "sessionId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "X-Dine-In-Token",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/GuestBillResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The running bill at the guest's own table",
+        "tags" : [ "QR dine-in" ]
+      }
+    },
+    "/api/v1/storefront/dine-in/sessions/{sessionId}/bill-requests" : {
+      "post" : {
+        "description" : "Moves the session to BILL_REQUESTED, which is a request rather than a payment: nothing is captured here, and a party that then orders one more round moves it back.",
+        "operationId" : "requestBill",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "sessionId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "X-Dine-In-Token",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/GuestBillResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask for the bill",
+        "tags" : [ "QR dine-in" ]
+      }
+    },
+    "/api/v1/storefront/loyalty/tenants/{tenantId}/accounts/{accountId}" : {
+      "get" : {
+        "description" : "The balance, what is spendable today, what an unfinished checkout is holding, and the next lot to expire. Points are not money: they cannot be withdrawn, cannot be transferred, and have no value outside the platform.",
+        "operationId" : "balance",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BalanceResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One points balance",
+        "tags" : [ "Loyalty" ]
+      }
+    },
+    "/api/v1/storefront/loyalty/tenants/{tenantId}/accounts/{accountId}/entries" : {
+      "get" : {
+        "description" : "Every entry that produced the balance, newest first, each with the balance it left behind. This is what a disputed figure is answered from.",
+        "operationId" : "entries",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/EntryResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The movements behind a balance",
+        "tags" : [ "Loyalty" ]
+      }
+    },
+    "/api/v1/storefront/pickup-locations" : {
+      "get" : {
+        "description" : "Returns at most twenty active pickup branches, nearest first. Each result carries the same current serviceability answer the checkout path will later re-resolve authoritatively.",
+        "operationId" : "nearbyPickupLocations",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "lat",
+          "required" : true,
+          "schema" : {
+            "format" : "double",
+            "type" : "number"
+          }
+        }, {
+          "in" : "query",
+          "name" : "lon",
+          "required" : true,
+          "schema" : {
+            "format" : "double",
+            "type" : "number"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "default" : 10,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PickupLocations"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Find the nearest pickup locations with a published storefront menu",
+        "tags" : [ "Storefront pickup locations" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts" : {
+      "post" : {
+        "description" : "The cart is bound to this location and channel for its whole life. Moving location rebuilds it, because catalog, availability, tax, fee and promise all change with the branch.",
+        "operationId" : "createCart",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateCartRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CartResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Open a cart at one location",
+        "tags" : [ "Storefront ordering" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}" : {
+      "get" : {
+        "description" : "Scoped to the caller's own account. A cart id is not a bearer token: knowing one does not read the basket it belongs to.",
+        "operationId" : "readCart",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "cartId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CartResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Read a cart",
+        "tags" : [ "Storefront ordering" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/destination" : {
+      "get" : {
+        "description" : "Answers with the caller's own address id and never with the address. The doorstep is personal data and is read from ADR 0015's own endpoint, where the decrypt is recorded against a purpose. A sub-resource rather than a field on the cart, so reading a basket stays one query and a cart response can never grow a field that is somebody's home.",
+        "operationId" : "readDestination",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "cartId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DestinationResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Which saved address this cart is going to",
+        "tags" : [ "Storefront ordering" ]
+      },
+      "put" : {
+        "description" : "Names one of the caller's own saved addresses, never an address typed into this request: ADR 0015 owns what an address is, including whether it has a coordinate and why. The chosen address is copied on to the cart, so editing or archiving it afterwards cannot change where an order in flight goes. Clears any attached quote, because ADR 0037 prices delivery from the destination and a basket priced to one door is not priced to another.",
+        "operationId" : "setDestination",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "cartId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DestinationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CartResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Say where a delivery cart is going",
+        "tags" : [ "Storefront ordering" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/lines/{lineKey}" : {
+      "delete" : {
+        "operationId" : "removeLine",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "cartId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "lineKey",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CartResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Remove a line",
+        "tags" : [ "Storefront ordering" ]
+      },
+      "put" : {
+        "description" : "Clears any attached quote in the same statement that bumps the cart version. A cart holding a price for contents it no longer has is the shortest path to charging for a basket nobody agreed to.",
+        "operationId" : "putLine",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "cartId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "lineKey",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PutLineRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CartResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Add or change a line",
+        "tags" : [ "Storefront ordering" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/location" : {
+      "post" : {
+        "description" : "Returns a new cart with the same lines and no price. The old cart is abandoned: ADR 0019 never carries a cart across locations, because the prices shown would be prices that do not apply.",
+        "operationId" : "moveLocation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "cartId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/MoveLocationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CartResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rebuild this cart at another location",
+        "tags" : [ "Storefront ordering" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/payment-methods" : {
+      "get" : {
+        "description" : "Only methods that would actually work: the channel offers them here, this build implements them, a customer may choose them, and a merchant account resolves for this branch today. A method whose provider binding is suspended is absent rather than listed and refused, because an unusable method offered to a customer is a checkout that fails at its last step. The codes map to customer wording in the storefront, the way a serviceability reason does.",
+        "operationId" : "paymentMethods",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "cartId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentMethodsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "What this cart may be paid with",
+        "tags" : [ "Storefront ordering" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/pricing" : {
+      "post" : {
+        "description" : "Returns the total and a context hash valid for 15 minutes. Checkout accepts only this quote for this cart, so a client cannot present a quote priced for a different, cheaper basket.",
+        "operationId" : "price",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "cartId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PricedCartResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Price the cart and bind the quote to it",
+        "tags" : [ "Storefront ordering" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/checkouts" : {
+      "post" : {
+        "description" : "Idempotent under the tenant-scoped Idempotency-Key. Repeating the request returns the same order; a settled business rejection returns the same rejection rather than running again against a changed cart.",
+        "operationId" : "checkout",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : true,
+          "schema" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CheckoutRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CheckoutResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Turn a priced cart into an order",
+        "tags" : [ "Storefront ordering" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/registrations" : {
+      "post" : {
+        "description" : "The identity comes from the caller's own token — issuer and subject, never a phone number, because a recycled number would otherwise hand one person another's order history. The grant is single-use and is only honoured at the brand it was proved for.",
+        "operationId" : "register",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RegistrationResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Turn a verified number and a token into a customer account",
+        "tags" : [ "Customer identity" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/sessions" : {
+      "post" : {
+        "description" : "The step that was missing. Redeems a single-use grant, finds or creates the account the proven number belongs to, and returns an opaque bearer the storefront presents on every later call. Unauthenticated, because a customer signing in for the first time has nothing to authenticate with — the grant is the authorisation, and it is spent here.",
+        "operationId" : "signIn",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SignInRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CustomerSessionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Turn a proven number into a session",
+        "tags" : [ "Customer identity" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/sessions/current" : {
+      "delete" : {
+        "description" : "Ends the session the caller is holding, and only that one. The session is named by the token in the Authorization header rather than by an id in the path, so there is nothing to edit in order to end somebody else's. Tapping it twice is not an error.",
+        "operationId" : "signOut",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Sign out",
+        "tags" : [ "Customer identity" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/verification-challenges" : {
+      "post" : {
+        "description" : "Answers the same way whether or not the number already has an account: nothing on this path reads the customer tables, so it cannot leak what it never looks at. Limited per number in the database and per caller in memory, and a new challenge retires any earlier one for the same number.",
+        "operationId" : "requestCode",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RequestCodeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChallengeResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask for a one-time code",
+        "tags" : [ "Customer identity" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/verification-challenges/{challengeId}/attempts" : {
+      "post" : {
+        "description" : "Costs one of the challenge's attempts however it turns out. A wrong code says how many attempts are left; an unknown, expired, superseded, exhausted or already-used challenge all answer identically. Success returns a single-use grant, which is proof of the number and not a session. POST /sessions is what exchanges it for one (ADR 0051).",
+        "operationId" : "submitCode",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "challengeId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SubmitCodeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/GrantResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Submit a code",
+        "tags" : [ "Customer identity" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/delivery-fee" : {
+      "get" : {
+        "description" : "Returns one fee, or one stable refusal code and no fee. An address outside every zone of this branch is refused here and never re-homed to a branch that does cover it: substituting one changes the menu, the prices, the preparation time and eventually the legal entity on the receipt.",
+        "operationId" : "quote",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "lat",
+          "required" : true,
+          "schema" : {
+            "format" : "double",
+            "type" : "number"
+          }
+        }, {
+          "in" : "query",
+          "name" : "lon",
+          "required" : true,
+          "schema" : {
+            "format" : "double",
+            "type" : "number"
+          }
+        }, {
+          "in" : "query",
+          "name" : "currency",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "subtotalMinor",
+          "required" : false,
+          "schema" : {
+            "default" : 0,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DeliveryFeeView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Resolve the delivery fee for one point",
+        "tags" : [ "Delivery fee" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/menu" : {
+      "get" : {
+        "description" : "Reads the active publication and applies the location's current availability on top. A variant the location does not offer is absent; one it has run out of is present and not orderable. The channel is required and supplies both the publication and the price plane (ADR 0036): a menu priced against another channel is a menu whose prices change at checkout.",
+        "operationId" : "menu",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "default" : "uz",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StorefrontMenu"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The live menu for one location",
+        "tags" : [ "Storefront catalog" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/serviceability" : {
+      "get" : {
+        "description" : "One resolver, one stable reason code, and a next-available instant where one is computable. \"Closed now\" and \"cannot pre-order\" are different facts and are reported separately.",
+        "operationId" : "resolve",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "mode",
+          "required" : true,
+          "schema" : {
+            "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "at",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ServiceabilityView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Resolve serviceability for a channel and fulfilment mode",
+        "tags" : [ "Serviceability" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me" : {
+      "get" : {
+        "description" : "Includes the account id, which is otherwise unlearnable from the storefront, and the scope the profile is shared at. Contact points are listed by type and verification state and never by value.",
+        "operationId" : "profile",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProfileResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The caller's own account and profile",
+        "tags" : [ "Customer self-service" ]
+      },
+      "patch" : {
+        "description" : "The three fields a customer owns. Status, identity partition, merge target and policy version are not among them: each decides something about the account, and none is the account holder's to set. Under TENANT_SHARED the change is visible at every brand of the tenant, which is what profileScope says.",
+        "operationId" : "updateProfile",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateProfileRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProfileResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Change the caller's own display name, language, or timezone",
+        "tags" : [ "Customer self-service" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses" : {
+      "get" : {
+        "description" : "Decrypted, because the person they belong to is asking, and the reveal is recorded against a purpose that says so. Archived addresses are not listed.",
+        "operationId" : "addresses",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/AddressResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The caller's own saved addresses",
+        "tags" : [ "Customer self-service" ]
+      },
+      "post" : {
+        "description" : "The coordinate source is required and must agree with the coordinates: an address awaiting geocoding and one that legitimately has no point — a mahalla house given by its ориентир — are different states, and only one is worth retrying. A customer may claim CUSTOMER_PIN, NOT_GEOCODED or LANDMARK_ONLY; the operator and geocoder sources are not theirs to assert.",
+        "operationId" : "addAddress",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SaveAddressRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AddressResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Save a new address",
+        "tags" : [ "Customer self-service" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses/{addressId}" : {
+      "delete" : {
+        "description" : "Archived rather than deleted. The row is what a dispute about where an order went is answered from, and nothing depends on it staying readable to the customer: a cart and an order each hold their own copy, taken when the address was chosen, so an order in flight is unaffected. This is not an erasure request, which is a governed act over the whole account.",
+        "operationId" : "removeAddress",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "addressId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Remove one of the caller's own addresses",
+        "tags" : [ "Customer self-service" ]
+      },
+      "get" : {
+        "description" : "Not found for an address that is somebody else's, is archived, or never existed. The three are one answer, because telling them apart is how an address id becomes probeable.",
+        "operationId" : "address",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "addressId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AddressResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One of the caller's own saved addresses",
+        "tags" : [ "Customer self-service" ]
+      },
+      "put" : {
+        "description" : "The whole address, never a field of it: the lines live inside one encrypted document, and the coordinate and its source have to move together. Requires If-Match, so a second tab loses loudly.",
+        "operationId" : "updateAddress",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "addressId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SaveAddressRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AddressResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Replace one of the caller's own addresses",
+        "tags" : [ "Customer self-service" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/favourites" : {
+      "get" : {
+        "description" : "Product ids, most recently marked first. Ids and not menu items: the storefront already holds the published menu and resolves them against it, which is also what drops a dish this branch has stopped serving instead of showing a card that cannot be ordered.",
+        "operationId" : "favourites",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/FavouritesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The products this customer marked",
+        "tags" : [ "Customer self-service" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/favourites/{productId}" : {
+      "delete" : {
+        "description" : "204 whether or not it was marked. Removing what was never there is the state the customer asked for.",
+        "operationId" : "removeFavourite",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Unmark a product",
+        "tags" : [ "Customer self-service" ]
+      },
+      "put" : {
+        "description" : "Idempotent: marking twice is one fact, so a double tap or a retried request is a no-op rather than an error. A product that is not this brand's is refused -- a stale menu in a customer's hand is an ordinary way to reach that.",
+        "operationId" : "addFavourite",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Mark a product",
+        "tags" : [ "Customer self-service" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders" : {
+      "get" : {
+        "description" : "Cursor-paginated per ADR 0031: pass the previous page's nextCursor, and a null nextCursor is the end. Every row is the caller's own — the account is a predicate of the query and there is no parameter that widens it — so this enumerates a customer's history and never a brand's. Carries what a list shows and nothing beneath it: no lines, no modifiers, no notes, no destination. Open one order to read those.",
+        "operationId" : "listOrders",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "The nextCursor of the previous page",
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "description" : "The nextCursor of the previous page",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageOrderSummaryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The caller's own orders at this brand, newest first",
+        "tags" : [ "Storefront ordering" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}" : {
+      "get" : {
+        "description" : "Scoped to the caller's account inside the query. A customer cannot read another customer's order by knowing its id.",
+        "operationId" : "readOrder",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OrderResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Read one of the caller's own orders",
+        "tags" : [ "Storefront ordering" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/cancellations" : {
+      "post" : {
+        "description" : "Refused once the order is confirmed: the payment, fiscal, POS and fulfilment consequences of that are owned by ADR 0039, and half-performing them would be worse than refusing.",
+        "operationId" : "cancel",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CancelRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OrderStateResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Cancel an order before it is confirmed",
+        "tags" : [ "Storefront ordering" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/payment-sessions" : {
+      "post" : {
+        "description" : "Returns a Click payment link or a Payme base64 checkout URL, and the attempt identity the provider's callback will carry. A customer who abandons the checkout and comes back is given the same attempt: a second one is refused by a unique index, because two payable links against one order is a double charge waiting for somebody to open both. Nothing here credits anything — both surfaces are unsigned, so the amount the platform enforces is the one it checks when the provider calls back.",
+        "operationId" : "openPaymentSession",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : true,
+          "schema" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PaymentSessionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentSessionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Open a payment attempt and get its checkout surface",
+        "tags" : [ "Storefront payments" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/support/faq" : {
+      "get" : {
+        "description" : "Categories in authored order, each with its published entries. Text resolves to the requested locale and falls back to any other published translation rather than to the authoring code. A brand with no published FAQ answers an empty list, which is a screen with no questions and not a failure.",
+        "operationId" : "faq",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "default" : "uz",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/FaqResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The brand's published FAQ",
+        "tags" : [ "Storefront support" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/support/social-links" : {
+      "get" : {
+        "description" : "Published links in authored order. The platform is a checked vocabulary so a storefront can choose an icon from it, and the URL is constrained at the database to http(s), tel: and mailto:.",
+        "operationId" : "socialLinks",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/SocialLinkResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Where a customer can reach this brand",
+        "tags" : [ "Storefront support" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/media/{assetId}" : {
+      "get" : {
+        "description" : "302 to a short-lived signed URL. Only a PUBLIC, displayable asset resolves; anything else is not found, and private, missing and unverified are one answer so an id cannot be probed.",
+        "operationId" : "image",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "assetId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Redirect to a published image",
+        "tags" : [ "Storefront media" ]
+      }
+    }
+  },
+  "security" : [ {
+    "bearerAuth" : [ ]
+  } ],
+  "servers" : [ {
+    "description" : "Generated server url",
+    "url" : "http://localhost"
+  } ],
+  "tags" : [ {
+    "description" : "Requesting a one-time code, proving a phone number, and becoming a customer",
+    "name" : "Customer identity"
+  }, {
+    "description" : "A customer's own profile, their own saved addresses, and the products they marked",
+    "name" : "Customer self-service"
+  }, {
+    "description" : "What delivery costs here, and the evidence for it",
+    "name" : "Delivery fee"
+  }, {
+    "description" : "Opening a payment attempt and getting the checkout surface for it",
+    "name" : "Storefront payments"
+  }, {
+    "description" : "Carts, checkout, and a customer's own orders",
+    "name" : "Storefront ordering"
+  }, {
+    "description" : "Pickup branches near a customer",
+    "name" : "Storefront pickup locations"
+  }, {
+    "description" : "The published menu a customer sees",
+    "name" : "Storefront catalog"
+  }, {
+    "description" : "Pictures on the published menu",
+    "name" : "Storefront media"
+  }, {
+    "description" : "Scanning a table code, and the bill it leads to",
+    "name" : "QR dine-in"
+  }, {
+    "description" : "A customer's points balance and its movements",
+    "name" : "Loyalty"
+  }, {
+    "description" : "Whether a location serves this channel and mode now",
+    "name" : "Serviceability"
+  }, {
+    "description" : "A brand's FAQ and its social links",
+    "name" : "Storefront support"
+  } ]
+}

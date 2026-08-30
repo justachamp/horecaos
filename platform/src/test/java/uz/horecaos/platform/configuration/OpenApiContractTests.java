@@ -6,18 +6,22 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -40,6 +44,15 @@ import uz.horecaos.platform.support.TestDatabase;
  * A maintainer updates the baseline only through {@code make openapi-baseline};
  * that path still runs the compatibility check first, so copying a new document
  * over an old one cannot hide a removed operation or a narrowed schema.
+ *
+ * <p>The same snapshot-and-compatibility flow also runs once per {@link OpenApiSurface}, against
+ * that group's own document at {@code /v3/api-docs/<id>} and its own checked-in baseline. Those
+ * per-group documents are additive views over the same running API — filtered by path, never
+ * regenerated — so they share this class's compatibility machinery rather than duplicating it.
+ * {@link #everyPublishedPathBelongsToExactlyOneSurfaceGroup()} is the test that keeps the split
+ * honest: it proves the four group documents partition the full document's paths exactly, so a
+ * controller landing under a prefix no {@link OpenApiSurface} claims fails the build instead of
+ * silently missing from every per-surface document and its generated TypeScript client.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -72,38 +85,104 @@ class OpenApiContractTests {
 
     @Test
     void generatedV1DocumentRemainsCompatibleWithAndRecordedAgainstItsReleasedBaseline() throws Exception {
-        String current = canonicalDocument();
-        Files.createDirectories(GENERATED.getParent());
-        Files.writeString(GENERATED, current, StandardCharsets.UTF_8);
+        verifyAgainstBaseline(canonicalDocument("/v3/api-docs"), BASELINE, GENERATED);
+    }
 
-        if (Files.exists(BASELINE)) {
-            JsonNode released = JSON.readTree(Files.readString(BASELINE, StandardCharsets.UTF_8));
-            JsonNode generated = JSON.readTree(current);
-            assertBackwardCompatible(released, generated);
+    /**
+     * The same gate as the full document, once per {@link OpenApiSurface}, against that group's
+     * own baseline. {@code make openapi-baseline} drives every group through this same
+     * update-flag flow, in one Maven run.
+     */
+    @ParameterizedTest
+    @EnumSource(OpenApiSurface.class)
+    void generatedGroupDocumentRemainsCompatibleWithAndRecordedAgainstItsReleasedBaseline(OpenApiSurface surface)
+            throws Exception {
+        String current = canonicalDocument("/v3/api-docs/" + surface.id());
+        Path baseline = Path.of("api/openapi/v1/horecaos-api." + surface.id() + ".json");
+        Path generated = Path.of("target/openapi/horecaos-api-v1." + surface.id() + ".json");
+        verifyAgainstBaseline(current, baseline, generated);
+    }
+
+    /**
+     * Every path published in the full v1 document must be covered by exactly one
+     * {@link OpenApiSurface}: present in exactly one group's document, never zero and never more
+     * than one. A future controller mounted under a prefix no group claims fails this test rather
+     * than silently vanishing from every per-surface document and its generated client.
+     */
+    @Test
+    void everyPublishedPathBelongsToExactlyOneSurfaceGroup() throws Exception {
+        Set<String> fullDocumentPaths = pathNames(fetchDocument("/v3/api-docs"));
+
+        Map<String, Set<String>> pathsByGroup = new LinkedHashMap<>();
+        for (OpenApiSurface surface : OpenApiSurface.values()) {
+            pathsByGroup.put(surface.id(), pathNames(fetchDocument("/v3/api-docs/" + surface.id())));
+        }
+
+        Set<String> union = new HashSet<>();
+        pathsByGroup.values().forEach(union::addAll);
+        assertThat(union)
+                .as("every path in the full v1 document must be covered by an OpenApiSurface group (no orphans)")
+                .isEqualTo(fullDocumentPaths);
+
+        List<String> groupIds = new ArrayList<>(pathsByGroup.keySet());
+        for (int i = 0; i < groupIds.size(); i++) {
+            for (int j = i + 1; j < groupIds.size(); j++) {
+                String left = groupIds.get(i);
+                String right = groupIds.get(j);
+                Set<String> overlap = new HashSet<>(pathsByGroup.get(left));
+                overlap.retainAll(pathsByGroup.get(right));
+                assertThat(overlap)
+                        .as("path must not belong to both the %s and %s OpenAPI groups", left, right)
+                        .isEmpty();
+            }
+        }
+    }
+
+    private static Set<String> pathNames(JsonNode document) {
+        Set<String> names = new HashSet<>();
+        document.path("paths").fieldNames().forEachRemaining(names::add);
+        return names;
+    }
+
+    /** Snapshots {@code current} to {@code generated}, checks it against {@code baseline}, and updates the baseline when asked. */
+    private void verifyAgainstBaseline(String current, Path baseline, Path generated) throws IOException {
+        Files.createDirectories(generated.getParent());
+        Files.writeString(generated, current, StandardCharsets.UTF_8);
+
+        if (Files.exists(baseline)) {
+            JsonNode released = JSON.readTree(Files.readString(baseline, StandardCharsets.UTF_8));
+            JsonNode generatedDocument = JSON.readTree(current);
+            assertBackwardCompatible(released, generatedDocument);
         }
 
         if (UPDATE_BASELINE) {
-            Files.createDirectories(BASELINE.getParent());
-            Files.writeString(BASELINE, current, StandardCharsets.UTF_8);
+            Files.createDirectories(baseline.getParent());
+            Files.writeString(baseline, current, StandardCharsets.UTF_8);
             return;
         }
 
-        assertThat(Files.exists(BASELINE))
-                .as("a released OpenAPI v1 baseline must be checked in")
+        assertThat(Files.exists(baseline))
+                .as("a released OpenAPI baseline must be checked in at %s", baseline)
                 .isTrue();
-        assertThat(Files.readString(BASELINE, StandardCharsets.UTF_8))
-                .as("OpenAPI changed; run make openapi-baseline, review the diff, and commit it")
+        assertThat(Files.readString(baseline, StandardCharsets.UTF_8))
+                .as("OpenAPI changed at %s; run make openapi-baseline, review the diff, and commit it", baseline)
                 .isEqualTo(current);
     }
 
-    private String canonicalDocument() throws Exception {
-        String body = mvc.perform(
-                        org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/v3/api-docs"))
+    private JsonNode fetchDocument(String url) throws Exception {
+        String body = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(url))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
         JsonNode document = JSON.readTree(body);
-        assertThat(document.path("openapi").asText()).startsWith("3.");
+        assertThat(document.path("openapi").asText())
+                .as("document at %s must be a valid OpenAPI document", url)
+                .startsWith("3.");
+        return document;
+    }
+
+    private String canonicalDocument(String url) throws Exception {
+        JsonNode document = fetchDocument(url);
         return JSON.writerWithDefaultPrettyPrinter().writeValueAsString(canonical(document)) + System.lineSeparator();
     }
 
@@ -169,7 +248,7 @@ class OpenApiContractTests {
     }
 
     private static Map<String, JsonNode> indexedParameters(JsonNode parameters) {
-        java.util.LinkedHashMap<String, JsonNode> result = new java.util.LinkedHashMap<>();
+        LinkedHashMap<String, JsonNode> result = new LinkedHashMap<>();
         parameters.forEach(parameter -> result.put(
                 parameter.path("in").asText() + ":" + parameter.path("name").asText(), parameter));
         return result;
