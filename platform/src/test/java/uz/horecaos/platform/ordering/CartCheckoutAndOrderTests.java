@@ -52,6 +52,8 @@ import uz.horecaos.platform.ordering.api.PaymentIntentPort;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
 import uz.horecaos.platform.ordering.application.OrderAcceptancePolicyService;
+import uz.horecaos.platform.ordering.application.OrderActionCode;
+import uz.horecaos.platform.ordering.application.OrderActionsPolicy;
 import uz.horecaos.platform.ordering.application.OrderInventoryProcess;
 import uz.horecaos.platform.ordering.application.OrderQueryService;
 import uz.horecaos.platform.ordering.application.OrderStateService;
@@ -371,7 +373,7 @@ class CartCheckoutAndOrderTests {
                 new JdbcAuditRecorder(jdbc, objectMapper),
                 clock,
                 200_000L);
-        orderQuery = new OrderQueryService(orderStore, processStore, UNWIRED_PAYMENTS, protection);
+        orderQuery = new OrderQueryService(orderStore, processStore, UNWIRED_PAYMENTS, protection, objectMapper);
         // The real ADR 0024 gate over the real scope table, not a stub that agrees
         // with itself. No scope row is seeded, so every checkout below runs through
         // the "no scope registered" branch — which is the branch that decides
@@ -1814,6 +1816,183 @@ class CartCheckoutAndOrderTests {
                                 .doesNotContain("Amir Temur")
                                 .doesNotContain("+998901112233")
                                 .doesNotContain("Dilnoza"));
+    }
+
+    // --------------------------------------- operations read models (customer)
+
+    /**
+     * orders.md §3.7-§3.8: name in full, phone decrypted for the caller to mask
+     * (asserted here as the raw value {@link OperationsOrderController} would
+     * mask, since masking itself is {@code PhoneMaskingTests}' job), and
+     * presence flags for an address and instructions that are on file.
+     */
+    @Test
+    @DisplayName("the customer block carries the name in full, the phone decrypted, and address presence")
+    void theCustomerBlockCarriesWhatAnOrdinaryReadMayShow() {
+        UUID orderId = placeDeliveryOrder("customer-block").orderId();
+
+        var customer = orderQuery.detail(TENANT, orderId).orElseThrow().customer();
+
+        assertThat(customer.displayName()).isEqualTo("Dilnoza");
+        assertThat(customer.contactDecrypted())
+                .as("decrypted for the caller to mask — never rendered whole by this class")
+                .isEqualTo("+998901112233");
+        assertThat(customer.hasAddress()).isTrue();
+        assertThat(customer.hasDeliveryInstructions()).isTrue();
+        assertThat(customer.customerType()).isEqualTo("ACCOUNT");
+        assertThat(customer.transactionalContactAllowed()).isTrue();
+        assertThat(customer.anonymized()).isFalse();
+    }
+
+    @Test
+    @DisplayName("a pickup order has no address to reveal")
+    void aPickupOrderCarriesNoAddress() {
+        UUID orderId = placeOrder("customer-block-pickup").orderId();
+
+        var customer = orderQuery.detail(TENANT, orderId).orElseThrow().customer();
+        assertThat(customer.hasAddress()).isFalse();
+        assertThat(customer.hasDeliveryInstructions()).isFalse();
+
+        assertThat(orderQuery.revealCustomerAddress(TENANT, orderId, "TEST")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a guest order is labelled GUEST, never ACCOUNT")
+    void aGuestOrderIsLabelledGuest() {
+        allowGuestOrders();
+        var placed = tx(() -> checkout.checkout(guestCheckoutCommand(readyGuestCart(), "customer-block-guest")));
+
+        var customer = orderQuery.detail(TENANT, placed.orderId()).orElseThrow().customer();
+        assertThat(customer.customerType()).isEqualTo("GUEST");
+    }
+
+    /**
+     * The reveal call orders.md §1.5 requires: separate from the masked detail
+     * read, and returning the value whole. Capability-gating itself is a build
+     * gate ({@code EndpointCapabilityDeclarationTests}), which is what proves
+     * {@code GET .../customer/phone} declares {@code CUSTOMER_PII_REVEAL} the
+     * same way {@code GET .../lines/{lineId}/note} does; this asserts the
+     * decrypted value the gated call is for.
+     */
+    @Test
+    @DisplayName("revealing the phone returns the whole number")
+    void revealingThePhoneReturnsTheWholeNumber() {
+        UUID orderId = placeDeliveryOrder("reveal-phone").orderId();
+
+        assertThat(orderQuery.revealCustomerPhone(TENANT, orderId, "CUSTOMER_CALLED_IN"))
+                .contains("+998901112233");
+    }
+
+    @Test
+    @DisplayName("revealing the address returns дом/квартира/подъезд/этаж/ориентир and the coordinate")
+    void revealingTheAddressReturnsTheStructuredFields() {
+        UUID orderId = placeDeliveryOrder("reveal-address").orderId();
+
+        var revealed = orderQuery
+                .revealCustomerAddress(TENANT, orderId, "COURIER_HANDOFF")
+                .orElseThrow();
+        var address = revealed.address();
+
+        assertThat(address.line1()).isEqualTo("Amir Temur 12");
+        assertThat(address.city()).isEqualTo("Tashkent");
+        assertThat(address.district()).isEqualTo("Yunusobod");
+        assertThat(address.entrance()).isEqualTo("2");
+        assertThat(address.floor()).isEqualTo("5");
+        assertThat(address.apartment()).isEqualTo("41");
+        assertThat(address.landmark()).isEqualTo("blue gate");
+        assertThat(address.latitude()).isEqualTo(41.311081);
+        assertThat(address.longitude()).isEqualTo(69.240562);
+        assertThat(revealed.deliveryInstructions()).isEqualTo("Ring the top bell");
+    }
+
+    // ----------------------------------------- operations read models (counts)
+
+    /**
+     * orders.md §2.3's tab badges, computed by one aggregate. Seven orders are
+     * pushed through every bucket the endpoint reports, and the counts are
+     * checked against a total built by hand rather than against each other, so
+     * a query that quietly double-counted a status would still be caught.
+     */
+    @Test
+    @DisplayName("counts aggregates the location's orders into the board's tab buckets")
+    void countsAggregatesIntoTheBoardsBuckets() {
+        UUID inKitchen1 = placeOrder("counts-confirmed").orderId(); // CONFIRMED
+
+        UUID inKitchen2 = placeOrder("counts-preparing").orderId();
+        advance(inKitchen2, OrderStatus.PREPARING);
+
+        UUID ready = placeOrder("counts-ready").orderId();
+        advance(ready, OrderStatus.PREPARING);
+        advance(ready, OrderStatus.READY);
+
+        UUID completed = placeOrder("counts-completed").orderId();
+        advance(completed, OrderStatus.PREPARING);
+        advance(completed, OrderStatus.READY);
+        advance(completed, OrderStatus.COMPLETED);
+
+        placeBranchOnTheMap();
+        UUID fulfilling = placeDeliveryOrder("counts-fulfilling").orderId();
+        advance(fulfilling, OrderStatus.PREPARING);
+        advance(fulfilling, OrderStatus.READY);
+        advance(fulfilling, OrderStatus.FULFILLING);
+
+        requireApproval();
+        UUID awaiting = placeOrder("counts-awaiting").orderId();
+        UUID rejected = placeOrder("counts-rejected").orderId();
+        tx(() -> orderState.decide(
+                TENANT, rejected, decision("d-counts-reject", OrderStateService.DecisionAction.REJECT)));
+
+        var counts = orderQuery.counts(TENANT, BRAND, LOCATION);
+
+        assertThat(counts.awaitingApproval()).as("awaiting").isEqualTo(1);
+        assertThat(counts.newOrders())
+                .as("new (RECEIVED/PAYMENT_AUTHORIZING/AWAITING_APPROVAL)")
+                .isEqualTo(1);
+        assertThat(counts.inKitchen()).as("in kitchen (CONFIRMED+PREPARING)").isEqualTo(2);
+        assertThat(counts.ready()).as("ready").isEqualTo(1);
+        assertThat(counts.fulfilling()).as("fulfilling").isEqualTo(1);
+        assertThat(counts.completed()).as("completed").isEqualTo(1);
+        assertThat(counts.cancelled()).as("cancelled/rejected/expired").isEqualTo(1);
+        assertThat(counts.totalNonTerminal()).as("every non-terminal order").isEqualTo(5);
+        assertThat(counts.total()).as("every order this location has").isEqualTo(7);
+
+        assertThat(orderQuery.counts(TENANT, BRAND, OTHER_LOCATION).total())
+                .as("scoped to the location, not the whole brand")
+                .isZero();
+
+        // Referenced so a maintainer who inlines the ids above still sees they
+        // are used, not orphaned by a later edit.
+        assertThat(List.of(inKitchen1, inKitchen2, ready, completed, fulfilling, awaiting, rejected))
+                .hasSize(7);
+    }
+
+    // --------------------------------------- operations read models (actions)
+
+    /**
+     * The trickiest single case {@code OrderActionsPolicy} has to get right:
+     * cancellation is legal in {@link uz.horecaos.platform.ordering.domain.OrderStateMachine}
+     * from {@code CONFIRMED} but refused by {@code OrderStateService.cancel}'s
+     * application-level guard. This proves the real mutating call and the read
+     * model agree by construction — {@code OrderStateService.cancel} calls
+     * {@code OrderActionsPolicy.canCancelWithoutReason} directly, so there is
+     * one implementation behind both assertions below, not two that happen to
+     * match today.
+     */
+    @Test
+    @DisplayName("a confirmed order's refused cancellation matches actions[] omitting CANCEL")
+    void confirmedCancellationRefusalMatchesTheActionsList() {
+        var result = placeOrder("actions-confirmed-cancel");
+        int version = orderStore.find(TENANT, result.orderId()).orElseThrow().version();
+
+        assertThat(catchThrowable(() -> tx(() -> orderState.cancel(
+                        TENANT, result.orderId(), version, "OPERATOR_ERROR", "USER", "someone", null))))
+                .isInstanceOf(OrderStateService.CancellationNotPermittedException.class);
+
+        var order = orderStore.find(TENANT, result.orderId()).orElseThrow();
+        assertThat(order.status()).isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(OrderActionsPolicy.availableFor(order.status(), order.fulfillmentMode()))
+                .as("the read model must not offer what the mutating endpoint just refused")
+                .noneMatch(action -> action.code() == OrderActionCode.CANCEL);
     }
 
     /**

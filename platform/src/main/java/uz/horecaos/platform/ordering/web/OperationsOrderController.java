@@ -23,6 +23,8 @@ import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.ordering.application.OrderAction;
+import uz.horecaos.platform.ordering.application.OrderActionsPolicy;
 import uz.horecaos.platform.ordering.application.OrderAmendmentService;
 import uz.horecaos.platform.ordering.application.OrderOutcomeReasonService;
 import uz.horecaos.platform.ordering.application.OrderOutcomeService;
@@ -94,6 +96,22 @@ public class OperationsOrderController {
         return ResponseEntity.ok(orderQuery.forLocation(tenantId, brandId, locationId, statuses, limit).stream()
                 .map(OrderSummaryResponse::of)
                 .toList());
+    }
+
+    @GetMapping("/counts")
+    @RequiresCapability(value = Capability.ORDER_READ, scope = ScopeType.LOCATION)
+    @Operation(
+            summary = "The board's tab badges, one call",
+            description = "orders.md §2.3: each tab shows a live count computed before the tab's "
+                    + "own filters apply, and until ADR 0045's COUNTERS signal exists this is what "
+                    + "computes them. One aggregate over the location's orders, scoped identically "
+                    + "to the list above. Внимание's live severity queue (late orders, stuck "
+                    + "processes) is not among these — it is derived per render from the promise "
+                    + "and the clock, never stored, so a count of it would be wrong five seconds "
+                    + "after being cached.")
+    public ResponseEntity<OrderCountsResponse> counts(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
+        return ResponseEntity.ok(OrderCountsResponse.of(orderQuery.counts(tenantId, brandId, locationId)));
     }
 
     @GetMapping("/{orderId}")
@@ -506,6 +524,55 @@ public class OperationsOrderController {
                 orderQuery.revealLineNote(tenantId, orderId, lineId, purpose).orElse(null)));
     }
 
+    @GetMapping("/{orderId}/customer/phone")
+    @RequiresCapability(value = Capability.CUSTOMER_PII_REVEAL, scope = ScopeType.LOCATION)
+    @Operation(
+            summary = "Reveal the customer's phone in full",
+            description = "orders.md §1.5: the detail screen shows the phone masked with no gate; "
+                    + "going from masked to whole is this separate, audited call, mirroring "
+                    + "GET .../lines/{lineId}/note. Copy-to-clipboard of the phone counts as a "
+                    + "reveal and performs this call rather than copying an already-decrypted "
+                    + "value.")
+    public ResponseEntity<PhoneRevealResponse> revealPhone(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID orderId,
+            @RequestParam @NotBlank String purpose) {
+
+        requireOrderAtLocation(tenantId, orderId, locationId);
+
+        return ResponseEntity.ok(new PhoneRevealResponse(
+                orderQuery.revealCustomerPhone(tenantId, orderId, purpose).orElse(null)));
+    }
+
+    @GetMapping("/{orderId}/customer/address")
+    @RequiresCapability(value = Capability.CUSTOMER_PII_REVEAL, scope = ScopeType.LOCATION)
+    @Operation(
+            summary = "Reveal the delivery address and instructions in full",
+            description = "orders.md §3.8: дом, квартира, подъезд, этаж and ориентир, decrypted "
+                    + "together with the coordinate that travels inside the same document. The "
+                    + "detail screen shows only whether an address is on file; this is the "
+                    + "capability-gated, audited call that opens it.")
+    public ResponseEntity<AddressResponse> revealAddress(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID orderId,
+            @RequestParam @NotBlank String purpose) {
+
+        requireOrderAtLocation(tenantId, orderId, locationId);
+
+        // A Problem Details refusal (ADR 0031) rather than a bare 404: unlike
+        // NoteResponse's nullable text, AddressResponse carries primitive
+        // latitude/longitude, and there is no null coordinate honest enough to
+        // stand in for "no address on file" — 0,0 is a real point.
+        return ResponseEntity.ok(AddressResponse.of(orderQuery
+                .revealCustomerAddress(tenantId, orderId, purpose)
+                .orElseThrow(
+                        () -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No address on file for this order"))));
+    }
+
     /**
      * The order exists, at this branch.
      *
@@ -751,6 +818,14 @@ public class OperationsOrderController {
             String effectiveDecisionId,
             String effectiveAction) {}
 
+    /**
+     * @param actions the IA 1.2 server-supplied {@code actions[]} array
+     *                (orders.md §4.2): exactly what {@link OrderActionsPolicy}
+     *                — the same rules {@code OrderStateService} enforces —
+     *                permits for this order's status and fulfilment mode right
+     *                now. The client renders this list and never computes
+     *                availability itself.
+     */
     public record OrderSummaryResponse(
             UUID orderId,
             String publicOrderNumber,
@@ -761,7 +836,8 @@ public class OperationsOrderController {
             long totalMinor,
             int version,
             Instant createdAt,
-            Instant approvalDeadlineAt) {
+            Instant approvalDeadlineAt,
+            List<OrderActionResponse> actions) {
 
         static OrderSummaryResponse of(JdbcOrderStore.OrderRow order) {
             return new OrderSummaryResponse(
@@ -774,7 +850,32 @@ public class OperationsOrderController {
                     order.totalMinor(),
                     order.version(),
                     order.createdAt(),
-                    order.approvalDeadlineAt());
+                    order.approvalDeadlineAt(),
+                    OrderActionResponse.allFor(order.status(), order.fulfillmentMode()));
+        }
+    }
+
+    /**
+     * One action the console may take on this order right now.
+     *
+     * @param action       the code the client matches on; see {@link
+     *                     uz.horecaos.platform.ordering.application.OrderActionCode}
+     * @param targetStatus the status {@code ADVANCE} would move the order to.
+     *                     Null for every other action
+     */
+    public record OrderActionResponse(String action, String targetStatus) {
+
+        static List<OrderActionResponse> allFor(
+                OrderStatus status, uz.horecaos.platform.tenancy.api.FulfillmentMode mode) {
+            return OrderActionsPolicy.availableFor(status, mode).stream()
+                    .map(OrderActionResponse::of)
+                    .toList();
+        }
+
+        private static OrderActionResponse of(OrderAction action) {
+            return new OrderActionResponse(
+                    action.code().name(),
+                    action.targetStatus() == null ? null : action.targetStatus().name());
         }
     }
 
@@ -784,6 +885,12 @@ public class OperationsOrderController {
      *                       moved, and storing it would make a figure that is only
      *                       true until the next amendment look like a payment
      * @param outcome        present only once the order has ended
+     * @param customer       orders.md §3.7-§3.8: name in full, phone masked,
+     *                       guest-vs-account, and presence flags for the
+     *                       delivery address and instructions. The raw phone
+     *                       and address are never here — {@link #revealPhone}
+     *                       and {@link #revealAddress} are the capability-gated
+     *                       calls that return them
      */
     public record OrderDetailResponse(
             OrderSummaryResponse summary,
@@ -803,7 +910,8 @@ public class OperationsOrderController {
             String kitchenNote,
             Long cashTenderedExpectedMinor,
             Long changeDueMinor,
-            OutcomeResponse outcome) {
+            OutcomeResponse outcome,
+            CustomerResponse customer) {
 
         static OrderDetailResponse of(OrderQueryService.OrderDetail detail, JdbcOrderStore.OutcomeRow outcomeRow) {
             var order = detail.order();
@@ -827,7 +935,8 @@ public class OperationsOrderController {
                     order.cashTenderedExpectedMinor() == null
                             ? null
                             : order.cashTenderedExpectedMinor() - order.totalMinor(),
-                    outcomeRow == null ? null : OutcomeResponse.of(outcomeRow));
+                    outcomeRow == null ? null : OutcomeResponse.of(outcomeRow),
+                    CustomerResponse.of(detail.customer()));
         }
 
         private static List<LineResponse> lineResponses(OrderQueryService.OrderDetail detail) {
@@ -843,6 +952,106 @@ public class OperationsOrderController {
                             line.line().lineId(),
                             line.line().hasNote()))
                     .toList();
+        }
+    }
+
+    /**
+     * The order's customer, exactly as far as an ordinary {@code ORDER_READ}
+     * may see it (orders.md §1.5, §3.7-§3.8).
+     *
+     * @param displayName             in full — never masked
+     * @param phoneMasked             {@code +998 90 ••• •• 42}, or null when
+     *                                there is no phone on file
+     * @param customerType            {@code "ACCOUNT"} or {@code "GUEST"}
+     * @param hasAddress              a delivery address is on file, for
+     *                                delivery orders — revealed at {@link
+     *                                #revealAddress}
+     * @param hasDeliveryInstructions the customer left instructions — revealed
+     *                                at the same call
+     * @param anonymized              the ADR 0029 retention job has blanked the
+     *                                snapshot; the panel renders "Данные удалены
+     *                                по сроку хранения" and shows no reveal
+     *                                control at all
+     */
+    public record CustomerResponse(
+            String displayName,
+            String phoneMasked,
+            String customerType,
+            boolean hasAddress,
+            boolean hasDeliveryInstructions,
+            boolean transactionalContactAllowed,
+            boolean anonymized) {
+
+        static CustomerResponse of(OrderQueryService.CustomerDetail detail) {
+            return new CustomerResponse(
+                    detail.displayName(),
+                    PhoneMasking.mask(detail.contactDecrypted()),
+                    detail.customerType(),
+                    detail.hasAddress(),
+                    detail.hasDeliveryInstructions(),
+                    detail.transactionalContactAllowed(),
+                    detail.anonymized());
+        }
+    }
+
+    /** The delivery address in full, as {@link #revealAddress} returns it. */
+    public record AddressResponse(
+            String line1,
+            String line2,
+            String city,
+            String district,
+            String postalCode,
+            String entrance,
+            String floor,
+            String apartment,
+            String landmark,
+            double latitude,
+            double longitude,
+            String deliveryInstructions) {
+
+        static AddressResponse of(OrderQueryService.CustomerAddressReveal reveal) {
+            var address = reveal.address();
+            return new AddressResponse(
+                    address.line1(),
+                    address.line2(),
+                    address.city(),
+                    address.district(),
+                    address.postalCode(),
+                    address.entrance(),
+                    address.floor(),
+                    address.apartment(),
+                    address.landmark(),
+                    address.latitude(),
+                    address.longitude(),
+                    reveal.deliveryInstructions());
+        }
+    }
+
+    public record PhoneRevealResponse(String phone) {}
+
+    /** {@code GET .../orders/counts}: the board's tab badges (orders.md §2.3). */
+    public record OrderCountsResponse(
+            long newOrders,
+            long awaitingApproval,
+            long inKitchen,
+            long ready,
+            long fulfilling,
+            long completed,
+            long cancelled,
+            long totalNonTerminal,
+            long total) {
+
+        static OrderCountsResponse of(JdbcOrderStore.OrderCountsRow row) {
+            return new OrderCountsResponse(
+                    row.newOrders(),
+                    row.awaitingApproval(),
+                    row.inKitchen(),
+                    row.ready(),
+                    row.fulfilling(),
+                    row.completed(),
+                    row.cancelled(),
+                    row.totalNonTerminal(),
+                    row.total());
         }
     }
 

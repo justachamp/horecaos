@@ -9,11 +9,15 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
+import uz.horecaos.platform.ordering.domain.DeliveryDestination;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderProcessStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.CustomerSnapshotRow;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderCountsRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderLineRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderModifierRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderRow;
@@ -36,20 +40,39 @@ public class OrderQueryService {
     private static final String ORDER_LINE_TABLE = "ordering.order_lines";
     private static final String NOTE_COLUMN = "note_encrypted";
 
+    private static final String SNAPSHOT_TABLE = "ordering.order_customer_snapshots";
+    private static final String SNAPSHOT_NAME_COLUMN = "display_name_encrypted";
+    private static final String SNAPSHOT_CONTACT_COLUMN = "contact_encrypted";
+    private static final String SNAPSHOT_ADDRESS_COLUMN = "address_encrypted";
+    private static final String SNAPSHOT_INSTRUCTIONS_COLUMN = "delivery_instructions_encrypted";
+
+    /**
+     * The fixed purpose behind the name and masked-phone decrypt every ordinary
+     * detail read performs. Not a reveal in the ADR 0029 sense — orders.md §1.5
+     * puts the name in full and the phone masked on every detail screen with no
+     * separate gate — so there is no caller-supplied purpose to thread through;
+     * {@link #revealCustomerPhone} and {@link #revealCustomerAddress} take one
+     * because the value they return is the whole point of the call.
+     */
+    private static final String DETAIL_DISPLAY_PURPOSE = "ORDER_DETAIL_DISPLAY";
+
     private final JdbcOrderStore orders;
     private final JdbcOrderProcessStore processes;
     private final PaymentIntentPort payments;
     private final FieldProtection protection;
+    private final ObjectMapper objectMapper;
 
     public OrderQueryService(
             JdbcOrderStore orders,
             JdbcOrderProcessStore processes,
             PaymentIntentPort payments,
-            FieldProtection protection) {
+            FieldProtection protection,
+            ObjectMapper objectMapper) {
         this.orders = orders;
         this.processes = processes;
         this.payments = payments;
         this.protection = protection;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -96,8 +119,119 @@ public class OrderQueryService {
             lines.forEach(
                     line -> detailLines.add(new DetailLine(line, modifiers.getOrDefault(line.lineId(), List.of()))));
 
-            return new OrderDetail(order, detailLines, warnings());
+            return new OrderDetail(order, detailLines, warnings(), customerDetail(tenantId, order));
         });
+    }
+
+    /**
+     * The order's customer, decrypted exactly as far as an ordinary detail read
+     * may go (orders.md §1.5, §3.7-§3.8): the name in full, the phone decrypted
+     * for the caller to mask, and a presence flag rather than the plaintext for
+     * the address and the delivery instructions — both of those stay behind
+     * {@link #revealCustomerAddress}.
+     *
+     * <p>{@code customerType} is derived from the order row itself and is
+     * therefore never absent, even for the (untested-in-production) case of a
+     * snapshot row that was never written.
+     */
+    private CustomerDetail customerDetail(UUID tenantId, OrderRow order) {
+        String customerType;
+        if (order.customerAccountId() != null) {
+            customerType = "ACCOUNT";
+        } else if (order.guestReferenceHash() != null) {
+            customerType = "GUEST";
+        } else {
+            customerType = null;
+        }
+
+        Optional<CustomerSnapshotRow> snapshot = orders.customerSnapshot(tenantId, order.orderId());
+        if (snapshot.isEmpty()) {
+            return new CustomerDetail(null, null, false, false, true, customerType, false);
+        }
+
+        CustomerSnapshotRow row = snapshot.get();
+        return new CustomerDetail(
+                decryptForDisplay(tenantId, order.orderId(), SNAPSHOT_NAME_COLUMN, row.displayNameEncrypted()),
+                decryptForDisplay(tenantId, order.orderId(), SNAPSHOT_CONTACT_COLUMN, row.contactEncrypted()),
+                row.hasAddress(),
+                row.hasDeliveryInstructions(),
+                row.transactionalContactAllowed(),
+                customerType,
+                row.anonymizedAt() != null);
+    }
+
+    private String decryptForDisplay(UUID tenantId, UUID orderId, String column, String ciphertext) {
+        if (ciphertext == null) {
+            return null;
+        }
+        return protection.reveal(
+                tenantId,
+                ProtectedValue.deserialize(ciphertext),
+                new FieldProtection.RecordRef(SNAPSHOT_TABLE, column, orderId),
+                DETAIL_DISPLAY_PURPOSE);
+    }
+
+    /**
+     * Reveals the customer's phone in full (ADR 0029, orders.md §1.5).
+     *
+     * <p>Separate from {@link #detail}, and requiring a stated purpose, for the
+     * same reason {@link #revealLineNote} is separate from reading the order:
+     * the masked form on the detail screen is what an ordinary read may show,
+     * and going from masked to whole is a deliberate act with its own audit
+     * trail. Copy-to-clipboard of the phone counts as a reveal (orders.md
+     * §1.5) and calls this endpoint rather than copying an already-decrypted
+     * value.
+     */
+    @Transactional(readOnly = true)
+    public Optional<String> revealCustomerPhone(UUID tenantId, UUID orderId, String purpose) {
+        return orders.customerSnapshot(tenantId, orderId)
+                .filter(row -> row.contactEncrypted() != null)
+                .map(row -> protection.reveal(
+                        tenantId,
+                        ProtectedValue.deserialize(row.contactEncrypted()),
+                        new FieldProtection.RecordRef(SNAPSHOT_TABLE, SNAPSHOT_CONTACT_COLUMN, orderId),
+                        purpose));
+    }
+
+    /**
+     * Reveals the delivery address and instructions in full (ADR 0029,
+     * orders.md §1.5, §3.6, §3.8).
+     *
+     * <p>The stored document is the structured {@link DeliveryDestination}
+     * checkout wrote — дом, квартира, подъезд, этаж, ориентир and the
+     * coordinate together, never a single address line — decrypted and parsed
+     * back into the same shape rather than handed back as a JSON blob the
+     * caller has to know the schema of by convention.
+     */
+    @Transactional(readOnly = true)
+    public Optional<CustomerAddressReveal> revealCustomerAddress(UUID tenantId, UUID orderId, String purpose) {
+        return orders.customerSnapshot(tenantId, orderId).flatMap(row -> {
+            if (row.addressEncrypted() == null) {
+                return Optional.empty();
+            }
+            String addressDocument = protection.reveal(
+                    tenantId,
+                    ProtectedValue.deserialize(row.addressEncrypted()),
+                    new FieldProtection.RecordRef(SNAPSHOT_TABLE, SNAPSHOT_ADDRESS_COLUMN, orderId),
+                    purpose);
+            DeliveryDestination address = objectMapper.readValue(addressDocument, DeliveryDestination.class);
+
+            String instructions = row.deliveryInstructionsEncrypted() == null
+                    ? null
+                    : protection.reveal(
+                            tenantId,
+                            ProtectedValue.deserialize(row.deliveryInstructionsEncrypted()),
+                            new FieldProtection.RecordRef(SNAPSHOT_TABLE, SNAPSHOT_INSTRUCTIONS_COLUMN, orderId),
+                            purpose);
+
+            return Optional.of(new CustomerAddressReveal(address, instructions));
+        });
+    }
+
+    /** The board's tab badges for one location, one aggregate (orders.md §2.3). */
+    @Transactional(readOnly = true)
+    public OrderCountsRow counts(UUID tenantId, UUID brandId, UUID locationId) {
+        return orders.counts(tenantId, brandId, locationId);
     }
 
     /**
@@ -198,7 +332,60 @@ public class OrderQueryService {
         return payments.isWired() ? List.of() : List.of(PaymentIntentPort.NOT_WIRED_WARNING);
     }
 
-    public record OrderDetail(OrderRow order, List<DetailLine> lines, List<String> warnings) {}
+    public record OrderDetail(OrderRow order, List<DetailLine> lines, List<String> warnings, CustomerDetail customer) {}
 
     public record DetailLine(OrderLineRow line, List<OrderModifierRow> modifiers) {}
+
+    /**
+     * The customer block an ordinary detail read may show (orders.md
+     * §3.7-§3.8).
+     *
+     * @param displayName          decrypted in full; never masked (orders.md
+     *                             §1.5)
+     * @param contactDecrypted     the phone, decrypted. Personal data held only
+     *                             long enough for the web layer to mask it —
+     *                             never serialize this field directly
+     * @param hasAddress           whether a delivery address is on file, without
+     *                             revealing it
+     * @param hasDeliveryInstructions whether the customer left instructions,
+     *                             without revealing them
+     * @param customerType         {@code "ACCOUNT"} or {@code "GUEST"}, or null
+     *                             for an order carrying neither
+     * @param anonymized           true once the ADR 0029 retention job has
+     *                             blanked the snapshot; the panel renders
+     *                             "Данные удалены по сроку хранения" rather than
+     *                             an empty customer
+     */
+    public record CustomerDetail(
+            String displayName,
+            String contactDecrypted,
+            boolean hasAddress,
+            boolean hasDeliveryInstructions,
+            boolean transactionalContactAllowed,
+            String customerType,
+            boolean anonymized) {
+
+        /**
+         * Never the phone. A generated record accessor is not called here, but a
+         * future logging statement reaching for {@code String.valueOf(detail)}
+         * is exactly the mistake {@link DeliveryDestination#toString()} is also
+         * guarded against.
+         */
+        @Override
+        public String toString() {
+            return "CustomerDetail[REDACTED]";
+        }
+    }
+
+    /**
+     * The full delivery address and instructions, as {@link #revealCustomerAddress}
+     * returns them.
+     */
+    public record CustomerAddressReveal(DeliveryDestination address, String deliveryInstructions) {
+
+        @Override
+        public String toString() {
+            return "CustomerAddressReveal[REDACTED]";
+        }
+    }
 }

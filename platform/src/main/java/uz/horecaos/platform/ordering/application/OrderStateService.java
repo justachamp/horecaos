@@ -748,11 +748,11 @@ public class OrderStateService {
         if (order.version() != expectedVersion) {
             throw new StaleOrderException(expectedVersion, order.version());
         }
-        if (prepared == null
-                && (order.status() == OrderStatus.CONFIRMED
-                        || order.status() == OrderStatus.PREPARING
-                        || order.status() == OrderStatus.READY
-                        || order.status() == OrderStatus.FULFILLING)) {
+        // Extracted to OrderActionsPolicy so the mutating guard here and the
+        // server-supplied actions[] read model (orders.md §4.2) read one
+        // implementation of "may this order be cancelled with no registry
+        // reason" rather than two copies that can silently disagree.
+        if (prepared == null && !OrderActionsPolicy.canCancelWithoutReason(order.status())) {
             throw new CancellationNotPermittedException(order.status());
         }
         if (!OrderStateMachine.permits(order.status(), OrderStatus.CANCELLED)) {

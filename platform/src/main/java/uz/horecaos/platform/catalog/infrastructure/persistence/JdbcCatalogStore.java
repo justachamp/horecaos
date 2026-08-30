@@ -614,6 +614,107 @@ public class JdbcCatalogStore {
     }
 
     /**
+     * The sellable variants of one location, joined with their current
+     * availability (catalog.md §4.6) — the read side of {@code
+     * InventoryController.setAvailability} / {@code
+     * CatalogAuthoringController.setOffering}.
+     *
+     * <p>"Sellable" means offered here: an active variant of an active product
+     * with an {@code AVAILABLE} {@code location_offerings} row at this
+     * location. Availability is read the same way {@code
+     * InventoryService.checkAvailability} decides it, mirrored rather than
+     * called through the port because this is one join, not a per-variant
+     * lookup: a variant with no {@code inventory.stock_items} row is
+     * unavailable (an unlisted variant is never orderable, ADR 0017), {@code
+     * UNTRACKED} is always available, and {@code BINARY} follows {@code
+     * positions.binary_available}. {@code QUANTITY} is accepted by the schema
+     * and refused by the inventory service; a row in that mode comes back
+     * {@code available = false} with its tracking mode named, so the caller can
+     * render catalog.md's read-only "Количественный учёт пока не
+     * поддерживается" state instead of a control that would 409.
+     *
+     * <p>Keyset on {@code v.id}, the same documented shortcut {@code
+     * MigrationProgramController#listScopes} uses: ADR 0031 asks for a signed
+     * cursor and the platform has no {@code CursorSigner} bean yet, so the
+     * cursor is the last variant id of the previous page.
+     *
+     * <p>A product may sit in more than one category; the lateral join below
+     * picks exactly one, by the same {@code sort_order} tiebreak {@link
+     * #productIdsByCategory} uses elsewhere, so the join fans out to one row per
+     * variant rather than one per (variant, category) pair.
+     */
+    public List<VariantAvailabilityRow> variantsAtLocation(
+            UUID tenantId, UUID brandId, UUID locationId, String locale, UUID cursorVariantId, int limit) {
+        return jdbc.sql("""
+                SELECT v.id AS variant_id,
+                       t.name AS product_name,
+                       ct.name AS category_name,
+                       si.tracking_mode AS tracking_mode,
+                       pos.binary_available AS binary_available
+                FROM catalog.variants v
+                JOIN catalog.products p
+                    ON p.id = v.product_id AND p.tenant_id = v.tenant_id AND p.brand_id = v.brand_id
+                JOIN catalog.location_offerings lo
+                    ON lo.variant_id = v.id AND lo.tenant_id = v.tenant_id AND lo.brand_id = v.brand_id
+                       AND lo.location_id = :locationId AND lo.status = 'AVAILABLE'
+                LEFT JOIN catalog.translations t
+                    ON t.entity_type = 'PRODUCT' AND t.entity_id = p.id AND t.tenant_id = p.tenant_id
+                       AND t.brand_id = p.brand_id AND t.locale = :locale
+                LEFT JOIN LATERAL (
+                    SELECT c.id, c.tenant_id
+                    FROM catalog.category_products cp
+                    JOIN catalog.categories c
+                        ON c.id = cp.category_id AND c.tenant_id = cp.tenant_id AND c.brand_id = cp.brand_id
+                    WHERE cp.product_id = p.id AND cp.tenant_id = p.tenant_id AND cp.brand_id = p.brand_id
+                    ORDER BY cp.sort_order, c.id
+                    LIMIT 1
+                ) first_category ON true
+                LEFT JOIN catalog.translations ct
+                    ON ct.entity_type = 'CATEGORY' AND ct.entity_id = first_category.id
+                       AND ct.tenant_id = first_category.tenant_id AND ct.locale = :locale
+                LEFT JOIN inventory.stock_items si
+                    ON si.variant_id = v.id AND si.tenant_id = v.tenant_id AND si.location_id = :locationId
+                LEFT JOIN inventory.positions pos
+                    ON pos.stock_item_id = si.id AND pos.tenant_id = si.tenant_id
+                WHERE v.tenant_id = :tenantId AND v.brand_id = :brandId
+                  AND v.status = 'ACTIVE' AND p.status = 'ACTIVE'
+                  AND (CAST(:cursor AS uuid) IS NULL OR v.id > CAST(:cursor AS uuid))
+                ORDER BY v.id
+                LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("locale", locale)
+                .param("cursor", cursorVariantId)
+                .param("limit", limit)
+                .query((row, number) -> {
+                    String trackingMode = row.getString("tracking_mode");
+                    boolean available;
+                    if (trackingMode == null) {
+                        // No stock item at all: unlisted, and unlisted is
+                        // unavailable (InventoryService.checkAvailability).
+                        available = false;
+                    } else if ("UNTRACKED".equals(trackingMode)) {
+                        available = true;
+                    } else if ("BINARY".equals(trackingMode)) {
+                        available = Boolean.TRUE.equals(row.getObject("binary_available", Boolean.class));
+                    } else {
+                        // QUANTITY: accepted by the schema, refused by the
+                        // service. Never orderable in this release.
+                        available = false;
+                    }
+                    return new VariantAvailabilityRow(
+                            row.getObject("variant_id", UUID.class),
+                            row.getString("product_name"),
+                            row.getString("category_name"),
+                            available,
+                            trackingMode);
+                })
+                .list();
+    }
+
+    /**
      * Modifier groups reachable from this catalog's products.
      *
      * <p>Scoped to the catalog rather than the brand: a group attached to no
@@ -1022,6 +1123,17 @@ public class JdbcCatalogStore {
     private java.util.Map<String, Object> readJson(String json) {
         return objectMapper.readValue(json, java.util.Map.class);
     }
+
+    /**
+     * One row of the 86 screen (catalog.md §4.6).
+     *
+     * @param categoryName null when the product sits in no category
+     * @param trackingMode {@code BINARY}, {@code UNTRACKED}, {@code QUANTITY},
+     *                     or null when the variant carries no {@code
+     *                     inventory.stock_items} row at this location at all
+     */
+    public record VariantAvailabilityRow(
+            UUID variantId, String productName, String categoryName, boolean available, String trackingMode) {}
 
     public record PublicationRow(
             UUID id, PublicationStatus status, String contentHash, UUID catalogId, String channel) {}

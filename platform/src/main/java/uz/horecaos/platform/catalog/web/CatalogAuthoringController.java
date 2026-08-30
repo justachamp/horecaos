@@ -12,19 +12,23 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableNode;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.web.api.Page;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 /**
@@ -269,6 +273,39 @@ public class CatalogAuthoringController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/locations/{locationId}/variants")
+    @RequiresCapability(value = Capability.INVENTORY_READ, scope = ScopeType.LOCATION)
+    @Operation(
+            summary = "One location's sellable variants, with current availability",
+            description = "catalog.md §4.6, the 86 screen's read side: the read counterpart of "
+                    + "PUT .../inventory/variants/{variantId}/availability. Gated on inventory.read "
+                    + "rather than catalog.read, matching the screen's own denial rule — an actor "
+                    + "who can adjust stock but never touches draft authoring still needs this "
+                    + "list.")
+    public Page<VariantAvailabilityResponse> variantsAtLocation(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @RequestParam(defaultValue = "uz") String locale,
+            @RequestParam(required = false) UUID cursor,
+            @RequestParam(required = false) Integer limit) {
+
+        int pageSize = Page.limitOrDefault(limit);
+        List<JdbcCatalogStore.VariantAvailabilityRow> rows =
+                authoring.variantsAtLocation(tenantId, brandId, locationId, locale, cursor, pageSize);
+        List<VariantAvailabilityResponse> items =
+                rows.stream().map(VariantAvailabilityResponse::of).toList();
+
+        // A short page is the end of the collection; a full one may or may not
+        // be, and the same shortcut MigrationProgramController#listScopes takes
+        // costs the caller one empty request rather than losing every row after
+        // this page (ADR 0031 — no signed CursorSigner bean exists yet).
+        String nextCursor = items.size() < pageSize
+                ? null
+                : rows.get(rows.size() - 1).variantId().toString();
+        return new Page<>(items, nextCursor);
+    }
+
     /**
      * Actor attribution for a classification (ADR 0038).
      *
@@ -427,4 +464,25 @@ public class CatalogAuthoringController {
     public record IdResponse(UUID id) {}
 
     public record ProductResponse(UUID productId, UUID defaultVariantId) {}
+
+    /**
+     * One row of the 86 screen.
+     *
+     * @param category  null when the product sits in no category
+     * @param available whether this variant can be sold right now
+     * @param trackingMode {@code BINARY}, {@code UNTRACKED}, {@code QUANTITY},
+     *                     or null when nothing stocks it at this location. A
+     *                     {@code QUANTITY} row is always {@code available:
+     *                     false} — the client renders catalog.md's read-only
+     *                     "Количественный учёт пока не поддерживается" state
+     *                     rather than a control that would 409
+     */
+    public record VariantAvailabilityResponse(
+            UUID variantId, String productName, String category, boolean available, String trackingMode) {
+
+        static VariantAvailabilityResponse of(JdbcCatalogStore.VariantAvailabilityRow row) {
+            return new VariantAvailabilityResponse(
+                    row.variantId(), row.productName(), row.categoryName(), row.available(), row.trackingMode());
+        }
+    }
 }
