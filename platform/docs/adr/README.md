@@ -1,6 +1,7 @@
 # Architecture decisions
 
-This directory holds every architecture decision record for Qoida Platform.
+This directory holds every architecture decision record for HorecaOS Platform,
+including the records written in its Qoida era, which keep their historical names.
 
 Start with [ADR 0000](meta/0000-adr-process-and-status-model.md), which defines how
 these records are written, and [`TEMPLATE.md`](TEMPLATE.md) for new ones.
