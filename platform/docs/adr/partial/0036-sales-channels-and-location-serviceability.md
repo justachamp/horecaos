@@ -288,7 +288,7 @@ slot are settled by the database, not by a number either read a second earlier.
 `externally_priced` on a channel — an aggregator setting its own customer price —
 is a **default that seeds `ordering.orders.pricing_authority`** when an order is
 created on that channel. It is not a second enforcement point. ADR 0040 owns
-`pricing_authority (QOIDA|EXTERNAL)`, and that column on the order is the only
+`pricing_authority (HORECAOS|EXTERNAL)`, and that column on the order is the only
 value the pricing path consults; the channel flag is never read again after the
 order exists, and never by the pricing engine. ADR 0040 constrains the seeded
 value further — `EXTERNAL` is legal only where the order's channel resolves to a
@@ -299,7 +299,7 @@ The reason for one enforcement point rather than two is that two disagree
 silently. A flag flipped after orders were placed would retroactively change how
 already-booked orders are read, and an order whose channel was corrected would
 answer one way in its own row and another on the channel. ADR 0018 promises a
-Qoida-priced quote is reproducible from its context hash; an order stamped
+HorecaOS-priced quote is reproducible from its context hash; an order stamped
 `EXTERNAL` is never re-derived, so the promise holds rather than being quietly
 weakened.
 

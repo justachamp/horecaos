@@ -129,9 +129,9 @@ distinguishes it is three immutable flags and a partner attribution.
 
 | Flag | Values | Meaning |
 |---|---|---|
-| `origin` | `QOIDA`, `MARKETPLACE` | Where the order was placed |
-| `pricing_authority` | `QOIDA`, `EXTERNAL` | Who computed the total |
-| `fulfillment_authority` | `QOIDA`, `PARTNER` | Who owns the courier and the customer promise |
+| `origin` | `HORECAOS`, `MARKETPLACE` | Where the order was placed |
+| `pricing_authority` | `HORECAOS`, `EXTERNAL` | Who computed the total |
+| `fulfillment_authority` | `HORECAOS`, `PARTNER` | Who owns the courier and the customer promise |
 
 **`pricing_authority = EXTERNAL` bypasses the ADR 0018 quote engine entirely** —
 no quote, no promotion evaluation, no coupon reservation. The partner's amounts
@@ -213,12 +213,12 @@ installation ID.
 
 ```text
 ordering.orders  (columns added)
-  origin (QOIDA|MARKETPLACE), pricing_authority (QOIDA|EXTERNAL)
-  fulfillment_authority (QOIDA|PARTNER), entry_mode (API|MANUAL|IMPORT)
+  origin (HORECAOS|MARKETPLACE), pricing_authority (HORECAOS|EXTERNAL)
+  fulfillment_authority (HORECAOS|PARTNER), entry_mode (API|MANUAL|IMPORT)
   marketplace_binding_id null references integration.bindings
-  check (pricing_authority = 'QOIDA' or origin = 'MARKETPLACE')
-  check (origin = 'QOIDA' or marketplace_binding_id is not null)
-  check (pricing_authority = 'QOIDA' or pricing_quote_id is null)
+  check (pricing_authority = 'HORECAOS' or origin = 'MARKETPLACE')
+  check (origin = 'HORECAOS' or marketplace_binding_id is not null)
+  check (pricing_authority = 'HORECAOS' or pricing_quote_id is null)
 
 ordering.order_external_pricing
   order_id, tenant_id, binding_id, currency, customer_paid_total_minor
@@ -237,7 +237,7 @@ ordering.order_external_references
 
 ordering.order_handover_challenges
   id, tenant_id, order_id, binding_id null, version
-  challenge_type (CODE|QR|SIGNATURE|NONE), issued_by (PARTNER|QOIDA)
+  challenge_type (CODE|QR|SIGNATURE|NONE), issued_by (PARTNER|HORECAOS)
   expected_value_hash null, attempts, max_attempts
   status (PENDING|VERIFIED|BYPASSED|FAILED|EXPIRED)
   verified_at null, verified_by null, bypass_reason_code null
@@ -395,7 +395,7 @@ locations × bindings matrix Delever shows as «Отчёт по последне
 ## Partner API
 
 ```text
-POST {keycloak}/realms/qoida/protocol/openid-connect/token        client_credentials
+POST {keycloak}/realms/horecaos/protocol/openid-connect/token     client_credentials
 GET  /api/v1/partner/tenants/{tenantId}/restaurants
 GET  /api/v1/partner/tenants/{tenantId}/restaurants/{locationId}/availability
 GET  /api/v1/partner/tenants/{tenantId}/restaurants/{locationId}/menu

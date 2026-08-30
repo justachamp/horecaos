@@ -39,7 +39,7 @@
 - Deciders: Ayubkhon Abbosov (platform architecture, owner of the 2026-08-25 decision), finance (settlement, liability, and who bears a reimbursement), support operations (the people who actually perform the refund), product (the remedy set)
 - Depends on: ADR 0013, ADR 0018, ADR 0025, ADR 0027, ADR 0029, ADR 0031, ADR 0043, ADR 0046
 - Supersedes / Superseded by: Supersedes the refund and service-recovery compensation decision of [ADR 0013](../partial/0013-payment-refund-and-service-recovery-compensation.md) — its `payments.refunds` physical model, its `execution_channel` of `PROVIDER_CONSOLE | PLATFORM`, and its deferral of every non-refund remedy to a later `recovery` module. Everything else in ADR 0013 — the provider port, the payment state machine, uncertainty resolution, the som/tiyin boundary, and the cash `NOT_APPLICABLE` fiscal state — is untouched and remains current
-- Open inputs: Whether Click and Payme publish a machine-readable settlement statement per legal entity at all, which decides whether the verification path can ever be automated or stays a second human assertion forever (integration discovery, finance); who bears a delivery-fee reimbursement — tenant, courier partner, or platform — which decides whether it is a refund line or a cost allocation on the ADR 0043 metric layer (finance, product; carried forward unanswered from ADR 0013); where the future-discount liability is reported and on what basis it is valued — granted exposure, remaining exposure, or expected redemption (finance, with ADR 0043); whether a cabinet action may be evidenced by an upload held as an ADR 0029 protected reference, and what retention that evidence needs (legal, finance); the remedy reason-code vocabulary and whether the approval threshold is per tenant rather than the single platform-wide `qoida.payments.remedy-approval-threshold-minor` default of 200 000 (product, finance). **None is structural** — each changes a column, a report, or a configuration scope, not the model
+- Open inputs: Whether Click and Payme publish a machine-readable settlement statement per legal entity at all, which decides whether the verification path can ever be automated or stays a second human assertion forever (integration discovery, finance); who bears a delivery-fee reimbursement — tenant, courier partner, or platform — which decides whether it is a refund line or a cost allocation on the ADR 0043 metric layer (finance, product; carried forward unanswered from ADR 0013); where the future-discount liability is reported and on what basis it is valued — granted exposure, remaining exposure, or expected redemption (finance, with ADR 0043); whether a cabinet action may be evidenced by an upload held as an ADR 0029 protected reference, and what retention that evidence needs (legal, finance); the remedy reason-code vocabulary and whether the approval threshold is per tenant rather than the single platform-wide `horecaos.payments.remedy-approval-threshold-minor` default of 200 000 (product, finance). **None is structural** — each changes a column, a report, or a configuration scope, not the model
 
 ## Context
 
@@ -285,7 +285,7 @@ Other costs:
 
 - **One person below the threshold is enough.** A holder of `refund.request` can
   create a record the platform will believe, with no second pair of eyes, for any
-  amount under `qoida.payments.remedy-approval-threshold-minor` — one number,
+  amount under `horecaos.payments.remedy-approval-threshold-minor` — one number,
   defaulting to 200 000, for the whole platform. The threshold is the control and
   it is coarse.
 - **`refund.approve` is declared and guards nothing here, deliberately.**
@@ -311,7 +311,7 @@ Other costs:
 Created by
 [V0052](../../../src/main/resources/db/migration/V0052__record_remedies_horecaos_did_not_perform.sql).
 Every table is tenant-owned, every unique and foreign key includes `tenant_id`,
-and each carries a `GRANT` for `qoida_application`.
+and each carries a `GRANT` for `horecaos_application`.
 
 ```text
 payments.order_remedies
@@ -447,7 +447,7 @@ ADR that supersedes this one; the rows already written stay, because they are th
 record of money that moved.
 
 The one live configuration is
-`qoida.payments.remedy-approval-threshold-minor` (default 200 000). Lowering it
+`horecaos.payments.remedy-approval-threshold-minor` (default 200 000). Lowering it
 sends more remedies to approval and blocks nothing; raising it widens what one
 person can do alone.
 
@@ -459,7 +459,7 @@ settlement import calls the existing `recordVerification`.
 
 ## Implementation checklist
 
-- [x] Add `payments.order_remedies`, `payments.remedy_entitlements` and `payments.entitlement_redemptions` with the split, attestation, verification, cap and per-order-redemption invariants as constraints, and grants for `qoida_application` (V0052).
+- [x] Add `payments.order_remedies`, `payments.remedy_entitlements` and `payments.entitlement_redemptions` with the split, attestation, verification, cap and per-order-redemption invariants as constraints, and grants for `horecaos_application` (V0052).
 - [x] Record a refund and a delivery-fee reimbursement, full or partial, splitting the amount through `OrderSettlementService.refund` and demanding attestation only for money the platform did not move (`OrderRemedyService`).
 - [x] Grant a future discount bounded by uses, window and a per-use maximum, approved against its exposure rather than its zero cash cost (`OrderRemedyService.grantFutureDiscount`).
 - [x] Expose the three remedies, the manual verification, the unverified worklist and the totals report under `refund.request`, `refund.execute` and `payment.read` (`OperationsRemedyController`).

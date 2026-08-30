@@ -86,7 +86,7 @@ The payment model is why the split-tender half is decided now rather than when i
 is built. ADR 0013 proposes `payments.payment_intents` keyed one per order with a
 single `requested_amount_minor`. That is right for a card payment and wrong for an
 order paid 12 000 som from points and 72 000 som in cash. Payments is an empty
-package today — `src/main/java/uz/qoida/platform/payments` holds only
+package today — `src/main/java/uz/horecaos/platform/payments` holds only
 `package-info.java` — so admitting a second tender costs a schema nobody has
 written yet. After ADR 0013 ships it is a migration of live financial records with
 in-flight intents in them.

@@ -7,20 +7,20 @@
   the Caddyfile, Postgres init, grant audit and an `ops/` image whose `backup-job.sh`
   resolves every backup credential — including the passphrase — from OpenBao through
   `bao-get.sh`. `infra/backup` has `backup.sh`, `restore.sh` and
-  `rehearse-restore.sh`, encrypting and shipping to `QOIDA_BACKUP_OFFSITE_*` and refusing
-  when the off-site endpoint equals the primary. `infra/observability/qoida-probe.sh`
+  `rehearse-restore.sh`, encrypting and shipping to `HORECAOS_BACKUP_OFFSITE_*` and refusing
+  when the off-site endpoint equals the primary. `infra/observability/horecaos-probe.sh`
   evaluates the alert table on a one-minute cron and pings a dead-man's switch, and
-  `docs/runbooks/` holds thirteen runbooks plus the one-to-one alert map and an index.
+  `docs/runbooks/` holds fifteen runbooks plus the one-to-one alert map and an index.
   Not built: every gate in the checklist below is still open. `rehearse-restore.sh`
   defaults its off-site target to a second local MinIO and
-  `QOIDA_BACKUP_OFFSITE_ENDPOINT` is blank in `production.env.example`, so nothing has
+  `HORECAOS_BACKUP_OFFSITE_ENDPOINT` is blank in `production.env.example`, so nothing has
   been proved against a real remote bucket with versioning and object lock; there is no
   WAL archiving anywhere in `infra/`, so worst-case loss remains 24 hours; the media
   bucket is not mirrored; the passphrase has a defined OpenBao path and a reader but no
   sealed offline copy and no credential escrow; there is no RAID mirror; the off-box half
   — external uptime check and dead-man's-switch receiver — is configured outside this
-  repository and is not verified; eleven of the thirteen runbooks record "Last executed:
-  never" and `deploy.md` and `restore.md` carry no such line at all; and there is no
+  repository and is not verified; all thirteen of the runbooks that carry the line record "Last executed:
+  never", and `deploy.md` and `restore.md` carry no such line at all; and there is no
   staging VM, no blue/green swap script, no processor register and no sanitized-staging
   procedure.
 - Date proposed: 2026-08-20
@@ -516,7 +516,7 @@ these may see. It is a privacy and access-control artifact, not a residency one.
       local MinIO, which models the topology but not a real remote destination.
 - [x] Write the single-point-of-failure list with an honest recovery time for
       each entry.
-- [ ] Point `QOIDA_BACKUP_OFFSITE_*` at a genuine off-site bucket with versioning
+- [ ] Point `HORECAOS_BACKUP_OFFSITE_*` at a genuine off-site bucket with versioning
       and object lock, using a credential scoped to that bucket alone, and
       perform one restore from it. **Gate: no live tenant order before this.**
 - [ ] Ship continuous WAL archiving to the off-site bucket, moving worst-case

@@ -17,12 +17,12 @@
   against every stub. Fixed by naming the content type. That is the second time
   on this record that a test bypassing the real thing proved less than it
   appeared to. **The first checklist box was wrong and is
-  now unchecked.** `infra/keycloak/realm/qoida-realm.json` declares the two
+  now unchecked.** `infra/keycloak/realm/horecaos-realm.json` declares the two
   service accounts and maps *no* `realm-management` roles onto either of them, so
   against the checked-in realm every Admin API call in this record returns 403 —
   including the ones the table below records as 201. Verified 2026-08-25 against
   the running Keycloak 26.7: both clients authenticate, and `GET
-  /admin/realms/qoida/organizations` is forbidden for both. Granting the ADR's
+  /admin/realms/horecaos/organizations` is forbidden for both. Granting the ADR's
   role sets by hand reproduces the table exactly, 403s included, so the decision
   is right and the export does not carry it. `OrganizationDirectory` splits the
   read path from the write path so the drift
@@ -32,14 +32,14 @@
   missing drift for every tenant at once); `IdentityDriftReporter` compares every
   live tenant's stored organization against the realm on a timer and reports
   `ORGANIZATION_MISSING`, `_DISABLED`, `_ALIAS_MISMATCH` and `_UNLINKED` as
-  ADR 0027 `SECURITY` audit facts plus `qoida.iam.identity.drift`,
+  ADR 0027 `SECURITY` audit facts plus `horecaos.iam.identity.drift`,
   `.drift.detected{code}`, `.drift.scans{outcome}` and `.drift.report.age.seconds`
   — the last so that a report which has silently stopped is distinguishable from
   a healthy estate; and `KeycloakOrganizationIntegrationTests` runs the ADR's own
   test list against a real Keycloak, skipping with the realm finding above rather
-  than substituting a mock. `infra/keycloak/realm/qoida-realm.json`
-  defines the two approved service accounts (`qoida-provisioning`,
-  `qoida-identity-reader`); `KeycloakConfiguration` authenticates with cached
+  than substituting a mock. `infra/keycloak/realm/horecaos-realm.json`
+  defines the two approved service accounts (`horecaos-provisioning`,
+  `horecaos-identity-reader`); `KeycloakConfiguration` authenticates with cached
   client-credentials tokens refreshed 30s before expiry, bounded 3s connect /
   10s read timeouts, and resolves the client secret by ADR 0028 reference so no
   credential is logged; `KeycloakOrganizationProvisioner` implements
@@ -53,7 +53,7 @@
   `iam.identity_reconciliation_runs`, with the two-column foreign key that makes a
   link naming another tenant's organization impossible and the
   `uq_tenant_id_keycloak_organization` constraint it needs, all three granted to
-  `qoida_application`. **No Java reads or writes any of the three.** The linked
+  `horecaos_application`. **No Java reads or writes any of the three.** The linked
   subject and organization still survive only in the tenant row and the onboarding
   step result, membership-level drift is still not reported —
   `IdentityDriftReporter` never emits `MEMBERSHIP_UNVERIFIED`, and its own comment
@@ -64,7 +64,7 @@
   sketched below was never split out of `OrganizationProvisioner`; disable and
   re-enable handling (`setOrganizationEnabled` is likewise absent); the three
   control-plane identity endpoints this record specifies; the four events; and
-  the probe stanza reading `qoida.iam.identity.drift.report.age.seconds`. Every
+  the probe stanza reading `horecaos.iam.identity.drift.report.age.seconds`. Every
   claim in this implementation status line was checked against the source tree on
   2026-08-25, not against another document.
 - Date proposed: 2026-08-19
@@ -114,8 +114,8 @@ capability it never uses.
 
 | Client | Purpose | `realm-management` roles |
 |---|---|---|
-| `qoida-provisioning` | Create organizations, create and link owners, assign organization-scoped roles | `manage-organizations`, `manage-users`, `view-users`, `query-users` |
-| `qoida-identity-reader` | Scheduled drift report | `view-organizations`, `query-organizations`, `view-users`, `query-users` |
+| `horecaos-provisioning` | Create organizations, create and link owners, assign organization-scoped roles | `manage-organizations`, `manage-users`, `view-users`, `query-users` |
+| `horecaos-identity-reader` | Scheduled drift report | `view-organizations`, `query-organizations`, `view-users`, `query-users` |
 
 Neither holds `manage-realm`, `realm-admin`, `manage-clients`, or
 `impersonation`.
@@ -342,13 +342,13 @@ evidence; do not delete external objects automatically.
 ## Implementation checklist
 
 - [ ] Approve the service-account role set, verified against Keycloak 26.7, with secrets delivered from OpenBao per ADR 0028. The role set is approved and the realm export carries none of it: neither service account has a `realm-management` role mapping, so every Admin API call is 403. The local OpenBao seed in `compose.yaml` also holds secrets the realm import never set, so the local application cannot authenticate at all.
-- [x] Add IAM principal, membership-link, and reconciliation migrations. `V0057` creates `iam.principals`, `iam.tenant_membership_links` and `iam.identity_reconciliation_runs`, with the two-column foreign key that makes a membership link naming another tenant's organization impossible and the `uq_tenant_id_keycloak_organization` constraint it references, all three granted to `qoida_application`. The tables are the only thing delivered: no code reads or writes any of them, which is the next box and the one after it.
+- [x] Add IAM principal, membership-link, and reconciliation migrations. `V0057` creates `iam.principals`, `iam.tenant_membership_links` and `iam.identity_reconciliation_runs`, with the two-column foreign key that makes a membership link naming another tenant's organization impossible and the `uq_tenant_id_keycloak_organization` constraint it references, all three granted to `horecaos_application`. The tables are the only thing delivered: no code reads or writes any of them, which is the next box and the one after it.
 - [x] Implement HTTP client authentication with cached client-credentials tokens, bounded timeouts, and no credential in any log.
 - [x] Implement the organization ensure, read-back, and link algorithm, including the refusal to create a replacement on drift.
 - [x] Implement subject link and create-or-link membership. Organization-scoped role reconciliation remains.
 - [x] Connect the organization and membership steps to the ADR 0008 workflow, reconciling by stored identifier on retry.
-- [ ] Add drift reporting, audit facts, metrics, and alerts. Organization-level drift, its `SECURITY` audit facts and its four metrics are built and tested. Membership-level drift no longer waits on a migration — `V0057` shipped it — but on something writing `iam.tenant_membership_links`, since a drift report over an empty table would report every tenant clean. The probe stanza that reads `qoida.iam.identity.drift.report.age.seconds` still belongs in `infra/observability/qoida-probe.sh` and is not there.
-- [ ] Add isolated Keycloak integration and cross-tenant security tests. `KeycloakOrganizationIntegrationTests` covers double-ensure, uncertain-create readback, refusal to replace a vanished organization, double link, per-organization membership isolation, and both least-privilege 403s — against a real Keycloak, and skipping while the realm export grants the service accounts nothing.
+- [ ] Add drift reporting, audit facts, metrics, and alerts. Organization-level drift, its `SECURITY` audit facts and its four metrics are built and tested. Membership-level drift no longer waits on a migration — `V0057` shipped it — but on something writing `iam.tenant_membership_links`, since a drift report over an empty table would report every tenant clean. The probe stanza that reads `horecaos.iam.identity.drift.report.age.seconds` still belongs in `infra/observability/horecaos-probe.sh` and is not there.
+- [x] Add isolated Keycloak integration and cross-tenant security tests. `KeycloakOrganizationIntegrationTests` covers double-ensure, uncertain-create readback, refusal to replace a vanished organization, double link, per-organization membership isolation, and both least-privilege 403s — against a real Keycloak. It still skips loudly (`Assumptions.abort`) if Keycloak is absent or the realm grants `horecaos-provisioning` no roles, but as of 2026-08-30 `make up` runs `assign-service-account-roles.sh` with wait/retry, so the normal path runs all 8 rather than skipping.
 
 ## Exit criteria
 

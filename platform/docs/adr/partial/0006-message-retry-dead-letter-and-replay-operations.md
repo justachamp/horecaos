@@ -11,7 +11,7 @@
   `FailureOperationsController` exposes list/retry/resolve at
   `/api/v1/control-plane/integration/failures` behind
   `INTEGRATION_FAILURE_READ/RETRY/RESOLVE`; `MessagingBacklogMetrics` publishes
-  the backlog and dead-letter gauges and `infra/observability/qoida-probe.sh`
+  the backlog and dead-letter gauges and `infra/observability/horecaos-probe.sh`
   evaluates the stall and monetary-dead-letter alerts against them, with
   `docs/runbooks/outbox-not-draining.md` and
   `docs/runbooks/dead-letter-decision.md`; `RetryBackoff` gives both retry loops
@@ -313,7 +313,7 @@ records and dashboards. Never delete dead-letter evidence during rollback.
       confirm which ids are real.
 - [x] Add compare-and-set retry and resolve commands with immutable audit facts.
 - [x] Define the approval policy: retry never needs a second approver; resolving an `UNCERTAIN_EXTERNAL_OUTCOME` does, through the ADR 0027 maker-checker.
-- [x] Add alert rules, dashboards, and operator runbooks. — Alerts and runbooks are built: `infra/observability/qoida-probe.sh` evaluates the order-flow stall and monetary dead-letter rules against `MessagingBacklogMetrics`'s gauges, and links `docs/runbooks/outbox-not-draining.md` and `docs/runbooks/dead-letter-decision.md`. The dashboard is deliberately absent here. ADR 0023 owns the observability stack, chose a direct-scrape probe and a dead-man's switch over Prometheus and a dashboard, and carries the dashboard on its own checklist; building one under this record would be a second answer to a question another record has already decided.
+- [x] Add alert rules, dashboards, and operator runbooks. — Alerts and runbooks are built: `infra/observability/horecaos-probe.sh` evaluates the order-flow stall and monetary dead-letter rules against `MessagingBacklogMetrics`'s gauges, and links `docs/runbooks/outbox-not-draining.md` and `docs/runbooks/dead-letter-decision.md`. The dashboard is deliberately absent here. ADR 0023 owns the observability stack, chose a direct-scrape probe and a dead-man's switch over Prometheus and a dashboard, and carries the dashboard on its own checklist; building one under this record would be a second answer to a question another record has already decided.
 - [x] Add concurrency, replay, and evidence tests. Authorization tests land with the endpoints.
 
 ## Exit criteria

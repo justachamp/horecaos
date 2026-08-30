@@ -68,9 +68,9 @@ layers stops being a decision record.
    channel. The Click Mini App is explicitly later.
 
 **What did not change.** Angular remains the single web component framework.
-The Qoida Design System remains the visual contract, adopted by consuming its
+The HorecaOS Design System remains the visual contract, adopted by consuming its
 tokens rather than rewriting them. Authentication remains Authorization Code
-with PKCE against the Qoida realm, with the additions in *Telegram Mini App*
+with PKCE against the HorecaOS realm, with the additions in *Telegram Mini App*
 below. The component gap identified on 2026-08-21 is unchanged in substance and
 is restated with a corrected mobile column.
 
@@ -305,7 +305,7 @@ to say what it switches off as well as what it sets.
 | Geometry | 8pt corner radii, 44pt minimum targets | 8dp radii from `--q-radius` FIELD value, 48dp minimum targets. Material 3's default shapes are overridden explicitly in `ThemeData`, not inherited |
 | Elevation | One soft shadow | One soft shadow. Material 3 surface *tint* elevation is disabled — it recolours surfaces by depth, which the design system does not do |
 | Feedback | `UIImpactFeedbackGenerator` | `HapticFeedback`, and the Material ink ripple is replaced with a token-controlled press state. A ripple is decoration this system does not use |
-| Navigation | `NavigationStack`, `.sheet` | A single declarative router; sheets are `showModalBottomSheet` with the FIELD radius. One widget set on both platforms — Material-based and Qoida-skinned — rather than adaptive Cupertino/Material widgets, because "one codebase" stops being true the moment the tree branches on platform |
+| Navigation | `NavigationStack`, `.sheet` | A single declarative router; sheets are `showModalBottomSheet` with the FIELD radius. One widget set on both platforms — Material-based and HorecaOS-skinned — rather than adaptive Cupertino/Material widgets, because "one codebase" stops being true the moment the tree branches on platform |
 | Dynamic type | Dynamic Type | `MediaQuery.textScaler`, honoured and clamped to a bounded range so the closed scale survives a 200 % system setting |
 | Money and dates | `Int` extension formatting | One shared formatter: `intl` with a space group separator and no decimals for UZS; 24h clock and `DD.MM` for ru and uz. Not reimplemented per screen — the legacy application reimplemented it per screen |
 | Locale | `LanType` enum of `en`/`ru`/`uz` | `Locale('ru')`, `Locale.fromSubtags(languageCode: 'uz', scriptCode: 'Latn')`, `Locale('en')`. The script subtag is carried because uz-Latn and uz-Cyrl are not the same locale and the legacy `uz` was ambiguous |
@@ -343,7 +343,7 @@ version.
 | `PhoneFrame` and siblings | Previewing FIELD and MOBILE inside CONSOLE | Not used | The real thing, not a frame |
 
 Charts, maps, and rich text are third-party by necessity, each wrapped behind a
-Qoida component so the library stays replaceable.
+HorecaOS component so the library stays replaceable.
 
 **One console template is not enough.** Operations needs three shells — the
 operator console (dense, keyboard-first), a kitchen device shell (fullscreen,
@@ -353,7 +353,7 @@ do not.
 
 ## Authentication
 
-Carried forward: Authorization Code with PKCE against the Qoida realm, tokens in
+Carried forward: Authorization Code with PKCE against the HorecaOS realm, tokens in
 memory rather than local storage, exact allowlisted redirect URIs, proactive
 refresh coordinated across tabs, explicit tenant selection verified against
 membership before it enters API context, and logout clearing application cache
@@ -529,7 +529,7 @@ wave 7. "The frontend" is no longer one deployable, so:
       unimplemented. Add a lint rule forbidding `window.Telegram` outside the
       Telegram host implementation.
 - [ ] Implement server-side `initData` verification — HMAC against the bot token,
-      `auth_date` freshness window, exchange for a Qoida token.
+      `auth_date` freshness window, exchange for a HorecaOS token.
 - [ ] Publish the OpenAPI document as a versioned release artifact; pin it in
       each client and generate clients in CI with a committed-output diff check.
 - [ ] Add consumer manifests, one per client, and extend the ADR 0031 diff gate

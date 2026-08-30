@@ -48,7 +48,7 @@
 - Deciders: Ayubkhon Abbosov (platform architecture), product
 - Depends on: none
 - Supersedes / Superseded by: —
-- Open inputs: Tenant grouping of legacy companies (product, per tenant)
+- Open inputs: none — tenant grouping of legacy companies is a legacy-migration concern; ADR 0055 (greenfield launch scope) moved all legacy-facing dispositions, including this one, out of launch scope and into the future migration program, decided only once that program starts
 
 ## Context
 

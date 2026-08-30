@@ -36,8 +36,10 @@
   `payments.payment_method_entity_bindings`, the fiscal-responsibility validation
   at method activation, and the foreign key from ADR 0036's
   `channel_payment_methods` — note that `payments.payment_methods` itself now
-  exists, created by ADR 0046 in V0042, but `JdbcSettlementStore.registerMethod`
-  has no production caller, so no tenant has a registry row; bulk classification
+  exists, created by ADR 0046 in V0042, and `CheckoutService`'s checkout-time
+  settlement planning now calls `JdbcSettlementStore.registerMethod` through
+  `CheckoutSettlementPlanner`, seeding a tenant's registry row lazily the first
+  time it tenders against that method; bulk classification
   assignment, and the three `CatalogValidator` rules are still warnings rather
   than publication errors; the payments half of the `PARTNER` path — nothing
   implements `fiscal.api.PartnerFiscalizationPort`, so `FiscalPortConfiguration`'s
@@ -1080,7 +1082,7 @@ orders.
 
 ## Implementation checklist
 
-- [x] Add `tenant.legal_entities` and `tenant.location_fiscal_assignments` with the overlap exclusion constraint. (V0053, which also adds the two foreign keys from `payments.merchant_bindings.legal_entity_id` and `fiscal.fiscal_documents.legal_entity_id`, so neither is an unconstrained uuid any longer. No control-plane surface writes either table: `LegalEntityService` has no controller, so an entity and its assignment are hand-written SQL today.)
+- [x] Add `tenant.legal_entities` and `tenant.location_fiscal_assignments` with the overlap exclusion constraint. (V0053, which also adds the two foreign keys from `payments.merchant_bindings.legal_entity_id` and `fiscal.fiscal_documents.legal_entity_id`, so neither is an unconstrained uuid any longer. A control-plane surface now writes both tables through `LegalEntityController` — register, list, get and activate an entity, and read/write a location's fiscal assignment, gated by the `legal-entity.read`/`legal-entity.manage` capabilities.)
 - [ ] Extend ADR 0018 tax profile resolution and the quote context hash with the legal entity, and constrain `rate_basis_points` to multiples of 100.
 - [x] Add `catalog.fiscal_classifications` with `unit_code` and `fiscal_name`, and `catalog.mxik_reference`; migrate V0021's interim columns into it and drop them, along with `catalog.products.tax_category_code` and the two unclassified indexes. (V0028; the four completeness fields are nullable and asserted by the validator, so stage 3 can be enabled per brand.)
 - [ ] Add the three `CatalogValidator` rules, bulk assignment, and the coverage report. (V0028 reports coverage; the rules are still warnings.)

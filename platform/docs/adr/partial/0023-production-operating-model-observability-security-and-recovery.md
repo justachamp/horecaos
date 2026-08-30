@@ -1,7 +1,7 @@
 # ADR 0023: Production operating model, observability, security, and recovery
 
 - Decision status: Accepted
-- Implementation status: Partial — the alerts, the probes, the watchdog, and the runbooks are built. `uz.qoida.platform.observability` publishes the gauges; `infra/observability/qoida-probe.sh` evaluates every alert in the table below at its stated threshold and tier and pings the dead-man's switch; `management.endpoint.health.group` splits liveness, readiness, and the external customer probe; the platform runbooks are written. `compose.production.yaml` runs the box and `infra/production/caddy/Caddyfile` fronts it. **Four things in this record are not built and are enumerated under "What is not built yet" below**: the off-box half (two external services), the single dashboard, traces, and one alert that cannot be implemented as specified — dead letters by `FailureCategory` on the outbox side, which has no column to group by. **Nine checklist items remain open, not the three an earlier revision of this line counted**: the `app`/`worker` role split (one container runs every scheduler today, and the four switches this record names no longer cover them); Prometheus, Alertmanager and the dashboard; the reverse proxy's Payme allowlist, body caps and rate limits, of which the Caddyfile carries none; the WireGuard and key-only-SSH host configuration; the laptop-loss rehearsal; the OpenBao AppRole file mounts; the restore rehearsal's money reconciliation; the cutover suppression window and ownership panel; and the external vulnerability scan
+- Implementation status: Partial — the alerts, the probes, the watchdog, and the runbooks are built. `uz.horecaos.platform.observability` publishes the gauges; `infra/observability/horecaos-probe.sh` evaluates every alert in the table below at its stated threshold and tier and pings the dead-man's switch; `management.endpoint.health.group` splits liveness, readiness, and the external customer probe; the platform runbooks are written. `compose.production.yaml` runs the box and `infra/production/caddy/Caddyfile` fronts it. **Four things in this record are not built and are enumerated under "What is not built yet" below**: the off-box half (two external services), the single dashboard, traces, and one alert that cannot be implemented as specified — dead letters by `FailureCategory` on the outbox side, which has no column to group by. **Nine checklist items remain open, not the three an earlier revision of this line counted**: the `app`/`worker` role split (one container runs every scheduler today, and the four switches this record names no longer cover them); Prometheus, Alertmanager and the dashboard; the reverse proxy's Payme allowlist, body caps and rate limits, of which the Caddyfile carries none; the WireGuard and key-only-SSH host configuration; the laptop-loss rehearsal; the OpenBao AppRole file mounts; the restore rehearsal's money reconciliation; the cutover suppression window and ownership panel; and the external vulnerability scan
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-23
 - Deciders: Ayubkhon Abbosov (platform architecture, and the person who carries the pager)
@@ -112,8 +112,8 @@ worker    outbox relay, Kafka inbox consumers, order timers, scheduled jobs
 
 ADR 0034's five role configurations survive as configuration; the process count
 does not. The switches already exist and are the whole mechanism:
-`qoida.messaging.outbox.enabled`, `qoida.messaging.inbox.listener.enabled`,
-`qoida.ordering.workers.enabled`, and `qoida.api.idempotency.purge.enabled`. The
+`horecaos.messaging.outbox.enabled`, `horecaos.messaging.inbox.listener.enabled`,
+`horecaos.ordering.workers.enabled`, and `horecaos.api.idempotency.purge.enabled`. The
 `app` service runs with all four off; `worker` runs with them on and receives no
 proxied traffic. `scheduler` and `integration` remain profiles rather than
 containers, so ADR 0028 can still issue an identity per role and grant
@@ -150,9 +150,9 @@ alert has already fired. Nothing is measured because it is measurable.
 
 ### What is measured
 
-The counters that exist today — `qoida.outbox.publications`,
-`qoida.inbox.records`, `qoida.notifications.provider.calls`,
-`qoida.authorization.shadow` — plus the gauges this record requires and which do
+The counters that exist today — `horecaos.outbox.publications`,
+`horecaos.inbox.records`, `horecaos.notifications.provider.calls`,
+`horecaos.authorization.shadow` — plus the gauges this record requires and which do
 not exist yet: outbox and inbox oldest-pending age, dead-letter counts by
 `FailureCategory`, circuit-breaker state per provider, orders by state with the
 age of the oldest, free space on the data volume, and during cutover the count
@@ -341,7 +341,7 @@ without ever being allowed to reject them:
 
 ### Secrets reaching the process
 
-ADR 0028 owns this and the mechanism exists: `qoida.secrets.provider` selects
+ADR 0028 owns this and the mechanism exists: `horecaos.secrets.provider` selects
 OpenBao, `SecretsProfileGuard` refuses to start a non-local profile on the
 file-based resolver, and `SecretValue` redacts itself so a credential cannot
 reach a log line. What this record adds is the delivery detail. Each service
@@ -495,8 +495,8 @@ asynchronous and quota-bounded so a report cannot become an outage.
 - [x] Write the production Compose overlay: three services, no host port mappings except the proxy, log rotation with a hard cap, `restart: unless-stopped`. — `compose.production.yaml`, with the `worker` split still outstanding below.
 - [ ] Split the role switches into `app` and `worker` configuration, and assert in a test that exactly one process runs each scheduler. — Not done, and the gap has widened. The four switches this record names still exist, but the codebase now holds twenty-one `@Scheduled` classes and twenty of them carry their own `@ConditionalOnProperty`: the delivery sourcing scheduler, the fiscal obligation and reporting sweepers, the inbox retry worker, the verification-challenge sweeper, the loyalty sweeper, the kitchen release worker, the telemetry track and stream sweepers, the audit and reporting partition managers, the onboarding scheduler and the identity drift reporter among them. Only three of the four named switches guard a scheduler at all — the fourth guards a Kafka listener — so a `worker` split built against that list would leave most of the schedulers running in `app`. `platform-app` runs with all of them on, so today one container is both roles.
 - [x] Add the missing gauges: outbox and inbox oldest age, dead letters by category, breaker state, orders by state and age, free disk, fence rejections, replicator lag. — All except two. **Outbox dead letters cannot be grouped by category**: the outbox table records only `last_error` free text, so those rows are published as `failure_category="unclassified"` and grouped by topic domain, which is what the alert actually needs. **Replicator lag has nothing to measure** — ADR 0024's replicator does not exist yet.
-- [ ] Stand up Prometheus, Alertmanager, and the single dashboard on the box; deliver alerts off it. — Not done, and the alerts do not wait for it: `qoida-probe.sh` evaluates them from a direct scrape, so the thresholds live in exactly one place. The consequence is that everything on the "deliberately not an alert" list is measured and currently unwatched, because the dashboard it was supposed to live on does not exist.
-- [x] Implement the alert rules in this record at the stated thresholds and tiers, and nothing else. — `infra/observability/qoida-probe.sh`, with one exception. **"Platform unreachable" is not evaluated on the box and cannot be**, because a script running on the machine cannot observe that the machine is unreachable; it is the off-box uptime check, specified in `infra/observability/README.md`. Every remaining threshold is overridable by an environment variable so that each can be made to fire on demand, which is how the exit criterion is met without staging an outage. The stuck-circuit alert covers the payment and POS breakers; the courier breakers publish the same gauge and do not page.
+- [ ] Stand up Prometheus, Alertmanager, and the single dashboard on the box; deliver alerts off it. — Not done, and the alerts do not wait for it: `horecaos-probe.sh` evaluates them from a direct scrape, so the thresholds live in exactly one place. The consequence is that everything on the "deliberately not an alert" list is measured and currently unwatched, because the dashboard it was supposed to live on does not exist.
+- [x] Implement the alert rules in this record at the stated thresholds and tiers, and nothing else. — `infra/observability/horecaos-probe.sh`, with one exception. **"Platform unreachable" is not evaluated on the box and cannot be**, because a script running on the machine cannot observe that the machine is unreachable; it is the off-box uptime check, specified in `infra/observability/README.md`. Every remaining threshold is overridable by an environment variable so that each can be made to fire on demand, which is how the exit criterion is met without staging an outage. The stuck-circuit alert covers the payment and POS breakers; the courier breakers publish the same gauge and do not page.
 - [x] Implement the watchdog that recreates a failing container before it pages, per ADR 0034. — `autoheal` restarts on the health check; the probe pages only when the restart did not fix it, at three restarts in ten minutes.
 - [x] Implement `/actuator/health/liveness` and `/actuator/health/readiness`, with no dependency check on liveness. — And a third group, `customer`, which is the only one that consults PostgreSQL and is the one the external uptime check must use. Asserted in `HealthProbeAndMetricTests`, including with the database deliberately stopped.
 - [ ] Configure WireGuard, key-only SSH on the tunnel interface, and the second device's peer and key. — Host configuration, not in this repository.
@@ -505,7 +505,7 @@ asynchronous and quota-bounded so a report cannot become an outage.
 - [ ] Deliver OpenBao AppRole secret identifiers as `0600` file mounts and document the unseal procedure. — The unseal procedure is `docs/runbooks/openbao-sealed.md`; the mounts are ADR 0028's.
 - [ ] Add the money reconciliation in integer minor units to the rehearsal, and record the wall clock as an ADR 0027 audit fact.
 - [x] Write the platform runbooks: outbox not draining, dead-letter decision, circuit stuck open, scope fencing writes, laptop lost. — Plus PostgreSQL down, payment callback failing, OpenBao sealed, crash loop, and disk filling, indexed by `docs/runbooks/alerts.md`. **Every one is a draft until executed.**
-- [ ] Add the cutover alert, the replicator-lag signal, and the ownership panel, and define the backfill suppression window. — The cutover alert is built and counts from `qoida.migration.writes.fenced`. The replicator-lag signal has nothing to measure. The panel needs the dashboard. The suppression window is not implemented: the probe has no maintenance mode, so an announced backfill will currently produce digest noise.
+- [ ] Add the cutover alert, the replicator-lag signal, and the ownership panel, and define the backfill suppression window. — The cutover alert is built and counts from `horecaos.migration.writes.fenced`. The replicator-lag signal has nothing to measure. The panel needs the dashboard. The suppression window is not implemented: the probe has no maintenance mode, so an announced backfill will currently produce digest noise.
 - [ ] Run the external vulnerability scan before the pilot serves customers.
 
 ## What is not built yet

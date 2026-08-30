@@ -29,7 +29,7 @@
   and no run has ever advanced outside a test calling `runNextStep` directly. It
   is an `EXISTS` subquery now, and `aRunWaitingForPlatformApprovalIsNeverStalled`
   asserts the query against a real database so a scheduler that cannot claim
-  cannot pass again. `qoida.onboarding.runs.stalled.age.seconds` joins the two
+  cannot pass again. `horecaos.onboarding.runs.stalled.age.seconds` joins the two
   existing gauges,
   excluding the `TENANT_ACTIVATE` step by name so the signal is "the workflow has
   stopped" and not "a person has not decided yet". That exclusion used to rest on
@@ -41,7 +41,7 @@
   gauge exists never to raise. The gauge now excludes the step by key, and
   `aRunWaitingForPlatformApprovalIsNeverStalled` drives the real scheduler with a
   batch of four to hold it there. Reading it is the `check_onboarding_stalled`
-  stanza in `infra/observability/qoida-probe.sh`, at one hour — ten times the
+  stanza in `infra/observability/horecaos-probe.sh`, at one hour — ten times the
   longest a healthy step waits, which is one expired five-minute lease plus one
   five-second poll — in the morning tier, because the tenant this concerns is by
   definition not live, and pointing at
@@ -71,7 +71,7 @@
   capability at all — it parks awaiting the platform's approval, which is
   precisely why the stalled gauge has to exclude it. Audit facts
   (`tenant.onboarding_started`, `tenant.onboarding_resumed`,
-  `tenant.activated`) and the `qoida.onboarding.runs.waiting` /
+  `tenant.activated`) and the `horecaos.onboarding.runs.waiting` /
   `.failed` gauges are emitted. The bootstrap gap noted here is closed:
   `JdbcAuthorizationService` now confers `IAM_GRANT_MANAGE` on a caller holding
   the `platform-admin` realm role, so an operator on a fresh deployment can grant
@@ -306,7 +306,7 @@ run/step evidence remains intact.
 - [x] Implement the four required handlers, including the structure validation that has no external effect.
 - [x] Integrate the ADR 0009 organization and membership steps.
 - [x] Publish onboarding events through the outbox.
-- [x] Add metrics, audit facts, dashboards, and stuck-run alerts. Metrics, audit facts, and the alert are done: `qoida.onboarding.runs.stalled.age.seconds` excludes the `TENANT_ACTIVATE` step by name so a run correctly waiting for platform approval is never counted, `check_onboarding_stalled` in `infra/observability/qoida-probe.sh` reads it at one hour in the morning tier, and `docs/runbooks/onboarding-run-stalled.md` is the one runbook it points at. No dashboard is coming: ADR 0023 chose a probe, and a dashboard would be a second unwatched surface. The runbook is a draft until it has been executed once, like every other in that directory.
+- [x] Add metrics, audit facts, dashboards, and stuck-run alerts. Metrics, audit facts, and the alert are done: `horecaos.onboarding.runs.stalled.age.seconds` excludes the `TENANT_ACTIVATE` step by name so a run correctly waiting for platform approval is never counted, `check_onboarding_stalled` in `infra/observability/horecaos-probe.sh` reads it at one hour in the morning tier, and `docs/runbooks/onboarding-run-stalled.md` is the one runbook it points at. No dashboard is coming: ADR 0023 chose a probe, and a dashboard would be a second unwatched surface. The runbook is a draft until it has been executed once, like every other in that directory.
 - [x] Test resume, blocked steps, readiness gating, double activation, and reconciliation without recreation.
 
 ## Exit criteria

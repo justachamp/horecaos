@@ -41,8 +41,9 @@ then an em dash, then what exists and what does not:
   endpoint.
 ```
 
-[ADR 0000](meta/0000-adr-process-and-status-model.md) still documents the older
-vocabulary. Amending it is a decision record change and belongs to the owner.
+[ADR 0000](meta/0000-adr-process-and-status-model.md) now documents this same
+vocabulary; it was corrected in the 2026-08-30 documentation-accuracy pass, with
+the owner's sign-off, as a process-description fix rather than a decision change.
 
 `Accepted` plus `Not started` is normal and common. `Proposed` means an
 external answer is genuinely missing, and every such ADR lists who owns it.
@@ -148,18 +149,32 @@ did not exist.
 numbers are immutable identifiers assigned in creation order, not sequence
 numbers. An ADR does not state its own position in the plan.
 
-The plan is a dependency graph, not a line. Work in different tracks can proceed
-in parallel wherever the graph allows it, and pretending otherwise understates
-capacity and overstates coupling.
+**[ADR 0055](meta/0055-greenfield-launch-scope.md) (2026-08-30) replaced the
+migration-shaped order this section used to describe with launch phases.** The
+platform's first production launch is greenfield — new tenants only, no legacy
+data or traffic in scope — and the legacy migration program (production
+discovery, credential rotation, backfill, shadow, cutover, retirement) becomes a
+later, separate program that starts only once production exists. The tracks and
+phases below are organized around that: cross-cutting foundations and the
+messaging/onboarding backbone still run before or alongside the first capability
+that needs them; everything else is grouped into ADR 0055's six launch phases
+(storefront → operations → payments → onboarding completion → dev/test proving →
+production hardening), with the migration program placed after them, dormant
+until it starts. Records 0036–0057, added since this roadmap was last written,
+are placed in the phase or track their subject matter belongs to.
+
+The plan is a dependency graph, not a line. Work in different tracks or within
+one phase can proceed in parallel wherever the graph allows it, and pretending
+otherwise understates capacity and overstates coupling.
 
 ```mermaid
 flowchart TD
-    F["Foundation<br/>0001–0004 · done"] --> X
+    F["Foundation<br/>0001–0004, 0052, 0053, 0054 · done"] --> X
 
     subgraph X["Track A · Cross-cutting foundations"]
-      A1["0031 API conventions"]
-      A2["0027 Audit + approvals"]
-      A3["0025 Authorization"]
+      A1["0031 API conventions<br/>0057 OpenAPI groups"]
+      A2["0027 Audit + approvals<br/>0050 missing-policy behavior"]
+      A3["0025 Authorization<br/>0049 non-staff principals"]
       A4["0028 Secrets"]
       A5["0030 Config + policy"]
       A6["0032 Event governance"]
@@ -169,28 +184,61 @@ flowchart TD
     end
 
     X --> B["Track B · Messaging and integration<br/>0005 → 0006 → 0026 → 0007"]
-    X --> C["Track C · Control plane<br/>0008 → 0009"]
-    X --> E["Track E · Frontend shell<br/>0035 foundation"]
+    X --> C["Track C · Onboarding backbone<br/>0008 → 0009 · ADR 0055 phase 4"]
 
-    B --> D1["0010 Media"]
-    C --> D1
-    D1 --> D2["0015 Customers"]
-    D2 --> D3["0016 Catalog"]
-    D3 --> D4["0017 Inventory"]
-    D3 --> D5["0011 POS adapters"]
-    D4 --> D6["0018 Pricing"]
-    D3 --> D7["0013 Payments + recovery"]
-    D5 --> D8["0012 POS sync"]
-    D7 --> D9["0014 Delivery"]
-    D6 --> O["0019 Ordering"]
-    D7 --> O
-    D9 --> O
-    O --> N["0020 Notifications"]
-    O --> S["0021 Plans + entitlements"]
-    N --> J["Track E · 0022 journey migration"]
-    S --> J
-    J --> P["0023 Production readiness"]
-    P --> R["0024 Cutover and retirement"]
+    B --> P1
+    X --> P1
+
+    subgraph P1["ADR 0055 phase 1 · Storefront"]
+      S1["0051 Customer sessions · done"]
+      S2["0035 Angular frontend"]
+      S3["0010 Media"]
+      S4["0015 Customers"]
+      S5["0016 Catalog"]
+      S6["0036 Sales channels + serviceability"]
+      S7["0017 Inventory"]
+      S8["0037 Delivery zones + tariffs"]
+      S9["0018 Pricing"]
+      S10["0038 Legal entities + fiscal receipts"]
+      S11["0019 Cart, checkout, ordering"]
+      S12["0020 Notifications"]
+    end
+
+    P1 --> P2
+    P1 --> P3
+    C --> P4
+
+    subgraph P2["ADR 0055 phase 2 · Operations"]
+      O1["0039 Operator-assisted ordering"]
+      O2["0041 Kitchen execution"]
+      O3["0045 Realtime push"]
+      O4["0011 → 0012 POS adapters + sync"]
+    end
+
+    subgraph P3["ADR 0055 phase 3 · Payments"]
+      PA1["0013 Payments, refunds, recovery"]
+      PA2["0048 Refunds as bookkeeping"]
+    end
+
+    subgraph P4["ADR 0055 phase 4 · Onboarding completion"]
+      ON1["0002 SaaS domain model"]
+      ON2["0021 Plans + entitlements"]
+    end
+
+    P2 --> P5
+    P3 --> P5
+    P4 --> P5
+    P5["ADR 0055 phase 5 · Dev/test proving<br/>phases 1–4 exercised together"] --> P6
+
+    subgraph P6["ADR 0055 phase 6 · Production hardening"]
+      H1["0023 Production operating model"]
+      H2["0056 Tenant isolation RLS backstop"]
+      H3["0034 orchestrator spike"]
+    end
+
+    P6 --> M["Migration program · later, dormant<br/>0024 legacy data migration"]
+
+    P1 -.expansion after the pilot.-> LX["0040 Marketplace · 0042 Courier comp<br/>0044 Marketing · 0046 Loyalty · 0047 Dine-in · 0043 Reporting"]
 ```
 
 ### Track A — cross-cutting foundations
@@ -200,54 +248,164 @@ small. All of them were previously assumed by later ADRs without existing.
 
 | Order | ADR | Why here |
 |---:|---|---|
-| A1 | [0031](built/0031-http-api-conventions.md) | Sixteen ADRs specify endpoints assuming these conventions. Partly implemented already |
-| A2 | [0027](partial/0027-audit-evidence-and-approval-model.md) | ADR 0006 needs audited replay at the very start of Track B |
-| A3 | [0025](built/0025-fine-grained-authorization-and-capability-model.md) | Narrows ADR 0003's read rule. Cheapest to do before more tenant data is exposed |
+| A1 | [0031](built/0031-http-api-conventions.md) | Sixteen-plus ADRs specify endpoints assuming these conventions. Built |
+| A2 | [0027](partial/0027-audit-evidence-and-approval-model.md), [0050](built/0050-missing-approval-policy-behavior.md) | ADR 0006 needs audited replay at the very start of Track B. 0050 settles 0027's missing-policy open input |
+| A3 | [0025](built/0025-fine-grained-authorization-and-capability-model.md), [0049](built/0049-non-staff-principal-authorization.md) | Narrows ADR 0003's read rule. Cheapest to do before more tenant data is exposed. 0049 extends it to partner and courier principals |
 | A4 | [0028](partial/0028-secrets-management-and-credential-lifecycle.md) | ADR 0007 needs a secrets manager to exist |
-| A5 | [0030](partial/0030-configuration-and-policy-resolution.md) | Eight ADRs re-describe scoped resolution; one mechanism instead |
-| A6 | [0032](built/0032-event-contract-governance-and-topic-policy.md) | Cheap now on three events; expensive after a hundred |
+| A5 | [0030](partial/0030-configuration-and-policy-resolution.md) | Eight-plus ADRs re-describe scoped resolution; one mechanism instead |
+| A6 | [0032](built/0032-event-contract-governance-and-topic-policy.md) | Cheap now on eighteen events; expensive after a hundred |
 | A7 | [0029](partial/0029-pii-protection-envelope-encryption-and-key-rotation.md) | Needed by ADR 0010 media classification, well before ADR 0015 |
 | A8 | [0033](partial/0033-caching-rate-limiting-and-shared-runtime-state.md) | Consumed by 0025, 0030, 0021; also corrects the architecture diagram |
-| A9 | [0034](partial/0034-hosting-environments-topology-and-data-residency.md) | Accepted: colocation in Uzbekistan first, AWS later. Only the orchestrator spike remains |
+| A9 | [0034](partial/0034-hosting-environments-topology-and-data-residency.md) | Accepted: colocation in Uzbekistan first, AWS later. Only the orchestrator spike remains, and that spike is now ADR 0055 phase 6 |
+| A10 | [0057](built/0057-openapi-per-surface-document-groups.md) | Splits 0031's OpenAPI document per surface so a frontend pins only its own baseline and client. Built |
 
 ### Track B — messaging and integration backbone
 
-`0005` → `0006` → `0026` → `0007`. Strictly sequential.
+`0005` → `0006` → `0026` → `0007`. Strictly sequential. `0007`'s fake-provider
+contract suite is also the direct prerequisite for ADR 0055 phase 3 (payments):
+"payments wired through the fake-provider suite first" is that phase's own
+wording.
 
-### Track C — control plane
+### Track C — onboarding backbone
 
-`0008` → `0009`. Depends on Track B through 0006 and on A2, A3, A4, A5.
+`0008` → `0009`. Depends on Track B through 0006 and on A2, A3, A4, A5. Maps to
+[ADR 0055](meta/0055-greenfield-launch-scope.md) phase 4, "tenant onboarding
+workflow completed so a pilot tenant is created through the API" — see that
+phase below for the rest of what phase 4 needs.
 
-### Track D — commerce
+## Launch phases (ADR 0055)
 
-Largely sequential through catalog, but with real parallelism: `0010` media,
-`0015` customers, and `0011` POS adapters do not depend on each other. `0013`
-payments can proceed alongside `0017` and `0018`.
+Everything below is a launch-phase track, in ADR 0055's execution order. A
+phase's ADRs can proceed in parallel with each other and, where the graph
+allows it, with an earlier phase's tail — the phases mark a dependency and
+proving order, not a strict release-train sequence.
 
-**Sequencing correction:** `0012` POS catalog sync now follows `0016`, not
-precedes it. Its normalization and difference engine are shaped by the target
-catalog model, and building it first guaranteed rework. If POS ingestion must
-start earlier for discovery, restrict it to raw evidence capture and mapping.
+### Phase 1 — storefront
 
-### Track E — frontend
+Sequential through catalog and pricing, with real parallelism: `0010` media,
+`0015` customers, and `0036` sales channels do not depend on each other.
 
-Split deliberately. The **platform foundation** — workspace, design system,
-Keycloak PKCE, session context, generated clients — depends only on `0003`,
-`0025`, and `0031`, and should start early so the control plane has a usable
-interface. **Journey migration** follows each journey's backend owner and is
-gated by `0024`.
+| Order | ADR | Why here |
+|---:|---|---|
+| 1 | [0051](built/0051-customer-session-authentication.md) | Customer sign-in. Built — the storefront has nothing to authenticate a cart against without it |
+| 2 | [0035](partial/0035-angular-frontend-platform-and-design-system-adoption.md) | Platform foundation — workspace, design system, Keycloak PKCE, generated clients — depends only on 0003, 0025, 0031. Start early |
+| 3 | [0010](partial/0010-s3-media-lifecycle-and-filesystem-migration.md) | Catalog images. Independent of customers/channels, can run in parallel |
+| 4 | [0015](partial/0015-customer-accounts-cross-brand-identity-and-consent.md) | Customer identity the storefront session (0051) resolves into |
+| 5 | [0016](partial/0016-brand-catalog-publication-and-location-offerings.md) | Published catalog checkout reads from |
+| 6 | [0036](partial/0036-sales-channels-and-location-serviceability.md) | Which channel and location can serve a given order; gates what 0016's offerings are even eligible |
+| 7 | [0017](partial/0017-inventory-ledger-reservations-and-availability.md) | Availability checkout reserves against |
+| 8 | [0037](partial/0037-delivery-zones-tariffs-and-fee-resolution.md) | Delivery-fee resolution checkout needs whenever fulfillment is delivery, not pickup |
+| 9 | [0018](partial/0018-deterministic-pricing-promotions-taxes-and-quotes.md) | Quote contract checkout prices against |
+| 10 | [0038](partial/0038-legal-entities-fiscal-receipts-and-product-classification.md) | Which legal entity fiscalizes and how a line item classifies for it; needed before checkout can accept payment |
+| 11 | [0019](partial/0019-cart-checkout-and-order-orchestration.md) | Cart, checkout, and order orchestration itself; depends on identity, catalog, inventory, pricing, and fiscal classification above |
+| 12 | [0020](partial/0020-notification-preferences-templates-and-delivery.md) | Order confirmation and rejection, the slice's one notification channel |
 
-### Track F — production and cutover
+Not blocking this phase, per `docs/minimum-viable-cutover.md`: 0011/0012 POS
+(catalog is authored by hand for the first slice), 0014 external delivery
+partners, promotions/coupons in 0018, quantity inventory in 0017. 0047 (dine-in
+and QR ordering) and 0046 (loyalty and split tender) are additional storefront
+channels and payment options layered on this phase later — see "Not yet placed"
+below.
 
-`0023` then `0024`. Note that `0023` no longer carries secrets, audit, caching,
-or hosting; those moved into Track A precisely because they were needed earlier.
+### Phase 2 — operations
+
+The order board a restaurant runs on (`RESTAURANT_APPROVAL`), per ADR 0055's
+own description of this phase.
+
+| ADR | Why here |
+|---|---|
+| [0039](partial/0039-operator-assisted-ordering-and-order-amendment.md) | Staff creating and amending orders on the board itself |
+| [0041](partial/0041-kitchen-execution-and-production-routing.md) | What the board routes an approved order to |
+| [0045](partial/0045-realtime-operational-push-and-field-telemetry.md) | Live board updates; a polled board is a materially worse product for the same launch |
+| [0011](partial/0011-pos-installations-bindings-and-capability-adapters.md) → [0012](partial/0012-pos-catalog-sync-staging-and-reconciliation.md) | Deferred by `docs/minimum-viable-cutover.md` for the pilot slice, but this is still where POS lands once picked up. `0012` follows `0016`, not the reverse — its normalization and difference engine are shaped by the target catalog model, and building it first guaranteed rework |
+
+### Phase 3 — payments
+
+"Payments wired through the fake-provider suite first, per the roadmap rule; a
+real provider sandbox when credentials exist" — ADR 0055's own words. Depends on
+Track B's `0007` and Track A's `0028`.
+
+| ADR | Why here |
+|---|---|
+| [0013](partial/0013-payment-refund-and-service-recovery-compensation.md) | Intent, attempt, transaction, webhook verification. The core of this phase |
+| [0048](partial/0048-refunds-as-bookkeeping-and-the-order-remedy-model.md) | The approval model and refund reservation that let 0013's refund half move past "handled manually in the provider console" |
+
+0038 (legal entities and fiscal receipts, phase 1) is this phase's fiscalization
+counterpart: Click and Payme fiscalize as part of accepting payment, so
+fiscalization is proven here even though the ADR sits in phase 1.
+
+### Phase 4 — onboarding completion
+
+Track C (`0008` → `0009`) is this phase's backbone; these two join it to finish
+what "tenant onboarding workflow completed so a pilot tenant is created through
+the API" requires.
+
+| ADR | Why here |
+|---|---|
+| [0002](partial/0002-saas-domain-model.md) | Tenant/brand/location model onboarding provisions against |
+| [0021](partial/0021-saas-plans-entitlements-and-usage-metering.md) | Not blocking for one pilot tenant (`docs/minimum-viable-cutover.md` allows `METER_ONLY`), but is what onboarding a *second* tenant needs |
+
+### Phase 5 — dev/test proving
+
+Not a set of ADRs — a milestone. ADR 0055: "dev/test environment exercising 1–4
+together." This is where phases 1–4 are run end to end against each other
+before any production deployment planning starts, using Track B's fake-provider
+suite (`0007`) rather than live provider credentials.
+
+### Phase 6 — production hardening
+
+ADR 0055: "production deployment planning (hosting, domain, TLS, secrets,
+observability — ADR 0023's open items) as its own subsequent effort."
+
+| ADR | Why here |
+|---|---|
+| [0023](partial/0023-production-operating-model-observability-security-and-recovery.md) | Production operating model itself — no longer carries secrets, audit, caching, or hosting; those moved into Track A because they were needed earlier |
+| [0056](not-started/0056-tenant-isolation-enforcement-and-rls.md) | RLS backstop, explicitly scheduled to "ADR 0055's production-deployment phase," not to dev/test. The application-enforced mechanism it backstops is already built |
+| [0034](partial/0034-hosting-environments-topology-and-data-residency.md) orchestrator spike | The one remaining piece of Track A's 0034, per that row above |
+
+### Non-blocking quality work, alongside
+
+ADR 0055 names this explicitly: "client generation, static-analysis promotion,
+decomposition, OIDC convergence proceed alongside without displacing 1–5."
+[0054](built/0054-build-time-quality-gates.md) (static-analysis gates) and
+[0057](built/0057-openapi-per-surface-document-groups.md) (per-surface client
+generation) are already built; decomposition and OIDC convergence have no
+dedicated ADR yet.
+
+### Later — the migration program (deferred, dormant)
+
+[0024](partial/0024-legacy-data-migration-cutover-and-retirement.md) and the
+`migration` module remain in the tree, dormant. Per ADR 0055, the legacy
+register's `DECIDE` items and the milliy-facing phases — production discovery,
+credential rotation, backfill, shadow, cutover, retirement — move here and no
+longer gate the first (greenfield) launch. This program starts only after
+production exists, and this roadmap will be extended with its own track
+structure when it does.
+
+### Not yet placed — expansion after the pilot
+
+Accepted and buildable when the trigger in `docs/minimum-viable-cutover.md`'s
+"After the slice" section arrives; none block the first slice:
+
+| ADR | Subject |
+|---|---|
+| [0040](partial/0040-marketplace-channel-and-partner-api.md) | Marketplace channel and inbound aggregator orders |
+| [0042](partial/0042-courier-compensation-shifts-and-settlement.md) | Own-courier compensation, shifts, and settlement |
+| [0043](partial/0043-reporting-analytics-and-the-metric-layer.md) | Reporting, analytics, and the metric layer |
+| [0044](partial/0044-marketing-campaigns-audiences-and-engagement.md) | Marketing campaigns, audiences, and engagement content |
+| [0046](partial/0046-loyalty-points-and-split-tender.md) | Loyalty points and split tender |
+| [0047](partial/0047-dine-in-table-service-and-qr-ordering.md) | Dine-in table service, reservations, and QR ordering |
 
 ## Relationship to the migration plan
 
-[`docs/migration-plan.md`](../migration-plan.md) describes migration
-**workstreams and their content**. This roadmap describes **engineering
-execution order**. Where they appear to disagree about sequence, this roadmap
-wins; where they disagree about migration mechanics, the migration plan wins.
+**Since ADR 0055, this table describes the later migration program, not the
+first launch.** [`docs/migration-plan.md`](../migration-plan.md) describes
+migration **workstreams and their content** for migrating existing legacy
+restaurants — work that starts only after production exists for greenfield
+tenants, per ADR 0055. For the launch itself, the "Launch phases (ADR 0055)"
+section above is authoritative. Where the migration plan and this roadmap
+appear to disagree about sequence, this roadmap wins; where they disagree about
+migration mechanics, the migration plan wins.
 
 | Migration plan phase | Corresponding ADRs |
 |---|---|
@@ -256,23 +414,27 @@ wins; where they disagree about migration mechanics, the migration plan wins.
 | Phase 2 Canonical domain and data model | 0002, `docs/domains` |
 | Phase 3 Java, Keycloak, and Camel foundation | 0001, 0003, 0004, 0005, 0006, 0007, 0026 |
 | Phase 4 SaaS control plane and onboarding | 0008, 0009, 0021, 0025, 0027, 0030 |
-| Phase 5 Frontend platform and application migration | 0022 |
+| Phase 5 Frontend platform and application migration | 0035 |
 | Phase 6 S3 media migration | 0010, 0029 |
 | Phase 7 Kafka migration | 0004, 0005, 0006, 0032 |
-| Phase 8 Capability migration sequence | 0011–0020 |
+| Phase 8 Capability migration sequence | 0011–0020, 0036–0048 |
 | Phase 9 Database backfill and synchronization | 0024 |
 | Phase 10 Cutover procedure | 0024 |
 | Phase 11 Legacy contraction and retirement | 0024 |
 
-The migration plan places frontend work at Phase 5 while this roadmap splits it.
-That is the split described in Track E, not a contradiction.
+The migration plan places frontend work at Phase 5 while this roadmap splits it
+into the Track A/C backbone and Phase 1 (storefront). That is the split
+described there, not a contradiction.
 
 ## Scope and staging
 
 See [`docs/minimum-viable-cutover.md`](../minimum-viable-cutover.md) for the
 smallest slice that can take a real order, and for which ADR requirements are
-launch-blocking versus later. Thirty-four ADRs is the shape of the destination,
-not the size of the first release.
+launch-blocking versus later. The full ADR set — see the record counts in
+[By implementation status](#by-implementation-status) above — is the shape of
+the destination, not the size of the first release, which per
+[ADR 0055](meta/0055-greenfield-launch-scope.md) is a greenfield launch, not a
+legacy cutover.
 
 ## Execution protocol
 
@@ -284,8 +446,10 @@ For every ADR:
 2. Close every `Open inputs` item, or record explicitly why the work can proceed
    without it. For external providers, verify current official API and sandbox
    contracts rather than relying on assumptions in the ADR.
-3. Set `Implementation status: In progress` and record any changed assumptions
-   before creating schema or code.
+3. Leave `Implementation status: Not started` until the first slice of code
+   exists, then set `Partial` and keep the status line's factual clause current
+   as work proceeds; record any changed assumptions before creating schema or
+   code.
 4. Update the canonical domain model, ERD, process, state-machine, event
    catalogue, and legacy mapping documents when the capability introduces new
    business facts.
@@ -299,7 +463,7 @@ For every ADR:
 8. Update migration status, runbooks, configuration documentation, and the ADR
    checklist.
 9. Run the complete Java 25 verification against real disposable dependencies.
-10. Set `Implementation status: Done` only when the exit criteria are genuinely
+10. Set `Implementation status: Built` only when the exit criteria are genuinely
     satisfied. If a decision changed along the way, write a new ADR rather than
     editing an accepted one.
 
@@ -322,6 +486,13 @@ Every capability must address:
 
 ## Important ordering rules
 
+Ten rules held under the migration-shaped plan. Eight are unchanged; two named a
+legacy-cutover gate that ADR 0055 removed from the launch path. Both are amended
+below rather than dropped, because the underlying caution (don't automate money
+movement without reconciliation; don't declare readiness without rehearsed
+recovery) still holds — only the legacy-specific half of each moved to the
+migration program.
+
 - Do not enable a real Kafka business consumer before ADRs 0005 and 0006.
 - Do not enable a real provider route before ADR 0007's fake-provider contract
   suite proves idempotency and uncertain-outcome behavior, and before ADR 0028
@@ -330,16 +501,27 @@ Every capability must address:
   Keycloak safely.
 - Do not apply POS changes directly to live catalog data. ADR 0012 staging and
   review are mandatory, and ADR 0012 now follows ADR 0016.
-- Do not automate refunds or courier bookings before reconciliation and
-  single-winner protections in ADRs 0013 and 0014. Fiscal evidence and internal
-  courier workflows need an approved target or retirement disposition first.
+- **Amended.** Do not automate refunds or courier bookings before reconciliation
+  and single-winner protections in ADRs 0013/0048 and 0014/0042. Fiscal evidence
+  needs an approved target under ADR 0038 before it is automated; internal
+  courier workflows need ADR 0042's compensation and settlement model. (The
+  legacy-side half of this rule — a retirement disposition for legacy fiscal or
+  courier data — moved to the migration program; it does not gate the
+  greenfield launch.)
 - Do not implement checkout around mutable product or price rows. ADRs
   0015–0018 must provide identity, published catalog, reservation, and quote
-  contracts.
+  contracts. This is Phase 1's own ordering, restated here because it predates
+  the phase structure.
 - Do not store personal data before ADR 0029, or a credential anywhere except
   ADR 0028's manager.
 - Do not publish a new event type without its ADR 0032 schema and catalogue entry.
-- Do not start a frontend big-bang rewrite. ADR 0022 migrates complete journeys
-  behind one backend-writer gate, and ADR 0024 owns final route cutover.
-- Do not declare production readiness until ADR 0023 recovery exercises and ADR
-  0024 rehearsals have produced recorded evidence.
+- **Amended.** Do not start a frontend big-bang rewrite. ADR 0035 migrates one
+  coherent Angular platform behind the ADR 0025 authorization and ADR 0031 API
+  contracts; ADR 0022, which this rule used to cite, is superseded by ADR 0035.
+  Final legacy route cutover is ADR 0024's, and belongs to the migration
+  program, not to getting the storefront and operations apps live.
+- **Amended.** Do not declare the first (greenfield) production launch ready
+  until ADR 0023's recovery exercises and ADR 0056's RLS backstop have produced
+  recorded evidence. ADR 0024's cutover rehearsals are a separate gate the
+  migration program owns, required before migrating a legacy restaurant, not
+  before the first greenfield launch.

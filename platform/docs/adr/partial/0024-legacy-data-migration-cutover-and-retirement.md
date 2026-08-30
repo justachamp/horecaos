@@ -10,7 +10,7 @@
   version 1, with `ImportContext` suppression consulted by every adapter enumerated in
   `ExternalEffect`. Five platform-admin controllers expose programs, scopes, transitions,
   suspend/resume, cutover decisions, runs, quarantine resolution and ownership lookup,
-  across ninety-four Java files in `uz.qoida.platform.migration`, with ten test classes
+  across ninety-four Java files in `uz.horecaos.platform.migration`, with ten test classes
   and the shared `MigrationControlPlaneFixture`. Not built: any import port beyond the one
   reference port `LegacyBrandImportPort` (legacy `companies` to brands), so no wave can
   actually be migrated; the security, media, catalog and golden-cart reconciliation
@@ -401,7 +401,7 @@ deletion.
       was, and every CRITICAL rule is zero-tolerance by constraint. Still open: the security
       suite, the media and catalog structural probes, and the business probes that render
       production-shaped menus and price golden carts in both systems.
-- [ ] Build wave dashboards, pause/resume, quarantine resolution, and approval workflows.
+- [ ] Build wave dashboards, pause/resume, quarantine resolution, and approval workflows. Pause/resume (`MigrationScopeController`'s `/{scopeId}/suspensions` and `/{scopeId}/resumptions`), quarantine resolution (`MigrationQuarantineController`'s `/quarantine-items/{itemId}/resolution`), and the cutover decision endpoint (`/{scopeId}/cutover`) are built; wave dashboards are not — the Angular control-plane app has no migration section.
 - [ ] Rehearse every wave, canary, provider uncertainty path, and rollback twice.
 - [ ] Execute tenant/brand/location journey cutovers with soak and support signoff.
 - [ ] Freeze/archive legacy, revoke all access/integrations, and complete retirement review.
