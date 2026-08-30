@@ -3,6 +3,12 @@
 
 MVN := ./mvnw
 
+# The OpenApiSurface groups (ADR 0031). Keep in sync with
+# src/main/java/uz/horecaos/platform/configuration/OpenApiSurface.java — the
+# membership test in OpenApiContractTests fails the build if a path fits none
+# of them, but nothing enforces this list matching that one automatically.
+OPENAPI_GROUPS := storefront control-plane operations providers
+
 .DEFAULT_GOAL := help
 
 .PHONY: help verify test arch build lint format run up down logs eval fmt-check hooks-test bands-test doc-links openapi-client-check openapi-baseline ci
@@ -43,14 +49,25 @@ doc-links: ## Every relative link in the repository's markdown resolves
 bands: ## Show the current control bands
 	@python3 ops/control_band_watch.py --status
 
-openapi-client-check: ## Regenerate the typed OpenAPI client and reject undocumented drift
+openapi-client-check: ## Regenerate the typed OpenAPI clients (full + per-group) and reject undocumented drift
 	$(MVN) test -Dtest=OpenApiContractTests
 	@python3 tools/openapi/generate_types.py --input target/openapi/horecaos-api-v1.json --output target/openapi/horecaos-api-v1.ts
 	@diff -u api/generated/horecaos-api-v1.ts target/openapi/horecaos-api-v1.ts
+	@for group in $(OPENAPI_GROUPS); do \
+		python3 tools/openapi/generate_types.py \
+			--input "target/openapi/horecaos-api-v1.$$group.json" \
+			--output "target/openapi/horecaos-api-v1.$$group.ts" && \
+		diff -u "api/generated/horecaos-api-v1.$$group.ts" "target/openapi/horecaos-api-v1.$$group.ts" || exit 1; \
+	done
 
-openapi-baseline: ## Reviewably refresh the OpenAPI baseline and generated typed client
+openapi-baseline: ## Reviewably refresh the OpenAPI baselines and generated typed clients (full + per-group)
 	$(MVN) test -Dtest=OpenApiContractTests -Dhorecaos.openapi.updateBaseline=true
 	@python3 tools/openapi/generate_types.py --input target/openapi/horecaos-api-v1.json --output api/generated/horecaos-api-v1.ts
+	@for group in $(OPENAPI_GROUPS); do \
+		python3 tools/openapi/generate_types.py \
+			--input "target/openapi/horecaos-api-v1.$$group.json" \
+			--output "api/generated/horecaos-api-v1.$$group.ts"; \
+	done
 
 run: ## Start the API on :8080 with local-only fixture data
 	$(MVN) spring-boot:run -Dspring-boot.run.profiles=local
