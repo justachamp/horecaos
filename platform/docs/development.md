@@ -112,13 +112,14 @@ It does four things:
    exactly what ADR 0025 exists to prevent.
 4. Seeds the installation, the binding, and the `payments.merchant_bindings`
    row directly in Postgres, reusing the fixture's own legal entity when one
-   is already assigned to the fixture location. Direct SQL because, unlike
-   step 3, no HTTP endpoint exists yet for either a merchant binding or a
-   legal entity: `LegalEntityService` has no web controller, and
-   `PAYMENT_MERCHANT_BINDING_MANAGE` is declared in `Capability` but no
-   controller uses it. This is the same shape the test suite already uses to
-   build this fixture (e.g. `PaymentCheckoutSurfaceTests`), not a new write
-   path invented for this script.
+   is already assigned to the fixture location. HTTP endpoints for both DO
+   exist — `LegalEntityController` (`legal-entity.manage`) and
+   `MerchantBindingController` (`payment.merchant-binding.manage`) — and are
+   what an operator uses; the script stays on direct SQL for the same reason
+   as step 3: both capabilities belong to a signed-in owner, and a script
+   minting its own capability token is exactly what ADR 0025 exists to
+   prevent. Same shape the test suite uses (e.g.
+   `PaymentCheckoutSurfaceTests`), not a new write path.
 
 Idempotent — safe to run again.
 
