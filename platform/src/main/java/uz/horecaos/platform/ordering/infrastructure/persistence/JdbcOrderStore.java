@@ -490,6 +490,80 @@ public class JdbcOrderStore {
                 .update();
     }
 
+    /**
+     * The order's customer snapshot, ciphertext and all (ADR 0029).
+     *
+     * <p>Every personal column comes back exactly as stored. Nothing here
+     * decrypts: {@link uz.horecaos.platform.ordering.application.OrderQueryService}
+     * masks the phone for an ordinary detail read and defers a full decrypt to
+     * the capability-gated reveal calls, mirroring how {@link #lineNote} hands
+     * back ciphertext for the one endpoint entitled to open it.
+     */
+    public Optional<CustomerSnapshotRow> customerSnapshot(UUID tenantId, UUID orderId) {
+        return jdbc.sql("""
+                SELECT order_id, display_name_encrypted, contact_encrypted, address_encrypted,
+                       delivery_instructions_encrypted, transactional_contact_allowed, anonymized_at
+                FROM ordering.order_customer_snapshots
+                WHERE tenant_id = :tenantId AND order_id = :orderId
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query((row, number) -> new CustomerSnapshotRow(
+                        row.getObject("order_id", UUID.class),
+                        row.getString("display_name_encrypted"),
+                        row.getString("contact_encrypted"),
+                        row.getString("address_encrypted"),
+                        row.getString("delivery_instructions_encrypted"),
+                        row.getBoolean("transactional_contact_allowed"),
+                        instantOrNull(row, "anonymized_at")))
+                .optional();
+    }
+
+    /**
+     * The board's tab badges, one aggregate (orders.md §2.3).
+     *
+     * <p>Scoped identically to {@link #listForLocation} and computed in one pass
+     * over the location's orders rather than one query per tab, so the board's
+     * header never costs seven round trips. {@code Внимание}'s live severity
+     * queue (late orders, stuck processes) is deliberately not among these
+     * columns — orders.md §2.7 is explicit that lateness "needs no column, no
+     * job and no event" because it is derived from the promise and the clock at
+     * render time, and a count computed here would be wrong five seconds after
+     * it was cached.
+     */
+    public OrderCountsRow counts(UUID tenantId, UUID brandId, UUID locationId) {
+        return jdbc.sql("""
+                SELECT
+                    count(*) FILTER (WHERE status IN ('RECEIVED', 'PAYMENT_AUTHORIZING', 'AWAITING_APPROVAL'))
+                        AS new_orders,
+                    count(*) FILTER (WHERE status = 'AWAITING_APPROVAL') AS awaiting_approval,
+                    count(*) FILTER (WHERE status IN ('CONFIRMED', 'PREPARING')) AS in_kitchen,
+                    count(*) FILTER (WHERE status = 'READY') AS ready,
+                    count(*) FILTER (WHERE status = 'FULFILLING') AS fulfilling,
+                    count(*) FILTER (WHERE status = 'COMPLETED') AS completed,
+                    count(*) FILTER (WHERE status IN ('CANCELLED', 'REJECTED', 'EXPIRED')) AS cancelled,
+                    count(*) FILTER (WHERE status NOT IN
+                        ('PAYMENT_FAILED', 'REJECTED', 'EXPIRED', 'COMPLETED', 'CANCELLED')) AS total_non_terminal,
+                    count(*) AS total
+                FROM ordering.orders
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND location_id = :locationId
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .query((row, number) -> new OrderCountsRow(
+                        row.getLong("new_orders"),
+                        row.getLong("awaiting_approval"),
+                        row.getLong("in_kitchen"),
+                        row.getLong("ready"),
+                        row.getLong("fulfilling"),
+                        row.getLong("completed"),
+                        row.getLong("cancelled"),
+                        row.getLong("total_non_terminal"),
+                        row.getLong("total")))
+                .single();
+    }
+
     public Optional<OrderRow> find(UUID tenantId, UUID orderId) {
         return jdbc.sql(SELECT_ORDER + " WHERE tenant_id = :tenantId AND id = :id")
                 .param("tenantId", tenantId)
@@ -1373,6 +1447,57 @@ public class JdbcOrderStore {
             String callbackResolvedBy,
             Long cashTenderedExpectedMinor,
             String kitchenNote) {}
+
+    /**
+     * The order's customer snapshot, still encrypted (ADR 0029).
+     *
+     * <p>{@code addressEncrypted} is the JSON {@code DeliveryDestination}
+     * document checkout wrote — structured fields and the coordinate together —
+     * never a plain address line; {@code hasAddress}/{@code
+     * hasDeliveryInstructions} are what an ordinary detail read may show, the
+     * same way {@link OrderLineRow#hasNote()} lets a list show a marker without
+     * rendering the words themselves.
+     *
+     * @param anonymizedAt non-null once the ADR 0029 retention job has blanked
+     *                      the columns above; the caller renders "Данные удалены
+     *                      по сроку хранения" rather than treating the row as
+     *                      empty by accident
+     */
+    public record CustomerSnapshotRow(
+            UUID orderId,
+            String displayNameEncrypted,
+            String contactEncrypted,
+            String addressEncrypted,
+            String deliveryInstructionsEncrypted,
+            boolean transactionalContactAllowed,
+            Instant anonymizedAt) {
+
+        public boolean hasAddress() {
+            return addressEncrypted != null;
+        }
+
+        public boolean hasDeliveryInstructions() {
+            return deliveryInstructionsEncrypted != null;
+        }
+    }
+
+    /**
+     * The board's tab badges (orders.md §2.3), all from one aggregate.
+     *
+     * <p>{@code Внимание} is deliberately absent — see {@link #counts}. {@code
+     * totalNonTerminal} is every order not in {@link OrderStatus#terminal()},
+     * across every status above.
+     */
+    public record OrderCountsRow(
+            long newOrders,
+            long awaitingApproval,
+            long inKitchen,
+            long ready,
+            long fulfilling,
+            long completed,
+            long cancelled,
+            long totalNonTerminal,
+            long total) {}
 
     /**
      * The twelve columns a customer's own order list needs, and no others.

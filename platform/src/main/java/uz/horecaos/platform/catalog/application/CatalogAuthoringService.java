@@ -275,6 +275,21 @@ public class CatalogAuthoringService {
     }
 
     /**
+     * The 86 screen's read (catalog.md §4.6): one location's sellable variants,
+     * joined with whether each can be sold right now.
+     *
+     * <p>Read-only and, unlike every other method here, not scoped to a draft —
+     * {@code location_offerings} and {@code inventory.positions} both take
+     * effect immediately without a publication, which is the design rule
+     * catalog.md §0 states and this query reads rather than restates.
+     */
+    @Transactional(readOnly = true)
+    public List<JdbcCatalogStore.VariantAvailabilityRow> variantsAtLocation(
+            UUID tenantId, UUID brandId, UUID locationId, String locale, UUID cursor, int limit) {
+        return store.variantsAtLocation(tenantId, brandId, locationId, locale, cursor, limit);
+    }
+
+    /**
      * Sets one entity's name and description in one locale.
      *
      * <p>{@code entityId} arrives from the caller and {@code catalog.translations}

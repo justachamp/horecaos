@@ -2158,6 +2158,32 @@
         "required" : [ "code", "displayNameEn", "displayNameRu", "displayNameUz", "role" ],
         "type" : "object"
       },
+      "CustomerResponse" : {
+        "properties" : {
+          "anonymized" : {
+            "type" : "boolean"
+          },
+          "customerType" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "hasAddress" : {
+            "type" : "boolean"
+          },
+          "hasDeliveryInstructions" : {
+            "type" : "boolean"
+          },
+          "phoneMasked" : {
+            "type" : "string"
+          },
+          "transactionalContactAllowed" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "CustomerSessionResponse" : {
         "properties" : {
           "accountId" : {
@@ -4664,6 +4690,58 @@
         },
         "type" : "object"
       },
+      "OrderActionResponse" : {
+        "properties" : {
+          "action" : {
+            "type" : "string"
+          },
+          "targetStatus" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "OrderCountsResponse" : {
+        "properties" : {
+          "awaitingApproval" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "cancelled" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "completed" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "fulfilling" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "inKitchen" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "newOrders" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "ready" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "total" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalNonTerminal" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "OrderDetailResponse" : {
         "properties" : {
           "acceptanceMode" : {
@@ -4703,6 +4781,9 @@
           "currentRevision" : {
             "format" : "int32",
             "type" : "integer"
+          },
+          "customer" : {
+            "$ref" : "#/components/schemas/CustomerResponse"
           },
           "kitchenNote" : {
             "type" : "string"
@@ -4844,6 +4925,12 @@
       },
       "OrderSummaryResponse" : {
         "properties" : {
+          "actions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OrderActionResponse"
+            },
+            "type" : "array"
+          },
           "approvalDeadlineAt" : {
             "format" : "date-time",
             "type" : "string"
@@ -5221,6 +5308,20 @@
         },
         "type" : "object"
       },
+      "PageVariantAvailabilityResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/VariantAvailabilityResponse"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PathTotal" : {
         "properties" : {
           "costPath" : {
@@ -5415,6 +5516,14 @@
             "type" : "string"
           },
           "thresholdDescription" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PhoneRevealResponse" : {
+        "properties" : {
+          "phone" : {
             "type" : "string"
           }
         },
@@ -8671,6 +8780,27 @@
         },
         "type" : "object"
       },
+      "VariantAvailabilityResponse" : {
+        "properties" : {
+          "available" : {
+            "type" : "boolean"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "productName" : {
+            "type" : "string"
+          },
+          "trackingMode" : {
+            "type" : "string"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "VerificationRequest" : {
         "properties" : {
           "correlationId" : {
@@ -10027,6 +10157,75 @@
           }
         },
         "summary" : "Classify a brand's delivery charge",
+        "tags" : [ "Catalog authoring" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/locations/{locationId}/variants" : {
+      "get" : {
+        "description" : "catalog.md §4.6, the 86 screen's read side: the read counterpart of PUT .../inventory/variants/{variantId}/availability. Gated on inventory.read rather than catalog.read, matching the screen's own denial rule — an actor who can adjust stock but never touches draft authoring still needs this list.",
+        "operationId" : "variantsAtLocation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "default" : "uz",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageVariantAvailabilityResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One location's sellable variants, with current availability",
         "tags" : [ "Catalog authoring" ]
       }
     },
@@ -20223,6 +20422,51 @@
         "tags" : [ "Operations orders" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/counts" : {
+      "get" : {
+        "description" : "orders.md §2.3: each tab shows a live count computed before the tab's own filters apply, and until ADR 0045's COUNTERS signal exists this is what computes them. One aggregate over the location's orders, scoped identically to the list above. Внимание's live severity queue (late orders, stuck processes) is not among these — it is derived per render from the promise and the clock, never stored, so a count of it would be wrong five seconds after being cached.",
+        "operationId" : "counts",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OrderCountsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The board's tab badges, one call",
+        "tags" : [ "Operations orders" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}" : {
       "get" : {
         "description" : "Revision-aware (ADR 0039). The default is the order's current revision; naming an earlier one re-renders the lines as they were. A read that forgets to pin a revision double-counts, and the mistake stays invisible until somebody reconciles a total by hand.",
@@ -20712,6 +20956,128 @@
           }
         },
         "summary" : "Complete an order, naming how it was completed",
+        "tags" : [ "Operations orders" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/customer/address" : {
+      "get" : {
+        "description" : "orders.md §3.8: дом, квартира, подъезд, этаж and ориентир, decrypted together with the coordinate that travels inside the same document. The detail screen shows only whether an address is on file; this is the capability-gated, audited call that opens it.",
+        "operationId" : "revealAddress",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "purpose",
+          "required" : true,
+          "schema" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AddressResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Reveal the delivery address and instructions in full",
+        "tags" : [ "Operations orders" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/customer/phone" : {
+      "get" : {
+        "description" : "orders.md §1.5: the detail screen shows the phone masked with no gate; going from masked to whole is this separate, audited call, mirroring GET .../lines/{lineId}/note. Copy-to-clipboard of the phone counts as a reveal and performs this call rather than copying an already-decrypted value.",
+        "operationId" : "revealPhone",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "purpose",
+          "required" : true,
+          "schema" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PhoneRevealResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Reveal the customer's phone in full",
         "tags" : [ "Operations orders" ]
       }
     },
@@ -23354,11 +23720,11 @@
     "description" : "Opening a payment attempt and getting the checkout surface for it",
     "name" : "Storefront payments"
   }, {
-    "description" : "Pictures on the published menu",
-    "name" : "Storefront media"
-  }, {
     "description" : "Draft menu authoring; never visible to customers",
     "name" : "Catalog authoring"
+  }, {
+    "description" : "Pictures on the published menu",
+    "name" : "Storefront media"
   }, {
     "description" : "Plans, subscriptions, overrides, and usage corrections",
     "name" : "Commercial administration"
