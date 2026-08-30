@@ -20,8 +20,10 @@
   re-encryption job that moves `g1` records onto the current generation, so rotation has a
   seam but no mover, and retired-key retention is undefined; no data-subject export,
   correction, anonymisation, retention, legal-hold or proof operation exists anywhere —
-  there is no privacy endpoint, service or table; and there is no masked projection or
-  restricted database role for support. Retention periods and lawful basis remain
+  there is no privacy endpoint, service or table; and there is now one masked
+  projection for support — the order detail's customer phone (`PhoneMasking`,
+  raw value behind a separate `customer.pii.reveal` call) — but still no
+  restricted database role, and no masked projection anywhere else. Retention periods and lawful basis remain
   provisional, per the Open input.
 - Date proposed: 2026-08-20
 - Date decided: 2026-08-20

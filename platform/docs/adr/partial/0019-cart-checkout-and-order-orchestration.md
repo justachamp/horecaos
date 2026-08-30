@@ -19,12 +19,13 @@
   where it mutates, instead of the ADR 0025 capability no customer could hold.
   Confirmation also fans out now, though not through `ordering.order_processes`:
   `PosOrderExportTrigger`, `DeliveryPlanTrigger` and `OrderNotificationTrigger`
-  are transactional listeners on `OrderConfirmed`. Not built: the process-manager
+  are transactional listeners on `OrderConfirmed`. The edge out of
+  `PAYMENT_AUTHORIZING` is closed: `PaymentCaptureConfirmationTrigger` listens
+  for payments' `PaymentCaptured` and calls `OrderStateService.paymentCaptured`,
+  which confirms or sends to restaurant approval exactly as checkout would. Not built: the process-manager
   rows themselves — `ORDER_PAYMENT`, `POS_ORDER_EXPORT`, `ORDER_FULFILLMENT` and
   `ORDER_NOTIFICATION` are named in `ck_order_process_name` and enqueued by
-  nothing, so only `ORDER_INVENTORY` has durable resumable state; the edge out of
-  `PAYMENT_AUTHORIZING` (ADR 0013 presents a checkout link, but no callback moves
-  the order on, so a card order stops there); scheduled orders, which is why
+  nothing, so only `ORDER_INVENTORY` has durable resumable state; scheduled orders, which is why
   V0056 leaves the requested-time column out; guest carts; and legacy shadow
   comparison.
 - Date proposed: 2026-08-19

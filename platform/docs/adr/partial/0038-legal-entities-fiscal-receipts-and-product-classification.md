@@ -22,14 +22,17 @@
   `FiscalObligationService` with `FiscalObligationSweeper`'s two `@Scheduled`
   passes opens a `SALE` obligation for every completed order, stamps the resolved
   seller on it, and blocks with a reason where no entity covers that branch on
-  that date (`LegalEntityAssignmentTests`, `FiscalObligationTests`). Not built:
-  any HTTP surface over the registry — `LegalEntityService` has no controller and
-  no caller outside its own test, so an operator cannot register an entity or
-  assign a branch and every row is hand-written SQL; ADR 0018 tax-profile
+  that date (`LegalEntityAssignmentTests`, `FiscalObligationTests`). Also built now: an HTTP
+  surface over the registry — `LegalEntityController` at
+  `/api/v1/control-plane/tenants/{tenantId}/legal-entities` registers, lists,
+  gets and activates an entity and reads/writes a location's fiscal assignment,
+  gated by new `legal-entity.read`/`legal-entity.manage` capabilities
+  (`.manage` held by `tenant-owner` alone); and `payments`' own
+  `PaymentLegalEntityResolver` — `TenancyLegalEntityResolver`, delegating to
+  `tenancy.api.LegalEntityDirectory` — so `canAcceptPayment` resolves a real
+  seller and CLICK/PAYME can be offered wherever a location has an assignment.
+  Not built: ADR 0018 tax-profile
   resolution and the quote context hash, which still resolve no entity;
-  `payments`' own `PaymentLegalEntityResolver`, which is still
-  `PaymentLegalEntityConfiguration`'s stand-in answering empty, so no provider
-  payment method can be offered on any channel;
   `payments.payment_method_entity_bindings`, the fiscal-responsibility validation
   at method activation, and the foreign key from ADR 0036's
   `channel_payment_methods` — note that `payments.payment_methods` itself now

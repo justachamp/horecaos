@@ -28,13 +28,16 @@
   remedy policy and execution outbox (`recovery.case.manage` and
   `recovery.remedy.approve` are still bare capability constants, and the model
   that would have used them is superseded by ADR 0048); and the ArchUnit money
-  rule. **Two things block an operator.**
-  Nothing writes `payments.merchant_bindings`
-  or `tenant.legal_entities` over HTTP — `JdbcPaymentBindingResolver` only
-  reads the first and `LegalEntityService` has no controller, so both are
-  hand-written SQL. And no callback moves an order out of `PAYMENT_AUTHORIZING`,
-  because `ordering.api.OrderDirectory` is read-only and neither inbound
-  endpoint transitions the order a captured attempt belongs to. What the state
+  rule. **One thing still blocks an operator.**
+  Nothing writes `payments.merchant_bindings` over HTTP —
+  `JdbcPaymentBindingResolver` only reads it, so a merchant account is still
+  hand-written SQL (`tenant.legal_entities` now has a controller, via ADR
+  0038's `LegalEntityController`). The callback-to-order edge is closed:
+  `PaymentAttemptService.applyToIntent` publishes `ordering.api.PaymentCaptured`
+  on a capture, and `OrderStateService.paymentCaptured` (delivered by
+  `PaymentCaptureConfirmationTrigger`) moves the order out of
+  `PAYMENT_AUTHORIZING` to `CONFIRMED` or `AWAITING_APPROVAL` under the same
+  acceptance policy a cash order would use. What the state
   of `payments.order_settlements` does to a remedy is ADR 0048's to report, and
   it reports it. **Nothing has touched
   a real provider sandbox**, so the unsigned link's exact acceptance — Click's
