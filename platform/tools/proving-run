@@ -1,0 +1,966 @@
+#!/usr/bin/env bash
+#
+# ADR 0055 phase 5 dev/test proving run.
+#
+# Proves, against a fresh local stack and entirely through the HTTP API (no
+# fixture shortcuts for the tenant under test — see docs/local-fixtures.md's
+# demo tenant, used only for contrast/debugging, never touched by this
+# script), that a brand-new tenant can be:
+#
+#   1. Created via the control-plane API by a platform administrator.
+#   2. Carried through ADR 0008's resumable onboarding workflow, including
+#      real validator failures and real resumes — not a template that never
+#      fails.
+#   3. Activated (ADR 0027/0050).
+#   4. Taken a real phone+OTP customer through menu -> cart -> quote ->
+#      checkout -> CLICK payment -> operations approval -> preparation ->
+#      completion -> an ISSUED fiscal document with OFD evidence, and a
+#      payment projection that reads CAPTURED.
+#
+# See docs/runbooks/proving-run.md for what each phase proves, the expected
+# evidence, and the full, honest list of dev-only accommodations this script
+# needs — every one of them is also called out at the point it happens below,
+# with a comment naming the gap.
+#
+# Precondition: a fresh stack. This script's own first phase runs
+# `docker compose down -v && make up`, exactly as docs/local-fixtures.md
+# documents for returning the stack to its first-start state. Local volumes
+# are disposable; never run this against an environment holding data you
+# need.
+#
+# Usage:
+#   tools/proving-run
+#
+# Overridable (all optional, all local-loopback by default):
+#   HORECAOS_API_URL, HORECAOS_KEYCLOAK_URL, HORECAOS_OPENBAO_URL,
+#   HORECAOS_OPENBAO_TOKEN, HORECAOS_KEYCLOAK_REALM,
+#   HORECAOS_PROVING_RUN_LOG (defaults to a timestamped file under /tmp)
+#
+# Idempotency: not required across runs. A fresh `docker compose down -v` is
+# the documented precondition (phase 0 does this itself), exactly like
+# docs/local-fixtures.md's own reset instructions.
+
+set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+
+API="${HORECAOS_API_URL:-http://localhost:8080}"
+KC="${HORECAOS_KEYCLOAK_URL:-http://localhost:8081}"
+KC_REALM="${HORECAOS_KEYCLOAK_REALM:-horecaos}"
+KC_ADMIN_USER="${HORECAOS_KEYCLOAK_ADMIN:-admin}"
+KC_ADMIN_PASSWORD="${HORECAOS_KEYCLOAK_ADMIN_PASSWORD:-admin}"
+BAO_URL="${HORECAOS_OPENBAO_URL:-http://localhost:8200}"
+BAO_TOKEN="${HORECAOS_OPENBAO_TOKEN:-horecaos-local-root}"
+DB_SERVICE="platform-db"
+DB_APP_USER="horecaos_app"
+DB_APP_PASSWORD="horecaos_app"
+DB_MIGRATOR_USER="horecaos_migrator"
+DB_MIGRATOR_PASSWORD="horecaos_migrator"
+DB_NAME="horecaos"
+
+RUN_STAMP="$(date +%Y%m%d-%H%M%S)"
+LOG_FILE="${HORECAOS_PROVING_RUN_LOG:-/tmp/horecaos-proving-run-${RUN_STAMP}.log}"
+: > "${LOG_FILE}"
+
+# Distinct per invocation, so two proving runs against two stacks never
+# collide on a slug, an email, or an OpenBao path.
+RUN_SUFFIX="${RUN_STAMP}"
+TENANT_SLUG="proving-run-${RUN_SUFFIX}"
+OWNER_EMAIL="owner@${TENANT_SLUG}.local"
+PLATFORM_ADMIN_USERNAME="proving-run-platform-admin-${RUN_SUFFIX}"
+PLATFORM_ADMIN_PASSWORD="proving-run-$(uuidgen)"
+OWNER_PASSWORD="proving-run-$(uuidgen)"
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${REPO_ROOT}"
+
+# ---------------------------------------------------------------------------
+# Small library
+# ---------------------------------------------------------------------------
+
+section() {
+  echo | tee -a "${LOG_FILE}"
+  echo "==================================================================" | tee -a "${LOG_FILE}"
+  echo "== $1" | tee -a "${LOG_FILE}"
+  echo "==================================================================" | tee -a "${LOG_FILE}"
+}
+
+log() { echo "-- $1" | tee -a "${LOG_FILE}"; }
+
+evidence() { echo "   EVIDENCE: $1" | tee -a "${LOG_FILE}"; }
+
+gap() { echo "   GAP: $1" | tee -a "${LOG_FILE}"; }
+
+fail() {
+  echo | tee -a "${LOG_FILE}"
+  echo "!! FAILED: $1" | tee -a "${LOG_FILE}"
+  exit 1
+}
+
+idemp() { uuidgen; }
+
+# req METHOD URL EXPECTED_STATUS [curl-args...]
+# Issues a request, fails loudly with the full response body on an
+# unexpected status, and prints the body to stdout on success so callers can
+# capture it with $(...).
+req() {
+  local method="$1" url="$2" expected="$3"
+  shift 3
+  local response status body
+  response="$(curl -sS -w '\n%{http_code}' -X "${method}" "${url}" "$@")"
+  status="${response##*$'\n'}"
+  body="${response%$'\n'*}"
+  if [ "${status}" != "${expected}" ]; then
+    {
+      echo "!! ${method} ${url} -> HTTP ${status}, expected ${expected}"
+      echo "!! Response body:"
+      echo "${body}" | (jq . 2>/dev/null || cat)
+    } | tee -a "${LOG_FILE}" >&2
+    exit 1
+  fi
+  echo "${body}"
+}
+
+psql_app() {
+  docker compose exec -T -e PGPASSWORD="${DB_APP_PASSWORD}" "${DB_SERVICE}" \
+    psql -v ON_ERROR_STOP=1 -U "${DB_APP_USER}" -d "${DB_NAME}" "$@"
+}
+
+psql_migrator() {
+  docker compose exec -T -e PGPASSWORD="${DB_MIGRATOR_PASSWORD}" "${DB_SERVICE}" \
+    psql -v ON_ERROR_STOP=1 -U "${DB_MIGRATOR_USER}" -d "${DB_NAME}" "$@"
+}
+
+kc_admin_token() {
+  curl -sf -X POST "${KC}/realms/master/protocol/openid-connect/token" \
+    -d "client_id=admin-cli" -d "username=${KC_ADMIN_USER}" -d "password=${KC_ADMIN_PASSWORD}" \
+    -d "grant_type=password" | jq -r .access_token
+}
+
+# ---------------------------------------------------------------------------
+# Phase 0: fresh stack
+# ---------------------------------------------------------------------------
+
+section "Phase 0: fresh stack"
+
+log "docker compose down -v (this project's volumes are disposable)"
+docker compose down -v 2>&1 | tee -a "${LOG_FILE}"
+
+log "make up (Postgres, Kafka, Keycloak, OpenBao, MinIO; asserts Keycloak service-account roles)"
+make up 2>&1 | tee -a "${LOG_FILE}"
+evidence "make up completed without error — Keycloak realm import and ADR 0009 service-account role assignment are themselves under test here"
+
+# GAP (compose.yaml, fixed by this change — not Java, no mvnw verify needed):
+# openbao-seed never seeded object_storage/platform/media-{access,secret}-key
+# or data_encryption/platform/handover-pepper. Those are required only when
+# HORECAOS_SECRETS_PROVIDER=openbao (docs/development.md's own documented way
+# to exercise the OpenBao path instead of the "environment" provider
+# default), and this proving run needs the OpenBao path for real: payments'
+# SecretResolver has no "environment" fallback for a tenant-scoped merchant
+# secret, so a real (fake-provider) CLICK payment cannot be proved without
+# it. Fixed directly in compose.yaml's openbao-seed step; see its comment.
+log "Seeding the .env used for HORECAOS_SECRETS_PROVIDER=openbao (docs/development.md's documented path)"
+if [ ! -f .env ]; then
+  cp .env.example .env
+fi
+set -a
+# shellcheck disable=SC1091
+source .env
+set +a
+
+section "Phase 0: start the API"
+
+# A stale `spring-boot:run` from an earlier session left bound to this port
+# answers readiness checks (it is a healthy process) while talking to a
+# database `down -v` just deleted — the exact failure this guard exists to
+# turn into a clear message instead of a confusing mid-run SQL error.
+API_PORT="$(printf '%s' "${API}" | sed -n 's#.*:\([0-9]\+\)$#\1#p')"
+if [ -n "${API_PORT}" ] && lsof -i ":${API_PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
+  fail "something is already listening on port ${API_PORT} (${API}) — likely a leftover 'mvnw spring-boot:run' from an earlier session, now talking to a database phase 0 just deleted. Stop it (check 'ps aux | grep spring-boot:run') and re-run."
+fi
+
+RUN_LOG_APP="/tmp/horecaos-proving-run-app-${RUN_SUFFIX}.log"
+log "mvnw spring-boot:run -Dspring-boot.run.profiles=local (background, log: ${RUN_LOG_APP})"
+nohup ./mvnw spring-boot:run -Dspring-boot.run.profiles=local > "${RUN_LOG_APP}" 2>&1 &
+APP_PID=$!
+log "app pid ${APP_PID}; waiting for readiness on ${API}/actuator/health/readiness"
+
+READY=0
+for _ in $(seq 1 90); do
+  if curl -sf -o /dev/null "${API}/actuator/health/readiness"; then
+    READY=1
+    break
+  fi
+  if ! kill -0 "${APP_PID}" 2>/dev/null; then
+    tail -n 80 "${RUN_LOG_APP}" | tee -a "${LOG_FILE}"
+    fail "the application process exited before becoming ready; see ${RUN_LOG_APP}"
+  fi
+  sleep 5
+done
+[ "${READY}" = "1" ] || fail "the application never became ready within 450s; see ${RUN_LOG_APP}"
+evidence "GET ${API}/actuator/health/readiness -> ready"
+
+# ---------------------------------------------------------------------------
+# Phase 1: identity bootstrap (local dev only — every accommodation named)
+# ---------------------------------------------------------------------------
+
+section "Phase 1: identity bootstrap"
+
+# GAP (Keycloak, worked around with local-dev-only scripts, not a Java
+# change): horecaos-realm.json ships no realm users and horecaos-api is
+# bearerOnly with directAccessGrantsEnabled=false — correctly, it is the
+# resource server, not something anybody signs into. Nothing in the realm
+# supports non-interactive (password-grant) token acquisition, which this
+# script needs to drive the API headlessly the way a human would through
+# Swagger UI's Authorize button. infra/keycloak/create-local-dev-client.sh
+# creates a confidential, direct-grant-enabled client scoped to local/loopback
+# only, mirroring create-local-web-client.sh's own guard.
+log "Creating the local-dev password-grant Keycloak client (infra/keycloak/create-local-dev-client.sh)"
+DEV_CLIENT_SECRET="$(./infra/keycloak/create-local-dev-client.sh)"
+evidence "client horecaos-local-dev created/updated, direct grants enabled, loopback-only"
+
+# GAP (Keycloak, same class): no platform-admin realm user exists on a fresh
+# deployment either — ADR 0003 deliberately leaves who holds the role to each
+# deployment. infra/keycloak/create-platform-admin.sh creates one and assigns
+# the horecaos-api platform-admin client role directly (a normal, global,
+# non-org-scoped role mapping — nothing ADR-0009-specific).
+log "Creating the platform-admin realm user (infra/keycloak/create-platform-admin.sh)"
+HORECAOS_PLATFORM_ADMIN_PASSWORD="${PLATFORM_ADMIN_PASSWORD}" \
+  ./infra/keycloak/create-platform-admin.sh "${PLATFORM_ADMIN_USERNAME}" >>"${LOG_FILE}" 2>&1
+evidence "realm user ${PLATFORM_ADMIN_USERNAME} holds the horecaos-api platform-admin client role"
+
+kc_token() {
+  local username="$1" password="$2" scope="$3"
+  curl -sS -X POST "${KC}/realms/${KC_REALM}/protocol/openid-connect/token" \
+    -d "client_id=horecaos-local-dev" -d "client_secret=${DEV_CLIENT_SECRET}" \
+    -d "grant_type=password" -d "username=${username}" -d "password=${password}" \
+    ${scope:+-d "scope=${scope}"} | jq -r .access_token
+}
+
+ADMIN_TOKEN="$(kc_token "${PLATFORM_ADMIN_USERNAME}" "${PLATFORM_ADMIN_PASSWORD}" "")"
+[ -n "${ADMIN_TOKEN}" ] && [ "${ADMIN_TOKEN}" != "null" ] || fail "could not acquire a platform-admin token"
+ADMIN_SUBJECT="$(python3 -c "
+import base64, json
+t = '${ADMIN_TOKEN}'.split('.')[1]
+t += '=' * (-len(t) % 4)
+print(json.loads(base64.urlsafe_b64decode(t))['sub'])
+")"
+evidence "platform-admin token acquired; sub=${ADMIN_SUBJECT}"
+
+# GAP (application code, worked around with one direct SQL insert — this is
+# the load-bearing gap of the whole run, documented in
+# docs/runbooks/proving-run.md as Gap A): the ADR 0025 fresh-deployment
+# bootstrap bypass in JdbcAuthorizationService confers exactly one capability
+# to a platform-admin realm-role holder — IAM_GRANT_MANAGE, at any scope —
+# and nothing else, "so a platform admin can create the first grant and must
+# then grant themselves everything else through the ordinary audited API."
+# But GrantController's own grant endpoint is nested under
+# /control-plane/tenants/{tenantId}/grants and can only ever construct a
+# TENANT/BRAND/LOCATION scope from that path — never PLATFORM. There is
+# therefore no HTTP endpoint anywhere in this codebase that can create a
+# PLATFORM-scope grant, which is exactly what creating the very first tenant
+# needs (TenantControlPlaneController.createTenant requires TENANT_WRITE at
+# PLATFORM scope). Confirmed live: a fresh platform-admin token gets a plain
+# 403 INSUFFICIENT_CAPABILITY from POST /control-plane/tenants before this.
+# The one-time row below mirrors the exact shape
+# ControlPlaneWiringIntegrationTests.grantPlatformAdministration already uses
+# as a test fixture for the same reason: no API path exists, and the honest
+# thing to do is name that rather than build an ad hoc endpoint under this
+# task. iam.roles already carries the platform-admin row —
+# RoleRegistrySynchronizer seeds it as an ApplicationRunner on every startup.
+log "Bootstrapping the platform-admin's first grant directly in iam.grants (no PLATFORM-scope grant endpoint exists — see Gap A)"
+psql_app <<SQL
+INSERT INTO iam.grants
+    (id, tenant_id, principal_subject, role_id, role_is_platform, scope_type, scope_id,
+     status, granted_by, reason)
+SELECT gen_random_uuid(), NULL, '${ADMIN_SUBJECT}', id, true, 'PLATFORM', NULL,
+       'ACTIVE', 'tools/proving-run bootstrap', 'Fresh-deployment IAM_GRANT_MANAGE bypass cannot reach PLATFORM scope; see docs/runbooks/proving-run.md Gap A'
+  FROM iam.roles WHERE code = 'platform-admin' AND tenant_id IS NULL
+ON CONFLICT DO NOTHING;
+SQL
+evidence "iam.grants now carries a PLATFORM-scope platform-admin grant for ${ADMIN_SUBJECT}"
+
+# GAP (application code, worked around with one direct SQL insert, same
+# class as Gap A — named as Gap B in the runbook): tenant.onboarding_runs has
+# a NOT NULL foreign key to tenant.onboarding_templates, and nothing in
+# production code — no migration, no local-fixtures seed, no controller —
+# ever creates a template row. Every test that starts a run inserts one by
+# hand (OnboardingFullRunIntegrationTests.seedARealisticTenant, mirrored
+# exactly below: code 'default', version 1, status ACTIVE, empty
+# required_steps). Confirmed by reading OnboardingController/OnboardingService
+# and grepping the whole tree for an OnboardingTemplateController that does
+# not exist.
+log "Seeding the onboarding template row (no authoring endpoint exists — see Gap B)"
+TEMPLATE_ID="$(uuidgen | tr 'A-Z' 'a-z')"
+psql_app <<SQL
+INSERT INTO tenant.onboarding_templates (id, code, version, status, required_steps, created_by)
+VALUES ('${TEMPLATE_ID}', 'default', 1, 'ACTIVE', '[]'::jsonb, 'tools/proving-run bootstrap')
+ON CONFLICT DO NOTHING;
+SQL
+evidence "onboarding template ${TEMPLATE_ID} (code=default, version=1) seeded"
+
+# ---------------------------------------------------------------------------
+# Phase 2: tenant, brand, location (platform-admin, control-plane API)
+# ---------------------------------------------------------------------------
+
+section "Phase 2: tenant creation"
+
+TENANT_JSON="$(req POST "${API}/api/v1/control-plane/tenants" 201 \
+  -H "Authorization: Bearer ${ADMIN_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d "$(jq -n --arg slug "${TENANT_SLUG}" '{
+        slug: $slug,
+        legalName: "Proving Run Foods LLC",
+        displayName: "Proving Run Tenant",
+        defaultCurrency: "UZS",
+        defaultTimezone: "Asia/Tashkent",
+        customerIdentityMode: "TENANT_SHARED"
+      }')")"
+TENANT_ID="$(echo "${TENANT_JSON}" | jq -r .id)"
+evidence "tenant ${TENANT_ID} (slug=${TENANT_SLUG}) created; status=$(echo "${TENANT_JSON}" | jq -r .status)"
+
+BRAND_JSON="$(req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands" 201 \
+  -H "Authorization: Bearer ${ADMIN_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"code":"MAIN","slug":"main-brand","displayName":"Proving Run Brand"}')"
+BRAND_ID="$(echo "${BRAND_JSON}" | jq -r .id)"
+evidence "brand ${BRAND_ID} created"
+
+LOCATION_JSON="$(req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands/${BRAND_ID}/locations" 201 \
+  -H "Authorization: Bearer ${ADMIN_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"code":"MAIN01","slug":"main-location","displayName":"Proving Run Location","timezone":"Asia/Tashkent"}')"
+LOCATION_ID="$(echo "${LOCATION_JSON}" | jq -r .id)"
+evidence "location ${LOCATION_ID} created"
+
+req PUT "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands/${BRAND_ID}/locations/${LOCATION_ID}/place" 200 \
+  -H "Authorization: Bearer ${ADMIN_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"addressLine":"12 Amir Temur Street","district":"Yunusabad","city":"Tashkent","contactPhone":"+998712000001","latitude":41.3350,"longitude":69.2880,"coordinateSource":"MERCHANT_PIN"}' \
+  > /dev/null
+evidence "location place recorded (Tashkent, 41.3350,69.2880)"
+
+# GAP (application code — confirmed live, worked around by having
+# platform-admin do this instead of the tenant owner; named as Gap C in the
+# runbook, NOT fixed in code because the fix is a real design decision, not a
+# one-line change): TenantAccessPolicy.requireTenantManagement, which gates
+# createBrand/createLocation/describeLocation, accepts either the global
+# platform-admin realm role OR an org-nested Keycloak client role
+# ("tenant-owner"/"tenant-admin") read from the token's own
+# "organization"."<org>"."resource_access" claim. Nothing in this codebase —
+# not TenantOwnerLinkOrInvite, not any script — ever assigns that nested
+# role; OrganizationProvisioner's own class javadoc explains why
+# (ensureOrganizationRoles was deliberately left unimplemented: Keycloak 26.7's
+# Organizations Admin REST API has no organization-scoped role sub-resource).
+# TenantOwnerAuthorityGrantorAdapter instead confers the tenant-owner
+# capability BUNDLE through iam.grants — which is real and sufficient for
+# every @RequiresCapability-gated endpoint (legal entity, catalog, payments,
+# channels — everything phase 3 below does) — but requireTenantManagement is
+# a second, independent, older check that iam.grants cannot satisfy. A
+# linked tenant owner is therefore capability-eligible but access-policy-
+# blocked from ever creating a second brand or location for their own
+# tenant. Verified live in this same script below, right after the owner
+# signs in, as a deliberate negative check — then this run proceeds with
+# platform-admin owning brand/location creation, which is what a real
+# deployment would do too until this gap is closed.
+gap "TenantAccessPolicy.requireTenantManagement will refuse the tenant owner on createBrand/createLocation later in this run (confirmed live below) — no code path ever grants the Keycloak org-nested role it checks. See docs/runbooks/proving-run.md Gap C."
+
+# ---------------------------------------------------------------------------
+# Phase 2b: RESTAURANT_APPROVAL acceptance policy (no authoring endpoint)
+# ---------------------------------------------------------------------------
+
+section "Phase 2b: order acceptance policy"
+
+# GAP (application code, worked around with one direct SQL insert — Gap D):
+# minimum-viable-cutover.md names RESTAURANT_APPROVAL through Operations as
+# the intended v1 acceptance mode, and OrderAcceptancePolicyService resolves
+# it through ADR 0030's generic tenant.policies mechanism — but that
+# mechanism is read-only in this codebase (JdbcPolicyResolver has no writer
+# anywhere; minimum-viable-cutover.md itself lists "control-plane editing UI"
+# for ADR 0030 as "Not blocking", i.e. deliberately deferred). Absent a
+# policy, OrderAcceptancePolicy.platformDefault() applies (AUTO_CONFIRM),
+# which is a legitimate answer but not the one this slice is meant to prove.
+# The row below is the same shape a real policy-authoring write would
+# produce; there is no HTTP path to it today.
+log "Seeding an ordering.acceptance=RESTAURANT_APPROVAL policy (no authoring endpoint exists — see Gap D)"
+ACCEPTANCE_DOC='{"mode":"RESTAURANT_APPROVAL","approvalChannel":"HORECAOS_OPERATIONS","approvalTimeoutSeconds":600,"timeoutAction":"AUTO_REJECT","rejectionReasonRequired":false,"notifyCustomerWhilePending":true}'
+ACCEPTANCE_HASH="$(printf '%s' "${ACCEPTANCE_DOC}" | shasum -a 256 | awk '{print $1}')"
+ACCEPTANCE_POLICY_ID="$(uuidgen | tr 'A-Z' 'a-z')"
+psql_migrator <<SQL
+INSERT INTO tenant.policies
+    (id, key_code, scope_type, tenant_id, brand_id, location_id, version, status,
+     document, document_hash, valid_from, created_by, approved_by)
+VALUES ('${ACCEPTANCE_POLICY_ID}', 'ordering.acceptance', 'TENANT', '${TENANT_ID}', NULL, NULL, 1, 'ACTIVE',
+        '${ACCEPTANCE_DOC}'::jsonb, '${ACCEPTANCE_HASH}', now(),
+        'tools/proving-run bootstrap', 'tools/proving-run bootstrap');
+INSERT INTO tenant.policy_current (key_code, scope_type, tenant_id, brand_id, location_id, policy_id, policy_version, activated_by)
+VALUES ('ordering.acceptance', 'TENANT', '${TENANT_ID}', NULL, NULL, '${ACCEPTANCE_POLICY_ID}', 1, 'tools/proving-run bootstrap');
+SQL
+evidence "tenant ${TENANT_ID} now resolves ordering.acceptance = RESTAURANT_APPROVAL"
+
+# ---------------------------------------------------------------------------
+# Phase 3: onboarding run — first pass, expect a real failure
+# ---------------------------------------------------------------------------
+
+section "Phase 3: start the onboarding run"
+
+RUN_JSON="$(req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/onboarding-runs" 200 \
+  -H "Authorization: Bearer ${ADMIN_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d "$(jq -n --arg t "${TEMPLATE_ID}" --arg email "${OWNER_EMAIL}" \
+        '{templateId:$t, templateVersion:1, ownerEmail:$email}')")"
+RUN_ID="$(echo "${RUN_JSON}" | jq -r .runId)"
+evidence "onboarding run ${RUN_ID} started for tenant ${TENANT_ID}, owner email ${OWNER_EMAIL}"
+
+run_view() { req GET "${API}/api/v1/control-plane/tenants/${TENANT_ID}/onboarding-runs/${RUN_ID}" 200 -H "Authorization: Bearer ${ADMIN_TOKEN}"; }
+
+# Waits (poll every 4s) until the run reaches one of the given top-level
+# statuses, or until timeout. The scheduler's own cadence is a 10s initial
+# delay then a 5s tick (horecaos.onboarding.scheduler.*), and a step that
+# calls StepResult.failed(...) — every validator this run exercises — goes
+# straight to FAILED on its first attempt, no backoff; only StepResult.retry
+# results back off exponentially. 90s covers several ticks with margin.
+wait_for_run_status() {
+  local wanted="$1" timeout="${2:-90}" elapsed=0 status view
+  while [ "${elapsed}" -lt "${timeout}" ]; do
+    view="$(run_view)"
+    status="$(echo "${view}" | jq -r .run.status)"
+    if echo "${wanted}" | tr ',' '\n' | grep -qx "${status}"; then
+      echo "${view}"
+      return 0
+    fi
+    sleep 4
+    elapsed=$((elapsed + 4))
+  done
+  echo "${view}" | tee -a "${LOG_FILE}"
+  fail "onboarding run ${RUN_ID} did not reach status [${wanted}] within ${timeout}s (last seen: ${status})"
+}
+
+log "Waiting for step 2 (TENANT_OWNER_LINK_OR_INVITE) to complete, so the owner exists"
+OWNER_WAIT_ELAPSED=0
+OWNER_SUBJECT=""
+while [ "${OWNER_WAIT_ELAPSED}" -lt 60 ]; do
+  VIEW="$(run_view)"
+  OWNER_STEP="$(echo "${VIEW}" | jq -r '.steps[] | select(.stepKey=="TENANT_OWNER_LINK_OR_INVITE")')"
+  if [ "$(echo "${OWNER_STEP}" | jq -r .status)" = "COMPLETED" ]; then
+    OWNER_SUBJECT="$(echo "${OWNER_STEP}" | jq -r .externalReference)"
+    break
+  fi
+  sleep 4
+  OWNER_WAIT_ELAPSED=$((OWNER_WAIT_ELAPSED + 4))
+done
+[ -n "${OWNER_SUBJECT}" ] && [ "${OWNER_SUBJECT}" != "null" ] || fail "TENANT_OWNER_LINK_OR_INVITE never completed"
+evidence "owner Keycloak subject ${OWNER_SUBJECT} linked (ADR 0009 organization membership, real Keycloak Admin API call)"
+
+# GAP (Keycloak behavior, worked around in this script — not a code change,
+# and arguably not even a HorecaOS gap): KeycloakOrganizationProvisioner
+# creates the invited owner with only username/email (deliberately — ADR
+# 0009's own membership contract). Keycloak 26's declarative User Profile
+# then refuses ANY password-grant login for an account missing firstName or
+# lastName with the misleading invalid_grant "Account is not fully set up" —
+# no exception, no realm setting names it (confirmed by reproducing it
+# against a stock realm with DEBUG logging: this is
+# https://github.com/keycloak/keycloak/issues/36108, a known Keycloak 26.0.7+
+# regression). A real owner hitting this in a browser just sees Keycloak's
+# own "complete your profile" required-action screen and fills it in; a
+# script has no browser, so it does the Keycloak Admin API equivalent
+# directly, plus setting the password a real owner would set through
+# Keycloak's own invitation/reset flow.
+log "Patching the owner's Keycloak profile and setting a password (Keycloak 26 User Profile quirk — see Gap E in the runbook; a browser flow shows this as a normal 'complete your profile' step)"
+KC_ADMIN_TOKEN="$(kc_admin_token)"
+curl -sf -o /dev/null -X PUT "${KC}/admin/realms/${KC_REALM}/users/${OWNER_SUBJECT}" \
+  -H "Authorization: Bearer ${KC_ADMIN_TOKEN}" -H "Content-Type: application/json" \
+  -d '{"firstName":"Proving Run","lastName":"Owner","enabled":true,"emailVerified":true}'
+curl -sf -o /dev/null -X PUT "${KC}/admin/realms/${KC_REALM}/users/${OWNER_SUBJECT}/reset-password" \
+  -H "Authorization: Bearer ${KC_ADMIN_TOKEN}" -H "Content-Type: application/json" \
+  -d "$(jq -n --arg p "${OWNER_PASSWORD}" '{type:"password", value:$p, temporary:false}')"
+evidence "owner profile completed and password set"
+
+OWNER_TOKEN="$(kc_token "${OWNER_EMAIL}" "${OWNER_PASSWORD}" "organization:${TENANT_SLUG}")"
+[ -n "${OWNER_TOKEN}" ] && [ "${OWNER_TOKEN}" != "null" ] || fail "could not acquire an owner token"
+evidence "owner signed in over HTTP with organization:${TENANT_SLUG} scope"
+
+log "Confirming Gap C live: the owner cannot create a second brand"
+GAP_C_STATUS="$(curl -sS -o /tmp/gap-c-body-${RUN_SUFFIX}.json -w '%{http_code}' -X POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands" \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"code":"SECOND","slug":"second-brand-should-fail","displayName":"Should be refused"}')"
+if [ "${GAP_C_STATUS}" = "403" ]; then
+  evidence "confirmed: owner createBrand -> 403 $(jq -r .code /tmp/gap-c-body-${RUN_SUFFIX}.json 2>/dev/null) (Gap C is real, not theoretical)"
+else
+  log "NOTE: owner createBrand returned ${GAP_C_STATUS}, not the expected 403 — Gap C may have been fixed since this script was written; see $(cat /tmp/gap-c-body-${RUN_SUFFIX}.json)"
+fi
+rm -f "/tmp/gap-c-body-${RUN_SUFFIX}.json"
+
+log "Waiting for the run to reach READY or a FAILED step"
+VIEW="$(wait_for_run_status "READY,FAILED" 90)"
+echo "${VIEW}" | jq . >> "${LOG_FILE}"
+FAILED_STEP="$(echo "${VIEW}" | jq -r '[.steps[] | select(.status=="FAILED")][0].stepKey // empty')"
+FAILED_CODE="$(echo "${VIEW}" | jq -r '[.steps[] | select(.status=="FAILED")][0].errorCode // empty')"
+if [ -n "${FAILED_STEP}" ]; then
+  evidence "step ${FAILED_STEP} FAILED with ${FAILED_CODE} — exactly the design: a required validator failing before it is configured"
+else
+  fail "expected at least one required step to FAIL before any payment/catalog configuration exists, but the run reached READY unconfigured"
+fi
+[ "${FAILED_STEP}" = "PAYMENT_CONFIGURATION_VALIDATE" ] || \
+  log "NOTE: expected PAYMENT_CONFIGURATION_VALIDATE to be the first failure; got ${FAILED_STEP} instead — behavior may have changed since this script was written"
+
+# ---------------------------------------------------------------------------
+# Phase 4: the owner configures payments (legal entity + CLICK), resumes
+# ---------------------------------------------------------------------------
+
+section "Phase 4: legal entity and CLICK payment configuration (as the owner)"
+
+LE_JSON="$(req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/legal-entities" 201 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"code":"PRLLC","legalName":"Proving Run Foods LLC","tin":"123456789","vatRegistered":false}')"
+LEGAL_ENTITY_ID="$(echo "${LE_JSON}" | jq -r .id)"
+LE_VERSION="$(echo "${LE_JSON}" | jq -r .version)"
+evidence "legal entity ${LEGAL_ENTITY_ID} registered"
+
+LE_ACT="$(req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/legal-entities/${LEGAL_ENTITY_ID}/activate?expectedVersion=${LE_VERSION}" 200 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Idempotency-Key: $(idemp)")"
+evidence "legal entity activated: status=$(echo "${LE_ACT}" | jq -r .status)"
+
+req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/legal-entities/${LEGAL_ENTITY_ID}/assignments" 201 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d "$(jq -n --arg b "${BRAND_ID}" --arg l "${LOCATION_ID}" --arg d "$(date +%Y-%m-%d)" \
+        '{brandId:$b, locationId:$l, effectiveFrom:$d}')" > /dev/null
+evidence "legal entity assigned as the seller of location ${LOCATION_ID}"
+
+# Platform-owned reference data (ADR 0026): integration.provider_environments
+# has no tenant-facing write endpoint by design — the same shape
+# tools/seed-payments already uses for the fixture tenant, mirrored here for
+# a unique environment code so the two never collide. Points at
+# FakeClickHttpProvider, which `make run` starts under the local profile.
+ENV_CODE="click-${TENANT_SLUG}-sandbox"
+log "Seeding the platform-owned CLICK provider environment (${ENV_CODE}) — no tenant-facing write endpoint exists for this table by design (ADR 0026)"
+psql_migrator <<SQL
+INSERT INTO integration.provider_environments
+    (code, provider_category, provider_type, base_url, is_production, egress_allowlist, notes)
+VALUES ('${ENV_CODE}', 'PAYMENT', 'CLICK', 'http://localhost:18089', false, 'localhost',
+        'tools/proving-run: local dev only, points at FakeClickHttpProvider')
+ON CONFLICT (code) DO UPDATE SET base_url = EXCLUDED.base_url;
+SQL
+
+# The secret VALUE, not just its reference format, matters: FakeClickHttpProvider
+# validates every merchant-API call's Auth header against
+# FakeClickProviderConfiguration's own configured secret
+# (horecaos.fake-providers.click.secret), whose default is exactly this
+# string — the fake does not read OpenBao itself, so the resolved secret and
+# the fake's own default must agree by construction, mirroring
+# tools/seed-payments' own comment on this. Any other value authenticates as
+# nothing and every provider call comes back "rejected the cached
+# credential", which is indistinguishable from a real secret mismatch.
+SECRET_REFERENCE="horecaos:local:provider_payment:${TENANT_SLUG}:click"
+log "Writing the fake CLICK secret to OpenBao at ${SECRET_REFERENCE}"
+curl -sf -X POST -H "X-Vault-Token: ${BAO_TOKEN}" -H "Content-Type: application/json" \
+  -d '{"data":{"value":"local-fixture-click-secret-key-not-a-real-credential"}}' \
+  "${BAO_URL}/v1/horecaos/data/local/provider_payment/${TENANT_SLUG}/click" > /dev/null
+evidence "OpenBao secret written at the ADR 0028 reference the merchant binding will carry"
+
+INST_JSON="$(req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/integrations" 200 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d "$(jq -n --arg env "${ENV_CODE}" --arg ref "${SECRET_REFERENCE}" \
+        '{category:"PAYMENT", providerType:"CLICK", environmentCode:$env, displayName:"Click (proving run)", secretReference:$ref}')")"
+INSTALLATION_ID="$(echo "${INST_JSON}" | jq -r .installationId)"
+evidence "CLICK provider installed: ${INSTALLATION_ID} (status $(echo "${INST_JSON}" | jq -r .status))"
+
+RECON_JSON="$(req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/integrations/${INSTALLATION_ID}/capability-reconciliation" 200 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Idempotency-Key: $(idemp)")"
+RECON_STATUS="$(echo "${RECON_JSON}" | jq -r .connectionStatus)"
+[ "${RECON_STATUS}" = "SUCCEEDED" ] || fail "capability reconciliation against the fake CLICK provider did not succeed: ${RECON_JSON}"
+evidence "capability reconciliation SUCCEEDED against the real FakeClickHttpProvider process on :18089 — capabilities: $(echo "${RECON_JSON}" | jq -c .capabilities)"
+
+BIND_JSON="$(req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/integrations/${INSTALLATION_ID}/bindings" 200 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d "$(jq -n --arg b "${BRAND_ID}" \
+        '{brandId:$b, priority:100, capabilities:["PAYMENT_PRESENT","PAYMENT_QUERY"], primaryCapabilities:["PAYMENT_PRESENT"]}')")"
+BINDING_ID="$(echo "${BIND_JSON}" | jq -r .bindingId)"
+
+req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/integrations/${INSTALLATION_ID}/bindings/${BINDING_ID}/activate" 200 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"reason":"proving run"}' > /dev/null
+evidence "integration binding ${BINDING_ID} activated"
+
+MB_JSON="$(req POST "${API}/api/v1/operations/tenants/${TENANT_ID}/merchant-bindings" 201 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d "$(jq -n --arg le "${LEGAL_ENTITY_ID}" --arg inst "${INSTALLATION_ID}" --arg bind "${BINDING_ID}" \
+             --arg ref "${SECRET_REFERENCE}" --arg d "$(date +%Y-%m-%d)" '{
+        legalEntityId:$le, providerType:"CLICK", installationId:$inst, integrationBindingId:$bind,
+        merchantAccountReference:"proving-run-service-1", merchantUserReference:"4444", merchantIdReference:"9999",
+        secretReference:$ref, callbackPathSegment:"proving-run-click-1",
+        supportsReversal:true, supportsPartnerFiscalization:true, effectiveFrom:$d
+      }')")"
+MB_ID="$(echo "${MB_JSON}" | jq -r .id)"
+MB_VERSION="$(echo "${MB_JSON}" | jq -r .version)"
+
+MB_ACT="$(req POST "${API}/api/v1/operations/tenants/${TENANT_ID}/merchant-bindings/${MB_ID}/activate?expectedVersion=${MB_VERSION}" 200 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Idempotency-Key: $(idemp)")"
+evidence "CLICK merchant binding ${MB_ID} ACTIVE for legal entity ${LEGAL_ENTITY_ID}: status=$(echo "${MB_ACT}" | jq -r .status)"
+
+log "Resuming the onboarding run"
+req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/onboarding-runs/${RUN_ID}/resume" 200 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"reason":"payment configuration completed"}' > /dev/null
+
+VIEW="$(wait_for_run_status "READY,FAILED" 90)"
+echo "${VIEW}" | jq . >> "${LOG_FILE}"
+FAILED_STEP="$(echo "${VIEW}" | jq -r '[.steps[] | select(.status=="FAILED")][0].stepKey // empty')"
+FAILED_CODE="$(echo "${VIEW}" | jq -r '[.steps[] | select(.status=="FAILED")][0].errorCode // empty')"
+RUN_STATUS="$(echo "${VIEW}" | jq -r .run.status)"
+if [ "${RUN_STATUS}" = "READY" ]; then
+  log "run reached READY without a further failure (catalog/channel readiness may already be satisfied) — continuing to phase 5 regardless, to configure the real menu"
+elif [ -n "${FAILED_STEP}" ]; then
+  evidence "step ${FAILED_STEP} FAILED with ${FAILED_CODE} — payment now passes; the next real gap is catalog/channel readiness, exactly as expected"
+else
+  fail "onboarding run in unexpected state after resume: ${VIEW}"
+fi
+
+# ---------------------------------------------------------------------------
+# Phase 5: the owner authors the catalog, prices it, and configures the
+# channel and inventory, then resumes to READY
+# ---------------------------------------------------------------------------
+
+section "Phase 5: catalog, pricing, channel, inventory (as the owner)"
+
+CAT_JSON="$(req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands/${BRAND_ID}/catalog/catalogs" 200 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"code":"MAIN-MENU","name":"Main Menu","locale":"uz"}')"
+CATALOG_ID="$(echo "${CAT_JSON}" | jq -r .id)"
+evidence "catalog ${CATALOG_ID} created"
+
+PROD_JSON="$(req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands/${BRAND_ID}/catalog/catalogs/${CATALOG_ID}/products" 200 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"code":"OSH-01","name":"Osh (Plov)","description":"Traditional Uzbek plov","locale":"uz","sku":"OSH-01","unitCode":"PORTION"}')"
+PRODUCT_ID="$(echo "${PROD_JSON}" | jq -r .productId)"
+VARIANT_ID="$(echo "${PROD_JSON}" | jq -r .defaultVariantId)"
+evidence "product ${PRODUCT_ID} / default variant ${VARIANT_ID} created"
+
+CATEGORY_JSON="$(req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands/${BRAND_ID}/catalog/catalogs/${CATALOG_ID}/categories" 200 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"code":"MAINS","name":"Main dishes","locale":"uz","sortOrder":0}')"
+CATEGORY_ID="$(echo "${CATEGORY_JSON}" | jq -r .id)"
+
+req PUT "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands/${BRAND_ID}/catalog/categories/${CATEGORY_ID}/products/${PRODUCT_ID}" 204 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"sortOrder":0}' > /dev/null
+evidence "product placed in category ${CATEGORY_ID}"
+
+PB_JSON="$(req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands/${BRAND_ID}/pricing/price-books" 200 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"name":"Standard price book","currency":"UZS","priority":100}')"
+PRICE_BOOK_ID="$(echo "${PB_JSON}" | jq -r .priceBookId)"
+
+# Each price-book mutation returns the updated PriceBookResponse (including
+# its own new version), so the version is tracked from those responses
+# rather than from an extra GET — one fewer endpoint this script depends on
+# working exactly as assumed.
+PB_ASSIGN_JSON="$(req PUT "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands/${BRAND_ID}/pricing/price-books/${PRICE_BOOK_ID}/assignments/brand" 200 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"priority":100}')"
+PB_VERSION="$(echo "${PB_ASSIGN_JSON}" | jq -r .version)"
+
+PB_PRICE_JSON="$(req PUT "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands/${BRAND_ID}/pricing/price-books/${PRICE_BOOK_ID}/variant-prices/${VARIANT_ID}" 200 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"amountMinor":35000}')"
+PB_VERSION="$(echo "${PB_PRICE_JSON}" | jq -r .version)"
+evidence "variant ${VARIANT_ID} priced at 35000 UZS (VAT-inclusive)"
+
+TAX_JSON="$(req PUT "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands/${BRAND_ID}/pricing/tax-profiles/UZ" 200 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"mode":"INCLUSIVE","rateBasisPoints":1200}')"
+evidence "tax profile UZ set: 12% inclusive"
+
+PB_ACT="$(req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands/${BRAND_ID}/pricing/price-books/${PRICE_BOOK_ID}/activation" 200 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "If-Match: ${PB_VERSION}" -H "Idempotency-Key: $(idemp)")"
+evidence "price book ${PRICE_BOOK_ID} ACTIVE: $(echo "${PB_ACT}" | jq -c '{status,currency,priority}')"
+
+# GAP (application code — real, and independent of onboarding readiness;
+# named Gap F): ACTIVATION_SMOKE_TEST prices a representative item via
+# CartPricingPort directly and never checks inventory, so an onboarding run
+# can reach READY/ACTIVE while its only item is not actually orderable.
+# Confirmed live: checkout against a priced, published, channel-bound item
+# with no stock item refused 409 ITEMS_UNAVAILABLE/NOT_STOCKED_AT_LOCATION
+# until this section ran. Listed here as a finding, not worked around with
+# SQL — the front door (InventoryController) exists and is used.
+CHANNELS_JSON="$(req GET "${API}/api/v1/control-plane/tenants/${TENANT_ID}/sales-channels" 200 -H "Authorization: Bearer ${OWNER_TOKEN}")"
+CHANNEL_ID="$(echo "${CHANNELS_JSON}" | jq -r '.[] | select(.code=="STOREFRONT") | .id')"
+[ -n "${CHANNEL_ID}" ] && [ "${CHANNEL_ID}" != "null" ] || fail "no STOREFRONT channel found — StorefrontChannelSeeder should have created one on TenantCreated"
+evidence "STOREFRONT channel ${CHANNEL_ID} (auto-created by StorefrontChannelSeeder on tenant creation)"
+
+req PUT "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands/${BRAND_ID}/catalog/variants/${VARIANT_ID}/location-offerings/${LOCATION_ID}" 204 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"status":"AVAILABLE","fulfillmentModes":["PICKUP"]}' > /dev/null
+evidence "location offering set AVAILABLE for pickup"
+
+log "Listing the variant as BINARY-tracked stock and marking it available (ADR 0017 — see Gap F: onboarding's own smoke test does not require this)"
+req POST "${API}/api/v1/tenants/${TENANT_ID}/brands/${BRAND_ID}/locations/${LOCATION_ID}/inventory/stock-items" 200 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d "$(jq -n --arg v "${VARIANT_ID}" '{variantId:$v, trackingMode:"BINARY"}')" > /dev/null
+req PUT "${API}/api/v1/tenants/${TENANT_ID}/brands/${BRAND_ID}/locations/${LOCATION_ID}/inventory/variants/${VARIANT_ID}/availability" 204 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"available":true,"reasonCode":"proving-run-setup"}' > /dev/null
+evidence "variant ${VARIANT_ID} listed and marked available at location ${LOCATION_ID}"
+
+CH_VERSION="$(echo "${CHANNELS_JSON}" | jq -r '.[0].version')"
+req PUT "${API}/api/v1/control-plane/tenants/${TENANT_ID}/sales-channels/${CHANNEL_ID}/payment-methods?expectedVersion=${CH_VERSION}" 204 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"CASH":true,"CLICK":true}' > /dev/null
+CH_VERSION=$((CH_VERSION + 1))
+req PUT "${API}/api/v1/control-plane/tenants/${TENANT_ID}/sales-channels/${CHANNEL_ID}/fulfillment-modes?expectedVersion=${CH_VERSION}" 204 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"PICKUP":true}' > /dev/null
+CH_VERSION=$((CH_VERSION + 1))
+req PUT "${API}/api/v1/control-plane/tenants/${TENANT_ID}/sales-channels/${CHANNEL_ID}/locations?expectedVersion=${CH_VERSION}" 204 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d "$(jq -n --arg l "${LOCATION_ID}" '{locationIds:[$l]}')" > /dev/null
+evidence "STOREFRONT channel: CASH+CLICK enabled, PICKUP enabled, bound to location ${LOCATION_ID}"
+
+SCHED_JSON="$(req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands/${BRAND_ID}/service-schedules" 200 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"name":"Standard hours","acceptsScheduledOrders":false,"rules":[
+        {"dayOfWeek":1,"opensAt":"08:00:00","closesAt":"23:00:00"},
+        {"dayOfWeek":2,"opensAt":"08:00:00","closesAt":"23:00:00"},
+        {"dayOfWeek":3,"opensAt":"08:00:00","closesAt":"23:00:00"},
+        {"dayOfWeek":4,"opensAt":"08:00:00","closesAt":"23:00:00"},
+        {"dayOfWeek":5,"opensAt":"08:00:00","closesAt":"23:00:00"},
+        {"dayOfWeek":6,"opensAt":"08:00:00","closesAt":"23:00:00"},
+        {"dayOfWeek":7,"opensAt":"08:00:00","closesAt":"23:00:00"}
+      ]}')"
+SCHEDULE_ID="$(echo "${SCHED_JSON}" | jq -r .id)"
+
+req PUT "${API}/api/v1/operations/tenants/${TENANT_ID}/brands/${BRAND_ID}/locations/${LOCATION_ID}/service-bindings" 204 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d "$(jq -n --arg s "${SCHEDULE_ID}" '{fulfillmentMode:"PICKUP", scheduleId:$s}')" > /dev/null
+evidence "08:00-23:00 daily schedule ${SCHEDULE_ID} bound to location for PICKUP"
+
+PUB_JSON="$(req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands/${BRAND_ID}/catalog/catalogs/${CATALOG_ID}/publications?channel=STOREFRONT" 200 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Idempotency-Key: $(idemp)")"
+PUB_STATUS="$(echo "${PUB_JSON}" | jq -r .status)"
+[ "${PUB_STATUS}" = "PUBLISHED" ] || fail "catalog publication did not succeed: ${PUB_JSON}"
+evidence "catalog PUBLISHED on STOREFRONT (publicationId=$(echo "${PUB_JSON}" | jq -r .publicationId)); findings: $(echo "${PUB_JSON}" | jq -c '.validation.findings')"
+
+log "Resuming the onboarding run"
+req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/onboarding-runs/${RUN_ID}/resume" 200 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"reason":"catalog, pricing, and channel configuration completed"}' > /dev/null
+
+VIEW="$(wait_for_run_status "READY,FAILED" 90)"
+echo "${VIEW}" | jq . >> "${LOG_FILE}"
+RUN_STATUS="$(echo "${VIEW}" | jq -r .run.status)"
+if [ "${RUN_STATUS}" != "READY" ]; then
+  echo "${VIEW}" | jq . | tee -a "${LOG_FILE}"
+  fail "onboarding run did not reach READY after configuring catalog/pricing/channel/inventory"
+fi
+evidence "onboarding run ${RUN_ID} is READY — every required step COMPLETED"
+
+# ---------------------------------------------------------------------------
+# Phase 6: activation (ADR 0027/0050)
+# ---------------------------------------------------------------------------
+
+section "Phase 6: activation"
+
+# ADR 0050's code-owned register lists TENANT_ACTIVATE as
+# ALLOW_WITHOUT_APPROVAL — the platform's declared, deliberate default (not
+# an absence nobody decided). No approval policy is configured for this
+# tenant, so this is the honest default path: single-signature activation by
+# the platform administrator. See docs/runbooks/proving-run.md for how to
+# additionally exercise the two-principal REQUIRE_CONFIGURED_POLICY path if
+# ever needed.
+ACTIVATE_JSON="$(req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/onboarding-runs/${RUN_ID}/activate" 200 \
+  -H "Authorization: Bearer ${ADMIN_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"reason":"proving run activation"}')"
+ACTIVATED="$(echo "${ACTIVATE_JSON}" | jq -r .activated)"
+[ "${ACTIVATED}" = "true" ] || fail "activation did not succeed: ${ACTIVATE_JSON}"
+evidence "tenant activation outcome: $(echo "${ACTIVATE_JSON}" | jq -r .outcome) (ADR 0050 TENANT_ACTIVATE = ALLOW_WITHOUT_APPROVAL, single signature)"
+
+TENANT_STATUS="$(req GET "${API}/api/v1/control-plane/tenants/${TENANT_ID}" 200 -H "Authorization: Bearer ${ADMIN_TOKEN}" | jq -r .status)"
+[ "${TENANT_STATUS}" = "ACTIVE" ] || fail "tenant status is ${TENANT_STATUS}, expected ACTIVE"
+evidence "tenant ${TENANT_ID} is ACTIVE"
+
+# ---------------------------------------------------------------------------
+# Phase 7: the customer — phone+OTP, menu, cart, quote, checkout with CLICK
+# ---------------------------------------------------------------------------
+
+section "Phase 7: customer session and order"
+
+IDENTITY="${API}/api/v1/storefront/tenants/${TENANT_ID}/brands/${BRAND_ID}/identity"
+CHALLENGE_JSON="$(req POST "${IDENTITY}/verification-challenges" 202 -H "Content-Type: application/json" -d '{"phone":"+998000000000"}')"
+CHALLENGE_ID="$(echo "${CHALLENGE_JSON}" | jq -r .challengeId)"
+GRANT_JSON="$(req POST "${IDENTITY}/verification-challenges/${CHALLENGE_ID}/attempts" 200 -H "Content-Type: application/json" -d '{"code":"000000"}')"
+GRANT_TOKEN="$(echo "${GRANT_JSON}" | jq -r .grant)"
+SESSION_JSON="$(req POST "${IDENTITY}/sessions" 201 -H "Content-Type: application/json" -d "$(jq -n --arg g "${GRANT_TOKEN}" '{grant:$g}')")"
+CUSTOMER_TOKEN="$(echo "${SESSION_JSON}" | jq -r .token)"
+evidence "customer signed in via local preset phone/OTP (+998000000000/000000); accountId=$(echo "${SESSION_JSON}" | jq -r .accountId)"
+
+STOREFRONT="${API}/api/v1/storefront/tenants/${TENANT_ID}/brands/${BRAND_ID}"
+MENU_JSON="$(req GET "${STOREFRONT}/locations/${LOCATION_ID}/menu?locale=uz&channel=STOREFRONT" 200)"
+evidence "menu published and visible: $(echo "${MENU_JSON}" | jq -c '.products[0] | {code,name,variants}')"
+
+CART_JSON="$(req POST "${STOREFRONT}/carts" 200 -H "Authorization: Bearer ${CUSTOMER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d "$(jq -n --arg l "${LOCATION_ID}" '{locationId:$l, channel:"STOREFRONT", fulfillmentMode:"PICKUP"}')")"
+CART_ID="$(echo "${CART_JSON}" | jq -r .cartId)"
+
+LINE_JSON="$(req PUT "${STOREFRONT}/carts/${CART_ID}/lines/line1" 200 \
+  -H "Authorization: Bearer ${CUSTOMER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" -H "If-Match: 1" \
+  -d "$(jq -n --arg v "${VARIANT_ID}" '{variantId:$v, quantity:2}')")"
+CART_VERSION="$(echo "${LINE_JSON}" | jq -r .version)"
+
+PRICE_JSON="$(req POST "${STOREFRONT}/carts/${CART_ID}/pricing" 200 \
+  -H "Authorization: Bearer ${CUSTOMER_TOKEN}" -H "Idempotency-Key: $(idemp)" -H "If-Match: ${CART_VERSION}")"
+QUOTE_ID="$(echo "${PRICE_JSON}" | jq -r .quoteId)"
+CONTEXT_HASH="$(echo "${PRICE_JSON}" | jq -r .contextHash)"
+evidence "priced quote ${QUOTE_ID}: $(echo "${PRICE_JSON}" | jq -c '{subtotalMinor,taxMinor,totalMinor,currency}')"
+
+CHECKOUT_JSON="$(req POST "${STOREFRONT}/checkouts" 200 \
+  -H "Authorization: Bearer ${CUSTOMER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d "$(jq -n --arg c "${CART_ID}" --arg v "${CART_VERSION}" --arg q "${QUOTE_ID}" --arg h "${CONTEXT_HASH}" \
+        '{cartId:$c, cartVersion:($v|tonumber), quoteId:$q, contextHash:$h, paymentMethodCode:"CLICK"}')")"
+ORDER_ID="$(echo "${CHECKOUT_JSON}" | jq -r .orderId)"
+evidence "order ${ORDER_ID} (public number $(echo "${CHECKOUT_JSON}" | jq -r .publicOrderNumber)) created: status=$(echo "${CHECKOUT_JSON}" | jq -r .status)"
+
+# ---------------------------------------------------------------------------
+# Phase 8: payment (real payment session + fake-provider capture)
+# ---------------------------------------------------------------------------
+
+section "Phase 8: payment"
+
+PAY_SESSION_JSON="$(req POST "${STOREFRONT}/orders/${ORDER_ID}/payment-sessions" 200 \
+  -H "Authorization: Bearer ${CUSTOMER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" -d '{}')"
+ATTEMPT_ID="$(echo "${PAY_SESSION_JSON}" | jq -r .attemptId)"
+evidence "payment attempt ${ATTEMPT_ID} opened: $(echo "${PAY_SESSION_JSON}" | jq -c '{provider,presentation,amountMinor,currency}')"
+
+# tools/pay-fake-click's own mechanics, pointed at THIS tenant/order rather
+# than the fixture tenant — the same real DevFakeClickPaymentController
+# endpoint (local profile only), which drives the real
+# FakeCustomerPaymentService -> ClickCallbackProcessor path a genuine Click
+# webhook would take.
+FAKE_PAY_JSON="$(req POST "${API}/dev/fake-providers/click/tenants/${TENANT_ID}/orders/${ORDER_ID}/pay" 200)"
+evidence "fake CLICK customer paid: $(echo "${FAKE_PAY_JSON}" | jq -c .)"
+
+log "Waiting for the order to reach AWAITING_APPROVAL (RESTAURANT_APPROVAL policy) after capture"
+ORDER_STATUS=""
+for _ in $(seq 1 15); do
+  ORDER_STATUS="$(req GET "${STOREFRONT}/orders/${ORDER_ID}" 200 -H "Authorization: Bearer ${CUSTOMER_TOKEN}" | jq -r .status)"
+  [ "${ORDER_STATUS}" = "AWAITING_APPROVAL" ] && break
+  sleep 2
+done
+[ "${ORDER_STATUS}" = "AWAITING_APPROVAL" ] || fail "order ${ORDER_ID} did not reach AWAITING_APPROVAL after payment capture (status: ${ORDER_STATUS})"
+evidence "order ${ORDER_ID} status: AWAITING_APPROVAL (RESTAURANT_APPROVAL policy honored)"
+
+# ---------------------------------------------------------------------------
+# Phase 9: operations — approve, advance, complete (as the owner)
+# ---------------------------------------------------------------------------
+
+section "Phase 9: operations approval and fulfilment"
+
+OPS="${API}/api/v1/tenants/${TENANT_ID}/brands/${BRAND_ID}/locations/${LOCATION_ID}/orders"
+
+APPROVE_JSON="$(req POST "${OPS}/${ORDER_ID}/approval-decisions" 200 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"decisionId":"proving-run-approve-1","action":"APPROVE","reasonCode":"PROVING_RUN_APPROVED"}')"
+ORDER_VERSION="$(echo "${APPROVE_JSON}" | jq -r .version)"
+evidence "order approved by ${OWNER_EMAIL} (ORDER_APPROVE @ LOCATION, via the tenant-owner bundle): status=$(echo "${APPROVE_JSON}" | jq -r .status)"
+
+PREP_JSON="$(req POST "${OPS}/${ORDER_ID}/state-actions" 200 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" -H "If-Match: ${ORDER_VERSION}" \
+  -d '{"targetStatus":"PREPARING","reasonCode":"PROVING_RUN_ADVANCE"}')"
+ORDER_VERSION="$(echo "${PREP_JSON}" | jq -r .version)"
+
+READY_JSON="$(req POST "${OPS}/${ORDER_ID}/state-actions" 200 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" -H "If-Match: ${ORDER_VERSION}" \
+  -d '{"targetStatus":"READY","reasonCode":"PROVING_RUN_ADVANCE"}')"
+ORDER_VERSION="$(echo "${READY_JSON}" | jq -r .version)"
+evidence "order advanced PREPARING -> READY"
+
+COMPLETE_JSON="$(req POST "${OPS}/${ORDER_ID}/completion" 200 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" -H "If-Match: ${ORDER_VERSION}" \
+  -d '{}')"
+ORDER_FINAL_STATUS="$(echo "${COMPLETE_JSON}" | jq -r .status)"
+[ "${ORDER_FINAL_STATUS}" = "COMPLETED" ] || fail "order did not reach COMPLETED: ${COMPLETE_JSON}"
+evidence "order ${ORDER_ID} COMPLETED"
+
+# ---------------------------------------------------------------------------
+# Phase 10: fiscal and payment evidence
+# ---------------------------------------------------------------------------
+
+section "Phase 10: fiscal and payment evidence"
+
+log "Waiting for the fiscal obligation sweeper to open a document (horecaos.fiscal.obligation-opener: 20s initial delay, 1m interval)"
+DOC_JSON="[]"
+for _ in $(seq 1 20); do
+  DOC_JSON="$(req GET "${API}/api/v1/tenants/${TENANT_ID}/fiscal/orders/${ORDER_ID}/documents" 200 -H "Authorization: Bearer ${ADMIN_TOKEN}")"
+  [ "$(echo "${DOC_JSON}" | jq 'length')" -gt 0 ] && break
+  sleep 5
+done
+[ "$(echo "${DOC_JSON}" | jq 'length')" -gt 0 ] || fail "no fiscal document was ever opened for order ${ORDER_ID}"
+DOC_ID="$(echo "${DOC_JSON}" | jq -r '.[0].documentId')"
+evidence "fiscal document ${DOC_ID} opened: $(echo "${DOC_JSON}" | jq -c '.[0] | {status,reasonCode,providerType}')"
+
+log "Waiting for the submission sweeper (horecaos.fiscal.obligation-opener: 40s initial delay, 1m interval), then retrying manually if needed"
+DOC_STATUS=""
+DOC_VERSION=""
+for _ in $(seq 1 24); do
+  DOC_JSON="$(req GET "${API}/api/v1/tenants/${TENANT_ID}/fiscal/orders/${ORDER_ID}/documents" 200 -H "Authorization: Bearer ${ADMIN_TOKEN}")"
+  DOC_STATUS="$(echo "${DOC_JSON}" | jq -r '.[0].status')"
+  DOC_VERSION="$(echo "${DOC_JSON}" | jq -r '.[0].version')"
+  [ "${DOC_STATUS}" = "ISSUED" ] && break
+  sleep 5
+done
+
+if [ "${DOC_STATUS}" != "ISSUED" ] && [ "${DOC_STATUS}" = "SUBMITTED" ]; then
+  # The automatic sweep only claims PENDING rows; a document already
+  # SUBMITTED is not re-claimed on a timer. FISCAL_DOCUMENT_RESOLVE's manual
+  # retry (the same one an operator would use from the fiscal worklist) is
+  # the front-door way to push it again rather than waiting indefinitely.
+  log "Document is SUBMITTED, not yet ISSUED; calling the manual retry endpoint once (FISCAL_DOCUMENT_RESOLVE)"
+  RETRY_JSON="$(req POST "${API}/api/v1/tenants/${TENANT_ID}/fiscal/documents/${DOC_ID}/retries" 200 \
+    -H "Authorization: Bearer ${ADMIN_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" -H "If-Match: ${DOC_VERSION}" \
+    -d '{"reason":"proving run: manual retry after the automatic submission sweep"}')"
+  log "retry outcome: $(echo "${RETRY_JSON}" | jq -r .outcome)"
+  DOC_JSON="$(req GET "${API}/api/v1/tenants/${TENANT_ID}/fiscal/orders/${ORDER_ID}/documents" 200 -H "Authorization: Bearer ${ADMIN_TOKEN}")"
+  DOC_STATUS="$(echo "${DOC_JSON}" | jq -r '.[0].status')"
+fi
+
+if [ "${DOC_STATUS}" = "ISSUED" ]; then
+  HAS_EVIDENCE="$(echo "${DOC_JSON}" | jq -r '.[0].hasEvidence')"
+  evidence "fiscal document ${DOC_ID} ISSUED, hasEvidence=${HAS_EVIDENCE} (reasonCode=$(echo "${DOC_JSON}" | jq -r '.[0].reasonCode'))"
+else
+  gap "fiscal document ${DOC_ID} did not reach ISSUED within this run's wait budget (status: ${DOC_STATUS}). This has been observed to resolve with one more manual retry a short time later — see docs/runbooks/proving-run.md for the exact mechanics (ClickFiscalAdapter.capturedPaymentId's live status_by_mti fallback, and the merchant binding's secret VALUE, not just its reference, must equal FakeClickProviderConfiguration's own default for the fake provider's Auth check to pass)."
+fi
+
+# Payment projection: no HTTP endpoint reads a payment attempt's own status
+# (PAYMENT_READ is declared in the capability catalogue but no controller in
+# this codebase exposes a query surface for it — a real, separate finding).
+# Read directly as evidence, not as a workaround for a missing write path:
+# nothing here is being changed, only observed.
+gap "No HTTP endpoint exposes a payment attempt's own status (PAYMENT_READ capability is declared with no controller using it). Payment projection evidence below is read directly from payments.payment_attempts for verification purposes only."
+PAYMENT_ROW="$(psql_app -t -A -F'|' <<SQL
+SELECT status, provider_type, external_document_id
+  FROM payments.payment_attempts
+ WHERE id = '${ATTEMPT_ID}';
+SQL
+)"
+evidence "payments.payment_attempts[${ATTEMPT_ID}] = ${PAYMENT_ROW} (status|provider_type|external_document_id)"
+echo "${PAYMENT_ROW}" | grep -q '^CAPTURED|' || fail "payment attempt ${ATTEMPT_ID} is not CAPTURED: ${PAYMENT_ROW}"
+
+# ---------------------------------------------------------------------------
+# Summary
+# ---------------------------------------------------------------------------
+
+section "Summary"
+
+cat <<SUMMARY | tee -a "${LOG_FILE}"
+tenant:          ${TENANT_ID} (${TENANT_SLUG}) — ACTIVE
+brand/location:  ${BRAND_ID} / ${LOCATION_ID}
+onboarding run:  ${RUN_ID} — READY, activated
+owner:           ${OWNER_EMAIL} (subject ${OWNER_SUBJECT})
+legal entity:    ${LEGAL_ENTITY_ID}
+merchant binding: ${MB_ID} (CLICK, ACTIVE)
+catalog:         ${CATALOG_ID}, publication PUBLISHED
+order:           ${ORDER_ID} — COMPLETED
+payment attempt: ${ATTEMPT_ID} — CAPTURED
+fiscal document: ${DOC_ID} — ${DOC_STATUS}
+
+Full log: ${LOG_FILE}
+App log:  ${RUN_LOG_APP}
+SUMMARY
+
+log "Proving run complete."

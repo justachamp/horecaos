@@ -26,6 +26,30 @@ it selects a subset of them.
 > unchanged. The Flutter app is on hold; the Angular storefront is the
 > customer surface for launch.
 
+> **Stage note, 2026-08-30 (ADR 0055 phase 5 — dev/test proving run):**
+> [`tools/proving-run`](runbooks/proving-run.md) exercised stages 1 through 4
+> of the table below end to end, against a fresh local stack, entirely
+> through the HTTP API and for a genuinely new tenant — never the
+> [local-fixtures](local-fixtures.md) demo tenant. It passed. A tenant was
+> created by a platform administrator; carried through ADR 0008's onboarding
+> workflow with two real validator failures (`PAYMENT_CONFIGURATION_VALIDATE`
+> on a missing legal entity, `CATALOG_READINESS_VALIDATE` on an unpublished
+> menu) and two real resumes, not a template that never fails; activated
+> under ADR 0050's actual default; and taken a real phone+OTP customer
+> through a published menu, a priced quote, checkout with CLICK, a captured
+> fake-provider payment, `RESTAURANT_APPROVAL` operations approval,
+> fulfilment, and a fiscal document that reached `ISSUED` with OFD evidence.
+> The payment projection read `CAPTURED`. Full evidence and the six
+> confirmed gaps (labeled A–F, all local-dev-bootstrap or capability-model
+> findings — none a business-data shortcut) are in
+> [the runbook](runbooks/proving-run.md); none of them blocked the
+> journey, and all six have named follow-ups there. This confirms the slice's
+> deferred items (POS, external delivery, refunds beyond manual, promotions,
+> quantity inventory, SaaS metering) stayed genuinely absent rather than
+> silently required — nothing in the run reached for any of them. Stage 5
+> (the pilot location's legacy scope registry and single-writer gate) remains
+> out of scope under ADR 0055's greenfield reframing.
+
 ## The slice
 
 **One tenant, one brand, one location, taking real paid orders on the new

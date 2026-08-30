@@ -158,6 +158,23 @@ services:
           value=development-only-not-a-secret-provisioning
         bao kv put horecaos/local/identity_admin/keycloak/reader-secret \
           value=development-only-not-a-secret-reader
+        # These two close a gap docs/development.md's own documented dev loop
+        # falls into: running `make run` with HORECAOS_SECRETS_PROVIDER=openbao
+        # (.env.example's own recommended way to exercise the OpenBao path
+        # rather than the "environment" provider default) previously failed
+        # application startup outright — ObjectStorageConfiguration.s3Client
+        # and PartnerConfiguration.handoverCodeHasher both resolve their
+        # secret eagerly at bean construction, and only data_encryption/kek
+        # and the two identity_admin values above were ever seeded here. The
+        # values match application.yml's own "environment" provider fallbacks
+        # (HORECAOS_MEDIA_ACCESS_KEY / _SECRET_KEY and HORECAOS_HANDOVER_PEPPER),
+        # so behaviour is identical whichever provider a checkout ends up on.
+        bao kv put horecaos/local/object_storage/platform/media-access-key \
+          value=horecaos
+        bao kv put horecaos/local/object_storage/platform/media-secret-key \
+          value=horecaos-local-secret
+        bao kv put horecaos/local/data_encryption/platform/handover-pepper \
+          value=horecaos-local-handover-pepper-not-for-use
         echo "seeded horecaos local secrets"
 
   minio:
