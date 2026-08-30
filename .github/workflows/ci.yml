@@ -93,12 +93,18 @@ jobs:
       - name: Verify
         run: ./mvnw --batch-mode verify
 
-      - name: OpenAPI compatibility and generated TypeScript client
+      - name: OpenAPI compatibility and generated TypeScript clients
         run: |
           python3 tools/openapi/generate_types.py \
-            --input target/openapi/qoida-api-v1.json \
-            --output target/openapi/qoida-api-v1.ts
-          diff -u api/generated/qoida-api-v1.ts target/openapi/qoida-api-v1.ts
+            --input target/openapi/horecaos-api-v1.json \
+            --output target/openapi/horecaos-api-v1.ts
+          diff -u api/generated/horecaos-api-v1.ts target/openapi/horecaos-api-v1.ts
+          for group in storefront control-plane operations providers; do
+            python3 tools/openapi/generate_types.py \
+              --input "target/openapi/horecaos-api-v1.$group.json" \
+              --output "target/openapi/horecaos-api-v1.$group.ts"
+            diff -u "api/generated/horecaos-api-v1.$group.ts" "target/openapi/horecaos-api-v1.$group.ts"
+          done
 
       - name: Publish test report
         if: always()

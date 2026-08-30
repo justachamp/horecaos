@@ -23,7 +23,10 @@
   app (`control-plane/src/design-system` holds `tokens.css` and nothing else), across 184
   TypeScript files; server-side Telegram `initData` verification does not exist anywhere in
   `src/main/java`, so the storefront's session exchange has no counterpart; and there is
-  no OpenAPI release artifact, no generated clients, no consumer manifests and no nightly
+  no OpenAPI release artifact and no consumer manifests or nightly smoke suite —
+  though generated TypeScript clients now exist and are checked in at
+  `api/generated/` (the full v1 client plus one per ADR 0057 surface group), no
+  frontend imports any of them yet, so every API layer is still hand-written — and no nightly
   smoke suite. The screens are no longer uniformly stubs. The storefront routes a whole
   customer journey — unauthenticated browse, search and product, then cart, a
   session-guarded checkout, orders, profile and addresses — across 109 of those

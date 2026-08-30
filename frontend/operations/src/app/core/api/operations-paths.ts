@@ -41,9 +41,31 @@ export const operationsPaths = {
     return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/orders`;
   },
 
+  /** The board's seven tab badges in one call (§2.3). Falls back to client derivation on error. */
+  orderCounts(scope: LocationScope): string {
+    return `${this.orders(scope)}/counts`;
+  },
+
   /** One order with its snapshotted lines. Returns an `ETag`. */
   order(scope: LocationScope, orderId: string): string {
     return `${this.orders(scope)}/${encodeURIComponent(orderId)}`;
+  },
+
+  /**
+   * Reveal the customer's phone in full.
+   *
+   * A separate capability and a separate audited call requiring a stated purpose
+   * (ADR 0029), mirroring {@link orderLineNote}. Copy-to-clipboard of the phone
+   * counts as a reveal and performs this call rather than copying an
+   * already-decrypted value (§1.5).
+   */
+  orderCustomerPhone(scope: LocationScope, orderId: string): string {
+    return `${this.order(scope, orderId)}/customer/phone`;
+  },
+
+  /** Reveal the delivery address and instructions in full. Same reveal contract as {@link orderCustomerPhone}. */
+  orderCustomerAddress(scope: LocationScope, orderId: string): string {
+    return `${this.order(scope, orderId)}/customer/address`;
   },
 
   /** Every transition with what caused it — the answer to "why is it in this state". */

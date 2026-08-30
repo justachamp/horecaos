@@ -1,0 +1,86 @@
+.reason-dialog__backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(22, 22, 22, 0.5);
+  z-index: 50;
+}
+
+.reason-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  padding: 20px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.reason-dialog__title {
+  margin: 0;
+}
+
+.reason-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.reason-dialog__input,
+.reason-dialog__textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-family: var(--q-font-sans);
+  font-size: 14px;
+}
+
+.reason-dialog__textarea {
+  resize: vertical;
+}
+
+.reason-dialog__error {
+  color: var(--q-error-text);
+}
+
+.reason-dialog__banner {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.reason-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.reason-dialog__dismiss,
+.reason-dialog__confirm {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.reason-dialog__confirm {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: #fff;
+}
+
+.reason-dialog__confirm:disabled,
+.reason-dialog__dismiss:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

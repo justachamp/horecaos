@@ -19,6 +19,11 @@
   structurally against the released `api/openapi/v1/qoida-api.json` baseline, and refuses any
   undocumented drift; `tools/openapi/generate_types.py` produces the checked-in typed
   TypeScript transport contract under `api/generated/`, with CI regenerating and diffing it.
+  `OpenApiSurface` now turns this record's surfaces into four additive Springdoc
+  groups — `storefront`, `control-plane`, `operations`, `providers` — at
+  `/v3/api-docs/<group>`, each with its own checked-in baseline and generated
+  TypeScript client behind the same compatibility gate; a path fitting none or more
+  than one group fails the build (ADR 0057).
 - Date proposed: 2026-08-20
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture)

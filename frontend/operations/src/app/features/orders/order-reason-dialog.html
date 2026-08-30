@@ -1,0 +1,55 @@
+<div class="reason-dialog__backdrop" data-testid="order-reason-dialog">
+  <div class="reason-dialog" role="dialog" aria-modal="true" [attr.aria-label]="titleKey() | t">
+    <h2 class="q-emphasis reason-dialog__title">{{ titleKey() | t }}</h2>
+
+    <label class="reason-dialog__field">
+      <span class="q-body-sm">{{ 'orders.dialog.reasonCode.label' | t }}</span>
+      <input
+        type="text"
+        class="reason-dialog__input"
+        [value]="reasonCode()"
+        (input)="setReasonCode($any($event.target).value)"
+        [placeholder]="'orders.dialog.reasonCode.placeholder' | t"
+        [attr.aria-invalid]="reasonMissing() ? 'true' : null"
+        data-testid="order-reason-dialog-code"
+      />
+      @if (reasonMissing()) {
+        <span class="q-caption reason-dialog__error" data-testid="order-reason-dialog-required">{{
+          'orders.dialog.reasonRequired' | t
+        }}</span>
+      }
+    </label>
+
+    @if (noteEnabled()) {
+      <label class="reason-dialog__field">
+        <span class="q-body-sm">{{ 'orders.dialog.note.label' | t }}</span>
+        <textarea
+          class="reason-dialog__textarea"
+          rows="3"
+          [value]="note()"
+          (input)="setNote($any($event.target).value)"
+          data-testid="order-reason-dialog-note"
+        ></textarea>
+      </label>
+    }
+
+    @if (errorKey(); as key) {
+      <p class="q-body-sm reason-dialog__banner" role="alert">{{ key | t }}</p>
+    }
+
+    <div class="reason-dialog__actions">
+      <button type="button" class="reason-dialog__dismiss" (click)="close()" [disabled]="busy()">
+        {{ 'orders.dialog.dismiss' | t }}
+      </button>
+      <button
+        type="button"
+        class="reason-dialog__confirm"
+        (click)="submit()"
+        [disabled]="busy()"
+        data-testid="order-reason-dialog-confirm"
+      >
+        {{ confirmLabelKey() | t }}
+      </button>
+    </div>
+  </div>
+</div>

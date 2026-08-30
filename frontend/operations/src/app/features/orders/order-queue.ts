@@ -7,7 +7,7 @@ import {
   signal,
 } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
+import { Observable, firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
 import { operationsPaths } from '../../core/api/operations-paths';
@@ -19,7 +19,16 @@ import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { ServiceStatus } from '../../shell/service-status';
+import {
+  DecisionIdRegistry,
+  OrderActionResponse,
+  actionLabel,
+  splitInlineOverflow,
+} from './order-actions';
+import { DecisionResponse, OrderActionsApi } from './order-actions-api';
 import { CountableOrder, OrderCounts, TabCounts, zeroTabCounts } from './order-counts';
+import { describeApiError, errorReference, transitionConflict } from './order-errors';
+import { OrderReasonDialog, OrderReasonSubmission } from './order-reason-dialog';
 import {
   OrderSeverity,
   compareNewestFirst,
@@ -63,22 +72,18 @@ const FETCH_LIMIT = 200;
  */
 const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
 
-const ERROR_MESSAGE_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
-  [ApiErrorCode.NETWORK_UNREACHABLE]: 'error.NETWORK_UNREACHABLE',
-  [ApiErrorCode.UNAUTHENTICATED]: 'error.UNAUTHENTICATED',
-  [ApiErrorCode.INSUFFICIENT_CAPABILITY]: 'error.INSUFFICIENT_CAPABILITY',
-  [ApiErrorCode.ENTITLEMENT_REQUIRED]: 'error.ENTITLEMENT_REQUIRED',
-  [ApiErrorCode.STALE_VERSION]: 'error.STALE_VERSION',
-  [ApiErrorCode.IDEMPOTENCY_KEY_IN_PROGRESS]: 'error.IDEMPOTENCY_KEY_IN_PROGRESS',
-  [ApiErrorCode.RESOURCE_NOT_FOUND]: 'error.RESOURCE_NOT_FOUND',
-  [ApiErrorCode.RATE_LIMIT_EXCEEDED]: 'error.RATE_LIMIT_EXCEEDED',
-};
-
 /** One row, decorated with what the table and the sort actually need. */
 interface OrderRow {
   readonly order: OrderSummaryResponse;
   readonly createdAt: Date;
   readonly severity: OrderSeverity;
+}
+
+/** Which row opened the reason dialog, for which action, at which version. */
+interface RowDialogState {
+  readonly orderId: string;
+  readonly kind: 'reject' | 'cancel';
+  readonly version: number;
 }
 
 /**
@@ -110,6 +115,7 @@ export class OrderQueue implements OnInit {
   private readonly api = inject(ApiClient);
   private readonly location = inject(CurrentLocation);
   private readonly counts = inject(OrderCounts);
+  private readonly actionsApi = inject(OrderActionsApi);
   private readonly serviceStatus = inject(ServiceStatus);
   private readonly i18n = inject(I18n);
   private readonly route = inject(ActivatedRoute);
@@ -126,6 +132,13 @@ export class OrderQueue implements OnInit {
   protected readonly refreshing = signal(false);
   protected readonly lastError = signal<ApiError | null>(null);
   protected readonly denied = signal(false);
+
+  /** §2.9: inline actions rendered from `actions[]`, plus their busy/dialog/notice state. */
+  protected readonly busyOrderIds = signal<ReadonlySet<string>>(new Set());
+  protected readonly openOverflowFor = signal<string | null>(null);
+  protected readonly actionNotice = signal<string | null>(null);
+  protected readonly dialog = signal<RowDialogState | null>(null);
+  private readonly decisionIds = new DecisionIdRegistry();
 
   private pollHandle: ReturnType<typeof setInterval> | null = null;
   private readonly onVisibilityChange = (): void => {
@@ -188,7 +201,7 @@ export class OrderQueue implements OnInit {
       const now = new Date();
 
       this.rows.set(orders.map((order) => decorate(order, now)));
-      this.tabCounts.set(this.counts.forOrders(orders.map(toCountable), now));
+      this.tabCounts.set(await this.counts.forOrders(scope, orders.map(toCountable), now));
       this.lastUpdatedAt.set(now);
       this.lastError.set(null);
       this.denied.set(false);

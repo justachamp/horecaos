@@ -1,8 +1,10 @@
+import { OrderActionResponse } from './order-actions';
+
 /**
- * Mirrors `OrderSummaryResponse` in
- * `platform/api/openapi/v1/horecaos-api.json` — the entire wire shape
- * `GET /api/v1/tenants/{t}/brands/{b}/locations/{l}/orders`
- * (`OperationsOrderController`) returns today, newest first.
+ * Mirrors `OrderSummaryResponse` in `OperationsOrderController.java` — the
+ * entire wire shape `GET /api/v1/tenants/{t}/brands/{b}/locations/{l}/orders`
+ * returns today, newest first, and the summary embedded in
+ * `OrderDetailResponse.summary`.
  *
  * This is far short of `docs/operations-spec/orders.md` §2.5's default
  * column set: no branch name, no customer, no line summary, no payment
@@ -25,4 +27,11 @@ export interface OrderSummaryResponse {
   readonly totalMinor: number;
   readonly currency: string;
   readonly version?: number;
+  /**
+   * The server-supplied `actions[]` array (orders.md §4.2): exactly what
+   * `OrderActionsPolicy` permits for this order's status and fulfilment mode
+   * right now. Absent on a response from before this field existed — treat
+   * that the same as empty, never as "unknown, so show everything".
+   */
+  readonly actions?: readonly OrderActionResponse[];
 }

@@ -1,5 +1,9 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 
+import { ApiClient } from '../../core/api/api-client';
+import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
+import { OrderCountsResponse } from './order-detail';
 import { OrderSeverityInput, computeOrderSeverity } from './order-severity';
 import { ORDER_TABS, OrderTabId, isOrderTabMember } from './order-tabs';
 
@@ -21,35 +25,109 @@ export function zeroTabCounts(): TabCounts {
 }
 
 /**
- * Per-tab badge counts — **the seam** `docs/operations-spec/orders.md` §2.3
- * asks for.
+ * Per-tab badge counts — `docs/operations-spec/orders.md` §2.3.
  *
- * The spec's real source is `COUNTERS` (ADR 0045, not built) or, until then,
- * `GET .../orders/counts` (also not built). Neither exists, so
- * {@link forOrders} derives counts from whatever page of orders the board
- * already fetched. That is wrong in the one way the spec calls out — a count
- * from a truncated page can undercount a tab, whereas §2.3 wants each tab's
- * count computed "before the other filters apply within that tab's own
- * scope" — and right in every way that matters for a first render: it needs
- * no new endpoint, and it isolates the wrongness to this one class.
+ * **The swap this class now performs.** `GET .../orders/counts` exists
+ * (`OperationsOrderController.counts`), and six of the seven tabs map onto it
+ * exactly — see {@link fromEndpoint}. `forOrders` calls it first and only
+ * falls back to deriving every tab from the already-fetched `orders` page (the
+ * original implementation, kept verbatim in {@link deriveAll}) when the call
+ * fails: a denied capability, a network error, or a server that has not yet
+ * deployed the endpoint. Nothing that calls `forOrders` — `order-queue.ts`'s
+ * tab bar — had to change shape for this, because the return type was always
+ * the real one.
  *
- * **The swap, when the endpoint exists:** replace this method's body with an
- * `ApiClient.get<TabCounts>(operationsPaths.orderCounts(scope))` call. Nothing
- * that calls {@link forOrders} — `order-queue.ts`'s tab bar — has to change,
- * because the return shape is already the real one.
+ * **`Внимание` is the exception, on purpose, not an oversight.**
+ * `JdbcOrderStore.counts`'s own Java doc says why the aggregate excludes it:
+ * "Внимание's live severity queue (late orders, stuck processes) is
+ * deliberately not among these columns... a count computed here would be
+ * wrong five seconds after it was cached." The endpoint also does not break
+ * `PAYMENT_FAILED` out from the other terminal-adjacent statuses, which
+ * `Внимание` needs too. So `attention` is *always* derived client-side from
+ * `orders`, regardless of whether the endpoint call below succeeds — it is
+ * the one tab this seam can never close, by the server's own design.
  */
 @Injectable({ providedIn: 'root' })
 export class OrderCounts {
-  forOrders(orders: readonly CountableOrder[], now: Date): TabCounts {
-    const members = orders.map((order) => ({
-      status: order.status,
-      severityLevel: computeOrderSeverity(order, now).level,
-    }));
+  private readonly api = inject(ApiClient);
 
+  async forOrders(
+    scope: LocationScope,
+    orders: readonly CountableOrder[],
+    now: Date,
+  ): Promise<TabCounts> {
+    const attention = countMembers('attention', orders, now);
+
+    try {
+      const result = await firstValueFrom(
+        this.api.get<OrderCountsResponse>(operationsPaths.orderCounts(scope)),
+      );
+      if (!isOrderCountsResponse(result.value)) {
+        // Not a shape the current server sends. Safer to fall back than to
+        // render `NaN`/`undefined` badges from a response this client
+        // misread — the same "throw on the unexpected" instinct as
+        // `money.ts`'s unknown-currency guard.
+        return this.deriveAll(orders, now);
+      }
+      return fromEndpoint(result.value, attention);
+    } catch {
+      // Network failure, a capability the operator does not hold, or a server
+      // that has not deployed the endpoint yet — the documented fallback,
+      // wrong only in the way the class doc above already accepts.
+      return this.deriveAll(orders, now);
+    }
+  }
+
+  private deriveAll(orders: readonly CountableOrder[], now: Date): TabCounts {
     const counts = { ...zeroTabCounts() } as Record<OrderTabId, number>;
     for (const tab of ORDER_TABS) {
-      counts[tab] = members.filter((member) => isOrderTabMember(tab, member)).length;
+      counts[tab] = countMembers(tab, orders, now);
     }
     return counts;
   }
+}
+
+function isOrderCountsResponse(value: unknown): value is OrderCountsResponse {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const candidate = value as Partial<OrderCountsResponse>;
+  return (
+    typeof candidate.newOrders === 'number' &&
+    typeof candidate.inKitchen === 'number' &&
+    typeof candidate.ready === 'number' &&
+    typeof candidate.fulfilling === 'number' &&
+    typeof candidate.completed === 'number' &&
+    typeof candidate.cancelled === 'number' &&
+    typeof candidate.total === 'number'
+  );
+}
+
+function countMembers(tab: OrderTabId, orders: readonly CountableOrder[], now: Date): number {
+  return orders.filter((order) =>
+    isOrderTabMember(tab, { status: order.status, severityLevel: computeOrderSeverity(order, now).level }),
+  ).length;
+}
+
+/**
+ * `OrderCountsResponse`'s fields, as `JdbcOrderStore.counts`'s SQL defines
+ * them, onto the six tabs it can answer for:
+ *
+ *   - `newOrders`      = RECEIVED ∪ PAYMENT_AUTHORIZING ∪ AWAITING_APPROVAL  → `new`, exactly
+ *   - `inKitchen`+`ready` = CONFIRMED ∪ PREPARING ∪ READY                    → `preparing`, exactly
+ *   - `fulfilling`                                                          → `delivering`, exactly
+ *   - `completed`                                                           → `completed`, exactly
+ *   - `cancelled`       = CANCELLED ∪ REJECTED ∪ EXPIRED                     → `cancelled`, exactly
+ *   - `total`                                                               → `all`, exactly
+ */
+function fromEndpoint(response: OrderCountsResponse, attention: number): TabCounts {
+  return {
+    attention,
+    new: response.newOrders,
+    preparing: response.inKitchen + response.ready,
+    delivering: response.fulfilling,
+    completed: response.completed,
+    cancelled: response.cancelled,
+    all: response.total,
+  };
 }
