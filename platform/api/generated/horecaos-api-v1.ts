@@ -962,6 +962,10 @@ export interface FaqResponse {
   name?: string;
 }
 
+export interface FavouritesResponse {
+  productIds?: Array<string>;
+}
+
 export interface FindingView {
   code?: string;
   detail?: string;
@@ -2926,6 +2930,9 @@ export interface Operations {
   "removeAddress": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses/{addressId}"; request: { parameters: { path: { addressId: string; brandId: string; tenantId: string } } }; responses: { "200": unknown } };
   "address": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses/{addressId}"; request: { parameters: { path: { addressId: string; brandId: string; tenantId: string } } }; responses: { "200": AddressResponse } };
   "updateAddress": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses/{addressId}"; request: { parameters: { path: { addressId: string; brandId: string; tenantId: string } }; body: SaveAddressRequest }; responses: { "200": AddressResponse } };
+  "favourites": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/favourites"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": FavouritesResponse } };
+  "removeFavourite": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/favourites/{productId}"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } } }; responses: { "200": unknown } };
+  "addFavourite": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/favourites/{productId}"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } } }; responses: { "200": unknown } };
   "listOrders": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PageOrderSummaryResponse } };
   "readOrder": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } } }; responses: { "200": OrderResponse } };
   "cancel_1": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/cancellations"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } }; body: CancelRequest }; responses: { "200": OrderStateResponse } };

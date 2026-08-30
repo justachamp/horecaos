@@ -3074,6 +3074,18 @@
         },
         "type" : "object"
       },
+      "FavouritesResponse" : {
+        "properties" : {
+          "productIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "FindingView" : {
         "properties" : {
           "code" : {
@@ -17484,6 +17496,117 @@
         "tags" : [ "Customer self-service" ]
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/favourites" : {
+      "get" : {
+        "description" : "Product ids, most recently marked first. Ids and not menu items: the storefront already holds the published menu and resolves them against it, which is also what drops a dish this branch has stopped serving instead of showing a card that cannot be ordered.",
+        "operationId" : "favourites",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/FavouritesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The products this customer marked",
+        "tags" : [ "Customer self-service" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/favourites/{productId}" : {
+      "delete" : {
+        "description" : "204 whether or not it was marked. Removing what was never there is the state the customer asked for.",
+        "operationId" : "removeFavourite",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Unmark a product",
+        "tags" : [ "Customer self-service" ]
+      },
+      "put" : {
+        "description" : "Idempotent: marking twice is one fact, so a double tap or a retried request is a no-op rather than an error. A product that is not this brand's is refused -- a stale menu in a customer's hand is an ordinary way to reach that.",
+        "operationId" : "addFavourite",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Mark a product",
+        "tags" : [ "Customer self-service" ]
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders" : {
       "get" : {
         "description" : "Cursor-paginated per ADR 0031: pass the previous page's nextCursor, and a null nextCursor is the end. Every row is the caller's own — the account is a predicate of the query and there is no parameter that widens it — so this enumerates a customer's history and never a brand's. Carries what a list shows and nothing beneath it: no lines, no modifiers, no notes, no destination. Open one order to read those.",
@@ -22852,6 +22975,9 @@
     "description" : "Migration programs and the capability scopes under them",
     "name" : "Migration programs"
   }, {
+    "description" : "A customer's own profile, their own saved addresses, and the products they marked",
+    "name" : "Customer self-service"
+  }, {
     "description" : "Resumable onboarding runs and activation",
     "name" : "Tenant onboarding"
   }, {
@@ -22860,9 +22986,6 @@
   }, {
     "description" : "Carts, checkout, and a customer's own orders",
     "name" : "Storefront ordering"
-  }, {
-    "description" : "A customer's own profile and their own saved addresses",
-    "name" : "Customer self-service"
   }, {
     "description" : "Why orders are cancelled and how they are completed, per tenant",
     "name" : "Order outcome reasons"

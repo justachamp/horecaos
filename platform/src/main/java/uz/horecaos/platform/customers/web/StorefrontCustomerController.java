@@ -33,6 +33,7 @@ import uz.horecaos.platform.customers.application.CustomerProfileService.Contact
 import uz.horecaos.platform.customers.application.CustomerProfileService.CoordinateSource;
 import uz.horecaos.platform.customers.application.CustomerProfileService.RevealedAddress;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
+import uz.horecaos.platform.customers.infrastructure.persistence.JdbcFavouriteStore;
 import uz.horecaos.platform.iam.api.protection.Classified;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.web.api.AggregateVersion;
@@ -87,7 +88,9 @@ import uz.horecaos.platform.web.idempotency.Idempotent;
  */
 @RestController
 @RequestMapping("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me")
-@Tag(name = "Customer self-service", description = "A customer's own profile and their own saved addresses")
+@Tag(
+        name = "Customer self-service",
+        description = "A customer's own profile, their own saved addresses, and the products they marked")
 public class StorefrontCustomerController {
 
     /**
@@ -107,16 +110,19 @@ public class StorefrontCustomerController {
     private final CurrentCustomer currentCustomer;
     private final CustomerPolicyLookup policies;
     private final Clock clock;
+    private final JdbcFavouriteStore favourites;
 
     public StorefrontCustomerController(
             CustomerProfileService profiles,
             CurrentCustomer currentCustomer,
             CustomerPolicyLookup policies,
-            Clock clock) {
+            Clock clock,
+            JdbcFavouriteStore favourites) {
         this.profiles = profiles;
         this.currentCustomer = currentCustomer;
         this.policies = policies;
         this.clock = clock;
+        this.favourites = favourites;
     }
 
     // ------------------------------------------------------------------ profile
@@ -323,6 +329,56 @@ public class StorefrontCustomerController {
         return ResponseEntity.noContent().build();
     }
 
+    // ----------------------------------------------------------------- favourites
+
+    @GetMapping("/favourites")
+    @CustomerOwned
+    @Operation(
+            summary = "The products this customer marked",
+            description = "Product ids, most recently marked first. Ids and not menu items: "
+                    + "the storefront already holds the published menu and resolves them "
+                    + "against it, which is also what drops a dish this branch has stopped "
+                    + "serving instead of showing a card that cannot be ordered.")
+    public ResponseEntity<FavouritesResponse> favourites(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+
+        UUID accountId = accountId(tenantId, brandId);
+        return ResponseEntity.ok(new FavouritesResponse(favourites.list(tenantId, brandId, accountId)));
+    }
+
+    @PutMapping("/favourites/{productId}")
+    @CustomerOwned
+    @Idempotent
+    @Operation(
+            summary = "Mark a product",
+            description = "Idempotent: marking twice is one fact, so a double tap or a retried "
+                    + "request is a no-op rather than an error. A product that is not this "
+                    + "brand's is refused -- a stale menu in a customer's hand is an ordinary "
+                    + "way to reach that.")
+    public ResponseEntity<Void> addFavourite(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID productId) {
+
+        UUID accountId = accountId(tenantId, brandId);
+        if (!favourites.add(tenantId, brandId, accountId, productId)) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such product on this menu");
+        }
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/favourites/{productId}")
+    @CustomerOwned
+    @Idempotent
+    @Operation(
+            summary = "Unmark a product",
+            description = "204 whether or not it was marked. Removing what was never there is "
+                    + "the state the customer asked for.")
+    public ResponseEntity<Void> removeFavourite(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID productId) {
+
+        UUID accountId = accountId(tenantId, brandId);
+        favourites.remove(tenantId, brandId, accountId, productId);
+        return ResponseEntity.noContent().build();
+    }
+
     // ------------------------------------------------------------------ helpers
 
     /**
@@ -483,6 +539,9 @@ public class StorefrontCustomerController {
                     address.version());
         }
     }
+
+    /** @param productIds resolved against the menu by the caller. */
+    public record FavouritesResponse(List<UUID> productIds) {}
 
     /**
      * The whole address, used for both the create and the replace.
