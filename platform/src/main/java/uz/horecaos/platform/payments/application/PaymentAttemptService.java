@@ -11,6 +11,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionDefinition;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import uz.horecaos.platform.migration.api.ExternalEffect;
 import uz.horecaos.platform.migration.api.ImportSuppression;
+import uz.horecaos.platform.ordering.api.PaymentCaptured;
 import uz.horecaos.platform.payments.domain.PaymentAttempt;
 import uz.horecaos.platform.payments.domain.PaymentAttemptStateMachine;
 import uz.horecaos.platform.payments.domain.PaymentAttemptStatus;
@@ -36,6 +38,7 @@ import uz.horecaos.platform.payments.domain.UncertaintyResolver;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentAttemptStore;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentIntentStore;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentTransactionStore;
+import uz.horecaos.platform.tenancy.api.TenantId;
 
 /**
  * The attempt lifecycle, and the place uncertainty is handled (ADR 0013).
@@ -94,6 +97,7 @@ public class PaymentAttemptService {
     private final CapturedMoneyPort captures;
     private final TransactionTemplate unitOfWork;
     private final TransactionTemplate independently;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
 
     // The template is for the two methods that call a provider. Their database
@@ -108,6 +112,7 @@ public class PaymentAttemptService {
             List<PaymentProviderPort> providerPorts,
             CapturedMoneyPort captures,
             TransactionTemplate unitOfWork,
+            ApplicationEventPublisher events,
             Clock clock) {
         this.intents = intents;
         this.attempts = attempts;
@@ -115,6 +120,7 @@ public class PaymentAttemptService {
         this.bindings = bindings;
         this.captures = captures;
         this.unitOfWork = unitOfWork;
+        this.events = events;
         // A second template for the one write that has to survive the exception
         // it accompanies. present() records uncertainty and then throws; a caller
         // that happened to hold a transaction of its own would otherwise roll
@@ -531,6 +537,20 @@ public class PaymentAttemptService {
         intents.find(attempt.tenantId(), attempt.intentId()).ifPresent(intent -> {
             if (attemptStatus == PaymentAttemptStatus.CAPTURED) {
                 captures.recordCapture(intent.tenantId(), intent.orderId(), CAPTURE_ACTOR);
+
+                // ADR 0019 step 8's missing half: an order held in
+                // PAYMENT_AUTHORIZING is told the money arrived so it can confirm
+                // or go to restaurant approval, exactly as a cash order would at
+                // checkout. A plain application event and not a direct call,
+                // because this module already depends on ordering.api for the
+                // reverse direction (OrderConfirmedSettlementTrigger,
+                // TerminalOrderPaymentVoid) — calling into ordering.application
+                // directly would reach past its module boundary into a package
+                // this module may not see, and a dependency running the other way
+                // would make the two modules mutually dependent. See
+                // PaymentCaptured's own Javadoc.
+                events.publishEvent(
+                        new PaymentCaptured(UUID.randomUUID(), new TenantId(intent.tenantId()), intent.orderId(), now));
             }
             PaymentIntentStatus target =
                     switch (attemptStatus) {

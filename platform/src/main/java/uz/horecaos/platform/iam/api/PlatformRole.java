@@ -122,6 +122,13 @@ public enum PlatformRole {
                     TENANT_READ,
                     TENANT_WRITE,
                     TENANT_ONBOARDING_MANAGE,
+                    // ADR 0038: registering a legal entity and naming it a location's
+                    // seller, held here alone among the tenant bundles for the reason
+                    // PAYMENT_MERCHANT_BINDING_MANAGE is: it decides whose name appears
+                    // on every fiscal receipt a branch issues, and neither the
+                    // administrator nor finance may move that on their own.
+                    LEGAL_ENTITY_READ,
+                    LEGAL_ENTITY_MANAGE,
                     BRAND_READ,
                     BRAND_WRITE,
                     LOCATION_READ,
@@ -264,6 +271,10 @@ public enum PlatformRole {
                     // a second receipt: fiscal.document.resolve stays with the owner and
                     // with finance.
                     FISCAL_DOCUMENT_READ,
+                    // Reading which companies exist and which sells where, never
+                    // registering one or moving an assignment: legal-entity.manage
+                    // stays with the owner alone.
+                    LEGAL_ENTITY_READ,
                     DELIVERY_PLAN_READ,
                     DELIVERY_MANUAL_ASSIGN,
                     SHIPMENT_CANCEL,
@@ -353,6 +364,11 @@ public enum PlatformRole {
                     PAYMENT_ATTEMPT_RESOLVE,
                     FISCAL_DOCUMENT_READ,
                     FISCAL_DOCUMENT_RESOLVE,
+                    // Which company sells where is exactly what a fiscal document and a
+                    // merchant binding both resolve against; finance reads it for the
+                    // same reason it reads those, and registering one stays with the
+                    // owner.
+                    LEGAL_ENTITY_READ,
                     // Activating a rate table is money; drawing one is not, which is why
                     // finance activates tariffs without being able to author them.
                     DELIVERY_TARIFF_ACTIVATE,

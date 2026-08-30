@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -29,6 +30,7 @@ import uz.horecaos.platform.iam.api.secrets.SecretValue;
 import uz.horecaos.platform.integration.api.payment.MerchantApiCall;
 import uz.horecaos.platform.integration.api.payment.MerchantApiTransport;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
+import uz.horecaos.platform.ordering.api.PaymentCaptured;
 import uz.horecaos.platform.payments.application.CapturedMoneyPort;
 import uz.horecaos.platform.payments.application.PaymentAttemptService;
 import uz.horecaos.platform.payments.domain.CaptureTiming;
@@ -108,6 +110,7 @@ class ClickShopApiCallbackTests {
     private ClickPaymentAdapter clickAdapter;
     private ClickFiscalAdapter fiscalAdapter;
     private ClickShopApiController controller;
+    private RecordingEventPublisher published;
 
     private static final UUID ORDER = UUID.randomUUID();
 
@@ -155,6 +158,7 @@ class ClickShopApiCallbackTests {
         clickAdapter = new ClickPaymentAdapter(click, CLOCK);
         fiscalAdapter = new ClickFiscalAdapter(click, attempts, CLOCK);
 
+        published = new RecordingEventPublisher();
         PaymentAttemptService attemptService = new PaymentAttemptService(
                 intents,
                 attempts,
@@ -163,6 +167,7 @@ class ClickShopApiCallbackTests {
                 List.of(clickAdapter),
                 CapturedMoneyPort.NONE,
                 unitOfWork,
+                published,
                 CLOCK);
 
         controller = new ClickShopApiController(new ClickCallbackProcessor(
@@ -294,6 +299,15 @@ class ClickShopApiCallbackTests {
         assertThat(attempts.find(TENANT, attemptId).orElseThrow().externalDocumentId())
                 .isEqualTo(CLICK_PAYDOC_ID);
         assertThat(transport.calls()).isEmpty();
+
+        // ADR 0019 step 8's missing half: ordering is told the money arrived so
+        // an order held in PAYMENT_AUTHORIZING can move on. See
+        // PaymentCaptureConfirmationTrigger for what the ordering side does with
+        // this fact.
+        assertThat(published.capturedPayments()).singleElement().satisfies(event -> {
+            assertThat(event.tenantId().value()).isEqualTo(TENANT);
+            assertThat(event.orderId()).isEqualTo(ORDER);
+        });
     }
 
     @Test
@@ -310,6 +324,12 @@ class ClickShopApiCallbackTests {
         // record of the replay matches its record of the original.
         assertThat(replay.merchantConfirmId()).isEqualTo(ClickPrepareId.forAttempt(attemptId));
         assertThat(transactionsOfType("CAPTURE")).isEqualTo(1);
+        // The transaction append is what makes applyToIntent, and therefore the
+        // publish, run at most once: a replayed Complete records nothing new, so
+        // ordering is never told about this order's money twice.
+        assertThat(published.capturedPayments())
+                .as("a replay must not tell ordering about this order twice")
+                .hasSize(1);
     }
 
     @Test
@@ -1012,6 +1032,24 @@ class ClickShopApiCallbackTests {
     }
 
     /** The outbound half, faked: what the adapter sent, and what it was told. */
+    /** Collects the events {@code PaymentAttemptService} publishes on a capture. */
+    private static final class RecordingEventPublisher implements ApplicationEventPublisher {
+
+        private final List<Object> events = new CopyOnWriteArrayList<>();
+
+        @Override
+        public void publishEvent(Object event) {
+            events.add(event);
+        }
+
+        List<PaymentCaptured> capturedPayments() {
+            return events.stream()
+                    .filter(PaymentCaptured.class::isInstance)
+                    .map(PaymentCaptured.class::cast)
+                    .toList();
+        }
+    }
+
     private static final class RecordingTransport implements MerchantApiTransport {
 
         private final List<MerchantApiCall> calls = new CopyOnWriteArrayList<>();

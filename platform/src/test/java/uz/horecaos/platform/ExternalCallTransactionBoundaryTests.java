@@ -353,6 +353,7 @@ class ExternalCallTransactionBoundaryTests {
                     List.of(provider),
                     CapturedMoneyPort.NONE,
                     transactions,
+                    event -> {},
                     clock);
         }
     }

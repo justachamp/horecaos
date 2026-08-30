@@ -48,6 +48,7 @@ import uz.horecaos.platform.ordering.api.OrderAwaitingApproval;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.OrderReceived;
 import uz.horecaos.platform.ordering.api.OrderingEvent;
+import uz.horecaos.platform.ordering.api.PaymentCaptured;
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
@@ -55,6 +56,7 @@ import uz.horecaos.platform.ordering.application.OrderAcceptancePolicyService;
 import uz.horecaos.platform.ordering.application.OrderInventoryProcess;
 import uz.horecaos.platform.ordering.application.OrderQueryService;
 import uz.horecaos.platform.ordering.application.OrderStateService;
+import uz.horecaos.platform.ordering.application.PaymentCaptureConfirmationTrigger;
 import uz.horecaos.platform.ordering.domain.AcceptanceMode;
 import uz.horecaos.platform.ordering.domain.ApprovalChannel;
 import uz.horecaos.platform.ordering.domain.ApprovalTimeoutAction;
@@ -162,6 +164,7 @@ class CartCheckoutAndOrderTests {
     private OrderSettlementService settlements;
     private CheckoutSettlementPlanner settlementPlanner;
     private OrderConfirmedSettlementTrigger confirmationSettles;
+    private PaymentCaptureConfirmationTrigger paymentCaptureTrigger;
     private OrderRemedyService remedies;
     private uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService loyaltyAdjustments;
     private uz.horecaos.platform.loyalty.application.LoyaltyMaintenanceService loyaltySweep;
@@ -362,6 +365,12 @@ class CartCheckoutAndOrderTests {
                 new JdbcAuditRecorder(jdbc, objectMapper),
                 published,
                 clock);
+        // Another BEFORE_COMMIT listener stood in by hand, for the same reason as
+        // confirmationSettles above: nothing would otherwise deliver PaymentCaptured
+        // to OrderStateService, and that delivery is production code whose absence
+        // is exactly what these tests must not paper over.
+        paymentCaptureTrigger = new PaymentCaptureConfirmationTrigger(orderState);
+        published.onPaymentCaptured = paymentCaptureTrigger::onPaymentCaptured;
         remedies = new OrderRemedyService(
                 new JdbcRemedyStore(jdbc),
                 settlements,
@@ -876,6 +885,145 @@ class CartCheckoutAndOrderTests {
         assertThat(published.events)
                 .as("an order waiting on a card has neither been confirmed nor sent for approval")
                 .noneMatch(event -> event instanceof OrderConfirmed || event instanceof OrderAwaitingApproval);
+    }
+
+    // ------------------------------------------ ADR 0013 step 8: payment capture
+
+    @Test
+    @DisplayName("a captured payment confirms an AUTO_CONFIRM order out of PAYMENT_AUTHORIZING")
+    void captureConfirmsAnAutoConfirmOrder() {
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-capture-auto", "CLICK")));
+        assertThat(placed.status()).isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
+
+        UUID attempt = reservedAttempt(placed.orderId(), PaymentProviderType.CLICK, Duration.ofHours(12));
+        capturePayment(placed.orderId(), attempt);
+
+        var order = orderStore.find(TENANT, placed.orderId()).orElseThrow();
+        assertThat(order.status())
+                .as("the location's policy is AUTO_CONFIRM, so the paid order lands exactly "
+                        + "where an equivalent cash order would")
+                .isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(published.events)
+                .as("the event a consumer expects on this path fires exactly as it would from " + "checkout")
+                .anyMatch(event -> event instanceof OrderConfirmed confirmed
+                        && confirmed.orderId().equals(placed.orderId()));
+    }
+
+    @Test
+    @DisplayName("a captured payment sends a RESTAURANT_APPROVAL order to AWAITING_APPROVAL, "
+            + "with a deadline measured from the capture")
+    void captureSendsARestaurantApprovalOrderToAwaitingApproval() {
+        requireApproval();
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-capture-approval", "CLICK")));
+        assertThat(placed.status()).isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
+        assertThat(pendingApprovalTimers(placed.orderId()))
+                .as("nobody has been asked to approve anything yet")
+                .isZero();
+
+        // Ten minutes on Click's page: the deadline this produces must be
+        // measured from here, not from the checkout instant now ten minutes
+        // stale.
+        clock.advance(Duration.ofMinutes(10));
+        UUID attempt = reservedAttempt(placed.orderId(), PaymentProviderType.CLICK, Duration.ofHours(12));
+        Instant captureInstant = clock.instant();
+        capturePayment(placed.orderId(), attempt);
+
+        var order = orderStore.find(TENANT, placed.orderId()).orElseThrow();
+        assertThat(order.status()).isEqualTo(OrderStatus.AWAITING_APPROVAL);
+        assertThat(order.approvalDeadlineAt())
+                .as("the deadline the order itself reports is corrected to the instant the real "
+                        + "timer was actually armed at, not the stale one checkout guessed")
+                .isEqualTo(captureInstant.plus(Duration.ofMinutes(5)));
+        assertThat(pendingApprovalTimers(placed.orderId())).isEqualTo(1L);
+        assertThat(published.events)
+                .anyMatch(event -> event instanceof OrderAwaitingApproval awaiting
+                        && awaiting.orderId().equals(placed.orderId())
+                        && awaiting.approvalDeadlineAt().equals(captureInstant.plus(Duration.ofMinutes(5))));
+    }
+
+    @Test
+    @DisplayName("a duplicate payment-captured delivery does not double-confirm the order")
+    void duplicateCaptureIsANoOp() {
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-capture-dup", "CLICK")));
+
+        UUID attempt = reservedAttempt(placed.orderId(), PaymentProviderType.CLICK, Duration.ofHours(12));
+        capturePayment(placed.orderId(), attempt);
+
+        var confirmed = orderStore.find(TENANT, placed.orderId()).orElseThrow();
+        assertThat(confirmed.status()).isEqualTo(OrderStatus.CONFIRMED);
+
+        // A redelivery of the same fact. In production the transaction append
+        // in PaymentAttemptService.recordProviderEvent is what keeps this from
+        // happening twice at all; this publishes the fact again directly so the
+        // ordering side's own idempotency — the conditional UPDATE naming
+        // PAYMENT_AUTHORIZING — is what is under test here.
+        tx(() -> published.publishEvent(new PaymentCaptured(
+                UUID.randomUUID(),
+                new uz.horecaos.platform.tenancy.api.TenantId(TENANT),
+                placed.orderId(),
+                clock.instant())));
+
+        var after = orderStore.find(TENANT, placed.orderId()).orElseThrow();
+        assertThat(after.status()).isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(after.version())
+                .as("a duplicate capture must not advance an order that already moved on")
+                .isEqualTo(confirmed.version());
+        assertThat(published.events.stream()
+                        .filter(event -> event instanceof OrderConfirmed orderConfirmed
+                                && orderConfirmed.orderId().equals(placed.orderId()))
+                        .count())
+                .as("one OrderConfirmed for this order, however many times the capture is delivered")
+                .isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("a payment captured after its order was cancelled is recorded, not crashed")
+    void captureForAnAlreadyCancelledOrderIsRecordedNotCrashed() {
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-capture-cancelled", "CLICK")));
+
+        UUID attempt = reservedAttempt(placed.orderId(), PaymentProviderType.CLICK, Duration.ofHours(12));
+
+        // The operator gives up on a customer who has wandered off. The order
+        // has never confirmed, so the pre-confirmation cancellation path applies.
+        int version = orderStore.find(TENANT, placed.orderId()).orElseThrow().version();
+        tx(() ->
+                orderState.cancel(TENANT, placed.orderId(), version, "CUSTOMER_UNREACHABLE", "USER", "operator", null));
+        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().status())
+                .isEqualTo(OrderStatus.CANCELLED);
+
+        // And then Click's redirect completes anyway: the customer's page was
+        // still live. This must not resurrect the order or throw.
+        Throwable late = catchThrowable(() -> capturePayment(placed.orderId(), attempt));
+
+        assertThat(late).as("late money is recorded, never a crash").isNull();
+        var afterCapture = orderStore.find(TENANT, placed.orderId()).orElseThrow();
+        assertThat(afterCapture.status())
+                .as("a cancelled order stays cancelled; the state machine has no edge back out of "
+                        + "it and this method must not invent one")
+                .isEqualTo(OrderStatus.CANCELLED);
+        assertThat(published.events)
+                .as("an order that is not PAYMENT_AUTHORIZING is never confirmed or sent for "
+                        + "approval by a late capture")
+                .noneMatch(event -> (event instanceof OrderConfirmed confirmed
+                                && confirmed.orderId().equals(placed.orderId()))
+                        || (event instanceof OrderAwaitingApproval awaiting
+                                && awaiting.orderId().equals(placed.orderId())));
+        // The money itself is not lost: CapturedMoneyPort recorded it against the
+        // settlement regardless of what the order did, which is the other half
+        // of this design and is covered on its own in the settlement suite
+        // (aLatePaymentAfterAReleasedHoldSettlesShortAndSaysSo and neighbours).
+        assertThat(settlementStore.findSettlement(TENANT, placed.orderId())).isPresent();
+    }
+
+    private long pendingApprovalTimers(UUID orderId) {
+        return jdbc.sql("""
+                SELECT count(*) FROM ordering.order_timers
+                WHERE order_id = :orderId AND status = 'PENDING' AND timer_type = 'APPROVAL_DEADLINE'
+                """).param("orderId", orderId).query(Long.class).single();
     }
 
     /** No ADR 0038 assignment, which is what a real build resolves today. */
@@ -3195,6 +3343,34 @@ class CartCheckoutAndOrderTests {
                 clock.instant());
     }
 
+    /**
+     * The money lands, with every consequence {@code PaymentAttemptService
+     * .applyToIntent} would draw from it: the attempt reaches {@code CAPTURED},
+     * the intent reaches {@code PAID}, the settlement is told through {@code
+     * CapturedMoneyPort} and — the seam this suite exists to prove —
+     * {@code PaymentCaptured} is published, which {@code
+     * PaymentCaptureConfirmationTrigger} is wired above to deliver to {@code
+     * OrderStateService.paymentCaptured}.
+     *
+     * <p>Written by hand rather than through {@code PaymentAttemptService}, for
+     * the same reason {@link #captureAttempt} is: that service is not wired in
+     * this suite, so this reproduces what it writes, in the order it writes it.
+     */
+    private void capturePayment(UUID orderId, UUID attemptId) {
+        tx(() -> {
+            captureAttempt(attemptId);
+            var intent = intentStore.findLiveForOrder(TENANT, orderId).orElseThrow();
+            intentStore.transition(
+                    TENANT, intent.id(), intent.status(), PaymentIntentStatus.PAID, intent.version(), clock.instant());
+            settlementPlanner.recordCapture(TENANT, orderId, "payment-capture");
+            published.publishEvent(new PaymentCaptured(
+                    UUID.randomUUID(),
+                    new uz.horecaos.platform.tenancy.api.TenantId(TENANT),
+                    orderId,
+                    clock.instant()));
+        });
+    }
+
     private OrderRemedyService.RefundCommand refundOf(UUID orderId, long amountMinor) {
         return new OrderRemedyService.RefundCommand(
                 TENANT,
@@ -3683,6 +3859,14 @@ class CartCheckoutAndOrderTests {
          */
         private volatile java.util.function.Consumer<OrderConfirmed> onConfirmed = confirmed -> {};
 
+        /**
+         * Stands in for the Spring dispatch a {@code BEFORE_COMMIT} listener gets,
+         * for the payments-to-ordering direction. Production payments code
+         * publishes {@link PaymentCaptured}; nothing in this hand-wired suite
+         * delivers it to {@link PaymentCaptureConfirmationTrigger} otherwise.
+         */
+        private volatile java.util.function.Consumer<PaymentCaptured> onPaymentCaptured = captured -> {};
+
         @Override
         public void publishEvent(Object event) {
             if (event instanceof OrderingEvent ordering) {
@@ -3690,6 +3874,9 @@ class CartCheckoutAndOrderTests {
             }
             if (event instanceof OrderConfirmed confirmed) {
                 onConfirmed.accept(confirmed);
+            }
+            if (event instanceof PaymentCaptured captured) {
+                onPaymentCaptured.accept(captured);
             }
         }
     }
