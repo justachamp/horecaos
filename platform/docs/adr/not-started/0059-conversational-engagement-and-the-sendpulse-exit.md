@@ -97,9 +97,9 @@ core and channel-specific adapters:
 
 ### Accepted trade-offs
 
-Config-as-flows trades SendPulse's drag-and-drop convenience for ownership and price;
-accepted explicitly, with the GUI question parked behind a named trigger rather than
-denied.
+Config-as-flows trades SendPulse's drag-and-drop convenience for ownership, price,
+and reviewable YAML; accepted explicitly and permanently — the GUI is denied, not
+parked.
 
 ## Specification
 
