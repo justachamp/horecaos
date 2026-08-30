@@ -41,10 +41,15 @@
   `CheckoutSettlementPlanner`, seeding a tenant's registry row lazily the first
   time it tenders against that method; bulk classification
   assignment, and the three `CatalogValidator` rules are still warnings rather
-  than publication errors; the payments half of the `PARTNER` path — nothing
-  implements `fiscal.api.PartnerFiscalizationPort`, so `FiscalPortConfiguration`'s
-  stand-in answers `NOT_WIRED`, every claimed submission is released unsent, and
-  no receipt reaches Click or Payme; the `business_date` and `tender_id` snapshot
+  than publication errors; order-line ИКПУ classification at
+  submission — `PartnerFiscalizationBridge` now implements
+  `fiscal.api.PartnerFiscalizationPort` in `payments` and the sweeper's claimed
+  submissions reach the Click adapter for real (proven end to end against a
+  fake Click HTTP boundary in `ClickFakeProviderRoundTripTests`; the callback's
+  missing `payment_id` is resolved via `status_by_mti` as the adapter's javadoc
+  forecast), but the bridge sends one clearly-synthetic aggregate line until
+  real classification exists, and nothing has touched a real Click or Payme
+  sandbox — only the fake; the `business_date` and `tender_id` snapshot
   at acceptance — `JdbcFiscalLifecycleStore`'s insert writes neither and the
   sweeper still derives the date from the branch timezone; `TERMINAL` issuance,
   marked goods and age gating; the correction and void commands; the
@@ -1090,7 +1095,7 @@ orders.
 - [ ] Add `payments.payment_methods` and `payments.payment_method_entity_bindings`, seed each tenant's methods, and repoint ADR 0036's `channel_payment_methods.payment_method_code` at the registry as a foreign key.
 - [ ] Validate fiscal responsibility and per-entity bindings at payment-method activation; add the cash serviceability precondition and the marking-versus-`supports_marking` exclusion.
 - [x] Build the Click and Payme fiscal adapters together, with the single named som↔tiyin conversion, read-before-retry on Click, and `PERFORM`/`CANCEL` as separate documents on Payme. (V0027's module; a `SetFiscalData` with a non-zero `status_code` lands `FAILED` and never `ISSUED`.)
-- [ ] Wire the adapters to the lifecycle. Half done: `FiscalObligationService` and `FiscalObligationSweeper`, which landed with V0053, open the obligation and claim it for submission on two timers — at completion rather than at capture, because ordering publishes no capture signal. Still missing, and the whole of what remains in rollout stage 4: an implementation of `fiscal.api.PartnerFiscalizationPort` in payments, without which every claimed submission settles `NOT_WIRED` and is released unsent, and an operator retry reaches neither Click nor Payme.
+- [ ] Wire the adapters to the lifecycle. Half done: `FiscalObligationService` and `FiscalObligationSweeper`, which landed with V0053, open the obligation and claim it for submission on two timers — at completion rather than at capture, because ordering publishes no capture signal. The port implementation landed 2026-08-30 (`PartnerFiscalizationBridge` in payments); what remains of stage 4 is real order-line ИКПУ classification behind it and a run against a real provider sandbox.
 - [x] Implement the reporting sweeper, the `fiscal.reporting_deadline` ADR 0030 policy, and the business-date backstop. (V0039. The policy is settable at `PLATFORM` and `TENANT`, defaults to sixty minutes, and takes per-provider overrides; legal-entity granularity belongs inside the document rather than as a fourth ADR 0025 scope.)
 - [ ] Snapshot the order's `business_date` and `tender_id` onto the fiscal document at acceptance. The sweeper derives the business date from the branch's timezone today, and `tender_id` is null on every row, which is correct for one intent per order and wrong the moment ADR 0046 split tender lands.
 - [ ] Publish the `FiscalDocument*` ADR 0032 event contracts — catalogue entries, schemas, topic policy and an outbox listener — so `FiscalDocumentBlocked` reaches a consumer rather than only a worklist.
