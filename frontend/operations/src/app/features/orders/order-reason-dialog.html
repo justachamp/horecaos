@@ -33,10 +33,6 @@
       </label>
     }
 
-    @if (errorKey(); as key) {
-      <p class="q-body-sm reason-dialog__banner" role="alert">{{ key | t }}</p>
-    }
-
     <div class="reason-dialog__actions">
       <button type="button" class="reason-dialog__dismiss" (click)="close()" [disabled]="busy()">
         {{ 'orders.dialog.dismiss' | t }}

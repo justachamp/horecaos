@@ -49,13 +49,6 @@
   color: var(--q-error-text);
 }
 
-.reason-dialog__banner {
-  margin: 0;
-  padding: 8px 10px;
-  background: var(--q-error-tint);
-  color: var(--q-error-text);
-}
-
 .reason-dialog__actions {
   display: flex;
   justify-content: flex-end;

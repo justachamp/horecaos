@@ -36,9 +36,14 @@ export class OrderReasonDialog {
   readonly confirmLabelKey = input.required<MessageKey>();
   /** True for `Отменить` (`CancelRequest.note`); false for `Отклонить`, which has no note field. */
   readonly noteEnabled = input(false);
+  /**
+   * Every consumer today closes the dialog on any settlement and reports a
+   * failure through its own notice band instead (`order-queue.ts`,
+   * `order-detail-pane.ts`) — see `mutationErrorNotice` in `order-errors.ts`
+   * — so there is deliberately no in-dialog error state here to keep in sync
+   * with that behaviour.
+   */
   readonly busy = input(false);
-  /** The message key for the last submission's failure, if any — shown inside the dialog rather than closing it. */
-  readonly errorKey = input<MessageKey | null>(null);
 
   readonly confirm = output<OrderReasonSubmission>();
   readonly dismiss = output<void>();
