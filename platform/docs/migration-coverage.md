@@ -56,7 +56,7 @@ migration specification for each capability.
 | Legacy tables | Proposed disposition and target | Gate |
 |---|---|---|
 | `companies`, `vendors` | `TRANSFORM` into tenant-approved `Tenant -> Brand -> Location` mappings. | Legal tenant grouping and all ancestry mappings approved. |
-| `dashboard_users`, `vendor_users` | `TRANSFORM` into Keycloak subjects/organizations plus Qoida memberships/grants; never migrate bearer tokens. | Credential strategy, roles, duplicates, disablement, and recovery reconciled. |
+| `dashboard_users`, `vendor_users` | `TRANSFORM` into Keycloak subjects/organizations plus HorecaOS memberships/grants; never migrate bearer tokens. | Credential strategy, roles, duplicates, disablement, and recovery reconciled. |
 | `configs` | `TRANSFORM` only known settings into typed platform/tenant/brand/location configuration; archive unknown keys. | Every observed key has owner, type, scope, default, secrecy, and disposition. |
 | `statuses`, `cities`, `delivery_methods`, `order_statuses`, `order_types`, `payment_methods`, `vendor_delivery_methods` | `TRANSFORM` into domain enums/reference/configuration and translations; archive the original lookup rows. | Every observed value is mapped; no silent default. |
 

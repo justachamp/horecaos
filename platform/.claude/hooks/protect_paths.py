@@ -125,7 +125,7 @@ def main() -> int:
                 "Flyway migrations are append-only — environments that already ran this "
                 "file will never see the change, and its checksum will fail.\n"
                 f"Write src/main/resources/db/migration/V{nxt:04d}__<snake_case>.sql "
-                "instead, and remember the GRANT for qoida_application.\n"
+                "instead, and remember the GRANT for horecaos_application.\n"
                 "See .claude/skills/flyway-migration/SKILL.md"
             )
         return 0

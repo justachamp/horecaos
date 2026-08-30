@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.qoida.uz/events/fulfillment.commands/ShipmentReconciliationRequested.v1.schema.json",
+  "$id": "https://contracts.horecaos.uz/events/fulfillment.commands/ShipmentReconciliationRequested.v1.schema.json",
   "title": "ShipmentReconciliationRequested v1 payload",
   "description": "A courier call came back UNCERTAIN and the in-route status query did not settle it. The consumer asks the partner again, later; it never repeats the original call. Identifiers only: no address, contact name, phone number, or provider body, because ADR 0029 keeps personal data off every topic and a courier command is exactly where it would otherwise leak.",
   "type": "object",

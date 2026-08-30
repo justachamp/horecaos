@@ -27,10 +27,10 @@ available and costs only replay depth.
 ### Prune backups past retention
 
 ```bash
-qc run --rm ops sh -c 'mc ls qoida/${QOIDA_BACKUP_BUCKET}' | head -40
+qc run --rm ops sh -c 'mc ls horecaos/${HORECAOS_BACKUP_BUCKET}' | head -40
 ```
 
-Retention is `QOIDA_BACKUP_RETENTION_DAYS`, and `backup.sh` applies it to both
+Retention is `HORECAOS_BACKUP_RETENTION_DAYS`, and `backup.sh` applies it to both
 destinations. **Confirm the off-site copy of that exact object exists before
 deleting anything local** — the nightly run refuses without an off-site
 destination, but a bucket lifecycle rule on the far side can still have expired
@@ -38,9 +38,9 @@ an object the local store kept:
 
 ```bash
 qc run --rm ops sh -c '
-  mc alias set offsite "$QOIDA_BACKUP_OFFSITE_ENDPOINT" \
-     "$QOIDA_BACKUP_OFFSITE_ACCESS_KEY" "$QOIDA_BACKUP_OFFSITE_SECRET_KEY" >/dev/null
-  mc ls offsite/${QOIDA_BACKUP_OFFSITE_BUCKET:-$QOIDA_BACKUP_BUCKET}' | head -40
+  mc alias set offsite "$HORECAOS_BACKUP_OFFSITE_ENDPOINT" \
+     "$HORECAOS_BACKUP_OFFSITE_ACCESS_KEY" "$HORECAOS_BACKUP_OFFSITE_SECRET_KEY" >/dev/null
+  mc ls offsite/${HORECAOS_BACKUP_OFFSITE_BUCKET:-$HORECAOS_BACKUP_BUCKET}' | head -40
 ```
 
 Deleting the only copy to make room is how a disk-space incident becomes a
@@ -49,7 +49,7 @@ data-loss incident.
 ### Drop leftover rehearsal databases
 
 ```bash
-qc exec -T platform-db psql -U qoida_migrator -d postgres -c \
+qc exec -T platform-db psql -U horecaos_migrator -d postgres -c \
   "SELECT datname, pg_size_pretty(pg_database_size(datname)) FROM pg_database ORDER BY pg_database_size(datname) DESC"
 ```
 

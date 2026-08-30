@@ -1,3 +1,0 @@
-/** Preferences, templates, notifications, and delivery attempts. */
-@org.springframework.modulith.ApplicationModule(displayName = "Notifications")
-package uz.qoida.platform.notifications;

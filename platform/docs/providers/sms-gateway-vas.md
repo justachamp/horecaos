@@ -226,7 +226,7 @@ the row below.
 |---|---|---|
 | `login` | `integration.installations.non_sensitive_config` → `{"login": "…"}` | The partner account name. Not a secret, and useless on its own. A binding may override it in `integration.bindings.configuration_override`, narrower wins (ADR 0030) |
 | `sender` | the same object → `{"sender": "…"}` | The registered sender string, typically a short code. **There is no registration API**, so a wrong value is learned at call time as `16 wrong sender` and nowhere earlier. This is the field a multi-brand tenant most often overrides per brand |
-| `key` | **OpenBao**, referenced by `integration.installations.secret_reference` | Never a column, never configuration, never a log line (ADR 0028). Reference shape `qoida:{environment}:provider_notification:{owner}:{id}`; the KV v2 secret at `{mount}/data/{environment}/provider_notification/{owner}/{id}` holds the key under the field name **`value`**, which is the only field the resolver reads |
+| `key` | **OpenBao**, referenced by `integration.installations.secret_reference` | Never a column, never configuration, never a log line (ADR 0028). Reference shape `horecaos:{environment}:provider_notification:{owner}:{id}`; the KV v2 secret at `{mount}/data/{environment}/provider_notification/{owner}/{id}` holds the key under the field name **`value`**, which is the only field the resolver reads |
 
 Everything else is platform-side and fixed:
 

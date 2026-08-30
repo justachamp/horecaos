@@ -9,7 +9,7 @@
 --   TrackRetentionSweeper        CREATE TABLE ... PARTITION OF, then GRANT,
 --                                and DROP TABLE for the ADR 0029 retention
 --
--- Under `qoida_application` the CREATE is `permission denied for schema`, the
+-- Under `horecaos_application` the CREATE is `permission denied for schema`, the
 -- DROP is `must be owner of table`, and — the worst of the three — the GRANT
 -- raises nothing at all. PostgreSQL answers a GRANT from a role holding no grant
 -- option with `WARNING: no privileges were granted` and moves nothing, so even
@@ -31,8 +31,8 @@
 -- forever.
 --
 -- The fix is V0070's, not a wider role: a `SECURITY DEFINER` function owned by
--- `qoida_migrator`, `search_path` pinned to `pg_catalog`, EXECUTE revoked from
--- PUBLIC and granted to `qoida_application` by name, and — the part that matters
+-- `horecaos_migrator`, `search_path` pinned to `pg_catalog`, EXECUTE revoked from
+-- PUBLIC and granted to `horecaos_application` by name, and — the part that matters
 -- most — no identifier slot that a caller's string can reach. Every function
 -- below builds the only name it will ever touch from a value the type system has
 -- already proven: an `integer` year, a `date`. There is no `p_table text` here,
@@ -43,7 +43,7 @@
 --
 -- WHY THESE JOBS STAY ON THE APPLICATION
 --
--- The alternative was to move both to deploy time, where `qoida_migrator`
+-- The alternative was to move both to deploy time, where `horecaos_migrator`
 -- already runs and holds everything outright. It is rejected for both, for the
 -- same reason and with different force.
 --
@@ -152,7 +152,7 @@ BEGIN
             RAISE;
     END;
 
-    EXECUTE format('GRANT INSERT, SELECT ON audit.%I TO qoida_application', v_name);
+    EXECUTE format('GRANT INSERT, SELECT ON audit.%I TO horecaos_application', v_name);
     RETURN true;
 END;
 $$;
@@ -161,7 +161,7 @@ COMMENT ON FUNCTION audit.ensure_event_partition(integer) IS
     'ADR 0027 partition upkeep. Idempotent and race-tolerant across replicas. SECURITY DEFINER (V0075) because the application role holds no DDL rights and this is the only way it is meant to add a partition; search_path is pinned, EXECUTE is granted by name rather than to PUBLIC, and the only identifier it builds comes from an integer year, never from a caller''s string.';
 
 REVOKE EXECUTE ON FUNCTION audit.ensure_event_partition(integer) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION audit.ensure_event_partition(integer) TO qoida_application;
+GRANT EXECUTE ON FUNCTION audit.ensure_event_partition(integer) TO horecaos_application;
 
 
 -- ---------------------------------------------------------------------------
@@ -212,7 +212,7 @@ BEGIN
             RAISE;
     END;
 
-    EXECUTE format('GRANT SELECT, INSERT ON fulfillment.%I TO qoida_application', v_name);
+    EXECUTE format('GRANT SELECT, INSERT ON fulfillment.%I TO horecaos_application', v_name);
     RETURN true;
 END;
 $$;
@@ -221,7 +221,7 @@ COMMENT ON FUNCTION fulfillment.ensure_track_partition(date) IS
     'ADR 0045 partition upkeep. Idempotent and race-tolerant across replicas. SECURITY DEFINER (V0075) for the reason audit.ensure_event_partition is; the only identifier it builds is a to_char of a date, so there is no slot a caller''s string can reach. SELECT and INSERT only — nothing rewrites a track, and deleting one is the sweep''s job and not a row operation.';
 
 REVOKE EXECUTE ON FUNCTION fulfillment.ensure_track_partition(date) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION fulfillment.ensure_track_partition(date) TO qoida_application;
+GRANT EXECUTE ON FUNCTION fulfillment.ensure_track_partition(date) TO horecaos_application;
 
 
 -- ---------------------------------------------------------------------------
@@ -334,7 +334,7 @@ COMMENT ON FUNCTION fulfillment.sweep_expired_track_partitions(integer, boolean)
 
 REVOKE EXECUTE ON FUNCTION fulfillment.sweep_expired_track_partitions(integer, boolean) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION fulfillment.sweep_expired_track_partitions(integer, boolean)
-    TO qoida_application;
+    TO horecaos_application;
 
 
 -- ---------------------------------------------------------------------------

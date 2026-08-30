@@ -49,7 +49,7 @@
 --     still holds: what is worth keeping is the exact `Items` array or `detail`
 --     object that was *sent*, behind an ADR 0029 protected reference, because a
 --     reconstruction is not evidence. A lines table earns its place when
---     TERMINAL issuance builds a receipt Qoida composes rather than relays.
+--     TERMINAL issuance builds a receipt HorecaOS composes rather than relays.
 --   * Unit marks and terminals are the ADR's rollout stages 5 and 6 and have no
 --     writer in this build.
 --   * `provider_receipt_type` would duplicate `document_type`: Payme's PERFORM
@@ -254,6 +254,6 @@ COMMENT ON VIEW payments.fiscal_documents IS
 -- legitimate way for one to stop being true is a linked correction, which is an
 -- INSERT. The one existing caller that deletes is a test fixture running as the
 -- owner, which is the correct place for that power to live.
-GRANT USAGE ON SCHEMA fiscal TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON fiscal.fiscal_documents TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON payments.fiscal_documents TO qoida_application;
+GRANT USAGE ON SCHEMA fiscal TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON fiscal.fiscal_documents TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON payments.fiscal_documents TO horecaos_application;

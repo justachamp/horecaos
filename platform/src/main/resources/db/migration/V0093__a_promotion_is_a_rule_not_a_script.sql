@@ -332,9 +332,9 @@ CREATE INDEX ix_redemptions_reserved
 -- table above. Nine migrations have made exactly this mistake; V0035 exists to
 -- repair them, and the failure is invisible until the application connects.
 
-GRANT SELECT, INSERT, UPDATE ON pricing.promotions TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON pricing.promotion_conditions TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON pricing.promotion_actions TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON pricing.coupon_codes TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON pricing.coupon_customer_usage TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON pricing.coupon_redemptions TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON pricing.promotions TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON pricing.promotion_conditions TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON pricing.promotion_actions TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON pricing.coupon_codes TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON pricing.coupon_customer_usage TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON pricing.coupon_redemptions TO horecaos_application;

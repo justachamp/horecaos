@@ -1,9 +1,9 @@
-# Qoida Platform Migration Plan
+# HorecaOS Platform Migration Plan
 
 ## 1. Purpose
 
 This plan describes the incremental migration from the legacy FastAPI platform
-in `../milliy` to the Java-based Qoida SaaS platform.
+in `../milliy` to the Java-based HorecaOS SaaS platform.
 
 It covers:
 
@@ -99,13 +99,13 @@ approved.
 - Keycloak provides OpenID Connect, OAuth 2.0, SSO, MFA, identity brokering,
   sessions, organization membership, and coarse-grained application roles.
 - The working B2B model uses one platform realm per environment and maps one
-  Keycloak Organization to one Qoida tenant.
+  Keycloak Organization to one HorecaOS tenant.
 - A separate customer realm remains an option when customer and workforce
   identity lifecycle or isolation requires it.
 - New frontends use Authorization Code with PKCE and separate public clients.
 - Java APIs validate Keycloak tokens as resource servers.
 - Camel routes and other machine clients use dedicated service accounts.
-- Qoida domain services enforce tenant, brand, location, plan, entitlement,
+- HorecaOS domain services enforce tenant, brand, location, plan, entitlement,
   and resource-level authorization using verified identity claims and
   application-owned relationships.
 - Legacy bearer and refresh tokens are not migrated.
@@ -408,7 +408,7 @@ and a verified sample Camel flow are not complete.
 - Create initial public frontend clients, Java resource-server client, Camel
   service-account client, and migration service account.
 - Establish immutable mappings between Keycloak organization/user identifiers
-  and Qoida tenant/principal records.
+  and HorecaOS tenant/principal records.
 - Scaffold the Apache Camel integration runtime and route-module conventions.
 - Add Camel Kafka and HTTP foundations, error handling, idempotent repository,
   route health, trace propagation, and secrets resolution.
@@ -812,7 +812,7 @@ and writer-ownership review.
 - Make Java authoritative for tenants, brands, locations, verified domains,
   memberships/grants, configuration, and resumable onboarding.
 - Make Keycloak authoritative for credentials, sessions, organizations, and
-  approved coarse roles; keep resource relationships in Qoida.
+  approved coarse roles; keep resource relationships in HorecaOS.
 - Transform approved `configs`/lookup values into typed scoped configuration.
 - Assign a versioned trial/plan/subscription and shadow usage/entitlements before
   enabling limits. Reconcile resource counts before hard enforcement.
@@ -950,7 +950,7 @@ migration.entity_map:
 ```
 
 Identity migration also maintains an explicit map containing legacy actor type
-and ID, Keycloak realm, subject ID, organization ID, Qoida tenant ID, link
+and ID, Keycloak realm, subject ID, organization ID, HorecaOS tenant ID, link
 status, and reconciliation timestamp. Never infer identity by mutable username,
 email, phone, or display name after the link is approved.
 

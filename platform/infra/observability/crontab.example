@@ -5,15 +5,15 @@
 # minutes" conditions are evaluated from a series of samples, and a five-minute
 # cadence would give them one sample per window.
 
-*/1 * * * * /opt/qoida/qoida-platform/infra/observability/qoida-probe.sh >/dev/null 2>&1
+*/1 * * * * /opt/horecaos/horecaos-platform/infra/observability/horecaos-probe.sh >/dev/null 2>&1
 
 # The backup, which touches the stamp file the probe reads. See
 # docs/runbooks/restore.md.
-30 3 * * * /opt/qoida/qoida-platform/infra/production/run-backup.sh >/dev/null 2>&1
+30 3 * * * /opt/horecaos/horecaos-platform/infra/production/run-backup.sh >/dev/null 2>&1
 
 # REMOVE THIS LINE when the probe above is installed. heartbeat.sh evaluates five
 # checks at one tier and withholds the dead-man's-switch ping for any of them,
 # which turns a disk at 86% into a night alert and breaks ADR 0034's budget of
-# three. qoida-probe.sh supersedes it.
+# three. horecaos-probe.sh supersedes it.
 #
-# */5 * * * * /opt/qoida/qoida-platform/infra/production/heartbeat.sh
+# */5 * * * * /opt/horecaos/horecaos-platform/infra/production/heartbeat.sh

@@ -2,8 +2,8 @@
 #
 # The nightly backup, as cron runs it.
 #
-#   17 2 * * * /opt/qoida/qoida-platform/infra/production/run-backup.sh \
-#              && touch /var/lib/qoida/last-backup
+#   17 2 * * * /opt/horecaos/horecaos-platform/infra/production/run-backup.sh \
+#              && touch /var/lib/horecaos/last-backup
 #
 # The `&& touch` is not decoration. `infra/production/heartbeat.sh` alerts when
 # that file is older than 26 hours, which means it alerts on a backup that
@@ -23,11 +23,11 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 COMPOSE_FILE="${REPO_ROOT}/compose.production.yaml"
-ENV_FILE="${QOIDA_ENV_FILE:-/etc/qoida/production.env}"
-SECRET_DIR="${QOIDA_SECRET_DIR:-/run/qoida/secrets}"
+ENV_FILE="${HORECAOS_ENV_FILE:-/etc/horecaos/production.env}"
+SECRET_DIR="${HORECAOS_SECRET_DIR:-/run/horecaos/secrets}"
 
-export QOIDA_SECRET_DIR="${SECRET_DIR}"
-export QOIDA_IMAGE_TAG="${QOIDA_IMAGE_TAG:-latest}"
+export HORECAOS_SECRET_DIR="${SECRET_DIR}"
+export HORECAOS_IMAGE_TAG="${HORECAOS_IMAGE_TAG:-latest}"
 
 # Everything below runs inside the ops container. Nothing is resolved on this
 # host, so no credential ever reaches this shell, this crontab, or this host's

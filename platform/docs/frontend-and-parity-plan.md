@@ -1,6 +1,6 @@
 # Frontend rebuild and Delever parity — plan
 
-How Qoida gets from a working backend with no user interface to two Angular
+How HorecaOS gets from a working backend with no user interface to two Angular
 consoles, a re-pointed storefront, and feature parity with the competitor.
 
 Companion documents: [the parity matrix](delever-parity-matrix.md) holds the
@@ -25,7 +25,7 @@ Three inputs define what gets built:
 |---|---|
 | Delever's documentation | The functional bar. 355 catalogued capabilities |
 | The three archived applications | What this client's staff and customers already expect. 82 screens |
-| The Qoida Design System | The visual and interaction contract |
+| The HorecaOS Design System | The visual and interaction contract |
 
 ## The shape of the work
 
@@ -71,7 +71,7 @@ The pilot blockers, and what forces each:
 | `DataTable` extensions — saved views, persisted filters, server pagination, selection with bulk-action bar | The order list above all. The legacy dashboard already persisted per-status filters and merchants will notice their loss |
 
 Charts, maps, and rich text are third-party by necessity. Each is wrapped behind
-a Qoida component so the library stays replaceable — the same seam the `Icon`
+a HorecaOS component so the library stays replaceable — the same seam the `Icon`
 component already uses to substitute Lucide for Carbon.
 
 **One console template is not enough.** Operations needs three shells: the
@@ -135,7 +135,7 @@ reason the control plane goes first.
 
 ## The decision programme
 
-The research surfaced twelve capability areas that need a decision Qoida has not
+The research surfaced twelve capability areas that need a decision HorecaOS has not
 made. Three block the pilot.
 
 | ADR | Title | Status | Priority |
@@ -169,7 +169,7 @@ on an answer only a person can give:
 | ~~0040~~ | ~~Who issues the fiscal receipt for an aggregator-collected payment~~ — closed by ADR 0038 on 2026-08-22: the restaurant's legal entity is the seller and the legal principal | Legal, finance |
 | 0042 | Courier employment classification | Legal, finance |
 | 0045 | Lawful basis for continuous courier location telemetry | Legal |
-| 0046 | Whether Qoida may hold customer prepaid balances at all | Legal |
+| 0046 | Whether HorecaOS may hold customer prepaid balances at all | Legal |
 
 Four of those five are the same question wearing different clothes: who is the
 legal principal when money or a tax obligation moves. That is one conversation,
@@ -266,7 +266,7 @@ Delever exposes seven integration categories. ADR 0026 already owns the
 installation, binding, and credential model that all of them plug into, so what
 remains is per-category capability decisions rather than new architecture:
 
-| Category | Qoida position |
+| Category | HorecaOS position |
 |---|---|
 | Delivery services | **Built.** Noor and Yandex adapters, ADR 0014 |
 | POS systems | ADRs 0011 and 0012 exist, unbuilt. Two capabilities missing from the port list: print-to-POS and read-and-settle an open ticket |

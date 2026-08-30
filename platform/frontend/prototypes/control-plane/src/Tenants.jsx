@@ -765,7 +765,7 @@ function CommercialTab({ tenant, invoices, arrears }) {
                 ? "Cancelled. Nothing is billed against this subscription — the final invoice was settled at offboarding."
                 : sub.billedMinor === 0
                   ? `Trial until ${dayOnly(sub.renewsAt)}. Nothing is billed, and the plan price applies from the first renewal.`
-                  : `${uzs(sub.monthlyMinor)} plan + ${sub.extraLocations} extra ${sub.extraLocations === 1 ? "location" : "locations"} at ${uzs(plan ? plan.extraLocationMinor : 0)} = ${uzs(sub.monthlyMinor + extrasMinor)}. Commission is zero on every plan; Qoida charges for the software, not for the customer's orders.`}
+                  : `${uzs(sub.monthlyMinor)} plan + ${sub.extraLocations} extra ${sub.extraLocations === 1 ? "location" : "locations"} at ${uzs(plan ? plan.extraLocationMinor : 0)} = ${uzs(sub.monthlyMinor + extrasMinor)}. Commission is zero on every plan; HorecaOS charges for the software, not for the customer's orders.`}
             </div>
           </Card>
         )}
@@ -871,7 +871,7 @@ function ActivityTab({ tenant, activity }) {
           ? `${activity.length} ${activity.length === 1 ? "entry" : "entries"} against this account`
           : "Nothing recorded"
       }
-      note="Everything Qoida staff did to this customer's account, newest first. Actions the restaurant took in their own console are not here — this log is about us, and it is what an account manager reads before returning an angry call."
+      note="Everything HorecaOS staff did to this customer's account, newest first. Actions the restaurant took in their own console are not here — this log is about us, and it is what an account manager reads before returning an angry call."
     >
       <Card>
         {activity.length === 0 ? (

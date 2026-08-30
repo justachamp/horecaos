@@ -469,16 +469,16 @@ COMMENT ON TABLE tenant.location_service_state IS
 COMMENT ON TABLE tenant.location_capacity_holds IS
     'ADR 0036 interim counted set for the concurrent-order cap until ADR 0019 creates ordering.orders';
 
-GRANT USAGE ON SCHEMA tenant TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.sales_channels TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.sales_channel_locations TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.channel_payment_methods TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.channel_fulfillment_modes TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.service_schedules TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.service_schedule_rules TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.service_schedule_exceptions TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.location_service_bindings TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.location_service_state TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.location_capacity_holds TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.preparation_bands TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON catalog.channel_offering_exclusions TO qoida_application;
+GRANT USAGE ON SCHEMA tenant TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.sales_channels TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.sales_channel_locations TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.channel_payment_methods TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.channel_fulfillment_modes TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.service_schedules TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.service_schedule_rules TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.service_schedule_exceptions TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.location_service_bindings TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.location_service_state TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.location_capacity_holds TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.preparation_bands TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON catalog.channel_offering_exclusions TO horecaos_application;

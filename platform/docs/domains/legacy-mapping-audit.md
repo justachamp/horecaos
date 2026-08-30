@@ -282,7 +282,7 @@ Recorded so a re-audit does not repeat the work:
   "Legacy rows are location-owned … do not copy the row shape" is correct.
 - `vendor_users.password` is bcrypt via `bcrypt.hashpw`, and `access_token` is a
   self-signed HS256 JWT with a 7-day expiry — both mapping rules ("never store in
-  Qoida", "never migrate") are right and, given the self-signed token, urgent.
+  HorecaOS", "never migrate") are right and, given the self-signed token, urgent.
 - The locale rule is enforceable as written: `validate_languages_in_dictionary`
   requires all of `uz`, `en`, `ru` in every translated JSONB field, so
   "validate locale keys" has a definite, testable answer.

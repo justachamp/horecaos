@@ -40,7 +40,7 @@
 -- input before any settle-mode work starts", and its rollout says to leave the
 -- mode disabled until one POS adapter passes contract tests for both new
 -- ADR 0011 ports. Neither has happened: who issues the fiscal receipt when a
--- POS-owned check is settled through Qoida is undecided, and no adapter declares
+-- POS-owned check is settled through HorecaOS is undecided, and no adapter declares
 -- either capability. A settlement table now would be schema nothing writes,
 -- reading as a capability that exists — the same mistake V0022 refused for
 -- `ordering.cart_fulfillment` and V0030 refused for `kitchen.devices`. The mode
@@ -359,7 +359,7 @@ COMMENT ON TABLE dinein.qr_guest_sessions IS
 -- encrypted, in the same shape customer.contact_points uses — randomized AEAD
 -- bound to this row in `*_encrypted`, and a separate keyed per-tenant digest for
 -- the one search support actually performs, which is "a guest is on the phone
--- quoting this number". A booking for a guest with no Qoida account creates no
+-- quoting this number". A booking for a guest with no HorecaOS account creates no
 -- customer record and no consent, per ADR 0015, which is why the name lives here
 -- rather than as a thin customer row nobody agreed to.
 CREATE TABLE dinein.reservations (
@@ -732,17 +732,17 @@ CREATE TABLE dinein.session_orders (
 COMMENT ON TABLE dinein.session_orders IS
     'ADR 0047. Membership of a round in a session, and nothing else. The bill is a SUM over the orders this names; no amount is copied here.';
 
-GRANT USAGE ON SCHEMA dinein TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON dinein.location_settings TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON dinein.sections TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON dinein.tables TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON dinein.qr_guest_sessions TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON dinein.reservations TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON dinein.reservation_tables TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON dinein.table_sessions TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON dinein.session_tables TO qoida_application;
+GRANT USAGE ON SCHEMA dinein TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON dinein.location_settings TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON dinein.sections TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON dinein.tables TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON dinein.qr_guest_sessions TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON dinein.reservations TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON dinein.reservation_tables TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON dinein.table_sessions TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON dinein.session_tables TO horecaos_application;
 -- No DELETE. Removing a round from a settled evening is how a bill and its orders
 -- stop reconciling, and the only legitimate reasons to detach one — a void, a
 -- transfer to another table — are transitions somebody must be able to read back
 -- afterwards rather than an absence.
-GRANT SELECT, INSERT, UPDATE ON dinein.session_orders TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON dinein.session_orders TO horecaos_application;

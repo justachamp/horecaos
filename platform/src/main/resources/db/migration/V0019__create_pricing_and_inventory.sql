@@ -360,9 +360,9 @@ CREATE TABLE inventory.reservation_lines (
         REFERENCES inventory.stock_items (id, tenant_id)
 );
 
-GRANT USAGE ON SCHEMA pricing, inventory TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA pricing TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA inventory TO qoida_application;
+GRANT USAGE ON SCHEMA pricing, inventory TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA pricing TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA inventory TO horecaos_application;
 
 -- The ledger is evidence. Nothing may rewrite it.
-REVOKE UPDATE ON inventory.movements FROM qoida_application;
+REVOKE UPDATE ON inventory.movements FROM horecaos_application;

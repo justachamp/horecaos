@@ -5,7 +5,7 @@ The restaurant's own people, what each of them may do, and the record of what
 they did.
 
 Audience: whoever builds these screens. Everything here is sourced from the
-Delever parity matrix, Delever's own documentation, the legacy Qoida dashboard,
+Delever parity matrix, Delever's own documentation, the legacy HorecaOS dashboard,
 and the built backend. Where a source is thin or wrong, this document says so
 and decides.
 
@@ -13,7 +13,7 @@ and decides.
 
 ## 0. The one thing to get right first
 
-Qoida's authorization model is built and is good. It is also unspeakable.
+HorecaOS's authorization model is built and is good. It is also unspeakable.
 
 `iam.grants` binds a *principal subject* to a *role* at a *resource scope*, and
 a role is a set of *capabilities* like `order.cancel` and `catalog.publish`.
@@ -398,7 +398,7 @@ no shift-tracked job, the tab is **absent**, not empty.
 | PIN на терминале | Set / not set + **Сбросить** | **Not built — §11.7** |
 | Внутренний идентификатор | Mono + copy | `iam.grants.principal_subject` |
 
-Actions: **Сбросить пароль** (triggers Keycloak's own reset flow; Qoida never
+Actions: **Сбросить пароль** (triggers Keycloak's own reset flow; HorecaOS never
 handles the password), **Сбросить PIN**, **Завершить все сеансы**. All three
 require confirmation and a reason. None of the three exists in the backend
 today.
@@ -543,7 +543,7 @@ should not imply otherwise by showing greyed-out edit controls.
 
 Delever's role page is a video with no prose, and its permission model is a flat
 `get`/`post` grid per sidebar section. The consequence, visible in its own route
-map, is that permission is expressed as *what menu you can open*. Qoida's
+map, is that permission is expressed as *what menu you can open*. HorecaOS's
 capabilities are verbs on resources, which means this screen can answer "what
 will happen if I give her this?" rather than "what will she see?". Write the
 sentences as **actions**, never as screen names: «Отменять заказы», not «Раздел
@@ -721,7 +721,7 @@ audit record in the building, because `audit_events.actor_subject` becomes one
 anonymous identity — or individual logins, which nobody will type on a greasy
 touchscreen forty times a shift.
 
-The answer is standard in this category and Qoida does not have it: **the device
+The answer is standard in this category and HorecaOS does not have it: **the device
 holds a long-lived session; the person holds a short PIN.** The device
 authenticates as itself; each action is attributed to the person whose PIN
 unlocked it. `audit_events.actor_subject` stays a real human being, which is the
@@ -869,7 +869,7 @@ drawer on the diff.
 
 Delever's `История изменений` has a «Что изменилось?» column opening a
 before/after view; that is the feature to match. Its documentation page is
-empty, so the column set above is Qoida's, sourced from the built schema.
+empty, so the column set above is HorecaOS's, sourced from the built schema.
 
 ### A bulk action produces N records, not one
 
@@ -921,7 +921,7 @@ of the rail.
 **Личные данные** — name, phone, email, interface language (`ru` / `uz`), all
 editable by the person themselves. **Not built — §11.1.**
 
-**Безопасность** — «Сменить пароль» (hands off to Keycloak's own flow, Qoida
+**Безопасность** — «Сменить пароль» (hands off to Keycloak's own flow, HorecaOS
 never sees the value), «Мой PIN» (set or change, at a terminal only — the browser
 shows the state and a reset, never an entry field), active sessions with a
 «Выйти везде» action.
@@ -1049,7 +1049,7 @@ exists. **ADR 0003 / ADR 0009.**
 entitlement: ADR 0021 is `Not started` and `CapabilityView` has no entitlement
 field despite ADR 0025 stating that `/session/context` returns an "entitlement
 summary". The locked-by-plan versus denied-by-permission distinction — which the
-IA lists as something Qoida owns and Delever ships as "module locks" — cannot be
+IA lists as something HorecaOS owns and Delever ships as "module locks" — cannot be
 rendered until this lands. **ADR 0021**, with a `CapabilityView` change under
 **ADR 0025**.
 
@@ -1086,7 +1086,7 @@ not. **ADR 0027.**
 
 ### 11.14 Enforcement is on
 
-`qoida.authorization.enforce` now defaults to true, so a `RequiresCapability`
+`horecaos.authorization.enforce` now defaults to true, so a `RequiresCapability`
 declaration refuses: a principal without the grant is answered
 `INSUFFICIENT_CAPABILITY` with the capability and the scope level named. Every
 denied state specified in this document is reachable, and a QA pass that
@@ -1109,9 +1109,9 @@ ADR 0025's checklist.
 
 | Delever | Why |
 |---|---|
-| Permission-gated navigation — a section renders only when the user holds the associated permission | Correct, and the IA already requires it. Qoida's version is server-driven from `CapabilityView.capabilities` and enforced again per request, unlike Delever's route-visibility flag |
+| Permission-gated navigation — a section renders only when the user holds the associated permission | Correct, and the IA already requires it. HorecaOS's version is server-driven from `CapabilityView.capabilities` and enforced again per request, unlike Delever's route-visibility flag |
 | Module locks as a second, independent gate | This is the entitlement layer. ADR 0025 is emphatic that entitlement never grants permission and permission never satisfies entitlement, and that the two produce distinguishable errors. Match the concept; §11.10 blocks the implementation |
-| «История изменений» with a «Что изменилось?» before/after view | The single most valuable thing in Delever's settings area. Qoida's `change_document` is better structured than a rendered diff, and §9's drawer should use it |
+| «История изменений» with a «Что изменилось?» before/after view | The single most valuable thing in Delever's settings area. HorecaOS's `change_document` is better structured than a rendered diff, and §9's drawer should use it |
 | Filters by parameter and by period on the change log | Match, with outcome and scope added (§11.12) |
 | Attendance for staff, at all | Delever ships it courier-only and undocumented; §7 covers everyone and separates plan from fact |
 
@@ -1119,8 +1119,8 @@ ADR 0025's checklist.
 
 | | |
 |---|---|
-| **One person record instead of two screens** | Delever splits RBAC (Настройки → Роль и доступ) from the person (Персонал → Оператор). Hiring one person therefore means visiting two unrelated sections and reconciling them by name. Qoida merges them: §3's Доступ tab is the RBAC screen, attached to the human it concerns |
-| **Jobs described as actions, not as menus** | Delever's model is a `get`/`post` grid per sidebar section, so a permission is "which menu you can open". Qoida's capabilities are verbs on resources, which lets §5 answer "what will happen if I give her this?" |
+| **One person record instead of two screens** | Delever splits RBAC (Настройки → Роль и доступ) from the person (Персонал → Оператор). Hiring one person therefore means visiting two unrelated sections and reconciling them by name. HorecaOS merges them: §3's Доступ tab is the RBAC screen, attached to the human it concerns |
+| **Jobs described as actions, not as menus** | Delever's model is a `get`/`post` grid per sidebar section, so a permission is "which menu you can open". HorecaOS's capabilities are verbs on resources, which lets §5 answer "what will happen if I give her this?" |
 | **«Чего нельзя»** | The complement of a job's capabilities, shown next to the job. Nobody ships this and it is the half of the question a manager is actually asking when she hesitates |
 | **A named human actor for background paths** | ADR 0027's `ActorRef.Type` and `on_behalf_of_subject` make this structural rather than a bug fix. Delever's release notes record patching it case by case — print jobs, then something else |
 | **A bulk action producing N audit records** | Delever's granularity here is unknown; the IA requires N and §9 specifies the `correlation_id` chip that makes N navigable |
@@ -1134,7 +1134,7 @@ ADR 0025's checklist.
 |---|---|
 | **User type «Aggregator» as a role** | Delever mints partner integration credentials by creating a *user* of type Aggregator under Users and roles. A partner integration is a machine client, not an employee, and ADR 0040 gives it a proper OAuth client with a rotatable secret under Integrations. Putting it in Staff means a partner's credentials get revoked when someone tidies the staff list |
 | **Beta-version toggle on the personal account page** | A tenant-scoped flag on a user-scoped screen. Excluded by the IA |
-| **Per-module v1/v2 version toggles** | A symptom of running two frontends at once. Qoida builds once |
+| **Per-module v1/v2 version toggles** | A symptom of running two frontends at once. HorecaOS builds once |
 | **Personal sales statistics on the profile page** | Right feature, wrong location. It belongs to Home 0.2, where the operator already is |
 | **The «Сотрудники» top-10 dashboard** | That is a staff *report* (IA 7.5), not staff administration. Cross-link from §5's holder counts; do not duplicate it here |
 | **A full role × capability permission grid, now** | Correct artefact for authoring custom jobs; wrong artefact for choosing among eight fixed ones. Build it with §11.4, not before |
@@ -1182,7 +1182,7 @@ anyone who cannot be scoped.
 
 **Permission enforcement was client-side only.** Every settings page computes
 `const isDispatcher = useMemo(() => authUser?.role === UserRole.DISPATCHER)` and
-hides its write controls. The API was not enforcing it. Qoida's is server-side
+hides its write controls. The API was not enforcing it. HorecaOS's is server-side
 (ADR 0025, once §11.14 flips), and this is a genuine security improvement that
 will be invisible to users — except that a dispatcher who used to be able to
 `curl` a write will no longer be able to. Say so in cutover notes.
@@ -1196,7 +1196,7 @@ email optional for exactly this reason.
 **The role was visible in the header**, in `DropdownUser.tsx`, colour-coded —
 dispatcher blue, manager amber, admin red — under the person's name. Staff know
 their colour. Keep the role name under the name in the rail's user chip; drop the
-colour coding, which under the Qoida palette would spend `--q-error` on a person
+colour coding, which under the HorecaOS palette would spend `--q-error` on a person
 who has done nothing wrong.
 
 **A dedicated `/permission_denied` page existed.** Users have seen it. The
@@ -1214,7 +1214,7 @@ the same job dialog. One model, two doors, and the door they already know is the
 branch.
 
 **`Status.ON / OFF / ARCHIVED`** was the universal record state, including on
-users. `Приостановлен` maps to `OFF`; there is no Qoida equivalent of `ARCHIVED`
+users. `Приостановлен` maps to `OFF`; there is no HorecaOS equivalent of `ARCHIVED`
 for a person and there should not be one — ADR 0009 is explicit that permanent
 deletion of identity records is out of scope, and a person who has left is a
 person with no active jobs and an intact audit trail.

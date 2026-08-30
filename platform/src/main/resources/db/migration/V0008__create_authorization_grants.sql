@@ -1,7 +1,7 @@
--- ADR 0025: capability-based authorization owned by Qoida.
+-- ADR 0025: capability-based authorization owned by HorecaOS.
 --
 -- ADR 0003 stopped at the tenant boundary and left fine-grained grants to
--- "Qoida projections" without saying what they are. Everything after it assumed
+-- "HorecaOS projections" without saying what they are. Everything after it assumed
 -- the missing model, and today organization membership alone authorises reading
 -- every location's data in a tenant. These tables close that gap.
 

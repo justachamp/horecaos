@@ -13,21 +13,21 @@
 
 set -euo pipefail
 
-: "${QOIDA_RESTORE_TARGET_URL:?set the target PostgreSQL URL (must not be production)}"
-: "${QOIDA_BACKUP_PASSPHRASE:?set the encryption passphrase}"
-: "${QOIDA_BACKUP_BUCKET:=qoida-backups}"
-: "${QOIDA_BACKUP_S3_ENDPOINT:=http://localhost:9000}"
+: "${HORECAOS_RESTORE_TARGET_URL:?set the target PostgreSQL URL (must not be production)}"
+: "${HORECAOS_BACKUP_PASSPHRASE:?set the encryption passphrase}"
+: "${HORECAOS_BACKUP_BUCKET:=horecaos-backups}"
+: "${HORECAOS_BACKUP_S3_ENDPOINT:=http://localhost:9000}"
 
 # The names this script will not restore over, comma separated. `pg_restore
 # --clean --if-exists` drops every object it is about to recreate, so aiming it
 # at the live database is not a mistake anything recovers from: the drops commit
 # whether or not the restore then succeeds.
 #
-# docs/runbooks/restore.md restores into `qoida_restore` and swaps it in with
+# docs/runbooks/restore.md restores into `horecaos_restore` and swaps it in with
 # ALTER DATABASE ... RENAME, so nothing in the documented recovery path needs
 # this list widened. Changing it is the escape hatch, and changing it is a
 # deliberate act rather than a paste.
-: "${QOIDA_RESTORE_FORBIDDEN_DATABASES:=qoida}"
+: "${HORECAOS_RESTORE_FORBIDDEN_DATABASES:=horecaos}"
 
 # Asked of the server rather than parsed out of the URL. A connection string can
 # reach production through a hostname alias, an SSH tunnel, a pooler, or simply
@@ -35,13 +35,13 @@ set -euo pipefail
 # the text of the URL passes all four. `current_database()` is what will actually
 # be dropped.
 echo "==> Checking what the target URL really points at"
-target_database="$(psql "${QOIDA_RESTORE_TARGET_URL}" -Atqc 'SELECT current_database()')" || {
-  echo "!! Cannot reach ${QOIDA_RESTORE_TARGET_URL%%\?*}. Nothing was changed." >&2
+target_database="$(psql "${HORECAOS_RESTORE_TARGET_URL}" -Atqc 'SELECT current_database()')" || {
+  echo "!! Cannot reach ${HORECAOS_RESTORE_TARGET_URL%%\?*}. Nothing was changed." >&2
   exit 1
 }
 [ -n "${target_database}" ] || { echo "!! The target server named no database." >&2; exit 1; }
 
-for forbidden in ${QOIDA_RESTORE_FORBIDDEN_DATABASES//,/ }; do
+for forbidden in ${HORECAOS_RESTORE_FORBIDDEN_DATABASES//,/ }; do
   [ "${target_database}" != "${forbidden}" ] || {
     cat >&2 <<EOF
 !! Refusing to restore into "${target_database}".
@@ -51,8 +51,8 @@ for forbidden in ${QOIDA_RESTORE_FORBIDDEN_DATABASES//,/ }; do
 
    Restore into a new database and swap it in instead:
 
-       CREATE DATABASE qoida_restore OWNER qoida_migrator;
-       QOIDA_RESTORE_TARGET_URL=postgresql://qoida_migrator@platform-db:5432/qoida_restore
+       CREATE DATABASE horecaos_restore OWNER horecaos_migrator;
+       HORECAOS_RESTORE_TARGET_URL=postgresql://horecaos_migrator@platform-db:5432/horecaos_restore
 
    docs/runbooks/restore.md, section 3, is the whole procedure.
 EOF
@@ -63,20 +63,20 @@ object="${1:-}"
 workdir="$(mktemp -d)"
 trap 'rm -rf "${workdir}"' EXIT
 
-mc alias set qoida-backup "${QOIDA_BACKUP_S3_ENDPOINT}" \
-  "${QOIDA_BACKUP_ACCESS_KEY}" "${QOIDA_BACKUP_SECRET_KEY}" >/dev/null
+mc alias set horecaos-backup "${HORECAOS_BACKUP_S3_ENDPOINT}" \
+  "${HORECAOS_BACKUP_ACCESS_KEY}" "${HORECAOS_BACKUP_SECRET_KEY}" >/dev/null
 
 if [ -z "${object}" ]; then
   echo "==> Selecting the most recent backup"
-  object="$(mc ls "qoida-backup/${QOIDA_BACKUP_BUCKET}/" \
+  object="$(mc ls "horecaos-backup/${HORECAOS_BACKUP_BUCKET}/" \
     | grep '\.dump\.enc$' | sort | tail -1 | awk '{print $NF}')"
 fi
 [ -n "${object}" ] || { echo "!! No backup found" >&2; exit 1; }
 echo "    ${object}"
 
 echo "==> Downloading and checking the stored checksum"
-mc cp "qoida-backup/${QOIDA_BACKUP_BUCKET}/${object}" "${workdir}/backup.enc" >/dev/null
-if mc cp "qoida-backup/${QOIDA_BACKUP_BUCKET}/${object}.sha256" \
+mc cp "horecaos-backup/${HORECAOS_BACKUP_BUCKET}/${object}" "${workdir}/backup.enc" >/dev/null
+if mc cp "horecaos-backup/${HORECAOS_BACKUP_BUCKET}/${object}.sha256" \
      "${workdir}/checksum.txt" >/dev/null 2>&1; then
   expected="$(cut -d' ' -f1 < "${workdir}/checksum.txt")"
   actual="$(openssl dgst -sha256 -r "${workdir}/backup.enc" | cut -d' ' -f1)"
@@ -93,17 +93,17 @@ echo "==> Decrypting"
 # this script does not control the lifetime of.
 openssl enc -d -aes-256-cbc -pbkdf2 -iter 250000 \
   -in "${workdir}/backup.enc" -out "${workdir}/backup.dump" \
-  -pass fd:3 3< <(printf '%s' "${QOIDA_BACKUP_PASSPHRASE}")
+  -pass fd:3 3< <(printf '%s' "${HORECAOS_BACKUP_PASSPHRASE}")
 
-echo "==> Restoring into ${QOIDA_RESTORE_TARGET_URL%%\?*}"
+echo "==> Restoring into ${HORECAOS_RESTORE_TARGET_URL%%\?*}"
 pg_restore --clean --if-exists --no-owner --no-privileges \
-  --dbname="${QOIDA_RESTORE_TARGET_URL}" "${workdir}/backup.dump"
+  --dbname="${HORECAOS_RESTORE_TARGET_URL}" "${workdir}/backup.dump"
 
 # Restoring without error is not the same as restoring something usable. These
 # checks are the difference between "the command exited zero" and "the platform
 # could actually run on this".
 echo "==> Verifying the restored database"
-psql "${QOIDA_RESTORE_TARGET_URL}" -v ON_ERROR_STOP=1 -qAt <<'SQL'
+psql "${HORECAOS_RESTORE_TARGET_URL}" -v ON_ERROR_STOP=1 -qAt <<'SQL'
 SELECT 'flyway history: ' || count(*) FROM flyway_schema_history WHERE success;
 SELECT 'schemas: ' || count(*) FROM information_schema.schemata
  WHERE schema_name IN ('tenant','iam','integration','audit','ordering','reporting');

@@ -267,7 +267,7 @@ BEGIN
             to_char(v_day, 'YYYY-MM-DD') || ' 00:00:00+00',
             to_char(v_day + 1, 'YYYY-MM-DD') || ' 00:00:00+00');
         EXECUTE format(
-            'GRANT SELECT, INSERT ON fulfillment.courier_location_tracks_%s TO qoida_application',
+            'GRANT SELECT, INSERT ON fulfillment.courier_location_tracks_%s TO horecaos_application',
             to_char(v_day, 'YYYYMMDD'));
         v_day := v_day + 1;
     END LOOP;
@@ -363,27 +363,27 @@ CREATE INDEX ix_summary_shipment ON fulfillment.courier_track_summaries (tenant_
 -- summary, which is financial evidence that only stops being true when the
 -- shipment's own retention expires.
 --
--- Nothing is granted to `qoida_reporting_read`, and that is the enforceable half
+-- Nothing is granted to `horecaos_reporting_read`, and that is the enforceable half
 -- of ADR 0045's "the reporting and support database roles hold no grant on either
 -- table, so a position cannot be reached by writing SQL against the reporting
 -- path". ADR 0043 gave that role USAGE on the `reporting` schema alone and
 -- default privileges only there, so silence here is genuinely a refusal and not
 -- an omission — but the REVOKE below states it anyway, so that a future
 -- schema-wide grant cannot pick these tables up by accident.
-GRANT USAGE ON SCHEMA fulfillment TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.courier_duty_sessions TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.courier_positions_live TO qoida_application;
-GRANT SELECT, INSERT ON fulfillment.courier_location_tracks TO qoida_application;
-GRANT SELECT, INSERT ON fulfillment.courier_location_tracks_default TO qoida_application;
-GRANT SELECT, INSERT ON fulfillment.courier_track_summaries TO qoida_application;
+GRANT USAGE ON SCHEMA fulfillment TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.courier_duty_sessions TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.courier_positions_live TO horecaos_application;
+GRANT SELECT, INSERT ON fulfillment.courier_location_tracks TO horecaos_application;
+GRANT SELECT, INSERT ON fulfillment.courier_location_tracks_default TO horecaos_application;
+GRANT SELECT, INSERT ON fulfillment.courier_track_summaries TO horecaos_application;
 
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'qoida_reporting_read') THEN
-        REVOKE ALL ON fulfillment.courier_duty_sessions FROM qoida_reporting_read;
-        REVOKE ALL ON fulfillment.courier_positions_live FROM qoida_reporting_read;
-        REVOKE ALL ON fulfillment.courier_location_tracks FROM qoida_reporting_read;
-        REVOKE ALL ON fulfillment.courier_track_summaries FROM qoida_reporting_read;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'horecaos_reporting_read') THEN
+        REVOKE ALL ON fulfillment.courier_duty_sessions FROM horecaos_reporting_read;
+        REVOKE ALL ON fulfillment.courier_positions_live FROM horecaos_reporting_read;
+        REVOKE ALL ON fulfillment.courier_location_tracks FROM horecaos_reporting_read;
+        REVOKE ALL ON fulfillment.courier_track_summaries FROM horecaos_reporting_read;
     END IF;
 END
 $$;

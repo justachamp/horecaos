@@ -1,6 +1,6 @@
 /* Payments — money in from tenants.
  *
- * This is the platform's own receivables ledger: what Qoida invoices a
+ * This is the platform's own receivables ledger: what HorecaOS invoices a
  * restaurant for its subscription, and whether it arrived. It is not the
  * customer payment surface — a diner paying with Payme for a plov is an order
  * concern and belongs to the tenant's own console, not to this one.
@@ -457,7 +457,7 @@ export default function Payments({ filter, setFilter, invoiceId, setInvoiceId })
       <SectionHeader
         title="Payments"
         description={
-          "What tenants owe Qoida for their subscription, and whether it arrived. " +
+          "What tenants owe HorecaOS for their subscription, and whether it arrived. " +
           "Customer payments for orders are a tenant concern and are not in this ledger."
         }
       />

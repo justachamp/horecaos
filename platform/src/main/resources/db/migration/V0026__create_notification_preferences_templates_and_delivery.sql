@@ -566,7 +566,7 @@ CREATE TABLE notifications.delivery_attempts (
     CONSTRAINT ck_attempt_uncertain_pair CHECK (
         uncertain_outcome = (status = 'UNCERTAIN')
     ),
-    -- Qoida must not claim a stronger guarantee than the provider gave. A
+    -- HorecaOS must not claim a stronger guarantee than the provider gave. A
     -- delivered attempt has an acknowledgement time; an accepted one may not.
     CONSTRAINT ck_attempt_delivered_ack CHECK (
         (status <> 'DELIVERED') OR (acknowledged_at IS NOT NULL)
@@ -634,14 +634,14 @@ COMMENT ON TABLE notifications.delivery_attempts IS
 COMMENT ON TABLE notifications.delivery_status_events IS
     'ADR 0020 immutable provider status evidence. Insert and select only.';
 
-GRANT USAGE ON SCHEMA notifications TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON notifications.notification_preferences TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON notifications.recipient_endpoints TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON notifications.templates TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON notifications.template_versions TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON notifications.notifications TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON notifications.delivery_attempts TO qoida_application;
+GRANT USAGE ON SCHEMA notifications TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON notifications.notification_preferences TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON notifications.recipient_endpoints TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON notifications.templates TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON notifications.template_versions TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON notifications.notifications TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON notifications.delivery_attempts TO horecaos_application;
 -- Insert and read only. Delivery evidence that the application can rewrite is not
 -- evidence, and ADR 0020 forbids unsubscribe destroying the record of what was
 -- already sent.
-GRANT SELECT, INSERT ON notifications.delivery_status_events TO qoida_application;
+GRANT SELECT, INSERT ON notifications.delivery_status_events TO horecaos_application;

@@ -1,6 +1,6 @@
 ---
 name: event-contract
-description: Use whenever producing or consuming a Kafka event, adding a topic, changing an event payload, writing an outbox or inbox path, or handling a provider webhook in Qoida Platform. Encodes ADR 0032, ADR 0004, and ADR 0005.
+description: Use whenever producing or consuming a Kafka event, adding a topic, changing an event payload, writing an outbox or inbox path, or handling a provider webhook in HorecaOS Platform. Encodes ADR 0032, ADR 0004, and ADR 0005.
 ---
 
 # Event contracts

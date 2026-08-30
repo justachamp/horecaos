@@ -495,7 +495,7 @@ ALTER TABLE catalog.fiscal_classifications
     FOREIGN KEY (tax_profile_id, tenant_id, brand_id)
     REFERENCES pricing.tax_profiles (id, tenant_id, brand_id);
 
-GRANT USAGE ON SCHEMA catalog TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON catalog.mxik_reference TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON catalog.fees TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON catalog.fiscal_classifications TO qoida_application;
+GRANT USAGE ON SCHEMA catalog TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON catalog.mxik_reference TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON catalog.fees TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON catalog.fiscal_classifications TO horecaos_application;

@@ -1,7 +1,7 @@
 /* Overview — the control-plane home.
  *
  * This is the commercial board, not an engineering one. The person reading it
- * runs Qoida as a business: they want to know which customer needs attention
+ * runs HorecaOS as a business: they want to know which customer needs attention
  * before lunch, and why. So the shape is a KPI band, then three lists of work —
  * customers at risk, customers arriving, and customers who owe money — and only
  * then a fortnight of trade, which is context rather than a task.
@@ -410,7 +410,7 @@ export default function Overview({ onNavigate, onOpenTenant }) {
             Open onboarding
           </Button>
         }
-        note="A run is stalled when the step in front of it belongs to the restaurant rather than to Qoida. Anor has been waiting on its owner for nine days and is four days from a target go-live that will now move; that is a phone call, not a process change."
+        note="A run is stalled when the step in front of it belongs to the restaurant rather than to HorecaOS. Anor has been waiting on its owner for nine days and is four days from a target go-live that will now move; that is a phone call, not a process change."
       >
         <DataTable
           columns={[
@@ -446,7 +446,7 @@ export default function Overview({ onNavigate, onOpenTenant }) {
             {
               key: "stalledReason", label: "Waiting on",
               render: (v, row) =>
-                row.stalled ? <Reason>{v}</Reason> : <span style={{ color: inkSubtle }}>Qoida holds the next step</span>,
+                row.stalled ? <Reason>{v}</Reason> : <span style={{ color: inkSubtle }}>HorecaOS holds the next step</span>,
             },
           ]}
           rows={pipeline}

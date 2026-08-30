@@ -1,6 +1,6 @@
 ---
 name: http-api-conventions
-description: Use whenever creating or modifying an external-facing HTTP endpoint, controller, request or response DTO, or error response in Qoida Platform. Encodes ADR 0031 and the capability model from ADR 0025.
+description: Use whenever creating or modifying an external-facing HTTP endpoint, controller, request or response DTO, or error response in HorecaOS Platform. Encodes ADR 0031 and the capability model from ADR 0025.
 ---
 
 # HTTP API conventions

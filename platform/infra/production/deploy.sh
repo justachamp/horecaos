@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Deploy the Qoida Platform to the colocated production host.
+# Deploy the HorecaOS Platform to the colocated production host.
 #
 # This script exists so that the deploy is one command with no judgement calls
 # in it. The runbook (docs/runbooks/deploy.md) explains what each phase is for
@@ -11,7 +11,7 @@
 # that has an obvious wrong answer available at 3am.
 #
 # Usage:
-#   sudo QOIDA_ENV_FILE=/etc/qoida/production.env infra/production/deploy.sh
+#   sudo HORECAOS_ENV_FILE=/etc/horecaos/production.env infra/production/deploy.sh
 #
 # Root is required for two things and nothing else: mounting the tmpfs that
 # holds secrets, and talking to the Docker socket.
@@ -20,15 +20,15 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 COMPOSE_FILE="${REPO_ROOT}/compose.production.yaml"
-ENV_FILE="${QOIDA_ENV_FILE:-/etc/qoida/production.env}"
-SECRET_DIR="${QOIDA_SECRET_DIR:-/run/qoida/secrets}"
+ENV_FILE="${HORECAOS_ENV_FILE:-/etc/horecaos/production.env}"
+SECRET_DIR="${HORECAOS_SECRET_DIR:-/run/horecaos/secrets}"
 
 # Secret paths in OpenBao. These are the KV v2 logical paths; the `data/` segment
 # the HTTP API needs is added by `bao kv`, not here.
-DB_MIGRATOR_PATH="qoida/production/database/platform/migrator-password"
-DB_APP_PATH="qoida/production/database/platform/app-password"
-KEYCLOAK_DB_PATH="qoida/production/database/keycloak/password"
-MINIO_ROOT_PATH="qoida/production/object_storage/platform/root-password"
+DB_MIGRATOR_PATH="horecaos/production/database/platform/migrator-password"
+DB_APP_PATH="horecaos/production/database/platform/app-password"
+KEYCLOAK_DB_PATH="horecaos/production/database/keycloak/password"
+MINIO_ROOT_PATH="horecaos/production/object_storage/platform/root-password"
 
 say()  { printf '\n==> %s\n' "$*"; }
 warn() { printf '\n!!  %s\n' "$*" >&2; }
@@ -58,9 +58,9 @@ fi
 
 GIT_SHA="$(git rev-parse HEAD)"
 IMAGE_TAG="$(git rev-parse --short HEAD)"
-export QOIDA_GIT_SHA="${GIT_SHA}"
-export QOIDA_IMAGE_TAG="${IMAGE_TAG}"
-export QOIDA_SECRET_DIR="${SECRET_DIR}"
+export HORECAOS_GIT_SHA="${GIT_SHA}"
+export HORECAOS_IMAGE_TAG="${IMAGE_TAG}"
+export HORECAOS_SECRET_DIR="${SECRET_DIR}"
 
 say "Deploying ${IMAGE_TAG} (${GIT_SHA})"
 
@@ -80,8 +80,8 @@ ensure_secret_dir() {
         return
     fi
 
-    if [ "${QOIDA_ALLOW_NON_TMPFS:-0}" = "1" ]; then
-        warn "QOIDA_ALLOW_NON_TMPFS=1: writing secrets to an ordinary directory.
+    if [ "${HORECAOS_ALLOW_NON_TMPFS:-0}" = "1" ]; then
+        warn "HORECAOS_ALLOW_NON_TMPFS=1: writing secrets to an ordinary directory.
     This is for verifying the stack on a workstation. On the production host it
     means the database password is on the disk, and it must never be set there."
         mkdir -p "${SECRET_DIR}"
@@ -181,9 +181,9 @@ write_secret minio-root-password           "${MINIO_ROOT_PATH}"
 # cycle, and a copy taken from a host that has since been redeployed is dead.
 
 say "Issuing a new AppRole secret-id for the OpenBao agent"
-role_id="$(bao_run bao read -field=role_id auth/approle/role/qoida-platform/role-id)" \
-    || die "The qoida-platform AppRole does not exist. Run infra/production/bootstrap.sh."
-secret_id="$(bao_run bao write -field=secret_id -f auth/approle/role/qoida-platform/secret-id)" \
+role_id="$(bao_run bao read -field=role_id auth/approle/role/horecaos-platform/role-id)" \
+    || die "The horecaos-platform AppRole does not exist. Run infra/production/bootstrap.sh."
+secret_id="$(bao_run bao write -field=secret_id -f auth/approle/role/horecaos-platform/secret-id)" \
     || die "Could not issue a secret-id."
 
 ( umask 133; printf '%s' "${role_id}"   > "${SECRET_DIR}/openbao-role-id" )
@@ -202,44 +202,44 @@ unset role_id secret_id
 # no longer has, and spends production RAM on a Maven run.
 
 # Label the image that is running right now, before it is replaced. Rollback then
-# needs no memory and no notes: `qoida/platform:previous` is by definition what
+# needs no memory and no notes: `horecaos/platform:previous` is by definition what
 # was serving traffic before this deploy started.
 previous_image="$(compose ps --format '{{.Image}}' platform-app 2>/dev/null | head -1 || true)"
-if [ -n "${previous_image}" ] && [ "${previous_image}" != "qoida/platform:${IMAGE_TAG}" ]; then
-    say "Tagging the currently running image (${previous_image}) as qoida/platform:previous"
-    docker image tag "${previous_image}" "qoida/platform:previous" \
-        || die "Could not tag ${previous_image} as qoida/platform:previous.
+if [ -n "${previous_image}" ] && [ "${previous_image}" != "horecaos/platform:${IMAGE_TAG}" ]; then
+    say "Tagging the currently running image (${previous_image}) as horecaos/platform:previous"
+    docker image tag "${previous_image}" "horecaos/platform:previous" \
+        || die "Could not tag ${previous_image} as horecaos/platform:previous.
     The rollback procedure is built entirely on that tag, so a deploy that could
     not move it is a deploy with no way back."
 elif [ -n "${previous_image}" ]; then
-    say "Already running qoida/platform:${IMAGE_TAG}; qoida/platform:previous still names the release before it"
-elif [ "${QOIDA_NO_ROLLBACK_TARGET:-0}" = "1" ]; then
-    warn "QOIDA_NO_ROLLBACK_TARGET=1: qoida/platform:previous is left as it is.
+    say "Already running horecaos/platform:${IMAGE_TAG}; horecaos/platform:previous still names the release before it"
+elif [ "${HORECAOS_NO_ROLLBACK_TARGET:-0}" = "1" ]; then
+    warn "HORECAOS_NO_ROLLBACK_TARGET=1: horecaos/platform:previous is left as it is.
     It does not name the release this deploy replaces, so do not roll back to it.
     The way back from this release is another deploy."
-elif docker image inspect qoida/platform:previous >/dev/null 2>&1; then
+elif docker image inspect horecaos/platform:previous >/dev/null 2>&1; then
     # No running application container, but a `previous` tag from some earlier
     # deploy. This branch used to be silent, and silence here is the dangerous
     # answer: the tag now names an image two or more releases old, the deploy
     # succeeds, and the rollback in docs/runbooks/deploy.md starts the wrong
     # release — during whatever incident made somebody reach for it.
     die "platform-app is not running, so the image this deploy replaces cannot be
-    identified — and qoida/platform:previous already points at an older release.
+    identified — and horecaos/platform:previous already points at an older release.
     Rolling back after this deploy would start the wrong one.
 
     Either start the release that is supposed to be running and re-run this
     script, or, if that image is genuinely gone, say what it was:
 
-        docker image tag qoida/platform:<sha> qoida/platform:previous
+        docker image tag horecaos/platform:<sha> horecaos/platform:previous
 
     If there is no rollback target at all — a rebuilt host, a first deploy of a
-    checkout — re-run with QOIDA_NO_ROLLBACK_TARGET=1 and accept that the only
+    checkout — re-run with HORECAOS_NO_ROLLBACK_TARGET=1 and accept that the only
     way back from this release is another deploy."
 else
-    say "No running application container and no qoida/platform:previous tag; this is the first deploy on this host"
+    say "No running application container and no horecaos/platform:previous tag; this is the first deploy on this host"
 fi
 
-say "Building the application image (qoida/platform:${IMAGE_TAG})"
+say "Building the application image (horecaos/platform:${IMAGE_TAG})"
 compose build platform-app platform-migrate
 
 
@@ -292,7 +292,7 @@ unset FLYWAY_PASSWORD
 
 say "Auditing the application role"
 docker compose --file "${COMPOSE_FILE}" --env-file "${ENV_FILE}" \
-    exec -T platform-db psql -U qoida_migrator -d qoida -v ON_ERROR_STOP=1 -q \
+    exec -T platform-db psql -U horecaos_migrator -d horecaos -v ON_ERROR_STOP=1 -q \
     < "${REPO_ROOT}/infra/production/audit-grants.sql" \
     || die "A table exists that the application role cannot read. STOP.
     The message above names it. The fix is a GRANT in the migration that created
@@ -332,11 +332,11 @@ cat <<-EOF
 	Check before you walk away:
 
 	  1. The public health endpoint answers from outside this machine:
-	         curl -fsS "\${QOIDA_API_ORIGIN}/actuator/health/readiness"
+	         curl -fsS "\${HORECAOS_API_ORIGIN}/actuator/health/readiness"
 	  2. The external uptime monitor has gone green again.
 	  3. The running image is the one you meant:
 	         docker compose -f compose.production.yaml images platform-app
 
-	The previous image is still on this host, tagged qoida/platform:previous.
+	The previous image is still on this host, tagged horecaos/platform:previous.
 	Rollback is in docs/runbooks/deploy.md and does not require this script.
 EOF

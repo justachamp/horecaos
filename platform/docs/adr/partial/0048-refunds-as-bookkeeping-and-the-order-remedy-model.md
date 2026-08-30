@@ -85,7 +85,7 @@ knows about. Weighed by its immediate cash cost it is always zero, which puts ev
 grant under any approval threshold — and the ten-use grant is the one shape of
 this remedy that most deserves a second pair of eyes.
 
-Migration [V0052](../../../src/main/resources/db/migration/V0052__record_remedies_qoida_did_not_perform.sql)
+Migration [V0052](../../../src/main/resources/db/migration/V0052__record_remedies_horecaos_did_not_perform.sql)
 implements this decision. Until this record existed, its only written trace was
 that file's header comment.
 
@@ -306,7 +306,7 @@ Other costs:
 ### Physical model
 
 Created by
-[V0052](../../../src/main/resources/db/migration/V0052__record_remedies_qoida_did_not_perform.sql).
+[V0052](../../../src/main/resources/db/migration/V0052__record_remedies_horecaos_did_not_perform.sql).
 Every table is tenant-owned, every unique and foreign key includes `tenant_id`,
 and each carries a `GRANT` for `qoida_application`.
 
@@ -503,5 +503,5 @@ settlement import calls the existing `recordVerification`.
 - [ADR 0031: HTTP API conventions](../built/0031-http-api-conventions.md)
 - [ADR 0043: Reporting, analytics, and the metric layer](../partial/0043-reporting-analytics-and-the-metric-layer.md) — where the liability report belongs
 - [ADR 0000: ADR process and status model](../meta/0000-adr-process-and-status-model.md)
-- [V0052 — record remedies Qoida did not perform](../../../src/main/resources/db/migration/V0052__record_remedies_qoida_did_not_perform.sql), whose header comment was the only written trace of this decision until now
+- [V0052 — record remedies HorecaOS did not perform](../../../src/main/resources/db/migration/V0052__record_remedies_horecaos_did_not_perform.sql), whose header comment was the only written trace of this decision until now
 - [V0048 — record how much of a tender was refunded](../../../src/main/resources/db/migration/V0048__record_how_much_of_a_tender_was_refunded.sql)

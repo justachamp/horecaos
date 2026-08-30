@@ -48,7 +48,7 @@ CREATE TABLE media.derivatives (
 );
 CREATE UNIQUE INDEX ux_media_derivatives_key ON media.derivatives (bucket, object_key);
 CREATE INDEX ix_media_derivatives_asset ON media.derivatives (tenant_id, asset_id);
-GRANT SELECT, INSERT, UPDATE, DELETE ON media.derivatives TO qoida_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON media.derivatives TO horecaos_application;
 
 CREATE TABLE media.migration_runs (
     run_id uuid PRIMARY KEY,
@@ -71,7 +71,7 @@ CREATE TABLE media.migration_runs (
     -- run belonging to somebody else.
     CONSTRAINT uq_media_migration_run_tenant UNIQUE (run_id, tenant_id)
 );
-GRANT SELECT, INSERT, UPDATE ON media.migration_runs TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON media.migration_runs TO horecaos_application;
 
 -- Approved legacy-prefix to owner mappings. Globally unique on the prefix,
 -- because a directory belongs to exactly one tenant; two tenants claiming the
@@ -87,7 +87,7 @@ CREATE TABLE media.legacy_path_mappings (
     CONSTRAINT uq_legacy_prefix UNIQUE (legacy_prefix),
     CONSTRAINT ck_legacy_mapping_scope CHECK (owner_scope IN ('TENANT', 'BRAND', 'LOCATION'))
 );
-GRANT SELECT, INSERT, UPDATE ON media.legacy_path_mappings TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON media.legacy_path_mappings TO horecaos_application;
 
 CREATE TABLE media.migration_items (
     item_id uuid PRIMARY KEY,
@@ -141,4 +141,4 @@ CREATE INDEX ix_media_migration_items_pending
 -- a second run duplicating a first one's work.
 CREATE INDEX ix_media_migration_items_path
     ON media.migration_items (tenant_id, normalized_path);
-GRANT SELECT, INSERT, UPDATE ON media.migration_items TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON media.migration_items TO horecaos_application;

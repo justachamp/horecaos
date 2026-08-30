@@ -306,7 +306,7 @@ CREATE TABLE ordering.orders (
     CONSTRAINT ck_order_acceptance_mode CHECK (
         acceptance_mode_snapshot IN ('AUTO_CONFIRM', 'RESTAURANT_APPROVAL')),
     CONSTRAINT ck_order_approval_channel CHECK (
-        approval_channel_snapshot IN ('NONE', 'QOIDA_OPERATIONS', 'POS', 'EITHER')),
+        approval_channel_snapshot IN ('NONE', 'HORECAOS_OPERATIONS', 'POS', 'EITHER')),
     CONSTRAINT ck_order_currency CHECK (currency ~ '^[A-Z]{3}$'),
     CONSTRAINT ck_order_amounts CHECK (
         subtotal_minor >= 0 AND tax_minor >= 0 AND discount_minor >= 0
@@ -551,7 +551,7 @@ CREATE TABLE ordering.approval_decisions (
 
     CONSTRAINT ck_approval_action CHECK (action IN ('APPROVE', 'REJECT')),
     CONSTRAINT ck_approval_channel CHECK (
-        decision_channel IN ('QOIDA_OPERATIONS', 'POS', 'SYSTEM_TIMEOUT')),
+        decision_channel IN ('HORECAOS_OPERATIONS', 'POS', 'SYSTEM_TIMEOUT')),
     CONSTRAINT ck_approval_actor CHECK (actor_type IN ('USER', 'SERVICE', 'SYSTEM_JOB', 'PROVIDER')),
     CONSTRAINT fk_approval_order FOREIGN KEY (order_id, tenant_id)
         REFERENCES ordering.orders (id, tenant_id),
@@ -664,20 +664,20 @@ COMMENT ON COLUMN tenant.location_capacity_holds.id IS
 
 -- --------------------------------------------------------------------- grants
 
-GRANT USAGE ON SCHEMA ordering TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ordering.carts TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ordering.cart_lines TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON ordering.checkout_attempts TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON ordering.orders TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON ordering.order_number_counters TO qoida_application;
-GRANT SELECT, INSERT ON ordering.order_lines TO qoida_application;
-GRANT SELECT, INSERT ON ordering.order_line_modifiers TO qoida_application;
-GRANT SELECT, INSERT ON ordering.order_adjustments TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON ordering.order_customer_snapshots TO qoida_application;
-GRANT SELECT, INSERT ON ordering.order_state_history TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON ordering.approval_decisions TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON ordering.order_timers TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON ordering.order_process_states TO qoida_application;
+GRANT USAGE ON SCHEMA ordering TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ordering.carts TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ordering.cart_lines TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON ordering.checkout_attempts TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON ordering.orders TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON ordering.order_number_counters TO horecaos_application;
+GRANT SELECT, INSERT ON ordering.order_lines TO horecaos_application;
+GRANT SELECT, INSERT ON ordering.order_line_modifiers TO horecaos_application;
+GRANT SELECT, INSERT ON ordering.order_adjustments TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON ordering.order_customer_snapshots TO horecaos_application;
+GRANT SELECT, INSERT ON ordering.order_state_history TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON ordering.approval_decisions TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON ordering.order_timers TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON ordering.order_process_states TO horecaos_application;
 
 -- The grants above are deliberately uneven, and the unevenness is the point.
 --

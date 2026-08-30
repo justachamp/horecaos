@@ -17,7 +17,7 @@ and saying which.
 | Alert | Where it is evaluated | Runbook |
 |---|---|---|
 | Platform unreachable | Off the box: the external uptime check fails twice consecutively | [deploy.md](deploy.md), "It did not come up" — after checking the host answers at all |
-| PostgreSQL down while the host is up | On the box: `qoida-probe.sh` | [postgresql-down.md](postgresql-down.md) |
+| PostgreSQL down while the host is up | On the box: `horecaos-probe.sh` | [postgresql-down.md](postgresql-down.md) |
 | Order flow stalled | On the box: outbox age, inbox age, or consumer lag past 15 minutes | [outbox-not-draining.md](outbox-not-draining.md) |
 
 ## Trading hours, 09:00–23:30 Asia/Tashkent
@@ -62,7 +62,7 @@ While ADR 0024's programme is running, two systems serve one business and the
 first question is always the same one:
 
 ```bash
-qc exec -T platform-db psql -U qoida_migrator -d qoida -c \
+qc exec -T platform-db psql -U horecaos_migrator -d horecaos -c \
   "SELECT capability, state, write_mode, read_mode, state_entered_at
      FROM migration.scopes ORDER BY capability"
 ```

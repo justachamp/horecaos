@@ -15,7 +15,7 @@ migration.
 **Version.** Free, sequential, `V00NN__snake_case.sql`. A duplicate silently shadows.
 
 **GRANTs.** Every table created in this migration has an explicit `GRANT` to
-`qoida_application` *in this migration*. An earlier `GRANT ... ON ALL TABLES IN SCHEMA`
+`horecaos_application` *in this migration*. An earlier `GRANT ... ON ALL TABLES IN SCHEMA`
 does **not** cover a table created later — it applies only to tables existing when it ran.
 This exact bug required V0035 to repair nine migrations, and it is invisible until the
 first production start. `python3 tools/checks/repo_hygiene.py` checks this; run it.

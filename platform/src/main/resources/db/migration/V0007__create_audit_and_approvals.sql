@@ -163,19 +163,19 @@ COMMENT ON TABLE audit.approval_requests IS
 -- this role to the environment login user keeps credentials out of migrations.
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'qoida_application') THEN
-        CREATE ROLE qoida_application NOLOGIN;
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'horecaos_application') THEN
+        CREATE ROLE horecaos_application NOLOGIN;
     END IF;
 END
 $$;
 
-GRANT USAGE ON SCHEMA audit TO qoida_application;
-GRANT INSERT, SELECT ON audit.audit_events TO qoida_application;
-GRANT INSERT, SELECT ON audit.audit_events_2026 TO qoida_application;
-GRANT INSERT, SELECT ON audit.audit_events_2027 TO qoida_application;
-GRANT INSERT, SELECT ON audit.audit_events_2028 TO qoida_application;
-GRANT INSERT, SELECT ON audit.audit_events_default TO qoida_application;
-GRANT INSERT, SELECT, UPDATE ON audit.approval_requests TO qoida_application;
-GRANT SELECT ON audit.approval_policies TO qoida_application;
+GRANT USAGE ON SCHEMA audit TO horecaos_application;
+GRANT INSERT, SELECT ON audit.audit_events TO horecaos_application;
+GRANT INSERT, SELECT ON audit.audit_events_2026 TO horecaos_application;
+GRANT INSERT, SELECT ON audit.audit_events_2027 TO horecaos_application;
+GRANT INSERT, SELECT ON audit.audit_events_2028 TO horecaos_application;
+GRANT INSERT, SELECT ON audit.audit_events_default TO horecaos_application;
+GRANT INSERT, SELECT, UPDATE ON audit.approval_requests TO horecaos_application;
+GRANT SELECT ON audit.approval_policies TO horecaos_application;
 
-REVOKE UPDATE, DELETE, TRUNCATE ON audit.audit_events FROM qoida_application;
+REVOKE UPDATE, DELETE, TRUNCATE ON audit.audit_events FROM horecaos_application;

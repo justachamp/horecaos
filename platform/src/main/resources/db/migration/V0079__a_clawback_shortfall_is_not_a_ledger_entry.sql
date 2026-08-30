@@ -137,7 +137,7 @@ COMMENT ON COLUMN loyalty.clawbacks.recovered_minor IS
 COMMENT ON CONSTRAINT uq_loyalty_clawback_order ON loyalty.clawbacks IS
     'Idempotency by key rather than by luck. The insert is the gate a redelivered clawback fails at, before anything moves.';
 
-GRANT SELECT, INSERT ON loyalty.clawbacks TO qoida_application;
+GRANT SELECT, INSERT ON loyalty.clawbacks TO horecaos_application;
 
 -- ---------------------------------------------------------------------------
 -- And the ledger stops admitting the shape

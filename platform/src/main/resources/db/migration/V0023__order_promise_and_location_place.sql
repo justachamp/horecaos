@@ -186,7 +186,7 @@ ALTER TABLE tenant.locations
             'NOT_GEOCODED',   -- not attempted, or attempted and failed. Retryable.
             'GEOCODER',       -- resolved by the ADR 0015 geocoding port
             'MERCHANT_PIN',   -- the tenant placed their own pin during onboarding
-            'OPERATOR_PIN'    -- Qoida support placed it, usually while on a call
+            'OPERATOR_PIN'    -- HorecaOS support placed it, usually while on a call
         )
     );
 

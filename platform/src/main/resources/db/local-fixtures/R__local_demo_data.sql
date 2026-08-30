@@ -16,9 +16,9 @@ INSERT INTO tenant.tenants (
     id, slug, legal_name, display_name, default_currency, default_timezone, status
 ) VALUES (
     '10000000-0000-0000-0000-000000000001',
-    'qoida-local-cafe',
-    'Qoida Local Cafe LLC',
-    'Qoida Local Cafe',
+    'horecaos-local-cafe',
+    'HorecaOS Local Cafe LLC',
+    'HorecaOS Local Cafe',
     'UZS', 'Asia/Tashkent', 'ACTIVE'
 ) ON CONFLICT DO NOTHING;
 
@@ -27,7 +27,7 @@ INSERT INTO tenant.brands (
 ) VALUES (
     '10000000-0000-0000-0000-000000000002',
     '10000000-0000-0000-0000-000000000001',
-    'LOCAL_CAFE', 'qoida-local-cafe', 'Qoida Local Cafe', 'ACTIVE'
+    'LOCAL_CAFE', 'horecaos-local-cafe', 'HorecaOS Local Cafe', 'ACTIVE'
 ) ON CONFLICT DO NOTHING;
 
 INSERT INTO tenant.locations (
@@ -342,7 +342,7 @@ INSERT INTO tenant.legal_entities (
 ) VALUES (
     '10000000-0000-0000-0000-000000000031',
     '10000000-0000-0000-0000-000000000001', 'LOCAL_CAFE',
-    'Qoida Local Cafe LLC', 'Qoida Local Cafe', '123456789', true,
+    'HorecaOS Local Cafe LLC', 'HorecaOS Local Cafe', '123456789', true,
     'local-fixture-vat-certificate', '10000000-0000-0000-0000-000000000027',
     '1 Demo Street, Tashkent', '+998712000000', 'ACTIVE'
 ) ON CONFLICT DO NOTHING;
@@ -514,7 +514,7 @@ ON CONFLICT (tenant_id, entity_type, entity_id, locale) DO NOTHING;
 INSERT INTO support.social_links (id, tenant_id, brand_id, platform, url, sort_order, status)
 VALUES
     ('10000000-0000-0000-0000-000000000045', '10000000-0000-0000-0000-000000000001',
-     '10000000-0000-0000-0000-000000000002', 'TELEGRAM', 'https://t.me/qoida', 10, 'PUBLISHED'),
+     '10000000-0000-0000-0000-000000000002', 'TELEGRAM', 'https://t.me/horecaos', 10, 'PUBLISHED'),
     ('10000000-0000-0000-0000-000000000046', '10000000-0000-0000-0000-000000000001',
      '10000000-0000-0000-0000-000000000002', 'PHONE', 'tel:+998000000000', 20, 'PUBLISHED')
 ON CONFLICT (id) DO NOTHING;

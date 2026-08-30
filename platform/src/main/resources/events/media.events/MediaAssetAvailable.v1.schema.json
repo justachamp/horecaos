@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.qoida.uz/events/media.events/MediaAssetAvailable.v1.schema.json",
+  "$id": "https://contracts.horecaos.uz/events/media.events/MediaAssetAvailable.v1.schema.json",
   "title": "MediaAssetAvailable v1 payload",
   "description": "Emitted after an upload is verified against the object store and becomes displayable (ADR 0010). Carries identifiers and verified technical facts. Deliberately has no object key, no signed URL and no original filename: the key and the URL are read capabilities, and the filename is text a customer typed.",
   "type": "object",

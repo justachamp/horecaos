@@ -14,7 +14,7 @@ Required by ADR 0007. A production route may not ship without one of these; see
 | Source | `direct:notification.send`; status queries enter at `direct:notification.status` |
 | Destination | Messaging gateway over HTTPS, selected by the ADR 0026 binding that holds the `SEND_SMS` capability |
 | Service identity | Per-installation gateway credential, ADR 0026 |
-| Secret reference type | `qoida:{env}:provider_notification:{owner}:{id}` (ADR 0028) |
+| Secret reference type | `horecaos:{env}:provider_notification:{owner}:{id}` (ADR 0028) |
 | Connect timeout | 5s |
 | Total timeout | 15s per call, the gateway default |
 | Retry classification | **None on the send.** ADR 0020 already gives a notification a durable attempt counter and backoff; a second policy in-route would multiply against it. Bounded redelivery (3 attempts, 2s, doubling) exists on `notification.status.v1` only, because a status query has no side effect |
@@ -25,7 +25,7 @@ Required by ADR 0007. A production route may not ship without one of these; see
 | Expected volume | Pilot: under 5,000 messages/day/tenant |
 | SLO | p95 under 4s for a send; under 2s for a status query |
 | Runbook | `docs/routes/notification-send.md#runbook` |
-| Dashboard | Metric `qoida.notifications.provider.calls`, tagged `channel`, `kind`, `outcome` |
+| Dashboard | Metric `horecaos.notifications.provider.calls`, tagged `channel`, `kind`, `outcome` |
 
 ## Why the send never retries and the query does
 

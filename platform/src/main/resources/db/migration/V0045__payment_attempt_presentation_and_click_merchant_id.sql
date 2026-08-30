@@ -128,6 +128,6 @@ COMMENT ON INDEX payments.ux_payment_attempt_open_per_intent IS
 -- Unchanged in shape from V0027: the application reads and writes attempts and
 -- reads bindings. Repeated because a column added later inherits the table's
 -- grants but a reader of this file should not have to go and check that.
-GRANT USAGE ON SCHEMA payments TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON payments.payment_attempts TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON payments.merchant_bindings TO qoida_application;
+GRANT USAGE ON SCHEMA payments TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON payments.payment_attempts TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON payments.merchant_bindings TO horecaos_application;

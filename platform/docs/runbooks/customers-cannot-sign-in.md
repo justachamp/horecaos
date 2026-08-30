@@ -14,7 +14,7 @@ invalidates a session, so there is nothing to undo.
 
 ```bash
 curl -sX POST \
-  "https://$QOIDA_HOST/api/v1/storefront/tenants/$TENANT/brands/$BRAND/identity/verification-challenges" \
+  "https://$HORECAOS_HOST/api/v1/storefront/tenants/$TENANT/brands/$BRAND/identity/verification-challenges" \
   -H 'Content-Type: application/json' \
   -d '{"phone":"+998901112233"}' | jq '{status: .status, code: .code, reason: .reason}'
 ```
@@ -35,7 +35,7 @@ step 5. Otherwise the `reason` decides where you go:
 ## 2. Check what the tenant has
 
 ```bash
-qc exec -T postgres psql -U qoida -d qoida -c "
+qc exec -T postgres psql -U horecaos -d horecaos -c "
 SELECT i.id, i.status, i.environment_code, i.provider_type,
        i.non_sensitive_config, i.secret_reference,
        b.id AS binding, b.brand_id, b.status AS binding_status
@@ -58,7 +58,7 @@ operator database change today; the three inputs and their exact shapes are in
 
 ```bash
 qc exec -T openbao bao kv get -field=value \
-  "$QOIDA_OPENBAO_MOUNT/$(echo "$SECRET_REFERENCE" | cut -d: -f2)/provider_notification/$(echo "$SECRET_REFERENCE" | cut -d: -f4)/$(echo "$SECRET_REFERENCE" | cut -d: -f5)" \
+  "$HORECAOS_OPENBAO_MOUNT/$(echo "$SECRET_REFERENCE" | cut -d: -f2)/provider_notification/$(echo "$SECRET_REFERENCE" | cut -d: -f4)/$(echo "$SECRET_REFERENCE" | cut -d: -f5)" \
   > /dev/null && echo present
 ```
 
@@ -73,7 +73,7 @@ changes. It is never a column, never configuration, and never in a commit
 ## 4. Check the route is running
 
 ```bash
-curl -s "https://$QOIDA_HOST/actuator/health" | jq '.components.camelRoutes'
+curl -s "https://$HORECAOS_HOST/actuator/health" | jq '.components.camelRoutes'
 ```
 
 **Check:** `sms.verification.send.v1` is `Started`. If it is not, the adapter
@@ -84,7 +84,7 @@ non-local profile with no adapter bean at all should not have started — see
 ## 5. Confirm a real number all the way through
 
 ```bash
-IDENTITY="https://$QOIDA_HOST/api/v1/storefront/tenants/$TENANT/brands/$BRAND/identity"
+IDENTITY="https://$HORECAOS_HOST/api/v1/storefront/tenants/$TENANT/brands/$BRAND/identity"
 
 CHALLENGE=$(curl -sX POST "$IDENTITY/verification-challenges" \
   -H 'Content-Type: application/json' -d '{"phone":"+998901112233"}' | jq -r .challengeId)
@@ -126,5 +126,5 @@ outage stops staff working and does not stop customers ordering.
 The one number that signs in with a fixed code and no SMS exists only on a local
 profile, and a non-local profile refuses to start if it is configured. If this
 host ever fails to boot with a message about
-`qoida.customers.verification.preset.phone`, that is the guard doing its job —
+`horecaos.customers.verification.preset.phone`, that is the guard doing its job —
 unset it, do not work around it.

@@ -2,7 +2,7 @@
 
 **Section:** the delivery fleet. Who is working, who has what, and what they are owed.
 **Audience of these screens:** the restaurant's own dispatcher, shift supervisor, branch
-manager, branch cashier and finance clerk. Not Qoida staff.
+manager, branch cashier and finance clerk. Not HorecaOS staff.
 **IA coverage:** Part 2 §3.1 Dispatch board, §3.2 Live map, §3.3 Couriers, §3.4 Courier
 types & rates, §3.5 Shifts & attendance, §3.9 Courier policy, §7.4 Courier reports,
 §8.3 Cash reconciliation, §8.5 Courier payouts.
@@ -890,7 +890,7 @@ unexplained one are the two rows a finance clerk opens.
 | Mark as paid | `courier.payout.authorise` + external reference | Yes |
 | Export | column-fidelity CSV/XLSX matching the on-screen columns exactly | No |
 
-**Qoida computes, approves and records the payout; it does not move the money.** A large
+**HorecaOS computes, approves and records the payout; it does not move the money.** A large
 share of courier pay here is settled by the courier keeping cash he already collected,
 and the payout record makes that a real settlement entry rather than an off-books
 arrangement. The screen must say this: *"Recording a payout does not transfer funds."*
@@ -1021,7 +1021,7 @@ order"*.
 
 **Deliberately absent: courier billing mode.** Delever's master toggle enables a personal
 courier balance from which commissions are debited — a prepaid float the worker tops up.
-ADR 0042 rejects it: Qoida does not take deposits from workers, and a courier who cannot
+ADR 0042 rejects it: HorecaOS does not take deposits from workers, and a courier who cannot
 top up cannot work, which trades a payroll problem for a debt-collection problem. The
 setting does not exist here, and the parity matrix should record it as refused, not
 missing.
@@ -1087,7 +1087,7 @@ missing.
 - **Careers / vacancies / candidates** — recruiting is not the delivery fleet.
 - **Aggregator shift open/close notifications** — belongs to Integrations (IA 10.8/10.9).
 - **Operator records and operator reports** — the Personnel section conflates call-centre
-  operators with couriers. Qoida splits them: operators are Staff (IA §9), couriers are
+  operators with couriers. HorecaOS splits them: operators are Staff (IA §9), couriers are
   Delivery (IA §3). They share nothing but a sidebar heading in Delever.
 
 ### Where the documentation simply does not say
@@ -1095,7 +1095,7 @@ Several Delever pages are **video-only or screenshot-only**, and this specificat
 not invent what they contain. Verified on 22.08.2026:
 - `personal/couriers` — three embedded videos, no prose. No field list exists in text.
 - `personal/courier-bonus-penalty` — one video plus two sentences. **The condition
-  language is undocumented**; the typed condition set in §11 is Qoida's own design.
+  language is undocumented**; the typed condition set in §11 is HorecaOS's own design.
 - `personal/courier-attendance` — a single screenshot, no prose at all.
 - `admin-panel-1/couriers` (V2) — two videos ("Создание курьера", "Привязка курьера в
   филиал"), no prose.
@@ -1175,7 +1175,7 @@ Blocks: §7, §8, §9, §10, §11, §12, §13, §14, and the balance and on-time
 everywhere else.
 Structural open input: **courier employment classification and withholding treatment**
 (legal, finance). Until it is answered, §14's statement carries a net figure only; if
-couriers are employees, gross / withholding / net become three lines and Qoida becomes a
+couriers are employees, gross / withholding / net become three lines and HorecaOS becomes a
 payroll system of record.
 
 ### ADR 0045 — Proposed, not started

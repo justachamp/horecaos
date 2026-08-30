@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.qoida.uz/events/tenancy.events/TenantOnboardingStarted.v1.schema.json",
+  "$id": "https://contracts.horecaos.uz/events/tenancy.events/TenantOnboardingStarted.v1.schema.json",
   "title": "TenantOnboardingStarted v1 payload",
   "description": "Emitted in the same transaction as the ADR 0008 onboarding run that created it. Identifiers only; carries no personal data and no template configuration.",
   "type": "object",

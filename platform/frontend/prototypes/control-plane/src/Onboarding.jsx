@@ -5,7 +5,7 @@
  *
  * The owner column is the point of this screen. An onboarding does not fail
  * because a step is hard; it fails because a step is nobody's job, or because it
- * is the restaurant's job and nobody in Qoida is watching it. So every step
+ * is the restaurant's job and nobody in HorecaOS is watching it. So every step
  * carries a named owner, the open steps are counted per owner, and the ones that
  * sit outside the account manager are called out rather than averaged away.
  *
@@ -57,7 +57,7 @@ const EXIT_STAGE = {
   AT_RISK:  { label: "At risk", tone: "failed" },
 };
 
-/* Who Qoida can chase directly, and who it can only ask. */
+/* Who HorecaOS can chase directly, and who it can only ask. */
 const INTERNAL_OWNERS = new Set(["Sales", "Account manager", "Content team", "Operations"]);
 
 const STEP_FILL = {
@@ -152,7 +152,7 @@ function OwnerLoad({ steps, onPick, picked }) {
             <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
               <span className="q-emphasis" style={{ color: ink }}>{o.owner}</span>
               {external ? (
-                <span className="q-caption" style={{ color: inkSubtle }}>outside Qoida</span>
+                <span className="q-caption" style={{ color: inkSubtle }}>outside HorecaOS</span>
               ) : null}
             </div>
             <div className="q-caption q-tnum" style={{ color: inkMuted, margin: "4px 0 8px" }}>
@@ -323,7 +323,7 @@ const stepColumns = [
         <div style={{ minWidth: 0 }}>
           <div className="q-emphasis" style={{ color: ink }}>{v}</div>
           <div className="q-caption" style={{ color: external && r.status !== "DONE" ? "var(--q-error-text)" : inkSubtle }}>
-            {external ? "Outside Qoida — has to be asked, not assigned" : "Qoida"}
+            {external ? "Outside HorecaOS — has to be asked, not assigned" : "HorecaOS"}
           </div>
         </div>
       );
@@ -399,7 +399,7 @@ function RunDetail({ run, entry, ownerFilter, setOwnerFilter }) {
       <Note tone={unowned.length ? "failed" : "active"} pill={unowned.length ? "Unowned" : "Owners"}>
         {unowned.length
           ? `${unowned.length} steps have no named owner. A step that is nobody's job does not get done.`
-          : `Every step has a named owner. ${notManager.length} of the ${open.length} open steps are not the account manager's — ${owners(notManager)} — and ${outside.length} of those sit outside Qoida altogether, where the only lever is a phone call.`}
+          : `Every step has a named owner. ${notManager.length} of the ${open.length} open steps are not the account manager's — ${owners(notManager)} — and ${outside.length} of those sit outside HorecaOS altogether, where the only lever is a phone call.`}
       </Note>
 
       <Subsection

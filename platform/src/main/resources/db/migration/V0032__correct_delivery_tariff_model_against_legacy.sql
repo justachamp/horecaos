@@ -43,7 +43,7 @@
 --    could express any of the discounts every migrated branch carries.
 --
 -- 4. The legacy rounds both the fee and the discount to the nearest 500 so'm,
---    with Python's round — which is half to even. Qoida assumed whole minor units
+--    with Python's round — which is half to even. HorecaOS assumed whole minor units
 --    and half up. On a 500 so'm step with round rates, a great many fees land
 --    exactly on a half-step, so this is not a rounding nicety: 1,250 becomes
 --    1,000 there and 1,500 here.
@@ -251,4 +251,4 @@ ALTER TABLE pricing.quote_adjustments
                             'DELIVERY_TARIFF_DISCOUNT')
     );
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.delivery_tariff_discounts TO qoida_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.delivery_tariff_discounts TO horecaos_application;

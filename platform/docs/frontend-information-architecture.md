@@ -1,7 +1,7 @@
 # Frontend information architecture
 
 Navigation trees for the two console applications, derived from the
-[Delever parity matrix](delever-parity-matrix.md) and the three archived Qoida
+[Delever parity matrix](delever-parity-matrix.md) and the three archived HorecaOS
 applications. Sequenced by [the frontend and parity plan](frontend-and-parity-plan.md);
 the framework and design-system decisions are
 [ADR 0035](adr/partial/0035-angular-frontend-platform-and-design-system-adoption.md).
@@ -15,7 +15,7 @@ ADR rather than here.
 Both applications are `.console` surface: strict Carbon, square geometry,
 platform blue, dense tables, never a tenant accent.
 
-# Qoida front-end information architecture
+# HorecaOS front-end information architecture
 ## apps/control-plane and apps/operations
 
 **Tier legend** — `P` = first single-location pilot (go-live blocker) · `2` = wave 2 (multi-location + Delever parity) · `3` = wave 3 (parity tail, or blocked on a decision)
@@ -24,7 +24,7 @@ platform blue, dense tables, never a tenant accent.
 
 # PART 1 — apps/control-plane
 
-**Audience:** Qoida staff (onboarding, support, platform ops, billing, engineering).
+**Audience:** HorecaOS staff (onboarding, support, platform ops, billing, engineering).
 **Template:** the existing platform console (Carbon, 0px corners, platform blue, hairline elevation) fits this app as-is.
 **Governing principle:** control-plane administers *the platform*, never *the merchant's business*. Anything a merchant would do for themselves is reached by scoped, audited impersonation into operations — not by a parallel console.
 
@@ -76,7 +76,7 @@ platform blue, dense tables, never a tenant accent.
 ## 6. Compliance & fiscal
 | # | Screen | Purpose & owned features | Tier |
 |---|---|---|---|
-| 6.1 | Fiscalization operations | Cross-tenant fiscal receipt failures by operator and cause; bulk retry. **This is a legal go-live blocker in Uzbekistan and Qoida has no ADR for it.** | P |
+| 6.1 | Fiscalization operations | Cross-tenant fiscal receipt failures by operator and cause; bulk retry. **This is a legal go-live blocker in Uzbekistan and HorecaOS has no ADR for it.** | P |
 | 6.2 | Fiscal reference | IKPU/MXIK classifier data, validation rules, package codes, Data Matrix marking config. | P |
 | 6.3 | Residency & hosting | Where each tenant's data lives; country → currency/locale/timezone/fiscal regime (ADR 0034; UZ/KZ/GE). | 2 |
 | 6.4 | PII & data classification | Classification registry, retention schedules, export egress audit, DSAR/erasure (ADR 0029). **Owns:** courier-location retention, abandoned-cart retention, candidate-record retention. | 2 |
@@ -85,7 +85,7 @@ platform blue, dense tables, never a tenant accent.
 ## 7. Access & security
 | # | Screen | Purpose & owned features | Tier |
 |---|---|---|---|
-| 7.1 | Staff & roles | Qoida employees, roles, tenant scoping. | P |
+| 7.1 | Staff & roles | HorecaOS employees, roles, tenant scoping. | P |
 | 7.2 | Capability registry | The canonical capability vocabulary that tenant roles are assembled from (ADR 0025), granular to per-bulk-action. | P |
 | 7.3 | Effective access debugger | "Can this principal do this, on this resource, and why" (ADR 0003 + grants cache). | 2 |
 | 7.4 | Secrets | Inventory of provider credentials by tenant/branch, rotation status, last use — **never rendered** (ADR 0028). Replaces Delever's `base64(login:password)` pseudo-secret. | P |
@@ -104,8 +104,8 @@ platform blue, dense tables, never a tenant accent.
 | # | Screen | Purpose | Tier |
 |---|---|---|---|
 | 9.1 | Migration runs | Per-tenant legacy import: stages, counts, failures, resumability; provenance retained (`source = import`). | P |
-| 9.2 | ID mapping explorer | Legacy ↔ Qoida identity resolution across entities. | 2 |
-| 9.3 | Dual-run comparison | Legacy vs Qoida output diffing during cutover. | 2 |
+| 9.2 | ID mapping explorer | Legacy ↔ HorecaOS identity resolution across entities. | 2 |
+| 9.3 | Dual-run comparison | Legacy vs HorecaOS output diffing during cutover. | 2 |
 | 9.4 | Cutover checklist | Go/no-go per tenant. | 2 |
 
 ## 10. Support
@@ -120,7 +120,7 @@ platform blue, dense tables, never a tenant accent.
 - **Consumer content** (banners, stories, news, gallery, recipes, careers) and **storefront configuration** (bot token, domain, colours) — merchant-owned self-service, not a platform concern.
 - **Merchant BI dashboards** — control-plane gets platform metrics only; tenant analytics belongs to operations 7.x.
 - **Telephony operator UI** — a merchant call-centre tool, not platform administration.
-- **Delever's `Управление версиями` per-module v1/v2 toggles** — that is a symptom of running two frontends simultaneously. Qoida builds once and rolls out with 8.1 flags.
+- **Delever's `Управление версиями` per-module v1/v2 toggles** — that is a symptom of running two frontends simultaneously. HorecaOS builds once and rolls out with 8.1 flags.
 
 ---
 
@@ -128,7 +128,7 @@ platform blue, dense tables, never a tenant accent.
 
 **Audience:** the merchant's own staff — operators/call-centre, dispatchers, kitchen, branch managers, marketers, finance, owners.
 **Templates needed:** the platform console template is *not sufficient* — see §"Component gaps". Operations needs three shells: (a) **operator console** (dense, sidebar, keyboard-first), (b) **device/KDS fullscreen** (touch, no sidebar, offline banner), (c) **wallboard** (TV-distance, oversized counters).
-**Vocabulary mapping vs Delever:** Qoida's `Delivery` replaces Delever's split between `Персонал → Курьеры` and `Настройки → Доставка`. Qoida's `Finance` collects what Delever scatters across Orders, Персонал and Настройки. Qoida folds Delever's V2 `Контент` into `Marketing`.
+**Vocabulary mapping vs Delever:** HorecaOS's `Delivery` replaces Delever's split between `Персонал → Курьеры` and `Настройки → Доставка`. HorecaOS's `Finance` collects what Delever scatters across Orders, Персонал and Настройки. HorecaOS folds Delever's V2 `Контент` into `Marketing`.
 
 ---
 
@@ -172,7 +172,7 @@ platform blue, dense tables, never a tenant accent.
 | 3.3 | Couriers | The in-house roster. **Owns:** courier CRUD; branch bindings (many-to-many); passport / PINFL / driving licence / vehicle registration / plate / fuel; photo; emergency contact; courier groups; courier-app account provisioning (**password is never derived from the passport number**); online status and rating (read-only). | P |
 | 3.4 | Courier types & rates | Vehicle classes and pay schemes. **Owns:** Тип курьера (авто/мото/вело/грузовой, minimum distance, starting minute, work mode); Тариф курьера = fixed + per-order + per-km, kept **strictly separate from the customer-facing delivery tariff**; bonus/penalty rule definitions; the three salary models expressible by zeroing components. | 2 |
 | 3.5 | Shifts & attendance | Rosters, shift activation, hours worked. **Owns:** Посещаемость; "check courier work schedule" as an **authorization gate on order acceptance**; hours feeding payout. | 2 |
-| 3.6 | Delivery zones | Draw the polygons that decide serviceability, branch selection, tariff and provider. **Owns:** зоны доставки; branch geozones; regions with SW/NE bounding box constraining the geocoder; free geozone; zone → branch set; zone → courier-service binding; zone-beats-branch tariff precedence; bulk geozone upload. *(Qoida should collapse Delever's three overlapping geometry layers into one Zone entity with typed roles.)* | P |
+| 3.6 | Delivery zones | Draw the polygons that decide serviceability, branch selection, tariff and provider. **Owns:** зоны доставки; branch geozones; regions with SW/NE bounding box constraining the geocoder; free geozone; zone → branch set; zone → courier-service binding; zone-beats-branch tariff precedence; bulk geozone upload. *(HorecaOS should collapse Delever's three overlapping geometry layers into one Zone entity with typed roles.)* | P |
 | 3.7 | Delivery tariffs | What the **customer** pays. **Owns:** distance bands / per-km tiers; base and max distance; minimum order value; free-delivery-from threshold per zone; peak-hour surcharge windows; provider-quote-vs-own-tariff toggle; customer-visible tariff description; the applied tariff stamped immutably on the order. | P |
 | 3.8 | Dispatch rules | **One provider-agnostic rule engine** replacing the near-identical config duplicated inside all five Delever provider pages. Conditions (source, zone, branch, timing basis, order status, prep time, delay minutes) → action (provider, service tier, fallback). **Owns:** auto-dispatch triggers; cascade/simultaneous multi-provider search with cheapest selection **and loser cancellation**; auto-recreate after late payment; courier order grouping with merge radius; unpaid-order cancellation timeout. | P |
 | 3.9 | Courier policy | What a courier may see and do. **Owns:** GPS radius validation (accept radius in km, action radius in m); show only kitchen-ready orders; reveal customer location before vs after accept; post-delivery payment check; acceptance SLA in minutes with reassignment; max concurrent orders per courier; courier billing mode. | 2 |
@@ -208,13 +208,13 @@ platform blue, dense tables, never a tenant accent.
 ## 6. Marketing
 | # | Screen | Purpose & owned features | Tier |
 |---|---|---|---|
-| 6.1 | Promotions | The discount/markup/promo-code rule engine. **Owns:** type (discount / **markup** / promo code); scope (order vs product); fixed, percentage, delivery, gift, **free-form aggregator** (externally computed, flagged as non-reproducible); gift triggers and multiplicity (`equal` vs `at least`); manual vs automatic activation; eligibility by order type × source × **payment method**; Nth-order + first-order-source; priority with a defined tie-break; stackable and cashback-compatible flags with **specified arithmetic**; birthday-only; date range, intra-day window, 24/7, weekday toggles; geozone polygon; branch / customer / category / product scoping plus **excluded products**; usage limits (Qoida addition); pre-order re-validation at the scheduled time; **quote simulator over a versioned policy snapshot** (Qoida addition — Delever's own notes record repeated double-deduction and cross-channel divergence bugs here). | 2 |
+| 6.1 | Promotions | The discount/markup/promo-code rule engine. **Owns:** type (discount / **markup** / promo code); scope (order vs product); fixed, percentage, delivery, gift, **free-form aggregator** (externally computed, flagged as non-reproducible); gift triggers and multiplicity (`equal` vs `at least`); manual vs automatic activation; eligibility by order type × source × **payment method**; Nth-order + first-order-source; priority with a defined tie-break; stackable and cashback-compatible flags with **specified arithmetic**; birthday-only; date range, intra-day window, 24/7, weekday toggles; geozone polygon; branch / customer / category / product scoping plus **excluded products**; usage limits (HorecaOS addition); pre-order re-validation at the scheduled time; **quote simulator over a versioned policy snapshot** (HorecaOS addition — Delever's own notes record repeated double-deduction and cross-channel divergence bugs here). | 2 |
 | 6.2 | Promo codes | Issued codes as first-class rows. **Owns:** shared campaign codes and **per-instance unique codes** (late-order apology), owner, expiry, redemption state and ledger. | 2 |
 | 6.3 | Loyalty | Cashback/bonus and stored value. **Owns:** accrual rate (per channel/branch), redemption cap as a share of order value, point expiry + pre-expiry notification, deposit accounts, POS balance sync. Loyalty spend and deposit are **payment methods, not discounts**. | 3 |
-| 6.4 | Campaigns | One-off broadcasts to a segment. **Owns:** SMS (customers and **couriers** as separate audiences, history, per-recipient delivery receipts); push (3:1 cover, scheduled send, recipient and read counts); Telegram post (media type, `{client_name}`, unregistered-only targeting, inline buttons, test send, sender recorded); RFM targeting; **consent and suppression enforced in audience selection** (Qoida addition — Delever has no opt-out at all). | 2 |
+| 6.4 | Campaigns | One-off broadcasts to a segment. **Owns:** SMS (customers and **couriers** as separate audiences, history, per-recipient delivery receipts); push (3:1 cover, scheduled send, recipient and read counts); Telegram post (media type, `{client_name}`, unregistered-only targeting, inline buttons, test send, sender recorded); RFM targeting; **consent and suppression enforced in audience selection** (HorecaOS addition — Delever has no opt-out at all). | 2 |
 | 6.5 | Automations | Triggers that send without a human. **Owns:** birthday; cashback balance change (accrual vs debit templates); **late-order apology with auto-generated unique promo code**; inactivity / funnel abandonment (missed action, referral filter, delay minutes) with cancellation when the action completes. | 2 |
 | 6.6 | Referrals | Trackable acquisition and the referral programme. **Owns:** website `?ref=` links; Telegram `startapp` deep links; Mini-App / BotFather setup as a guided resumable flow; referral programme rewards (**to be specified from scratch — Delever's is undocumented**). | 3 |
-| 6.7 | Content | Everything customer-facing that is not a product. **Owns:** banners (image **or video**, priority, per-channel placement, active period); stories (group → ordered slides with per-slide media, duration, CTA, view counts); pop-ups (delay, duration, priority, time window, **plus frequency capping** — a Qoida addition); promotion content cards **linked to the promotion rule** (Qoida improvement: Delever keeps them unrelated so ads drift out of sync with pricing); news; gallery albums; recipes (editorial); vacancies (a public listing only). | 2 |
+| 6.7 | Content | Everything customer-facing that is not a product. **Owns:** banners (image **or video**, priority, per-channel placement, active period); stories (group → ordered slides with per-slide media, duration, CTA, view counts); pop-ups (delay, duration, priority, time window, **plus frequency capping** — a HorecaOS addition); promotion content cards **linked to the promotion rule** (HorecaOS improvement: Delever keeps them unrelated so ads drift out of sync with pricing); news; gallery albums; recipes (editorial); vacancies (a public listing only). | 2 |
 | 6.8 | Storefront merchandising | What shows on the home screen of each channel. **Owns:** home-page product groups (manual and by-category with priority ordering); offer carousel; multi-brand switcher entries; marketplace layout mode. | 2 |
 
 ---
@@ -240,10 +240,10 @@ platform blue, dense tables, never a tenant accent.
 |---|---|---|---|
 | 8.1 | Payments & settlements | **Owns:** the `payment[]` array per order (**split tender**: cash + cashback + deposit); payment status; **re-issue a payment invoice to a phone number other than the order's**, idempotently; refunds; provider-mappable cancellation reason for voids; auto-send payment link. | P |
 | 8.2 | Fiscal receipts | The fiscalization queue. **Owns:** per-order fiscal status and URL/codes; manual retry; which INN was used; fiscalized payment types; delivery-line IKPU; marking codes transmitted; fiscal operator errors. | P |
-| 8.3 | Cash reconciliation | Courier shift close and инкассация. **Owns:** courier daily/shift totals by payment method; **cash acceptance and shortfall recording** (Qoida addition — Delever's courier hands in a report with nowhere to record it); bonus-paid amount reducing cash due. | 2 |
+| 8.3 | Cash reconciliation | Courier shift close and инкассация. **Owns:** courier daily/shift totals by payment method; **cash acceptance and shortfall recording** (HorecaOS addition — Delever's courier hands in a report with nowhere to record it); bonus-paid amount reducing cash due. | 2 |
 | 8.4 | Delivery cost reconciliation | Provider invoices vs recorded per-delivery cost. **Owns:** акт сверки per provider; charged-vs-cost delivery margin; provider terminal status. | 2 |
 | 8.5 | Courier payouts | The settlement run. **Owns:** salary report (orders, km, hours, **вовремя**, penalties, bonus, **К оплате**) with an exact, immutable on-time definition; the courier balance as an **append-only ledger** with credits and debits; commission deductions; export with column fidelity. | 2 |
-| 8.6 | Subscription & billing | The merchant's own Qoida account. **Owns:** current plan and term; purchasable modules with their billing units and inline purchase; prepaid wallet + top-up via Click/Atmos (UzCard, Humo, Visa, Mastercard); credit-expiry warning; arrears state and restricted-feature banner; invoices. | 2 |
+| 8.6 | Subscription & billing | The merchant's own HorecaOS account. **Owns:** current plan and term; purchasable modules with their billing units and inline purchase; prepaid wallet + top-up via Click/Atmos (UzCard, Humo, Visa, Mastercard); credit-expiry warning; arrears state and restricted-feature banner; invoices. | 2 |
 
 ---
 
@@ -279,9 +279,9 @@ platform blue, dense tables, never a tenant accent.
 - **Tenant, brand and location creation.** Merchants *request* an additional brand or location; provisioning happens in control-plane 2.3 so that legal entity, residency, entitlement and metering are settled at creation.
 - **Keycloak realm/org internals.**
 - **The customer storefront, the courier mobile app, and the kiosk device app.** All three are separate deployables. Operations *configures* them (10.5, 3.3) and *previews* them (PhoneFrame), but does not contain them. Everything in the inventory tagged "customer app profile", "courier app order flow / earnings / history", "bonus-payment visibility to courier" belongs to those apps.
-- **Order status vocabulary CRUD.** Delever models statuses as configurable `status_id` UUID rows. Qoida keeps a **fixed, code-owned state machine parameterised by the courier-first/branch-first policy** (10.3). A tenant-editable status list makes ADR 0032 event contracts, status-driven automations and cross-tenant reporting ungovernable. This is an explicit parity gap, taken on purpose.
+- **Order status vocabulary CRUD.** Delever models statuses as configurable `status_id` UUID rows. HorecaOS keeps a **fixed, code-owned state machine parameterised by the courier-first/branch-first policy** (10.3). A tenant-editable status list makes ADR 0032 event contracts, status-driven automations and cross-tenant reporting ungovernable. This is an explicit parity gap, taken on purpose.
 - **Ingredient-level BOM, tech cards, costing and waste.** The inventory explicitly corrects the assumption: Delever's `Ингредиенты` is a customer-facing composition label and `Рецепты` is editorial content. Neither is a bill of materials. Do not scope one on parity grounds.
-- **AI generation of IKPU/MXIK or package codes.** Delever ships it behind a liability disclaimer. Qoida offers AI assist for descriptions and composition only (4.2); a tax classifier code must be entered or validated by a human before it can be used for fiscalisation.
+- **AI generation of IKPU/MXIK or package codes.** Delever ships it behind a liability disclaimer. HorecaOS offers AI assist for descriptions and composition only (4.2); a tax classifier code must be entered or validated by a human before it can be used for fiscalisation.
 - **A recruitment ATS.** Vacancies stay as content (6.7); a candidate pipeline collecting free-text CVs and phone numbers from anonymous public users is a retention liability with no revenue attached.
 - **`Tenders`.** Present in Delever V2 with no documentation and no V1 counterpart. Excluded pending evidence it is a real feature.
 - **Per-tenant v1/v2 module toggles, and beta switches on a personal profile page.** Tenant-scoped flags never live on a user-scoped screen.
@@ -312,7 +312,7 @@ Settings dominates the pilot and that is correct: you cannot take one legal orde
 ## First single-location pilot — control-plane (23 screens)
 `1.1` · `2.1 2.2 2.3 2.4 2.5 2.8` · `3.1 3.2 3.3` · `4.1 4.2` · `5.3` · `6.1 6.2` · `7.1 7.2 7.4 7.5` · `8.1 8.3` · `9.1` · `10.1`
 
-Note `6.1 Fiscalization operations` is pilot despite Qoida having **no ADR for fiscalization at all**. It is a legal requirement, it needs a retry path with an operator-visible replay control, and it is not a subset of ADR 0013.
+Note `6.1 Fiscalization operations` is pilot despite HorecaOS having **no ADR for fiscalization at all**. It is a legal requirement, it needs a retry path with an operator-visible replay control, and it is not a subset of ADR 0013.
 
 ## Wave 2 — what closes the Delever gap
 Kitchen buffer/expo/VDU · live courier map · courier rates, shifts and policy · publication preview · price list · auto-add rules · segments · reviews · the whole of Marketing · reports 7.3–7.7 and 7.9 · Finance 8.3–8.6 · Staff 9.2–9.3 · control-plane commerce, residency, PII and migration tooling.
@@ -348,7 +348,7 @@ The current set (Button, Icon, DataTable, EmptyState, StatusPill, Input, Select,
 ### Parity components — needed for wave 2
 | Component | Forced by |
 |---|---|
-| **Chart family** — line, bar, stacked bar, donut, funnel, histogram, cohort heatmap, sparkline, geographic heatmap | All of §7 and 0.1. `DataTable` cannot render a funnel or an ABC cumulative curve. Pair with the `dataviz` palette; note Delever backs these with ClickHouse and Qoida is Postgres-only. |
+| **Chart family** — line, bar, stacked bar, donut, funnel, histogram, cohort heatmap, sparkline, geographic heatmap | All of §7 and 0.1. `DataTable` cannot render a funnel or an ABC cumulative curve. Pair with the `dataviz` palette; note Delever backs these with ClickHouse and HorecaOS is Postgres-only. |
 | **KpiTile** (value + delta + sparkline) and **WallboardTile** (TV-distance) | 7.x and 0.1. `Card` is close but the wallboard scale is a different component, not a size prop. |
 | **Board / BoardColumn / BoardCard** with drag-drop | 5.4 review kanban; 3.1 dispatch. |
 | **DragDropAssign** (drag a card onto a target card) | 3.1 dispatcher module. |
@@ -360,7 +360,7 @@ The current set (Button, Icon, DataTable, EmptyState, StatusPill, Input, Select,
 | **PhoneFrame siblings** — AggregatorCardFrame, KioskFrame (9:16), TelegramMiniAppFrame | 4.6 aggregator preview; 10.5 kiosk idle media and bot preview. |
 | **NumberStepper** | Order line quantities, gift quantities, modifier min/max, portion bands. |
 | **SplitPane** (master-detail) | 1.1 → 1.2 without losing queue position. |
-| **RichTextEditor** (block-based, sanitized) | 10.5 static pages (Delever accepts **raw HTML from tenants** — an XSS surface Qoida must close), 6.7 news and vacancy bodies. |
+| **RichTextEditor** (block-based, sanitized) | 10.5 static pages (Delever accepts **raw HTML from tenants** — an XSS surface HorecaOS must close), 6.7 news and vacancy bodies. |
 | **ColorInput** | 10.3 late-order indicator colour; 10.4 per-channel brand colours. |
 | **Steps / ProgressRail** | Control-plane 2.5 onboarding; 1.2 order lifecycle rail; import job stages. |
 | **LiveBadge / RefreshIndicator / StaleIndicator / ConnectionState banner** | 0.1, 1.1, 2.1, 3.2 — the inventory specifies 10s refresh, live counters and, for KDS, a mid-service connectivity failure mode nobody has designed for. |

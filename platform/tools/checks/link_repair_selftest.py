@@ -37,7 +37,7 @@ GREEN, RED, DIM, OFF = "\033[32m", "\033[31m", "\033[2m", "\033[0m"
 def load_file_adrs():
     """Import tools/file-adrs, which has no .py suffix because it is a command."""
     spec = importlib.util.spec_from_loader(
-        "qoida_file_adrs", SourceFileLoader("qoida_file_adrs", str(FILE_ADRS))
+        "horecaos_file_adrs", SourceFileLoader("horecaos_file_adrs", str(FILE_ADRS))
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

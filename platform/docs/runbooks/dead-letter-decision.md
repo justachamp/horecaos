@@ -14,7 +14,7 @@ needs `INTEGRATION_FAILURE_READ` (ADR 0025); `platform-support` carries it.
 
 ```bash
 read -rsp 'access token: ' TOKEN; echo
-API=https://api.qoida.uz/api/v1/control-plane/integration/failures
+API=https://api.horecaos.uz/api/v1/control-plane/integration/failures
 ```
 
 The queue, in both directions:
@@ -61,12 +61,12 @@ Read-only, and only then. Nothing in this runbook is ever fixed with an
 `UPDATE`; see section 4.
 
 ```bash
-qc exec -T platform-db psql -U qoida_migrator -d qoida -c \
+qc exec -T platform-db psql -U horecaos_migrator -d horecaos -c \
   "SELECT event_id, topic, event_type, error_code, attempt_count, dead_lettered_at
      FROM integration.outbox_events WHERE status = 'DEAD_LETTER'
      ORDER BY dead_lettered_at DESC LIMIT 20"
 
-qc exec -T platform-db psql -U qoida_migrator -d qoida -c \
+qc exec -T platform-db psql -U horecaos_migrator -d horecaos -c \
   "SELECT consumer_name, event_id, topic, event_type, last_error_code,
           attempt_count, dead_lettered_at
      FROM integration.inbox_messages WHERE status = 'DEAD_LETTER'
@@ -97,7 +97,7 @@ Start from `aggregateId` on the item from section 1 — for a payment-bearing
 event that is the order — and walk to the attempts underneath it:
 
 ```bash
-qc exec -T platform-db psql -U qoida_migrator -d qoida -c \
+qc exec -T platform-db psql -U horecaos_migrator -d horecaos -c \
   "SELECT a.id, a.provider_type, a.external_payment_id, a.status,
           a.requested_amount_minor, a.currency
      FROM payments.payment_attempts a

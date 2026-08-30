@@ -25,11 +25,11 @@ get() { /usr/local/bin/bao-get.sh "$1"; }
 PGPASSWORD="$(get production/database/platform/migrator-password)"
 export PGPASSWORD
 
-export QOIDA_BACKUP_DB_URL="postgresql://qoida_migrator@platform-db:5432/qoida"
-QOIDA_BACKUP_PASSPHRASE="$(get production/data_encryption/platform/backup-passphrase)"
-QOIDA_BACKUP_ACCESS_KEY="$(get production/object_storage/platform/backup-access-key)"
-QOIDA_BACKUP_SECRET_KEY="$(get production/object_storage/platform/backup-secret-key)"
-export QOIDA_BACKUP_PASSPHRASE QOIDA_BACKUP_ACCESS_KEY QOIDA_BACKUP_SECRET_KEY
+export HORECAOS_BACKUP_DB_URL="postgresql://horecaos_migrator@platform-db:5432/horecaos"
+HORECAOS_BACKUP_PASSPHRASE="$(get production/data_encryption/platform/backup-passphrase)"
+HORECAOS_BACKUP_ACCESS_KEY="$(get production/object_storage/platform/backup-access-key)"
+HORECAOS_BACKUP_SECRET_KEY="$(get production/object_storage/platform/backup-secret-key)"
+export HORECAOS_BACKUP_PASSPHRASE HORECAOS_BACKUP_ACCESS_KEY HORECAOS_BACKUP_SECRET_KEY
 
 # The off-site destination's own credentials, resolved here rather than passed
 # through compose. They are deliberately not in the env file and not in the ops
@@ -41,8 +41,8 @@ export QOIDA_BACKUP_PASSPHRASE QOIDA_BACKUP_ACCESS_KEY QOIDA_BACKUP_SECRET_KEY
 # The passphrase above is fetched separately and stays separate. A destination
 # that holds both the ciphertext and the key to it is one account compromise
 # away from being no encryption at all.
-QOIDA_BACKUP_OFFSITE_ACCESS_KEY="$(get production/object_storage/platform/backup-offsite-access-key)"
-QOIDA_BACKUP_OFFSITE_SECRET_KEY="$(get production/object_storage/platform/backup-offsite-secret-key)"
-export QOIDA_BACKUP_OFFSITE_ACCESS_KEY QOIDA_BACKUP_OFFSITE_SECRET_KEY
+HORECAOS_BACKUP_OFFSITE_ACCESS_KEY="$(get production/object_storage/platform/backup-offsite-access-key)"
+HORECAOS_BACKUP_OFFSITE_SECRET_KEY="$(get production/object_storage/platform/backup-offsite-secret-key)"
+export HORECAOS_BACKUP_OFFSITE_ACCESS_KEY HORECAOS_BACKUP_OFFSITE_SECRET_KEY
 
-exec /opt/qoida/backup/backup.sh
+exec /opt/horecaos/backup/backup.sh

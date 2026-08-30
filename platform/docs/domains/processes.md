@@ -4,15 +4,15 @@
 
 1. A platform user chooses an onboarding template and submits legal tenant
    data, default currency/timezone, and customer identity mode.
-2. Qoida creates the tenant in `PROVISIONING` and records an onboarding run.
+2. HorecaOS creates the tenant in `PROVISIONING` and records an onboarding run.
 3. An idempotent step creates or reconciles the Keycloak Organization and
    stores its immutable external ID.
-4. Qoida creates brands and their single-brand locations.
+4. HorecaOS creates brands and their single-brand locations.
 5. The tenant owner is linked or invited and receives scoped grants.
 6. Defaults resolve for language, currency, order acceptance, payment,
    delivery, and notifications.
 7. Integration installations store secret references and perform connection
-   checks; secrets are never persisted in Qoida tables.
+   checks; secrets are never persisted in HorecaOS tables.
 8. Catalog and location imports run as dry runs before applying valid records.
 9. Readiness checks verify identity, roles, locations, menus, payments,
    fulfillment, integrations, domains, and required media.
@@ -71,14 +71,14 @@ sequenceDiagram
     Ordering->>Ordering: First valid decision wins atomically
 ```
 
-On approval, Qoida confirms the order and emits independent commands to capture
+On approval, HorecaOS confirms the order and emits independent commands to capture
 payment, commit inventory, and export to the POS unless POS approval already
-created the external order. On rejection or safe timeout, Qoida emits commands
+created the external order. On rejection or safe timeout, HorecaOS emits commands
 to release inventory and void/refund according to provider capability, records
 a reason, and notifies the customer. Late responses are acknowledged and
 audited but do not mutate the order.
 
-The Qoida Operations channel is always available as the fallback. A POS binding
+The HorecaOS Operations channel is always available as the fallback. A POS binding
 that lacks a reliable approval capability cannot be configured as the sole
 approval path.
 
@@ -86,20 +86,20 @@ approval path.
 
 1. The scheduler creates a run for each active location binding.
 2. Camel calls the provider adapter using the installation's secret reference.
-3. Qoida stores run metadata and a protected raw import snapshot.
+3. HorecaOS stores run metadata and a protected raw import snapshot.
 4. External identifiers are resolved through `POS_ENTITY_MAPPING`.
 5. Imported rows are normalized into provider-neutral staging records.
-6. Qoida calculates additions, changes, removals, and mapping conflicts.
+6. HorecaOS calculates additions, changes, removals, and mapping conflicts.
 7. New products may be applied as drafts. POS-owned operational metadata may
    be auto-applied under an explicit field policy.
 8. Customer-facing product content, prices, and availability require review or
-   remain unchanged because Qoida is authoritative.
+   remain unchanged because HorecaOS is authoritative.
 9. The run records counts, differences, errors, duration, and checkpoint.
 10. Reconciliation alerts on unmapped, duplicated, or destructive changes.
 
 Daily polling is not considered real-time availability. A provider-supported
 webhook or frequent incremental poll can supply an availability signal later,
-but Qoida remains responsible for the effective sellability decision.
+but HorecaOS remains responsible for the effective sellability decision.
 
 ## Provider command reliability
 

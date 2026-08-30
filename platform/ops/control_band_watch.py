@@ -165,7 +165,7 @@ def respond(metric: dict, value: float, verdict: dict, action: str, dry_run: boo
     slug = f"{number:04d}-{metric['id']}-breach"
     runbook = metric.get("runbook")
 
-    prompt = f"""A production control band was breached on Qoida Platform.
+    prompt = f"""A production control band was breached on HorecaOS Platform.
 
     Metric:      {metric['id']}
     Description: {metric.get('description', '').strip()}

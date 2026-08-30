@@ -18,9 +18,9 @@ Cases run **read-only** — the agent gets `Read`, `Grep`, and `Glob`, never `Ed
 
 ```json
 {
-  "why": "Nine migrations omitted the GRANT for qoida_application. The failure is invisible until the first production start; V0035 exists to repair them.",
+  "why": "Nine migrations omitted the GRANT for horecaos_application. The failure is invisible until the first production start; V0035 exists to repair them.",
   "prompt": "I need to add a table ... Show me the complete SQL file you would create.",
-  "expect_all": ["GRANT", "qoida_application", "tenant_id", "timestamptz"],
+  "expect_all": ["GRANT", "horecaos_application", "tenant_id", "timestamptz"],
   "forbid": ["timestamp without time zone"]
 }
 ```

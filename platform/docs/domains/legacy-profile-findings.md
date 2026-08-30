@@ -373,7 +373,7 @@ application wrote, whether the overlap is four phones or forty thousand.
 
 **The tenant's identity mode is `BRAND_ISOLATED`**, and the reasoning is now a
 constraint rather than a count: with every company becoming a brand under one
-Qoida tenant, sharing accounts across brands would merge people the legacy
+HorecaOS tenant, sharing accounts across brands would merge people the legacy
 system kept apart by design, and ADR 0015 and ADR 0024 both forbid merging people
 on a matching phone. The four dev phones spanning two partitions are an
 illustration of the constraint, not the evidence for it.

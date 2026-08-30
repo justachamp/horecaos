@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.qoida.uz/events/tenancy.events/TenantCreated.v1.schema.json",
+  "$id": "https://contracts.horecaos.uz/events/tenancy.events/TenantCreated.v1.schema.json",
   "title": "TenantCreated v1 payload",
   "description": "Emitted after a tenant is created in the control plane. Carries no personal data.",
   "type": "object",

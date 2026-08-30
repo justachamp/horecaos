@@ -115,7 +115,7 @@ CREATE TABLE migration.scopes (
     capability varchar(16) NOT NULL,
 
     -- Which system owns the data on each side, as an identifier an operator can
-    -- recognise in a runbook ('DELEVER', 'QOIDA_ORDERING'). Free-form within a
+    -- recognise in a runbook ('DELEVER', 'HORECAOS_ORDERING'). Free-form within a
     -- code shape rather than a closed set, because the legacy side is named by
     -- the estate being retired and not by this platform.
     source_owner varchar(32) NOT NULL,
@@ -793,16 +793,16 @@ COMMENT ON COLUMN migration.cutover_decisions.evidence_snapshot IS
 
 -- --------------------------------------------------------------------- grants
 
-GRANT USAGE ON SCHEMA migration TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON migration.programs TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON migration.scopes TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON migration.runs TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON migration.entity_mappings TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON migration.quarantine_items TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON migration.reconciliation_results TO qoida_application;
-GRANT SELECT, INSERT ON migration.cutover_decisions TO qoida_application;
+GRANT USAGE ON SCHEMA migration TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON migration.programs TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON migration.scopes TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON migration.runs TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON migration.entity_mappings TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON migration.quarantine_items TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON migration.reconciliation_results TO horecaos_application;
+GRANT SELECT, INSERT ON migration.cutover_decisions TO horecaos_application;
 
-REVOKE UPDATE, DELETE, TRUNCATE ON migration.cutover_decisions FROM qoida_application;
+REVOKE UPDATE, DELETE, TRUNCATE ON migration.cutover_decisions FROM horecaos_application;
 
 -- No table here grants DELETE, and the omission is the point.
 --

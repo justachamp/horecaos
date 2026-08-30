@@ -1,4 +1,4 @@
-# Qoida Platform
+# HorecaOS Platform
 
 **Architecture, domain, and migration rules live in [AGENTS.md](AGENTS.md). Read it before
 any change that touches schema, module boundaries, integration, or migration.** This file

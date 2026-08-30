@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.qoida.uz/events/tenancy.events/BrandCreated.v1.schema.json",
+  "$id": "https://contracts.horecaos.uz/events/tenancy.events/BrandCreated.v1.schema.json",
   "title": "BrandCreated v1 payload",
   "description": "Emitted after a brand is created under a tenant. Carries no personal data.",
   "type": "object",

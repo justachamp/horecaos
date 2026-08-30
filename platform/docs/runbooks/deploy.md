@@ -1,14 +1,14 @@
 # Deploy
 
 Everything in this file assumes you are on the colocated production host, in
-`/opt/qoida/qoida-platform`, as root.
+`/opt/horecaos/horecaos-platform`, as root.
 
 Two shortcuts used throughout, so that no command in this file is longer than a
 line:
 
 ```bash
-cd /opt/qoida/qoida-platform
-alias qc='docker compose -f compose.production.yaml --env-file /etc/qoida/production.env'
+cd /opt/horecaos/horecaos-platform
+alias qc='docker compose -f compose.production.yaml --env-file /etc/horecaos/production.env'
 ```
 
 ---
@@ -31,7 +31,7 @@ where deploying a red build is the right call at night.
 ### Deploy
 
 ```bash
-sudo QOIDA_ENV_FILE=/etc/qoida/production.env infra/production/deploy.sh
+sudo HORECAOS_ENV_FILE=/etc/horecaos/production.env infra/production/deploy.sh
 ```
 
 It asks once for your OpenBao token. Everything else is automatic.
@@ -42,11 +42,11 @@ these phases:
 | Phase | What it does | Why it can stop here |
 |---|---|---|
 | 0 | Refuses a dirty working tree | The image tag is the git sha; a dirty tree makes the tag a lie and rollback meaningless |
-| 1 | Mounts a tmpfs at `/run/qoida/secrets` | Not root |
+| 1 | Mounts a tmpfs at `/run/horecaos/secrets` | Not root |
 | 2 | Authenticates you to OpenBao | Sealed, or wrong token |
 | 3 | Writes four startup passwords onto the tmpfs | A secret is missing from OpenBao |
 | 4 | Issues a fresh AppRole secret-id | The AppRole does not exist — the host was never bootstrapped |
-| 5 | Builds `qoida/platform:<sha>` and `qoida/platform-migrate:<sha>` | Compile failure, or the disk is full |
+| 5 | Builds `horecaos/platform:<sha>` and `horecaos/platform-migrate:<sha>` | Compile failure, or the disk is full |
 | 6 | Starts dependencies, **runs Flyway**, then starts the application | See section 3 |
 | 6b | Audits the application role | A migration created a table without granting the application access — see section 3 |
 | 7 | Waits for the application to report healthy | See section 4 |
@@ -64,7 +64,7 @@ Every service `running`, and every service with a health check `(healthy)`:
 Then, from a machine that is **not** this one:
 
 ```bash
-curl -fsS https://api.qoida.uz/actuator/health/readiness
+curl -fsS https://api.horecaos.uz/actuator/health/readiness
 ```
 
 **Check:** `{"status":"UP"}`. Doing this from your laptop rather than from the
@@ -85,7 +85,7 @@ docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revisi
 
 ## 2. Rolling back
 
-The previous image is still on the host, tagged `qoida/platform:previous`. It was
+The previous image is still on the host, tagged `horecaos/platform:previous`. It was
 tagged by the deploy script before the new one replaced it.
 
 That tag is only trustworthy because the deploy refuses to leave it stale. If the
@@ -94,17 +94,17 @@ which image it is replacing, so it stops:
 
 ```text
 !!  platform-app is not running, so the image this deploy replaces cannot be
-    identified — and qoida/platform:previous already points at an older release.
+    identified — and horecaos/platform:previous already points at an older release.
 ```
 
 Start the release that is supposed to be running and deploy again, or name the
-image being replaced yourself with `docker image tag`. `QOIDA_NO_ROLLBACK_TARGET=1`
+image being replaced yourself with `docker image tag`. `HORECAOS_NO_ROLLBACK_TARGET=1`
 proceeds without a rollback target and says so — for a rebuilt host, where there
 genuinely is none.
 
 ```bash
-QOIDA_IMAGE_TAG=previous \
-QOIDA_SECRET_DIR=/run/qoida/secrets \
+HORECAOS_IMAGE_TAG=previous \
+HORECAOS_SECRET_DIR=/run/horecaos/secrets \
 qc up -d --no-deps platform-app
 ```
 
@@ -179,7 +179,7 @@ contains `COMMIT` or a `CREATE INDEX CONCURRENTLY`, the statements rolled back
 together and the database is unchanged. Confirm rather than assume:
 
 ```bash
-qc exec -T platform-db psql -U qoida_migrator -d qoida -c "\dt+ <the schema it touched>.*"
+qc exec -T platform-db psql -U horecaos_migrator -d horecaos -c "\dt+ <the schema it touched>.*"
 ```
 
 - **If the schema is unchanged:** fix the SQL, commit a *new* migration file with
@@ -207,7 +207,7 @@ step here and not the first.
 
 ### The deploy stopped on the grant audit
 
-The message names a table that exists and that `qoida_application` cannot read.
+The message names a table that exists and that `horecaos_application` cannot read.
 That means a migration created it and did not grant the application access — in
 development the application connects as the owner, so the omission is invisible
 until the first production start.
@@ -233,8 +233,8 @@ An `ALTER TABLE` waiting on a lock will sit there until `lock_timeout`. See what
 is blocking it:
 
 ```bash
-qc exec -T platform-db psql -U qoida_migrator -d qoida -c \
-  "SELECT pid, state, wait_event_type, left(query, 80) FROM pg_stat_activity WHERE datname='qoida' AND state <> 'idle';"
+qc exec -T platform-db psql -U horecaos_migrator -d horecaos -c \
+  "SELECT pid, state, wait_event_type, left(query, 80) FROM pg_stat_activity WHERE datname='horecaos' AND state <> 'idle';"
 ```
 
 The application's own role has `lock_timeout = 5s` and
@@ -244,7 +244,7 @@ neither, on purpose — an index build is allowed to take an hour.
 To abandon a migration that is stuck:
 
 ```bash
-qc exec -T platform-db psql -U qoida_migrator -d qoida -c "SELECT pg_cancel_backend(<pid>);"
+qc exec -T platform-db psql -U horecaos_migrator -d horecaos -c "SELECT pg_cancel_backend(<pid>);"
 ```
 
 Then treat it as Case B.
@@ -260,7 +260,7 @@ qc ps                       # what is not healthy?
 qc logs --tail 100 platform-app
 ```
 
-**"waiting for the OpenBao agent to render /run/bao/qoida.env"**, then the
+**"waiting for the OpenBao agent to render /run/bao/horecaos.env"**, then the
 container exits after two minutes.
 The agent has no token or no rendered secret.
 
@@ -271,33 +271,33 @@ qc exec -T openbao bao status
 
 If `Sealed: true`, that is your answer — go to section 5. If the agent logs
 `permission denied`, the AppRole policy no longer covers the secret path; compare
-`infra/openbao/policies/qoida-platform.hcl` against what is loaded.
+`infra/openbao/policies/horecaos-platform.hcl` against what is loaded.
 
 **`Connection to platform-db:5432 refused` or authentication failure.**
 
 ```bash
 qc logs --tail 50 platform-db
-qc exec -T platform-db pg_isready -U qoida_migrator -d qoida
+qc exec -T platform-db pg_isready -U horecaos_migrator -d horecaos
 ```
 
-An authentication failure for `qoida_app` after a *rebuilt* database means the
+An authentication failure for `horecaos_app` after a *rebuilt* database means the
 init script did not run, or ran with a different password than the one in
 OpenBao. The init script only runs on an empty data directory, so this is almost
 always a restored database plus a rotated password. Fix by setting the password
 to match:
 
 ```bash
-qc exec -T platform-db psql -U qoida_migrator -d qoida
-\getenv p QOIDA_APP_PASSWORD
-ALTER ROLE qoida_app PASSWORD :'p';
+qc exec -T platform-db psql -U horecaos_migrator -d horecaos
+\getenv p HORECAOS_APP_PASSWORD
+ALTER ROLE horecaos_app PASSWORD :'p';
 ```
 
 **`Unable to resolve the Configuration with the provided Issuer`.**
 Keycloak is not answering on the public auth origin. Almost always DNS, the
-certificate, or `KC_HOSTNAME` disagreeing with `QOIDA_AUTH_ORIGIN`.
+certificate, or `KC_HOSTNAME` disagreeing with `HORECAOS_AUTH_ORIGIN`.
 
 ```bash
-qc exec -T platform-app wget -qO- https://auth.qoida.uz/realms/qoida/.well-known/openid-configuration | head -c 200
+qc exec -T platform-app wget -qO- https://auth.horecaos.uz/realms/horecaos/.well-known/openid-configuration | head -c 200
 ```
 
 That command runs *from inside the application container*, which is the only
@@ -347,7 +347,7 @@ Then re-issue the agent's credentials, because the tmpfs holding them did not
 survive the reboot:
 
 ```bash
-sudo QOIDA_ENV_FILE=/etc/qoida/production.env infra/production/deploy.sh
+sudo HORECAOS_ENV_FILE=/etc/horecaos/production.env infra/production/deploy.sh
 ```
 
 Running the full deploy is correct here even though nothing changed: it is
@@ -378,11 +378,11 @@ apt-get update && apt-get install -y docker.io docker-compose-plugin git
 # power cut. This is the one host setting the design depends on.
 swapoff -a && sed -i '/ swap /d' /etc/fstab
 
-mkdir -p /opt/qoida /etc/qoida /var/lib/qoida
-git clone <repo> /opt/qoida/qoida-platform
-cp /opt/qoida/qoida-platform/infra/production/production.env.example /etc/qoida/production.env
-chmod 0600 /etc/qoida/production.env
-$EDITOR /etc/qoida/production.env
+mkdir -p /opt/horecaos /etc/horecaos /var/lib/horecaos
+git clone <repo> /opt/horecaos/horecaos-platform
+cp /opt/horecaos/horecaos-platform/infra/production/production.env.example /etc/horecaos/production.env
+chmod 0600 /etc/horecaos/production.env
+$EDITOR /etc/horecaos/production.env
 ```
 
 Generate the Kafka cluster id once and paste it in:
@@ -391,7 +391,7 @@ Generate the Kafka cluster id once and paste it in:
 docker run --rm apache/kafka:4.3.1 /opt/kafka/bin/kafka-storage.sh random-uuid
 ```
 
-**Check:** `docker compose -f compose.production.yaml --env-file /etc/qoida/production.env config >/dev/null`
+**Check:** `docker compose -f compose.production.yaml --env-file /etc/horecaos/production.env config >/dev/null`
 exits zero. It will name any variable you missed.
 
 Two variables have **no default and no example line**, deliberately, because a
@@ -401,42 +401,42 @@ default for either is worse than a missing one. Add both by hand:
 # ADR 0040. The environment segment is what OpenBao's KV path is built from, so
 # this must name the environment you are deploying, not `local`. The application
 # refuses to start without it — see "the pepper" below.
-QOIDA_HANDOVER_PEPPER_REF=qoida:production:data_encryption:platform:handover-pepper
+HORECAOS_HANDOVER_PEPPER_REF=horecaos:production:data_encryption:platform:handover-pepper
 
 # ADR 0034. The bucket outside this building. The nightly backup refuses to run
 # without it rather than quietly keeping a copy on the machine it is backing up,
 # so this is a gate rather than an option.
-QOIDA_BACKUP_OFFSITE_ENDPOINT=https://<the S3-compatible endpoint you chose>
+HORECAOS_BACKUP_OFFSITE_ENDPOINT=https://<the S3-compatible endpoint you chose>
 ```
 
-`config` will not catch a missing `QOIDA_HANDOVER_PEPPER_REF` — nothing reads it
+`config` will not catch a missing `HORECAOS_HANDOVER_PEPPER_REF` — nothing reads it
 until the application starts. The failure is
-`Could not resolve placeholder 'QOIDA_HANDOVER_PEPPER_REF'` during startup.
+`Could not resolve placeholder 'HORECAOS_HANDOVER_PEPPER_REF'` during startup.
 
 ### Point DNS at the host
 
-`api.qoida.uz`, `auth.qoida.uz` and `media.qoida.uz`, all A records, before the
+`api.horecaos.uz`, `auth.horecaos.uz` and `media.horecaos.uz`, all A records, before the
 next step — Caddy asks Let's Encrypt for certificates the first time it starts,
 and the challenge fails if the names do not resolve here yet.
 
 ### The media origin
 
 Photos are served to browsers through presigned URLs, and a presigned URL is
-signed *for one origin*. `QOIDA_MEDIA_ORIGIN` in the env file is that origin, and
+signed *for one origin*. `HORECAOS_MEDIA_ORIGIN` in the env file is that origin, and
 it must be the public HTTPS name — a URL signed for `http://minio:9000` does not
 resolve on a customer's phone, and would carry the signature and the object in
 clear text if it did.
 
 ```text
-QOIDA_MEDIA_ORIGIN=https://media.qoida.uz
-QOIDA_MEDIA_HOSTNAME=media.qoida.uz
+HORECAOS_MEDIA_ORIGIN=https://media.horecaos.uz
+HORECAOS_MEDIA_HOSTNAME=media.horecaos.uz
 ```
 
 The edge has to serve that name. Add a site block to
 `infra/production/caddy/Caddyfile` alongside the API and auth ones:
 
 ```caddyfile
-{$QOIDA_MEDIA_ORIGIN} {
+{$HORECAOS_MEDIA_ORIGIN} {
 	# Objects only. The MinIO console is off, but the S3 API also carries bucket
 	# creation, policy and admin paths, and none of them belong on a public
 	# origin — even behind a signature check.
@@ -469,7 +469,7 @@ and open the URL it returns from a phone on mobile data. `https`, and it loads.
 ### Bootstrap OpenBao
 
 ```bash
-sudo QOIDA_ENV_FILE=/etc/qoida/production.env infra/production/bootstrap.sh
+sudo HORECAOS_ENV_FILE=/etc/horecaos/production.env infra/production/bootstrap.sh
 ```
 
 It will stop and wait while you record the five unseal shares and the root
@@ -489,13 +489,13 @@ three shares if it is ever genuinely needed.
 qc exec -it openbao sh
 export BAO_TOKEN=<a token with write access>
 
-bao kv put qoida/production/data_encryption/platform/kek \
+bao kv put horecaos/production/data_encryption/platform/kek \
   value="$(head -c 32 /dev/urandom | base64)"
-bao kv put qoida/production/data_encryption/platform/backup-passphrase \
+bao kv put horecaos/production/data_encryption/platform/backup-passphrase \
   value="$(head -c 32 /dev/urandom | base64)"
 
-# ADR 0040's handover pepper, at the path QOIDA_HANDOVER_PEPPER_REF names.
-bao kv put qoida/production/data_encryption/platform/handover-pepper \
+# ADR 0040's handover pepper, at the path HORECAOS_HANDOVER_PEPPER_REF names.
+bao kv put horecaos/production/data_encryption/platform/handover-pepper \
   value="$(head -c 32 /dev/urandom | base64)"
 ```
 
@@ -515,19 +515,19 @@ The remaining secrets come from Keycloak and MinIO and can only be created after
 those services exist:
 
 ```text
-qoida/production/identity_admin/keycloak/provisioning-secret
-qoida/production/identity_admin/keycloak/reader-secret
-qoida/production/object_storage/platform/media-access-key
-qoida/production/object_storage/platform/media-secret-key
+horecaos/production/identity_admin/keycloak/provisioning-secret
+horecaos/production/identity_admin/keycloak/reader-secret
+horecaos/production/object_storage/platform/media-access-key
+horecaos/production/object_storage/platform/media-secret-key
 ```
 
 plus the credentials the nightly backup uses:
 
 ```text
-qoida/production/object_storage/platform/backup-access-key
-qoida/production/object_storage/platform/backup-secret-key
-qoida/production/object_storage/platform/backup-offsite-access-key
-qoida/production/object_storage/platform/backup-offsite-secret-key
+horecaos/production/object_storage/platform/backup-access-key
+horecaos/production/object_storage/platform/backup-secret-key
+horecaos/production/object_storage/platform/backup-offsite-access-key
+horecaos/production/object_storage/platform/backup-offsite-secret-key
 ```
 
 The MinIO pairs must be **service accounts scoped to one bucket each**, not the
@@ -544,7 +544,7 @@ and the key means the encryption did nothing.
 
 **The application will not start until the two media keys exist.** It resolves
 them while constructing the S3 client, and the failure reads `No secret is
-configured for qoida:production:object_storage:platform:media-access-key` inside
+configured for horecaos:production:object_storage:platform:media-access-key` inside
 a bean-creation stack trace that names `catalogPublicationService` at the top and
 mentions nothing about secrets until nine `Caused by` lines down.
 
@@ -556,13 +556,13 @@ qc run --rm --no-TTY ops bash -c '
   mc alias set p http://minio:9000 \
     "$(bao-get.sh production/object_storage/platform/backup-access-key)" \
     "$(bao-get.sh production/object_storage/platform/backup-secret-key)" >/dev/null
-  mc mb --ignore-existing p/qoida-backups
-  mc version enable p/qoida-backups
-  mc mb --ignore-existing p/qoida-media
+  mc mb --ignore-existing p/horecaos-backups
+  mc version enable p/horecaos-backups
+  mc mb --ignore-existing p/horecaos-media
   mc ls p/'
 ```
 
-**Check:** both buckets listed, and `qoida-backups` reports versioning enabled.
+**Check:** both buckets listed, and `horecaos-backups` reports versioning enabled.
 Without versioning a single mistaken `mc rm` removes every backup with no undo.
 
 ### Import the Keycloak realm
@@ -580,10 +580,10 @@ qc up -d keycloak
 **Check:** the import ends with `Keycloak stopped` and no `ERROR` line, then
 
 ```bash
-curl -fsS -H "Host: auth.qoida.uz" http://127.0.0.1/realms/qoida/.well-known/openid-configuration | head -c 120
+curl -fsS -H "Host: auth.horecaos.uz" http://127.0.0.1/realms/horecaos/.well-known/openid-configuration | head -c 120
 ```
 
-reports an `issuer` exactly equal to `QOIDA_AUTH_ORIGIN` + `/realms/qoida`. If it
+reports an `issuer` exactly equal to `HORECAOS_AUTH_ORIGIN` + `/realms/horecaos`. If it
 differs by so much as a scheme, every token the application receives will be
 rejected.
 
@@ -600,8 +600,8 @@ change to anyone.
 ### Rotate the service-account secrets
 
 **Do this before anything else touches the realm.** The import file gives
-`qoida-provisioning` and `qoida-identity-reader` a secret only so that a laptop
-works out of the box; the fallback value is in git, and `qoida-provisioning`
+`horecaos-provisioning` and `horecaos-identity-reader` a secret only so that a laptop
+works out of the box; the fallback value is in git, and `horecaos-provisioning`
 holds `manage-users`. Until this step is done, a checkout of this repository is
 realm-wide user administration.
 
@@ -631,19 +631,19 @@ token="$(printf 'client_id=admin-cli&grant_type=password&username=admin&password
 auth="$(mktemp)"; trap 'rm -f "${auth}"' EXIT
 printf 'X-Vault-Token: %s\n' "${BAO_WRITE_TOKEN}" > "${auth}"
 
-for pair in qoida-provisioning:provisioning-secret qoida-identity-reader:reader-secret; do
+for pair in horecaos-provisioning:provisioning-secret horecaos-identity-reader:reader-secret; do
     client="${pair%%:*}"; slot="${pair##*:}"
 
     id="$(curl -sf -H "Authorization: Bearer ${token}" \
-        "${KC}/admin/realms/qoida/clients?clientId=${client}" | jq -r '.[0].id')"
+        "${KC}/admin/realms/horecaos/clients?clientId=${client}" | jq -r '.[0].id')"
 
     # POST regenerates and returns the new secret in one call.
     secret="$(curl -sf -X POST -H "Authorization: Bearer ${token}" \
-        "${KC}/admin/realms/qoida/clients/${id}/client-secret" | jq -r .value)"
+        "${KC}/admin/realms/horecaos/clients/${id}/client-secret" | jq -r .value)"
 
     jq -n --arg v "${secret}" '{data:{value:$v}}' \
       | curl -sf -o /dev/null --header "@${auth}" --json @- \
-        "${BAO}/v1/qoida/data/production/identity_admin/keycloak/${slot}"
+        "${BAO}/v1/horecaos/data/production/identity_admin/keycloak/${slot}"
 
     unset secret
     printf '    rotated %s -> %s\n' "${client}" "${slot}"
@@ -662,17 +662,17 @@ the value from the import file. Keycloak has no published port here, so it runs
 from a container on the compose network rather than from this host:
 
 ```bash
-read -rsp 'Keycloak bootstrap admin password: ' QOIDA_KEYCLOAK_ADMIN_PASSWORD; echo
-export QOIDA_KEYCLOAK_ADMIN_PASSWORD
+read -rsp 'Keycloak bootstrap admin password: ' HORECAOS_KEYCLOAK_ADMIN_PASSWORD; echo
+export HORECAOS_KEYCLOAK_ADMIN_PASSWORD
 
 qc run --rm --no-TTY \
   --volume "$(pwd)/infra/keycloak:/keycloak:ro" \
-  -e QOIDA_KEYCLOAK_URL=http://keycloak:8080 \
-  -e QOIDA_KEYCLOAK_ADMIN_PASSWORD \
-  -e QOIDA_KEYCLOAK_REQUIRE_ROTATED_SECRETS=1 \
+  -e HORECAOS_KEYCLOAK_URL=http://keycloak:8080 \
+  -e HORECAOS_KEYCLOAK_ADMIN_PASSWORD \
+  -e HORECAOS_KEYCLOAK_REQUIRE_ROTATED_SECRETS=1 \
   ops bash /keycloak/assign-service-account-roles.sh
 
-unset QOIDA_KEYCLOAK_ADMIN_PASSWORD
+unset HORECAOS_KEYCLOAK_ADMIN_PASSWORD
 ```
 
 It must print the two role lines and `==> Done`. If it prints
@@ -689,25 +689,25 @@ bootstrap admin**.
 ### First deploy
 
 ```bash
-sudo QOIDA_ENV_FILE=/etc/qoida/production.env infra/production/deploy.sh
+sudo HORECAOS_ENV_FILE=/etc/horecaos/production.env infra/production/deploy.sh
 ```
 
 ### Set up the things that watch it
 
 ```bash
-cat > /etc/qoida/alerting.env <<'EOF'
-QOIDA_HEARTBEAT_URL=https://hc-ping.com/<uuid>
-QOIDA_ALERT_WEBHOOK=https://api.telegram.org/bot<token>/sendMessage?chat_id=<id>
-QOIDA_BACKUP_STAMP=/var/lib/qoida/last-backup
+cat > /etc/horecaos/alerting.env <<'EOF'
+HORECAOS_HEARTBEAT_URL=https://hc-ping.com/<uuid>
+HORECAOS_ALERT_WEBHOOK=https://api.telegram.org/bot<token>/sendMessage?chat_id=<id>
+HORECAOS_BACKUP_STAMP=/var/lib/horecaos/last-backup
 EOF
-chmod 0600 /etc/qoida/alerting.env
+chmod 0600 /etc/horecaos/alerting.env
 
 crontab -e
 ```
 
 ```cron
-*/5 * * * * /opt/qoida/qoida-platform/infra/production/heartbeat.sh
-17 2 * * *  /opt/qoida/qoida-platform/infra/production/run-backup.sh && touch /var/lib/qoida/last-backup
+*/5 * * * * /opt/horecaos/horecaos-platform/infra/production/heartbeat.sh
+17 2 * * *  /opt/horecaos/horecaos-platform/infra/production/run-backup.sh && touch /var/lib/horecaos/last-backup
 ```
 
 Run the backup once by hand before trusting the schedule. It will refuse, loudly,
@@ -716,10 +716,10 @@ and not something to work around, because `&& touch` means a backup that only
 existed locally would have kept the stamp file fresh and the heartbeat quiet:
 
 ```bash
-/opt/qoida/qoida-platform/infra/production/run-backup.sh
+/opt/horecaos/horecaos-platform/infra/production/run-backup.sh
 ```
 
-**Check:** the last line reads `Done: qoida-<timestamp>.dump.enc (local and
+**Check:** the last line reads `Done: horecaos-<timestamp>.dump.enc (local and
 off-site)`. Anything else, including a non-zero exit with `No off-site
 destination is configured`, means there is no backup tonight.
 
@@ -727,7 +727,7 @@ Then, off this machine:
 
 - Configure the dead-man's-switch to alert if it hears nothing for 15 minutes.
 - Configure an external HTTP check on
-  `https://api.qoida.uz/actuator/health/readiness`, every minute, alerting after
+  `https://api.horecaos.uz/actuator/health/readiness`, every minute, alerting after
   two consecutive failures.
 
 **Check both by breaking them on purpose.** Stop the application and confirm the
@@ -745,7 +745,7 @@ belief, in exactly the way an untested backup is.
 - **Nothing but 80 and 443 is published.** There is no way to reach PostgreSQL,
   Kafka, MinIO or OpenBao from off the host, and there should never be one. Use
   `qc exec`, or an SSH tunnel if you need a GUI.
-- **The application connects as `qoida_app`, which cannot change the schema and
+- **The application connects as `horecaos_app`, which cannot change the schema and
   cannot read a table no migration granted it.** If a query fails with
   `permission denied`, the missing `GRANT` belongs in the migration that created
   the table, not in a manual statement on the server.

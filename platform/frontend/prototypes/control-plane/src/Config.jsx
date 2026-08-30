@@ -359,7 +359,7 @@ export default function Config({ tab, setTab }) {
       <Block
         title="Currency and formatting"
         meta="One currency, platform-wide"
-        note="Qoida is single-currency. A second currency is a data-model change, not a setting, so it is not offered here."
+        note="HorecaOS is single-currency. A second currency is a data-model change, not a setting, so it is not offered here."
       >
         <Card>
           <FieldGrid
@@ -545,7 +545,7 @@ export default function Config({ tab, setTab }) {
           title={`${c.name} is inactive, and ${c.pipelineNames} is being onboarded into it`}
           body={
             `An onboarding tenant in an inactive city cannot open a location, draw a delivery zone or go live. ` +
-            `Either activate ${c.name} or move the account to a city Qoida serves.`
+            `Either activate ${c.name} or move the account to a city HorecaOS serves.`
           }
           action={
             <Button
@@ -578,7 +578,7 @@ export default function Config({ tab, setTab }) {
       ))}
 
       <Block
-        title="Where Qoida operates"
+        title="Where HorecaOS operates"
         meta={`${activeCities.length} of ${CONFIG.cities.length} active`}
         note={
           "Tenants, locations, delivery zones and courier coverage all resolve against this list. " +
@@ -693,7 +693,7 @@ export default function Config({ tab, setTab }) {
         <ActionNote
           title={`${planned.map((p) => p.name).join(", ")} is planned, not connected`}
           body={
-            "A planned provider is visible to Qoida and invisible to tenants: no fee is negotiated, no contract is " +
+            "A planned provider is visible to HorecaOS and invisible to tenants: no fee is negotiated, no contract is " +
             "signed, and no tenant can select it at checkout. It sits here so it is not promised twice."
           }
           action={<Button size="sm" variant="tertiary" onClick={() => {}}>Open the integration</Button>}
@@ -704,9 +704,9 @@ export default function Config({ tab, setTab }) {
         title="Payment providers"
         meta={`${providerRows.filter((p) => p.status === "ACTIVE").length} available to tenants`}
         note={
-          "The fee is what Qoida is charged by the provider and what a tenant is quoted, in basis points, so a " +
+          "The fee is what HorecaOS is charged by the provider and what a tenant is quoted, in basis points, so a " +
           "170 bps difference reads as money rather than as a number. This list is what a tenant's customers pay " +
-          "with — it is not how Qoida bills the tenant."
+          "with — it is not how HorecaOS bills the tenant."
         }
       >
         <DataTable columns={providerColumns} rows={providerRows} />
@@ -801,7 +801,7 @@ export default function Config({ tab, setTab }) {
             `${uncovered.map((c) => c.name).join(" and ")} carry ` +
             `${uncovered.reduce((n, c) => n + tenantsInCity(c.name).length, 0)} tenants and ` +
             `${uncovered.reduce((n, c) => n + locationsInCity(c.name), 0)} locations between them. ` +
-            `Those tenants deliver with their own couriers, so Qoida has no delivery telemetry for them and ` +
+            `Those tenants deliver with their own couriers, so HorecaOS has no delivery telemetry for them and ` +
             `cannot quote a delivery fee at checkout.`
           }
           action={<Button size="sm" variant="primary" onClick={() => {}}>Add a partner</Button>}
@@ -820,7 +820,7 @@ export default function Config({ tab, setTab }) {
         title="Coverage by city"
         meta={`${CONFIG.deliveryPartners.length} partners × ${CONFIG.cities.length} cities`}
         note={
-          "The matrix is the argument for the next partner: the empty rows with tenants in them are where Qoida " +
+          "The matrix is the argument for the next partner: the empty rows with tenants in them are where HorecaOS " +
           "is selling a delivery platform that does not deliver."
         }
       >

@@ -80,7 +80,7 @@ POS export status is deliberately absent. POS transport failure is an
 integration concern and cannot reverse `CONFIRMED`.
 
 This machine is owned by `OrderStatus` and `OrderStateMachine` in
-`uz.qoida.platform.ordering.domain`, and by the `ck_order_status` check
+`uz.horecaos.platform.ordering.domain`, and by the `ck_order_status` check
 constraint in migration V0022. There is no table a tenant can override and no
 ADR 0030 policy key that reaches it: ADR 0036's omission list is explicit that
 tenants may not reorder the order lifecycle. A tenant chooses *which* transitions
@@ -170,7 +170,7 @@ stateDiagram-v2
 ```
 
 When POS approval itself creates the POS order, the returned external order ID
-moves the export directly to `ACKNOWLEDGED`; Qoida does not export it twice.
+moves the export directly to `ACKNOWLEDGED`; HorecaOS does not export it twice.
 
 ## Delivery shipment
 

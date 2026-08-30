@@ -1,5 +1,5 @@
 -- Close the two privilege gaps that only became visible once anything actually
--- connected as `qoida_application`.
+-- connected as `horecaos_application`.
 --
 -- Both were written correctly in SQL and verified by nothing. The application ran
 -- as the superuser that owns the database on every laptop and in every test, so a
@@ -30,12 +30,12 @@
 -- different kind of wrong.
 --
 -- Under the owner connection that DELETE succeeded and nobody noticed the missing
--- grant. Under qoida_app it is `permission denied for table customer_metrics`,
+-- grant. Under horecaos_app it is `permission denied for table customer_metrics`,
 -- raised inside an erasure request, which is the single worst place on this
 -- platform to discover a privilege gap: the request is legally timed, the failure
 -- looks like a bug in the erasure path rather than a grant, and the operator's
 -- only evidence is that the customer is still there.
-GRANT DELETE ON marketing.customer_metrics TO qoida_application;
+GRANT DELETE ON marketing.customer_metrics TO horecaos_application;
 
 
 -- ---------------------------------------------------------------------------
@@ -45,8 +45,8 @@ GRANT DELETE ON marketing.customer_metrics TO qoida_application;
 -- reporting.ensure_fact_partition exists precisely so that the application can
 -- add next month's fact partition without holding DDL rights: it validates the
 -- table name against a fixed list, creates the partition, and grants it to
--- qoida_application and qoida_reporting_read. V0031 granted EXECUTE on it to
--- qoida_application, which says plainly who was meant to call it.
+-- horecaos_application and horecaos_reporting_read. V0031 granted EXECUTE on it to
+-- horecaos_application, which says plainly who was meant to call it.
 --
 -- It was declared SECURITY INVOKER, so the CREATE TABLE inside it runs with the
 -- caller's privileges. The caller is the application. The application owns
@@ -75,7 +75,7 @@ ALTER FUNCTION reporting.ensure_fact_partition(text, date)
     SET search_path = pg_catalog;
 
 REVOKE EXECUTE ON FUNCTION reporting.ensure_fact_partition(text, date) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION reporting.ensure_fact_partition(text, date) TO qoida_application;
+GRANT EXECUTE ON FUNCTION reporting.ensure_fact_partition(text, date) TO horecaos_application;
 
 COMMENT ON FUNCTION reporting.ensure_fact_partition(text, date) IS
     'ADR 0043 partition upkeep. Idempotent, and refuses any table it does not own so a typo cannot partition something else. SECURITY DEFINER (V0070) because the application role holds no DDL rights and this function is the only way it is meant to add a partition; search_path is pinned and EXECUTE is granted by name, never to PUBLIC.';

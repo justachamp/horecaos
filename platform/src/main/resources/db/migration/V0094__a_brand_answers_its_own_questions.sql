@@ -144,8 +144,8 @@ CREATE INDEX ix_social_links_brand
 -- Explicit, and in this migration: GRANT ... ON ALL TABLES IN SCHEMA covers only
 -- what existed when it ran, so no earlier grant reaches these.
 
-GRANT USAGE ON SCHEMA support TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON support.faq_categories TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON support.faq_entries TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON support.faq_translations TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON support.social_links TO qoida_application;
+GRANT USAGE ON SCHEMA support TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON support.faq_categories TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON support.faq_entries TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON support.faq_translations TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON support.social_links TO horecaos_application;

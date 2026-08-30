@@ -525,16 +525,16 @@ COMMENT ON COLUMN commercial.usage_aggregates.event_quantity IS
 
 -- --------------------------------------------------------------------- grants
 
-GRANT USAGE ON SCHEMA commercial TO qoida_application;
+GRANT USAGE ON SCHEMA commercial TO horecaos_application;
 
-GRANT SELECT, INSERT, UPDATE ON commercial.plans TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON commercial.plan_versions TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON commercial.plan_entitlements TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON commercial.subscriptions TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON commercial.entitlement_overrides TO qoida_application;
-GRANT SELECT, INSERT ON commercial.usage_events TO qoida_application;
-GRANT SELECT, INSERT ON commercial.usage_adjustments TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON commercial.usage_aggregates TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON commercial.plans TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON commercial.plan_versions TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON commercial.plan_entitlements TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON commercial.subscriptions TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON commercial.entitlement_overrides TO horecaos_application;
+GRANT SELECT, INSERT ON commercial.usage_events TO horecaos_application;
+GRANT SELECT, INSERT ON commercial.usage_adjustments TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON commercial.usage_aggregates TO horecaos_application;
 
 -- The grants are uneven and the unevenness is the point.
 --

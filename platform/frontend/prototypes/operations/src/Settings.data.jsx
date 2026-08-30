@@ -342,7 +342,7 @@ export const CONFIG_KEYS = [
     note: "The single most-used value on the order board. Not a status — lateness is an overlay computed from this threshold.",
     settableAt: ["PLATFORM", "TENANT", "BRAND", "LOCATION"], explicitNullTerminates: false,
     levels: {
-      PLATFORM: at("SET", 20, "Qoida", "2025-11-04T09:00:00", "Platforma qiymati"),
+      PLATFORM: at("SET", 20, "HorecaOS", "2025-11-04T09:00:00", "Platforma qiymati"),
       TENANT: at("SET", 15, "Alisher Karimov", "2026-03-12T10:41:00", "Yagona va'da"),
       BRAND: { "br-osh": at("SET", 12, "Nodira Ismoilova", "2026-06-02T11:15:00", "Osh Markazi tezroq ishlaydi"), "br-rayhon": at("UNSET") },
       LOCATION: {
@@ -358,7 +358,7 @@ export const CONFIG_KEYS = [
     type: "minutes", unit: "min", built: false, adr: "ADR 0030 registry",
     settableAt: ["PLATFORM", "TENANT", "BRAND", "LOCATION"], explicitNullTerminates: false,
     levels: {
-      PLATFORM: at("SET", 40, "Qoida", "2025-11-04T09:00:00", "Platforma qiymati"),
+      PLATFORM: at("SET", 40, "HorecaOS", "2025-11-04T09:00:00", "Platforma qiymati"),
       TENANT: at("UNSET"),
       BRAND: { "br-osh": at("SET", 35, "Alisher Karimov", "2026-03-12T10:44:00", null), "br-rayhon": at("UNSET") },
       LOCATION: { "loc-chilonzor": at("SET", 30, "Alisher Karimov", "2026-08-04T12:10:00", null) },
@@ -371,7 +371,7 @@ export const CONFIG_KEYS = [
     type: "minutes", unit: "min", built: false, adr: "ADR 0030 registry",
     settableAt: ["PLATFORM", "TENANT", "BRAND", "LOCATION"], explicitNullTerminates: false,
     levels: {
-      PLATFORM: at("SET", 90, "Qoida", "2025-11-04T09:00:00", null),
+      PLATFORM: at("SET", 90, "HorecaOS", "2025-11-04T09:00:00", null),
       TENANT: at("SET", 75, "Alisher Karimov", "2026-03-12T10:45:00", null),
       BRAND: { "br-osh": at("UNSET"), "br-rayhon": at("UNSET") },
       LOCATION: {},
@@ -398,7 +398,7 @@ export const CONFIG_KEYS = [
     type: "time", built: false, adr: "ADR 0043 depends on it — a business day that crosses midnight is still an open question",
     settableAt: ["PLATFORM", "TENANT", "BRAND"], explicitNullTerminates: false,
     levels: {
-      PLATFORM: at("SET", "09:00", "Qoida", "2025-11-04T09:00:00", null),
+      PLATFORM: at("SET", "09:00", "HorecaOS", "2025-11-04T09:00:00", null),
       TENANT: at("UNSET"),
       BRAND: { "br-osh": at("UNSET"), "br-rayhon": at("UNSET") },
       LOCATION: {},
@@ -430,7 +430,7 @@ export const CONFIG_KEYS = [
     note: "MANUAL_REVIEW holds the cart for an operator to approve a manual fee with a reason, audited — choosing it creates work for the operations queue.",
     settableAt: ["PLATFORM", "TENANT", "BRAND", "LOCATION"], explicitNullTerminates: false,
     levels: {
-      PLATFORM: at("SET", "REJECT", "Qoida", "2025-11-04T09:00:00", null),
+      PLATFORM: at("SET", "REJECT", "HorecaOS", "2025-11-04T09:00:00", null),
       TENANT: at("SET", "OFFER_PICKUP", "Alisher Karimov", "2026-04-02T13:00:00", "Zonadan tashqarida olib ketishni taklif qilamiz"),
       BRAND: { "br-osh": at("UNSET"), "br-rayhon": at("SET", "MANUAL_REVIEW", "Ilhom Toshmatov", "2026-02-14T10:00:00", "Rayhon uzoq buyurtmalarni qo'lda ko'rib chiqadi") },
       LOCATION: {},
@@ -443,7 +443,7 @@ export const CONFIG_KEYS = [
     type: "boolean", built: false, adr: "ADR 0042",
     settableAt: ["PLATFORM", "TENANT", "BRAND", "LOCATION"], explicitNullTerminates: false,
     levels: {
-      PLATFORM: at("SET", false, "Qoida", "2025-11-04T09:00:00", null),
+      PLATFORM: at("SET", false, "HorecaOS", "2025-11-04T09:00:00", null),
       TENANT: at("UNSET"), BRAND: { "br-osh": at("UNSET"), "br-rayhon": at("UNSET") }, LOCATION: {},
     },
   },
@@ -454,7 +454,7 @@ export const CONFIG_KEYS = [
     type: "boolean", built: false, adr: "ADR 0030 key · ADR 0018 promotions",
     settableAt: ["PLATFORM", "TENANT", "BRAND"], explicitNullTerminates: false,
     levels: {
-      PLATFORM: at("SET", false, "Qoida", "2025-11-04T09:00:00", null),
+      PLATFORM: at("SET", false, "HorecaOS", "2025-11-04T09:00:00", null),
       TENANT: at("SET", true, "Alisher Karimov", "2026-06-18T17:22:00", "Call-markaz kompensatsiya bera oladi"),
       BRAND: { "br-osh": at("UNSET"), "br-rayhon": at("UNSET") }, LOCATION: {},
     },
@@ -466,7 +466,7 @@ export const CONFIG_KEYS = [
     type: "boolean", built: false, adr: "ADR 0039 — ordering.orders.cash_tendered_expected_minor",
     settableAt: ["PLATFORM", "TENANT", "BRAND"], explicitNullTerminates: false,
     levels: {
-      PLATFORM: at("SET", true, "Qoida", "2025-11-04T09:00:00", null),
+      PLATFORM: at("SET", true, "HorecaOS", "2025-11-04T09:00:00", null),
       TENANT: at("UNSET"), BRAND: { "br-osh": at("UNSET"), "br-rayhon": at("UNSET") }, LOCATION: {},
     },
   },
@@ -476,7 +476,7 @@ export const CONFIG_KEYS = [
     where: "Selling → Order policy", screen: "order-policy", card: "operator",
     type: "boolean", built: false, adr: "ADR 0039 — ordering.orders.callback_requested",
     settableAt: ["PLATFORM", "TENANT", "BRAND"], explicitNullTerminates: false,
-    levels: { PLATFORM: at("SET", false, "Qoida", "2025-11-04T09:00:00", null), TENANT: at("UNSET"), BRAND: {}, LOCATION: {} },
+    levels: { PLATFORM: at("SET", false, "HorecaOS", "2025-11-04T09:00:00", null), TENANT: at("UNSET"), BRAND: {}, LOCATION: {} },
   },
   {
     code: "notifications.quiet_hours_start_hour",
@@ -486,7 +486,7 @@ export const CONFIG_KEYS = [
     note: "explicitNullTerminates. «Quiet hours cleared for this brand» and «never set» are different facts and the resolver treats them differently.",
     settableAt: ["PLATFORM", "TENANT", "BRAND"], explicitNullTerminates: true,
     levels: {
-      PLATFORM: at("SET", 22, "Qoida", "2025-11-04T09:00:00", null),
+      PLATFORM: at("SET", 22, "HorecaOS", "2025-11-04T09:00:00", null),
       TENANT: at("SET", 23, "Alisher Karimov", "2026-01-08T08:30:00", null),
       BRAND: { "br-osh": at("NULLED", null, "Ilhom Toshmatov", "2026-02-27T21:44:00", "Tungi yetkazib berish — tinch soatlar kerak emas"), "br-rayhon": at("UNSET") },
       LOCATION: {},
@@ -500,7 +500,7 @@ export const CONFIG_KEYS = [
     note: "What a notification falls back to when the customer's preference is unknown (ADR 0020 resolution order).",
     settableAt: ["PLATFORM", "TENANT", "BRAND", "LOCATION"], explicitNullTerminates: false,
     levels: {
-      PLATFORM: at("SET", "uz", "Qoida", "2025-11-04T09:00:00", null),
+      PLATFORM: at("SET", "uz", "HorecaOS", "2025-11-04T09:00:00", null),
       TENANT: at("UNSET"),
       BRAND: { "br-osh": at("UNSET"), "br-rayhon": at("SET", "ru", "Ilhom Toshmatov", "2026-02-14T10:04:00", "Rayhon mijozlari ruscha yozadi") },
       LOCATION: {},
@@ -514,7 +514,7 @@ export const CONFIG_KEYS = [
     readonlyValue: "12%",
     settableAt: ["PLATFORM", "TENANT"], explicitNullTerminates: false,
     levels: {
-      PLATFORM: at("SET", "12%", "Qoida", "2025-11-04T09:00:00", null),
+      PLATFORM: at("SET", "12%", "HorecaOS", "2025-11-04T09:00:00", null),
       TENANT: at("UNSET"), BRAND: {}, LOCATION: {},
     },
   },
@@ -564,7 +564,7 @@ export const ACCEPTANCE_POLICY = {
     { version: 6, at: "2026-05-30T11:02:00", by: "Ilhom Toshmatov", reason: "Тайм-аут увеличен до 5 минут" },
     { version: 5, at: "2026-02-14T09:50:00", by: "Nodira Ismoilova", reason: "Обязательная причина отказа" },
   ],
-  /* Two fields Delever has, Qoida's document does not, and every tenant wants. */
+  /* Two fields Delever has, HorecaOS's document does not, and every tenant wants. */
   missing: [
     { field: "eligibleChannelIds", label: "Auto-accept only on these channels", adr: "ADR 0002 + ADR 0030", why: "Without it a tenant cannot say «auto-accept the bot, hand-check the aggregator»." },
     { field: "minimumPriorSuccessfulOrders", label: "Minimum prior successful orders", adr: "ADR 0002 + ADR 0030", why: "An anti-fraud gate, not a convenience. Cheap to add." },
@@ -634,7 +634,7 @@ export const SETTINGS_NAV = [
   {
     id: "g-connections", label: "Connections",
     screens: [
-      { id: "integrations", label: "Integrations", purpose: "Everything outside Qoida, and which connection is broken right now.", built: false, scope: "TENANT", adr: "10.8 · installations and bindings exist; the hub is not prototyped here" },
+      { id: "integrations", label: "Integrations", purpose: "Everything outside HorecaOS, and which connection is broken right now.", built: false, scope: "TENANT", adr: "10.8 · installations and bindings exist; the hub is not prototyped here" },
     ],
   },
   {

@@ -251,7 +251,7 @@ unreadable.
 ### Tab 2 — Варианты
 
 The variant is the priceable, sellable, stockable unit. The parent product is
-not sellable — this is Delever's Главный/Вариативный split and Qoida's schema
+not sellable — this is Delever's Главный/Вариативный split and HorecaOS's schema
 already agrees (`pricing.prices.priceable_type='VARIANT'`,
 `inventory.stock_items.variant_id`).
 
@@ -555,11 +555,11 @@ independent facts:
 - `price_on_channel` — resolvable **today** through
   `pricing.price_book_assignments` at `CHANNEL` scope, honouring the channel's
   `price_plane_channel_id` (the mechanism by which QR and kiosk take hall prices,
-  which Delever ships as a global switch and Qoida gets for free from the price
+  which Delever ships as a global switch and HorecaOS gets for free from the price
   plane pointer)
 
 **Separate these two.** Delever's menu conflates availability and price on one
-toggle, and the parity matrix's own open question asks whether Qoida should split
+toggle, and the parity matrix's own open question asks whether HorecaOS should split
 them. It should. A price of zero must mean "free", never "not sold" — the
 `ck_price_amount` constraint already treats zero as legitimate.
 
@@ -688,7 +688,7 @@ picture in the menu's shape, not alphabetically.
 ### The availability explainer
 
 A dish can be unbuyable for six independent reasons, and Delever offers no single
-place to see which. Qoida should beat it here (IA "where operations beats
+place to see which. HorecaOS should beat it here (IA "where operations beats
 Delever" §6). Tapping the row's info affordance opens a compact panel resolving,
 in order, exactly the projection ADR 0017 specifies:
 
@@ -831,7 +831,7 @@ and overlapping windows — renders as a red banner listing both.
 ### 4.8b Bulk price change (Delever's Прейскурант)
 
 Delever's `price-changer` is documented as **a single screen recording with zero
-prose**; the parity matrix flags the ambiguity and the IA answers it: Qoida
+prose**; the parity matrix flags the ambiguity and the IA answers it: HorecaOS
 builds a *bulk change tool* over a filtered selection, and the *named price list*
 half is already `pricing.price_books`. Both readings are served, neither is
 guessed at.
@@ -928,7 +928,7 @@ nobody builds a bare `fetch(url)`).
 
 Per-aggregator image variants and a per-asset content hash for downstream change
 detection — **ADR 0010**, both named in the parity matrix as the two refinements
-Delever proved useful and Qoida lacks.
+Delever proved useful and HorecaOS lacks.
 
 ---
 
@@ -1071,7 +1071,7 @@ Steps: **Файл** (dropzone; **Скачать шаблон** for create and up
 The dry run is not optional. The legacy dashboard already shipped it —
 `POST products/import-jobs/{mode}?dry_run=true` returning
 `{total_rows, success_rows, failed_rows, products_updated, variants_updated}` —
-and staff will expect it. Qoida keeps the summary and adds what the legacy lacked:
+and staff will expect it. HorecaOS keeps the summary and adds what the legacy lacked:
 **a row-level result table**. Per row: line number, the source values, the
 outcome (`Создан` / `Обновлён` / `Пропущен` / `Ошибка`), and for an error the
 stable code and the offending column. **Never a silent skip** — the IA names this
@@ -1093,7 +1093,7 @@ lossless. Export respects the active filter.
 mapping conflicts, versioned fields — and it is **not built**. The screen it
 implies:
 
-- **Соответствия** — a persistent mapping table of external id ↔ Qoida entity
+- **Соответствия** — a persistent mapping table of external id ↔ HorecaOS entity
   with `Связано` / `Не связано` / `Конфликт` states and manual pairing. This
   table is what makes a re-import idempotent, and Delever's absence of it is why
   its imports silently skip.
@@ -1232,23 +1232,23 @@ improvises one into the product editor as a free-text field.
 
 | Capability | Verdict |
 |---|---|
-| Two-layer model: tenant catalog + per-branch Menu bound to channels | **Match.** This is the correct shape and Qoida lacks the Menu entity. IA Part 5 §2. It is what copy-menu, bind-to-branch, per-channel price and per-item stock all hang off |
+| Two-layer model: tenant catalog + per-branch Menu bound to channels | **Match.** This is the correct shape and HorecaOS lacks the Menu entity. IA Part 5 §2. It is what copy-menu, bind-to-branch, per-channel price and per-item stock all hang off |
 | Per-channel price overrides, several planes simultaneously | **Match, and already better.** `price_book_assignments` at CHANNEL scope with `priority` and a `price_plane_channel_id` pointer is an open map keyed by channel id, which the matrix's own open question recommends over a fixed enum. Delever cannot say how many planes it has |
 | Stop-list operated from the kitchen, propagating to every channel | **Match exactly, including the labels** `Добавить в стоп (N)` / `Убрать со стопа (N)` / tabs `Доступные продукты` / `На стопе`. Staff migrating from Delever already read these |
 | Bulk ИКПУ / package-code editing | **Match.** 4.12. It is the daily reality of onboarding in this market |
 | Excel export and import with a photo-URL column | **Match, and beat** with a mandatory dry run and per-item outcome reporting. Delever skips unmapped rows silently |
-| Pre-publication validation with a downloadable deficiency report | **Match and beat.** Qoida's `CatalogValidator` already produces stable codes with entity paths; Delever's report is a text file. Qoida makes every finding clickable and shows findings *while editing* (4.2's readiness rail), not only at publish |
+| Pre-publication validation with a downloadable deficiency report | **Match and beat.** HorecaOS's `CatalogValidator` already produces stable codes with entity paths; Delever's report is a text file. HorecaOS makes every finding clickable and shows findings *while editing* (4.2's readiness rail), not only at publish |
 | Copy menu into another menu / branch | **Match** once the Menu entity exists. Explicitly the chain feature Delever's release notes call out |
 | Mass "enable for aggregator" at base price | **Match** once channel-item enablement exists. Onboarding a marketplace by toggling 600 items by hand is not a workflow |
 | Per-item sale schedule | **Match the capability, beat the design.** Named schedules assigned to many items, not a time field per menu row |
-| Product types Главный / Вариативный / Простой / Модификатор | **Match** — Qoida's product + variants + shared modifier groups expresses all four without a type enum. A "Простой" product is a product with one variant |
+| Product types Главный / Вариативный / Простой / Модификатор | **Match** — HorecaOS's product + variants + shared modifier groups expresses all four without a type enum. A "Простой" product is a product with one variant |
 | Combo (Комбо) with choice-sets and per-variant price maps | **Match later — ADR 0016, not built.** Real demand, real complexity; not pilot |
 | Hidden modifiers auto-selected by order type (packaging) | **Match later — ADR 0016.** Small, and it is how packaging charges reach the receipt |
 | Product physical/nutritional attributes, catchweight, splittable, portions | **Match later — ADR 0016.** `splittable` and marking interact (ADR 0038 forbids splittable on marked goods), so build them together |
 | Аggregator menu preview (mobile/desktop, per marketplace) | **Match later — ADR 0040** |
 | ABC-XYZ analysis, demand forecasting, holidays, kitchen buffer | **Later — ADR 0043.** Analytics, not catalog; and the forecast's 09:00→09:00 business day is a cross-cutting decision the reporting ADR owns |
 | Auto-add rules (plain, product-triggered, portion-band) | **Match later.** Portion-band is unimplementable without portions as a product attribute — ADR 0016 first |
-| **Skip: AI generation of ИКПУ / package code** | A wrong code is a tax classification error on a legal document, and generating it transfers that risk to Qoida invisibly. ADR 0038 permits assistive search with a human selecting. AI on descriptions is fine |
+| **Skip: AI generation of ИКПУ / package code** | A wrong code is a tax classification error on a legal document, and generating it transfers that risk to HorecaOS invisibly. ADR 0038 permits assistive search with a human selecting. AI on descriptions is fine |
 | **Skip: Рецепты and general editorial CMS** | Website-builder work, and Delever's static-page editor accepts raw HTML — an XSS surface pointed at the tenant's own customers |
 | **Skip: ingredient-level BOM and recipe costing** | Delever does not have it either; the matrix corrects the brief's assumption. Depletion lives in the POS |
 | **Skip: price 0 meaning "not sold"** | Delever's conflation of price and availability. Zero is a valid price for a free modifier; `ck_price_amount` already says so |
@@ -1267,11 +1267,11 @@ Read from `legacy-archive/qoida-dashboard/src` — `types/Product.ts`,
 | Legacy behaviour | Disposition |
 |---|---|
 | `name` and `description` as `{en, ru, uz}` objects, all required | **Keep.** `catalog.translations` with a per-locale row; the brand default is a publication blocker |
-| Product carries `category` (one) and `kitchen` (one) | **Keep the shape, extend it.** Qoida allows several categories via `category_products`. `kitchen` is the kitchen department — **not built, ADR 0016/0041** — and staff will look for it on the product form |
+| Product carries `category` (one) and `kitchen` (one) | **Keep the shape, extend it.** HorecaOS allows several categories via `category_products`. `kitchen` is the kitchen department — **not built, ADR 0016/0041** — and staff will look for it on the product form |
 | `image` as a single file uploaded multipart with the create/update call | **Change, and explain it.** ADR 0010's presign → upload → verify flow means the photo is uploaded separately and can be pending. The editor must show that state rather than pretending the old synchronous behaviour |
 | `status_id` on / off | **Keep as** `DRAFT` / `ACTIVE` / `ARCHIVED`. Two states were not enough to express "being built" |
 | `priority` (integer) for category order | **Keep the field, change the gesture.** Drag sets `sort_order`; the number stays editable for precision |
-| `time_enabled` + `start` + `finish` `HH:MM` per product | **Keep the capability.** This is per-item scheduling and staff already use it. Qoida models it as a named schedule (4.7) — **not built, ADR 0036** — and must not lose it |
+| `time_enabled` + `start` + `finish` `HH:MM` per product | **Keep the capability.** This is per-item scheduling and staff already use it. HorecaOS models it as a named schedule (4.7) — **not built, ADR 0036** — and must not lose it |
 | `stock_enabled` boolean per product | **Keep as** `inventory.stock_items.tracking_mode` (BINARY vs UNTRACKED) |
 | `has_discount` / `discount` / `discount_type` / `tag_discount` on the product row | **Do not carry over.** ADR 0018 owns discounts as priority-ranked rules with recorded sources; a discount column on the product is exactly the non-deterministic pricing that ADR replaces. Migration maps these to promotion rules |
 | Excel import with `dry_run` and a `{total_rows, success_rows, failed_rows, products_updated, variants_updated}` summary | **Keep, and extend** with per-row results. Staff already trust the dry run; taking it away would be a regression |

@@ -1,6 +1,6 @@
 /* Control-plane shell.
  *
- * This console belongs to the people who run Qoida as a business — account
+ * This console belongs to the people who run HorecaOS as a business — account
  * managers, finance, support, and whoever configures the platform. Its subject
  * is the customer: who they are, how they were brought on, what they pay, what
  * they use, and when they leave.
@@ -90,7 +90,7 @@ export default function App() {
         <div style={{ height: TOPBAR, display: "flex", alignItems: "center", padding: "0 16px", flexShrink: 0 }}>
           {/* No logo was provided; the wordmark stands in, per the design system. */}
           <span className="q-body-em" style={{ color: "#fff", letterSpacing: "0.16px" }}>
-            qoida<span style={{ color: blue }}>.</span>
+            horecaos<span style={{ color: blue }}>.</span>
           </span>
           <span className="q-caption" style={{ color: "var(--q-inverse-ink-muted)", marginLeft: 8 }}>
             control plane

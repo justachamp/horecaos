@@ -49,8 +49,8 @@ the target product; rows marked `DECIDE` block the affected cutover.
 | Legacy source | Target rule |
 |---|---|
 | `username` | Identity-link input only; immutable Keycloak subject is the final identity key. |
-| `password` | Import only through a separately approved Keycloak credential mechanism, otherwise invite/reset. Never store in Qoida. |
-| `role` | Map to Keycloak coarse role and/or Qoida location role grant after explicit review. |
+| `password` | Import only through a separately approved Keycloak credential mechanism, otherwise invite/reset. Never store in HorecaOS. |
+| `role` | Map to Keycloak coarse role and/or HorecaOS location role grant after explicit review. |
 | `access_token` | Never migrate. Require a new Keycloak session. |
 | `fcm_token`, device fields | Migrate into customer/staff device or notification registration only after ownership and consent validation. |
 | `last_login`, IP | Retain only when required by security/audit policy and normalize timestamps. |

@@ -20,9 +20,9 @@
 --
 -- An **attempt** is one try at one provider through one merchant account. It
 -- carries the identifiers that make an uncertain outcome resolvable — the id
--- Qoida minted before the mutating call, and the business date the resolver
+-- HorecaOS minted before the mutating call, and the business date the resolver
 -- needs as a path segment — and it carries the provider's own state verbatim,
--- beside Qoida's, never instead of it.
+-- beside HorecaOS's, never instead of it.
 --
 -- A **transaction** is what the provider says happened, appended once and never
 -- rewritten.
@@ -50,13 +50,13 @@
 -- Merchant bindings: the legal-entity dimension
 -- ---------------------------------------------------------------------------
 --
--- The restaurant's legal entity is the seller and the principal; Qoida is an
+-- The restaurant's legal entity is the seller and the principal; HorecaOS is an
 -- agent. That is not a preference, it is what the contracts force: neither
 -- provider accepts a fiscal identity as a per-request field. Payme derives the
 -- seller from the cashbox — its receipt carries a `merchant.organization`
 -- populated from the cashbox with nothing supplied by the request — and Click
--- derives it from `service_id` plus `merchant_user_id`. One Qoida account serving
--- many restaurants would name Qoida as the seller on every receipt it issued.
+-- derives it from `service_id` plus `merchant_user_id`. One HorecaOS account serving
+-- many restaurants would name HorecaOS as the seller on every receipt it issued.
 --
 -- So each legal entity holds its own Click service and its own Payme cashbox, and
 -- an ADR 0026 binding that is tenant-scoped and singular is wrong for payments.
@@ -108,7 +108,7 @@ CREATE TABLE payments.merchant_bindings (
     -- Declared facts the operations console renders, not runtime exceptions. On
     -- Click a reversal is an outbound call that may be refused; on Payme there is
     -- no outbound refund at all, because the cabinet's refund button calls
-    -- Qoida's CancelTransaction. An operator about to reject a paid order needs to
+    -- HorecaOS's CancelTransaction. An operator about to reject a paid order needs to
     -- be told which of those they are in before they reject it.
     supports_reversal boolean NOT NULL,
     supports_partner_fiscalization boolean NOT NULL,
@@ -137,14 +137,14 @@ CREATE TABLE payments.merchant_bindings (
         effective_until IS NULL OR effective_until > effective_from),
     CONSTRAINT ck_merchant_binding_version CHECK (version >= 1),
 
-    -- ADR 0028's reference format is `qoida:{environment}:{category}:{owner}:{id}`
+    -- ADR 0028's reference format is `horecaos:{environment}:{category}:{owner}:{id}`
     -- and the category for a merchant credential is `provider_payment`. The
     -- pattern is here so that a Payme 36-character cashbox key or a Click
     -- `secret_key` pasted into this column is refused by the database rather than
     -- by a code review. A credential in a column is a credential in every backup,
     -- every replica, and every support export of that backup.
     CONSTRAINT ck_merchant_binding_secret_is_a_reference CHECK (
-        secret_reference ~ '^qoida:[^:]+:provider_payment:[^:]+:[^:]+$'),
+        secret_reference ~ '^horecaos:[^:]+:provider_payment:[^:]+:[^:]+$'),
 
     CONSTRAINT ck_merchant_binding_callback_segment CHECK (
         callback_path_segment ~ '^[a-z0-9][a-z0-9-]{7,63}$')
@@ -179,13 +179,13 @@ COMMENT ON COLUMN payments.merchant_bindings.legal_entity_id IS
 COMMENT ON COLUMN payments.merchant_bindings.secret_reference IS
     'ADR 0028 reference, never a value. Rotation changes what is behind this string and never this string, so no row here is rewritten when a key rotates.';
 COMMENT ON COLUMN payments.merchant_bindings.supports_reversal IS
-    'ADR 0013 capability declaration. False on Payme: a refund is initiated in Payme cabinet and arrives inbound as CancelTransaction, which Qoida can only veto with -31007.';
+    'ADR 0013 capability declaration. False on Payme: a refund is initiated in Payme cabinet and arrives inbound as CancelTransaction, which HorecaOS can only veto with -31007.';
 
 -- ---------------------------------------------------------------------------
 -- Payment intents
 -- ---------------------------------------------------------------------------
 --
--- What the order needs, in Qoida's own terms. No provider vocabulary appears on
+-- What the order needs, in HorecaOS's own terms. No provider vocabulary appears on
 -- this table, and cash is a first-class tender here rather than the absence of
 -- one: the legacy `payment_methods` seeds cash enabled, so it is the majority
 -- tender in this market and an intent model that treats it as a gap would be
@@ -281,7 +281,7 @@ CREATE INDEX ix_payment_intents_open
     WHERE status IN ('PENDING', 'AUTHORIZING');
 
 COMMENT ON TABLE payments.payment_intents IS
-    'ADR 0013. What the order needs paid, in Qoida terms. An intent is not an attempt: it survives every attempt made against it.';
+    'ADR 0013. What the order needs paid, in HorecaOS terms. An intent is not an attempt: it survives every attempt made against it.';
 COMMENT ON COLUMN payments.payment_intents.requested_amount_minor IS
     'ADR 0018 minor units, which for UZS are whole som. Never tiyin. The multiplication by 100 lives in TiyinAmount.of(SomAmount) and nowhere else.';
 COMMENT ON COLUMN payments.payment_intents.tender_id IS
@@ -299,7 +299,7 @@ COMMENT ON COLUMN payments.payment_intents.capture_timing IS
 -- Two columns exist purely so that a lost response is resolvable, and both must
 -- be written **before** the mutating call rather than after it:
 --
---   `merchant_trans_id` is Qoida's own id. On Click it is the join key the
+--   `merchant_trans_id` is HorecaOS's own id. On Click it is the join key the
 --   callback carries and the only thing `status_by_mti` can be asked about;
 --   Click's MERCHANT API has no idempotency key on any call, so this is the
 --   entire recovery mechanism. On Payme it is the `account.order_id` the checkout
@@ -325,7 +325,7 @@ CREATE TABLE payments.payment_attempts (
 
     -- Click's `payment_id`, or Payme's 24-character transaction id. Identity runs
     -- in opposite directions on the two providers — Payme mints it and hands it
-    -- over, Click hands back an id derived from one Qoida minted — so this column
+    -- over, Click hands back an id derived from one HorecaOS minted — so this column
     -- is null until the provider has named something, and the port may not assume
     -- either direction.
     external_payment_id varchar(64),
@@ -342,12 +342,12 @@ CREATE TABLE payments.payment_attempts (
     presentation_kind varchar(24),
     presented_at timestamptz,
 
-    -- The provider's own vocabulary, verbatim, beside Qoida's state and never
+    -- The provider's own vocabulary, verbatim, beside HorecaOS's state and never
     -- instead of it. Payme's signed numeric state carries "cancelled" in its sign
     -- and how far the transaction got in its magnitude; Click has no equivalent,
     -- no expiry state, and no provider-side reservation state at all, so adopting
     -- either vocabulary would leave half of the other provider unrepresentable.
-    -- Stored as text because these are evidence, not enumerations Qoida owns.
+    -- Stored as text because these are evidence, not enumerations HorecaOS owns.
     provider_state varchar(32),
     provider_reason varchar(32),
     provider_state_recorded_at timestamptz,
@@ -472,13 +472,13 @@ CREATE INDEX ix_payment_attempts_intent
 COMMENT ON TABLE payments.payment_attempts IS
     'ADR 0013. One try at one provider through one merchant account. UNCERTAIN is a state with a resolver and a deadline, never a failure and never a reason to retry.';
 COMMENT ON COLUMN payments.payment_attempts.merchant_trans_id IS
-    'Qoida own identifier, minted and committed before any mutating provider call. Click join key and status_by_mti argument; Payme account.order_id. Opaque and non-sequential, because CheckPerformTransaction is unauthenticated from the customer side.';
+    'HorecaOS own identifier, minted and committed before any mutating provider call. Click join key and status_by_mti argument; Payme account.order_id. Opaque and non-sequential, because CheckPerformTransaction is unauthenticated from the customer side.';
 COMMENT ON COLUMN payments.payment_attempts.business_date IS
     'Snapshotted at initiation for Click status_by_mti trailing path segment, whose meaning and timezone Click does not document. A wrong date reads as no payment found, which is the answer that makes a retry look safe.';
 COMMENT ON COLUMN payments.payment_attempts.provider_state IS
-    'The provider own state verbatim: Payme signed numeric state as text, Click payment_status. Evidence beside the Qoida state and never the source of a transition.';
+    'The provider own state verbatim: Payme signed numeric state as text, Click payment_status. Evidence beside the HorecaOS state and never the source of a transition.';
 COMMENT ON COLUMN payments.payment_attempts.provider_created_at IS
-    'Payme params.time. The twelve-hour expiry is measured from this and never from Qoida own creation time; Payme own Java template gets this wrong.';
+    'Payme params.time. The twelve-hour expiry is measured from this and never from HorecaOS own creation time; Payme own Java template gets this wrong.';
 COMMENT ON COLUMN payments.payment_attempts.uncertain_resolver IS
     'Which named procedure settles this: Click status_by_mti then payment/status, or Payme CheckTransaction. OPERATIONS_EXCEPTION once the automated path has given up.';
 
@@ -508,7 +508,7 @@ CREATE TABLE payments.payment_transactions (
 
     -- Click's `click_trans_id` or Payme's `params.id`, and a locally minted
     -- `LOCAL:{uuid}` for the one transaction type no provider originates — an
-    -- expiry Qoida decided on its own, which Click is never told about because
+    -- expiry HorecaOS decided on its own, which Click is never told about because
     -- Click has no expiry state at all. NOT NULL so that the uniqueness below
     -- actually deduplicates: a nullable column would let every replay through.
     provider_reference varchar(128) NOT NULL,
@@ -517,7 +517,7 @@ CREATE TABLE payments.payment_transactions (
     provider_reason varchar(32),
 
     -- Two clocks, deliberately both kept. `occurred_at` is the provider's, and it
-    -- is what a settlement file will be matched against; `recorded_at` is Qoida's,
+    -- is what a settlement file will be matched against; `recorded_at` is HorecaOS's,
     -- and the gap between them is how a replayed callback is told apart from a
     -- second event.
     occurred_at timestamptz NOT NULL,
@@ -558,9 +558,9 @@ CREATE INDEX ix_payment_transactions_intent
 COMMENT ON TABLE payments.payment_transactions IS
     'ADR 0013. Append-only record of what a provider says happened. Never updated: the grant block withholds UPDATE and DELETE.';
 COMMENT ON COLUMN payments.payment_transactions.amount_minor IS
-    'ADR 0018 minor units, whole som. The value as Qoida understands it, never the tiyin figure that crossed the wire.';
+    'ADR 0018 minor units, whole som. The value as HorecaOS understands it, never the tiyin figure that crossed the wire.';
 COMMENT ON COLUMN payments.payment_transactions.provider_reference IS
-    'Click click_trans_id, Payme params.id, or LOCAL:{uuid} for a Qoida-decided expiry that no provider originated. Not null, because a nullable column would defeat the replay uniqueness.';
+    'Click click_trans_id, Payme params.id, or LOCAL:{uuid} for a HorecaOS-decided expiry that no provider originated. Not null, because a nullable column would defeat the replay uniqueness.';
 
 -- ---------------------------------------------------------------------------
 -- Provider callbacks
@@ -590,7 +590,7 @@ CREATE TABLE payments.provider_callbacks (
 
     attempt_id uuid,
 
-    -- What Qoida answered, in the provider's own vocabulary: `0`, `-4`, `-9`,
+    -- What HorecaOS answered, in the provider's own vocabulary: `0`, `-4`, `-9`,
     -- `-31008`, `-32504`. Recorded because both providers surface these in their
     -- support tooling and the argument about what was returned is otherwise
     -- unwinnable.
@@ -625,7 +625,7 @@ CREATE INDEX ix_provider_callbacks_attempt
     ON payments.provider_callbacks (tenant_id, attempt_id, received_at);
 
 -- The security signal. A burst of signature failures on one binding is either a
--- rotation Qoida missed or someone probing an endpoint whose only authentication
+-- rotation HorecaOS missed or someone probing an endpoint whose only authentication
 -- is an MD5 over a secret-prefixed concatenation.
 CREATE INDEX ix_provider_callbacks_signature_failures
     ON payments.provider_callbacks (tenant_id, merchant_binding_id, received_at DESC)
@@ -681,7 +681,7 @@ CREATE TABLE payments.fiscal_documents (
     -- Both providers return the same underlying object; Click packs it into one
     -- ofd.soliq.uz URL and Payme returns named fields plus a URL. The adapter
     -- parses Click's URL into these columns and stores both, because a URL points
-    -- at a service Qoida does not run and an evidence record that is only a dead
+    -- at a service HorecaOS does not run and an evidence record that is only a dead
     -- link is not evidence.
     external_receipt_id varchar(64),
     fiscal_sign varchar(64),
@@ -786,7 +786,7 @@ COMMENT ON COLUMN payments.fiscal_documents.status IS
 COMMENT ON COLUMN payments.fiscal_documents.reason_code IS
     'Why this document is in this status. CASH_TENDER_NO_PROVIDER_FISCALIZATION for a cash order; PARTNER_FISCALIZED once a provider has issued.';
 COMMENT ON COLUMN payments.fiscal_documents.fiscal_sign IS
-    'The identifier the tax authority recognises. Click returns it inside the QR URL as &s=; Payme returns it as a named field. Parsed into a column either way, because a URL is a pointer to a service Qoida does not run.';
+    'The identifier the tax authority recognises. Click returns it inside the QR URL as &s=; Payme returns it as a named field. Parsed into a column either way, because a URL is a pointer to a service HorecaOS does not run.';
 COMMENT ON COLUMN payments.fiscal_documents.corrects_document_id IS
     'A Payme CANCEL produces a second document of type REFUND linked here. Never an update of the sale row: overwriting it destroys the only record that the sale was fiscalized.';
 
@@ -798,10 +798,10 @@ COMMENT ON COLUMN payments.fiscal_documents.corrects_document_id IS
 -- They are the financial and evidentiary record, and withholding UPDATE at the
 -- grant is a stronger statement than a comment saying they are append-only —
 -- a mistaken UPDATE fails at the database rather than in review.
-GRANT USAGE ON SCHEMA payments TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON payments.merchant_bindings TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON payments.payment_intents TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON payments.payment_attempts TO qoida_application;
-GRANT SELECT, INSERT ON payments.payment_transactions TO qoida_application;
-GRANT SELECT, INSERT ON payments.provider_callbacks TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON payments.fiscal_documents TO qoida_application;
+GRANT USAGE ON SCHEMA payments TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON payments.merchant_bindings TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON payments.payment_intents TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON payments.payment_attempts TO horecaos_application;
+GRANT SELECT, INSERT ON payments.payment_transactions TO horecaos_application;
+GRANT SELECT, INSERT ON payments.provider_callbacks TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON payments.fiscal_documents TO horecaos_application;

@@ -3,7 +3,7 @@
 # The single most important difference from `compose.yaml` is that this is not
 # dev mode. Dev mode holds everything in memory behind a fixed root token that is
 # printed to the log; production starts sealed, and the unseal key shares are the
-# only thing standing between someone with the disk and every credential Qoida
+# only thing standing between someone with the disk and every credential HorecaOS
 # owns. Those shares are never on this machine.
 
 # Raft rather than the file backend, for one operational reason: raft supports
@@ -13,7 +13,7 @@
 # backup ends up half-written.
 storage "raft" {
   path    = "/openbao/file"
-  node_id = "qoida-colo-1"
+  node_id = "horecaos-colo-1"
 }
 
 # TLS is terminated at the edge and this listener is reachable only from the

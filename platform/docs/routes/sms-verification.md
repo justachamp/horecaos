@@ -16,7 +16,7 @@ that one wins.
 | Source | `direct:sms.verification.send`; the resolver is entered at `direct:sms.verification.search` |
 | Destination | `smsgw.vas.uz/api/v2` over HTTPS — `POST /send` and `POST /search` — selected by the ADR 0026 binding that holds `SEND_SMS` **and** declares `provider_type = SMSGW_VAS` |
 | Service identity | The tenant's own partner account on the gateway: `login` from ADR 0026 configuration, `key` from ADR 0028. There is no service account and no token exchange; the credential travels in the body of every request |
-| Secret reference type | `qoida:{env}:provider_notification:{owner}:{id}` (ADR 0028), resolved at call time, refreshed once past the cache on `13 wrong key` |
+| Secret reference type | `horecaos:{env}:provider_notification:{owner}:{id}` (ADR 0028), resolved at call time, refreshed once past the cache on `13 wrong key` |
 | Connect timeout | 5s (`ProviderHttpClient`). A connect-phase failure is the only one that proves nothing left this process |
 | Total timeout | 15s per call, applied to the whole exchange including the body, and used for both operations. The provider documents no timeout and does not say whether a request that times out was accepted, which is why the uncertain path below is real rather than theoretical |
 | Retry classification | **None on the send, ever.** `/send` has no idempotency key, so a redelivery is a second SMS to a real person. The one exception is a `13 wrong key`, which is the provider answering *instead of* sending, and which is retried exactly once after a fresh ADR 0028 read. `sms.verification.search.v1` retries twice at 1s doubling, because a search creates nothing. `1 spam` and `27 server side error` are classified but **not** retried on a timer here — see the outcome table |
@@ -27,7 +27,7 @@ that one wins.
 | Expected volume | Pilot: under 2,000 codes/day/tenant, bounded above by five per destination per hour and six issuances per caller per minute |
 | SLO | p95 under 3s for a send, under 2s for a search. A customer is looking at a form while this runs |
 | Runbook | `docs/routes/sms-verification.md#runbook` |
-| Dashboard | Metric `qoida.sms.verification.calls`, tagged `step` (`send`, `resolve`, `dead_letter`), `status`, `reason` — all three bounded by the enums that produce them |
+| Dashboard | Metric `horecaos.sms.verification.calls`, tagged `step` (`send`, `resolve`, `dead_letter`), `status`, `reason` — all three bounded by the enums that produce them |
 
 ## Why there is no retry and what replaces it
 
@@ -106,7 +106,7 @@ Provider codes are in `docs/providers/sms-gateway-vas.md`; the mapping lives in
 
 **Every code for one tenant fails, others are fine.** This route has no circuit
 breaker by design, so an outage here is per binding. Look at the `reason` tag on
-`qoida.sms.verification.calls`. `SMS_ACCOUNT_MISCONFIGURED`,
+`horecaos.sms.verification.calls`. `SMS_ACCOUNT_MISCONFIGURED`,
 `SMS_SENDER_NOT_REGISTERED` and `SMS_PROVIDER_UNSUPPORTED` are all ADR 0026
 configuration on that tenant's installation or binding; `PROVIDER_AUTHENTICATION`
 is the credential.

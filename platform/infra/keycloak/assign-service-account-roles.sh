@@ -8,10 +8,10 @@
 
 set -euo pipefail
 
-KEYCLOAK_URL="${QOIDA_KEYCLOAK_URL:-http://localhost:8081}"
-REALM="${QOIDA_KEYCLOAK_REALM:-qoida}"
-ADMIN_USER="${QOIDA_KEYCLOAK_ADMIN:-admin}"
-ADMIN_PASSWORD="${QOIDA_KEYCLOAK_ADMIN_PASSWORD:-admin}"
+KEYCLOAK_URL="${HORECAOS_KEYCLOAK_URL:-http://localhost:8081}"
+REALM="${HORECAOS_KEYCLOAK_REALM:-horecaos}"
+ADMIN_USER="${HORECAOS_KEYCLOAK_ADMIN:-admin}"
+ADMIN_PASSWORD="${HORECAOS_KEYCLOAK_ADMIN_PASSWORD:-admin}"
 
 # Verified against Keycloak 26.7. Deliberately excludes manage-realm,
 # realm-admin, manage-clients, and impersonation.
@@ -20,7 +20,7 @@ READER_ROLES="view-organizations,query-organizations,view-users,query-users"
 
 # The placeholder the realm file falls back to when the environment does not
 # supply a secret. Anything starting with this is a value that is in the
-# repository, and `qoida-provisioning` holds manage-users — so a repository
+# repository, and `horecaos-provisioning` holds manage-users — so a repository
 # secret on that client is realm-wide user administration for anyone with a
 # checkout.
 DEV_SECRET_PREFIX="development-only-not-a-secret"
@@ -28,7 +28,7 @@ DEV_SECRET_PREFIX="development-only-not-a-secret"
 # Set to 1 wherever the realm is not a laptop. The check below then refuses to
 # report success while either service account is still on a value that came out
 # of git. docs/runbooks/deploy.md sets it during the bootstrap.
-REQUIRE_ROTATED="${QOIDA_KEYCLOAK_REQUIRE_ROTATED_SECRETS:-0}"
+REQUIRE_ROTATED="${HORECAOS_KEYCLOAK_REQUIRE_ROTATED_SECRETS:-0}"
 unrotated=0
 
 token() {
@@ -84,7 +84,7 @@ print(json.dumps([{'id': available[n]['id'], 'name': n} for n in sorted(wanted)]
   secret="$(api "${KEYCLOAK_URL}/admin/realms/${REALM}/clients/${cid}/client-secret" \
     | python3 -c "import sys,json; print(json.load(sys.stdin).get('value',''))")"
   case "${secret}" in
-    "${DEV_SECRET_PREFIX}"*|'${QOIDA_KEYCLOAK'*)
+    "${DEV_SECRET_PREFIX}"*|'${HORECAOS_KEYCLOAK'*)
       echo "!!  ${client_id} is still using the secret from the import file." >&2
       unrotated=1
       ;;
@@ -92,18 +92,18 @@ print(json.dumps([{'id': available[n]['id'], 'name': n} for n in sorted(wanted)]
 }
 
 echo "==> Assigning ADR 0009 service-account roles in realm ${REALM}"
-assign qoida-provisioning "${PROVISIONING_ROLES}"
-assign qoida-identity-reader "${READER_ROLES}"
+assign horecaos-provisioning "${PROVISIONING_ROLES}"
+assign horecaos-identity-reader "${READER_ROLES}"
 
 if [ "${unrotated}" -eq 1 ]; then
   if [ "${REQUIRE_ROTATED}" = "1" ]; then
     echo "!! Refusing to report success: a service account is on a secret that is in
-   the repository, and qoida-provisioning can create users with it. Rotate both,
+   the repository, and horecaos-provisioning can create users with it. Rotate both,
    store the new values in OpenBao under identity_admin, and re-run.
    docs/runbooks/deploy.md, 'Rotate the service-account secrets'." >&2
     exit 1
   fi
-  echo "    (expected on a local realm; set QOIDA_KEYCLOAK_REQUIRE_ROTATED_SECRETS=1 anywhere else)"
+  echo "    (expected on a local realm; set HORECAOS_KEYCLOAK_REQUIRE_ROTATED_SECRETS=1 anywhere else)"
 fi
 
 echo "==> Done"

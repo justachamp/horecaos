@@ -47,7 +47,7 @@ dist/
 # gitlink with no matching `.gitmodules` entry, and a clone of this repository
 # would then fail to resolve a submodule that has no URL.
 #
-# Once the four remotes exist under the qoida-one organisation, remove these
+# Once the four remotes exist under the horecaos-one organisation, remove these
 # lines and run the commands in frontend/README.md. Nothing else changes; the
 # repositories and their histories are already correct.
 /frontend/control-plane/

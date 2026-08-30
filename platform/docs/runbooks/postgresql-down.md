@@ -2,17 +2,17 @@
 
 **Night alert.** **Last executed:** never — this is a draft.
 
-Everything assumes you are on the production host in `/opt/qoida/qoida-platform`
+Everything assumes you are on the production host in `/opt/horecaos/horecaos-platform`
 as root, with:
 
 ```bash
-alias qc='docker compose -f compose.production.yaml --env-file /etc/qoida/production.env'
+alias qc='docker compose -f compose.production.yaml --env-file /etc/horecaos/production.env'
 ```
 
 ## 1. Is it actually down, or is it full?
 
 ```bash
-qc ps platform-db && df -h / && qc exec -T platform-db pg_isready -U qoida_migrator -d qoida
+qc ps platform-db && df -h / && qc exec -T platform-db pg_isready -U horecaos_migrator -d horecaos
 ```
 
 **Check:** `df` first. A data volume at 100% presents as PostgreSQL refusing
@@ -41,7 +41,7 @@ answers.
 ## 3. If the container is not running at all
 
 ```bash
-qc up -d platform-db && sleep 20 && qc exec -T platform-db pg_isready -U qoida_migrator -d qoida
+qc up -d platform-db && sleep 20 && qc exec -T platform-db pg_isready -U horecaos_migrator -d horecaos
 ```
 
 **Check:** `accepting connections`. If it comes up and stays up, the application

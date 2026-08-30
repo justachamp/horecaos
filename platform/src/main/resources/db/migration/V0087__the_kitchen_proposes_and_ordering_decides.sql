@@ -89,7 +89,7 @@ CREATE INDEX ix_order_progress_proposals_order
 COMMENT ON TABLE ordering.order_progress_proposals IS
     'ADR 0041 / ADR 0019. Every transition the kitchen proposed and what ordering did with it. Carries no dish, customer, address or note: a proposal is a ticket id, an order id and a status.';
 
-GRANT SELECT, INSERT, UPDATE ON ordering.order_progress_proposals TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON ordering.order_progress_proposals TO horecaos_application;
 
 -- ------------------------------------------------- 3. the ticket-event trigger
 

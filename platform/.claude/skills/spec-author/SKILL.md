@@ -1,6 +1,6 @@
 ---
 name: spec-author
-description: Use when turning an intent.md into a spec.md for Qoida Platform — stage 2 of the AI-native SDLC. Invoked by the /spec command and by the sdlc-spec CI workflow on a merged intent.
+description: Use when turning an intent.md into a spec.md for HorecaOS Platform — stage 2 of the AI-native SDLC. Invoked by the /spec command and by the sdlc-spec CI workflow on a merged intent.
 ---
 
 # Authoring a spec

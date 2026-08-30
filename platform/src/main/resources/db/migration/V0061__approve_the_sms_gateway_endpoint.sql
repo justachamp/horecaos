@@ -19,7 +19,7 @@
 -- exists, so the read path parses it. The base URL satisfies
 -- ck_provider_environment_url. No table is created here, so no new GRANT is due:
 -- V0035 granted SELECT — and only SELECT — on integration.provider_environments
--- to qoida_application, which is exactly what the join above needs, and V0036
+-- to horecaos_application, which is exactly what the join above needs, and V0036
 -- re-granted USAGE on the schema.
 --
 -- -------------------------------------------------------------- one row, not two

@@ -158,7 +158,7 @@ $$;
 -- default is a setting an installation is entitled to revoke. The privilege this
 -- application needs is stated rather than inherited.
 GRANT EXECUTE ON FUNCTION tenant.current_customer_identity_policy(uuid, timestamptz)
-    TO qoida_application;
+    TO horecaos_application;
 
 COMMENT ON FUNCTION tenant.current_customer_identity_policy(uuid, timestamptz) IS
     'ADR 0015. The tenant.customer_identity_policies row in effect for a tenant at an instant: effective_from has passed and superseded_at has not. The single definition of "current" -- customers and tenancy both read through it so the rule cannot exist in two versions. Returns no row for a tenant that has configured nothing; the caller applies the TENANT_SHARED default.';

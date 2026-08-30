@@ -17,13 +17,13 @@
 
 set -euo pipefail
 
-KEYCLOAK_URL="${QOIDA_KEYCLOAK_URL:-http://localhost:8081}"
-REALM="${QOIDA_KEYCLOAK_REALM:-qoida}"
-ADMIN_USER="${QOIDA_KEYCLOAK_ADMIN:-admin}"
-ADMIN_PASSWORD="${QOIDA_KEYCLOAK_ADMIN_PASSWORD:-admin}"
+KEYCLOAK_URL="${HORECAOS_KEYCLOAK_URL:-http://localhost:8081}"
+REALM="${HORECAOS_KEYCLOAK_REALM:-horecaos}"
+ADMIN_USER="${HORECAOS_KEYCLOAK_ADMIN:-admin}"
+ADMIN_PASSWORD="${HORECAOS_KEYCLOAK_ADMIN_PASSWORD:-admin}"
 
-CLIENT_ID="qoida-local-web"
-REDIRECT_URI="${QOIDA_LOCAL_WEB_REDIRECT_URI:-http://localhost:5173/*}"
+CLIENT_ID="horecaos-local-web"
+REDIRECT_URI="${HORECAOS_LOCAL_WEB_REDIRECT_URI:-http://localhost:5173/*}"
 WEB_ORIGIN="${REDIRECT_URI%/\*}"
 
 # The guard, and the reason this file exists. A hostname check rather than a
@@ -59,7 +59,7 @@ payload="$(python3 -c "
 import json, sys
 print(json.dumps({
     'clientId': '${CLIENT_ID}',
-    'name': 'Qoida Local Web Development',
+    'name': 'HorecaOS Local Web Development',
     'description': 'Local development only. Created by infra/keycloak/create-local-web-client.sh; never import this into a real realm.',
     'enabled': True,
     'protocol': 'openid-connect',
@@ -73,12 +73,12 @@ print(json.dumps({
     'attributes': {'pkce.code.challenge.method': 'S256'},
     'optionalClientScopes': ['organization'],
     'protocolMappers': [{
-        'name': 'qoida-api-audience',
+        'name': 'horecaos-api-audience',
         'protocol': 'openid-connect',
         'protocolMapper': 'oidc-audience-mapper',
         'consentRequired': False,
         'config': {
-            'included.client.audience': 'qoida-api',
+            'included.client.audience': 'horecaos-api',
             'id.token.claim': 'false',
             'access.token.claim': 'true',
         },

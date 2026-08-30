@@ -34,16 +34,16 @@ BEGIN
                  -- touches them directly.
                  'topology', 'tiger', 'tiger_data')
              AND NOT has_table_privilege(
-                     'qoida_application',
+                     'horecaos_application',
                      quote_ident(t.table_schema) || '.' || quote_ident(t.table_name),
                      'SELECT')
       ) gaps;
 
     IF missing_count > 0 THEN
-        RAISE EXCEPTION E'% table(s) exist that qoida_application cannot read:\n  %\n\nThe GRANT belongs in the migration that created the table, or in a new forward migration where that one cannot be edited. Never run it by hand on the server: grants live with the objects, and the next restore drops it.',
+        RAISE EXCEPTION E'% table(s) exist that horecaos_application cannot read:\n  %\n\nThe GRANT belongs in the migration that created the table, or in a new forward migration where that one cannot be edited. Never run it by hand on the server: grants live with the objects, and the next restore drops it.',
             missing_count, missing;
     END IF;
 
-    RAISE NOTICE 'grant audit: qoida_application can read every table';
+    RAISE NOTICE 'grant audit: horecaos_application can read every table';
 END
 $$;

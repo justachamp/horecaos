@@ -1,7 +1,7 @@
 -- The grants nine earlier migrations never made.
 --
--- In production the application connects as `qoida_app`: a login role that owns
--- nothing and inherits only the NOLOGIN group role `qoida_application`, so it
+-- In production the application connects as `horecaos_app`: a login role that owns
+-- nothing and inherits only the NOLOGIN group role `horecaos_application`, so it
 -- reaches exactly the objects a migration has named and nothing else. In
 -- development it connects as the owner, where every grant is redundant. A
 -- missing GRANT is therefore invisible until the first production start, and the
@@ -20,7 +20,7 @@
 -- and deletes — declined to make the judgement on purpose, because a judgement
 -- about a table belongs beside the table. This is where it belongs, and it is
 -- made against two things: the SQL the repositories under
--- src/main/java/uz/qoida/platform issue, and the lifecycle each table's own
+-- src/main/java/uz/horecaos/platform issue, and the lifecycle each table's own
 -- columns describe. The reasoning for every narrowing is recorded after the
 -- grants.
 
@@ -45,9 +45,9 @@ COMMENT ON TABLE tenant.onboarding_steps IS
 -- No migration has ever granted USAGE on these three, so every table inside them
 -- was unreachable twice over. tenant and reporting have it from V0020 and V0031,
 -- which is why only the tables listed below were missing there.
-GRANT USAGE ON SCHEMA iam TO qoida_application;
-GRANT USAGE ON SCHEMA integration TO qoida_application;
-GRANT USAGE ON SCHEMA platform TO qoida_application;
+GRANT USAGE ON SCHEMA iam TO horecaos_application;
+GRANT USAGE ON SCHEMA integration TO horecaos_application;
+GRANT USAGE ON SCHEMA platform TO horecaos_application;
 
 -- The stopgap granted all four privileges on every table below, and production
 -- has been running with it applied since 2026-08-23. Revoking first is what
@@ -80,49 +80,49 @@ REVOKE ALL ON
     tenant.readiness_checks,
     platform.idempotency_records,
     reporting.tenant_summaries
-    FROM qoida_application;
+    FROM horecaos_application;
 
 -- V0003 create_tenancy_and_acceptance_policy
-GRANT SELECT, INSERT, UPDATE ON tenant.tenants TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON tenant.brands TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON tenant.locations TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON tenant.customer_identity_policies TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON tenant.tenants TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON tenant.brands TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON tenant.locations TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON tenant.customer_identity_policies TO horecaos_application;
 
 -- V0004 create_transactional_outbox
-GRANT SELECT, INSERT, UPDATE ON integration.outbox_events TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON integration.outbox_events TO horecaos_application;
 
 -- V0005 create_configuration_and_policies
-GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.configuration_values TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON tenant.policies TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.policy_current TO qoida_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.configuration_values TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON tenant.policies TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.policy_current TO horecaos_application;
 
 -- V0006 create_idempotency_records
-GRANT SELECT, INSERT, UPDATE, DELETE ON platform.idempotency_records TO qoida_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON platform.idempotency_records TO horecaos_application;
 
 -- V0008 create_authorization_grants
-GRANT SELECT, INSERT, UPDATE ON iam.roles TO qoida_application;
-GRANT SELECT, INSERT, DELETE ON iam.role_capabilities TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON iam.grants TO qoida_application;
-GRANT SELECT, INSERT, DELETE ON iam.capability_registry_snapshot TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON iam.roles TO horecaos_application;
+GRANT SELECT, INSERT, DELETE ON iam.role_capabilities TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON iam.grants TO horecaos_application;
+GRANT SELECT, INSERT, DELETE ON iam.capability_registry_snapshot TO horecaos_application;
 
 -- V0009 create_inbox_messages
-GRANT SELECT, INSERT, UPDATE ON integration.inbox_messages TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON integration.inbox_messages TO horecaos_application;
 
 -- V0011 create_tenant_summary_read_model
-GRANT SELECT, INSERT, UPDATE ON reporting.tenant_summaries TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON reporting.tenant_summaries TO horecaos_application;
 
 -- V0013 create_provider_installations
-GRANT SELECT ON integration.provider_environments TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON integration.installations TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON integration.bindings TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON integration.binding_capabilities TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON integration.provider_entity_mappings TO qoida_application;
+GRANT SELECT ON integration.provider_environments TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON integration.installations TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON integration.bindings TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON integration.binding_capabilities TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON integration.provider_entity_mappings TO horecaos_application;
 
 -- V0014 create_onboarding_workflow
-GRANT SELECT, INSERT, UPDATE ON tenant.onboarding_templates TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON tenant.onboarding_runs TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON tenant.onboarding_steps TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON tenant.readiness_checks TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON tenant.onboarding_templates TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON tenant.onboarding_runs TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON tenant.onboarding_steps TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON tenant.readiness_checks TO horecaos_application;
 
 -- The grants above are deliberately uneven, and the unevenness is the point. The
 -- default is SELECT, INSERT, UPDATE, and eighteen of these twenty-four tables

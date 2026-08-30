@@ -11,7 +11,7 @@ capability, and every one of them is a customer action that did not happen.
 ## 1. Who owns it right now?
 
 ```bash
-qc exec -T platform-db psql -U qoida_migrator -d qoida -c \
+qc exec -T platform-db psql -U horecaos_migrator -d horecaos -c \
   "SELECT capability, state, write_mode, read_mode, state_entered_at, tenant_id, brand_id, location_id
      FROM migration.scopes ORDER BY capability, state_entered_at DESC"
 ```
@@ -38,7 +38,7 @@ whole programme exists to prevent. Send the traffic back to the owner instead.
 ## 3. `BLOCKED_RECONCILIATION`
 
 ```bash
-qc exec -T platform-db psql -U qoida_migrator -d qoida -c \
+qc exec -T platform-db psql -U horecaos_migrator -d horecaos -c \
   "SELECT id, scope_id, status, severity, detected_at, summary
      FROM migration.reconciliation_results
      WHERE status <> 'PASSED' ORDER BY detected_at DESC LIMIT 20"

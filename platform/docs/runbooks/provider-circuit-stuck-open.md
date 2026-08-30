@@ -12,11 +12,11 @@ while it stays that way, and the action is commercial rather than technical.
 
 ```bash
 qc exec -T platform-app wget -q -O - http://127.0.0.1:8080/actuator/prometheus \
-  | grep qoida_provider_circuit
+  | grep horecaos_provider_circuit
 ```
 
-**Check:** `qoida_provider_circuit_open_duration_seconds` names the provider and
-how long it has been open. `qoida_provider_circuit_state` reads 2 for open and 1
+**Check:** `horecaos_provider_circuit_open_duration_seconds` names the provider and
+how long it has been open. `horecaos_provider_circuit_state` reads 2 for open and 1
 for half open — half open means it is already probing its way back.
 
 ## 2. Is it them or is it us?

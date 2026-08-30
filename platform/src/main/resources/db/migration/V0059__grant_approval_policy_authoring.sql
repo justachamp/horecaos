@@ -31,10 +31,10 @@
 -- Ordering matters: revoking a privilege at table level also revokes every
 -- column-level grant of that privilege, so the REVOKE comes first.
 
-REVOKE UPDATE, DELETE, TRUNCATE ON audit.approval_policies FROM qoida_application;
+REVOKE UPDATE, DELETE, TRUNCATE ON audit.approval_policies FROM horecaos_application;
 
-GRANT INSERT ON audit.approval_policies TO qoida_application;
-GRANT UPDATE (valid_until) ON audit.approval_policies TO qoida_application;
+GRANT INSERT ON audit.approval_policies TO horecaos_application;
+GRANT UPDATE (valid_until) ON audit.approval_policies TO horecaos_application;
 
 COMMENT ON TABLE audit.approval_policies IS
     'ADR 0027 maker-checker thresholds, authored through the control plane under approval.policy.manage. Append-only apart from valid_until: a change is a new version row, and closing a version''s window is how one is retired.';

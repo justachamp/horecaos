@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.qoida.uz/events/ordering.events/OrderRejected.v1.schema.json",
+  "$id": "https://contracts.horecaos.uz/events/ordering.events/OrderRejected.v1.schema.json",
   "title": "OrderRejected v1 payload",
   "description": "The restaurant declined. reasonCode is a stable code and never free text: a typed reason would be personal data on a topic and untranslatable in the customer's app.",
   "type": "object",
@@ -12,7 +12,7 @@
     "locationId": { "type": ["string", "null"], "format": "uuid" },
     "decisionChannel": {
       "type": ["string", "null"],
-      "enum": ["QOIDA_OPERATIONS", "POS", "SYSTEM_TIMEOUT", null]
+      "enum": ["HORECAOS_OPERATIONS", "POS", "SYSTEM_TIMEOUT", null]
     },
     "reasonCode": { "type": ["string", "null"], "maxLength": 64 },
     "status": {

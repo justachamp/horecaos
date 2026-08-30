@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.qoida.uz/events/ordering.events/OrderConfirmed.v1.schema.json",
+  "$id": "https://contracts.horecaos.uz/events/ordering.events/OrderConfirmed.v1.schema.json",
   "title": "OrderConfirmed v1 payload",
   "description": "The commercial commitment. The fact the customer is told about and the fact the inventory process commits a reservation on. POS export never gates it.",
   "type": "object",
@@ -16,7 +16,7 @@
     },
     "decisionChannel": {
       "type": ["string", "null"],
-      "enum": ["QOIDA_OPERATIONS", "POS", "SYSTEM_TIMEOUT", null]
+      "enum": ["HORECAOS_OPERATIONS", "POS", "SYSTEM_TIMEOUT", null]
     },
     "confirmedAt": { "type": "string", "format": "date-time" },
     "currency": { "type": ["string", "null"], "pattern": "^[A-Z]{3}$" },

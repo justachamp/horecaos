@@ -8,7 +8,7 @@
 # token. Rather than giving the backup its own long-lived credential — a second
 # thing to rotate and a second thing to leak — it borrows the agent's, which is
 # mounted read-only at /run/bao/token and is renewed continuously. The agent's
-# policy is read-only over `qoida/production/*`, which is exactly and only what
+# policy is read-only over `horecaos/production/*`, which is exactly and only what
 # this needs.
 #
 # If the agent is not running, this fails, and so does the backup, and the
@@ -18,9 +18,9 @@
 
 set -euo pipefail
 
-TOKEN_FILE="${QOIDA_BAO_TOKEN_FILE:-/run/bao/token}"
+TOKEN_FILE="${HORECAOS_BAO_TOKEN_FILE:-/run/bao/token}"
 BAO_ADDR="${BAO_ADDR:-http://openbao:8200}"
-MOUNT="${QOIDA_OPENBAO_MOUNT:-qoida}"
+MOUNT="${HORECAOS_OPENBAO_MOUNT:-horecaos}"
 
 path="${1:?usage: bao-get.sh <environment>/<category>/<owner>/<id>}"
 

@@ -1,4 +1,4 @@
-/* Staff and access — Qoida's own people, and what they did.
+/* Staff and access — HorecaOS's own people, and what they did.
  *
  * Two tables that are really one subject. The top table is who holds an account
  * and how far it reaches; the bottom one is what those accounts actually did to
@@ -150,7 +150,7 @@ export default function Staff({}) {
         <div style={{ minWidth: 0 }}>
           <h1 className="q-title" style={{ margin: 0, color: ink }}>Staff and access</h1>
           <p className="q-body-sm" style={{ margin: "4px 0 0", color: inkMuted, maxWidth: 720 }}>
-            Everyone at Qoida who can open a customer's account, how far their access
+            Everyone at HorecaOS who can open a customer's account, how far their access
             reaches, and what they have done with it. Customers' own staff are not
             here — they are managed inside their tenant.
           </p>
@@ -396,7 +396,7 @@ export default function Staff({}) {
 
       <div className="q-caption" style={{ color: inkSubtle, borderTop: `1px solid ${hairline}`, paddingTop: 12 }}>
         Prototype screen. Accounts and activity come from fixtures. Retention, export
-        of the record, and who outside Qoida may read it are not designed yet.
+        of the record, and who outside HorecaOS may read it are not designed yet.
       </div>
     </div>
   );

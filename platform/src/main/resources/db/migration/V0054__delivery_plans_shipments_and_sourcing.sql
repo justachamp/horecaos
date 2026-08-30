@@ -204,7 +204,7 @@ CREATE INDEX ix_shipment_courier_open
 -- Neither verified partner returns a redeemable quote object, so
 -- external_quote_id and the partner's own expiry are nullable and
 -- quote_validity_source records whether expires_at came from the partner or
--- from Qoida policy. A self-imposed TTL must never be mistaken for a partner
+-- from HorecaOS policy. A self-imposed TTL must never be mistaken for a partner
 -- guarantee.
 
 CREATE TABLE fulfillment.delivery_quotes (
@@ -239,7 +239,7 @@ CREATE TABLE fulfillment.delivery_quotes (
     -- because neither partner issues one.
     CONSTRAINT uq_quote_request UNIQUE (provider_binding_id, request_id),
     CONSTRAINT ck_quote_status CHECK (status IN ('RECEIVED', 'REFUSED', 'EXPIRED', 'SELECTED')),
-    CONSTRAINT ck_quote_validity_source CHECK (quote_validity_source IN ('PARTNER', 'QOIDA_POLICY')),
+    CONSTRAINT ck_quote_validity_source CHECK (quote_validity_source IN ('PARTNER', 'HORECAOS_POLICY')),
     CONSTRAINT ck_quote_currency CHECK (currency IS NULL OR currency ~ '^[A-Z]{3}$'),
     -- A price without a currency is a number nobody can compare, and comparing
     -- two partners is the only reason to store a quote.
@@ -253,7 +253,7 @@ CREATE TABLE fulfillment.delivery_quotes (
 );
 
 COMMENT ON COLUMN fulfillment.delivery_quotes.quote_validity_source IS
-    'ADR 0014. Whether expires_at is the partner''s guarantee or a TTL Qoida imposed. Neither Yandex nor Noor returns an expiry, so today every row is QOIDA_POLICY -- and the day one does, the difference is recorded rather than remembered.';
+    'ADR 0014. Whether expires_at is the partner''s guarantee or a TTL HorecaOS imposed. Neither Yandex nor Noor returns an expiry, so today every row is HORECAOS_POLICY -- and the day one does, the difference is recorded rather than remembered.';
 COMMENT ON COLUMN fulfillment.delivery_quotes.capability_snapshot IS
     'What the adapter declared at the moment this quote was scored. A selection re-read against today''s capability matrix is not the selection that was made.';
 
@@ -506,7 +506,7 @@ ALTER TABLE fulfillment.delivery_cost_lines
         REFERENCES fulfillment.shipments (id, tenant_id);
 
 -- partner_delivery_invoice_lines.shipment_id stays unconstrained on purpose: a
--- partner invoice may name a shipment Qoida has no record of, and that
+-- partner invoice may name a shipment HorecaOS has no record of, and that
 -- unmatched line is exactly what the reconciliation report exists to show.
 
 -- ---------------------------------------------------------------------------
@@ -517,12 +517,12 @@ ALTER TABLE fulfillment.delivery_cost_lines
 -- the evidence a disputed selection is answered from, and ADR 0014 requires the
 -- selection to be reproducible from it.
 
-GRANT SELECT, INSERT, UPDATE ON fulfillment.delivery_plans TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON fulfillment.shipments TO qoida_application;
-GRANT SELECT, INSERT ON fulfillment.delivery_quotes TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON fulfillment.assignment_attempts TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.delivery_sourcing_jobs TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON fulfillment.delivery_exceptions TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON fulfillment.delivery_plans TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON fulfillment.shipments TO horecaos_application;
+GRANT SELECT, INSERT ON fulfillment.delivery_quotes TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON fulfillment.assignment_attempts TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.delivery_sourcing_jobs TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON fulfillment.delivery_exceptions TO horecaos_application;
 
 -- NOTE for whoever applies this: delivery_quotes is INSERT/SELECT only, which
 -- means the RECEIVED -> SELECTED / EXPIRED transitions in ck_quote_status cannot

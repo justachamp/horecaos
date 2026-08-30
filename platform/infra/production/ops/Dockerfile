@@ -31,12 +31,12 @@ COPY --from=mc /usr/bin/mc /usr/local/bin/mc
 # The backup scripts are copied in rather than mounted, so that the image is a
 # self-contained thing that can be pulled onto a rescue host where this
 # repository is not checked out.
-COPY infra/backup/ /opt/qoida/backup/
+COPY infra/backup/ /opt/horecaos/backup/
 COPY infra/production/ops/bao-get.sh /usr/local/bin/bao-get.sh
 COPY infra/production/ops/backup-job.sh /usr/local/bin/backup-job.sh
-RUN chmod 0555 /opt/qoida/backup/*.sh /usr/local/bin/bao-get.sh /usr/local/bin/backup-job.sh
+RUN chmod 0555 /opt/horecaos/backup/*.sh /usr/local/bin/bao-get.sh /usr/local/bin/backup-job.sh
 
-WORKDIR /opt/qoida/backup
+WORKDIR /opt/horecaos/backup
 
 # No credentials, no endpoints, no bucket names. Everything this image needs is
 # supplied when it is run.

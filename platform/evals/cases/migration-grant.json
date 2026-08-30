@@ -1,6 +1,6 @@
 {
-  "why": "Nine migrations omitted the GRANT for qoida_application. The failure is invisible until the first production start; V0035 exists to repair them.",
+  "why": "Nine migrations omitted the GRANT for horecaos_application. The failure is invisible until the first production start; V0035 exists to repair them.",
   "prompt": "I need to add a table `fulfillment.courier_handover_notes` storing a note a courier leaves when a shift ends mid-delivery: tenant, shipment, author, note text, created time. Write the Flyway migration. Show me the complete SQL file you would create.",
-  "expect_all": ["GRANT", "qoida_application", "tenant_id", "timestamptz"],
+  "expect_all": ["GRANT", "horecaos_application", "tenant_id", "timestamptz"],
   "forbid": ["timestamp without time zone"]
 }

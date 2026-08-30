@@ -1,6 +1,6 @@
 # Togora prototype — extraction report
 
-What the Togora admin-panel prototype does, what Qoida should take from it, and
+What the Togora admin-panel prototype does, what HorecaOS should take from it, and
 what it should not. Source: `legacy-archive/togora-admin-panel/togora`, read in
 full — roughly 4 200 lines across nine files.
 
@@ -12,9 +12,9 @@ the screen inventory.
 ## Why this document exists
 
 Togora is a prototype for a comparable product built by the same team. Its
-engineering pattern is the fastest way to a reviewable console, and the Qoida
+engineering pattern is the fastest way to a reviewable console, and the HorecaOS
 control-plane prototype adopts it. Its visual language is the opposite of the
-Qoida design system's, and the prototype adopts none of it. Separating those two
+HorecaOS design system's, and the prototype adopts none of it. Separating those two
 judgements is the point of the report.
 
 ---
@@ -200,7 +200,7 @@ Cheap to author, renders directly, no date parsing anywhere.
 `if (selectedOrderId) return <detail/>` before any list branch. Back is `setSelectedOrderId(null)` rendered as a text link *above* the title, not a chrome button. Because filters live in `App`, they survive the round trip.
 
 *Problem solved:* drilling in and back out of a filtered queue fifty times a shift without re-establishing context.
-*Qoida:* control-plane 2.1→2.2 (tenant directory→overview), 3.3 installations explorer, 7.5 audit log, 9.1 migration runs. In Angular use real routes so deep links and browser-back work, but **keep filters in query params** so the survival property is preserved.
+*HorecaOS:* control-plane 2.1→2.2 (tenant directory→overview), 3.3 installations explorer, 7.5 audit log, 9.1 migration runs. In Angular use real routes so deep links and browser-back work, but **keep filters in query params** so the survival property is preserved.
 
 ### b. Filter bar: one row, mixed controls, counts inside the control
 
@@ -222,13 +222,13 @@ background: stageFilter !== "all" ? (stageFilter === "incident" ? "#FEF2F2" : �
 ```
 
 *Problem solved:* the operator sees where the work is before choosing a filter, and counts don't collapse as the selection narrows.
-*Qoida:* IA 1.1 already requires live per-status counts on order-board tabs. Apply the same to 4.2 dead letters (counts per failure cause), 3.3 installations (per credential status), 6.1 fiscalization (per operator/cause). Keep the divider-grouped single row and the "this control is filtering" visual state.
+*HorecaOS:* IA 1.1 already requires live per-status counts on order-board tabs. Apply the same to 4.2 dead letters (counts per failure cause), 3.3 installations (per credential status), 6.1 fiscalization (per operator/cause). Keep the divider-grouped single row and the "this control is filtering" visual state.
 
 ### c. Two filter axes given different visual weight
 
 `Showcase.jsx` stacks status filters (dark fill = primary axis) above category filters (amber outline, smaller = secondary axis). Different treatment says "different axis" rather than "one long wrap".
 
-*Qoida:* catalog products (category × status), audit log (actor type × outcome), provider registry (category × lifecycle state).
+*HorecaOS:* catalog products (category × status), audit log (actor type × outcome), provider registry (category × lifecycle state).
 
 ### d. Row severity on three channels simultaneously
 
@@ -247,7 +247,7 @@ getRowBorderLeft = o => o.incident ? "4px solid #DC2626"
 Note the strict precedence — incident outranks threat, and the threat caption is explicitly suppressed when an incident is present. The transparent left border keeps normal rows aligned with flagged ones.
 
 *Problem solved:* the operator learns *why* a row is flagged without opening it. A bare severity badge would not.
-*Qoida:* late-order highlight (1.1), fiscalization failures (6.1), stop-listed products (the prototype already does this in `Showcase.jsx` and the products tab: `borderLeft:"3px solid #F59E0B"` + `СТОП` beside the SKU), expired credentials (3.3).
+*HorecaOS:* late-order highlight (1.1), fiscalization failures (6.1), stop-listed products (the prototype already does this in `Showcase.jsx` and the products tab: `borderLeft:"3px solid #F59E0B"` + `СТОП` beside the SKU), expired credentials (3.3).
 
 ### e. Sort by severity, not by time
 
@@ -258,16 +258,16 @@ sortedProcess = [...filteredProcess].sort((a,b) => w(a) - w(b));
 
 The queue orders itself by what needs a human, after filtering.
 
-*Qoida:* dispatch board, 10.2 tenant issue queue, 4.2 dead letters, 6.1 fiscalization.
+*HorecaOS:* dispatch board, 10.2 tenant issue queue, 4.2 dead letters, 6.1 fiscalization.
 
-### f. Dual parallel pipelines on one row — the most Qoida-relevant widget here
+### f. Dual parallel pipelines on one row — the most HorecaOS-relevant widget here
 
 Each process card shows the **kitchen pipeline and the logistics pipeline side by side**, as two independent dot-and-connector strips with separate stage vocabularies and separate current indices.
 
 Rendering rules (`Orders.jsx:740`): filled = solid colour + `✓`; current = 18px hollow ring, 3px coloured border, `0 0 0 3px ${color}33` halo, inner dot, and the **stage label printed underneath only for the current stage**; future = `#E5E7EB`. The connector segment takes the *next* stage's colour, so colour flows forward. Hovering a filled dot shows `label — HH:MM` from the parallel `mDates`/`lDates` array via a plain `title` attribute.
 
 *Problem solved:* it makes visible that production and delivery are **separate clocks that can disagree** — precisely the distinction between "the merchant is late" and "the courier is late", which a single linear status bar destroys.
-*Qoida:* IA 1.2 explicitly requires "status timeline with per-stage clocks"; 2.1/2.3 kitchen; ADR 0041 production routing. Build this. Render with squares and hairlines instead of circles-with-halos; **put the timestamp under every completed stage as visible text, not in a `title`** — a `title` tooltip is not keyboard-reachable.
+*HorecaOS:* IA 1.2 explicitly requires "status timeline with per-stage clocks"; 2.1/2.3 kitchen; ADR 0041 production routing. Build this. Render with squares and hairlines instead of circles-with-halos; **put the timestamp under every completed stage as visible text, not in a `title`** — a `title` tooltip is not keyboard-reachable.
 
 ### g. The slots grid — capacity as a fixed-size lattice
 
@@ -296,7 +296,7 @@ const getSlotPhase = (windowStr) => {
 
 That `isToday` guard is the detail that makes the widget correct rather than merely pretty.
 
-*Qoida:* this shape is missing entirely. ADR 0014 covers scheduled delivery sourcing but there is no capacity lattice in the schema or the IA. It would serve 3.6 delivery zones, 3.8 dispatch rules, 3.5 courier shifts, and generalises directly to 2.6 kitchen capacity ("max preparations per hour per product per branch").
+*HorecaOS:* this shape is missing entirely. ADR 0014 covers scheduled delivery sourcing but there is no capacity lattice in the schema or the IA. It would serve 3.6 delivery zones, 3.8 dispatch rules, 3.5 courier shifts, and generalises directly to 2.6 kitchen capacity ("max preparations per hour per product per branch").
 
 ### h. Modal ladder — three depths, three sizes, one overlay
 
@@ -310,13 +310,13 @@ One `Overlay` (`Merchants.jsx:47`): `position:fixed; inset:0; rgba(0,0,0,0.5)`, 
 
 **Modal state is the id of the record being acted on, not a boolean:** `deleteReqDialog = "REQ-01"`, `reqModal`, `netModal`, `productModal`, `slotDialogOrder`. "Which one" and "is it open" become one variable, and the confirmation copy can name the object: *"Реквизит REQ-01 будет удалён. Это действие нельзя отменить."*
 
-*Qoida:* adopt the id-as-modal-state convention wholesale. The confirmation copy pattern fits every destructive platform action — secret rotation (7.4), selective replay (4.2), retention override (6.5), residency change.
+*HorecaOS:* adopt the id-as-modal-state convention wholesale. The confirmation copy pattern fits every destructive platform action — secret rotation (7.4), selective replay (4.2), retention override (6.5), residency change.
 
 ### i. Peek modal from a dense cell
 
 A slot cell shows only `#284719`. Clicking opens a 420px card: id + slot line, status badge, a 2×3 label/value grid, incident/threat callout blocks, and one primary button `Открыть заказ` that closes the peek and navigates to the full detail. The dense grid stays dense; drill-down is a two-step ladder.
 
-*Qoida:* dispatch board cells, capacity lattice cells, live-board tiles, ID mapping explorer (9.2).
+*HorecaOS:* dispatch board cells, capacity lattice cells, live-board tiles, ID mapping explorer (9.2).
 
 ### j. Aggregate counts are links to the view that produced them
 
@@ -328,13 +328,13 @@ A slot cell shows only `#284719`. Clicking opens a 420px card: id + slot line, s
 ```
 
 *Problem solved:* a number in a table always raises "which ones?" — this answers it in one click without a second screen.
-*Qoida:* this is the whole cross-module navigation problem (installation → tenant → brand → provider). Every aggregate in the control plane — open issues, failed messages, entitlement count, location count — should link to the filtered or tabbed view behind it. And the lesson from `setActiveMenu + setOrdersSub + setSelectedOrderId`: a jump must set the **complete** route, never a partial one.
+*HorecaOS:* this is the whole cross-module navigation problem (installation → tenant → brand → provider). Every aggregate in the control plane — open issues, failed messages, entitlement count, location count — should link to the filtered or tabbed view behind it. And the lesson from `setActiveMenu + setOrdersSub + setSelectedOrderId`: a jump must set the **complete** route, never a partial one.
 
 ### k. Tab group as a header extension
 
 `Merchant detail` has nine tabs (`Основное, Реквизиты, Сети, Медиа, Витрина, Документы, Финансы, Заказы, Пользователи`) rendered inside the white header block, below the entity identity line, as 2.5px bottom-border underlines. The active tab lives in `App` state and is reset explicitly on the back link (`setSelectedMerchantId(null); setMerchantTab("main")`) rather than implicitly by unmount.
 
-*Qoida:* 2.2 tenant overview, provider detail, 1.2 order detail. Nine is the observed ceiling, not a target.
+*HorecaOS:* 2.2 tenant overview, provider detail, 1.2 order detail. Nine is the observed ceiling, not a target.
 
 ### l. Heat-strip timeline with an overlap tooltip
 
@@ -347,7 +347,7 @@ return { count, ratio: count / merchant.cap, overlapping };
 
 The row label shows `пик: n/cap` coloured by the same thresholds. Hovering a cell shows a dark tooltip listing **the specific overlapping orders** with their windows — the tooltip is rendered as an absolutely-positioned sibling *outside* the `overflow:hidden` strip, which is the real technique for this widget class. Hour grid lines are drawn as absolutely-positioned 1px divs behind the cells.
 
-*Qoida:* 2.6 kitchen capacity, per-branch load in the branch picker (0.1), 3.5 courier shift coverage, and — highest value on the platform side — 4.1 message flow showing per-tenant integration throughput against rate-limit ceilings.
+*HorecaOS:* 2.6 kitchen capacity, per-branch load in the branch picker (0.1), 3.5 courier shift coverage, and — highest value on the platform side — 4.1 message flow showing per-tenant integration throughput against rate-limit ceilings.
 
 ### m. Fake map with a real interaction model
 
@@ -362,13 +362,13 @@ The row label shows `пик: n/cap` coloured by the same thresholds. Hovering a 
 
 Zoom is `transform: scale()` on a wrapper with +/− buttons and a `1.25x` mono readout. Pan is a manual `mousedown` → `window.addEventListener("mousemove")` closure that unregisters on mouseup. An `Анимация` toggle drives an 800ms `setInterval` tick; positions interpolate `lat + (to.lat - lat) * ((tick * speed) % 1)`.
 
-*Qoida:* 3.2 live map needs real tiles, but **the layer order, the two-colour route split at the current position, status-as-pin-border, and the clamped popover transfer directly**. The animation toggle is worth keeping in any prototype: it lets a reviewer see motion without a backend.
+*HorecaOS:* 3.2 live map needs real tiles, but **the layer order, the two-colour route split at the current position, status-as-pin-border, and the clamped popover transfer directly**. The animation toggle is worth keeping in any prototype: it lets a reviewer see motion without a backend.
 
 ### n. Inline actions on a review queue, derived from state
 
 `Moderation.jsx` is a card-per-application list. Pending rows get a 4px amber left border and Approve/Reject buttons; decided rows show a badge and **no buttons at all** — affordances are omitted rather than disabled.
 
-*Qoida:* 6.5 approvals, 8.4 template moderation, 2.5 onboarding blockers. Better sourced: IA 1.2 already specifies a server-supplied `actions[]` capability array driving which affordances render — same principle, correct origin.
+*HorecaOS:* 6.5 approvals, 8.4 template moderation, 2.5 onboarding blockers. Better sourced: IA 1.2 already specifies a server-supplied `actions[]` capability array driving which affordances render — same principle, correct origin.
 
 ### o. Stat tiles derived from the table's own data
 
@@ -397,13 +397,13 @@ Every order carries `slotTime: "15:30–17:00"` + `slotDate`. Capacity is `12 wi
 
 This is a **pre-booked delivery-window market**, not on-demand dispatch.
 
-*Qoida:* ADR 0014 covers scheduled delivery sourcing, but the schema (`V0001`–`V0019`) contains no slot, window, or capacity table. The lattice — capacity per window per zone, and an order's booked window — is a genuine **model gap**, not merely a UI gap.
+*HorecaOS:* ADR 0014 covers scheduled delivery sourcing, but the schema (`V0001`–`V0019`) contains no slot, window, or capacity table. The lattice — capacity per window per zone, and an order's booked window — is a genuine **model gap**, not merely a UI gap.
 
 ### Two independent progress clocks per order
 
 `mStage` (merchant/kitchen, 6 stages) and `lStage` (logistics, 6 stages) advance independently with separate timestamp arrays; the aggregate `stage` (8 stages) is a third. Operators filter by lane-specific stage, with the dropdown grouping the two vocabularies under separate headers.
 
-*Qoida:* `ordering` is unbuilt (ADR 0019); ADR 0041 covers kitchen execution. The prototype's evidence is that order state must be **at least two concurrent lanes**, not one enum. Model it as `(production_stage, fulfilment_stage)` with independent timestamps, and let the display status be derived.
+*HorecaOS:* `ordering` is unbuilt (ADR 0019); ADR 0041 covers kitchen execution. The prototype's evidence is that order state must be **at least two concurrent lanes**, not one enum. Model it as `(production_stage, fulfilment_stage)` with independent timestamps, and let the display status be derived.
 
 ### Incident vs threat — a record and a projection, both first-class
 
@@ -417,9 +417,9 @@ threat:   { active, type:"Опоздание", severity:"high", message,
 
 An **incident has an identity** — it can be worked, assigned and resolved. A **threat has none** — it is a computed comparison of a promise time, a live estimate, and the slot boundary. Both propagate into list rows, process cards, map pins, modals and the courier detail.
 
-*Qoida:* has neither. The threat shape is what makes "late-order highlight" (IA 1.1) *computable* rather than hand-waved: you need a promised time, a live estimate, and a signed delta against a boundary. Both deserve an ADR.
+*HorecaOS:* has neither. The threat shape is what makes "late-order highlight" (IA 1.1) *computable* rather than hand-waved: you need a promised time, a live estimate, and a signed delta against a boundary. Both deserve an ADR.
 
-### Merchant is a three-level tree that Qoida half-has
+### Merchant is a three-level tree that HorecaOS half-has
 
 ```
 merchant
@@ -432,15 +432,15 @@ merchant
 
 Two facts stand out. **Commission lives on the legal entity, not the merchant** — the fixture has one merchant with entities at 15% and 12%. And **each branch carries throughput config** (`maxLoad`, `pickupTime`, `prepareBuffer`) that is neither catalog nor address, and on which every capacity screen depends.
 
-*Qoida:* has `tenant.brands` + `tenant.locations`; IA 2.4 and ADR 0038 cover legal entities and fiscal identity. Missing: branch-level throughput configuration, and the commission-on-legal-entity relationship.
+*HorecaOS:* has `tenant.brands` + `tenant.locations`; IA 2.4 and ADR 0038 cover legal entities and fiscal identity. Missing: branch-level throughput configuration, and the commission-on-legal-entity relationship.
 
 ### Money: whole integers and pre-formatted strings, inconsistently
 
 `sum: 284000` (int, formatted at render), but `revenue: "48 200 000"` (a display string that `Merchants.jsx:64` must parse back to total it: `parseInt(m.revenue.replace(/\s/g,""), 10)`). And `Showcase.jsx` renders `₽` while everything else renders `сум` — a copy-paste bug that a prototype with no shared formatter will always eventually produce.
 
-*Qoida:* already correct (whole som, VAT-inclusive, deterministic quotes in `pricing.quotes`). Do not import the string-money habit; the prototype demonstrates exactly why one formatter module is non-negotiable.
+*HorecaOS:* already correct (whole som, VAT-inclusive, deterministic quotes in `pricing.quotes`). Do not import the string-money habit; the prototype demonstrates exactly why one formatter module is non-negotiable.
 
-### The product carries logistics attributes Qoida's catalog does not
+### The product carries logistics attributes HorecaOS's catalog does not
 
 ```js
 { prepTime: 15, temp: "Горячее", fragile: true, weight: 450,
@@ -452,16 +452,16 @@ Two facts stand out. **Commission lives on the legal entity, not the merchant** 
 Three observations:
 
 - `prepTime` / `temp` / `fragile` are **logistics attributes on the product** that the slot and dispatch models consume — a fragile hot item constrains courier type, prep buffer and window.
-- `modType` is a **typed modifier axis** (`size` | `person` | `tara`), with each option carrying an absolute price, not a delta. Qoida has `catalog.modifier_groups`/`modifier_options` but no typed axis.
-- `status` / `inStock` / `stopList` are **three independent flags**, and the UI treats "stop-list" as a filter value alongside statuses. The prototype has no stop *scope* and no stop *source* — IA 2.5 demands both, so this is a place Qoida should be strictly better rather than a shape to copy.
+- `modType` is a **typed modifier axis** (`size` | `person` | `tara`), with each option carrying an absolute price, not a delta. HorecaOS has `catalog.modifier_groups`/`modifier_options` but no typed axis.
+- `status` / `inStock` / `stopList` are **three independent flags**, and the UI treats "stop-list" as a filter value alongside statuses. The prototype has no stop *scope* and no stop *source* — IA 2.5 demands both, so this is a place HorecaOS should be strictly better rather than a shape to copy.
 
-Also: `catalog.location_offerings` exists in Qoida, which is the right home for `nets[]`. The per-item availability window (`avail`) has no home yet.
+Also: `catalog.location_offerings` exists in HorecaOS, which is the right home for `nets[]`. The per-item availability window (`avail`) has no home yet.
 
 ### Order gabarit — a tiny model that unlocks correct assignment
 
 `orderGabarit: { size: "Средний", couriersNeeded: 1 }` matched against courier `maxGabarit: "Средний / 15 кг"`. Order size determines courier capability *and* how many couriers are needed.
 
-*Qoida:* nothing like it. ADR 0042 covers courier compensation, not capability matching. Cheap to model, and dispatch is wrong without it.
+*HorecaOS:* nothing like it. ADR 0042 covers courier compensation, not capability matching. Cheap to model, and dispatch is wrong without it.
 
 ### History as a flat uniform event list with a non-human actor column
 
@@ -471,7 +471,7 @@ Also: `catalog.location_offerings` exists in Qoida, which is the right home for 
 
 Actors observed: `Система`, `Авто-диспетчер`, `GPS`, `Pizza Roma`, `Алишер К.`, `Диспетчер`, `Курьер`. Same shape on the order and on the courier. Rendered as a four-column table with mono time, muted date and actor, and a Скрыть/Показать collapse in the section header.
 
-*Qoida:* this is `audit.audit_events` with ADR 0027's "non-human actors are first-class". The prototype validates the *display*; Qoida can render its real audit rows in this exact shape today (IA 7.5).
+*HorecaOS:* this is `audit.audit_events` with ADR 0027's "non-human actors are first-class". The prototype validates the *display*; HorecaOS can render its real audit rows in this exact shape today (IA 7.5).
 
 ### Courier: person + contract + policy + performance, with two status axes
 
@@ -488,19 +488,19 @@ workStatus:  "BUSY"           ← live work state
 
 The work view adds `TAKEN`, `OFFERING`, `PENALTY`, `ABSENT`, each paired with a **free-text `statusText` carrying a live countdown** — `FP OFFER 00:47`, `Late 00:47`, `ожидание SLOT PICK`, `5 мин.`. The code is filterable; the text is human.
 
-*Qoida:* no courier entity exists. The **two-axis status** (account lifecycle × live work state) is the shape to copy. IA 3.3 mentions "online status and rating (read-only)" but not offer/penalty/absent states — those are what a dispatch board actually needs.
+*HorecaOS:* no courier entity exists. The **two-axis status** (account lifecycle × live work state) is the shape to copy. IA 3.3 mentions "online status and rating (read-only)" but not offer/penalty/absent states — those are what a dispatch board actually needs.
 
 ### What is absent from the fixtures, and what that tells you
 
 No tenant. No brand. No channel. No currency or locale. No VAT breakdown on the order total (`vat: true` sits on the product, but `payment` is only `itemsTotal / deliveryFee / discount / total`). No external provider ids, no idempotency keys, no roles or permissions, no pagination cursors.
 
-Togora is single-tenant, single-currency, single-country, single-channel. **Every Qoida screen must add a tenant/brand axis to shapes that have none here** — and because Qoida's house rule is that tenant and brand predicates go *in the query*, the filter bar needs a scope selector the prototype never had, and it belongs in the header strip beside the title.
+Togora is single-tenant, single-currency, single-country, single-channel. **Every HorecaOS screen must add a tenant/brand axis to shapes that have none here** — and because HorecaOS's house rule is that tenant and brand predicates go *in the query*, the filter bar needs a scope selector the prototype never had, and it belongs in the header strip beside the title.
 
 ---
 
 ## 4. What NOT to carry over
 
-| Togora choice | Where | Conflicts with | Qoida equivalent |
+| Togora choice | Where | Conflicts with | HorecaOS equivalent |
 |---|---|---|---|
 | `font = "'DM Sans', sans-serif"`, loaded from Google Fonts in `index.html` | everywhere | IBM Plex Sans mandated | `--q-font-sans`. `JetBrains Mono` → `--q-font-mono` (IBM Plex Mono). **Keep the habit** of mono for ids/times/money — that part is right. |
 | Inline `fontSize:` on nearly every element — 8, 9, 9.5, 10, 10.5, 11, 12, 13, 14, 15, 16, 17, 18, 20, 22, 28, 32, 36, 40, 48 | everywhere | Closed type scale; "never set a font-size inline" | The seven classes in `tokens.css`. Table cell → `.q-body-sm`; table header and field label → `.q-caption`; page title → `.q-title`; stat value → `.q-data-lg .q-tnum`. The 8px and 9px micro-labels have **no equivalent** and must rise to 12. |
@@ -523,7 +523,7 @@ Togora is single-tenant, single-currency, single-country, single-channel. **Ever
 
 ---
 
-## 5. Concrete recommendations for the Qoida control-plane prototype
+## 5. Concrete recommendations for the HorecaOS control-plane prototype
 
 ### Copy wholesale
 
@@ -539,13 +539,13 @@ Togora is single-tenant, single-currency, single-country, single-channel. **Ever
 10. **`—` for absent values**, everywhere.
 11. **Stat tiles derived by `reduce`** from the same array the table renders, so they cannot disagree.
 12. **An animation/live toggle** on any live view, so a reviewer sees motion without a backend.
-13. **The screen frame:** fixed header (title + `label · count` subtitle + exactly one right-hand affordance), scrolling body. Add the tenant/brand scope selector to the header — Togora had no such axis and Qoida cannot render a screen without it.
+13. **The screen frame:** fixed header (title + `label · count` subtitle + exactly one right-hand affordance), scrolling body. Add the tenant/brand scope selector to the header — Togora had no such axis and HorecaOS cannot render a screen without it.
 
 ### Adapt
 
 1. **Filter bar → Carbon.** Status becomes tabs with counts (IA 1.1 says tabs); secondary axes become dropdowns whose trigger displays the applied value; date becomes a range control. Keep the divider-grouped single row and the "this control is filtering" visual state.
 2. **Dual pipeline → the order timeline.** Squares and hairline connectors; done `--q-ink`, current `--q-primary`, future `--q-surface-2`. Print the stage label under **every** stage, not just the current one. Put the timestamp under completed stages as visible text — a `title` tooltip is not keyboard-reachable.
-3. **Slots grid → a capacity lattice component.** Columns = windows, rows = capacity lines, `n/cap` in the header, dashed outline for free cells, today-only phase computation. Confine the green/red tint to the **header cell**, not all 240 body cells — at Qoida's flat weight, whole-column tinting shouts.
+3. **Slots grid → a capacity lattice component.** Columns = windows, rows = capacity lines, `n/cap` in the header, dashed outline for free cells, today-only phase computation. Confine the green/red tint to the **header cell**, not all 240 body cells — at HorecaOS's flat weight, whole-column tinting shouts.
 4. **Heat strip → keep the overlap arithmetic and the outside-`overflow` tooltip.** Swap the four-hue ramp for a single-hue sequential ramp with a legend.
 5. **Map → real tiles.** Keep the layer order, the two-colour route split at the courier's current position, status-as-pin-border, the clamped popover and the zoom readout. Drop the hand-rolled `window`-listener pan for the map library's own.
 6. **Master-detail → real routes** (`/tenants/:id`, `/tenants/:id/installations`) so deep links and browser-back work — but keep filters in query params so the "filters survive the detail round trip" property survives.

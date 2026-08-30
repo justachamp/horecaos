@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.qoida.uz/events/fulfillment.events/ShipmentOutcomeReconciled.v1.schema.json",
+  "$id": "https://contracts.horecaos.uz/events/fulfillment.events/ShipmentOutcomeReconciled.v1.schema.json",
   "title": "ShipmentOutcomeReconciled v1 payload",
   "description": "The settled answer to a shipment whose outcome was uncertain. Emitted through the ADR 0004 outbox in the same transaction as the inbox PROCESSED transition, so the answer and the evidence that it was produced commit together. Identifiers and a classification only: no provider body, no address, no contact.",
   "type": "object",

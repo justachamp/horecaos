@@ -52,7 +52,7 @@ serving anything between restarts either.
 ## 4. Roll back if it started at a deploy
 
 ```bash
-QOIDA_IMAGE_TAG=<previous tag> qc up -d <service>
+HORECAOS_IMAGE_TAG=<previous tag> qc up -d <service>
 ```
 
 **Check:** `docker inspect --format '{{.RestartCount}}'` stops rising. ADR 0034's

@@ -624,12 +624,12 @@ COMMENT ON COLUMN ordering.order_amendment_commands.command_type IS
 
 -- --------------------------------------------------------------------- grants
 
-GRANT SELECT, INSERT ON ordering.order_revisions TO qoida_application;
-GRANT SELECT, INSERT ON ordering.order_outcomes TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ordering.order_outcome_reasons TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ordering.order_outcome_reason_texts TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON ordering.order_amendments TO qoida_application;
-GRANT SELECT, INSERT ON ordering.order_amendment_commands TO qoida_application;
+GRANT SELECT, INSERT ON ordering.order_revisions TO horecaos_application;
+GRANT SELECT, INSERT ON ordering.order_outcomes TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ordering.order_outcome_reasons TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ordering.order_outcome_reason_texts TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON ordering.order_amendments TO horecaos_application;
+GRANT SELECT, INSERT ON ordering.order_amendment_commands TO horecaos_application;
 
 -- The grants are uneven, and the unevenness carries the same argument V0022 made.
 --

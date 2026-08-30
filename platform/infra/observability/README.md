@@ -14,13 +14,13 @@ gone. A Prometheus and an Alertmanager on this box would produce exemplary
 graphs right up to the moment the disk failed, and then produce nothing — at the
 one moment their output mattered.
 
-So the alert of last resort runs the other way round. `qoida-probe.sh` runs from
+So the alert of last resort runs the other way round. `horecaos-probe.sh` runs from
 cron on the box, evaluates every alert in ADR 0023's table, delivers what is
 firing, and **pings an external dead-man's switch when it finishes**. The alert
 is the absence of that ping, evaluated by a service that is not on this machine
 and does not depend on it.
 
-    on the box      qoida-probe.sh, every minute from cron
+    on the box      horecaos-probe.sh, every minute from cron
                     -> evaluates the thresholds
                     -> pushes night and trading alerts to a webhook
                     -> accumulates morning items and sends one digest at 09:00
@@ -34,12 +34,12 @@ and does not depend on it.
 
 | File | What it is |
 |---|---|
-| `qoida-probe.sh` | Every alert in ADR 0023's table, at the stated threshold and tier, with the reason for the threshold in a comment above the check |
-| `alerting.env.example` | The shape of `/etc/qoida/alerting.env`. Copy it to the host, fill it in, `chown root:root`, `chmod 0600`. It is not in this repository and must never be (ADR 0028) |
+| `horecaos-probe.sh` | Every alert in ADR 0023's table, at the stated threshold and tier, with the reason for the threshold in a comment above the check |
+| `alerting.env.example` | The shape of `/etc/horecaos/alerting.env`. Copy it to the host, fill it in, `chown root:root`, `chmod 0600`. It is not in this repository and must never be (ADR 0028) |
 | `crontab.example` | The two cron entries, and the one that has to be removed |
 
 The metrics the probe reads are published by the application's
-`uz.qoida.platform.observability` module and scraped from
+`uz.horecaos.platform.observability` module and scraped from
 `/actuator/prometheus`. That endpoint is not reachable from the internet — the
 edge answers 404 for it — and inside the platform it is permitted only for a
 request whose peer address is the application container's own loopback, which is
@@ -53,14 +53,14 @@ firing", and paging stops without anything failing.
 
 ## Installing it
 
-    sudo install -m 0700 -d /var/lib/qoida/probe
-    sudo install -m 0600 infra/observability/alerting.env.example /etc/qoida/alerting.env
-    sudo "${EDITOR}" /etc/qoida/alerting.env
+    sudo install -m 0700 -d /var/lib/horecaos/probe
+    sudo install -m 0600 infra/observability/alerting.env.example /etc/horecaos/alerting.env
+    sudo "${EDITOR}" /etc/horecaos/alerting.env
     sudo crontab -e     # see crontab.example
 
 Then prove it works before trusting it:
 
-    sudo QOIDA_STALL_SECONDS=0 /opt/qoida/qoida-platform/infra/observability/qoida-probe.sh
+    sudo HORECAOS_STALL_SECONDS=0 /opt/horecaos/horecaos-platform/infra/observability/horecaos-probe.sh
 
 That forces the order-flow alert to fire against real data and delivers it down
 the real webhook. ADR 0023's exit criteria require each of the three night
@@ -103,7 +103,7 @@ Any of healthchecks.io, Better Stack, Cronitor, or equivalent. Configure:
   half — it is what fires when power, network, disk, kernel, or the Docker
   daemon has taken the whole machine, and none of those can be observed from the
   machine.
-- Put its ping URL in `QOIDA_HEARTBEAT_URL`.
+- Put its ping URL in `HORECAOS_HEARTBEAT_URL`.
 
 It cannot be created from here: it is an account, on a service, with a payment
 method, and its entire value is that it is not on this machine.
@@ -131,7 +131,7 @@ its own check for as long as it owns one.
 
 ### 3. Two notification channels, one loud and one silent
 
-`QOIDA_ALERT_WEBHOOK_LOUD` and `QOIDA_ALERT_WEBHOOK_QUIET`. With Telegram these
+`HORECAOS_ALERT_WEBHOOK_LOUD` and `HORECAOS_ALERT_WEBHOOK_QUIET`. With Telegram these
 are the same `sendMessage` URL, the quiet one carrying
 `&disable_notification=true`. The tier has to be a property of the alert rather
 than of what the phone thinks the time is, because the operator travels and the

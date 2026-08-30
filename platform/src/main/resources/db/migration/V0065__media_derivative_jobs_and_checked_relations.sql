@@ -86,7 +86,7 @@ CREATE INDEX ix_derivative_job_claimable
 COMMENT ON TABLE media.derivative_jobs IS
     'ADR 0010 derivative rendering owed for an asset. Written with the AVAILABLE transition; drained by a leased worker outside any transaction.';
 
-GRANT SELECT, INSERT, UPDATE ON media.derivative_jobs TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON media.derivative_jobs TO horecaos_application;
 
 -- ---------------------------------------------------------------------------
 -- 2. A media reference the database checks
@@ -121,7 +121,7 @@ CREATE TABLE catalog.media_relation_orphans (
 COMMENT ON TABLE catalog.media_relation_orphans IS
     'Rows removed from catalog.media_relations by V0065 because no media asset of that tenant matched. Retained as evidence; never read by the storefront.';
 
-GRANT SELECT, INSERT ON catalog.media_relation_orphans TO qoida_application;
+GRANT SELECT, INSERT ON catalog.media_relation_orphans TO horecaos_application;
 
 -- Move first, constrain second. An ALTER that fails on real data is not a
 -- migration, and "there is probably nothing in that table" is not a plan.

@@ -10,24 +10,24 @@ incident is how a recoverable afternoon becomes an unrecoverable one.
 
 That is now enforced rather than requested. Before it downloads anything, the
 script asks the target server for `current_database()` and refuses to continue if
-the answer is `qoida`:
+the answer is `horecaos`:
 
 ```text
-!! Refusing to restore into "qoida".
+!! Refusing to restore into "horecaos".
 ```
 
 It asks the server rather than reading the URL because a connection string can
 reach production through a hostname alias, an SSH tunnel, a pooler, or by
-omitting the database name entirely, and none of those look like `qoida` in the
-text you pasted. `QOIDA_RESTORE_FORBIDDEN_DATABASES` is the list, and widening it
+omitting the database name entirely, and none of those look like `horecaos` in the
+text you pasted. `HORECAOS_RESTORE_FORBIDDEN_DATABASES` is the list, and widening it
 is the only way past — which is a decision somebody makes, not one they make by
 accident at 3am.
 
 Setup, as in every runbook here:
 
 ```bash
-cd /opt/qoida/qoida-platform
-alias qc='docker compose -f compose.production.yaml --env-file /etc/qoida/production.env'
+cd /opt/horecaos/horecaos-platform
+alias qc='docker compose -f compose.production.yaml --env-file /etc/horecaos/production.env'
 ```
 
 Everything below runs inside the `ops` container, which has `pg_restore`, `psql`,
@@ -57,10 +57,10 @@ rows out of it, and repair the live one — section 4.
 
 ```bash
 qc run --rm ops bash -c '
-  mc alias set b "$QOIDA_BACKUP_S3_ENDPOINT" \
+  mc alias set b "$HORECAOS_BACKUP_S3_ENDPOINT" \
     "$(bao-get.sh production/object_storage/platform/backup-access-key)" \
     "$(bao-get.sh production/object_storage/platform/backup-secret-key)" >/dev/null
-  mc ls b/qoida-backups/ | tail -10'
+  mc ls b/horecaos-backups/ | tail -10'
 ```
 
 **Check:** the newest `.dump.enc` is from last night, and there is a matching
@@ -72,7 +72,7 @@ off-site bucket, which is the case that bucket exists for. Point the alias there
 instead and everything downstream is identical:
 
 ```bash
-mc alias set b "$QOIDA_BACKUP_OFFSITE_ENDPOINT" \
+mc alias set b "$HORECAOS_BACKUP_OFFSITE_ENDPOINT" \
   "$(bao-get.sh production/object_storage/platform/backup-offsite-access-key)" \
   "$(bao-get.sh production/object_storage/platform/backup-offsite-secret-key)"
 ```
@@ -104,18 +104,18 @@ timeout, and the external uptime monitor will already have alerted.
 ### 3.2 Restore into a new database, never over the old one
 
 ```bash
-qc exec -T platform-db psql -U qoida_migrator -d postgres \
-  -c "CREATE DATABASE qoida_restore OWNER qoida_migrator;"
+qc exec -T platform-db psql -U horecaos_migrator -d postgres \
+  -c "CREATE DATABASE horecaos_restore OWNER horecaos_migrator;"
 ```
 
 ```bash
 qc run --rm ops bash -c '
-  export QOIDA_BACKUP_ACCESS_KEY="$(bao-get.sh production/object_storage/platform/backup-access-key)"
-  export QOIDA_BACKUP_SECRET_KEY="$(bao-get.sh production/object_storage/platform/backup-secret-key)"
-  export QOIDA_BACKUP_PASSPHRASE="$(bao-get.sh production/data_encryption/platform/backup-passphrase)"
+  export HORECAOS_BACKUP_ACCESS_KEY="$(bao-get.sh production/object_storage/platform/backup-access-key)"
+  export HORECAOS_BACKUP_SECRET_KEY="$(bao-get.sh production/object_storage/platform/backup-secret-key)"
+  export HORECAOS_BACKUP_PASSPHRASE="$(bao-get.sh production/data_encryption/platform/backup-passphrase)"
   export PGPASSWORD="$(bao-get.sh production/database/platform/migrator-password)"
-  export QOIDA_RESTORE_TARGET_URL="postgresql://qoida_migrator@platform-db:5432/qoida_restore"
-  /opt/qoida/backup/restore.sh'
+  export HORECAOS_RESTORE_TARGET_URL="postgresql://horecaos_migrator@platform-db:5432/horecaos_restore"
+  /opt/horecaos/backup/restore.sh'
 ```
 
 To restore a specific backup rather than the newest, pass its object name as the
@@ -133,9 +133,9 @@ sides.
 ### 3.3 Look at it before you trust it
 
 ```bash
-qc exec -T platform-db psql -U qoida_migrator -d qoida_restore -c "
+qc exec -T platform-db psql -U horecaos_migrator -d horecaos_restore -c "
   SELECT max(placed_at) AS newest_order, count(*) AS orders FROM ordering.orders;"
-qc exec -T platform-db psql -U qoida_migrator -d qoida_restore -c "
+qc exec -T platform-db psql -U horecaos_migrator -d horecaos_restore -c "
   SELECT count(*) FROM flyway_schema_history WHERE success;"
 ```
 
@@ -155,38 +155,38 @@ happened, and it costs nothing but disk to keep it until the incident is
 understood.
 
 ```bash
-qc exec -T platform-db psql -U qoida_migrator -d postgres -c "
-  ALTER DATABASE qoida RENAME TO qoida_damaged_$(date -u +%Y%m%d);"
-qc exec -T platform-db psql -U qoida_migrator -d postgres -c "
-  ALTER DATABASE qoida_restore RENAME TO qoida;"
+qc exec -T platform-db psql -U horecaos_migrator -d postgres -c "
+  ALTER DATABASE horecaos RENAME TO horecaos_damaged_$(date -u +%Y%m%d);"
+qc exec -T platform-db psql -U horecaos_migrator -d postgres -c "
+  ALTER DATABASE horecaos_restore RENAME TO horecaos;"
 ```
 
 If the rename fails with "database is being accessed by other users", something
 is still connected:
 
 ```bash
-qc exec -T platform-db psql -U qoida_migrator -d postgres -c "
-  SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='qoida';"
+qc exec -T platform-db psql -U horecaos_migrator -d postgres -c "
+  SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='horecaos';"
 ```
 
 Then recreate the application login, because `pg_restore --no-owner
 --no-privileges` restores objects without the role grants that went with them:
 
 ```bash
-qc exec -T platform-db psql -U qoida_migrator -d qoida
+qc exec -T platform-db psql -U horecaos_migrator -d horecaos
 ```
 
 ```sql
--- The NOLOGIN group roles are cluster-wide and survived; qoida_app's membership
+-- The NOLOGIN group roles are cluster-wide and survived; horecaos_app's membership
 -- and the per-table grants did not travel with the dump.
-GRANT CONNECT ON DATABASE qoida TO qoida_app;
-GRANT qoida_application TO qoida_app;
+GRANT CONNECT ON DATABASE horecaos TO horecaos_app;
+GRANT horecaos_application TO horecaos_app;
 ```
 
 **Check:** connect as the application and read one row.
 
 ```bash
-qc exec -T platform-db psql -U qoida_app -d qoida -c "SELECT count(*) FROM tenant.tenants;"
+qc exec -T platform-db psql -U horecaos_app -d horecaos -c "SELECT count(*) FROM tenant.tenants;"
 ```
 
 If that returns `permission denied`, the grants did not come back. Re-run the
@@ -216,7 +216,7 @@ qc logs -f platform-app
 **Check:** `qc ps` shows `platform-app (healthy)`, and from off the machine:
 
 ```bash
-curl -fsS https://api.qoida.uz/actuator/health/readiness
+curl -fsS https://api.horecaos.uz/actuator/health/readiness
 ```
 
 ### 3.7 Afterwards, the same evening
@@ -225,7 +225,7 @@ curl -fsS https://api.qoida.uz/actuator/health/readiness
   `infra/backup/README.md`. That number is the recovery time; until it is
   written down it is a guess.
 - Tell the business the exact data-loss window from section 3.3.
-- Keep `qoida_damaged_*` until the cause is understood, then drop it.
+- Keep `horecaos_damaged_*` until the cause is understood, then drop it.
 - Take a fresh backup immediately. The one you just used is now the only copy of
   a database that has since diverged.
 
@@ -236,12 +236,12 @@ curl -fsS https://api.qoida.uz/actuator/health/readiness
 Do not restore over the live database. Restore beside it and copy back.
 
 ```bash
-qc exec -T platform-db psql -U qoida_migrator -d postgres \
-  -c "CREATE DATABASE qoida_scratch OWNER qoida_migrator;"
+qc exec -T platform-db psql -U horecaos_migrator -d postgres \
+  -c "CREATE DATABASE horecaos_scratch OWNER horecaos_migrator;"
 ```
 
 Then run the restore command from section 3.2 with
-`QOIDA_RESTORE_TARGET_URL` pointing at `qoida_scratch`.
+`HORECAOS_RESTORE_TARGET_URL` pointing at `horecaos_scratch`.
 
 Now both are on the same server and one query can see both — `dblink` and
 `postgres_fdw` are the ways, but for anything under a few hundred thousand rows
@@ -251,7 +251,7 @@ the simplest is a dump of the one table:
 qc run --rm ops bash -c '
   export PGPASSWORD="$(bao-get.sh production/database/platform/migrator-password)"
   pg_dump --data-only --table=<schema>.<table> \
-    "postgresql://qoida_migrator@platform-db:5432/qoida_scratch" \
+    "postgresql://horecaos_migrator@platform-db:5432/horecaos_scratch" \
     > /tmp/table.sql
   wc -l /tmp/table.sql'
 ```
@@ -287,8 +287,8 @@ pilot**, not after the data migration, because the migration is the phase most
 likely to need a restore and would otherwise be the phase where every copy still
 lived in the primary's failure domain.
 
-`backup.sh` enforces that. It refuses to run when `QOIDA_BACKUP_OFFSITE_ENDPOINT`,
-`QOIDA_BACKUP_OFFSITE_ACCESS_KEY` or `QOIDA_BACKUP_OFFSITE_SECRET_KEY` is unset,
+`backup.sh` enforces that. It refuses to run when `HORECAOS_BACKUP_OFFSITE_ENDPOINT`,
+`HORECAOS_BACKUP_OFFSITE_ACCESS_KEY` or `HORECAOS_BACKUP_OFFSITE_SECRET_KEY` is unset,
 and refuses an off-site endpoint equal to the primary one. So a nightly backup
 failing with "No off-site destination is configured" is not a bug to route
 around — it is the gate, and the fix is the bucket.
@@ -301,13 +301,13 @@ restore succeed from it.
 
 ## 6. The backup did not run
 
-The heartbeat alerts when `/var/lib/qoida/last-backup` is more than 26 hours old.
+The heartbeat alerts when `/var/lib/horecaos/last-backup` is more than 26 hours old.
 That fires for "did not run" as well as "ran and failed", which is the point:
 silence is the failure mode that hides longest.
 
 ```bash
 grep run-backup /var/log/syslog | tail -20
-/opt/qoida/qoida-platform/infra/production/run-backup.sh
+/opt/horecaos/horecaos-platform/infra/production/run-backup.sh
 ```
 
 The usual causes, in the order they actually happen:
@@ -329,8 +329,8 @@ The usual causes, in the order they actually happen:
 After fixing, run the backup by hand and confirm the stamp file updated:
 
 ```bash
-/opt/qoida/qoida-platform/infra/production/run-backup.sh && touch /var/lib/qoida/last-backup
-ls -l /var/lib/qoida/last-backup
+/opt/horecaos/horecaos-platform/infra/production/run-backup.sh && touch /var/lib/horecaos/last-backup
+ls -l /var/lib/horecaos/last-backup
 ```
 
 ---

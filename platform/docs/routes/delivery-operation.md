@@ -13,7 +13,7 @@ Required by ADR 0007. A production route may not ship without one of these.
 | Source | `direct:delivery.operation`, reached synchronously from `CamelShipmentBookingPort` and asynchronously from `ShipmentReconciliationHandler` on the `fulfillment.commands` topic |
 | Destination | Courier partner HTTPS API, selected by ADR 0026 binding |
 | Service identity | Per-installation credential, ADR 0026 |
-| Secret reference type | `qoida:{env}:provider_delivery:{owner}:{id}` (ADR 0028) |
+| Secret reference type | `horecaos:{env}:provider_delivery:{owner}:{id}` (ADR 0028) |
 | Connect timeout | 5s |
 | Total timeout | 20s per call |
 | Retry classification | `RETRYABLE` only; returned to the caller with a backoff, not looped in-route |
@@ -24,7 +24,7 @@ Required by ADR 0007. A production route may not ship without one of these.
 | Expected volume | Pilot: under 500 operations/day/tenant |
 | SLO | p95 under 3s for quote; under 8s for create |
 | Runbook | `docs/routes/delivery-operation.md#runbook` |
-| Dashboard | Metric `qoida.delivery.route`, tagged `event`, `provider`, `capability`, `status` |
+| Dashboard | Metric `horecaos.delivery.route`, tagged `event`, `provider`, `capability`, `status` |
 
 ## Registered adapters
 
@@ -106,7 +106,7 @@ unanswerable case must be a fact somebody can act on.
 ## Runbook
 
 **Circuit open for one provider.** Only that partner is affected; the other keeps
-taking orders. Check the partner's status page, then `qoida.delivery.route` with
+taking orders. Check the partner's status page, then `horecaos.delivery.route` with
 `event=circuit_open` for the onset time. The circuit half-opens by itself after
 30s. Do not restart the application to force it closed — that also discards the
 failure window that proves whether the partner has recovered.
@@ -119,11 +119,11 @@ covers is the one where a courier is already on the way.
 
 **Reconciliation commands piling up on `fulfillment.commands`.** Consumer lag on
 this topic is work not being done rather than a projection being behind. Check
-`qoida.delivery.reconciliation` with `event=unsettled` for the provider, and the
+`horecaos.delivery.reconciliation` with `event=unsettled` for the provider, and the
 partner's own status page: a partner whose status endpoint is down produces
 exactly this shape.
 
-**`event=binding_refused` on `qoida.delivery.reconciliation`.** A command named a
+**`event=binding_refused` on `horecaos.delivery.reconciliation`.** A command named a
 binding its tenant may not use. It is refused and no partner is called. One of
 these is a binding disabled between the operation and the reconciliation; a run
 of them for one tenant is a security question, not an operational one.
@@ -134,8 +134,8 @@ wrong means hunting for something that was never sent:
 
 | Partner | Search by | Field |
 |---|---|---|
-| Noor | the Qoida **order reference** (`DeliveryOperation.request.qoidaReference`) | `vendor_order_id` |
-| Yandex | the Qoida **command id** (`DeliveryOperation.commandId`) | `request_id` query parameter |
+| Noor | the HorecaOS **order reference** (`DeliveryOperation.request.horecaosReference`) | `vendor_order_id` |
+| Yandex | the HorecaOS **command id** (`DeliveryOperation.commandId`) | `request_id` query parameter |
 
 Noor is not sent the command id at all. If an order exists, record its reference
 against the shipment. If none exists, the create may be re-sent. Do not re-send

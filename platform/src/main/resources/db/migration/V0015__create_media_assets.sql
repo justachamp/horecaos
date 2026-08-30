@@ -94,5 +94,5 @@ COMMENT ON COLUMN media.assets.declared_checksum_sha256 IS
 COMMENT ON COLUMN media.assets.verified_checksum_sha256 IS
     'Read from the object store after upload. This is the trusted value.';
 
-GRANT USAGE ON SCHEMA media TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON media.assets TO qoida_application;
+GRANT USAGE ON SCHEMA media TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON media.assets TO horecaos_application;

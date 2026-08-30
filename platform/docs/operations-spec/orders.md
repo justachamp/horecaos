@@ -115,7 +115,7 @@ always off `status` plus the owning aggregate.
 Togora's most transferable finding (§3, "two independent progress clocks") is
 that production and delivery are separate clocks that can disagree, and that a
 single linear bar destroys the distinction between "the kitchen is late" and
-"the courier is late". Qoida already has the shape:
+"the courier is late". HorecaOS already has the shape:
 
 | Lane | Column / source | Owner |
 |---|---|---|
@@ -638,7 +638,7 @@ ADR 0014**). Show both here, not only in IA 8.4, because the operator refunding
 a delivery fee needs to know which number they are giving away.
 
 **Externally priced orders.** When `pricing_authority = 'EXTERNAL'` (**not built
-— ADR 0040**) the whole panel is read-only and headed **Цены партнёра — Qoida
+— ADR 0040**) the whole panel is read-only and headed **Цены партнёра — HorecaOS
 их не пересчитывает**, sourced from `ordering.order_external_pricing`. If
 `arithmetic_verified` is false the panel carries a warning. Never silently show
 a partner's numbers in the same styling as our own.
@@ -1217,7 +1217,7 @@ pretend otherwise.
 ## 7. Screen 1.5 — Reservations
 
 **Tier 3, and it should stay there.** Delever puts table booking under Orders
-because its floor-plan model is thin. Qoida has no floor-plan entity at all —
+because its floor-plan model is thin. HorecaOS has no floor-plan entity at all —
 ADR 0047 owns dine-in table service, sections, tables and time-interval
 availability, and none of it is built.
 
@@ -1258,7 +1258,7 @@ guard so tomorrow's plan never shows "past").
 | Free-form «Изменить заказ» | **Beat** | ADR 0039's ten intent-named commands, each with a declared consequence vector |
 | Multi-branch `steps[]` | **Skip** | Declined in the matrix; two nested state machines for a behaviour no evidence shows anyone using |
 | Tenant-editable order statuses | **Skip** | The same status name would mean different things in two tenants, and every report and automation becomes ungovernable |
-| Externally computed «Свободная скидка» on our own channels | **Skip on Qoida channels, allow on marketplace** | It exists so aggregators can push a discount we cannot re-derive. On an aggregator order that is unavoidable and flagged; extending it to our channels destroys ADR 0018's central promise |
+| Externally computed «Свободная скидка» on our own channels | **Skip on HorecaOS channels, allow on marketplace** | It exists so aggregators can push a discount we cannot re-derive. On an aggregator order that is unavoidable and flagged; extending it to our channels destroys ADR 0018's central promise |
 | Live courier map as an Orders sibling | **Move** | It is IA 3.2, under Delivery. An operator working the queue does not need a map; a dispatcher does |
 | Table reservations under Orders | **Move to tier 3** | ADR 0047, and it needs a floor-plan model nothing has |
 | Live dashboard counters | **Move** | IA 0.1 Live board, on the wallboard shell where a shift supervisor can see them from across the room |
@@ -1348,7 +1348,7 @@ rather than an unbuilt one:
    `LATE` / `AT_RISK` levels, their precedence against `BLOCKED`, and the rule
    that terminal orders are never flagged, do not. Togora's report already names
    this: a "threat" is a computed comparison of a promise time, a live estimate
-   and a boundary, and Qoida has no such concept. §2.7 specifies it; something
+   and a boundary, and HorecaOS has no such concept. §2.7 specifies it; something
    must own it.
 2. **The operator→courier note and the internal operator note.** ADR 0039's
    command set is closed and carries only `SET_KITCHEN_NOTE`. The legacy

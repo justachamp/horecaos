@@ -8,8 +8,8 @@ sitting idle in a scheduled job.
 
 | Client | Purpose | realm-management roles |
 |---|---|---|
-| `qoida-provisioning` | Create organizations, create and link owners, assign organization-scoped roles | `manage-organizations`, `manage-users`, `view-users`, `query-users` |
-| `qoida-identity-reader` | Scheduled drift report | `view-organizations`, `query-organizations`, `view-users`, `query-users` |
+| `horecaos-provisioning` | Create organizations, create and link owners, assign organization-scoped roles | `manage-organizations`, `manage-users`, `view-users`, `query-users` |
+| `horecaos-identity-reader` | Scheduled drift report | `view-organizations`, `query-organizations`, `view-users`, `query-users` |
 
 Neither holds `manage-realm`, `realm-admin`, `manage-clients`, or
 `impersonation`.
@@ -50,15 +50,15 @@ see below.
 
 ## Secrets
 
-**The two secrets in `realm/qoida-realm.json` are not secrets.** They are
-`${QOIDA_KEYCLOAK_PROVISIONING_SECRET:development-only-not-a-secret-provisioning}`
+**The two secrets in `realm/horecaos-realm.json` are not secrets.** They are
+`${HORECAOS_KEYCLOAK_PROVISIONING_SECRET:development-only-not-a-secret-provisioning}`
 and the reader equivalent: an environment placeholder with a fallback that is
 spelled so that it cannot be mistaken for a credential in an admin console, a
 log line, or a diff. Keycloak substitutes the environment variable at import when
 one is set, and falls back to the visible placeholder when one is not — which is
 what makes `docker compose up` work on a laptop with nothing configured.
 
-The fallback must never survive anywhere else, and `qoida-provisioning` is why:
+The fallback must never survive anywhere else, and `horecaos-provisioning` is why:
 it holds `manage-users`, so that value is realm-wide user administration for
 anybody with a checkout of this repository.
 
@@ -69,7 +69,7 @@ Two things enforce that rather than asking for it:
   go straight into OpenBao under `identity_admin` (ADR 0028); no human chooses,
   types, or sees a value.
 - `assign-service-account-roles.sh` reads each client's current secret afterwards
-  and, with `QOIDA_KEYCLOAK_REQUIRE_ROTATED_SECRETS=1`, exits non-zero while
+  and, with `HORECAOS_KEYCLOAK_REQUIRE_ROTATED_SECRETS=1`, exits non-zero while
   either is still the value from the import file. The bootstrap runs it that way.
 
 Rotation changes the value behind the reference and never the reference, so
@@ -77,7 +77,7 @@ nothing in this repository changes when it happens again.
 
 ## The local browser client
 
-`qoida-local-web` — public client, `http://localhost:5173/*` — is created by
+`horecaos-local-web` — public client, `http://localhost:5173/*` — is created by
 `create-local-web-client.sh` rather than by the realm import:
 
 ```bash

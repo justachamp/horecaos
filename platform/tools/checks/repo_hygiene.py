@@ -88,10 +88,10 @@ def check_grants() -> None:
     drop_re = re.compile(
         r"DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([a-z_]+)\.([a-z_0-9]+)", re.I)
     blanket_re = re.compile(
-        r"GRANT\s+[^;]*?\bON\s+ALL\s+TABLES\s+IN\s+SCHEMA\s+([a-z_]+)\s+TO\s+qoida_application",
+        r"GRANT\s+[^;]*?\bON\s+ALL\s+TABLES\s+IN\s+SCHEMA\s+([a-z_]+)\s+TO\s+horecaos_application",
         re.I | re.S)
     explicit_re = re.compile(
-        r"GRANT\s+[^;]*?\bON\s+(?:TABLE\s+)?([a-z_]+)\.([a-z_0-9]+)\s+TO\s+qoida_application",
+        r"GRANT\s+[^;]*?\bON\s+(?:TABLE\s+)?([a-z_]+)\.([a-z_0-9]+)\s+TO\s+horecaos_application",
         re.I | re.S)
 
     for version, path in migrations():
@@ -125,7 +125,7 @@ def check_grants() -> None:
         blanket_versions = [v for s, v in blanket.items() if s == schema and v >= version]
         if blanket_versions:
             continue
-        problems.append(f"{schema}.{table} created in {path.name} — no GRANT to qoida_application")
+        problems.append(f"{schema}.{table} created in {path.name} — no GRANT to horecaos_application")
 
     result("flyway: every created table has a GRANT that actually covers it", problems,
            "End the migration with an explicit GRANT for each new table.")

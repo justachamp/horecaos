@@ -1,6 +1,6 @@
 ---
 name: flyway-migration
-description: Use whenever adding or changing a database schema in Qoida Platform — any file under src/main/resources/db/migration, any CREATE TABLE, ALTER TABLE, index, constraint, or backfill. Flyway is the schema authority and migrations are append-only.
+description: Use whenever adding or changing a database schema in HorecaOS Platform — any file under src/main/resources/db/migration, any CREATE TABLE, ALTER TABLE, index, constraint, or backfill. Flyway is the schema authority and migrations are append-only.
 ---
 
 # Flyway migrations

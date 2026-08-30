@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.qoida.uz/events/ordering.events/OrderCancelled.v1.schema.json",
+  "$id": "https://contracts.horecaos.uz/events/ordering.events/OrderCancelled.v1.schema.json",
   "title": "OrderCancelled v1 payload",
   "description": "The order was cancelled before confirmation. Cancelling after confirmation is ADR 0039's and is refused rather than half-performed, so this event never follows CONFIRMED in this release.",
   "type": "object",

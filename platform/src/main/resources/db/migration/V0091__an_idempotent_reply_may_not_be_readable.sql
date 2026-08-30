@@ -59,15 +59,15 @@ UPDATE platform.idempotency_records
    AND scope_key LIKE '%StorefrontCustomerController#%';
 
 -- No GRANT block: V0035 granted SELECT, INSERT, UPDATE, DELETE on the table
--- itself to qoida_application, and a table-level grant covers a column added
+-- itself to horecaos_application, and a table-level grant covers a column added
 -- afterwards. Verified rather than assumed -- a column-level grant here would
 -- have needed its own line.
 DO $$
 BEGIN
     IF NOT has_column_privilege(
-            'qoida_application', 'platform.idempotency_records',
+            'horecaos_application', 'platform.idempotency_records',
             'response_body_protected', 'UPDATE') THEN
         RAISE EXCEPTION
-            'qoida_application cannot write response_body_protected; the table grant did not cover it';
+            'horecaos_application cannot write response_body_protected; the table grant did not cover it';
     END IF;
 END $$;

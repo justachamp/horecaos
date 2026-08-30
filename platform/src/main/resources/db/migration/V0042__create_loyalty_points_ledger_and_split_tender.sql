@@ -225,7 +225,7 @@ COMMENT ON TABLE payments.payment_methods IS
     'ADR 0038 tenant payment-method registry: the settlement mechanism, not the customer-visible label. Localised labels and icons are ADR 0036 presentation resolved per channel over these rows.';
 
 COMMENT ON COLUMN payments.payment_methods.settles_from_balance IS
-    'True for a method that discharges an amount from a Qoida-held balance rather than moving external money. Today only LOYALTY_POINTS. It is not a claim that the platform holds funds: a points balance is a promise, not a deposit.';
+    'True for a method that discharges an amount from a HorecaOS-held balance rather than moving external money. Today only LOYALTY_POINTS. It is not a claim that the platform holds funds: a points balance is a promise, not a deposit.';
 
 COMMENT ON COLUMN payments.payment_methods.responsibility IS
     'ADR 0038: who issues the fiscal receipt. Validated when a method is activated, and the reason a tender names a registry row instead of a second enum.';
@@ -748,19 +748,19 @@ COMMENT ON COLUMN loyalty.redemption_policies.excludes_delivery_fee IS
 
 -- -------------------------------------------------------------------- grants
 
-GRANT USAGE ON SCHEMA loyalty TO qoida_application;
+GRANT USAGE ON SCHEMA loyalty TO horecaos_application;
 
-GRANT SELECT, INSERT, UPDATE ON loyalty.accounts TO qoida_application;
-GRANT SELECT, INSERT ON loyalty.entries TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON loyalty.lots TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON loyalty.reservations TO qoida_application;
-GRANT SELECT, INSERT ON loyalty.reservation_lots TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON loyalty.accrual_rules TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON loyalty.redemption_policies TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON loyalty.accounts TO horecaos_application;
+GRANT SELECT, INSERT ON loyalty.entries TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON loyalty.lots TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON loyalty.reservations TO horecaos_application;
+GRANT SELECT, INSERT ON loyalty.reservation_lots TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON loyalty.accrual_rules TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON loyalty.redemption_policies TO horecaos_application;
 
-GRANT SELECT, INSERT, UPDATE ON payments.payment_methods TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON payments.order_settlements TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON payments.tenders TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON payments.payment_methods TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON payments.order_settlements TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON payments.tenders TO horecaos_application;
 
 -- loyalty.entries receives SELECT and INSERT and nothing else, and that is the
 -- decision this whole schema rests on. An UPDATE grant is all it takes for a

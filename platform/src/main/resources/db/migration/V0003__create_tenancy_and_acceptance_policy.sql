@@ -124,7 +124,7 @@ CREATE TABLE ordering.order_acceptance_policies (
         acceptance_mode IN ('AUTO_CONFIRM', 'RESTAURANT_APPROVAL')
     ),
     CONSTRAINT ck_order_acceptance_policy_channel CHECK (
-        approval_channel IN ('NONE', 'QOIDA_OPERATIONS', 'POS', 'EITHER')
+        approval_channel IN ('NONE', 'HORECAOS_OPERATIONS', 'POS', 'EITHER')
     ),
     CONSTRAINT ck_order_acceptance_policy_timeout_action CHECK (
         timeout_action IN ('AUTO_REJECT', 'AUTO_CONFIRM')

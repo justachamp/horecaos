@@ -10,7 +10,7 @@
 #   3 sigma  act      Claude may additionally open a PR or run a pre-approved runbook
 #
 # Tier 3 never reaches production on its own: .claude/hooks/deploy-gate.sh still
-# requires QOIDA_RELEASE_APPROVAL from a release manager.
+# requires HORECAOS_RELEASE_APPROVAL from a release manager.
 
 version: 1
 
@@ -34,7 +34,7 @@ metrics:
     runbook: docs/runbooks/outbox-not-draining.md
     source:
       command: >
-        psql "$QOIDA_DB_URL" -tAc
+        psql "$HORECAOS_DB_URL" -tAc
         "select count(*) from integration.outbox_events where published_at is null"
 
   - id: dead-letter-arrivals
@@ -47,7 +47,7 @@ metrics:
     runbook: docs/runbooks/dead-letter-decision.md
     source:
       command: >
-        psql "$QOIDA_DB_URL" -tAc
+        psql "$HORECAOS_DB_URL" -tAc
         "select count(*) from integration.dead_letters
          where created_at > now() - interval '1 hour'"
 
@@ -64,7 +64,7 @@ metrics:
       3: diagnose # money: an agent diagnoses, a person always acts
     source:
       command: >
-        psql "$QOIDA_DB_URL" -tAc
+        psql "$HORECAOS_DB_URL" -tAc
         "select count(*) from integration.inbox_messages
          where status = 'FAILED' and received_at > now() - interval '1 hour'"
 
@@ -78,7 +78,7 @@ metrics:
       # Replace with the real Prometheus endpoint. Any command printing one
       # number on stdout works — that is the whole contract.
       command: >
-        curl -sf --get "$QOIDA_PROMETHEUS_URL/api/v1/query"
+        curl -sf --get "$HORECAOS_PROMETHEUS_URL/api/v1/query"
         --data-urlencode 'query=sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
         / sum(rate(http_server_requests_seconds_count[5m]))'
         | python3 -c 'import json,sys; r=json.load(sys.stdin)["data"]["result"]; print(r[0]["value"][1] if r else 0)'

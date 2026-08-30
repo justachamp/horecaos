@@ -31,7 +31,7 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            Review this pull request for the Qoida Platform.
+            Review this pull request for the HorecaOS Platform.
 
             Your instruction set is REVIEW.md at the repository root. Read it first
             and follow it exactly — the four passes, the Important vs. Nit rule, the

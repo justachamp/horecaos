@@ -27,8 +27,8 @@ below finite.
 ## 1. Get in from the second device
 
 ```bash
-wg-quick up qoida
-ssh -i ~/.ssh/qoida_second_ed25519 qoida@10.8.0.1
+wg-quick up horecaos
+ssh -i ~/.ssh/horecaos_second_ed25519 horecaos@10.8.0.1
 ```
 
 **Check:** you are on the host. If this fails, the second device was never set
@@ -38,19 +38,19 @@ path this runbook exists to avoid.
 ## 2. Remove the lost peer from WireGuard
 
 ```bash
-sudo wg show qoida
-sudo wg set qoida peer <lost public key> remove
-sudo wg-quick save qoida
+sudo wg show horecaos
+sudo wg set horecaos peer <lost public key> remove
+sudo wg-quick save horecaos
 ```
 
-**Check:** `sudo wg show qoida` no longer lists it. Do this first: it closes the
+**Check:** `sudo wg show horecaos` no longer lists it. Do this first: it closes the
 only route to the SSH port, which does not listen on the public address at all.
 
 ## 3. Remove the SSH key
 
 ```bash
-sudo sed -i.bak '/<comment on the lost key>/d' /root/.ssh/authorized_keys /home/qoida/.ssh/authorized_keys
-sudo grep -c '' /home/qoida/.ssh/authorized_keys
+sudo sed -i.bak '/<comment on the lost key>/d' /root/.ssh/authorized_keys /home/horecaos/.ssh/authorized_keys
+sudo grep -c '' /home/horecaos/.ssh/authorized_keys
 ```
 
 **Check:** the count dropped by exactly one, and your own key is still there.
@@ -60,12 +60,12 @@ this point is the classic way to turn a lost laptop into an outage.
 ## 4. Rotate OpenBao and re-shard the unseal material
 
 ```bash
-cd /opt/qoida/qoida-platform
+cd /opt/horecaos/horecaos-platform
 qc exec -it openbao bao operator rekey -init -key-shares=5 -key-threshold=3
 ```
 
 Then rotate the AppRole secret identifiers each service authenticates with, and
-re-mount them as `0600` files under `QOIDA_SECRET_DIR`.
+re-mount them as `0600` files under `HORECAOS_SECRET_DIR`.
 
 **This step is not optional and is not a separate chore.** A revocation that
 leaves the old unseal shares valid has revoked nothing.

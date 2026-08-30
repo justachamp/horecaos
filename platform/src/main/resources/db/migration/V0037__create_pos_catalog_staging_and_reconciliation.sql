@@ -1,6 +1,6 @@
 -- ADR 0012: POS catalog synchronization staging and reconciliation.
 --
--- Every import lands here before anything of Qoida's is touched. The catalog
+-- Every import lands here before anything of HorecaOS's is touched. The catalog
 -- tables in V0016 are never written from a provider response; a run stages a
 -- normalized snapshot, a deterministic engine compares it, and applying the
 -- comparison is a separate command a person authorises.
@@ -64,7 +64,7 @@
 -- PriceList or the Price schema expresses that application — no venue_id, no
 -- sale_type_id, no channel, and no endpoint that resolves the effective price of
 -- a product at a venue for a sale type. Prices are staged as evidence for review
--- because ADR 0012 makes Qoida authoritative for customer-facing price anyway;
+-- because ADR 0012 makes HorecaOS authoritative for customer-facing price anyway;
 -- building a price-list-to-venue resolution on a guess would put a wrong number
 -- in front of a customer with a confident provenance attached to it.
 --
@@ -469,7 +469,7 @@ CREATE TABLE integration.pos_sync_differences (
 
     entity_type varchar(32) NOT NULL,
     external_entity_id varchar(64) NOT NULL,
-    qoida_entity_id uuid,
+    horecaos_entity_id uuid,
 
     category varchar(32) NOT NULL,
     field_path varchar(128),
@@ -509,7 +509,7 @@ CREATE TABLE integration.pos_sync_differences (
         'ADDITION', 'AUTHORIZED_CHANGE', 'PROTECTED_FIELD_CHANGE', 'REMOVAL_SIGNAL',
         'MAPPING_CONFLICT', 'INVALID_SOURCE', 'NO_CHANGE')),
     CONSTRAINT ck_pos_difference_authority CHECK (authority IN (
-        'QOIDA', 'PROVIDER', 'MAPPING', 'REVIEWED_IMPORT')),
+        'HORECAOS', 'PROVIDER', 'MAPPING', 'REVIEWED_IMPORT')),
     CONSTRAINT ck_pos_difference_severity CHECK (severity IN ('INFO', 'WARNING', 'BLOCKING')),
     CONSTRAINT ck_pos_difference_action CHECK (recommended_action IN (
         'AUTO_APPLY', 'REVIEW', 'IGNORE', 'STOP')),
@@ -532,7 +532,7 @@ COMMENT ON TABLE integration.pos_sync_differences IS
     'ADR 0012. One row per entity and field the comparison had something to say about. Re-running a comparison over the same snapshots produces exactly these rows again.';
 
 COMMENT ON COLUMN integration.pos_sync_differences.authority IS
-    'Who owns this field under the run''s snapshotted policy. QOIDA fields never auto-apply, whatever the provider sent.';
+    'Who owns this field under the run''s snapshotted policy. HORECAOS fields never auto-apply, whatever the provider sent.';
 
 CREATE TABLE integration.pos_sync_conflicts (
     id uuid PRIMARY KEY,
@@ -623,26 +623,26 @@ CREATE INDEX ix_pos_apply_run_status
     ON integration.pos_sync_apply_items (tenant_id, run_id, status);
 
 COMMENT ON TABLE integration.pos_sync_apply_items IS
-    'ADR 0012. What an approved run will do, and what it did. Nothing here writes a customer-facing price, name, or availability; those stay Qoida''s under every policy version this table can carry.';
+    'ADR 0012. What an approved run will do, and what it did. Nothing here writes a customer-facing price, name, or availability; those stay HorecaOS''s under every policy version this table can carry.';
 
 COMMENT ON COLUMN integration.pos_sync_apply_items.expected_target_version IS
     'The optimistic version the comparison read. A target that moved since goes back to review rather than being overwritten by a decision taken against an older row.';
 
-GRANT USAGE ON SCHEMA integration TO qoida_application;
+GRANT USAGE ON SCHEMA integration TO horecaos_application;
 
-GRANT SELECT, INSERT, UPDATE ON integration.pos_sync_schedules TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON integration.pos_sync_runs TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON integration.pos_sync_schedules TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON integration.pos_sync_runs TO horecaos_application;
 -- Staging is per-run working data with a retention policy, so DELETE is the
 -- expiry path rather than an edit path.
-GRANT SELECT, INSERT, DELETE ON integration.pos_staged_categories TO qoida_application;
-GRANT SELECT, INSERT, DELETE ON integration.pos_staged_products TO qoida_application;
-GRANT SELECT, INSERT, DELETE ON integration.pos_staged_variants TO qoida_application;
-GRANT SELECT, INSERT, DELETE ON integration.pos_staged_modifier_groups TO qoida_application;
-GRANT SELECT, INSERT, DELETE ON integration.pos_staged_modifiers TO qoida_application;
-GRANT SELECT, INSERT, DELETE ON integration.pos_staged_availability TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON integration.pos_absence_observations TO qoida_application;
+GRANT SELECT, INSERT, DELETE ON integration.pos_staged_categories TO horecaos_application;
+GRANT SELECT, INSERT, DELETE ON integration.pos_staged_products TO horecaos_application;
+GRANT SELECT, INSERT, DELETE ON integration.pos_staged_variants TO horecaos_application;
+GRANT SELECT, INSERT, DELETE ON integration.pos_staged_modifier_groups TO horecaos_application;
+GRANT SELECT, INSERT, DELETE ON integration.pos_staged_modifiers TO horecaos_application;
+GRANT SELECT, INSERT, DELETE ON integration.pos_staged_availability TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON integration.pos_absence_observations TO horecaos_application;
 -- No DELETE on a difference or a conflict. A reviewed decision is the evidence
 -- that a menu changed for a reason, and the reason has to outlive the review.
-GRANT SELECT, INSERT, UPDATE ON integration.pos_sync_differences TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON integration.pos_sync_conflicts TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON integration.pos_sync_apply_items TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON integration.pos_sync_differences TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON integration.pos_sync_conflicts TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON integration.pos_sync_apply_items TO horecaos_application;

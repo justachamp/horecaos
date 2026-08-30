@@ -20,7 +20,7 @@ run rule. A model never decides whether a breach happened, only what it means.
 | 3σ | severe | as above, and Claude may have opened a PR or run a pre-approved runbook step |
 
 Nothing reached production. `.claude/hooks/deploy-gate.sh` requires
-`QOIDA_RELEASE_APPROVAL` regardless of what invoked the command.
+`HORECAOS_RELEASE_APPROVAL` regardless of what invoked the command.
 
 ## Triage
 
@@ -124,7 +124,7 @@ Any command printing one number on stdout works — that is the entire contract.
   unit: rows
   runbook: docs/runbooks/....md
   source:
-    command: psql "$QOIDA_DB_URL" -tAc "select count(*) from ..."
+    command: psql "$HORECAOS_DB_URL" -tAc "select count(*) from ..."
 ```
 
 Then let it collect for a week with `--dry-run` before allowing it to escalate. Detection

@@ -324,9 +324,9 @@ CREATE TABLE catalog.publication_items (
 CREATE INDEX ix_publication_items_lookup
     ON catalog.publication_items (publication_id, entity_type);
 
-GRANT USAGE ON SCHEMA catalog TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA catalog TO qoida_application;
+GRANT USAGE ON SCHEMA catalog TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA catalog TO horecaos_application;
 
 -- Publication items are written once and never edited. The grant says so, so a
 -- bug cannot quietly rewrite a published menu.
-REVOKE UPDATE, DELETE ON catalog.publication_items FROM qoida_application;
+REVOKE UPDATE, DELETE ON catalog.publication_items FROM horecaos_application;

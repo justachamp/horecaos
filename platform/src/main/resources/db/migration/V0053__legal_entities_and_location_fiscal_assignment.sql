@@ -137,8 +137,8 @@ COMMENT ON TABLE tenant.location_fiscal_assignments IS
 CREATE INDEX ix_location_fiscal_assignment_resolution
     ON tenant.location_fiscal_assignments (tenant_id, location_id, effective_from DESC);
 
-GRANT SELECT, INSERT, UPDATE ON tenant.legal_entities TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON tenant.location_fiscal_assignments TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON tenant.legal_entities TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON tenant.location_fiscal_assignments TO horecaos_application;
 
 -- The two forward foreign keys ADR 0038's checklist calls "a one-line forward
 -- migration". Run them only after every existing legal_entity_id has a row

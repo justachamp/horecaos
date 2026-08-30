@@ -56,14 +56,14 @@ const LEVELS = ["LOCATION", "BRAND", "TENANT", "PLATFORM"];
 
 const levelLabel = (level, b, l) => ({
   LOCATION: l ? `Location «${l}»` : "Location", BRAND: b ? `Brand «${b}»` : "Brand",
-  TENANT: "Company", PLATFORM: "Qoida default",
+  TENANT: "Company", PLATFORM: "HorecaOS default",
 }[level]);
 
 /* Mid-sentence form. Lower-casing the whole label would lower-case the brand
  * name with it, and a brand's name is not the console's to alter. */
 const originLabel = (level, b, l) => ({
   LOCATION: l ? `location «${l}»` : "location", BRAND: b ? `brand «${b}»` : "brand",
-  TENANT: "company", PLATFORM: "Qoida default",
+  TENANT: "company", PLATFORM: "HorecaOS default",
 }[level]);
 
 /* ── ADR 0030, rendered ────────────────────────────────────────────────────
@@ -472,7 +472,7 @@ function Home({ go, scope }) {
                     {k.type === "readonly" ? `read-only · ${k.readonlyValue}`
                       : !t.winner ? `not set · settable at ${k.settableAt.length} levels`
                         : t.cleared ? `cleared at ${where}`
-                          : t.winner.level === "PLATFORM" ? `Qoida default (${fmt(k, t.value)})`
+                          : t.winner.level === "PLATFORM" ? `HorecaOS default (${fmt(k, t.value)})`
                             : `set at ${where} (${fmt(k, t.value)})`}
                   </span>
                 </button>
@@ -750,7 +750,7 @@ function Locations({ scope }) {
         empty={(
           <EmptyState
             title="No branches yet"
-            description="Branches are provisioned by Qoida — legal entity, residency and metering are settled at creation."
+            description="Branches are provisioned by HorecaOS — legal entity, residency and metering are settled at creation."
             action={<Button>Request a branch</Button>}
           />
         )}

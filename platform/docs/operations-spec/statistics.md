@@ -1,11 +1,11 @@
 # Operations spec — Statistics and reports
 
 **Application:** `apps/operations` · **IA section:** Part 2 §7 Reports (7.1–7.10)
-**Audience:** branch manager, owner, finance, operations director. Not Qoida staff.
+**Audience:** branch manager, owner, finance, operations director. Not HorecaOS staff.
 **Sources:** [parity matrix](../delever-parity-matrix.md) §Дашбоард/Клиенты and
 §Персонал · Delever live docs (fetched, cited inline) ·
 the legacy `qoida-dashboard` archive (outside this repository, in the founding
-machine's Qoida workspace) ·
+machine's HorecaOS workspace) ·
 [IA](../frontend-information-architecture.md) §7 ·
 [Togora report](../togora-prototype-report.md) §2 ·
 [ADR 0043](../adr/partial/0043-reporting-analytics-and-the-metric-layer.md) (Accepted,
@@ -782,7 +782,7 @@ a wallboard shell, not to a reporting workspace with a date picker.
 
 ## 4. Cost: what is cheap on PostgreSQL, and what needs ADR 0043 first
 
-Qoida is PostgreSQL-only where Delever runs a columnar store. ADR 0043 is
+HorecaOS is PostgreSQL-only where Delever runs a columnar store. ADR 0043 is
 **Accepted but not started**: no `reporting` fact tables exist beyond
 `reporting.tenant_summaries`. That makes the question concrete — what can be
 served from `ordering.*` today at pilot scale (one location), and what cannot be

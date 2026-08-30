@@ -481,7 +481,7 @@ VALUES
      'clopos /api-reference/v2/products/get-stop-list; product.venues undocumented', DATE '2026-08-23'),
 
     ('clopos', 'ORDER_APPROVAL', 'PARTIAL',
-     'A genuine authority: PENDING to RECEIVED is a clerk pressing a button on the POS terminal and we cannot make that transition. Partial because there are no webhooks, so the decision reaches us one poll interval late and a race with Qoida Operations is decided by our polling cadence rather than by who decided first.',
+     'A genuine authority: PENDING to RECEIVED is a clerk pressing a button on the POS terminal and we cannot make that transition. Partial because there are no webhooks, so the decision reaches us one poll interval late and a race with HorecaOS Operations is decided by our polling cadence rather than by who decided first.',
      'clopos /api-reference/v2/orders/get-orders; /webhooks.md', DATE '2026-08-23'),
 
     ('clopos', 'ORDER_EXPORT', 'SUPPORTED',
@@ -555,15 +555,15 @@ ON CONFLICT (code) DO NOTHING;
 -- Repeated rather than assumed. V0013 created the integration schema's tables
 -- without a grant block, and a table this migration grants on inside a schema
 -- the role cannot enter is a permission that reads as present and is not.
-GRANT USAGE ON SCHEMA integration TO qoida_application;
+GRANT USAGE ON SCHEMA integration TO horecaos_application;
 
-GRANT SELECT ON integration.pos_provider_capabilities TO qoida_application;
-GRANT SELECT, INSERT ON integration.pos_capability_probes TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON integration.pos_order_exports TO qoida_application;
+GRANT SELECT ON integration.pos_provider_capabilities TO horecaos_application;
+GRANT SELECT, INSERT ON integration.pos_capability_probes TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON integration.pos_order_exports TO horecaos_application;
 -- No UPDATE and no DELETE. An attempt is what happened; editing one would make
 -- the count of possible kitchen tickets negotiable after the fact.
-GRANT SELECT, INSERT ON integration.pos_export_attempts TO qoida_application;
+GRANT SELECT, INSERT ON integration.pos_export_attempts TO horecaos_application;
 -- DELETE is granted because a candidate is a working note from one recovery
 -- read, superseded when the read runs again. It is not evidence of a decision;
 -- the decision lives on the export row with the principal who made it.
-GRANT SELECT, INSERT, DELETE ON integration.pos_export_candidates TO qoida_application;
+GRANT SELECT, INSERT, DELETE ON integration.pos_export_candidates TO horecaos_application;

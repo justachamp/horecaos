@@ -1,6 +1,6 @@
 # Production deployment
 
-Everything needed to run Qoida on the colocated server in Uzbekistan, and
+Everything needed to run HorecaOS on the colocated server in Uzbekistan, and
 nothing that runs anywhere else.
 
 | Path | What it is |
@@ -35,7 +35,7 @@ internet, and putting the edge on `core` gives the one internet-facing process a
 path to PostgreSQL and OpenBao. A two-member link costs nothing and gives up
 neither property.
 
-`QOIDA_MEDIA_ORIGIN` and `QOIDA_MEDIA_HOSTNAME` are required for the same reason
+`HORECAOS_MEDIA_ORIGIN` and `HORECAOS_MEDIA_HOSTNAME` are required for the same reason
 the API and auth ones are: a URL signed for `http://minio:9000` is unreachable
 from a phone and unencrypted if it were.
 
@@ -62,9 +62,9 @@ disk.** ADR 0028 says OpenBao; here is exactly what that means in practice.
   (typed once, in RAM)      AppRole login, renews its own token
         |                         |
         v                         v
-  /run/qoida/secrets        /run/bao   (tmpfs volume, uid 100 : gid 10001)
+  /run/horecaos/secrets        /run/bao   (tmpfs volume, uid 100 : gid 10001)
   tmpfs on the host           token       renewed OpenBao token
-  mode 0700, root             qoida.env   QOIDA_DB_PASSWORD
+  mode 0700, root             horecaos.env   HORECAOS_DB_PASSWORD
         |                         |
         | bind-mounted as         | read by entrypoint.sh, exported to the JVM
         | compose `secrets:`      |
@@ -94,7 +94,7 @@ can be rotated without a restart. That is what `SecretResolver` and
 variables instead would quietly discard the whole design.
 
 **2. Exactly one value is delivered to the application as a value.**
-`QOIDA_DB_PASSWORD`, because Spring needs a datasource before any bean exists.
+`HORECAOS_DB_PASSWORD`, because Spring needs a datasource before any bean exists.
 `infra/openbao/agent.hcl` has one template in it and should keep having one. A
 second template appearing there is a signal that something took a value where a
 reference belonged.
@@ -174,8 +174,8 @@ file up on a workstation, with OpenBao in production mode:
   the shared tmpfs, and the value matches what is in OpenBao byte for byte.
 - Dependency ordering holds: the agent waits for OpenBao to be healthy, and the
   application waits for the database, Kafka, Keycloak and the agent.
-- The Flyway CLI job applies all 34 migrations as `qoida_migrator`, and the
-  application then connects as `qoida_app` and reaches ready.
+- The Flyway CLI job applies all 34 migrations as `horecaos_migrator`, and the
+  application then connects as `horecaos_app` and reaches ready.
 - Only 80 and 443 are published. `/actuator/health/readiness` answers through the
   edge; every other actuator path is 404; an unauthenticated API call is 401;
   Keycloak's admin console is 404.

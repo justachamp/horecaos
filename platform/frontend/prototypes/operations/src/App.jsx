@@ -143,7 +143,7 @@ export default function App() {
       >
         <div style={{ height: TOPBAR, display: "flex", alignItems: "center", padding: "0 16px", flexShrink: 0 }}>
           <span className="q-body-em" style={{ color: "#fff" }}>
-            qoida<span style={{ color: blue }}>.</span>
+            horecaos<span style={{ color: blue }}>.</span>
           </span>
         </div>
 

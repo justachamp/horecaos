@@ -1,6 +1,6 @@
 ---
 name: secrets-and-pii
-description: Use whenever handling a credential, API key, token, provider secret, or personal data (name, phone, address, payment detail) in Qoida Platform — including logging, events, traces, metrics, error messages, dead letters, test fixtures, and migrations. Encodes ADR 0028 and ADR 0029.
+description: Use whenever handling a credential, API key, token, provider secret, or personal data (name, phone, address, payment detail) in HorecaOS Platform — including logging, events, traces, metrics, error messages, dead letters, test fixtures, and migrations. Encodes ADR 0028 and ADR 0029.
 ---
 
 # Secrets and personal data

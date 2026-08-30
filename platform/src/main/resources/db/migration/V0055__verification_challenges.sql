@@ -102,7 +102,7 @@ CREATE INDEX ix_verification_settled
 -- carries an encrypted phone number and ADR 0029 retention is enforced by the
 -- application deleting it.
 GRANT SELECT, INSERT, UPDATE, DELETE
-    ON customer.verification_challenges TO qoida_application;
+    ON customer.verification_challenges TO horecaos_application;
 
 COMMENT ON TABLE customer.verification_challenges IS
     'ADR 0015. Holds a keyed MAC of a one-time code, never the code. Rows are deleted after their retention because they carry an ADR 0029 encrypted phone number.';

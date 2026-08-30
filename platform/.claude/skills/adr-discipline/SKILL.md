@@ -1,6 +1,6 @@
 ---
 name: adr-discipline
-description: Use whenever making, changing, or implementing an architectural decision in Qoida Platform — choosing a technology, adding a module, changing ownership or a boundary, or working from any file in docs/adr. Encodes ADR 0000's process and status model.
+description: Use whenever making, changing, or implementing an architectural decision in HorecaOS Platform — choosing a technology, adding a module, changing ownership or a boundary, or working from any file in docs/adr. Encodes ADR 0000's process and status model.
 ---
 
 # ADR discipline

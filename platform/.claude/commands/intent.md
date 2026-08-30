@@ -3,7 +3,7 @@ description: Capture a problem as intent/NNNN-slug/intent.md (SDLC stage 1)
 argument-hint: [the problem, in your own words]
 ---
 
-Capture this as an intent for Qoida Platform: **$ARGUMENTS**
+Capture this as an intent for HorecaOS Platform: **$ARGUMENTS**
 
 Stage 1 of [docs/sdlc.md](docs/sdlc.md). The originator may not be an engineer, and does
 not need to be.

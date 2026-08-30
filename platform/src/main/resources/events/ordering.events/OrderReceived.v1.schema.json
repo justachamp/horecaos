@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.qoida.uz/events/ordering.events/OrderReceived.v1.schema.json",
+  "$id": "https://contracts.horecaos.uz/events/ordering.events/OrderReceived.v1.schema.json",
   "title": "OrderReceived v1 payload",
   "description": "Emitted inside the ADR 0019 checkout transaction once the order is durable. Carries identifiers, state and totals only: no address, contact, note, or line payload.",
   "type": "object",

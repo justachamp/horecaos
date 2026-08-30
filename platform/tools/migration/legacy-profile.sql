@@ -219,7 +219,7 @@ DECLARE
         GROUP BY c.company
     $q$],
 
-    -- The decision this drives: whether one Qoida tenant may share customer
+    -- The decision this drives: whether one HorecaOS tenant may share customer
     -- accounts across brands, or must keep them isolated. A phone that appears
     -- under two partitions is two people today. ADR 0015 and ADR 0024 both
     -- forbid auto-merging them, so a nonzero count here settles the identity

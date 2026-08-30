@@ -99,9 +99,9 @@ COMMENT ON COLUMN loyalty.accounts.status IS
 
 -- No new table and therefore no new GRANT. Trigger functions run with the
 -- privileges of whoever ran the statement, and both of these only read and
--- raise, so qoida_application needs nothing it does not already hold. EXECUTE is
+-- raise, so horecaos_application needs nothing it does not already hold. EXECUTE is
 -- granted to PUBLIC by default on a new function; it is restated here so that a
 -- later REVOKE ... FROM PUBLIC on this schema cannot silently disarm the two
 -- statements this file exists to make.
-GRANT EXECUTE ON FUNCTION loyalty.assert_closed_account_holds_nothing() TO qoida_application;
-GRANT EXECUTE ON FUNCTION loyalty.assert_closed_account_stays_closed() TO qoida_application;
+GRANT EXECUTE ON FUNCTION loyalty.assert_closed_account_holds_nothing() TO horecaos_application;
+GRANT EXECUTE ON FUNCTION loyalty.assert_closed_account_stays_closed() TO horecaos_application;

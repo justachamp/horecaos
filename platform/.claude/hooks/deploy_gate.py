@@ -50,9 +50,9 @@ PRODUCTION = [
 # meanwhile: a force push still cannot rewrite what is already shared, and no
 # amount of workflow change makes DROP TABLE something to infer.
 #
-# Also honours QOIDA_GATE_PUSH_TO_MAIN=1 in the environment, so it can be armed
+# Also honours HORECAOS_GATE_PUSH_TO_MAIN=1 in the environment, so it can be armed
 # for one session without editing the file.
-PUSH_TO_MAIN_NEEDS_A_HUMAN = os.environ.get("QOIDA_GATE_PUSH_TO_MAIN") == "1"
+PUSH_TO_MAIN_NEEDS_A_HUMAN = os.environ.get("HORECAOS_GATE_PUSH_TO_MAIN") == "1"
 
 # Commands that destroy data or rewrite shared history.
 DESTRUCTIVE = [
@@ -123,14 +123,14 @@ def main() -> int:
     if READ_ONLY_LEAD.match(command.strip()):
         return 0
 
-    if matches(PRODUCTION, command) and not os.environ.get("QOIDA_RELEASE_APPROVAL"):
+    if matches(PRODUCTION, command) and not os.environ.get("HORECAOS_RELEASE_APPROVAL"):
         print(
             "BLOCKED: this command runs against production and no release approval is "
             f"set.\n  {raw[:200]}\n\n"
             "Production deployment is authorised by a person, not inferred by an agent "
             "(ADR 0023). Route:\n"
             "  1. Work through docs/runbooks/deploy.md\n"
-            "  2. The release manager exports QOIDA_RELEASE_APPROVAL=<change-ref>\n"
+            "  2. The release manager exports HORECAOS_RELEASE_APPROVAL=<change-ref>\n"
             "  3. Re-run in that shell\n\n"
             "Preparing the release, opening the PR, and rehearsing rollback in staging "
             "need no approval. Reading these files is not blocked.",

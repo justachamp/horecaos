@@ -1,4 +1,4 @@
-# Qoida Platform — production stack for the colocated server in Uzbekistan.
+# HorecaOS Platform — production stack for the colocated server in Uzbekistan.
 #
 # Why this file is named `compose.production.yaml`
 # ------------------------------------------------
@@ -31,7 +31,7 @@
 #
 # Usage is in docs/runbooks/deploy.md. Do not improvise against this file.
 
-name: qoida-production
+name: horecaos-production
 
 
 # Log rotation is not a detail on this topology. There is one machine and one
@@ -89,9 +89,9 @@ services:
       - "80:80"
       - "443:443"
     environment:
-      QOIDA_API_ORIGIN: ${QOIDA_API_ORIGIN:?set the public API origin, for example https://api.qoida.uz}
-      QOIDA_AUTH_ORIGIN: ${QOIDA_AUTH_ORIGIN:?set the public auth origin, for example https://auth.qoida.uz}
-      QOIDA_ACME_EMAIL: ${QOIDA_ACME_EMAIL:?set the address ACME certificate expiry notices should go to}
+      HORECAOS_API_ORIGIN: ${HORECAOS_API_ORIGIN:?set the public API origin, for example https://api.horecaos.uz}
+      HORECAOS_AUTH_ORIGIN: ${HORECAOS_AUTH_ORIGIN:?set the public auth origin, for example https://auth.horecaos.uz}
+      HORECAOS_ACME_EMAIL: ${HORECAOS_ACME_EMAIL:?set the address ACME certificate expiry notices should go to}
     volumes:
       - ./infra/production/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - edge-data:/data
@@ -107,12 +107,12 @@ services:
           # leaves the host and never depends on the network doing something
           # clever. TLS still verifies, because Caddy is serving the real
           # certificate for that name.
-          - ${QOIDA_API_HOSTNAME:?set the API hostname without a scheme}
-          - ${QOIDA_AUTH_HOSTNAME:?set the auth hostname without a scheme}
+          - ${HORECAOS_API_HOSTNAME:?set the API hostname without a scheme}
+          - ${HORECAOS_AUTH_HOSTNAME:?set the auth hostname without a scheme}
           # Same reasoning for media: the application signs URLs against the
           # public media origin, and it also talks to that origin itself. The
           # alias keeps its own traffic inside the host.
-          - ${QOIDA_MEDIA_HOSTNAME:?set the media hostname without a scheme}
+          - ${HORECAOS_MEDIA_HOSTNAME:?set the media hostname without a scheme}
       # A third network, holding exactly this container and MinIO. The edge has
       # to reach the object store to serve presigned URLs, and neither of the
       # two obvious ways to arrange that is acceptable: putting MinIO on `public`
@@ -159,8 +159,8 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        GIT_SHA: ${QOIDA_GIT_SHA:-unknown}
-    image: qoida/platform:${QOIDA_IMAGE_TAG:?set the release tag, normally the short git sha}
+        GIT_SHA: ${HORECAOS_GIT_SHA:-unknown}
+    image: horecaos/platform:${HORECAOS_IMAGE_TAG:?set the release tag, normally the short git sha}
     <<: *hardening
     restart: unless-stopped
     # Nothing writes to the image. A compromised process cannot drop a binary
@@ -178,25 +178,25 @@ services:
       # image cannot start without first arguing with the schema history.
       SPRING_FLYWAY_ENABLED: "false"
       SPRING_PROFILES_ACTIVE: production
-      QOIDA_ENVIRONMENT: production
+      HORECAOS_ENVIRONMENT: production
 
-      QOIDA_DB_URL: jdbc:postgresql://platform-db:5432/qoida
-      QOIDA_DB_USERNAME: qoida_app
-      # QOIDA_DB_PASSWORD is absent on purpose. It arrives from the OpenBao agent
-      # through /run/bao/qoida.env at container start. See infra/openbao/agent.hcl.
-      QOIDA_DB_MAX_POOL_SIZE: ${QOIDA_DB_MAX_POOL_SIZE:-20}
-      QOIDA_DB_MIN_IDLE: ${QOIDA_DB_MIN_IDLE:-4}
+      HORECAOS_DB_URL: jdbc:postgresql://platform-db:5432/horecaos
+      HORECAOS_DB_USERNAME: horecaos_app
+      # HORECAOS_DB_PASSWORD is absent on purpose. It arrives from the OpenBao agent
+      # through /run/bao/horecaos.env at container start. See infra/openbao/agent.hcl.
+      HORECAOS_DB_MAX_POOL_SIZE: ${HORECAOS_DB_MAX_POOL_SIZE:-20}
+      HORECAOS_DB_MIN_IDLE: ${HORECAOS_DB_MIN_IDLE:-4}
 
-      QOIDA_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      HORECAOS_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
 
-      QOIDA_OIDC_ISSUER_URI: ${QOIDA_AUTH_ORIGIN}/realms/qoida
-      QOIDA_OIDC_AUDIENCE: qoida-api
-      QOIDA_KEYCLOAK_BASE_URL: http://keycloak:8080
-      QOIDA_KEYCLOAK_REALM: qoida
+      HORECAOS_OIDC_ISSUER_URI: ${HORECAOS_AUTH_ORIGIN}/realms/horecaos
+      HORECAOS_OIDC_AUDIENCE: horecaos-api
+      HORECAOS_KEYCLOAK_BASE_URL: http://keycloak:8080
+      HORECAOS_KEYCLOAK_REALM: horecaos
 
-      QOIDA_SECRETS_PROVIDER: openbao
-      QOIDA_OPENBAO_URL: http://openbao:8200
-      QOIDA_OPENBAO_MOUNT: qoida
+      HORECAOS_SECRETS_PROVIDER: openbao
+      HORECAOS_OPENBAO_URL: http://openbao:8200
+      HORECAOS_OPENBAO_MOUNT: horecaos
 
       # The public origin, not `http://minio:9000`. This endpoint is what the
       # presigner signs against, and a presigned URL is handed to a browser: an
@@ -210,19 +210,19 @@ services:
       # alias for the edge container on this network, exactly as the API and auth
       # hostnames are. Caddy needs a site block for this origin — see
       # docs/runbooks/deploy.md, "The media origin".
-      QOIDA_MEDIA_ENDPOINT: ${QOIDA_MEDIA_ORIGIN:?set the public media origin, for example https://media.qoida.uz}
-      QOIDA_MEDIA_BUCKET: ${QOIDA_MEDIA_BUCKET:-qoida-media}
-      QOIDA_MEDIA_REGION: ${QOIDA_MEDIA_REGION:-us-east-1}
+      HORECAOS_MEDIA_ENDPOINT: ${HORECAOS_MEDIA_ORIGIN:?set the public media origin, for example https://media.horecaos.uz}
+      HORECAOS_MEDIA_BUCKET: ${HORECAOS_MEDIA_BUCKET:-horecaos-media}
+      HORECAOS_MEDIA_REGION: ${HORECAOS_MEDIA_REGION:-us-east-1}
       # References, never values. The credentials behind these live in OpenBao
       # and are fetched at call time, so rotating them needs no restart.
-      QOIDA_MEDIA_ACCESS_KEY_REF: qoida:production:object_storage:platform:media-access-key
-      QOIDA_MEDIA_SECRET_KEY_REF: qoida:production:object_storage:platform:media-secret-key
+      HORECAOS_MEDIA_ACCESS_KEY_REF: horecaos:production:object_storage:platform:media-access-key
+      HORECAOS_MEDIA_SECRET_KEY_REF: horecaos:production:object_storage:platform:media-secret-key
 
       # A public OpenAPI document on a production host is a free map of every
       # endpoint and parameter for anyone scanning. The contract is published
       # from CI to the frontend repositories instead.
-      QOIDA_API_DOCS_ENABLED: "false"
-      QOIDA_SWAGGER_UI_ENABLED: "false"
+      HORECAOS_API_DOCS_ENABLED: "false"
+      HORECAOS_SWAGGER_UI_ENABLED: "false"
 
       TZ: Asia/Tashkent
     volumes:
@@ -276,12 +276,12 @@ services:
     build:
       context: .
       dockerfile: infra/production/migrate/Dockerfile
-    image: qoida/platform-migrate:${QOIDA_IMAGE_TAG:-latest}
+    image: horecaos/platform-migrate:${HORECAOS_IMAGE_TAG:-latest}
     <<: *hardening
     restart: "no"
     environment:
-      FLYWAY_URL: jdbc:postgresql://platform-db:5432/qoida
-      FLYWAY_USER: qoida_migrator
+      FLYWAY_URL: jdbc:postgresql://platform-db:5432/horecaos
+      FLYWAY_USER: horecaos_migrator
       # Handed in by the deploy script from the operator's own authenticated
       # OpenBao session. It exists for the lifetime of one `run --rm` container
       # and is never written anywhere. See docs/runbooks/deploy.md.
@@ -289,7 +289,7 @@ services:
       # here would be interpolated on every compose command, including `ps` and
       # `logs`, so an operator debugging an incident would be blocked by a
       # variable that only the migration job needs. Empty fails as
-      # "password authentication failed for user qoida_migrator", which is a
+      # "password authentication failed for user horecaos_migrator", which is a
       # clear message at the only moment it can appear.
       FLYWAY_PASSWORD: ${FLYWAY_PASSWORD:-}
       FLYWAY_LOCATIONS: filesystem:/flyway/sql
@@ -324,19 +324,19 @@ services:
     # production database and the one every test runs against are the same
     # PostgreSQL and the same PostGIS.
     build: ./infra/postgres
-    image: qoida/postgres-postgis:18
+    image: horecaos/postgres-postgis:18
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
     shm_size: 512mb
     environment:
-      POSTGRES_DB: qoida
+      POSTGRES_DB: horecaos
       # The migration role. It owns every object and is the only role that can
-      # change the schema. The application connects as `qoida_app`, which the
+      # change the schema. The application connects as `horecaos_app`, which the
       # init script below creates and which holds only the privileges the
       # migrations grant it explicitly — insert-only on audit tables, no DDL
       # anywhere, and no access to a table a migration did not name.
-      POSTGRES_USER: qoida_migrator
+      POSTGRES_USER: horecaos_migrator
       POSTGRES_PASSWORD_FILE: /run/secrets/platform-db-migrator-password
       POSTGRES_INITDB_ARGS: "--data-checksums"
       TZ: Asia/Tashkent
@@ -388,7 +388,7 @@ services:
       - -c
       - log_line_prefix=%m [%p] %q%u@%d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U qoida_migrator -d qoida"]
+      test: ["CMD-SHELL", "pg_isready -U horecaos_migrator -d horecaos"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -448,7 +448,7 @@ services:
     restart: unless-stopped
     hostname: kafka
     environment:
-      CLUSTER_ID: ${QOIDA_KAFKA_CLUSTER_ID:?generate once with kafka-storage.sh random-uuid and keep it forever}
+      CLUSTER_ID: ${HORECAOS_KAFKA_CLUSTER_ID:?generate once with kafka-storage.sh random-uuid and keep it forever}
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       # No EXTERNAL listener. The development stack publishes 9092 so a developer
@@ -507,7 +507,7 @@ services:
     restart: unless-stopped
     command: ["server", "/data", "--console-address", ":9090"]
     environment:
-      MINIO_ROOT_USER: ${QOIDA_MINIO_ROOT_USER:?set a non-obvious root user name}
+      MINIO_ROOT_USER: ${HORECAOS_MINIO_ROOT_USER:?set a non-obvious root user name}
       MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio-root-password
       # The browser console is a second authenticated surface with no reason to
       # exist here; every operation the runbooks need is an `mc` command.
@@ -553,13 +553,13 @@ services:
     # The password is read from a file by a wrapper rather than passed as an
     # environment value; see infra/production/keycloak/entrypoint.sh for why
     # KC_DB_PASSWORD_FILE does not work here.
-    entrypoint: ["/bin/bash", "/opt/qoida/kc-entrypoint.sh"]
+    entrypoint: ["/bin/bash", "/opt/horecaos/kc-entrypoint.sh"]
     command: ["start"]
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
       KC_DB_USERNAME: keycloak
-      KC_HOSTNAME: ${QOIDA_AUTH_ORIGIN}
+      KC_HOSTNAME: ${HORECAOS_AUTH_ORIGIN}
       # TLS ends at the edge. Keycloak has to be told so explicitly, or it will
       # build redirect URLs on http and refuse cookies as insecure.
       KC_HTTP_ENABLED: "true"
@@ -574,7 +574,7 @@ services:
     secrets:
       - keycloak-db-password
     volumes:
-      - ./infra/production/keycloak/entrypoint.sh:/opt/qoida/kc-entrypoint.sh:ro
+      - ./infra/production/keycloak/entrypoint.sh:/opt/horecaos/kc-entrypoint.sh:ro
     healthcheck:
       # The image ships neither curl nor wget. bash's /dev/tcp is the documented
       # way to probe the management port from inside this container.
@@ -675,7 +675,7 @@ services:
       # Both artefacts, not just the token. A rendered token with an unrendered
       # template means a secret path is missing or the policy is too narrow, and
       # the application would start and then fail on its first secret lookup.
-      test: ["CMD-SHELL", "test -s /run/bao/token && test -s /run/bao/qoida.env"]
+      test: ["CMD-SHELL", "test -s /run/bao/token && test -s /run/bao/horecaos.env"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -766,7 +766,7 @@ services:
     build:
       context: .
       dockerfile: infra/production/ops/Dockerfile
-    image: qoida/platform-ops:${QOIDA_IMAGE_TAG:-latest}
+    image: horecaos/platform-ops:${HORECAOS_IMAGE_TAG:-latest}
     <<: *hardening
     restart: "no"
     # Root, but in the application's group. The nightly backup reads the
@@ -776,15 +776,15 @@ services:
     # group is the smaller privilege than handing the capability back.
     user: "0:10001"
     environment:
-      QOIDA_BACKUP_BUCKET: ${QOIDA_BACKUP_BUCKET:-qoida-backups}
-      QOIDA_BACKUP_S3_ENDPOINT: ${QOIDA_BACKUP_S3_ENDPOINT:-http://minio:9000}
-      QOIDA_BACKUP_RETENTION_DAYS: ${QOIDA_BACKUP_RETENTION_DAYS:-30}
-      QOIDA_BACKUP_OFFSITE_ENDPOINT: ${QOIDA_BACKUP_OFFSITE_ENDPOINT:-}
+      HORECAOS_BACKUP_BUCKET: ${HORECAOS_BACKUP_BUCKET:-horecaos-backups}
+      HORECAOS_BACKUP_S3_ENDPOINT: ${HORECAOS_BACKUP_S3_ENDPOINT:-http://minio:9000}
+      HORECAOS_BACKUP_RETENTION_DAYS: ${HORECAOS_BACKUP_RETENTION_DAYS:-30}
+      HORECAOS_BACKUP_OFFSITE_ENDPOINT: ${HORECAOS_BACKUP_OFFSITE_ENDPOINT:-}
       # Bucket name only. The access and secret keys for this destination are
       # resolved from OpenBao inside the container by ops/backup-job.sh, never
       # passed here: an environment value is visible in `docker inspect` and in
       # the host process table, and these are the keys to the off-site copy.
-      QOIDA_BACKUP_OFFSITE_BUCKET: ${QOIDA_BACKUP_OFFSITE_BUCKET:-}
+      HORECAOS_BACKUP_OFFSITE_BUCKET: ${HORECAOS_BACKUP_OFFSITE_BUCKET:-}
       BAO_ADDR: http://openbao:8200
       TZ: Asia/Tashkent
     volumes:
@@ -807,7 +807,7 @@ services:
 # Secrets
 # -----------------------------------------------------------------------------
 #
-# Every entry points at a file under QOIDA_SECRET_DIR, which
+# Every entry points at a file under HORECAOS_SECRET_DIR, which
 # infra/production/deploy.sh creates as a **tmpfs** — RAM, mode 0700, owned by
 # root — and fills by reading OpenBao with the operator's own authenticated
 # session. Nothing here is in the repository, nothing survives a reboot, and
@@ -823,7 +823,7 @@ services:
 # which is why it goes through the agent instead.
 #
 # The AppRole pair is the one bootstrap credential on the host. Its policy is
-# read-only and production-only (infra/openbao/policies/qoida-platform.hcl), the
+# read-only and production-only (infra/openbao/policies/horecaos-platform.hcl), the
 # secret-id is reissued on every deploy, and both files are gone the moment the
 # machine reboots.
 #
@@ -832,17 +832,17 @@ services:
 # database password is a stack that will be discovered by an attacker.
 secrets:
   platform-db-migrator-password:
-    file: ${QOIDA_SECRET_DIR:?run infra/production/deploy.sh, which sets this}/platform-db-migrator-password
+    file: ${HORECAOS_SECRET_DIR:?run infra/production/deploy.sh, which sets this}/platform-db-migrator-password
   platform-db-app-password:
-    file: ${QOIDA_SECRET_DIR}/platform-db-app-password
+    file: ${HORECAOS_SECRET_DIR}/platform-db-app-password
   keycloak-db-password:
-    file: ${QOIDA_SECRET_DIR}/keycloak-db-password
+    file: ${HORECAOS_SECRET_DIR}/keycloak-db-password
   minio-root-password:
-    file: ${QOIDA_SECRET_DIR}/minio-root-password
+    file: ${HORECAOS_SECRET_DIR}/minio-root-password
   openbao-role-id:
-    file: ${QOIDA_SECRET_DIR}/openbao-role-id
+    file: ${HORECAOS_SECRET_DIR}/openbao-role-id
   openbao-secret-id:
-    file: ${QOIDA_SECRET_DIR}/openbao-secret-id
+    file: ${HORECAOS_SECRET_DIR}/openbao-secret-id
 
 
 networks:

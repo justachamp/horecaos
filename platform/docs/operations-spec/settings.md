@@ -1,7 +1,7 @@
 # Operations spec — Settings
 
 `apps/operations` · section 10 of [the frontend information architecture](../frontend-information-architecture.md) ·
-audience: one restaurant's own admins and managers, never Qoida staff.
+audience: one restaurant's own admins and managers, never HorecaOS staff.
 
 Sources, in authority order: [the Delever parity matrix](../delever-parity-matrix.md) §Настройки and
 §Настройки → Интеграции · Delever's live documentation · `legacy-archive/qoida-dashboard` ·
@@ -15,14 +15,14 @@ the IA · [the Togora report](../togora-prototype-report.md) · the built backen
 Delever's settings area is 47 catalogued capabilities spread over four navigation levels, with
 delivery tariffs in two different places under the same word (*Тарифы* is both the SaaS
 subscription and the delivery rate table), loyalty under order settings in v1 and under marketing
-in v2, and the beta toggle on a personal profile page while being tenant-global. The legacy Qoida
+in v2, and the beta toggle on a personal profile page while being tenant-global. The legacy HorecaOS
 dashboard had the opposite failure: three settings pages total, with the whole branch
 configuration — hours, delivery pricing, Telegram routing — crammed into one `Конфиг` tab of
 `Vendor.detail.page.tsx` as an untyped JSON blob (`work_time`, `delivery`, `prices_per_km`,
 `peak_hours`).
 
 Both fail the same way: **a person cannot find a thing, and cannot tell what level a value came
-from.** Qoida has a real answer to the second problem that neither competitor has — ADR 0030
+from.** HorecaOS has a real answer to the second problem that neither competitor has — ADR 0030
 resolves every scoped value down `PLATFORM → TENANT → BRAND → LOCATION` and can explain itself.
 The single most important design instruction in this document is therefore:
 
@@ -37,7 +37,7 @@ The single most important design instruction in this document is therefore:
 2. **Settings hold what other screens *read*. They never hold what a person *authors*.** Promotions,
    campaigns, menus, zones and courier rates are authoring surfaces and live in Marketing, Catalog
    and Delivery. Settings holds the registries and policies those surfaces resolve against. This
-   is why Qoida's Settings is fourteen screens where Delever's is forty-seven.
+   is why HorecaOS's Settings is fourteen screens where Delever's is forty-seven.
 3. **A settings screen earns its place by being opened during setup or during an incident.**
    Anything opened neither is reference data (10.10) or belongs to control-plane.
 
@@ -60,7 +60,7 @@ different reason, so each gets a door.
 
 **Excluded from Settings on purpose, with where they went instead:**
 
-| Delever puts it in settings | Qoida puts it | Why |
+| Delever puts it in settings | HorecaOS puts it | Why |
 |---|---|---|
 | Надбавки и скидки, промокоды | Marketing 6.1 / 6.2 | A marketer authors these weekly; an admin sets a payment method twice a year. Different people, different cadence. |
 | Программа лояльности | Marketing 6.3 | Same. Delever moved it there itself in v2. |
@@ -70,7 +70,7 @@ different reason, so each gets a door.
 | Атрибуты, бренды, отделы, комментарии к продуктам | Catalog 4.7 | They are catalog vocabularies; the product editor is the only screen that reads them. |
 | Пользователи и роли | Staff 9.1 | Access control is a staff concern, and gating settings behind the screen that grants access to settings is a loop. |
 | История изменений | Staff 9.3 | One audit log for the whole console, filterable to settings. Settings screens deep-link into it. |
-| Тарифы (subscription), Баланс | Finance 8.6 | Delever's own SaaS commerce shown inside the merchant's panel. It is the merchant's Qoida bill, which is finance. |
+| Тарифы (subscription), Баланс | Finance 8.6 | Delever's own SaaS commerce shown inside the merchant's panel. It is the merchant's HorecaOS bill, which is finance. |
 | Управление версиями (v1/v2 module toggles) | Nowhere | Explicitly declined. Rollout is a platform concern behind control-plane 8.1 flags. Tenant-scoped flags never live on a tenant screen, and never on a personal profile page. |
 | Order status vocabulary CRUD | Nowhere | The state machine is code-owned (`ordering.orders.ck_order_status`, `OrderStateMachine`). Declined in the matrix and in ADR 0036. |
 
@@ -109,7 +109,7 @@ Every scalar setting renders through one control with five visual states, driven
 | State | Rendering | Actions offered |
 |---|---|---|
 | **Set at this level** | Value in normal weight. Chip `Задано здесь`. | Edit · `Вернуть наследование` (deletes the row at this level) |
-| **Inherited** | Value muted. Chip `Из бренда «Rayhon»` / `Из компании` / `Значение Qoida`. | `Переопределить здесь` |
+| **Inherited** | Value muted. Chip `Из бренда «Rayhon»` / `Из компании` / `Значение HorecaOS`. | `Переопределить здесь` |
 | **Explicitly unset here** | Chip `Снято здесь`, then the value resolution continued to, muted, beneath. | `Задать значение` · `Вернуть наследование` |
 | **Not settable at this level** | Value muted, chip disabled: `Задаётся на уровне бренда`. | Link that switches the scope bar to that level |
 | **Locked by plan** | Field greyed, `LockedState` inline with the module name and a `Подробнее` link to Finance 8.6. | none |
@@ -280,7 +280,7 @@ read-only with a banner rather than hiding it — history must stay readable.
 
 **Delever comparison.** Delever's *Основные настройки* is one company-wide profile with logo, an
 extra aggregator asset, trade name, phone, bot handle and description — matched above. Delever
-also has a *Бренды* registry (screencast-only) under catalog settings; Qoida's brand is a
+also has a *Бренды* registry (screencast-only) under catalog settings; HorecaOS's brand is a
 first-class tenancy object, so no second registry exists.
 
 **Legacy comparison.** `Company` in the legacy dashboard was `{name, description}` as `{en, ru, uz}`
@@ -342,7 +342,7 @@ badge, because the manager needs to know *why* without opening the row.
 переопределение` is hidden the moment one selected row is already `FOLLOW_SCHEDULE`. Partial
 failure is reported per row, never as one toast — 12 of 14 applied, 2 named with their reason.
 
-**Empty state.** *«Филиалов пока нет»* with the note that locations are provisioned by Qoida
+**Empty state.** *«Филиалов пока нет»* with the note that locations are provisioned by HorecaOS
 (control-plane 2.3) and a `Запросить филиал` action, because the IA excludes location creation from
 operations deliberately: legal entity, residency and metering must be settled at creation.
 
@@ -367,7 +367,7 @@ Nine tabs is Delever's observed ceiling (Togora §2k); this uses six.
 
 **Tab 2 — Часы** — the schedule tab.
 
-Qoida's model is materially better than both predecessors and the screen must show why. Delever
+HorecaOS's model is materially better than both predecessors and the screen must show why. Delever
 has a fixed pair of "venue hours" and "delivery hours"; the legacy dashboard had a `work_time`
 JSON blob per vendor plus a `Нерабочие дни` list. ADR 0036 replaced both with **named reusable
 timetables bound per fulfilment mode**.
@@ -443,7 +443,7 @@ visible and most valuable.
 | Field | Type | Source |
 |---|---|---|
 | Режим | `AUTO_CONFIRM` / `RESTAURANT_APPROVAL` | `document.mode` |
-| Кто подтверждает | `NONE` / `QOIDA_OPERATIONS` / `POS` / `EITHER` | `document.approvalChannel` |
+| Кто подтверждает | `NONE` / `HORECAOS_OPERATIONS` / `POS` / `EITHER` | `document.approvalChannel` |
 | Тайм-аут подтверждения | seconds, 30–1800 | `document.approvalTimeoutSeconds` |
 | Что делать по тайм-ауту | `AUTO_REJECT` / `AUTO_CONFIRM` | `document.timeoutAction` |
 | Требовать причину отказа | boolean | `document.rejectionReasonRequired` |
@@ -458,7 +458,7 @@ Version banner and draft→diff→activate per §1.3. `Активировать`
 изменятся.»* — naming the object and the blast radius, per Togora §2h.
 
 **Delever comparison.** Delever has *Автопринятие заказа* as a toggle plus a channel list plus a
-minimum-prior-successful-orders gate. Qoida's mode/channel/timeout/timeout-action model is richer
+minimum-prior-successful-orders gate. HorecaOS's mode/channel/timeout/timeout-action model is richer
 and versioned, but is missing two things Delever has and this screen should carry:
 
 - **Auto-accept restricted to a set of channels** — *not built.* The document needs an
@@ -477,20 +477,20 @@ and versioned, but is missing two things Delever has and this screen should carr
 | Заказ опаздывает с | minutes | **not built**, config key. The single most-used value on the order board |
 | Цвет индикатора опоздания | colour | **not built**, config key. Must be validated against the SLA ramp for contrast (IA Part 4) |
 | Минимальная сумма заказа | money UZS | overlaps `fulfillment.service_zone_versions.min_basket_minor` — **decide once**: the zone value wins for delivery, this one applies to pickup and dine-in. Say so in the helper text |
-| Расчёт дистанции | `RADIUS` / `ROAD` | `fulfillment.delivery_tariffs.distance_mode` — **per tariff, not global.** Shown here read-only with a link to 3.7, because Delever's global toggle is the worse design and Qoida already decided against it (ADR 0037) |
+| Расчёт дистанции | `RADIUS` / `ROAD` | `fulfillment.delivery_tariffs.distance_mode` — **per tariff, not global.** Shown here read-only with a link to 3.7, because Delever's global toggle is the worse design and HorecaOS already decided against it (ADR 0037) |
 | Интервал опроса маршрутизации | minutes | **not built**, ADR 0037 routing port |
 
 Lateness must be modelled as a computed **overlay**, never as an order status (IA Part 4,
 `StatusPill extensions`). This card sets the threshold; nothing here creates a state.
 
-**Judgement:** Delever sets all of these tenant-wide only. Qoida should make the late threshold and
+**Judgement:** Delever sets all of these tenant-wide only. HorecaOS should make the late threshold and
 average/maximum order time settable at LOCATION. A mall food-court branch and a highway branch do
 not have the same honest promise, and forcing one number makes the whole late indicator noise.
 
 ### Card 3 — Автоматизация
 
 Auto-dispatch, multi-provider cascade, batching radius and unpaid-order timeout are Delever
-settings that Qoida deliberately moved into **Delivery 3.8 dispatch rules**, a single
+settings that HorecaOS deliberately moved into **Delivery 3.8 dispatch rules**, a single
 provider-agnostic rule engine. This card therefore shows a read-only summary of the rules
 currently in force for the scope, with a link. Reason: Delever duplicates near-identical config
 inside five provider pages and consequently cannot express provider fallback at all.
@@ -639,7 +639,7 @@ a plain text field.
 
 Subdomain or custom domain. **Domain verification is DNS TXT, not credential handover.** Delever's
 documented onboarding asks the tenant to give a Delever manager their Cloudflare and registrar
-credentials; Qoida issues a TXT record, shows it with a copy button, polls, and shows
+credentials; HorecaOS issues a TXT record, shows it with a copy button, polls, and shows
 `Не подтверждён / Проверяется / Подтверждён` with the last check time. Also: menu ordering, colours,
 header layout, behaviours, social links, about text, SEO meta title/description templates with the
 recommended length counters Delever documents (≤60 / ≤160), and static pages.
@@ -656,7 +656,7 @@ service PIN, device login and password, status; plus idle media (9:16, ≤1 MB),
 operator, fiscal URL/IP, terminal protocol, marking endpoint, kiosk marking ID, marking toggle,
 table service, available reports.
 
-Qoida's position: **the kiosk stays a first-class channel from day one — it costs one row — and the
+HorecaOS's position: **the kiosk stays a first-class channel from day one — it costs one row — and the
 device/hardware integration is declined for now** (matrix: "Self-service kiosk hardware
 integration" is on the do-not-build list). So this form ships with identity, branch, booking
 customer profile, payment/order types and idle media; the fiscal identity comes from the location's
@@ -707,11 +707,11 @@ receipt.
 | Иконка | image 1:1 ≤1 MB | `media.assets` |
 | Название | localized ru / uz-Latn / en | `payments.payment_methods.display_name` + a texts table — **not built, ADR 0038** |
 | Код | immutable string | `.code` — **not built, ADR 0038** |
-| Базовый тип | `CASH / CARD / ONLINE / CASHBACK / DEPOSIT / GLOBAL_PAY` | Delever's enum; Qoida's equivalent is `responsibility` plus `settles_from_balance` — see below |
+| Базовый тип | `CASH / CARD / ONLINE / CASHBACK / DEPOSIT / GLOBAL_PAY` | Delever's enum; HorecaOS's equivalent is `responsibility` plus `settles_from_balance` — see below |
 | Кто выдаёт чек | `PARTNER / TERMINAL / MARKETPLACE / OPERATOR` | `.responsibility` — **not built, ADR 0038** |
 | Эквайринг | installation → 10.8 | `.provider_installation_id` — required when `PARTNER` |
 | Договор | reference | `.contract_reference` — required when `MARKETPLACE` |
-| Списывается с баланса | boolean | `.settles_from_balance` — ADR 0046, for `LOYALTY_POINTS`. `CUSTOMER_DEPOSIT` is withdrawn: Qoida holds no customer funds |
+| Списывается с баланса | boolean | `.settles_from_balance` — ADR 0046, for `LOYALTY_POINTS`. `CUSTOMER_DEPOSIT` is withdrawn: HorecaOS holds no customer funds |
 | Активен | boolean | `.active` |
 | Каналы | count → 10.4 | `tenant.channel_payment_methods` |
 
@@ -739,7 +739,7 @@ actions) and its six-value base-type enum are matched above. Its model is weaker
 place: nothing on a Delever payment type says who issues the receipt, so the fiscalization
 question is answered by a separate free-form list under order settings — *«Типы оплат,
 фискализируемые через Delever»* — which can drift out of agreement with the payment list.
-Qoida puts the responsibility on the method itself. That single move removes a whole class of
+HorecaOS puts the responsibility on the method itself. That single move removes a whole class of
 silent fiscal gaps and should not be traded away for parity.
 
 **Legacy comparison.** The legacy dashboard hard-coded `PaymentMethod` as a TypeScript enum —
@@ -828,7 +828,7 @@ fiscalize through each responsibility — a projection of 10.6, not a second edi
 
 ## 10.8 Integrations
 
-**What it is for.** Connect the restaurant to everything outside Qoida, and see at a glance which
+**What it is for.** Connect the restaurant to everything outside HorecaOS, and see at a glance which
 connection is broken right now.
 
 **Layout.** A hub of category sections over a per-installation detail with tabs. The hub is
@@ -842,7 +842,7 @@ ADR 0030 configuration, and the UI must present it that way: one account, many b
 binding able to override configuration (`configuration_override` jsonb).
 
 Delever's spine is "almost every integration is installed per branch" — credentials, service IDs,
-fiscal INNs and API tokens all at branch granularity. Qoida's model is better and must be shown as
+fiscal INNs and API tokens all at branch granularity. HorecaOS's model is better and must be shown as
 better: **the account is held once, and the branch overrides only what genuinely differs.**
 Duplicating a Payme merchant ID across thirty branch forms is how one of them ends up stale.
 
@@ -901,7 +901,7 @@ a `Только с ошибками` toggle · search over provider and display 
 A tenant registering its own partner integration gets a **proper OAuth client with a rotatable
 secret** (ADR 0026 + 0028): client id shown, secret revealed once, `Ротировать`, `Отозвать`, last
 used timestamp. Delever mints the credential as `base64(login:password)` of a real panel user;
-the matrix lists that among the security anti-patterns Qoida records as explicit non-goals, and it
+the matrix lists that among the security anti-patterns HorecaOS records as explicit non-goals, and it
 must not reappear here as "how it worked before".
 
 **States.** A `RETIRED` installation stays visible and read-only. An installation the plan does not
@@ -926,7 +926,7 @@ be built against them: `notifications.templates`, `notifications.template_versio
 ### Tab 1 — Шаблоны
 
 **The key.** Delever keys an order-status template on `(status × source × order type × language)`.
-Qoida keys it on **`(status × channel × fulfilment mode × source channel × locale)`** and resolves
+HorecaOS keys it on **`(status × channel × fulfilment mode × source channel × locale)`** and resolves
 brand override → tenant override → platform default, with locale falling back requested → brand
 default → tenant default. That is ADR 0020's stated resolution order; the screen must show which
 of those steps produced the template being previewed, using the same origin chip as §1.2.
@@ -948,7 +948,7 @@ alphabetically — an admin reading this list is walking an order through its li
 **Editor.** A `TemplateEditor` with `VariableChip` insertion and a live preview inside the matching
 frame. Variables are **allowlisted typed variables from a versioned schema**
 (`template_versions.variables_schema`) — ADR 0020 refuses object-graph access because a template
-that can walk an object is a PII exfiltration path. The thirteen Delever documents and Qoida should
+that can walk an object is a PII exfiltration path. The thirteen Delever documents and HorecaOS should
 match: order id, restaurant name, delivery time, preparation time, product list, total, discount
 amount, delivery fee, courier first name, courier surname, courier phone, customer name,
 customer phone. Plus a `Показывать цены товаров` toggle, which Delever has and which changes the
@@ -963,7 +963,7 @@ keep it.
 texts; ADR 0020 keeps the local record referencing the approved external template. A template
 `PENDING` or `REJECTED` **blocks sending**, and the editor shows that as a banner with the provider's
 reason and a `Отправить на модерацию` action — not as a badge someone might miss. Delever's docs do
-not model this at all and the IA calls it out as something Qoida adds.
+not model this at all and the IA calls it out as something HorecaOS adds.
 
 **Actions.** `Создать`, `Изменить` (creates a new `template_version`, never mutates), `Активировать`,
 `Тестовая отправка` (to a staff phone, recorded as an audit fact), `Дублировать на другой язык`.
@@ -977,7 +977,7 @@ delete button.
 ### Tab 2 — Маршрутизация
 
 Where the restaurant's own alerts go. Delever gives each branch five Telegram chat IDs by event
-class; the legacy Qoida dashboard gave each vendor two (`tg_chat_id`, `tg_delivery_chat_id`) and
+class; the legacy HorecaOS dashboard gave each vendor two (`tg_chat_id`, `tg_delivery_chat_id`) and
 staff use them daily.
 
 | Field | Source |
@@ -1012,7 +1012,7 @@ because each list is five to fifteen rows and giving each its own screen is the 
 
 ### Причины отмены
 
-The most-used list in the console, and the one Delever and Qoida model most differently.
+The most-used list in the console, and the one Delever and HorecaOS model most differently.
 `ordering.order_outcome_reasons` + `ordering.order_outcome_reasons_texts` — **ADR 0039,
 Accepted, Not started.** Today `ordering.order_state_history.reason_code` is a bare `varchar(64)`
 with no registry behind it.
@@ -1065,7 +1065,7 @@ Note the relationship to `tenant.service_schedule_exceptions`: a holiday in the 
 ### Границы SLA
 
 Tenant-configurable time buckets for the SLA distribution reports. **Not built, ADR 0043.**
-Qoida beats Delever here on purpose: Delever hard-codes six buckets, which cannot be changed later
+HorecaOS beats Delever here on purpose: Delever hard-codes six buckets, which cannot be changed later
 without invalidating historical comparison. Changing a boundary must therefore be versioned and
 the reports must state which boundary set they were computed under.
 
@@ -1243,7 +1243,7 @@ place a printer width exists is the kiosk form, and **kiosk hardware integration
 have to exist, rather than shipping fields nothing reads.
 
 **Judgement:** do not build a receipt-template designer. A restaurant that needs one has a POS that
-already has one, and Qoida's job at the print boundary is to hand the POS a correct order and to
+already has one, and HorecaOS's job at the print boundary is to hand the POS a correct order and to
 hand the customer a correct fiscal document.
 
 ---
@@ -1258,7 +1258,7 @@ hand the customer a correct fiscal document.
 | Dual-text cancellation reasons (internal + customer-facing) | Match. ADR 0039 already goes further with disposition and liability |
 | Completion reasons | Match, plus the fulfilment-mode restriction Delever lacks |
 | SMS/status templates keyed by status × source × order type × language, with drag-in merge variables and a show-prices toggle | Match the layout exactly — left content pane with language tabs, right parameter pane. It is well designed |
-| Five per-branch Telegram alert channels by event class | Match. The legacy Qoida dashboard had two and staff use them daily |
+| Five per-branch Telegram alert channels by event class | Match. The legacy HorecaOS dashboard had two and staff use them daily |
 | Branch prep-time intervals by time of day | Already built (`tenant.preparation_bands`), richer than Delever's |
 | Per-branch order limit | Already built (`tenant.location_service_state.max_concurrent_orders`) |
 | Auto-accept restricted to a channel set, gated by prior successful orders | **Not built and should be.** It is the difference between "auto-accept" being usable and being dangerous |
@@ -1269,7 +1269,7 @@ hand the customer a correct fiscal document.
 
 ### Beat, deliberately
 
-| Where | What Qoida does instead | Why |
+| Where | What HorecaOS does instead | Why |
 |---|---|---|
 | Inheritance | Every value shows its level and can explain itself (ADR 0030 trace) | Delever's settings are flat; a franchisee cannot tell what their head office set |
 | Explicit unset | `is_explicit_null` rendered as its own state | "Never set here" and "deliberately removed here" are different facts and Delever cannot express either |
@@ -1290,8 +1290,8 @@ hand the customer a correct fiscal document.
 
 | Delever capability | Reason |
 |---|---|
-| Тарифы (SaaS subscription) and Баланс (prepaid wallet with expiring credit) | The merchant's Qoida bill is Finance 8.6. Expiring prepaid credit is declined outright in the matrix |
-| Управление версиями — per-module v1/v2 toggles | A symptom of running two frontends. Qoida builds once and rolls out with control-plane flags |
+| Тарифы (SaaS subscription) and Баланс (prepaid wallet with expiring credit) | The merchant's HorecaOS bill is Finance 8.6. Expiring prepaid credit is declined outright in the matrix |
+| Управление версиями — per-module v1/v2 toggles | A symptom of running two frontends. HorecaOS builds once and rolls out with control-plane flags |
 | Beta toggle on the personal account page | Tenant-scoped flags never live on a user-scoped screen. The matrix records that Delever moved this control twice and it is still in the wrong place |
 | Order status CRUD | A tenant-editable state machine makes event contracts, automations and cross-tenant reporting ungovernable |
 | Программа лояльности, Надбавки и скидки in Settings | Marketing authoring surfaces, not configuration |

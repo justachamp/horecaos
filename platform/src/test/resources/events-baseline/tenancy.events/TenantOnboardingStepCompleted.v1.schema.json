@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.qoida.uz/events/tenancy.events/TenantOnboardingStepCompleted.v1.schema.json",
+  "$id": "https://contracts.horecaos.uz/events/tenancy.events/TenantOnboardingStepCompleted.v1.schema.json",
   "title": "TenantOnboardingStepCompleted v1 payload",
   "description": "One ADR 0008 onboarding step completed. Names the step; never carries what the step produced, because a step result holds organization and subject identifiers and applied configuration.",
   "type": "object",

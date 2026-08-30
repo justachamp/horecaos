@@ -148,7 +148,7 @@ CREATE TABLE integration.provider_entity_mappings (
     installation_id uuid NOT NULL,
     binding_id uuid NOT NULL,
     entity_type varchar(64) NOT NULL,
-    qoida_entity_id uuid NOT NULL,
+    horecaos_entity_id uuid NOT NULL,
     external_entity_id varchar(255) NOT NULL,
     external_parent_id varchar(255),
     status varchar(24) NOT NULL,
@@ -162,13 +162,13 @@ CREATE TABLE integration.provider_entity_mappings (
     -- Both directions unique: an ambiguous mapping is a conflict to resolve,
     -- never a last-write-wins race.
     CONSTRAINT uq_mapping_external UNIQUE (binding_id, entity_type, external_entity_id),
-    CONSTRAINT uq_mapping_qoida UNIQUE (binding_id, entity_type, qoida_entity_id),
+    CONSTRAINT uq_mapping_horecaos UNIQUE (binding_id, entity_type, horecaos_entity_id),
     CONSTRAINT ck_mapping_status CHECK (status IN ('PROPOSED', 'ACTIVE', 'CONFLICTED', 'RETIRED')),
     CONSTRAINT ck_mapping_source CHECK (mapping_source IN ('DISCOVERED', 'OPERATOR', 'IMPORTED'))
 );
 
 CREATE INDEX ix_mapping_lookup
-    ON integration.provider_entity_mappings (tenant_id, entity_type, qoida_entity_id, status);
+    ON integration.provider_entity_mappings (tenant_id, entity_type, horecaos_entity_id, status);
 
 COMMENT ON TABLE integration.provider_entity_mappings IS
     'ADR 0026 single store of external identifier mappings. Catalog reads these through a port and keeps no copy.';

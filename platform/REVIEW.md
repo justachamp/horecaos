@@ -1,6 +1,6 @@
 # Review policy
 
-How pull requests on Qoida Platform are reviewed, by people and by Claude. Claude reviews
+How pull requests on HorecaOS Platform are reviewed, by people and by Claude. Claude reviews
 every PR automatically (`.github/workflows/claude-review.yml`); this file is its
 instruction set as much as it is ours.
 

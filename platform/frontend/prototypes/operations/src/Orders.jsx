@@ -754,7 +754,7 @@ function Detail({ order: o, onClose, onAct, onMenu, revealed, onReveal }) {
       <Panel title="Money and payment">
         {o.pricingAuthority === "EXTERNAL" ? (
           <p className="q-body-sm" style={{ margin: "0 0 10px", padding: "8px 10px", color: "var(--q-warning-text)", background: "var(--q-warning-tint)" }}>
-            Partner prices — Qoida does not recompute them. Read from order_external_pricing and never rendered in the
+            Partner prices — HorecaOS does not recompute them. Read from order_external_pricing and never rendered in the
             same styling as our own numbers. <Gap adr={GAPS.external} />
           </p>
         ) : null}

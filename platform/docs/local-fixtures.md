@@ -60,7 +60,7 @@ where no gateway is bound and no message can leave.
 `+998 00 …` is allocated to no Uzbek operator, so it addresses nobody. Both
 values live in `src/main/resources/application-local.yml`, which the `local`
 profile activates — the same binding `db/local-fixtures` has. Override them with
-`QOIDA_VERIFICATION_PRESET_PHONE` and `QOIDA_VERIFICATION_PRESET_CODE` if you
+`HORECAOS_VERIFICATION_PRESET_PHONE` and `HORECAOS_VERIFICATION_PRESET_CODE` if you
 want different ones.
 
 Three requests, and the third returns the bearer everything else needs:
@@ -87,7 +87,7 @@ curl -s "http://localhost:8080/api/v1/storefront/tenants/$TENANT/brands/$BRAND/m
 ```
 
 The token is opaque, starts with `qcs1.`, and lasts 30 days
-(`qoida.customers.session.ttl`). Sign out with
+(`horecaos.customers.session.ttl`). Sign out with
 `DELETE $IDENTITY/sessions/current`, which needs the same bearer and an
 `Idempotency-Key` header.
 

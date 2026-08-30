@@ -18,7 +18,7 @@
 --      that foreign identifier is then copied into B's own audit evidence field.
 --   2. Because the constraint accepts exactly the ids that exist somewhere on
 --      the platform and rejects every other uuid, the verify endpoint answers
---      "does this media asset id exist anywhere on Qoida" for any uuid a caller
+--      "does this media asset id exist anywhere on HorecaOS" for any uuid a caller
 --      cares to submit. A foreign key is a fine integrity rule and a terrible
 --      place to learn that an identifier is real.
 --
@@ -57,7 +57,7 @@ CREATE TABLE fulfillment.courier_engagement_evidence_orphans (
 COMMENT ON TABLE fulfillment.courier_engagement_evidence_orphans IS
     'Evidence media references removed from fulfillment.courier_engagements by V0069 because no media asset of that tenant matched. Retained as evidence of what was once attached; never read by the application, and never resolved to an object.';
 
-GRANT SELECT, INSERT ON fulfillment.courier_engagement_evidence_orphans TO qoida_application;
+GRANT SELECT, INSERT ON fulfillment.courier_engagement_evidence_orphans TO horecaos_application;
 
 -- Move first, constrain second. An ALTER that fails on real data is not a
 -- migration, and "there is probably nothing in that column" is not a plan. On

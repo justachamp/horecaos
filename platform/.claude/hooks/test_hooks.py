@@ -60,7 +60,7 @@ check("committed migration", BLOCK, P,
       edit(f"{MIG}/V0035__grant_application_access_to_ungranted_tables.sql"))
 check("new, uncommitted migration", ALLOW, P, edit(f"{MIG}/V9999__brand_new.sql"))
 check("ordinary Java source", ALLOW, P,
-      edit("src/main/java/uz/qoida/platform/catalog/application/CatalogPublicationService.java"))
+      edit("src/main/java/uz/horecaos/platform/catalog/application/CatalogPublicationService.java"))
 check("accepted ADR, decision rewritten", BLOCK, P,
       edit("docs/adr/built/0001-platform-foundation.md",
            old_string="We will use PostgreSQL", new_string="We will use MySQL"))
@@ -81,21 +81,21 @@ check("malformed payload", ALLOW, P, {})
 
 # --- deploy-gate ------------------------------------------------------------
 D = "deploy_gate.py"
-APPROVED = {"QOIDA_RELEASE_APPROVAL": "CHG-1042"}
+APPROVED = {"HORECAOS_RELEASE_APPROVAL": "CHG-1042"}
 PROD_COMPOSE = "compose.production.yaml"
 PROD_DEPLOY = "infra/production/deploy.sh"
 
 # Whether pushing to main needs a human is a *configuration*, not a fact:
-# deploy_gate.py arms it from QOIDA_GATE_PUSH_TO_MAIN, and it is currently stood
+# deploy_gate.py arms it from HORECAOS_GATE_PUSH_TO_MAIN, and it is currently stood
 # down while the AI-native SDLC is being folded into daily work. So the tests
 # assert the setting behaves, not which setting is in force -- and every case
 # pins the variable explicitly, so an armed shell cannot silently change what a
 # test means. An empty string is falsy to the hook, i.e. stood down.
-GATE_ARMED = {"QOIDA_GATE_PUSH_TO_MAIN": "1"}
-GATE_STOOD_DOWN = {"QOIDA_GATE_PUSH_TO_MAIN": ""}
+GATE_ARMED = {"HORECAOS_GATE_PUSH_TO_MAIN": "1"}
+GATE_STOOD_DOWN = {"HORECAOS_GATE_PUSH_TO_MAIN": ""}
 # Production approval is pinned the same way, so a shell that happens to hold a
 # release approval does not turn the production cases green for the wrong reason.
-UNAPPROVED = {"QOIDA_RELEASE_APPROVAL": ""}
+UNAPPROVED = {"HORECAOS_RELEASE_APPROVAL": ""}
 
 check("push to main, gate armed", BLOCK, D, bash("git push origin main"), GATE_ARMED)
 check("push to HEAD:main, gate armed", BLOCK, D,
@@ -152,7 +152,7 @@ check("production deploy with approval", ALLOW, D, bash(f"./{PROD_DEPLOY}"), APP
 # --- post-edit-check --------------------------------------------------------
 C = "post_edit_check.py"
 check("advisory only, never blocks", ALLOW, C,
-      edit("src/main/java/uz/qoida/platform/catalog/application/CatalogPublicationService.java"))
+      edit("src/main/java/uz/horecaos/platform/catalog/application/CatalogPublicationService.java"))
 check("ignores non-code files", ALLOW, C, edit("README.md"))
 
 print()

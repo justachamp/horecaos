@@ -1,6 +1,6 @@
 # Backup and restore
 
-ADR 0034 puts Qoida on a colocated server first. Nobody else is checking that a
+ADR 0034 puts HorecaOS on a colocated server first. Nobody else is checking that a
 backup ran, produced something restorable, or left the building — so these
 scripts verify each of those, and the rehearsal is the one that matters.
 
@@ -28,14 +28,14 @@ differ. Last local run: 2 tenants, 25 audit events, 12 migrations, matched.
 ## Configuration
 
 ```text
-QOIDA_BACKUP_DB_URL          source database
-QOIDA_BACKUP_PASSPHRASE      encryption passphrase; see below
-QOIDA_BACKUP_BUCKET          primary (on-box) bucket
-QOIDA_BACKUP_S3_ENDPOINT     primary S3-compatible endpoint
-QOIDA_BACKUP_ACCESS_KEY      primary credentials
-QOIDA_BACKUP_SECRET_KEY
-QOIDA_BACKUP_RETENTION_DAYS  default 30
-QOIDA_RESTORE_TARGET_URL     restore target; never production
+HORECAOS_BACKUP_DB_URL          source database
+HORECAOS_BACKUP_PASSPHRASE      encryption passphrase; see below
+HORECAOS_BACKUP_BUCKET          primary (on-box) bucket
+HORECAOS_BACKUP_S3_ENDPOINT     primary S3-compatible endpoint
+HORECAOS_BACKUP_ACCESS_KEY      primary credentials
+HORECAOS_BACKUP_SECRET_KEY
+HORECAOS_BACKUP_RETENTION_DAYS  default 30
+HORECAOS_RESTORE_TARGET_URL     restore target; never production
 ```
 
 ## The off-site copy
@@ -65,11 +65,11 @@ Four environment variables, nothing else. The first three have no default in
 quietly keep a copy on the machine it is backing up.
 
 ```text
-QOIDA_BACKUP_OFFSITE_ENDPOINT     https://s3.<region>.amazonaws.com  (or B2, or a
+HORECAOS_BACKUP_OFFSITE_ENDPOINT     https://s3.<region>.amazonaws.com  (or B2, or a
                                   regional provider's S3-compatible endpoint)
-QOIDA_BACKUP_OFFSITE_ACCESS_KEY   a key restricted to this one bucket
-QOIDA_BACKUP_OFFSITE_SECRET_KEY   resolved from OpenBao, never a literal
-QOIDA_BACKUP_OFFSITE_BUCKET       optional; defaults to QOIDA_BACKUP_BUCKET,
+HORECAOS_BACKUP_OFFSITE_ACCESS_KEY   a key restricted to this one bucket
+HORECAOS_BACKUP_OFFSITE_SECRET_KEY   resolved from OpenBao, never a literal
+HORECAOS_BACKUP_OFFSITE_BUCKET       optional; defaults to HORECAOS_BACKUP_BUCKET,
                                   because the endpoint is what makes it off-site
 ```
 
@@ -110,11 +110,11 @@ server room. It must never be committed here.
 
 ## Before this is production-ready
 
-- [ ] Point `QOIDA_BACKUP_OFFSITE_*` at a genuine remote bucket with versioning
+- [ ] Point `HORECAOS_BACKUP_OFFSITE_*` at a genuine remote bucket with versioning
       and object-lock, using a credential scoped to that bucket alone. Until this
       is done the nightly backup fails every night, which is the intended
       behaviour and is not something to work around.
-- [ ] Resolve `QOIDA_BACKUP_OFFSITE_ACCESS_KEY` and `..._SECRET_KEY` from OpenBao
+- [ ] Resolve `HORECAOS_BACKUP_OFFSITE_ACCESS_KEY` and `..._SECRET_KEY` from OpenBao
       in `infra/production/ops/backup-job.sh`, beside the passphrase.
 - [ ] Schedule `backup.sh` and run `rehearse-restore.sh` at least weekly.
 - [ ] Alert on a backup that did not run, not only on one that failed — silence

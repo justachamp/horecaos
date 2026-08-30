@@ -75,4 +75,4 @@ COMMENT ON COLUMN ordering.cart_fulfillment.latitude IS
 
 -- No DELETE: a destination is replaced by upsert, and the row goes when the cart
 -- does, through the referential action above rather than through a grant.
-GRANT SELECT, INSERT, UPDATE ON ordering.cart_fulfillment TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON ordering.cart_fulfillment TO horecaos_application;

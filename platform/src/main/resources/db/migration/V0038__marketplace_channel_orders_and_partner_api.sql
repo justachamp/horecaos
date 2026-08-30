@@ -2,7 +2,7 @@
 --
 -- ADR 0040 was `Proposed` on one question: who issues the fiscal receipt for an
 -- order an aggregator collected payment for. ADR 0038 answered it — the
--- restaurant's legal entity is the seller and the legal principal, Qoida is an
+-- restaurant's legal entity is the seller and the legal principal, HorecaOS is an
 -- agent and never the issuer — and the answer is what makes this migration
 -- writable. A marketplace order is a sale by the restaurant, so it belongs in
 -- the same `ordering.orders` table as every other sale by that restaurant, under
@@ -62,8 +62,8 @@ CREATE SCHEMA IF NOT EXISTS partner;
 
 -- ADR 0026's category enum has no value for a provider that sends orders in.
 -- `MARKETPLACE` is distinct from `DELIVERY` and the distinction is not
--- taxonomy: Yandex Delivery sources a courier for an order Qoida owns, Yandex
--- Eda sends an order Qoida did not create. Same company, opposite direction, two
+-- taxonomy: Yandex Delivery sources a courier for an order HorecaOS owns, Yandex
+-- Eda sends an order HorecaOS did not create. Same company, opposite direction, two
 -- installations, two sets of credentials, two failure modes.
 ALTER TABLE integration.provider_environments
     DROP CONSTRAINT ck_provider_environment_category;
@@ -81,9 +81,9 @@ ALTER TABLE integration.installations
 
 -- --------------------------------------------------- inbound partner credentials
 
--- ADR 0026 models one direction of a provider relationship: Qoida holds a secret
+-- ADR 0026 models one direction of a provider relationship: HorecaOS holds a secret
 -- and calls out. A marketplace runs both directions, and the inbound half is a
--- machine principal authenticating *to* Qoida. That is an identity object with
+-- machine principal authenticating *to* HorecaOS. That is an identity object with
 -- its own lifecycle, so it is a row rather than a field on the installation.
 --
 -- There is no secret column, and there will not be one. `secret_reference` is an
@@ -164,14 +164,14 @@ ALTER TABLE ordering.orders
     -- Where the order was placed. Not derivable from the channel, because a
     -- tenant may register several marketplace channels and a channel may be
     -- reconfigured after orders were taken on it.
-    ADD COLUMN origin varchar(16) NOT NULL DEFAULT 'QOIDA',
+    ADD COLUMN origin varchar(16) NOT NULL DEFAULT 'HORECAOS',
     -- Who computed the total. The single enforcement point for the ADR 0018
     -- bypass; ADR 0036's channel flag seeds this and is never consulted again.
-    ADD COLUMN pricing_authority varchar(16) NOT NULL DEFAULT 'QOIDA',
-    -- Who owns the courier and the customer promise. PARTNER narrows Qoida's
-    -- state machine rather than surrendering it: Qoida stays the only writer of
+    ADD COLUMN pricing_authority varchar(16) NOT NULL DEFAULT 'HORECAOS',
+    -- Who owns the courier and the customer promise. PARTNER narrows HorecaOS's
+    -- state machine rather than surrendering it: HorecaOS stays the only writer of
     -- orders.status, and partner courier state is a projection stored beside it.
-    ADD COLUMN fulfillment_authority varchar(16) NOT NULL DEFAULT 'QOIDA',
+    ADD COLUMN fulfillment_authority varchar(16) NOT NULL DEFAULT 'HORECAOS',
     -- How the row got here. A manually keyed aggregator order is a total a human
     -- typed and the platform cannot verify, which is a materially different
     -- evidential position from a total a partner pushed.
@@ -179,7 +179,7 @@ ALTER TABLE ordering.orders
     ADD COLUMN marketplace_binding_id uuid;
 
 COMMENT ON COLUMN ordering.orders.origin IS
-    'ADR 0040. QOIDA for an order placed on a Qoida surface, MARKETPLACE for one an aggregator pushed or an operator keyed in on an aggregator''s behalf.';
+    'ADR 0040. HORECAOS for an order placed on a HorecaOS surface, MARKETPLACE for one an aggregator pushed or an operator keyed in on an aggregator''s behalf.';
 COMMENT ON COLUMN ordering.orders.pricing_authority IS
     'ADR 0040. The only enforcement point for the ADR 0018 bypass. EXTERNAL means the totals were supplied and verified arithmetically, never re-derived; such orders are excluded from pricing reconciliation and must be labelled wherever they are aggregated.';
 COMMENT ON COLUMN ordering.orders.fulfillment_authority IS
@@ -189,10 +189,10 @@ COMMENT ON COLUMN ordering.orders.entry_mode IS
 COMMENT ON COLUMN ordering.orders.marketplace_binding_id IS
     'ADR 0026 binding of the MARKETPLACE installation this order arrived through. Required on every MARKETPLACE-origin order, because "which aggregator" is not answerable from the channel alone once a tenant runs three.';
 
--- ADR 0019 made four columns mandatory because every order came from a Qoida
--- cart that Qoida had priced. A marketplace order has none of them: no cart was
+-- ADR 0019 made four columns mandatory because every order came from a HorecaOS
+-- cart that HorecaOS had priced. A marketplace order has none of them: no cart was
 -- ever opened, no quote was ever computed, and the context hash that proves "the
--- price you were shown is the price you paid" has nothing to prove because Qoida
+-- price you were shown is the price you paid" has nothing to prove because HorecaOS
 -- showed no price. Dropping the NOT NULL and stating the pairing per authority
 -- keeps the guarantee exactly where it was true and stops asserting it where it
 -- never was.
@@ -203,10 +203,10 @@ ALTER TABLE ordering.orders
     ALTER COLUMN cart_id DROP NOT NULL;
 
 ALTER TABLE ordering.orders
-    ADD CONSTRAINT ck_order_origin CHECK (origin IN ('QOIDA', 'MARKETPLACE')),
-    ADD CONSTRAINT ck_order_pricing_authority CHECK (pricing_authority IN ('QOIDA', 'EXTERNAL')),
+    ADD CONSTRAINT ck_order_origin CHECK (origin IN ('HORECAOS', 'MARKETPLACE')),
+    ADD CONSTRAINT ck_order_pricing_authority CHECK (pricing_authority IN ('HORECAOS', 'EXTERNAL')),
     ADD CONSTRAINT ck_order_fulfillment_authority CHECK (
-        fulfillment_authority IN ('QOIDA', 'PARTNER')),
+        fulfillment_authority IN ('HORECAOS', 'PARTNER')),
     ADD CONSTRAINT ck_order_entry_mode CHECK (entry_mode IN ('API', 'MANUAL', 'IMPORT')),
 
     -- The boundary this decision exists to draw. Delever's «Свободная скидка» is
@@ -214,38 +214,38 @@ ALTER TABLE ordering.orders
     -- anyone who can set a discount can set any total. Here the escape hatch is
     -- reachable from exactly one origin and the database says so.
     ADD CONSTRAINT ck_order_external_pricing_is_marketplace CHECK (
-        pricing_authority = 'QOIDA' OR origin = 'MARKETPLACE'),
+        pricing_authority = 'HORECAOS' OR origin = 'MARKETPLACE'),
 
     -- "Which aggregator" must be answerable from the order row alone. A
     -- marketplace order with no binding is one nobody can settle, reconcile, or
     -- push a status back to.
     ADD CONSTRAINT ck_order_marketplace_has_binding CHECK (
-        origin = 'QOIDA' OR marketplace_binding_id IS NOT NULL),
-    ADD CONSTRAINT ck_order_qoida_has_no_binding CHECK (
+        origin = 'HORECAOS' OR marketplace_binding_id IS NOT NULL),
+    ADD CONSTRAINT ck_order_horecaos_has_no_binding CHECK (
         origin = 'MARKETPLACE' OR marketplace_binding_id IS NULL),
 
     -- The quote and its context hash travel together or not at all, and both are
-    -- present exactly when Qoida priced the order. Written as equivalences so
-    -- neither an externally priced order carrying a quote nor a Qoida-priced one
+    -- present exactly when HorecaOS priced the order. Written as equivalences so
+    -- neither an externally priced order carrying a quote nor a HorecaOS-priced one
     -- missing its quote can be written.
     ADD CONSTRAINT ck_order_quote_matches_authority CHECK (
-        (pricing_authority = 'QOIDA') = (pricing_quote_id IS NOT NULL)),
+        (pricing_authority = 'HORECAOS') = (pricing_quote_id IS NOT NULL)),
     ADD CONSTRAINT ck_order_quote_pair CHECK (
         (pricing_quote_id IS NULL) = (pricing_context_hash IS NULL)),
 
-    -- A cart is a Qoida surface artefact. A marketplace order has none, and a
+    -- A cart is a HorecaOS surface artefact. A marketplace order has none, and a
     -- fabricated empty cart to satisfy a foreign key would put a row in every
     -- cart-conversion funnel that no customer ever filled.
     ADD CONSTRAINT ck_order_cart_matches_origin CHECK (
-        (origin = 'QOIDA') = (cart_id IS NOT NULL)),
+        (origin = 'HORECAOS') = (cart_id IS NOT NULL)),
 
-    -- One-directional on purpose. A Qoida order always names the publication its
+    -- One-directional on purpose. A HorecaOS order always names the publication its
     -- lines were snapshotted from; a marketplace order may name the publication
     -- its lines were matched against, and that is worth storing when it is known
     -- and honest to leave null when a partner sent something the catalogue does
     -- not carry.
-    ADD CONSTRAINT ck_order_qoida_has_publication CHECK (
-        origin <> 'QOIDA' OR catalog_publication_id IS NOT NULL),
+    ADD CONSTRAINT ck_order_horecaos_has_publication CHECK (
+        origin <> 'HORECAOS' OR catalog_publication_id IS NOT NULL),
 
     ADD CONSTRAINT fk_order_marketplace_binding FOREIGN KEY (tenant_id, marketplace_binding_id)
         REFERENCES integration.bindings (tenant_id, id);
@@ -305,12 +305,12 @@ ALTER TABLE ordering.order_revisions
         (pricing_quote_id IS NULL) = (pricing_context_hash IS NULL));
 
 COMMENT ON COLUMN ordering.order_revisions.pricing_quote_id IS
-    'ADR 0039, relaxed by ADR 0040. Null exactly on a revision of an externally priced order: there was no quote, and a fabricated one would claim Qoida computed a total it received.';
+    'ADR 0039, relaxed by ADR 0040. Null exactly on a revision of an externally priced order: there was no quote, and a fabricated one would claim HorecaOS computed a total it received.';
 
 -- ---------------------------------------------------------- unmapped order lines
 
 -- The deliberate tolerance in ADR 0040's rejection table. A line that maps to no
--- Qoida catalogue node is normally a menu-sync lag on one item, and refusing the
+-- HorecaOS catalogue node is normally a menu-sync lag on one item, and refusing the
 -- whole order means a customer who has already paid the aggregator gets nothing
 -- while the branch never learns why. A flagged line is a problem a person solves
 -- in the thirty seconds before the food is cooked.
@@ -334,13 +334,13 @@ ALTER TABLE ordering.order_lines
         (source_variant_id IS NULL) = (external_mapping_status = 'UNMAPPED'));
 
 COMMENT ON COLUMN ordering.order_lines.external_mapping_status IS
-    'ADR 0040. UNMAPPED means a partner sent an item the catalogue does not carry: the line keeps the partner''s own name and amount, carries no variant, and raises a location-visible exception. Every Qoida-originated line is MAPPED.';
+    'ADR 0040. UNMAPPED means a partner sent an item the catalogue does not carry: the line keeps the partner''s own name and amount, carries no variant, and raises a location-visible exception. Every HorecaOS-originated line is MAPPED.';
 COMMENT ON COLUMN ordering.order_lines.external_item_reference IS
     'ADR 0040. The partner''s identifier for the item. Present on marketplace lines so an unmapped line names the SKU the aggregator has to fix.';
 
 -- ---------------------------------------------------------- external order money
 
--- What the partner said, kept verbatim and separately from what Qoida booked.
+-- What the partner said, kept verbatim and separately from what HorecaOS booked.
 -- The two agree by construction — the ingestion refuses a push whose parts do
 -- not sum to its total, and `ordering.orders` carries its own reconciliation
 -- check — but they are different claims by different parties and a single set of
@@ -393,7 +393,7 @@ CREATE TABLE ordering.order_external_pricing (
         customer_paid_total_minor >= 0 AND external_subtotal_minor >= 0
         AND external_discount_minor >= 0 AND external_fee_minor >= 0
         AND (external_tax_minor IS NULL OR external_tax_minor >= 0)),
-    -- The arithmetic rule itself, at the database. Qoida validates nothing else
+    -- The arithmetic rule itself, at the database. HorecaOS validates nothing else
     -- about an external total, so this is the whole of what it promises: an
     -- order whose booked total does not equal the sum of its parts is what an
     -- accountant finds three months later and nobody can explain.
@@ -414,7 +414,7 @@ CREATE TABLE ordering.order_external_pricing (
 );
 
 COMMENT ON TABLE ordering.order_external_pricing IS
-    'ADR 0040. The partner''s own money claim for an externally priced order, stored verbatim. Qoida validates arithmetic and nothing else; these rows are excluded from pricing reconciliation and must be labelled wherever they are aggregated.';
+    'ADR 0040. The partner''s own money claim for an externally priced order, stored verbatim. HorecaOS validates arithmetic and nothing else; these rows are excluded from pricing reconciliation and must be labelled wherever they are aggregated.';
 COMMENT ON COLUMN ordering.order_external_pricing.external_tax_minor IS
     'Null means the partner stated no tax, which is not the same as zero tax. A zero here would be a VAT claim nobody made.';
 COMMENT ON COLUMN ordering.order_external_pricing.partner_payout_minor IS
@@ -422,7 +422,7 @@ COMMENT ON COLUMN ordering.order_external_pricing.partner_payout_minor IS
 
 -- ------------------------------------------------------------ external references
 
--- Customers and couriers quote the aggregator's number, not Qoida's. ADR 0026's
+-- Customers and couriers quote the aggregator's number, not HorecaOS's. ADR 0026's
 -- provider_entity_mappings cannot hold these: its unique keys make it a
 -- one-to-one map per binding per entity type, and one order legitimately carries
 -- a partner order id, a short display code, a venue-facing number and a delivery
@@ -449,7 +449,7 @@ CREATE TABLE ordering.order_external_references (
     CONSTRAINT ck_external_reference_type CHECK (reference_type IN (
         'PARTNER_ORDER_ID', 'PARTNER_DISPLAY_CODE', 'PARTNER_VENUE_ORDER_NO',
         'DELIVERY_CLAIM_ID', 'POS_ORDER_ID')),
-    CONSTRAINT ck_external_reference_issued_by CHECK (issued_by IN ('PARTNER', 'QOIDA', 'POS')),
+    CONSTRAINT ck_external_reference_issued_by CHECK (issued_by IN ('PARTNER', 'HORECAOS', 'POS')),
     CONSTRAINT ck_external_reference_value CHECK (length(btrim(reference_value)) > 0),
     CONSTRAINT ck_external_reference_version CHECK (version >= 1),
     CONSTRAINT fk_external_reference_order FOREIGN KEY (order_id, tenant_id)
@@ -524,7 +524,7 @@ CREATE TABLE ordering.order_handover_challenges (
     updated_at timestamptz NOT NULL DEFAULT now(),
 
     CONSTRAINT ck_handover_type CHECK (challenge_type IN ('CODE', 'QR', 'SIGNATURE', 'NONE')),
-    CONSTRAINT ck_handover_issued_by CHECK (issued_by IN ('PARTNER', 'QOIDA')),
+    CONSTRAINT ck_handover_issued_by CHECK (issued_by IN ('PARTNER', 'HORECAOS')),
     CONSTRAINT ck_handover_status CHECK (
         status IN ('PENDING', 'VERIFIED', 'BYPASSED', 'FAILED', 'EXPIRED')),
     -- A challenge that expects nothing is exactly a challenge of type NONE.
@@ -571,14 +571,14 @@ COMMENT ON COLUMN ordering.order_handover_challenges.challenge_type IS
 -- Every partner push lands here first, and this row is the evidence that a
 -- rejected order was received at all. Without it a refused push is
 -- indistinguishable from one that never arrived, and the partner's portal shows
--- an order Qoida has no record of.
+-- an order HorecaOS has no record of.
 CREATE TABLE partner.inbound_orders (
     id uuid PRIMARY KEY,
     tenant_id uuid NOT NULL,
     binding_id uuid NOT NULL,
     -- The partner's stable identifier for the order. Together with the binding
     -- this is the idempotency key, and it is a stronger one than a client-chosen
-    -- header: Qoida does not control the partner's retry client, but the
+    -- header: HorecaOS does not control the partner's retry client, but the
     -- partner's own order identifier is stable by construction.
     external_order_id varchar(128) NOT NULL,
 
@@ -598,10 +598,10 @@ CREATE TABLE partner.inbound_orders (
     -- it points at the order the first push created.
     order_id uuid,
 
-    -- What the partner said about timing. Qoida's own promise columns record
-    -- NOT_PROMISED for a fulfillment_authority = PARTNER order, because Qoida
+    -- What the partner said about timing. HorecaOS's own promise columns record
+    -- NOT_PROMISED for a fulfillment_authority = PARTNER order, because HorecaOS
     -- did not make that promise and a copied one would be indistinguishable from
-    -- a promise Qoida owns.
+    -- a promise HorecaOS owns.
     partner_pickup_expected_at timestamptz,
 
     created_at timestamptz NOT NULL DEFAULT now(),
@@ -704,33 +704,33 @@ COMMENT ON COLUMN integration.provider_activity_watermarks.alert_state IS
 
 -- ------------------------------------------------------------------------ grants
 
-GRANT USAGE ON SCHEMA partner TO qoida_application;
+GRANT USAGE ON SCHEMA partner TO horecaos_application;
 
 -- No DELETE on the credential registry. Revoking a partner's access is a status
 -- change with a time on it; deleting the row loses the evidence that the
 -- credential ever existed, which is the record an incident review needs most.
-GRANT SELECT, INSERT, UPDATE ON partner.api_clients TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON partner.api_clients TO horecaos_application;
 
 -- No UPDATE and no DELETE. An inbound push is what a partner sent at an instant.
 -- Its outcome is decided in the same transaction that inserts it, and a row that
 -- can be edited afterwards is not evidence of anything.
-GRANT SELECT, INSERT ON partner.inbound_orders TO qoida_application;
+GRANT SELECT, INSERT ON partner.inbound_orders TO horecaos_application;
 
 -- No DELETE. Settlement writes the payout columns weeks after ingestion, which
 -- is why UPDATE is here; nothing legitimately removes the record of what a
 -- partner claimed the customer paid.
-GRANT SELECT, INSERT, UPDATE ON ordering.order_external_pricing TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON ordering.order_external_pricing TO horecaos_application;
 
 -- No UPDATE. A reference is a fact somebody else issued: a partner that reissues
 -- a code has issued a second reference, and overwriting the first loses the
 -- courier's ability to find the order by the number on their phone.
-GRANT SELECT, INSERT ON ordering.order_external_references TO qoida_application;
+GRANT SELECT, INSERT ON ordering.order_external_references TO horecaos_application;
 
 -- UPDATE, because attempts, status and the verification columns are live state
 -- while a challenge is open. No DELETE: a failed handover is the record of an
 -- argument about a bag of food.
-GRANT SELECT, INSERT, UPDATE ON ordering.order_handover_challenges TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON ordering.order_handover_challenges TO horecaos_application;
 
-GRANT SELECT, INSERT, UPDATE ON integration.provider_activity_watermarks TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON integration.provider_activity_watermarks TO horecaos_application;
 
-GRANT EXECUTE ON FUNCTION ordering.assert_marketplace_binding() TO qoida_application;
+GRANT EXECUTE ON FUNCTION ordering.assert_marketplace_binding() TO horecaos_application;

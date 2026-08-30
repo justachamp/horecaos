@@ -3,8 +3,8 @@
 **Night alert.** **Last executed:** never — this is a draft.
 
 ```bash
-cd /opt/qoida/qoida-platform
-alias qc='docker compose -f compose.production.yaml --env-file /etc/qoida/production.env'
+cd /opt/horecaos/horecaos-platform
+alias qc='docker compose -f compose.production.yaml --env-file /etc/horecaos/production.env'
 ```
 
 ## Before anything: the rows are safe
@@ -17,7 +17,7 @@ touching the database by hand, and the reason this paragraph is first is that at
 ## 1. How far behind, and which direction?
 
 ```bash
-qc exec -T platform-db psql -U qoida_migrator -d qoida -c \
+qc exec -T platform-db psql -U horecaos_migrator -d horecaos -c \
   "SELECT status, count(*), max(now() - created_at) AS oldest
      FROM integration.outbox_events GROUP BY status ORDER BY 1"
 ```
@@ -39,7 +39,7 @@ you can reach the API, and it does not need a database credential:
 ```bash
 read -rsp 'access token: ' TOKEN; echo
 curl -fsS -H "Authorization: Bearer ${TOKEN}" \
-  "https://api.qoida.uz/api/v1/control-plane/integration/failures/outbox/<eventId>" | jq .
+  "https://api.horecaos.uz/api/v1/control-plane/integration/failures/outbox/<eventId>" | jq .
 ```
 
 ## 2. Is the relay running?
@@ -48,7 +48,7 @@ curl -fsS -H "Authorization: Bearer ${TOKEN}" \
 qc ps platform-app && qc logs --tail 100 platform-app | grep -i outbox
 ```
 
-**Check:** the relay is a switch, `qoida.messaging.outbox.enabled`. If the
+**Check:** the relay is a switch, `horecaos.messaging.outbox.enabled`. If the
 container is running and there is no outbox activity in the log at all, the
 switch is off in that container's environment — which is a deploy mistake, not
 an incident. Fix the environment and redeploy.
@@ -74,7 +74,7 @@ Kafka's own disk fills the same volume as everything else. If it is full, go to
 
 ```bash
 qc exec -T kafka /opt/kafka/bin/kafka-consumer-groups.sh \
-  --bootstrap-server localhost:29092 --describe --group qoida-platform
+  --bootstrap-server localhost:29092 --describe --group horecaos-platform
 ```
 
 **Check:** the `LAG` column. Lag that is falling is a consumer catching up and
@@ -85,14 +85,14 @@ spent and what the last error was:
 
 ```bash
 curl -fsS -H "Authorization: Bearer ${TOKEN}" \
-  "https://api.qoida.uz/api/v1/control-plane/integration/failures/inbox/<consumer>/<eventId>" | jq .
+  "https://api.horecaos.uz/api/v1/control-plane/integration/failures/inbox/<consumer>/<eventId>" | jq .
 ```
 
 The consumer is part of the key, not a filter: one event reaches several
 consumers and each has its own attempt count. Then treat it as
 [dead-letter-decision.md](dead-letter-decision.md). Lag that is flat
 with no consumer at all means the listener is not running:
-`qoida.messaging.inbox.listener.enabled`.
+`horecaos.messaging.inbox.listener.enabled`.
 
 ## 5. Never
 

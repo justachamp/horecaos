@@ -904,7 +904,7 @@ function People({ people, setPeople, actor, onOpen, jobFilter, setJobFilter }) {
               }],
             }]);
             setInvite(false);
-            setToast(`${f.name} is invited. The link is qoida.uz/i/8f2a-41c — copy it and send it, most branch staff have no email.`);
+            setToast(`${f.name} is invited. The link is horecaos.uz/i/8f2a-41c — copy it and send it, most branch staff have no email.`);
           }}
         />
       ) : null}

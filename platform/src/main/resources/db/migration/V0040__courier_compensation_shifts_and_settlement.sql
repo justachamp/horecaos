@@ -842,7 +842,7 @@ CREATE TABLE fulfillment.courier_payouts (
 );
 
 COMMENT ON TABLE fulfillment.courier_payouts IS
-    'ADR 0042. Qoida computes, approves and records the payout; it does not move the money. Disbursement is a later ADR 0013 capability and this row is its seam. A large share of courier pay here settles by the courier keeping cash he already collected, and CASH_AT_BRANCH is that arrangement written down rather than left off the books.';
+    'ADR 0042. HorecaOS computes, approves and records the payout; it does not move the money. Disbursement is a later ADR 0013 capability and this row is its seam. A large share of courier pay here settles by the courier keeping cash he already collected, and CASH_AT_BRANCH is that arrangement written down rather than left off the books.';
 
 -- ---------------------------------------------------------------------------
 -- 9. Two cost paths
@@ -896,7 +896,7 @@ CREATE TABLE fulfillment.delivery_cost_lines (
         (cost_path = 'PARTNER') = (provider_code IS NOT NULL)),
     -- INVOICED is meaningless on the internal path: a self-employed courier's
     -- accrual becomes SETTLED when the period closes, and there is no invoice
-    -- from Qoida to itself in between.
+    -- from HorecaOS to itself in between.
     CONSTRAINT ck_cost_line_internal_basis CHECK (
         cost_path <> 'INTERNAL' OR cost_basis IN ('ACCRUED', 'SETTLED'))
 );
@@ -964,7 +964,7 @@ CREATE TABLE fulfillment.partner_delivery_invoice_lines (
     CONSTRAINT ck_partner_line_match CHECK (match_status IN (
         'PENDING', 'MATCHED', 'VARIANCE', 'UNBILLED', 'UNMATCHED_LINE')),
     CONSTRAINT ck_partner_line_currency CHECK (currency ~ '^[A-Z]{3}$'),
-    -- UNMATCHED_LINE is exactly the case where Qoida has no shipment for what
+    -- UNMATCHED_LINE is exactly the case where HorecaOS has no shipment for what
     -- the partner billed, and every other settled status has one. Stated as two
     -- implications rather than one equality because PENDING is a third case --
     -- imported and not yet run through matching -- and folding it into either
@@ -979,7 +979,7 @@ CREATE TABLE fulfillment.partner_delivery_invoice_lines (
 );
 
 COMMENT ON COLUMN fulfillment.partner_delivery_invoice_lines.match_status IS
-    'UNMATCHED_LINE is the direction reconciliation reports usually omit -- the partner billed for something Qoida has no shipment for -- and the only one that can hide a charge for a delivery that never happened. It is never netted into a total.';
+    'UNMATCHED_LINE is the direction reconciliation reports usually omit -- the partner billed for something HorecaOS has no shipment for -- and the only one that can hide a charge for a delivery that never happened. It is never netted into a total.';
 COMMENT ON COLUMN fulfillment.partner_delivery_invoice_lines.variance_minor IS
     'Invoiced less accrued. Above the ADR 0030 threshold it raises an operations task and blocks nothing: disputing a partner invoice is a human activity, and the platform records evidence for it rather than pretending to automate it.';
 
@@ -998,26 +998,26 @@ CREATE INDEX ix_partner_line_status ON fulfillment.partner_delivery_invoice_line
 -- ADR 0027's grant test asserts exactly this by attempting an UPDATE as the
 -- application role and requiring it to fail.
 
-GRANT USAGE ON SCHEMA fulfillment TO qoida_application;
+GRANT USAGE ON SCHEMA fulfillment TO horecaos_application;
 
-GRANT SELECT, INSERT, UPDATE ON fulfillment.courier_types TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON fulfillment.couriers TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON fulfillment.courier_engagements TO qoida_application;
-GRANT SELECT, INSERT ON fulfillment.courier_registration_notices TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.courier_rate_cards TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.courier_rate_components TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON fulfillment.courier_settlement_periods TO qoida_application;
-GRANT SELECT, INSERT ON fulfillment.courier_settlement_statements TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON fulfillment.courier_shifts TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON fulfillment.courier_shift_breaks TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON fulfillment.courier_types TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON fulfillment.couriers TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON fulfillment.courier_engagements TO horecaos_application;
+GRANT SELECT, INSERT ON fulfillment.courier_registration_notices TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.courier_rate_cards TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.courier_rate_components TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON fulfillment.courier_settlement_periods TO horecaos_application;
+GRANT SELECT, INSERT ON fulfillment.courier_settlement_statements TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON fulfillment.courier_shifts TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON fulfillment.courier_shift_breaks TO horecaos_application;
 -- UPDATE on earnings is granted for one column and one reason: the ADR 0029
 -- retention sweeper nulls the two confirmation coordinates thirty days after the
 -- period settles. Everything the accrual was computed from is untouched by it.
-GRANT SELECT, INSERT, UPDATE ON fulfillment.courier_assignment_earnings TO qoida_application;
-GRANT SELECT, INSERT ON fulfillment.courier_ledger_entries TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON fulfillment.courier_cash_handovers TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON fulfillment.courier_adjustment_reasons TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON fulfillment.courier_payouts TO qoida_application;
-GRANT SELECT, INSERT ON fulfillment.delivery_cost_lines TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON fulfillment.partner_delivery_invoices TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON fulfillment.partner_delivery_invoice_lines TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON fulfillment.courier_assignment_earnings TO horecaos_application;
+GRANT SELECT, INSERT ON fulfillment.courier_ledger_entries TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON fulfillment.courier_cash_handovers TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON fulfillment.courier_adjustment_reasons TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON fulfillment.courier_payouts TO horecaos_application;
+GRANT SELECT, INSERT ON fulfillment.delivery_cost_lines TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON fulfillment.partner_delivery_invoices TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON fulfillment.partner_delivery_invoice_lines TO horecaos_application;

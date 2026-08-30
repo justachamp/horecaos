@@ -83,7 +83,7 @@
 -- ------------------------------------------------------------------- grants
 --
 -- No new table, so no new GRANT. Every one of the six tables touched holds a
--- table-level privilege for `qoida_application` (V0005, V0007, V0024, V0025), and
+-- table-level privilege for `horecaos_application` (V0005, V0007, V0024, V0025), and
 -- a table-level privilege in PostgreSQL covers columns added later — the same
 -- reasoning V0071 wrote down for `consumed_at`. A generated column is never
 -- written directly, so it needs no INSERT or UPDATE privilege of its own, which

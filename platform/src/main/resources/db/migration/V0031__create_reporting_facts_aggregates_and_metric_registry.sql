@@ -28,7 +28,7 @@
 -- ---------------------------------------------------------------------------
 --
 -- ADR 0023 forbids reporting from reading a module schema on the read path, and
--- ADR 0043 makes that a grant rather than a convention: `qoida_reporting_read`,
+-- ADR 0043 makes that a grant rather than a convention: `horecaos_reporting_read`,
 -- created at the end of this file, holds SELECT on `reporting` and nothing else.
 -- The close job is the one thing that reads `ordering` and `payments`, and it
 -- writes only here.
@@ -55,7 +55,7 @@ CREATE TABLE reporting.business_day_policies (
     tenant_id uuid PRIMARY KEY,
 
     -- Local wall-clock time at which the business day begins. Delever defaults to
-    -- 09:00; Qoida defaults to midnight, because midnight is what a merchant
+    -- 09:00; HorecaOS defaults to midnight, because midnight is what a merchant
     -- assumes until they say otherwise, and a default that silently shifts a
     -- third of the evening into tomorrow is a support ticket on day one.
     business_day_start time NOT NULL DEFAULT '00:00',
@@ -413,8 +413,8 @@ BEGIN
     EXECUTE format(
         'CREATE TABLE reporting.%I PARTITION OF reporting.%I FOR VALUES FROM (%L) TO (%L)',
         v_name, p_table, v_start, v_end);
-    EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON reporting.%I TO qoida_application', v_name);
-    EXECUTE format('GRANT SELECT ON reporting.%I TO qoida_reporting_read', v_name);
+    EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON reporting.%I TO horecaos_application', v_name);
+    EXECUTE format('GRANT SELECT ON reporting.%I TO horecaos_reporting_read', v_name);
 END;
 $$;
 
@@ -647,7 +647,7 @@ CREATE INDEX ix_agg_branch_day_range
 -- Grants
 -- ---------------------------------------------------------------------------
 --
--- `qoida_reporting_read` is ADR 0023's rule expressed as a grant rather than a
+-- `horecaos_reporting_read` is ADR 0023's rule expressed as a grant rather than a
 -- convention: SELECT on `reporting` and nothing else, no INSERT anywhere, and no
 -- USAGE on `ordering`, `payments`, `customers`, or any other module schema. A
 -- reporting query that reaches a module table fails at the database instead of
@@ -657,27 +657,27 @@ CREATE INDEX ix_agg_branch_day_range
 -- uses; creating a password here would put a credential in a migration file.
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'qoida_reporting_read') THEN
-        CREATE ROLE qoida_reporting_read NOLOGIN;
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'horecaos_reporting_read') THEN
+        CREATE ROLE horecaos_reporting_read NOLOGIN;
     END IF;
 END
 $$;
 
-GRANT USAGE ON SCHEMA reporting TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON reporting.business_day_policies TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON reporting.metric_definitions TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON reporting.fact_order TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON reporting.fact_order_line TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON reporting.fact_refund TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON reporting.agg_branch_day TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON reporting.agg_sla_bucket_day TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON reporting.close_runs TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON reporting.aggregate_divergences TO qoida_application;
-GRANT EXECUTE ON FUNCTION reporting.ensure_fact_partition(text, date) TO qoida_application;
+GRANT USAGE ON SCHEMA reporting TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON reporting.business_day_policies TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON reporting.metric_definitions TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON reporting.fact_order TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON reporting.fact_order_line TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON reporting.fact_refund TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON reporting.agg_branch_day TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON reporting.agg_sla_bucket_day TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON reporting.close_runs TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON reporting.aggregate_divergences TO horecaos_application;
+GRANT EXECUTE ON FUNCTION reporting.ensure_fact_partition(text, date) TO horecaos_application;
 
-GRANT USAGE ON SCHEMA reporting TO qoida_reporting_read;
-GRANT SELECT ON ALL TABLES IN SCHEMA reporting TO qoida_reporting_read;
-ALTER DEFAULT PRIVILEGES IN SCHEMA reporting GRANT SELECT ON TABLES TO qoida_reporting_read;
+GRANT USAGE ON SCHEMA reporting TO horecaos_reporting_read;
+GRANT SELECT ON ALL TABLES IN SCHEMA reporting TO horecaos_reporting_read;
+ALTER DEFAULT PRIVILEGES IN SCHEMA reporting GRANT SELECT ON TABLES TO horecaos_reporting_read;
 
 -- Seeded after the grants so the partitions inherit them through the function.
 DO $$

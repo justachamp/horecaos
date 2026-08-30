@@ -3,8 +3,8 @@
 **Morning digest item.** **Last executed:** never — this is a draft.
 
 ```bash
-cd /opt/qoida/qoida-platform
-alias qc='docker compose -f compose.production.yaml --env-file /etc/qoida/production.env'
+cd /opt/horecaos/horecaos-platform
+alias qc='docker compose -f compose.production.yaml --env-file /etc/horecaos/production.env'
 ```
 
 ## Before anything: no customer is affected
@@ -20,7 +20,7 @@ be ready. The whole run is on record, so you can say exactly where it stopped.
 ## 1. Which run, and which step?
 
 ```bash
-qc exec -T platform-db psql -U qoida_migrator -d qoida -c \
+qc exec -T platform-db psql -U horecaos_migrator -d horecaos -c \
   "SELECT r.id AS run_id, r.tenant_id, r.status AS run_status, r.current_phase,
           s.step_key, s.status AS step_status, s.attempt_count,
           s.last_error_code, now() - s.updated_at AS stopped_for
@@ -74,7 +74,7 @@ qc ps platform-app && qc logs --tail 200 platform-app | grep -iE "onboarding|sch
   platform rather than about one tenant. Read the SQL state in the message; it
   is a code bug and needs a fix, not a resume.
 - **No onboarding activity at all** — the scheduler is a switch,
-  `qoida.onboarding.scheduler.enabled`, and it is off in that container's
+  `horecaos.onboarding.scheduler.enabled`, and it is off in that container's
   environment. A deploy mistake rather than an incident: fix the environment and
   redeploy.
 - **Ordinary activity** — the workers are alive and it is one step that is
@@ -83,7 +83,7 @@ qc ps platform-app && qc logs --tail 200 platform-app | grep -iE "onboarding|sch
 In the third case, look for a step stuck mid-flight:
 
 ```bash
-qc exec -T platform-db psql -U qoida_migrator -d qoida -c \
+qc exec -T platform-db psql -U horecaos_migrator -d horecaos -c \
   "SELECT run_id, step_key, attempt_count, claimed_at, now() - claimed_at AS held_for
      FROM tenant.onboarding_steps WHERE status = 'RUNNING' ORDER BY claimed_at"
 ```
@@ -115,7 +115,7 @@ curl -fsS -X POST \
   -H "Idempotency-Key: $(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid)" \
   -H 'Content-Type: application/json' \
   --data "$(printf '{"reason":"resumed after fixing %s"}' "${FIX}")" \
-  "https://api.qoida.uz/api/v1/control-plane/tenants/${TENANT_ID}/onboarding-runs/${RUN_ID}/resume"
+  "https://api.horecaos.uz/api/v1/control-plane/tenants/${TENANT_ID}/onboarding-runs/${RUN_ID}/resume"
 
 unset TOKEN
 ```
@@ -147,7 +147,7 @@ That is not this alert and never will be. A run reaching `READY` means every
 required check passed and the go-live decision is now a person's:
 
 ```bash
-qc exec -T platform-db psql -U qoida_migrator -d qoida -c \
+qc exec -T platform-db psql -U horecaos_migrator -d horecaos -c \
   "SELECT id, tenant_id, status, updated_at FROM tenant.onboarding_runs
     WHERE status = 'READY' ORDER BY updated_at"
 ```

@@ -1,4 +1,4 @@
-# The Qoida SDLC
+# The HorecaOS SDLC
 
 How a change moves from someone noticing a problem to running in production, and where a
 person has to make a decision.
@@ -169,7 +169,7 @@ merge.
 Production is authorised, never inferred:
 
 ```bash
-export QOIDA_RELEASE_APPROVAL=CHG-1042   # release manager, in their own shell
+export HORECAOS_RELEASE_APPROVAL=CHG-1042   # release manager, in their own shell
 ```
 
 Without it, `.claude/hooks/deploy-gate.sh` blocks anything that runs against production,
@@ -250,7 +250,7 @@ Everything in this repository is already wired. What is left is outside it:
 4. **Schedule the watcher** from the ops host, not a GitHub runner — it needs production
    database access, which should not be reachable from CI:
    ```bash
-   */15 * * * * cd /srv/qoida-platform && python3 ops/control_band_watch.py --sample
+   */15 * * * * cd /srv/horecaos-platform && python3 ops/control_band_watch.py --sample
    ```
    Run it with `--dry-run` for a week first, so the baselines fill before anything
    escalates. Detection on a three-sample baseline is noise.

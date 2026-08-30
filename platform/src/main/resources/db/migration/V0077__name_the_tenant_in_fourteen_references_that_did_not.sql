@@ -32,7 +32,7 @@
 --      notifications module then treats that row as its own recipient endpoint.
 --   2. The constraint accepts exactly the ids that exist somewhere on the
 --      platform and rejects every other uuid, so any write path that reaches
---      this column answers "is this contact point id real anywhere on Qoida" for
+--      this column answers "is this contact point id real anywhere on HorecaOS" for
 --      any uuid a caller submits.
 --
 -- The Java side of the notifications path is already tenant-correct:
@@ -125,7 +125,7 @@ COMMENT ON TABLE tenant.cross_tenant_reference_quarantine IS
 -- SELECT only, and only so an operator surfacing this through the platform's own
 -- tooling does not need a database session. Nothing in the application writes
 -- here: every row in this table was written by a migration.
-GRANT SELECT ON tenant.cross_tenant_reference_quarantine TO qoida_application;
+GRANT SELECT ON tenant.cross_tenant_reference_quarantine TO horecaos_application;
 
 -- ---------------------------------------------------------------------------
 -- 1. The keys the composite references need

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.19
 
-# The Qoida Platform application image.
+# The HorecaOS Platform application image.
 #
 # Why a hand-written Dockerfile rather than `spring-boot:build-image`
 # ------------------------------------------------------------------
@@ -32,7 +32,7 @@
 #   byte-identical layers.
 #
 # Build:
-#   docker build -t qoida/platform:$(git rev-parse --short HEAD) \
+#   docker build -t horecaos/platform:$(git rev-parse --short HEAD) \
 #     --build-arg GIT_SHA=$(git rev-parse HEAD) .
 
 ARG JDK_IMAGE=eclipse-temurin:25-jdk@sha256:e787e08ef76f4c16866108cd7f9fcd96a68eef3ac6cc76866897d4d02d5a2262
@@ -71,7 +71,7 @@ RUN --mount=type=cache,target=/root/.m2,sharing=locked \
 # a colocated server reached over an ordinary Uzbek uplink is the difference
 # between a deploy that takes seconds and one that takes minutes.
 RUN set -eux; \
-    jar="$(find target -maxdepth 1 -name 'qoida-platform-*.jar' ! -name '*-plain.jar' | head -1)"; \
+    jar="$(find target -maxdepth 1 -name 'horecaos-platform-*.jar' ! -name '*-plain.jar' | head -1)"; \
     test -n "${jar}"; \
     java -Djarmode=tools -jar "${jar}" extract --layers --launcher --destination /build/extracted
 
@@ -86,14 +86,14 @@ ARG APP_GID=10001
 ARG GIT_SHA=unknown
 ARG SOURCE_DATE_EPOCH=1755475200
 
-LABEL org.opencontainers.image.title="Qoida Platform" \
-      org.opencontainers.image.source="https://github.com/qoida-one/qoida-platform" \
+LABEL org.opencontainers.image.title="HorecaOS Platform" \
+      org.opencontainers.image.source="https://github.com/horecaos-one/horecaos-platform" \
       org.opencontainers.image.revision="${GIT_SHA}" \
       org.opencontainers.image.base.name="eclipse-temurin:25-jre-alpine"
 
 RUN set -eux; \
-    addgroup -S -g "${APP_GID}" qoida; \
-    adduser -S -D -H -u "${APP_UID}" -G qoida -s /sbin/nologin qoida
+    addgroup -S -g "${APP_GID}" horecaos; \
+    adduser -S -D -H -u "${APP_UID}" -G horecaos -s /sbin/nologin horecaos
 
 WORKDIR /app
 
@@ -104,17 +104,17 @@ COPY --from=build /build/extracted/dependencies/ ./
 COPY --from=build /build/extracted/spring-boot-loader/ ./
 COPY --from=build /build/extracted/snapshot-dependencies/ ./
 COPY --from=build /build/extracted/application/ ./
-COPY infra/app/entrypoint.sh /usr/local/bin/qoida-entrypoint
+COPY infra/app/entrypoint.sh /usr/local/bin/horecaos-entrypoint
 
 # Ownership is root and the mode is read-only for the application user. The
 # container runs with a read-only root filesystem in production; this makes the
 # same property hold when someone runs the image by hand to reproduce a problem.
 RUN set -eux; \
-    chmod 0555 /usr/local/bin/qoida-entrypoint; \
+    chmod 0555 /usr/local/bin/horecaos-entrypoint; \
     find /app -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +; \
-    touch -h -d "@${SOURCE_DATE_EPOCH}" /usr/local/bin/qoida-entrypoint
+    touch -h -d "@${SOURCE_DATE_EPOCH}" /usr/local/bin/horecaos-entrypoint
 
-ENV QOIDA_HTTP_PORT=8080 \
+ENV HORECAOS_HTTP_PORT=8080 \
     JAVA_TOOL_OPTIONS="" \
     LANG=C.UTF-8 \
     TZ=Asia/Tashkent
@@ -134,6 +134,6 @@ EXPOSE 8080
 # explicit that a probe which restarts the process when the database is slow
 # converts a degradation into an outage — so nothing here consults the database.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=90s --retries=4 \
-    CMD wget -q -O /dev/null "http://127.0.0.1:${QOIDA_HTTP_PORT}/actuator/health/readiness" || exit 1
+    CMD wget -q -O /dev/null "http://127.0.0.1:${HORECAOS_HTTP_PORT}/actuator/health/readiness" || exit 1
 
-ENTRYPOINT ["/usr/local/bin/qoida-entrypoint"]
+ENTRYPOINT ["/usr/local/bin/horecaos-entrypoint"]

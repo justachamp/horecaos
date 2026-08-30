@@ -1,7 +1,7 @@
 # Kafka event catalog
 
 This catalog defines the external domain-event contracts currently implemented
-by Qoida Platform. Topic names are domain-oriented and shared across tenants.
+by HorecaOS Platform. Topic names are domain-oriented and shared across tenants.
 Consumers must authorize and isolate using the signed envelope facts; a topic
 name never implies tenant scope.
 
@@ -24,7 +24,7 @@ name never implies tenant scope.
 ```
 
 Kafka records repeat `eventId`, `eventType`, `eventVersion`, `tenantId`, and
-`correlationId` in `qoida-*` headers. The record key is the aggregate ID.
+`correlationId` in `horecaos-*` headers. The record key is the aggregate ID.
 Payloads evolve additively within an event version; incompatible meaning or
 shape requires a new event version.
 
@@ -268,7 +268,7 @@ this catalogue, and the rules below are enforced by tests rather than by review.
 
 Every event needs three things in the same commit, or the build fails:
 
-1. an entry in `EventCatalog` (`uz.qoida.platform.integration.events`);
+1. an entry in `EventCatalog` (`uz.horecaos.platform.integration.events`);
 2. a JSON Schema at `src/main/resources/events/{topic}/{EventType}.v{n}.schema.json`;
 3. a row in this document.
 

@@ -1,6 +1,6 @@
 /* Fixture data for the control-plane prototype.
  *
- * This console is for the people who run Qoida as a business: who the customers
+ * This console is for the people who run HorecaOS as a business: who the customers
  * are, how they were brought on, what they pay, what they use, and how the
  * platform is configured for them. It is not an engineering console. Nothing
  * here names an internal decision record, a migration, or a code module, because
@@ -94,7 +94,7 @@ export const LOCATIONS = [
 ];
 
 /* ── onboarding and offboarding ────────────────────────────────────────────
- * The steps are what a Qoida account manager actually walks a restaurant
+ * The steps are what a HorecaOS account manager actually walks a restaurant
  * through. Each names the person responsible, because the commonest onboarding
  * failure is a step that is nobody's job.
  */
@@ -247,11 +247,11 @@ export const CONFIG = {
 /* ── platform staff and their access ───────────────────────────────────────*/
 
 export const STAFF = [
-  { id: "u-1", name: "Aziza Karimova",  email: "aziza.k@qoida.uz",  role: "Platform administrator", tenants: "All", lastActive: "2026-08-21T14:02:00", status: "ACTIVE" },
-  { id: "u-2", name: "Bekzod Toshmatov", email: "bekzod.t@qoida.uz", role: "Account manager",       tenants: "6 assigned", lastActive: "2026-08-21T13:44:00", status: "ACTIVE" },
-  { id: "u-3", name: "Nilufar Sobirova", email: "nilufar.s@qoida.uz", role: "Support agent",        tenants: "All (read)", lastActive: "2026-08-21T11:20:00", status: "ACTIVE" },
-  { id: "u-4", name: "Rustam Aliyev",    email: "rustam.a@qoida.uz",  role: "Finance",              tenants: "All (billing)", lastActive: "2026-08-20T17:55:00", status: "ACTIVE" },
-  { id: "u-5", name: "Kamola Nazarova",  email: "kamola.n@qoida.uz",  role: "Support agent",        tenants: "All (read)", lastActive: "2026-05-02T09:10:00", status: "DISABLED" },
+  { id: "u-1", name: "Aziza Karimova",  email: "aziza.k@horecaos.uz",  role: "Platform administrator", tenants: "All", lastActive: "2026-08-21T14:02:00", status: "ACTIVE" },
+  { id: "u-2", name: "Bekzod Toshmatov", email: "bekzod.t@horecaos.uz", role: "Account manager",       tenants: "6 assigned", lastActive: "2026-08-21T13:44:00", status: "ACTIVE" },
+  { id: "u-3", name: "Nilufar Sobirova", email: "nilufar.s@horecaos.uz", role: "Support agent",        tenants: "All (read)", lastActive: "2026-08-21T11:20:00", status: "ACTIVE" },
+  { id: "u-4", name: "Rustam Aliyev",    email: "rustam.a@horecaos.uz",  role: "Finance",              tenants: "All (billing)", lastActive: "2026-08-20T17:55:00", status: "ACTIVE" },
+  { id: "u-5", name: "Kamola Nazarova",  email: "kamola.n@horecaos.uz",  role: "Support agent",        tenants: "All (read)", lastActive: "2026-05-02T09:10:00", status: "DISABLED" },
 ];
 
 export const ACTIVITY = [

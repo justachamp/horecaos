@@ -1,10 +1,10 @@
-# Qoida Platform Agent Guide
+# HorecaOS Platform Agent Guide
 
 ## Scope
 
-These instructions apply to the entire `qoida-platform` repository.
+These instructions apply to the entire `horecaos-platform` repository.
 
-Qoida Platform is the target SaaS platform that will incrementally replace the
+HorecaOS Platform is the target SaaS platform that will incrementally replace the
 legacy FastAPI application in `../milliy`. The legacy application is a source
 of business behavior and migration data, not a template for the new design.
 
@@ -20,7 +20,7 @@ adversarial review maintains it: the generated summary in
 [docs/adr/README.md](docs/adr/README.md), each record's own status line
 (filed under [`built/`](docs/adr/built/), [`partial/`](docs/adr/partial/),
 [`not-started/`](docs/adr/not-started/) — verified against code, not
-aspirational), and the founding review at `../docs/qoida-review.md`. Read the
+aspirational), and the founding review at `../docs/horecaos-review.md`. Read the
 status line of the record you are about to touch.
 
 `Partial` is the normal state here and is not an invitation to finish the record
@@ -198,10 +198,10 @@ module's internal entities or repositories.
   Organizations used for B2B tenant membership. A separate customer realm may
   be used when workforce and customer identity lifecycles require isolation.
   Final realm topology requires an architecture decision record.
-- Map one Keycloak organization to one Qoida tenant. Keep the immutable
+- Map one Keycloak organization to one HorecaOS tenant. Keep the immutable
   Keycloak organization ID on the tenant record; do not join by display name.
 - Keycloak owns credentials, authentication flows, MFA, external identity
-  brokering, sessions, organization membership, and coarse roles. Qoida owns
+  brokering, sessions, organization membership, and coarse roles. HorecaOS owns
   tenant, brand, location, plan, entitlement, and resource relationships.
 - Java application services must still enforce tenant, brand, location, and
   resource authorization. Authentication success alone never authorizes a

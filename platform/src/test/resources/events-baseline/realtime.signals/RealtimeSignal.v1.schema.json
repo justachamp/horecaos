@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.qoida.uz/events/realtime.signals/RealtimeSignal.v1.schema.json",
+  "$id": "https://contracts.horecaos.uz/events/realtime.signals/RealtimeSignal.v1.schema.json",
   "title": "RealtimeSignal v1 payload",
   "description": "ADR 0045. Something in a scope changed; the reader re-reads it through the ordinary authorized API. Identifiers, a scope key, and a time. additionalProperties is false so a field carrying state — an order total, a courier coordinate, a customer name — cannot be added without changing this file and being seen.",
   "type": "object",

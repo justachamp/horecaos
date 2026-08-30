@@ -6,7 +6,7 @@ spring:
   flyway:
     locations: classpath:db/migration,classpath:db/local-fixtures
 
-qoida:
+horecaos:
   secrets:
     data_encryption:
       platform:
@@ -17,7 +17,7 @@ qoida:
         # one-time code hashes the phone number with a key derived from this
         # (`EnvelopeFieldProtection.lookupHash`), so the very first request of
         # the sign-in journey threw `SecretNotFoundException: No secret is
-        # configured for qoida:local:data_encryption:platform:kek` — which
+        # configured for horecaos:local:data_encryption:platform:kek` — which
         # reached the browser as a bare 401 with no body, indistinguishable
         # from "you are not signed in". On the one endpoint whose entire
         # purpose is to serve somebody who is not signed in.
@@ -32,14 +32,14 @@ qoida:
         # activated by the `local` profile, and SecretsProfileGuard refuses to
         # start a non-local profile on the `environment` provider at all. What
         # a deployment supplies instead is the reference
-        # `qoida:{environment}:data_encryption:platform:kek`, resolved from
+        # `horecaos:{environment}:data_encryption:platform:kek`, resolved from
         # OpenBao (ADR 0028, ADR 0034) — never a value in a file.
         #
         # Changing this value orphans every ciphertext and every lookup hash
         # already written to the local database, because both are derived from
         # it. That is a `make down && make up` on a laptop and an ADR 0028
         # rotation procedure anywhere else.
-        kek: ${QOIDA_DATA_ENCRYPTION_KEK:qoida-local-data-encryption-kek-not-for-use}
+        kek: ${HORECAOS_DATA_ENCRYPTION_KEK:horecaos-local-data-encryption-kek-not-for-use}
   customers:
     verification:
       # ADR 0051. The one number that signs in with a fixed code and sends no SMS,
@@ -64,5 +64,5 @@ qoida:
       # Every other number on this profile still draws a random code and still
       # needs a transport, so the preset cannot hide a broken SMS path.
       preset:
-        phone: ${QOIDA_VERIFICATION_PRESET_PHONE:+998000000000}
-        code: ${QOIDA_VERIFICATION_PRESET_CODE:000000}
+        phone: ${HORECAOS_VERIFICATION_PRESET_PHONE:+998000000000}
+        code: ${HORECAOS_VERIFICATION_PRESET_CODE:000000}

@@ -1,7 +1,7 @@
 # OpenBao agent — the only thing on this host that holds a live OpenBao token.
 #
 # The problem it solves is narrow and specific. `OpenBaoSecretResolver` reads
-# `qoida.secrets.openbao.token` once, when its bean is built. A token with a
+# `horecaos.secrets.openbao.token` once, when its bean is built. A token with a
 # fixed lifetime would therefore work until it expired and then fail in the
 # middle of an ordinary week, at whatever hour the TTL ran out — a scheduled
 # outage nobody scheduled.
@@ -65,12 +65,12 @@ auto_auth {
 # that way. A second template here is a sign that something took a value where a
 # reference belonged.
 template {
-  destination          = "/run/bao/qoida.env"
+  destination          = "/run/bao/horecaos.env"
   perms                = "0640"
   error_on_missing_key = true
 
   contents = <<-EOT
-  QOIDA_DB_PASSWORD={{ with secret "qoida/data/production/database/platform/app-password" }}{{ .Data.data.value }}{{ end }}
+  HORECAOS_DB_PASSWORD={{ with secret "horecaos/data/production/database/platform/app-password" }}{{ .Data.data.value }}{{ end }}
   EOT
 }
 

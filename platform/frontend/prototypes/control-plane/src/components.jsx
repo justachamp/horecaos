@@ -1,10 +1,10 @@
 /* Shared console primitives.
  *
  * Same role as Togora's components.jsx — a small contract every section file
- * imports — but rendered in the Qoida `.console` language rather than Togora's.
+ * imports — but rendered in the HorecaOS `.console` language rather than Togora's.
  * The differences are deliberate, not stylistic drift:
  *
- *   Togora                        Qoida console
+ *   Togora                        HorecaOS console
  *   ------------------------------------------------------------------
  *   DM Sans                       IBM Plex Sans
  *   14px rounded cards            0px corners

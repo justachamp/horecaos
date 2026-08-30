@@ -26,4 +26,4 @@ CREATE INDEX ix_provider_capability_probe_latest
 COMMENT ON TABLE integration.provider_capability_probes IS
     'ADR 0026 append-only non-POS provider preflight evidence. It records a resolvable secret reference and an adapter-declared capability, never a credential or provider response body.';
 
-GRANT SELECT, INSERT ON integration.provider_capability_probes TO qoida_application;
+GRANT SELECT, INSERT ON integration.provider_capability_probes TO horecaos_application;

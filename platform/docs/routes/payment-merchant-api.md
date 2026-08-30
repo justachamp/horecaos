@@ -14,7 +14,7 @@ Required by ADR 0007. A production route may not ship without one of these; see
 | Source | `direct:payment.merchant-api` |
 | Destination | Payment provider merchant API over HTTPS, selected by ADR 0026 binding |
 | Service identity | Per-installation merchant credential, ADR 0026 |
-| Secret reference type | `qoida:{env}:provider_payment:{owner}:{id}` (ADR 0028) |
+| Secret reference type | `horecaos:{env}:provider_payment:{owner}:{id}` (ADR 0028) |
 | Connect timeout | 5s |
 | Total timeout | `MerchantApiCall.timeout`, or 20s when the adapter names none |
 | Retry classification | **None in-route.** The route classifies and returns; the caller decides whether trying again is safe |
@@ -25,7 +25,7 @@ Required by ADR 0007. A production route may not ship without one of these; see
 | Expected volume | Pilot: under 2,000 calls/day/tenant |
 | SLO | p95 under 4s for an invoice create; under 2s for a status query |
 | Runbook | `docs/routes/payment-merchant-api.md#runbook` |
-| Dashboard | Metric `qoida.payment.route`, tagged `event`, `provider`, `operation`, `status` |
+| Dashboard | Metric `horecaos.payment.route`, tagged `event`, `provider`, `operation`, `status` |
 
 ## Why this route is shorter than `delivery.operation.v1`
 
@@ -54,7 +54,7 @@ trying again is safe.
 ## Runbook
 
 **Circuit open for one provider.** Only that provider is affected; the other keeps
-taking payments. Check `qoida.payment.route` with `event=circuit_open` for the
+taking payments. Check `horecaos.payment.route` with `event=circuit_open` for the
 onset time and the provider's status channel. The breaker half-opens by itself
 after 30s. Do not restart the application to force it closed — a restart also
 discards the failure window that proves whether the provider recovered.
@@ -72,7 +72,7 @@ and only then re-enable the binding.
 
 **Slow calls opening the circuit without any errors.** The breaker opens when
 four calls in five take longer than 10s, whether or not they eventually succeed.
-If `qoida.payment.route` shows successes alongside `circuit_open`, the provider is
+If `horecaos.payment.route` shows successes alongside `circuit_open`, the provider is
 up but degraded; treat it as an outage for capacity purposes and tell the
 restaurants, because a 10s checkout is an abandoned basket either way. Four in
 five, not one in five, because a couple of slow calls is ordinary congestion.

@@ -7,7 +7,7 @@ More than three non-200 responses in five minutes from `/providers/payme/*` or
 
 **Why this is not an availability statistic.** Payme and Click both read any
 non-200 as a transport failure and retry until the payment reaches their manual
-investigation queue. A 5xx here is a customer's money in a state Qoida cannot
+investigation queue. A 5xx here is a customer's money in a state HorecaOS cannot
 see, which is a different thing from a 5xx on the storefront.
 
 ## 1. What is failing, and with what?

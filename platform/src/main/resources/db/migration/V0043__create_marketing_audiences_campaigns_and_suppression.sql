@@ -56,7 +56,7 @@ COMMENT ON SCHEMA marketing IS
 -- configuration, and it is duplicated on purpose: the service rejects a loosening
 -- override with an explanation a marketer can read, and the constraint is the
 -- backstop for anything that reaches this table another way. Both numbers also
--- protect the sending reputation of an aggregator identity Qoida shares across
+-- protect the sending reputation of an aggregator identity HorecaOS shares across
 -- tenants, so one tenant loosening the cap degrades delivery for every other
 -- tenant on the same sender — which is why "the tenant's own customer
 -- relationship" is not a sufficient argument for letting them.
@@ -475,7 +475,7 @@ CREATE TABLE marketing.suppressions (
     CONSTRAINT ck_suppression_operator_identified CHECK (
         applied_by_type <> 'OPERATOR' OR applied_by IS NOT NULL
     ),
-    -- PLATFORM_BLOCK is settable only by the control plane. It is how Qoida stops
+    -- PLATFORM_BLOCK is settable only by the control plane. It is how HorecaOS stops
     -- a tenant messaging someone who complained to a regulator, and a tenant
     -- operator who could set it could also lift it.
     CONSTRAINT ck_suppression_platform_block_actor CHECK (
@@ -904,17 +904,17 @@ CREATE INDEX ix_campaign_recipient_status
 -- No DELETE on marketing.suppressions in particular: a suppression records a
 -- person's refusal, and deleting it re-enables what they refused. A lift is an
 -- UPDATE that leaves the row and names who lifted it.
-GRANT USAGE ON SCHEMA marketing TO qoida_application;
+GRANT USAGE ON SCHEMA marketing TO horecaos_application;
 
-GRANT SELECT, INSERT, UPDATE ON marketing.engagement_policies TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON marketing.customer_metrics TO qoida_application;
-GRANT SELECT, INSERT, DELETE ON marketing.metric_drift_observations TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON marketing.audiences TO qoida_application;
-GRANT SELECT, INSERT, DELETE ON marketing.audience_predicates TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON marketing.suppressions TO qoida_application;
-GRANT SELECT, INSERT ON marketing.marketing_sends TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON marketing.audience_snapshots TO qoida_application;
-GRANT SELECT, INSERT, DELETE ON marketing.audience_snapshot_members TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON marketing.campaigns TO qoida_application;
-GRANT SELECT, INSERT ON marketing.campaign_batches TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON marketing.campaign_recipients TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON marketing.engagement_policies TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON marketing.customer_metrics TO horecaos_application;
+GRANT SELECT, INSERT, DELETE ON marketing.metric_drift_observations TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON marketing.audiences TO horecaos_application;
+GRANT SELECT, INSERT, DELETE ON marketing.audience_predicates TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON marketing.suppressions TO horecaos_application;
+GRANT SELECT, INSERT ON marketing.marketing_sends TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON marketing.audience_snapshots TO horecaos_application;
+GRANT SELECT, INSERT, DELETE ON marketing.audience_snapshot_members TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON marketing.campaigns TO horecaos_application;
+GRANT SELECT, INSERT ON marketing.campaign_batches TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON marketing.campaign_recipients TO horecaos_application;

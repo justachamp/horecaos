@@ -232,13 +232,13 @@ CREATE TABLE customer.consent_decisions (
 CREATE INDEX ix_consent_current
     ON customer.consent_decisions (customer_account_id, purpose, brand_id, channel, decided_at DESC);
 
-GRANT USAGE ON SCHEMA customer TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON customer.customer_accounts TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON customer.principal_links TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON customer.brand_profiles TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON customer.contact_points TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON customer.addresses TO qoida_application;
+GRANT USAGE ON SCHEMA customer TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON customer.customer_accounts TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON customer.principal_links TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON customer.brand_profiles TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON customer.contact_points TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON customer.addresses TO horecaos_application;
 
 -- Insert and read only. No UPDATE, no DELETE: a consent record that can be
 -- edited is not evidence of anything.
-GRANT SELECT, INSERT ON customer.consent_decisions TO qoida_application;
+GRANT SELECT, INSERT ON customer.consent_decisions TO horecaos_application;

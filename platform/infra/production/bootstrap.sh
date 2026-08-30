@@ -11,14 +11,14 @@
 # Read docs/runbooks/deploy.md, section "Bootstrapping a new host", before
 # running this. Do not run it over an existing OpenBao volume.
 #
-#   sudo QOIDA_ENV_FILE=/etc/qoida/production.env infra/production/bootstrap.sh
+#   sudo HORECAOS_ENV_FILE=/etc/horecaos/production.env infra/production/bootstrap.sh
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 COMPOSE_FILE="${REPO_ROOT}/compose.production.yaml"
-ENV_FILE="${QOIDA_ENV_FILE:-/etc/qoida/production.env}"
-SECRET_DIR="${QOIDA_SECRET_DIR:-/run/qoida/secrets}"
+ENV_FILE="${HORECAOS_ENV_FILE:-/etc/horecaos/production.env}"
+SECRET_DIR="${HORECAOS_SECRET_DIR:-/run/horecaos/secrets}"
 
 say()  { printf '\n==> %s\n' "$*"; }
 die()  { printf '\n!!  %s\n' "$*" >&2; exit 1; }
@@ -29,8 +29,8 @@ compose() {
 
 [ -r "${ENV_FILE}" ] || die "${ENV_FILE} not readable. Copy infra/production/production.env.example and edit it."
 
-export QOIDA_SECRET_DIR="${SECRET_DIR}"
-export QOIDA_IMAGE_TAG="${QOIDA_IMAGE_TAG:-bootstrap}"
+export HORECAOS_SECRET_DIR="${SECRET_DIR}"
+export HORECAOS_IMAGE_TAG="${HORECAOS_IMAGE_TAG:-bootstrap}"
 
 # The compose file will not parse without these files existing, and at bootstrap
 # time none of them do yet. Placeholders are created and then immediately
@@ -106,13 +106,13 @@ bao_run() {
         | compose exec -T openbao sh -c 'BAO_TOKEN="$(cat)"; export BAO_TOKEN; "$@"' _ "$@"
 }
 
-say "Enabling the qoida KV v2 mount"
-bao_run bao secrets enable -path=qoida -version=2 kv 2>/dev/null || true
+say "Enabling the horecaos KV v2 mount"
+bao_run bao secrets enable -path=horecaos -version=2 kv 2>/dev/null || true
 
 say "Writing the policies"
 # Copied in rather than pasted, so what is active is byte-for-byte the file in
 # this repository and can be diffed against it later.
-for policy in qoida-platform qoida-deploy; do
+for policy in horecaos-platform horecaos-deploy; do
     compose cp "${REPO_ROOT}/infra/openbao/policies/${policy}.hcl" \
         "openbao:/tmp/${policy}.hcl"
     bao_run bao policy write "${policy}" "/tmp/${policy}.hcl"
@@ -123,7 +123,7 @@ for policy in qoida-platform qoida-deploy; do
     printf '    %s\n' "${policy}"
 done
 
-say "Enabling AppRole and creating the qoida-platform role"
+say "Enabling AppRole and creating the horecaos-platform role"
 bao_run bao auth enable approle 2>/dev/null || true
 # token_period makes this a periodic token: the agent can renew it forever
 # without ever hitting a max TTL, which is exactly what "the application read the
@@ -134,8 +134,8 @@ bao_run bao auth enable approle 2>/dev/null || true
 # secret_id_ttl is thirty days as a backstop only. The deploy script issues a new
 # one on every deploy, so in practice it is replaced far sooner; the TTL is what
 # bounds the damage if nobody deploys for a month.
-bao_run bao write auth/approle/role/qoida-platform \
-    token_policies=qoida-platform \
+bao_run bao write auth/approle/role/horecaos-platform \
+    token_policies=horecaos-platform \
     token_ttl=1h \
     token_period=1h \
     secret_id_ttl=720h \
@@ -157,10 +157,10 @@ say "Generating the database, Keycloak and MinIO credentials"
 # an operator who pastes this loop into an interactive shell would silently lose
 # every command on their PATH. It costs nothing to not do that to them.
 for secret_path in \
-    qoida/production/database/platform/migrator-password \
-    qoida/production/database/platform/app-password \
-    qoida/production/database/keycloak/password \
-    qoida/production/object_storage/platform/root-password
+    horecaos/production/database/platform/migrator-password \
+    horecaos/production/database/platform/app-password \
+    horecaos/production/database/keycloak/password \
+    horecaos/production/object_storage/platform/root-password
 do
     # Generated and consumed entirely inside the OpenBao container, so the value
     # never crosses onto this host: not into a shell variable, not into a log,
@@ -178,22 +178,22 @@ cat <<-'EOF'
 	The remaining secrets are not generated here, because they come from
 	outside OpenBao and have to be created or copied by hand:
 
-	  qoida/production/data_encryption/platform/kek
+	  horecaos/production/data_encryption/platform/kek
 	      The ADR 0029 key-encryption key. Generate it, store it, and keep a
 	      sealed offline copy: losing it makes every encrypted personal-data
 	      column unreadable, permanently.
 
-	  qoida/production/identity_admin/keycloak/provisioning-secret
-	  qoida/production/identity_admin/keycloak/reader-secret
+	  horecaos/production/identity_admin/keycloak/provisioning-secret
+	  horecaos/production/identity_admin/keycloak/reader-secret
 	      Copied from the Keycloak clients after the realm is imported.
 
-	  qoida/production/object_storage/platform/media-access-key
-	  qoida/production/object_storage/platform/media-secret-key
+	  horecaos/production/object_storage/platform/media-access-key
+	  horecaos/production/object_storage/platform/media-secret-key
 	      A MinIO service account scoped to the media bucket. Not the root
 	      credential: the application should not be able to delete the backups.
 
 	The backup passphrase belongs in
-	  qoida/production/data_encryption/platform/backup-passphrase
+	  horecaos/production/data_encryption/platform/backup-passphrase
 	and in a sealed envelope somewhere other than the server room. It must not be
 	stored in the same place as the backups themselves.
 
@@ -218,7 +218,7 @@ cat <<-'EOF'
 	Bootstrap complete. Next:
 
 	  1. Store the remaining secrets listed above.
-	  2. Create an operator login (userpass or OIDC) with the qoida-platform
+	  2. Create an operator login (userpass or OIDC) with the horecaos-platform
 	     policy plus whatever it needs to write secrets. The deploy script asks
 	     for that token, not for a root one.
 	  3. Run infra/production/deploy.sh.

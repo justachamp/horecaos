@@ -2,7 +2,7 @@
 
 Feature inventory of [Delever](https://delever.gitbook.io/delever), a competing
 restaurant delivery operations platform in the same market, mapped against
-Qoida's decision record.
+HorecaOS's decision record.
 
 Read with [the frontend and parity plan](frontend-and-parity-plan.md), which
 sequences the work, and with [the ADR index](adr/README.md), which owns the
@@ -11,8 +11,8 @@ decisions.
 ## How to read this
 
 The product owner's brief was that every Delever capability should be
-represented in Qoida's plans. This document is the evidence for that claim: what
-Delever does, what Qoida already decided, and where the gaps are.
+represented in HorecaOS's plans. This document is the evidence for that claim: what
+Delever does, what HorecaOS already decided, and where the gaps are.
 
 Three things it is not. It is not a commitment to build all of it — twelve
 capabilities are declined below with reasons. It is not a schedule; the plan
@@ -20,7 +20,7 @@ owns that. And it is not a substitute for reading Delever's own documentation
 before building any one area, because a matrix row is a pointer, not a
 specification.
 
-Importance is Delever's centrality, not Qoida's priority:
+Importance is Delever's centrality, not HorecaOS's priority:
 **●** core · **◐** important · **○** peripheral.
 
 ### A caveat about the source
@@ -48,16 +48,16 @@ rather than assumed:
 
 ## Coverage summary
 
-355 Delever capabilities catalogued across 9 documentation sections, 152 of them core. 41 map onto an existing Qoida decision, 12 need a new one, 12 we decline.
+355 Delever capabilities catalogued across 9 documentation sections, 152 of them core. 41 map onto an existing HorecaOS decision, 12 need a new one, 12 we decline.
 
-### Capability areas already owned by a Qoida decision
+### Capability areas already owned by a HorecaOS decision
 
 | Capability area | ADR | Coverage |
 |---|---|---|
 | Retry, dead-letter and replay with operator-visible failure views and audited manual retry | 0006 + 0027 | **Partial** — Manual re-fiscalization and POS export retry map onto this directly. What is partial is audience: Delever surfaces integration failures to the tenant (an 'Ошибки интеграции' table, an aggre… |
 | Tenant onboarding as a resumable PostgreSQL workflow with SQL leases and idempotent ports | 0008 + 0009 | **Partial** — Two onboarding costs this market imposes are unmodelled: bulk backfill of fiscal classification codes across hundreds of items (Delever ships bulk ИКПУ editing precisely because it is the d… |
 | Media lifecycle: private S3, presigned upload, derivatives, classification, checksummed legacy… | 0010 | **Partial** — Missing two refinements Delever proved useful: per-channel image variants (a different photo sent to one aggregator) and a content hash per asset so downstream consumers detect change witho… |
-| POS capability adapters, no provider-name branching, approved endpoint catalogue (closes the S… | 0011 + 0026 | **Partial** — The model absorbs new POS vendors as adapters, so Delever's twelve vs Qoida's three is scope not architecture. Two capabilities are genuinely absent from the port list: print-to-POS (Deleve… |
+| POS capability adapters, no provider-name branching, approved endpoint catalogue (closes the S… | 0011 + 0026 | **Partial** — The model absorbs new POS vendors as adapters, so Delever's twelve vs HorecaOS's three is scope not architecture. Two capabilities are genuinely absent from the port list: print-to-POS (Deleve… |
 | POS catalog sync: raw evidence, staging, deterministic diff, mapping conflicts, versioned fiel… | 0012 | **Partial** — The mechanism also fits operator-driven bulk import (Delever and the legacy dashboard both ship Excel import with dry-run and a row-level result summary), but ADR 0012 is scoped to POS sour… |
 | Fiscal receipt evidence retention from payment partners (Click, Payme), corrections requested… | 0013 | **Partial** — Sound for online payments only. The closed input 'partners fiscalize' does not hold for cash, kiosk, or POS-settled orders, which is most of this market's volume. See the proposed fiscaliza… |
 | Service recovery: complaint case, remedy decision, approval thresholds, refund vs future benef… | 0013 (recovery module) | **Partial** — The remedy and approval machinery is complete. The intake side is not: customer feedback/ratings with a category and polarity taxonomy (Delever's four-axis operator/courier/time/food tags)… |
@@ -117,27 +117,27 @@ rather than assumed:
 
 | Delever capability | Why not |
 |---|---|
-| Tenant-configurable order statuses and a reorderable state machine (Delever stores status as a… | A tenant-editable state machine makes ADR 0032 event contracts, ADR 0019 process managers, every status-driven automation, and every cross-tenant report ungovernable — the same status name would mean different things in two tenants. Qoida already fixed a canonical vocabulary in docs/domains/state-m… |
+| Tenant-configurable order statuses and a reorderable state machine (Delever stores status as a… | A tenant-editable state machine makes ADR 0032 event contracts, ADR 0019 process managers, every status-driven automation, and every cross-tenant report ungovernable — the same status name would mean different things in two tenants. HorecaOS already fixed a canonical vocabulary in docs/domains/state-m… |
 | Multi-branch orders (Delever's steps[], where one order carries several branches each with its… | Two nested state machines and per-step money, for a customer behaviour — ordering from two kitchens in one basket — that no evidence in the inventory shows anyone actually doing. ADR 0019 deliberately binds a cart to one location and rebuilds on change, and ADR 0002 rejected extra hierarchy tiers o… |
-| Accepting an externally computed discount on Qoida-priced channels (Delever's 'Свободная скидк… | It exists so aggregators can push an arbitrary discount amount the platform cannot re-derive. On an aggregator order that is unavoidable and belongs in the marketplace ADR behind an explicit externally-priced flag. Extending it to Qoida's own channels would destroy ADR 0018's central promise — that… |
+| Accepting an externally computed discount on HorecaOS-priced channels (Delever's 'Свободная скидк… | It exists so aggregators can push an arbitrary discount amount the platform cannot re-derive. On an aggregator order that is unavoidable and belongs in the marketplace ADR behind an explicit externally-priced flag. Extending it to HorecaOS's own channels would destroy ADR 0018's central promise — that… |
 | Recruiting module: vacancies and candidate pipeline | A mini-ATS inside a delivery platform. It collects name, phone and free-text CVs from anonymous public users, which is a distinct PII class with its own retention, consent and access obligations, in return for zero commercial differentiation — every tenant can already use a hiring form or a Telegra… |
 | General-purpose editorial CMS with tenant-authored raw HTML (static pages, news, gallery, reci… | Delever's static-page editor accepts raw HTML, which is an XSS surface pointed at the tenant's own customers, and the whole area is website-builder work rather than commerce. Build instead the bounded, typed merchandising slots the storefront genuinely needs — banner, story, promo card, each with a… |
 | Telephony: embedded softphone, PBX integration, call records, and operator answer-speed KPIs | An entire integration category (OnlinePBX, Asterisk) that shares nothing with POS, payments, delivery or messaging adapters, plus call recording with its own consent and retention regime. Delever's own operator KPI report showed 'no data' in the documented instance, which suggests it is not widely… |
 | Ingredient-level bill of materials, technological cards, and recipe costing | The parity brief assumed Delever has this; the inventory analysis establishes it does not — its Ингредиенты is a customer-facing localized composition label and its Рецепты is marketing content, and depletion lives in the POS (iiko, 1C) that Delever integrates with rather than replaces. ADR 0017 al… |
-| AI generation of fiscal classification codes (Delever AI-generates ИКПУ with a liability discl… | A wrong ИКПУ is a tax classification error on a legal receipt, and generating it automatically transfers that risk from the tenant to Qoida while making it invisible. AI assistance on descriptions, weights and nutrition is harmless and worth having; on a tax classifier it is not. If any assistive s… |
-| Per-module V1/V2 interface version toggles as a tenant-visible product feature | Genuinely clever for Delever, which is strangling a live product with paying tenants and has to let each migrate on its own schedule. Qoida is building the new system, and ADR 0024's single-authoritative-writer-per-capability gate already delivers staged, per-tenant cutover without shipping and mai… |
+| AI generation of fiscal classification codes (Delever AI-generates ИКПУ with a liability discl… | A wrong ИКПУ is a tax classification error on a legal receipt, and generating it automatically transfers that risk from the tenant to HorecaOS while making it invisible. AI assistance on descriptions, weights and nutrition is harmless and worth having; on a tax classifier it is not. If any assistive s… |
+| Per-module V1/V2 interface version toggles as a tenant-visible product feature | Genuinely clever for Delever, which is strangling a live product with paying tenants and has to let each migrate on its own schedule. HorecaOS is building the new system, and ADR 0024's single-authoritative-writer-per-capability gate already delivers staged, per-tenant cutover without shipping and mai… |
 | Prepaid tenant wallet with expiring credit and debt-triggered feature restriction | Delever requires a $500 deposit, funds a wallet from it, and expires the balance. Expiring prepaid credit is a customer-hostile financial product with real accounting weight (a liability that vanishes) for a benefit — cash collection — that an invoice plus ADR 0021's existing PAST_DUE→SUSPENDED lif… |
 | Self-service kiosk hardware integration (Arcus2 bank terminals, 58/80mm receipt printers, Data… | A hardware product line with device provisioning, certification, field support and a per-device fiscal identity, gated on physical terminals in restaurants. Kiosk should remain a recognised sales channel in the channel registry from day one — that costs a row — while the device integration waits un… |
 | Delever and legacy security anti-patterns: base64(login:password) as a partner client secret,… | Recording these as explicit non-goals matters because they are the shape of the systems being replaced and will be proposed as 'how it worked before'. ADR 0026 already closes tenant-supplied endpoints at the model level and ADR 0028 owns credentials; partner onboarding must issue rotatable OAuth cl… |
 
-## Legacy Qoida applications
+## Legacy HorecaOS applications
 
 The three archived applications, as the second parity input. What they do is what the client's staff and customers already expect.
 
 | Application | Screens | Domain vocabulary |
 |---|---|---|
 | qoida-dashboard (package name `rayhon-dashboard`) — archive… | 17 | company (компания) — the brand / parent entity. Has i18n name+description, slug, logo, background image. Owns vendors. The order-board filter hardcodes five: rayhon, marmar, jizbiz, kids_plate, and '… |
-| Qoida Storefront "JizBiz" (qoida-storefront-jizbiz) — singl… | 30 | Customer account — identified by Uzbek phone number ('998' + 9 digits), authenticated by OTP; JWT payload carries sub, role_id, phone_number, exp, iat. Profile is first_name, last_name, language, ima… |
+| HorecaOS Storefront "JizBiz" (qoida-storefront-jizbiz) — singl… | 30 | Customer account — identified by Uzbek phone number ('998' + 9 digits), authenticated by OTP; JWT payload carries sub, role_id, phone_number, exp, iat. Profile is first_name, last_name, language, ima… |
 | Milliy (Xcode target "Rayhon" / "Rayhon Birzumda") — the le… | 35 | vendor / branch (BranchModel: id, name, phone, active, pre_order, start, finish, error) — one per app install, delivered inside the cart response, menu composition (UIElementModel: category rail, off… |
 
 ---
@@ -193,14 +193,14 @@ Orders is Delever's operator cockpit: a filterable, tab-by-status order list wit
 
 **Open questions this section raises**
 
-- Delever stores order status as `status_id` (a UUID) rather than a fixed enum, and the branch-first/courier-first setting reorders the lifecycle. Does Qoida want a fixed, code-owned order state machine (simpler, testable, ADR-friendly) or tenant-configurable statuses (matches Delever, but makes ADR…
-- Does a Qoida order have one fulfilling location or many? Delever's `steps[]` gives each step its own branch, menu, product lines, amount AND status — two nested state machines. Retrofitting this later is very expensive, so it must be decided before ADR 0019 is written.
-- Cancellation in Delever posts a financial/inventory write-off ('со списанием' vs 'без списания'). Qoida ADR 0017's inventory ledger is BINARY-only and ADR 0013 is unstarted — who owns the write-off posting, and does a cancelled order need to consume stock?
+- Delever stores order status as `status_id` (a UUID) rather than a fixed enum, and the branch-first/courier-first setting reorders the lifecycle. Does HorecaOS want a fixed, code-owned order state machine (simpler, testable, ADR-friendly) or tenant-configurable statuses (matches Delever, but makes ADR…
+- Does a HorecaOS order have one fulfilling location or many? Delever's `steps[]` gives each step its own branch, menu, product lines, amount AND status — two nested state machines. Retrofitting this later is very expensive, so it must be decided before ADR 0019 is written.
+- Cancellation in Delever posts a financial/inventory write-off ('со списанием' vs 'без списания'). HorecaOS ADR 0017's inventory ledger is BINARY-only and ADR 0013 is unstarted — who owns the write-off posting, and does a cancelled order need to consume stock?
 - Fiscalization has no ADR at all. Uzbek law requires fiscal receipts (INN per legal entity/branch, per-payment-type fiscalization, a fiscalization URL on the order, manual retry from the operator UI). Is this a new ADR, part of ADR 0013 payments, or a provider capability under ADR 0026?
 - Table reservations require branches to have sections and tables as first-class entities with time-interval availability — nothing in ADR 0016 covers floor plans. Is reservations in scope for parity, and if so does it belong to the order aggregate or a separate one? (Delever puts it under Orders and…
 - Delever supports simultaneous multi-provider courier dispatch ('несколько такси-сервисов одновременно') and courier order grouping (multiple orders in one courier run with a merge radius in metres). Does ADR 0014's sourcing model cover racing providers, cancelling the losers, and batching orders in…
-- Payment types include Кешбэк (loyalty points) and Депозит (stored value) as first-class methods, and the order carries a `payment[]` array — so split tender is representable. Is split tender in scope for Qoida, and are loyalty/deposit modelled as payment methods or as discounts? (ADR 0018 is built…
-- The address model needs подъезд (entrance) and ориентир (landmark) as structured fields for this market. Has Qoida's address schema accounted for these, and for delivery orders that legitimately have no geocoded coordinates?
+- Payment types include Кешбэк (loyalty points) and Депозит (stored value) as first-class methods, and the order carries a `payment[]` array — so split tender is representable. Is split tender in scope for HorecaOS, and are loyalty/deposit modelled as payment methods or as discounts? (ADR 0018 is built…
+- The address model needs подъезд (entrance) and ориентир (landmark) as structured fields for this market. Has HorecaOS's address schema accounted for these, and for delivery orders that legitimately have no geocoded coordinates?
 
 ### Дашбоард (Dashboard) and Клиенты (Clients)
 
@@ -255,14 +255,14 @@ Delever's Dashboard is a read-only analytics surface split into tabs — Зак�
 
 **Open questions this section raises**
 
-- No blacklist feature is documented anywhere in the Clients area. The only suppression mechanism is the per-customer Статус (Активный) toggle. Qoida must decide whether it needs a real blacklist with a reason, an actor, an expiry, and defined enforcement semantics — does a blacklisted customer get b…
+- No blacklist feature is documented anywhere in the Clients area. The only suppression mechanism is the per-customer Статус (Активный) toggle. HorecaOS must decide whether it needs a real blacklist with a reason, an actor, an expiry, and defined enforcement semantics — does a blacklisted customer get b…
 - Delivery address management appears only in the customer-facing app profile, never in the admin panel. Can an operator taking a phone order see, reuse, or edit a customer's saved addresses? For a call-centre-heavy market this is almost certainly required, and it changes both the customer model (add…
-- Cashback (кешбек) is visible in the customer app but has no admin-side documentation — no balance ledger, no accrual rules, no expiry, no manual adjustment. Qoida must decide whether it is building a real loyalty/wallet ledger (which is a double-entry balance with its own consistency and audit requ…
+- Cashback (кешбек) is visible in the customer app but has no admin-side documentation — no balance ledger, no accrual rules, no expiry, no manual adjustment. HorecaOS must decide whether it is building a real loyalty/wallet ledger (which is a double-entry balance with its own consistency and audit requ…
 - There is no documented per-customer detail page. The docs only describe an inline edit and a status change from the list's three-dot menu. Does a customer record have a full profile view with order history, addresses, complaints, refunds, notes and communication log? If so, that view is a much larg…
-- RFM and LTV are presented as computed metrics with no stated definition of the period baseline, the currency handling, or whether cancelled and refunded orders are excluded. Qoida needs to fix these definitions explicitly, because two dashboards disagreeing on average check is a credibility problem…
-- The entire dashboard is an OLAP workload — cohort heatmaps, ABC/XYZ with standard deviation, funnel-by-day, per-day per-branch per-channel matrices — and the competitor uses ClickHouse. Qoida has PostgreSQL only and no analytics/reporting ADR. Decide now whether this is materialized views in Postgr…
-- Behavioural events (Входы, Зарегистрировано, Добавляет в корзину) are required for the funnel table and for the inactivity trigger, but they are client-side telemetry, not domain events. Qoida has no place for these. Decide whether they flow through the same Kafka contract governance as domain even…
-- Customers acquired through aggregators (yandex-eats, uzum-tezkor) are counted in the restaurant's customer base. Aggregators frequently mask or proxy customer phone numbers. How does Qoida create or match a customer identity from an aggregator order, and what happens when the same human later regis…
+- RFM and LTV are presented as computed metrics with no stated definition of the period baseline, the currency handling, or whether cancelled and refunded orders are excluded. HorecaOS needs to fix these definitions explicitly, because two dashboards disagreeing on average check is a credibility problem…
+- The entire dashboard is an OLAP workload — cohort heatmaps, ABC/XYZ with standard deviation, funnel-by-day, per-day per-branch per-channel matrices — and the competitor uses ClickHouse. HorecaOS has PostgreSQL only and no analytics/reporting ADR. Decide now whether this is materialized views in Postgr…
+- Behavioural events (Входы, Зарегистрировано, Добавляет в корзину) are required for the funnel table and for the inactivity trigger, but they are client-side telemetry, not domain events. HorecaOS has no place for these. Decide whether they flow through the same Kafka contract governance as domain even…
+- Customers acquired through aggregators (yandex-eats, uzum-tezkor) are counted in the restaurant's customer base. Aggregators frequently mask or proxy customer phone numbers. How does HorecaOS create or match a customer identity from an aggregator order, and what happens when the same human later regis…
 
 ### Персонал (Personnel)
 
@@ -310,14 +310,14 @@ Delever's Personnel section is a workforce module for two staff classes only: ca
 
 **Open questions this section raises**
 
-- Attendance (Посещаемость) is documented as a single screenshot with no prose. Is it a planned roster that managers author, an actual clock-in/clock-out log the courier app produces, or both reconciled against each other? The 'часы' column in the salary report is paid money, so Qoida must decide whe…
+- Attendance (Посещаемость) is documented as a single screenshot with no prose. Is it a planned roster that managers author, an actual clock-in/clock-out log the courier app produces, or both reconciled against each other? The 'часы' column in the salary report is paid money, so HorecaOS must decide whe…
 - How does a courier shift actually start and end? The settings toggle says orders are blocked unless the shift is 'activated according to the work schedule', but nothing documents whether the courier activates it themselves in the app, a manager activates it, or it opens automatically when the sched…
-- Courier Fare carries a 'Тип тарифа: бонус или штраф' field, yet Bonuses/Penalties is a separate page with its own condition logic. Are these the same mechanism surfaced twice, or is the fare-level type a different concept? Qoida needs one coherent model rather than replicating Delever's ambiguity.
+- Courier Fare carries a 'Тип тарифа: бонус или штраф' field, yet Bonuses/Penalties is a separate page with its own condition logic. Are these the same mechanism surfaced twice, or is the fare-level type a different concept? HorecaOS needs one coherent model rather than replicating Delever's ambiguity.
 - What is the condition language for bonuses and penalties? The page is video-only. Are conditions evaluated automatically (on-time count thresholds, order counts, holiday calendar, weather) or entered manually by a manager per incident? Named drivers include damaged thermal bags and customer complai…
 - What do 'Начальная минута' and 'Режим работы' on Courier Type actually control? Best reading is offer-timing and a working-mode/schedule mode, but neither is defined anywhere in the documentation.
 - How does 'Вовремя' (on-time) get determined — against a promised delivery time on the order, against a fixed company-wide SLA, or against the report's 30/35/40-minute buckets? This directly determines payout, so the definition must be exact and immutable per order.
 - Is the courier balance a liability the company owes the courier (accrued wages) or a prepaid float the courier tops up and the platform debits commissions from? The billing-mode description says fees are 'списание с личного баланса курьера', implying the latter, but the salary report's 'К оплате' i…
-- Who settles courier payouts, and how? 'К оплате' is exported to Excel for accounting, suggesting Delever computes but does not disburse. Does Qoida stop at computing the figure, or does ADR 0013 need to cover outbound worker payments?
+- Who settles courier payouts, and how? 'К оплате' is exported to Excel for accounting, suggesting Delever computes but does not disburse. Does HorecaOS stop at computing the figure, or does ADR 0013 need to cover outbound worker payments?
 
 ### Каталог (Catalog)
 
@@ -377,14 +377,14 @@ Delever's Catalog is a two-layer model: a tenant-wide **product catalog** (ти�
 
 **Open questions this section raises**
 
-- Прейскурант (price-changer) is documented only as a screen recording. Is it (a) a bulk mass-price-update tool applying percentage/absolute changes across a filtered selection, or (b) a named price-list entity that menus/channels point at? The two imply very different schemas. Qoida must decide whic…
-- How many named price planes exist? The evidence shows at least «Базовая цена» (delivery/pickup) and «Зал» (dine-in), plus per-aggregator overrides, plus a QR/kiosk redirect to the hall plane. Is 'channel price' an open-ended map keyed by channel id, or a fixed enum? Qoida should choose the open map.
-- Availability and price are conflated in Delever's menu (price 0 once deleted the menu row; «Базовая цена» toggles delivery visibility). Should Qoida separate is_offered_on_channel from price_on_channel, and if so how do we express Delever-parity behaviour for migrating tenants (ADR 0024)?
+- Прейскурант (price-changer) is documented only as a screen recording. Is it (a) a bulk mass-price-update tool applying percentage/absolute changes across a filtered selection, or (b) a named price-list entity that menus/channels point at? The two imply very different schemas. HorecaOS must decide whic…
+- How many named price planes exist? The evidence shows at least «Базовая цена» (delivery/pickup) and «Зал» (dine-in), plus per-aggregator overrides, plus a QR/kiosk redirect to the hall plane. Is 'channel price' an open-ended map keyed by channel id, or a fixed enum? HorecaOS should choose the open map.
+- Availability and price are conflated in Delever's menu (price 0 once deleted the menu row; «Базовая цена» toggles delivery visibility). Should HorecaOS separate is_offered_on_channel from price_on_channel, and if so how do we express Delever-parity behaviour for migrating tenants (ADR 0024)?
 - Are Атрибуты genuinely the variant axis (backing `size_id`), or a separate free-form spec-sheet vocabulary that happens to coexist with size_id? The docs describe them as 'размеры, вес, объем' which reads like a variant axis, but this is inferred, not stated.
-- Does Qoida want ingredient-level BOM / costing / depletion at all? Delever does NOT have it — its Ингредиенты is a customer-facing localized composition label and its Рецепты is marketing content. If the product owner's parity brief assumed tech-cards, that assumption should be corrected before it…
-- Portions (Порция) are a distinct decimal quantity dimension on the product, separate from line quantity, weight and unit of measure, and fractional values (0.5, 1.5) are supported. Does Qoida add a portions attribute to the product model, and does the cart sum it? Auto-add type 3 is unimplementable…
-- Counted stock with an automatic daily reset (company default daily quantity) is beyond ADR 0017's shipped BINARY availability. Does Qoida extend the inventory ledger to counted per-menu-item availability with a scheduled daily seed, or model it as a separate lightweight per-menu counter?
-- The forecast operating window defaults to 09:00→09:00 — the business day crosses midnight. Does Qoida adopt a tenant-configurable business-day boundary across reporting, forecasting and audit partitioning, or assume calendar days?
+- Does HorecaOS want ingredient-level BOM / costing / depletion at all? Delever does NOT have it — its Ингредиенты is a customer-facing localized composition label and its Рецепты is marketing content. If the product owner's parity brief assumed tech-cards, that assumption should be corrected before it…
+- Portions (Порция) are a distinct decimal quantity dimension on the product, separate from line quantity, weight and unit of measure, and fractional values (0.5, 1.5) are supported. Does HorecaOS add a portions attribute to the product model, and does the cart sum it? Auto-add type 3 is unimplementable…
+- Counted stock with an automatic daily reset (company default daily quantity) is beyond ADR 0017's shipped BINARY availability. Does HorecaOS extend the inventory ledger to counted per-menu-item availability with a scheduled daily seed, or model it as a separate lightweight per-menu counter?
+- The forecast operating window defaults to 09:00→09:00 — the business day crosses midnight. Does HorecaOS adopt a tenant-configurable business-day boundary across reporting, forecasting and audit partitioning, or assume calendar days?
 
 ### Маркетинг (Marketing)
 
@@ -440,13 +440,13 @@ Delever's Marketing area is two things bolted together: a rule-driven discount/p
 
 **Open questions this section raises**
 
-- Referral program rewards are entirely undocumented (video-only page): who earns the reward (referrer, referee, or both), whether it is cashback/promo code/discount, the qualifying event (registration vs first completed order), amounts, caps, and expiry. Qoida must specify this from scratch.
+- Referral program rewards are entirely undocumented (video-only page): who earns the reward (referrer, referee, or both), whether it is cashback/promo code/discount, the qualifying event (registration vs first completed order), amounts, caps, and expiry. HorecaOS must specify this from scratch.
 - Loyalty/cashback configuration is undocumented, yet cashback is referenced by the discount compatibility flag, the Накопительные trigger, and review compensation. Accrual rate, per-branch or per-channel rates, redemption caps as a share of order value, point expiry, and whether points accrue on dis…
 - Stacking arithmetic is unspecified: when two or more stackable percentage discounts qualify, are they applied sequentially (compounding) or summed additively, and is the base the pre- or post-discount subtotal? Also undefined: tie-breaking when two rules share the same priority value.
-- No per-customer or global usage limits on discounts and promo codes appear anywhere in the docs (no 'max N uses', 'once per customer', or total budget cap). Either Delever lacks them or they are undocumented — Qoida almost certainly needs them.
+- No per-customer or global usage limits on discounts and promo codes appear anywhere in the docs (no 'max N uses', 'once per customer', or total budget cap). Either Delever lacks them or they are undocumented — HorecaOS almost certainly needs them.
 - Promo code uniqueness model is ambiguous. The late-order trigger clearly mints unique per-customer codes, but campaign promo codes look like shared code words. Whether these are one entity with a uniqueness flag or two distinct concepts needs deciding.
 - Late-order detection thresholds are not documented: what counts as late (promised time vs SLA vs a configurable grace period), who owns the promise, and whether staff are notified alongside the customer.
-- The 'Свободная скидка' aggregator type accepts an externally computed discount with no validation. Qoida must decide whether to accept unvalidated external price adjustments, and how such orders are reconciled, audited, and fiscally reported when the platform cannot re-derive the total.
+- The 'Свободная скидка' aggregator type accepts an externally computed discount with no validation. HorecaOS must decide whether to accept unvalidated external price adjustments, and how such orders are reconciled, audited, and fiscally reported when the platform cannot re-derive the total.
 - Consent and opt-out are absent from the marketing docs. There is no unsubscribe flag, no marketing-consent field, and no suppression list on SMS/push/Telegram campaigns — ADR 0015 covers consent, so the link between consent state and campaign recipient selection must be defined.
 
 ### Кухня (Kitchen)
@@ -482,10 +482,10 @@ The Кухня section is Delever's in-restaurant execution surface, marketed se
 - Раздача (Distribution/expo) also has NO documentation — empty page. Is it a per-department assembly checklist, a simple ready-for-handout queue, or a packing/verification station? Does it operate per kitchen department (Отдел) with independent ready states that roll up to an order-level ready, or o…
 - Продажи продуктов (Product sales) is video-only. Is it a counter-sale/POS screen that originates orders from the kitchen, or a read-only per-product sold/remaining readout for the shift? The two readings imply very different work — one touches ADR 0002 order acceptance and pricing, the other is a r…
 - What is the exact relationship between VDU and Кухонные заказы? Is VDU a passive read-only wall display of the same data, a differently-filtered view, or a separate device class with its own configuration? The R-Keeper convention suggests KDS = interactive station screen, VDU = fast-food display bo…
-- Does a stop entry ever expire on its own? Nothing in the documentation mentions shift-end auto-clear, a duration, or a scheduled un-stop — it appears to persist until cleared manually or by the upstream POS. Qoida should decide deliberately whether stops are indefinite, shift-scoped, or time-boxed,…
-- What exactly is the scope key for a stop? The docs show branch-level, POS-terminal-level (iiko), menu-level, brand-level and per-aggregator-channel variants, and a fix that propagates one stop across all brands and branch menus containing the same position. Qoida needs one coherent scope model rath…
-- Are modifiers and modifier variants stoppable? The Poster integration explicitly excludes them (stops apply only to main products), but a separate 2025 fix concerned 'modifier display in the stop list'. Inconsistent — needs a decision for Qoida.
-- Does the handover-code check (Код выдачи заказа) generalise beyond Yandex Eats? The screen is written entirely around Yandex order IDs and Yandex-supplied codes. Do Wolt, Uzum Tezkor, Express24, Chocofood or Foody use comparable handover protocols that Qoida would also need to support?
+- Does a stop entry ever expire on its own? Nothing in the documentation mentions shift-end auto-clear, a duration, or a scheduled un-stop — it appears to persist until cleared manually or by the upstream POS. HorecaOS should decide deliberately whether stops are indefinite, shift-scoped, or time-boxed,…
+- What exactly is the scope key for a stop? The docs show branch-level, POS-terminal-level (iiko), menu-level, brand-level and per-aggregator-channel variants, and a fix that propagates one stop across all brands and branch menus containing the same position. HorecaOS needs one coherent scope model rath…
+- Are modifiers and modifier variants stoppable? The Poster integration explicitly excludes them (stops apply only to main products), but a separate 2025 fix concerned 'modifier display in the stop list'. Inconsistent — needs a decision for HorecaOS.
+- Does the handover-code check (Код выдачи заказа) generalise beyond Yandex Eats? The screen is written entirely around Yandex order IDs and Yandex-supplied codes. Do Wolt, Uzum Tezkor, Express24, Chocofood or Foody use comparable handover protocols that HorecaOS would also need to support?
 
 ### Настройки (Settings)
 
@@ -544,14 +544,14 @@ Delever's Settings section is the tenant-level control plane for a restaurant br
 
 **Open questions this section raises**
 
-- Тарифы (Settings, v1) is ambiguous in the docs: the v1 page is screencast-only and the term is used for BOTH Delever's own SaaS subscription plans (with purchasable modules and a deposit-funded balance) and for delivery tariffs (which v2 relocated to Settings → Доставка → Тарифы доставки). Qoida sh…
-- Delever exposes three overlapping geometry layers — branch geozone, delivery zone, and 'free geozone' — and the docs never explain how they interact or which wins. Does Qoida need three, or can one zone entity with typed roles cover all cases?
-- Delivery cost has at least four possible sources (branch tariff, zone tariff which outranks it, the live courier-service quote, and a promotion granting free delivery), plus a per-zone free-delivery threshold. The full precedence order is never stated in one place. Qoida must define it explicitly i…
-- The promotion engine is priority-ranked, optionally stackable and conditionally compatible with cashback. Delever's own release notes record repeated double-deduction and cross-channel divergence bugs here. What resolution algorithm does Qoida commit to, and is a quote reproducible from a versioned…
+- Тарифы (Settings, v1) is ambiguous in the docs: the v1 page is screencast-only and the term is used for BOTH Delever's own SaaS subscription plans (with purchasable modules and a deposit-funded balance) and for delivery tariffs (which v2 relocated to Settings → Доставка → Тарифы доставки). HorecaOS sh…
+- Delever exposes three overlapping geometry layers — branch geozone, delivery zone, and 'free geozone' — and the docs never explain how they interact or which wins. Does HorecaOS need three, or can one zone entity with typed roles cover all cases?
+- Delivery cost has at least four possible sources (branch tariff, zone tariff which outranks it, the live courier-service quote, and a promotion granting free delivery), plus a per-zone free-delivery threshold. The full precedence order is never stated in one place. HorecaOS must define it explicitly i…
+- The promotion engine is priority-ranked, optionally stackable and conditionally compatible with cashback. Delever's own release notes record repeated double-deduction and cross-channel divergence bugs here. What resolution algorithm does HorecaOS commit to, and is a quote reproducible from a versioned…
 - Loyalty (Программа лояльности) and review settings (Настройки отзывов) are documented only as empty stubs. Bonus points, expiry, and deposit accounts appear all over the release notes and payment-type enum but their rules are undocumented — this needs a direct product-owner conversation, not more d…
-- Bonus points and customer deposit are separate balances, and both are selectable as payment types. Is Qoida taking on customer-held stored value, and if so under what regulatory framing in Uzbekistan?
-- Delever's balance funds have an expiry date. Should Qoida prepaid credit expire? It changes the ledger design and requires a scheduled expiry-and-notify job.
-- Access control stacks three orthogonal gates: user permission, purchased module (entitlement), and tenant 'business type' (a courier-service tenant gets a different default route and different sections). Qoida ADR 0025 and 0021 cover the first two; business type as a navigation/capability axis is n…
+- Bonus points and customer deposit are separate balances, and both are selectable as payment types. Is HorecaOS taking on customer-held stored value, and if so under what regulatory framing in Uzbekistan?
+- Delever's balance funds have an expiry date. Should HorecaOS prepaid credit expire? It changes the ledger design and requires a scheduled expiry-and-notify job.
+- Access control stacks three orthogonal gates: user permission, purchased module (entitlement), and tenant 'business type' (a courier-service tenant gets a different default route and different sections). HorecaOS ADR 0025 and 0021 cover the first two; business type as a navigation/capability axis is n…
 
 ### Settings → Integrations (Настройки → Интеграции)
 
@@ -610,13 +610,13 @@ The Integrations section is Delever's provider-binding hub: it is where a tenant
 
 **Open questions this section raises**
 
-- Is D-Courier (D-courier) a Delever first-party courier fleet rather than a third-party integration? The 'D-' prefix matches 'D-aggregator Atmos', suggesting Delever-operated services. If Delever sells owned-fleet logistics, that is a separate business line Qoida should decide whether to match — the…
-- Express24 appears with Branches and Payment-types configuration in the older documentation tree but is absent from the current one, while Click Mini-App, Uzum Delivery, yTimes and Google Tag Manager are new. Is Express24 deprecated, commercially blocked, or merely undocumented? Qoida should confirm…
-- What is 'D-aggregator Atmos' in the per-channel payment matrix, and does it mean Delever acts as a payment facilitator aggregating Atmos on tenants' behalf rather than each tenant holding its own Atmos contract? If Qoida were to do the same it would carry payment-licensing obligations; if not, the…
-- Delever's stop-list is expressed as a numeric available quantity per product per branch menu (1C product-stock endpoint), and the dynamic aggregator integration has a 'send products to the stop list at remaining quantity N' threshold. Qoida ADR 0017 is currently BINARY-only availability. Does Qoida…
-- My Uzbekistan documents independent per-channel product pricing, and the 1C price endpoint has an is_update_aggregators_price flag deciding whether a price change propagates to aggregators. Does Qoida's ADR 0018 pricing model support price as a function of (product, sales channel), and what is the…
-- Delever's generic aggregator 'Client secret' is base64(login:password) of a real panel user, and the website onboarding asks tenants to hand over Cloudflare and domain-registrar credentials to a Delever manager. Both are security defects. Qoida presumably will not copy them — but what is the replac…
-- Fiscal identity (INN) can be set per branch, overriding the company INN, and Google Pay merchant profiles can be per branch 'if you want to split payments across legal entities'. Does this mean a single Qoida tenant may contain branches belonging to different legal entities, and if so how does that…
+- Is D-Courier (D-courier) a Delever first-party courier fleet rather than a third-party integration? The 'D-' prefix matches 'D-aggregator Atmos', suggesting Delever-operated services. If Delever sells owned-fleet logistics, that is a separate business line HorecaOS should decide whether to match — the…
+- Express24 appears with Branches and Payment-types configuration in the older documentation tree but is absent from the current one, while Click Mini-App, Uzum Delivery, yTimes and Google Tag Manager are new. Is Express24 deprecated, commercially blocked, or merely undocumented? HorecaOS should confirm…
+- What is 'D-aggregator Atmos' in the per-channel payment matrix, and does it mean Delever acts as a payment facilitator aggregating Atmos on tenants' behalf rather than each tenant holding its own Atmos contract? If HorecaOS were to do the same it would carry payment-licensing obligations; if not, the…
+- Delever's stop-list is expressed as a numeric available quantity per product per branch menu (1C product-stock endpoint), and the dynamic aggregator integration has a 'send products to the stop list at remaining quantity N' threshold. HorecaOS ADR 0017 is currently BINARY-only availability. Does HorecaOS…
+- My Uzbekistan documents independent per-channel product pricing, and the 1C price endpoint has an is_update_aggregators_price flag deciding whether a price change propagates to aggregators. Does HorecaOS's ADR 0018 pricing model support price as a function of (product, sales channel), and what is the…
+- Delever's generic aggregator 'Client secret' is base64(login:password) of a real panel user, and the website onboarding asks tenants to hand over Cloudflare and domain-registrar credentials to a Delever manager. Both are security defects. HorecaOS presumably will not copy them — but what is the replac…
+- Fiscal identity (INN) can be set per branch, overriding the company INN, and Google Pay merchant profiles can be per branch 'if you want to split payments across legal entities'. Does this mean a single HorecaOS tenant may contain branches belonging to different legal entities, and if so how does that…
 - The QR-hall channel supports 'pull up and pay an existing bill' — reading and settling a ticket a waiter opened in the POS. That is a substantially harder POS capability than pushing an order. Should ADR 0011's capability taxonomy include read-open-ticket and settle-ticket as declared capabilities,…
 
 ### Личный кабинет (Account) and BETA версия - V2
@@ -653,11 +653,11 @@ This section covers two things that are only superficially related. "Личны�
 
 **Open questions this section raises**
 
-- The account page's two substantive tabs — Личные данные and Персонализация — are documented only as embedded screen-capture videos with zero prose, so the actual editable fields are unknown. Does 'Personal Data' include self-service password change, phone/login change, or MFA? If yes, Qoida must de…
-- What is actually in 'Персонализация'? Language, theme, default branch, table column layout, notification sound? Whatever it is, it is the only per-user-scoped state in this section and Qoida has no staff-preferences store.
-- The beta toggle has moved at least twice — the V1 docs say it was relocated INTO Личный кабинет → «Бета-версия», while the newer V2 docs put the same toggles under Settings → Company → Управления версиями. Which is current is not stated. Qoida should skip the intermediate mistake and put tenant-sco…
-- Beta activation is explicitly tenant-global ('applies to all users of your admin panel'), yet the control sits on a personal page. Qoida needs an explicit scope dimension in ADR 0030 config resolution — platform / tenant / branch / user — and the UI should state the scope of every toggle.
-- The six version toggles (Заказ v2, Дашборд v2, Баланс v2, Кухонные заказы v2, Настройки бота v2, 'other sections') imply two live implementations of each module coexisting per tenant. Is Qoida willing to carry that cost for ADR 0024 cutover, or will it cut over whole tenants at once? Per-module tog…
-- 'Business type' changes both default route and module availability (courier-service tenants land on /home/deliveries). Is Qoida one product or several product shapes on one platform? ADR 0002 does not appear to carry a business-type discriminator, and adding one after launch is expensive.
-- 'Module locks' are a gate distinct from permissions. Qoida ADR 0021 (entitlements) is NOT STARTED while ADR 0025 (authorization) exists — the two must be designed to compose, and the frontend must be able to tell 'not permitted' apart from 'not purchased'.
-- Analytics is delegated to an embedded DataLens/Metabase workspace. Qoida has no analytics or BI ADR at all. Build, buy, or embed — and if embed, how is per-tenant row-level isolation enforced inside the BI tool, and does the BI tool's hosting satisfy ADR 0034 residency?
+- The account page's two substantive tabs — Личные данные and Персонализация — are documented only as embedded screen-capture videos with zero prose, so the actual editable fields are unknown. Does 'Personal Data' include self-service password change, phone/login change, or MFA? If yes, HorecaOS must de…
+- What is actually in 'Персонализация'? Language, theme, default branch, table column layout, notification sound? Whatever it is, it is the only per-user-scoped state in this section and HorecaOS has no staff-preferences store.
+- The beta toggle has moved at least twice — the V1 docs say it was relocated INTO Личный кабинет → «Бета-версия», while the newer V2 docs put the same toggles under Settings → Company → Управления версиями. Which is current is not stated. HorecaOS should skip the intermediate mistake and put tenant-sco…
+- Beta activation is explicitly tenant-global ('applies to all users of your admin panel'), yet the control sits on a personal page. HorecaOS needs an explicit scope dimension in ADR 0030 config resolution — platform / tenant / branch / user — and the UI should state the scope of every toggle.
+- The six version toggles (Заказ v2, Дашборд v2, Баланс v2, Кухонные заказы v2, Настройки бота v2, 'other sections') imply two live implementations of each module coexisting per tenant. Is HorecaOS willing to carry that cost for ADR 0024 cutover, or will it cut over whole tenants at once? Per-module tog…
+- 'Business type' changes both default route and module availability (courier-service tenants land on /home/deliveries). Is HorecaOS one product or several product shapes on one platform? ADR 0002 does not appear to carry a business-type discriminator, and adding one after launch is expensive.
+- 'Module locks' are a gate distinct from permissions. HorecaOS ADR 0021 (entitlements) is NOT STARTED while ADR 0025 (authorization) exists — the two must be designed to compose, and the frontend must be able to tell 'not permitted' apart from 'not purchased'.
+- Analytics is delegated to an embedded DataLens/Metabase workspace. HorecaOS has no analytics or BI ADR at all. Build, buy, or embed — and if embed, how is per-tenant row-level isolation enforced inside the BI tool, and does the BI tool's hosting satisfy ADR 0034 residency?

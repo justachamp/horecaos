@@ -339,17 +339,17 @@ VALUES
 
 -- --------------------------------------------------------------------- grants
 
-GRANT SELECT, INSERT, UPDATE ON migration.source_cursors TO qoida_application;
-GRANT SELECT, INSERT ON migration.transformations TO qoida_application;
-GRANT SELECT, INSERT ON migration.reconciliation_rules TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON migration.source_cursors TO horecaos_application;
+GRANT SELECT, INSERT ON migration.transformations TO horecaos_application;
+GRANT SELECT, INSERT ON migration.reconciliation_rules TO horecaos_application;
 
 -- Retiring a version is an UPDATE of retired_at, and it is deliberately not
 -- granted. Both tables are declarations that results and crosswalk rows point
 -- back to; retirement is a decision with an approver, taken through the same
 -- door as a cutover, and until that endpoint exists it is a migration rather
 -- than something the application can do to its own evidence.
-REVOKE UPDATE, DELETE, TRUNCATE ON migration.transformations FROM qoida_application;
-REVOKE UPDATE, DELETE, TRUNCATE ON migration.reconciliation_rules FROM qoida_application;
+REVOKE UPDATE, DELETE, TRUNCATE ON migration.transformations FROM horecaos_application;
+REVOKE UPDATE, DELETE, TRUNCATE ON migration.reconciliation_rules FROM horecaos_application;
 
 -- No DELETE anywhere here, for V0024's reason. A cursor is the record of how far
 -- a source was read, and deleting one turns "we can account for every row" into

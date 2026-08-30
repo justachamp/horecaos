@@ -499,12 +499,12 @@ COMMENT ON TABLE kitchen.ticket_events IS
 -- handover means the expo screen and the partner API can disagree about whether a
 -- bag was released with neither row authoritative.
 
-GRANT USAGE ON SCHEMA kitchen TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON kitchen.stations TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON kitchen.brand_routing_rules TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON kitchen.location_routing_rules TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON kitchen.tickets TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON kitchen.ticket_items TO qoida_application;
+GRANT USAGE ON SCHEMA kitchen TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON kitchen.stations TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON kitchen.brand_routing_rules TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON kitchen.location_routing_rules TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON kitchen.tickets TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON kitchen.ticket_items TO horecaos_application;
 -- Events are append-only evidence. No UPDATE and no DELETE, for the same reason
 -- ADR 0027 audit rows carry neither: a history that can be edited is not one.
-GRANT SELECT, INSERT ON kitchen.ticket_events TO qoida_application;
+GRANT SELECT, INSERT ON kitchen.ticket_events TO horecaos_application;

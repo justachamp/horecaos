@@ -1,11 +1,11 @@
 ---
 name: tenant-isolation
-description: Use whenever writing or changing a database table, SQL query, cache key, Kafka envelope, S3 object key, log statement, background job, import, or export in Qoida Platform. Tenant isolation is the platform's primary security boundary and is easy to break silently.
+description: Use whenever writing or changing a database table, SQL query, cache key, Kafka envelope, S3 object key, log statement, background job, import, or export in HorecaOS Platform. Tenant isolation is the platform's primary security boundary and is easy to break silently.
 ---
 
 # Tenant isolation
 
-Qoida is `Tenant -> Brand -> Location`. A tenant is the isolation, billing, and
+HorecaOS is `Tenant -> Brand -> Location`. A tenant is the isolation, billing, and
 administration boundary. Leaking across it is the platform's worst failure mode, and
 nothing in a passing test suite catches it unless the negative case was written.
 

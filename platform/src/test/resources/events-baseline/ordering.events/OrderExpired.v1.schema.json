@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.qoida.uz/events/ordering.events/OrderExpired.v1.schema.json",
+  "$id": "https://contracts.horecaos.uz/events/ordering.events/OrderExpired.v1.schema.json",
   "title": "OrderExpired v1 payload",
   "description": "Nobody decided before the approval deadline. Deliberately distinct from OrderRejected: 'the restaurant declined' and 'the restaurant never looked' have different customer wording and different branch metrics.",
   "type": "object",

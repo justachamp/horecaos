@@ -14,7 +14,7 @@ Required by ADR 0007. A production route may not ship without one of these; see
 | Source | `direct:pos.api` |
 | Destination | Point-of-sale vendor API over HTTPS, selected by ADR 0026 binding |
 | Service identity | Per-installation vendor credential, ADR 0026 |
-| Secret reference type | `qoida:{env}:provider_pos:{owner}:{id}` (ADR 0028) |
+| Secret reference type | `horecaos:{env}:provider_pos:{owner}:{id}` (ADR 0028) |
 | Connect timeout | 5s |
 | Total timeout | `PosApiCall.timeout`, or 25s when the adapter names none |
 | Retry classification | **None in-route.** The route classifies by `PosApiCall.effect` and returns; the `pos` module, and usually a person, decides whether to send again |
@@ -25,7 +25,7 @@ Required by ADR 0007. A production route may not ship without one of these; see
 | Expected volume | Pilot: under 3,000 calls/day/tenant, concentrated in two service peaks |
 | SLO | p95 under 5s for an order export; under 2s for a catalog read |
 | Runbook | `docs/routes/pos-api.md#runbook` |
-| Dashboard | Metric `qoida.pos.route`, tagged `event`, `provider`, `operation`, `effect`, `status` |
+| Dashboard | Metric `horecaos.pos.route`, tagged `event`, `provider`, `operation`, `effect`, `status` |
 
 ## Why this route has neither a retry nor a reconcile branch
 
@@ -52,7 +52,7 @@ to a human.
 ## Runbook
 
 **Circuit open for one vendor.** Only that vendor's restaurants are affected.
-Check `qoida.pos.route` with `event=circuit_open` for the onset. The breaker
+Check `horecaos.pos.route` with `event=circuit_open` for the onset. The breaker
 half-opens after 30s on its own. While it is open, the restaurant takes tickets
 the way it did before the integration existed; say so when you call them, because
 the useful instruction is operational, not technical.

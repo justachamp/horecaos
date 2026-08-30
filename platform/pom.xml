@@ -11,14 +11,14 @@
         <relativePath/>
     </parent>
 
-    <groupId>uz.qoida</groupId>
-    <artifactId>qoida-platform</artifactId>
+    <groupId>uz.horecaos</groupId>
+    <artifactId>horecaos-platform</artifactId>
     <version>0.1.0-SNAPSHOT</version>
-    <name>Qoida Platform</name>
+    <name>HorecaOS Platform</name>
     <description>Multi-tenant SaaS commerce and delivery platform</description>
 
     <properties>
-        <qoida.test.forks>4</qoida.test.forks>
+        <horecaos.test.forks>4</horecaos.test.forks>
         <java.version>25</java.version>
         <maven.compiler.parameters>true</maven.compiler.parameters>
         <project.build.outputTimestamp>2026-08-18T00:00:00Z</project.build.outputTimestamp>
@@ -236,7 +236,7 @@
 
                         Set from a property so a constrained machine can turn it
                         down without editing the build:
-                        `./mvnw verify -Dqoida.test.forks=1` is the old behaviour.
+                        `./mvnw verify -Dhorecaos.test.forks=1` is the old behaviour.
 
                         Four rather than 1C. Each fork costs a JVM plus a
                         PostgreSQL, and the fixed prologue — container start plus
@@ -246,7 +246,7 @@
                         the top ten classes are roughly half of it, so the win comes
                         from spreading those, not from maximum width.
                     -->
-                    <forkCount>${qoida.test.forks}</forkCount>
+                    <forkCount>${horecaos.test.forks}</forkCount>
                     <reuseForks>true</reuseForks>
                 </configuration>
             </plugin>
@@ -263,7 +263,7 @@
                             <rules>
                                 <requireJavaVersion>
                                     <version>[25,26)</version>
-                                    <message>Qoida Platform requires JDK 25.</message>
+                                    <message>HorecaOS Platform requires JDK 25.</message>
                                 </requireJavaVersion>
                                 <requireMavenVersion>
                                     <version>[3.9,)</version>

@@ -24,7 +24,7 @@
 
 set -euo pipefail
 
-LOCK_DIR="${TMPDIR:-/tmp}/qoida-maven.lock"
+LOCK_DIR="${TMPDIR:-/tmp}/horecaos-maven.lock"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STALE_AFTER_SECONDS=1800
 

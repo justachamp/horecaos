@@ -42,12 +42,12 @@ bands: ## Show the current control bands
 
 openapi-client-check: ## Regenerate the typed OpenAPI client and reject undocumented drift
 	$(MVN) test -Dtest=OpenApiContractTests
-	@python3 tools/openapi/generate_types.py --input target/openapi/qoida-api-v1.json --output target/openapi/qoida-api-v1.ts
-	@diff -u api/generated/qoida-api-v1.ts target/openapi/qoida-api-v1.ts
+	@python3 tools/openapi/generate_types.py --input target/openapi/horecaos-api-v1.json --output target/openapi/horecaos-api-v1.ts
+	@diff -u api/generated/horecaos-api-v1.ts target/openapi/horecaos-api-v1.ts
 
 openapi-baseline: ## Reviewably refresh the OpenAPI baseline and generated typed client
-	$(MVN) test -Dtest=OpenApiContractTests -Dqoida.openapi.updateBaseline=true
-	@python3 tools/openapi/generate_types.py --input target/openapi/qoida-api-v1.json --output api/generated/qoida-api-v1.ts
+	$(MVN) test -Dtest=OpenApiContractTests -Dhorecaos.openapi.updateBaseline=true
+	@python3 tools/openapi/generate_types.py --input target/openapi/horecaos-api-v1.json --output api/generated/horecaos-api-v1.ts
 
 run: ## Start the API on :8080 with local-only fixture data
 	$(MVN) spring-boot:run -Dspring-boot.run.profiles=local

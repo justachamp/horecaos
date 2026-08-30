@@ -20,7 +20,7 @@
 -- where `courier.shift.enforcement` is OFF or ADVISORY) carries none, and those
 -- rows can never satisfy this predicate.
 --
--- No GRANT below. This adds no table and no column; `qoida_application`
+-- No GRANT below. This adds no table and no column; `horecaos_application`
 -- already holds SELECT on `fulfillment.courier_assignment_earnings` from V0040
 -- line 1016, and an index is not a grantable object.
 

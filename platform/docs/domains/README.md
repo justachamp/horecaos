@@ -1,6 +1,6 @@
-# Qoida domain design
+# HorecaOS domain design
 
-This directory is the canonical version-1 logical business model for Qoida.
+This directory is the canonical version-1 logical business model for HorecaOS.
 It records the product decisions approved before business tables and domain
 code are introduced. Physical schemas are added incrementally by capability;
 they must preserve the ownership and invariants defined here.
@@ -30,13 +30,13 @@ they must preserve the ownership and invariants defined here.
 - Customer identity is tenant-configurable as `TENANT_SHARED` or
   `BRAND_ISOLATED`; brand-specific profiles exist in both modes.
 - Catalogs and products are brand-owned and cannot be shared across brands.
-- Qoida is authoritative for customer-facing products, prices, and
+- HorecaOS is authoritative for customer-facing products, prices, and
   availability. POS imports pass through staging and reconciliation.
 - Initial POS providers are CLOPOS, r_keeper, and iiko.
 - Order acceptance is inherited from platform, tenant, brand, and location.
 - The supported acceptance modes are `AUTO_CONFIRM` and
   `RESTAURANT_APPROVAL`.
-- Restaurant approval accepts both Qoida Operations and POS decisions. The
+- Restaurant approval accepts both HorecaOS Operations and POS decisions. The
   first valid decision wins atomically.
 - Kafka is the durable event backbone; Camel is the integration boundary.
 - Media is stored in private S3-compatible object storage, not a local

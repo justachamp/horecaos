@@ -7,7 +7,7 @@
 # common self-inflicted one on deployments like this.
 
 {
-	email {$QOIDA_ACME_EMAIL}
+	email {$HORECAOS_ACME_EMAIL}
 
 	# The admin API stays on loopback inside the container. It is what the
 	# health check probes, and it must never be reachable from the network: it
@@ -39,7 +39,7 @@
 	}
 }
 
-{$QOIDA_API_ORIGIN} {
+{$HORECAOS_API_ORIGIN} {
 	encode zstd gzip
 
 	# Two actuator paths and nothing else. `/actuator/metrics`,
@@ -108,7 +108,7 @@
 	}
 }
 
-{$QOIDA_AUTH_ORIGIN} {
+{$HORECAOS_AUTH_ORIGIN} {
 	encode zstd gzip
 
 	# Keycloak's admin console and its management port are not published. The
@@ -158,7 +158,7 @@
 # Media objects.
 #
 # A presigned URL is signed for one origin, so this name is the one in
-# QOIDA_MEDIA_ORIGIN and MinIO validates the signature against the Host header
+# HORECAOS_MEDIA_ORIGIN and MinIO validates the signature against the Host header
 # it receives. That is why the proxy below is a plain reverse_proxy with no
 # header rewriting: change the Host and every signature stops matching.
 #
@@ -167,7 +167,7 @@
 # internet -- and the edge is not on `core`, because the one internet-facing
 # process should have no path to PostgreSQL.
 # ---------------------------------------------------------------------------
-{$QOIDA_MEDIA_ORIGIN} {
+{$HORECAOS_MEDIA_ORIGIN} {
 	encode zstd gzip
 
 	# Objects only. The MinIO console is disabled, but the S3 API on the same

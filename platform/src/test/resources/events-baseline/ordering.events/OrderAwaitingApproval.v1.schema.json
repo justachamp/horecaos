@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.qoida.uz/events/ordering.events/OrderAwaitingApproval.v1.schema.json",
+  "$id": "https://contracts.horecaos.uz/events/ordering.events/OrderAwaitingApproval.v1.schema.json",
   "title": "OrderAwaitingApproval v1 payload",
   "description": "The order is waiting for a restaurant decision. Carries the deadline so every consumer counts down to the same instant as the durable timer.",
   "type": "object",
@@ -12,7 +12,7 @@
     "locationId": { "type": ["string", "null"], "format": "uuid" },
     "approvalChannel": {
       "type": ["string", "null"],
-      "enum": ["NONE", "QOIDA_OPERATIONS", "POS", "EITHER", null]
+      "enum": ["NONE", "HORECAOS_OPERATIONS", "POS", "EITHER", null]
     },
     "approvalDeadlineAt": { "type": "string", "format": "date-time" },
     "timeoutAction": {

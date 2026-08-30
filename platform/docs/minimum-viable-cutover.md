@@ -27,7 +27,7 @@ Deliberate constraints for the first slice:
 tenants          one, internal or a friendly pilot restaurant
 brands           one
 locations        one
-catalog          authored in Qoida by hand; no POS integration
+catalog          authored in HorecaOS by hand; no POS integration
 inventory        BINARY or UNTRACKED only; no quantity tracking
 pricing          price book and taxes; no promotions or coupons
 payments         one provider, one merchant account
@@ -79,7 +79,7 @@ Deferred means "not in the first slice", not "not needed". Each remains an
 accepted decision with an unchanged ADR.
 
 - **POS integration** (0011, 0012). The pilot restaurant enters its menu in
-  Qoida and works orders in the Operations application. This removes three
+  HorecaOS and works orders in the Operations application. This removes three
   provider contract discoveries from the critical path.
 - **External delivery partners** (0014). Manual assignment or pickup only. Both
   Yandex and Noor are now documented well enough to integrate, but each adds a

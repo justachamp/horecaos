@@ -70,7 +70,7 @@ Invariants:
 
 ### Principal and membership
 
-`Principal` is Qoida's stable link to a Keycloak subject. A principal can have
+`Principal` is HorecaOS's stable link to a Keycloak subject. A principal can have
 many tenant memberships. Tenant, brand, and location role grants scope what a
 membership can do; they are application authorization facts, not credentials.
 
@@ -109,7 +109,7 @@ existing customer data.
 - Inventory is never duplicated on product and location-offering rows.
   Quantity-tracked products use a position, reservations, and an append-only
   movement ledger.
-- POS data is imported into staging. New POS products can become draft Qoida
+- POS data is imported into staging. New POS products can become draft HorecaOS
   products; differences never silently overwrite authoritative fields.
 
 ## Ordering
@@ -135,7 +135,7 @@ Supported modes are:
 - `AUTO_CONFIRM`
 - `RESTAURANT_APPROVAL`
 
-Restaurant approval uses `EITHER`: Qoida Operations and the POS may decide.
+Restaurant approval uses `EITHER`: HorecaOS Operations and the POS may decide.
 The first valid approval or rejection wins with an atomic state transition.
 Later responses are retained as stale decisions for audit and diagnostics.
 The safe timeout default is `AUTO_REJECT`.
@@ -147,7 +147,7 @@ multiple attempts and transactions such as authorization, capture, void, and
 refund. Provider capabilities decide whether authorization and capture can be
 separated. Provider IDs and callbacks are idempotent and reconcilable.
 
-For restaurant approval, Qoida authorizes before requesting approval and
+For restaurant approval, HorecaOS authorizes before requesting approval and
 captures after approval. Rejection or expiry voids the authorization. When a
 provider cannot separate authorization and capture, the control plane must
 show that rejection requires a refund.
@@ -186,7 +186,7 @@ is effective.
 
 POS capabilities are independently discoverable: catalog read, availability
 read, approval, order export, cancellation, and preparation status. Unsupported
-capabilities fall back to Qoida workflows instead of provider-name conditionals
+capabilities fall back to HorecaOS workflows instead of provider-name conditionals
 inside the domain.
 
 Camel owns protocol mediation, authentication, transformation, throttling,

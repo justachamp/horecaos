@@ -441,7 +441,7 @@ CREATE TABLE fulfillment.delivery_tariff_versions (
     distance_mode varchar(8) NOT NULL DEFAULT 'RADIUS',
     -- What straight-line distance is multiplied by when routing is unavailable
     -- and RADIUS_FALLBACK applies. A platform default that must be calibrated per
-    -- city; Qoida has not measured it, which is why it is a column with a stated
+    -- city; HorecaOS has not measured it, which is why it is a column with a stated
     -- value rather than a constant nobody can see.
     road_factor_basis_points integer NOT NULL DEFAULT 13000,
     routing_provider_installation_id uuid,
@@ -632,7 +632,7 @@ CREATE TABLE fulfillment.delivery_fee_resolutions (
         'RESOLVED',
         -- ADR 0040 pricing authority is EXTERNAL. Checked before a zone or a
         -- tariff is looked up, so no tariff configuration can reintroduce a
-        -- Qoida-computed fee on top of the one the aggregator already collected.
+        -- HorecaOS-computed fee on top of the one the aggregator already collected.
         'EXTERNALLY_PRICED',
         -- The branch has no coordinate, so nothing can be measured from it. A
         -- distinct outcome and not OUT_OF_ZONE: the address is fine and the
@@ -771,14 +771,14 @@ ALTER TABLE pricing.quote_adjustments
                             'DELIVERY_FEE_BENEFIT')
     );
 
-GRANT USAGE ON SCHEMA fulfillment TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.regions TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.service_zones TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.service_zone_versions TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.zone_location_bindings TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.delivery_tariffs TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.location_tariff_bindings TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.delivery_tariff_versions TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.delivery_tariff_bands TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.delivery_tariff_time_rules TO qoida_application;
-GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.delivery_fee_resolutions TO qoida_application;
+GRANT USAGE ON SCHEMA fulfillment TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.regions TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.service_zones TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.service_zone_versions TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.zone_location_bindings TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.delivery_tariffs TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.location_tariff_bindings TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.delivery_tariff_versions TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.delivery_tariff_bands TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.delivery_tariff_time_rules TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE, DELETE ON fulfillment.delivery_fee_resolutions TO horecaos_application;

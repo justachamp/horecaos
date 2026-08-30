@@ -13,8 +13,8 @@
   CancelTransaction, signatures, and error codes. This file owns only the fiscal
   surface and cites them rather than restating them.
 - Decision this serves: **the restaurant's legal entity is the seller and the
-  principal; Qoida is an agent and never the issuer.** ADR 0038 already says
-  Qoida stays a requester and retainer of fiscal documents.
+  principal; HorecaOS is an agent and never the issuer.** ADR 0038 already says
+  HorecaOS stays a requester and retainer of fiscal documents.
 
 ## Answers up front
 
@@ -39,7 +39,7 @@
    `merchant_user_id`/`secret_key`, and the Payme cashbox. Payme's
    `receipts.create` response proves it — the receipt carries a `merchant`
    object with `organization` on it, populated from the cashbox, with no input
-   from the request. **Therefore one Qoida merchant account cannot serve many
+   from the request. **Therefore one HorecaOS merchant account cannot serve many
    restaurants under the `PARTNER` path.** Each restaurant legal entity needs
    its own Click service and its own Payme cashbox. See [Whose fiscal identity](#whose-fiscal-identity-is-used).
 5. **A cash order gets no fiscal receipt from either provider, and cannot.**
@@ -62,9 +62,9 @@ Auth: merchant_user_id:sha1(timestamp + secret_key):timestamp
 
 | Call | Direction | Purpose |
 |---|---|---|
-| `POST payment/ofd_data/submit_items` | Qoida → Click | Send the receipt lines and the tender split for one completed CLICK payment |
-| `POST payment/ofd_data/submit_qrcode` | Qoida → Click | Attach a fiscal receipt URL that *someone else* produced, to a CLICK payment |
-| `GET payment/ofd_data/:service_id/:payment_id` | Qoida → Click | Read back `{ paymentId, qrCodeURL }` |
+| `POST payment/ofd_data/submit_items` | HorecaOS → Click | Send the receipt lines and the tender split for one completed CLICK payment |
+| `POST payment/ofd_data/submit_qrcode` | HorecaOS → Click | Attach a fiscal receipt URL that *someone else* produced, to a CLICK payment |
+| `GET payment/ofd_data/:service_id/:payment_id` | HorecaOS → Click | Read back `{ paymentId, qrCodeURL }` |
 
 ```json
 {
@@ -77,7 +77,7 @@ Auth: merchant_user_id:sha1(timestamp + secret_key):timestamp
 }
 ```
 
-`payment_id` is CLICK's payment identifier, not Qoida's. Qoida's own identifier
+`payment_id` is CLICK's payment identifier, not HorecaOS's. HorecaOS's own identifier
 is `merchant_trans_id`, which the legacy system populated with `transactions.id`
 — and which is recoverable in the other direction through
 `GET payment/status_by_mti/:service_id/:merchant_trans_id/YYYY-MM-DD`. That
@@ -129,7 +129,7 @@ Three facts about this call that are easy to miss and expensive to miss:
 
 - **It is optional to implement.** The docs say so outright («Данный метод не
   обязателен к реализации»). Not implementing it means the money moves, the
-  receipt is issued, and Qoida holds no evidence of it. For a platform whose
+  receipt is issued, and HorecaOS holds no evidence of it. For a platform whose
   entire fiscal position is "retain evidence", not implementing it is the same
   as not fiscalizing.
 - **Its arrival is not proof of a receipt.** `status_code` is a status, and
@@ -162,7 +162,7 @@ matters for the `PARTNER` path.
 | Quantity | `Amount*` `uint64` | `count*` `Number` | See the fractional-quantity note below |
 | Unit price | `GoodPrice` `uint64` (optional) | `price*` `Number` (required) | |
 | Line total | `Price*` `uint64` (required) | — (derived) | **The trap.** Click's `Price` is the *line total*; Payme's `price` is the *unit price*. Same word, factor of `quantity` apart |
-| VAT amount | `VAT*` `uint64` tiyin | — (derived) | Click makes Qoida compute it |
+| VAT amount | `VAT*` `uint64` tiyin | — (derived) | Click makes HorecaOS compute it |
 | VAT rate | `VATPercent*` `int` | `vat_percent*` `Number` | Whole percent on both |
 | Discount | `Discount` `uint64` + `Other` `uint64` | `discount` `Number` | Payme's is explicitly "с учётом количества" — already multiplied out |
 | Barcode | `Barcode` `string(13)` | — | |
@@ -266,7 +266,7 @@ Recovery path, in order:
    never deleted.
 3. **If the `payment_id` is unknown** — the callback was lost — recover it with
    `GET payment/status_by_mti/:service_id/:merchant_trans_id/YYYY-MM-DD` using
-   Qoida's own transaction identifier and the payment's business date. This is
+   HorecaOS's own transaction identifier and the payment's business date. This is
    why the business date must be snapshotted on the order at acceptance and not
    inferred later.
 4. **If it cannot be fiscalized at all**, the document goes to `FAILED` and then
@@ -284,7 +284,7 @@ Recovery path, in order:
 
 ### Payme
 
-The failure mode is quieter, because nothing Qoida does fails. The lines are
+The failure mode is quieter, because nothing HorecaOS does fails. The lines are
 fixed at checkout initiation; the payment succeeds; and then either
 `SetFiscalData` never arrives, or it arrives with `status_code != 0` and a
 `message` describing an OFD registration error.
@@ -314,7 +314,7 @@ fixed at checkout initiation; the payment succeeds; and then either
 Both paths converge on one requirement ADR 0038 already states and that these
 contracts confirm is load-bearing: **the fiscal document is an obligation of the
 order, resolved to issued, not-required, or visibly blocked, and never silently
-absent.** Neither provider will tell Qoida that a receipt is missing. Only Qoida
+absent.** Neither provider will tell HorecaOS that a receipt is missing. Only HorecaOS
 asking will.
 
 ## What comes back, and what is evidence
@@ -331,8 +331,8 @@ asking will.
 Both providers return the same underlying object; Click returns it packed into
 one `https://ofd.soliq.uz/epi?t=…&r=…&c=…&s=…` URL and Payme returns it as
 named fields plus the URL. **Parse the Click URL into fields and store both.**
-A URL is a pointer to a service Qoida does not run; its lifetime belongs to the
-OFD, not to Qoida, and an evidence record that is only a dead link is not
+A URL is a pointer to a service HorecaOS does not run; its lifetime belongs to the
+OFD, not to HorecaOS, and an evidence record that is only a dead link is not
 evidence. Storing the components costs four columns —
 `external_receipt_id`, `fiscal_sign`, `receipt_reference` and the terminal id —
 which is exactly the shape ADR 0038's `fiscal.fiscal_documents` already has.
@@ -372,7 +372,7 @@ position is that **finance and legal set the number, not the code.** Two things
 follow regardless of what they choose:
 
 - Retention is per legal entity, because the obligation is the restaurant's, not
-  Qoida's, and a tenant offboarding does not extinguish it.
+  HorecaOS's, and a tenant offboarding does not extinguish it.
 - Retention must be an ADR 0030 policy value, not a constant, because it is a
   jurisdiction fact and this platform already intends to serve more than one.
 
@@ -394,9 +394,9 @@ carried in an ADR 0032 event. An INN is a business identifier and may travel.
   merchant, and every fiscal call carries `service_id`. No seller TIN appears
   anywhere in the request body.
 
-**Consequence, stated plainly: one Qoida merchant account cannot serve many
-restaurants on the `PARTNER` path.** Every receipt issued through a shared Qoida
-Click service or a shared Qoida Payme cashbox would name Qoida as the seller,
+**Consequence, stated plainly: one HorecaOS merchant account cannot serve many
+restaurants on the `PARTNER` path.** Every receipt issued through a shared HorecaOS
+Click service or a shared HorecaOS Payme cashbox would name HorecaOS as the seller,
 which is the opposite of the decision that the restaurant is the principal. Each
 restaurant legal entity needs its own Click service and its own Payme cashbox,
 registered to its own INN, with credentials held as ADR 0026 secret references
@@ -426,7 +426,7 @@ commission-receipt data. The documentation does not say **whose** TIN it is.
 
 This matters more than any other open question here, because commission trade
 (комиссионная торговля) is the Uzbek fiscal construct for exactly the
-arrangement Qoida has chosen: goods sold by one party on behalf of another, with
+arrangement HorecaOS has chosen: goods sold by one party on behalf of another, with
 the receipt naming the committent. If `CommissionInfo.TIN` is the committent's
 — the restaurant's — then a single Click merchant account issuing receipts that
 name each restaurant per line becomes at least conceivable, and the "one account
@@ -438,7 +438,7 @@ technical one. If it is the buyer's, or the commission agent's, it does not.
 - Ask Click, in writing, whose TIN/PINFL `CommissionInfo` carries and whether a
   receipt issued under service A may name a different TIN per line. Record the
   answer in this file.
-- Ask legal whether the Qoida–restaurant agreement is a commission agreement
+- Ask legal whether the HorecaOS–restaurant agreement is a commission agreement
   (договор комиссии) in the sense the tax rules use, or an agency arrangement
   that does not qualify. ADR 0038's open input "which party is the legal fiscal
   agent for each settlement path" is the same question and should be closed with
@@ -474,7 +474,7 @@ This is not a marginal case. The legacy `payment_methods` table seeds exactly
 three rows — `cash` (on), `click` (off), `payme` (on) — and cash is the method
 this market's customers use most. So the platform's fiscal coverage under a
 `PARTNER`-only implementation is *the minority of orders*, and ADR 0013's
-original position ("the partners fiscalize, Qoida retains evidence") is
+original position ("the partners fiscalize, HorecaOS retains evidence") is
 confirmed here as correct-and-inapplicable exactly as ADR 0038 says.
 
 What that leaves:
@@ -484,7 +484,7 @@ What that leaves:
 | Click / Payme online card | The provider, under the restaurant's merchant account | Documented here; buildable now |
 | Cash, courier terminal, kiosk, dine-in POS | The restaurant's own fiscal-capable equipment (`TERMINAL`) | ADR 0038 stage 5; depends on ADR 0011 POS work not yet built |
 | A receipt issued on the restaurant's equipment for an order paid through a provider | The restaurant's equipment, registered back via Click `submit_qrcode` or Payme `receipts.set_fiscal_data` | Documented here; the failure-recovery remedy |
-| Qoida calling a fiscal operator directly (`OPERATOR`) | Qoida | Specified by ADR 0038, deliberately unimplemented |
+| HorecaOS calling a fiscal operator directly (`OPERATOR`) | HorecaOS | Specified by ADR 0038, deliberately unimplemented |
 
 ADR 0038's serviceability precondition — cash is not offered on any channel
 serving a location with no active fiscal-capable terminal — is therefore not
@@ -501,7 +501,7 @@ nothing that relaxes it.
 | How is a fractional quantity expressed in `Amount` (`uint64`) and `count`? | Click, Payme | Any catch-weight or splittable item; ADR 0038 forbids it only for *marked* goods |
 | Is there a deadline after which `SetFiscalData` will not arrive? | Payme | The sweeper interval that turns silence into `BLOCKED` |
 | Full `status_code` list for `SetFiscalData` | Payme | Distinguishing a retryable OFD error from a permanent one |
-| Is the Qoida–restaurant relationship a commission agreement in the fiscal sense? | Legal | ADR 0038's open input on fiscal agency |
+| Is the HorecaOS–restaurant relationship a commission agreement in the fiscal sense? | Legal | ADR 0038's open input on fiscal agency |
 | Retention period for fiscal evidence, per legal entity | Finance, legal | The ADR 0030 policy value |
 
 ## What this implies for ADR 0038

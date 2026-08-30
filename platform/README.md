@@ -1,6 +1,6 @@
-# Qoida Platform
+# HorecaOS Platform
 
-Qoida Platform is the target multi-tenant SaaS commerce and delivery platform
+HorecaOS Platform is the target multi-tenant SaaS commerce and delivery platform
 that will incrementally replace the legacy FastAPI system in `../milliy`.
 
 The platform is being redesigned around new tenant-aware frontends, a Java
@@ -106,7 +106,7 @@ module conventions.
 
 ## Product model
 
-Qoida is moving toward SaaS. The primary ownership hierarchy is:
+HorecaOS is moving toward SaaS. The primary ownership hierarchy is:
 
 ```text
 Tenant
@@ -204,14 +204,14 @@ organization membership, and coarse application roles. Java APIs validate
 Keycloak access tokens and enforce resource-level tenant, brand, location, and
 entitlement rules.
 
-The working B2B model maps one Keycloak Organization to one Qoida tenant so
+The working B2B model maps one Keycloak Organization to one HorecaOS tenant so
 tenant users can be invited or federated without provisioning a realm per
 tenant; [ADR 0003](docs/adr/built/0003-keycloak-tenant-authorization.md) records why
 realm-per-tenant was rejected. The boundary between Keycloak roles and
 application authorization is decided in
 [ADR 0025](docs/adr/built/0025-fine-grained-authorization-and-capability-model.md):
 Keycloak owns authentication, organization membership, and coarse roles, while
-Qoida owns capability grants scoped to tenant, brand, and location. Customer
+HorecaOS owns capability grants scoped to tenant, brand, and location. Customer
 phone and OTP login remains an open Keycloak flow decision.
 
 Frontends use Authorization Code with PKCE and separate public clients. APIs,
@@ -442,7 +442,7 @@ At every point, each domain has exactly one authoritative writer.
 - An order belongs to one tenant, brand, and fulfillment location.
 - Order acceptance resolves through platform, tenant, brand, and location and
   supports auto-confirm or restaurant approval.
-- Restaurant approval accepts both Qoida Operations and POS decisions; the
+- Restaurant approval accepts both HorecaOS Operations and POS decisions; the
   first valid decision wins.
 - Payment, delivery, and integration settings may be overridden at narrower
   scopes where the relevant capability supports it.
@@ -460,7 +460,7 @@ At every point, each domain has exactly one authoritative writer.
 - [Domain model, ERD, state machines, and processes](docs/domains/README.md)
 - [Local development](docs/development.md)
 - [Agent and implementation rules](AGENTS.md)
-- [The Qoida SDLC](docs/sdlc.md) — how a change moves from `intent.md` through
+- [The HorecaOS SDLC](docs/sdlc.md) — how a change moves from `intent.md` through
   `spec.md`, `plan.md`, review, and release, and where a person decides
 - [Review policy](REVIEW.md) — what every pull request is reviewed against
 

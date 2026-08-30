@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.qoida.uz/events/ordering.events/OrderCancelled.v1.schema.json",
+  "$id": "https://contracts.horecaos.uz/events/ordering.events/OrderCancelled.v1.schema.json",
   "title": "OrderCancelled v1 payload",
   "description": "The order was cancelled. ADR 0039 added systemCategory, stockDisposition and liabilityParty as optional properties: a reason code alone cannot answer what happened to the stock or who carried the cost, and a report built on a status string cannot separate a cancellation from a rejection. None of the three names a person, which is why they may travel here while the reason's internal text may not.",
   "type": "object",

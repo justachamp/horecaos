@@ -93,7 +93,7 @@ CREATE INDEX ix_customer_session_expiry
     ON customer.customer_sessions (expires_at);
 
 GRANT SELECT, INSERT, UPDATE, DELETE
-    ON customer.customer_sessions TO qoida_application;
+    ON customer.customer_sessions TO horecaos_application;
 
 COMMENT ON TABLE customer.customer_sessions IS
     'ADR 0051. A platform-issued, opaque, database-backed customer session. Holds a SHA-256 of a 256-bit token, never the token, and no personal data of any kind.';

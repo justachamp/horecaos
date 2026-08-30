@@ -20,12 +20,12 @@
 -- `pg_class`, `pg_namespace`, `pg_inherits` — so all four were bendable. And
 -- `TEMPORARY` on the database is one of the two privileges PostgreSQL grants to
 -- PUBLIC by default; no migration in this repository had ever revoked it, so
--- `qoida_application` held it and `CREATE TEMP TABLE` succeeded.
+-- `horecaos_application` held it and `CREATE TEMP TABLE` succeeded.
 --
 -- That is enough for a foothold on the application's connection — an injection,
 -- a deserialization bug, anything that can run one statement of its choosing —
 -- to reach the worst verb the platform hands out. Reproduced against a real
--- container before this migration was written, as `qoida_application` and
+-- container before this migration was written, as `horecaos_application` and
 -- nothing more:
 --
 --     CREATE TEMP TABLE pg_class AS
@@ -65,7 +65,7 @@
 -- A privilege is not removed because it is unused-looking; it is removed after
 -- establishing that nothing uses it. Nothing does:
 --
---   * Flyway connects as `qoida_migrator`, which owns this database. An owner
+--   * Flyway connects as `horecaos_migrator`, which owns this database. An owner
 --     holds every database privilege implicitly and is unaffected by a REVOKE
 --     from PUBLIC, so migrations are untouched.
 --   * `src/main/java` contains no `CREATE TEMP`, no `TEMPORARY TABLE`, no
@@ -73,7 +73,7 @@
 --   * The three scripts in `tools/migration/` that do create a temporary table
 --     run against the LEGACY database with a legacy credential (ADR 0024 Phase
 --     0 profiling). They never connect here.
---   * `qoida_reporting_read` is a NOLOGIN group for reading facts through the
+--   * `horecaos_reporting_read` is a NOLOGIN group for reading facts through the
 --     ADR 0043 query surface, not a warehouse credential staging its own
 --     intermediate tables.
 --
@@ -96,7 +96,7 @@
 -- statement the code actually issues: an `ON CONFLICT ... DO UPDATE` needs the
 -- UPDATE privilege on its target whether or not any row ever conflicts.
 --
--- Under the owner connection this never showed. Under `qoida_application` it is
+-- Under the owner connection this never showed. Under `horecaos_application` it is
 -- `permission denied for table courier_location_tracks` on EVERY call — not on
 -- the conflicting ones, on all of them, because the privilege is checked when
 -- the statement is planned. Reproduced under the probe role before this was
@@ -123,7 +123,7 @@
 -- The grant the telemetry upsert has always needed
 -- ---------------------------------------------------------------------------
 
-GRANT UPDATE ON fulfillment.courier_location_tracks TO qoida_application;
+GRANT UPDATE ON fulfillment.courier_location_tracks TO horecaos_application;
 
 
 -- ---------------------------------------------------------------------------
@@ -198,7 +198,7 @@ BEGIN
             RAISE;
     END;
 
-    EXECUTE format('GRANT INSERT, SELECT ON audit.%I TO qoida_application', v_name);
+    EXECUTE format('GRANT INSERT, SELECT ON audit.%I TO horecaos_application', v_name);
     RETURN true;
 END;
 $$;
@@ -207,7 +207,7 @@ COMMENT ON FUNCTION audit.ensure_event_partition(integer) IS
     'ADR 0027 partition upkeep. Idempotent and race-tolerant across replicas. SECURITY DEFINER (V0075) because the application role holds no DDL rights and this is the only way it is meant to add a partition; EXECUTE is granted by name rather than to PUBLIC, and the only identifier it builds comes from an integer year, never from a caller''s string. search_path names pg_temp LAST and every catalogue read is schema-qualified (V0080) — without both, a caller''s temporary table is searched before pg_catalog and IS the catalogue this function reads.';
 
 REVOKE EXECUTE ON FUNCTION audit.ensure_event_partition(integer) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION audit.ensure_event_partition(integer) TO qoida_application;
+GRANT EXECUTE ON FUNCTION audit.ensure_event_partition(integer) TO horecaos_application;
 
 
 -- ---------------------------------------------------------------------------
@@ -253,7 +253,7 @@ BEGIN
             RAISE;
     END;
 
-    EXECUTE format('GRANT SELECT, INSERT ON fulfillment.%I TO qoida_application', v_name);
+    EXECUTE format('GRANT SELECT, INSERT ON fulfillment.%I TO horecaos_application', v_name);
     RETURN true;
 END;
 $$;
@@ -262,7 +262,7 @@ COMMENT ON FUNCTION fulfillment.ensure_track_partition(date) IS
     'ADR 0045 partition upkeep. Idempotent and race-tolerant across replicas. SECURITY DEFINER (V0075) for the reason audit.ensure_event_partition is; the only identifier it builds is a to_char of a date, so there is no slot a caller''s string can reach. The partition grant stays SELECT and INSERT: nothing rewrites a track, the upsert''s UPDATE is checked on the partitioned parent (V0080), and deleting one is the sweep''s job and not a row operation. search_path names pg_temp LAST and every catalogue read is schema-qualified (V0080).';
 
 REVOKE EXECUTE ON FUNCTION fulfillment.ensure_track_partition(date) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION fulfillment.ensure_track_partition(date) TO qoida_application;
+GRANT EXECUTE ON FUNCTION fulfillment.ensure_track_partition(date) TO horecaos_application;
 
 
 -- ---------------------------------------------------------------------------
@@ -359,7 +359,7 @@ COMMENT ON FUNCTION fulfillment.sweep_expired_track_partitions(integer, boolean)
 
 REVOKE EXECUTE ON FUNCTION fulfillment.sweep_expired_track_partitions(integer, boolean) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION fulfillment.sweep_expired_track_partitions(integer, boolean)
-    TO qoida_application;
+    TO horecaos_application;
 
 
 -- ---------------------------------------------------------------------------
@@ -400,8 +400,8 @@ BEGIN
     EXECUTE format(
         'CREATE TABLE reporting.%I PARTITION OF reporting.%I FOR VALUES FROM (%L) TO (%L)',
         v_name, p_table, v_start, v_end);
-    EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON reporting.%I TO qoida_application', v_name);
-    EXECUTE format('GRANT SELECT ON reporting.%I TO qoida_reporting_read', v_name);
+    EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON reporting.%I TO horecaos_application', v_name);
+    EXECUTE format('GRANT SELECT ON reporting.%I TO horecaos_reporting_read', v_name);
 END;
 $$;
 
@@ -409,4 +409,4 @@ COMMENT ON FUNCTION reporting.ensure_fact_partition(text, date) IS
     'ADR 0043 partition upkeep. Idempotent, and refuses any table it does not own so a typo cannot partition something else. SECURITY DEFINER (V0070) because the application role holds no DDL rights and this function is the only way it is meant to add a partition; EXECUTE is granted by name, never to PUBLIC. search_path names pg_temp LAST and the catalogue read is schema-qualified (V0080).';
 
 REVOKE EXECUTE ON FUNCTION reporting.ensure_fact_partition(text, date) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION reporting.ensure_fact_partition(text, date) TO qoida_application;
+GRANT EXECUTE ON FUNCTION reporting.ensure_fact_partition(text, date) TO horecaos_application;

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.qoida.uz/events/tenancy.events/TenantActivated.v1.schema.json",
+  "$id": "https://contracts.horecaos.uz/events/tenancy.events/TenantActivated.v1.schema.json",
   "title": "TenantActivated v1 payload",
   "description": "The tenant is live. The one ADR 0008 onboarding fact other modules act on rather than observe.",
   "type": "object",

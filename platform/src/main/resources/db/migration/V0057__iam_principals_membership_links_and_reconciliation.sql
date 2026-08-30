@@ -33,7 +33,7 @@ CREATE TABLE iam.principals (
     keycloak_realm varchar(64) NOT NULL,
     keycloak_subject_id varchar(64) NOT NULL,
 
-    -- What Keycloak last said about the account, not what Qoida wants it to be.
+    -- What Keycloak last said about the account, not what HorecaOS wants it to be.
     -- UNKNOWN is the honest state after a reconciliation could not reach
     -- Keycloak, and is distinct from DISABLED: one is an observation, the other
     -- is an absence of one.
@@ -230,14 +230,14 @@ CREATE INDEX ix_reconciliation_desired_state
     ON iam.identity_reconciliation_runs (desired_state_hash, started_at DESC);
 
 COMMENT ON TABLE iam.identity_reconciliation_runs IS
-    'ADR 0009. One row per comparison of Qoida against Keycloak, kept whether or not anything was wrong, so "when did this last look right?" has an answer. Never holds a token, an invitation link, or a user profile.';
+    'ADR 0009. One row per comparison of HorecaOS against Keycloak, kept whether or not anything was wrong, so "when did this last look right?" has an answer. Never holds a token, an invitation link, or a user profile.';
 COMMENT ON COLUMN iam.identity_reconciliation_runs.desired_state_hash IS
     'ADR 0009. SHA-256 of the desired shape, so a repeated attempt after an uncertain outcome is recognisable as a retry rather than a second intention.';
 
--- V0035's lesson: in production the application inherits `qoida_application` and
+-- V0035's lesson: in production the application inherits `horecaos_application` and
 -- reaches exactly what a migration names. No DELETE anywhere here — a
 -- reconciliation run is evidence, a membership link is revoked rather than
 -- removed, and a principal outlives every tenant it was ever linked to.
-GRANT SELECT, INSERT, UPDATE ON iam.principals TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON iam.tenant_membership_links TO qoida_application;
-GRANT SELECT, INSERT, UPDATE ON iam.identity_reconciliation_runs TO qoida_application;
+GRANT SELECT, INSERT, UPDATE ON iam.principals TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON iam.tenant_membership_links TO horecaos_application;
+GRANT SELECT, INSERT, UPDATE ON iam.identity_reconciliation_runs TO horecaos_application;

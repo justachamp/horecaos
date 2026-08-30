@@ -21,9 +21,11 @@ mobile/       Flutter customer application
 docs/         Monorepo-level documents (founding review, workspace plans)
 ```
 
-The platform tree still carries its Qoida-era identifiers; the rename is
-[ADR 0053](platform/docs/adr/not-started/0053-horecaos-identity-and-rebrand.md) and is
-deliberately the first change, not the last.
+The platform's code identity is HorecaOS throughout — package root `uz.horecaos`,
+domain `horecaos.uz` — renamed in one mechanical commit as
+[ADR 0053](platform/docs/adr/built/0053-horecaos-identity-and-rebrand.md) records.
+Historical documents and legacy artifact names deliberately keep the old name; the
+frontend apps' own identifiers are the next pass.
 
 ## Get started
 

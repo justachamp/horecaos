@@ -12,26 +12,26 @@
 
 set -euo pipefail
 
-PROJECT="${COMPOSE_PROJECT_NAME:-qoida-platform}"
+PROJECT="${COMPOSE_PROJECT_NAME:-horecaos-platform}"
 NETWORK="${PROJECT}_default"
 PG_IMAGE="postgres:18"
 MC_IMAGE="minio/mc:RELEASE.2025-07-21T05-28-08Z"
-WORK_VOLUME="qoida-backup-rehearsal"
+WORK_VOLUME="horecaos-backup-rehearsal"
 
-SOURCE_URL="postgresql://qoida:qoida@platform-db:5432/qoida"
-ADMIN_URL="postgresql://qoida:qoida@platform-db:5432/postgres"
-TARGET_DB="qoida_restore_rehearsal"
-TARGET_URL="postgresql://qoida:qoida@platform-db:5432/${TARGET_DB}"
-PASSPHRASE="${QOIDA_BACKUP_PASSPHRASE:-local-rehearsal-passphrase}"
-BUCKET="${QOIDA_BACKUP_BUCKET:-qoida-backups}"
+SOURCE_URL="postgresql://horecaos:horecaos@platform-db:5432/horecaos"
+ADMIN_URL="postgresql://horecaos:horecaos@platform-db:5432/postgres"
+TARGET_DB="horecaos_restore_rehearsal"
+TARGET_URL="postgresql://horecaos:horecaos@platform-db:5432/${TARGET_DB}"
+PASSPHRASE="${HORECAOS_BACKUP_PASSPHRASE:-local-rehearsal-passphrase}"
+BUCKET="${HORECAOS_BACKUP_BUCKET:-horecaos-backups}"
 
 # The off-site destination. Locally this is a second MinIO standing in for a
 # remote site; in production it is a real bucket elsewhere. Everything between
 # here and the restore is identical either way, which is the point.
-OFFSITE_ENDPOINT="${QOIDA_BACKUP_OFFSITE_ENDPOINT:-http://minio-offsite:9000}"
-OFFSITE_ACCESS_KEY="${QOIDA_BACKUP_OFFSITE_ACCESS_KEY:-qoida}"
-OFFSITE_SECRET_KEY="${QOIDA_BACKUP_OFFSITE_SECRET_KEY:-qoida-offsite-secret}"
-OBJECT="qoida-$(date -u +%Y%m%dT%H%M%SZ).dump.enc"
+OFFSITE_ENDPOINT="${HORECAOS_BACKUP_OFFSITE_ENDPOINT:-http://minio-offsite:9000}"
+OFFSITE_ACCESS_KEY="${HORECAOS_BACKUP_OFFSITE_ACCESS_KEY:-horecaos}"
+OFFSITE_SECRET_KEY="${HORECAOS_BACKUP_OFFSITE_SECRET_KEY:-horecaos-offsite-secret}"
+OBJECT="horecaos-$(date -u +%Y%m%dT%H%M%SZ).dump.enc"
 
 cleanup() { docker volume rm -f "${WORK_VOLUME}" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
@@ -39,7 +39,7 @@ docker volume create "${WORK_VOLUME}" >/dev/null
 
 pg() {
   docker run --rm --network "${NETWORK}" -v "${WORK_VOLUME}:/work" \
-    -e PGPASSWORD=qoida -e PASSPHRASE="${PASSPHRASE}" \
+    -e PGPASSWORD=horecaos -e PASSPHRASE="${PASSPHRASE}" \
     --entrypoint bash "${PG_IMAGE}" -c "$1"
 }
 
@@ -72,7 +72,7 @@ pg "set -e
 
 echo "==> Upload, replicate off-site, and read back from off-site"
 mcc "set -e
-     mc alias set backup http://minio:9000 qoida qoida-local-secret >/dev/null
+     mc alias set backup http://minio:9000 horecaos horecaos-local-secret >/dev/null
      mc alias set offsite ${OFFSITE_ENDPOINT} ${OFFSITE_ACCESS_KEY} ${OFFSITE_SECRET_KEY} >/dev/null
      mc mb --ignore-existing backup/${BUCKET} >/dev/null
      mc mb --ignore-existing offsite/${BUCKET} >/dev/null

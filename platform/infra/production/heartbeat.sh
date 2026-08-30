@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# The whole of Qoida's production alerting.
+# The whole of HorecaOS's production alerting.
 #
 # The tension this resolves
 # -------------------------
@@ -22,7 +22,7 @@
 #   * The dead-man's-switch (healthchecks.io, Better Stack, or equivalent). Fires
 #     when this script stops reporting. Catches: power, network, disk, kernel,
 #     Docker daemon, and anything else that stops the whole machine.
-#   * An external HTTP uptime check against ${QOIDA_API_ORIGIN}/actuator/health/readiness.
+#   * An external HTTP uptime check against ${HORECAOS_API_ORIGIN}/actuator/health/readiness.
 #     Catches: the application being down while the host is fine, TLS expiry,
 #     DNS, and the colocation provider's routing.
 #
@@ -45,13 +45,13 @@
 #
 # Installation
 # ------------
-#   */5 * * * * /opt/qoida/qoida-platform/infra/production/heartbeat.sh
+#   */5 * * * * /opt/horecaos/horecaos-platform/infra/production/heartbeat.sh
 #
-# Configuration lives in /etc/qoida/alerting.env, root-owned, mode 0600:
+# Configuration lives in /etc/horecaos/alerting.env, root-owned, mode 0600:
 #
-#   QOIDA_HEARTBEAT_URL=https://hc-ping.com/<uuid>
-#   QOIDA_ALERT_WEBHOOK=https://api.telegram.org/bot<token>/sendMessage?chat_id=<id>
-#   QOIDA_BACKUP_STAMP=/var/lib/qoida/last-backup
+#   HORECAOS_HEARTBEAT_URL=https://hc-ping.com/<uuid>
+#   HORECAOS_ALERT_WEBHOOK=https://api.telegram.org/bot<token>/sendMessage?chat_id=<id>
+#   HORECAOS_BACKUP_STAMP=/var/lib/horecaos/last-backup
 #
 # Those two URLs are deliberately NOT in OpenBao. The alert path must not depend
 # on the thing it is monitoring: an OpenBao that is sealed, or a Docker daemon
@@ -61,14 +61,14 @@
 
 set -uo pipefail
 
-CONFIG="${QOIDA_ALERTING_ENV:-/etc/qoida/alerting.env}"
-COMPOSE_FILE="${QOIDA_COMPOSE_FILE:-/opt/qoida/qoida-platform/compose.production.yaml}"
-DISK_THRESHOLD_PERCENT="${QOIDA_DISK_THRESHOLD_PERCENT:-85}"
-BACKUP_MAX_AGE_HOURS="${QOIDA_BACKUP_MAX_AGE_HOURS:-26}"
+CONFIG="${HORECAOS_ALERTING_ENV:-/etc/horecaos/alerting.env}"
+COMPOSE_FILE="${HORECAOS_COMPOSE_FILE:-/opt/horecaos/horecaos-platform/compose.production.yaml}"
+DISK_THRESHOLD_PERCENT="${HORECAOS_DISK_THRESHOLD_PERCENT:-85}"
+BACKUP_MAX_AGE_HOURS="${HORECAOS_BACKUP_MAX_AGE_HOURS:-26}"
 
 # Touched by the backup cron entry only when infra/backup/backup.sh exits zero.
 # See docs/runbooks/restore.md for the crontab line that maintains it.
-BACKUP_STAMP="${QOIDA_BACKUP_STAMP:-/var/lib/qoida/last-backup}"
+BACKUP_STAMP="${HORECAOS_BACKUP_STAMP:-/var/lib/horecaos/last-backup}"
 
 # shellcheck disable=SC1090
 [ -r "${CONFIG}" ] && . "${CONFIG}"
@@ -137,21 +137,21 @@ fi
 
 if [ "${#problems[@]}" -eq 0 ]; then
     # All clear. Ping the dead-man's-switch; its silence is the alert.
-    [ -n "${QOIDA_HEARTBEAT_URL:-}" ] \
-        && curl -fsS --max-time 20 --retry 3 "${QOIDA_HEARTBEAT_URL}" >/dev/null 2>&1
+    [ -n "${HORECAOS_HEARTBEAT_URL:-}" ] \
+        && curl -fsS --max-time 20 --retry 3 "${HORECAOS_HEARTBEAT_URL}" >/dev/null 2>&1
     exit 0
 fi
 
-message="qoida production: $(printf '%s; ' "${problems[@]}")"
+message="horecaos production: $(printf '%s; ' "${problems[@]}")"
 printf '%s\n' "${message}" >&2
 
 # Push once, directly, and do not ping the heartbeat. If the push fails because
 # the network is the problem, the missed heartbeat raises the alarm anyway —
 # which is the reason the heartbeat is the primary path and this is the detail.
-if [ -n "${QOIDA_ALERT_WEBHOOK:-}" ]; then
+if [ -n "${HORECAOS_ALERT_WEBHOOK:-}" ]; then
     curl -fsS --max-time 20 --retry 2 \
         --data-urlencode "text=${message}" \
-        "${QOIDA_ALERT_WEBHOOK}" >/dev/null 2>&1
+        "${HORECAOS_ALERT_WEBHOOK}" >/dev/null 2>&1
 fi
 
 exit 1

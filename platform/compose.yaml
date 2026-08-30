@@ -1,4 +1,4 @@
-name: qoida-platform
+name: horecaos-platform
 
 services:
   platform-db:
@@ -6,11 +6,11 @@ services:
     # built here rather than pulled. ADR 0037 stores delivery zones as geometry.
     #
     # Two roles, exactly as in compose.production.yaml, and for the reason that
-    # file gives: `qoida_migrator` owns every object and is the only role that can
-    # change the schema; the application connects as `qoida_app`, which owns
+    # file gives: `horecaos_migrator` owns every object and is the only role that can
+    # change the schema; the application connects as `horecaos_app`, which owns
     # nothing and holds only what a migration granted it by name.
     #
-    # This used to be a single `qoida` superuser that also owned the database, so
+    # This used to be a single `horecaos` superuser that also owned the database, so
     # every GRANT and REVOKE in sixty-one migrations was bypassed locally and in
     # every test — including the REVOKE that makes the audit trail immutable. The
     # privileges were only ever real in production, which is the same as saying
@@ -18,20 +18,20 @@ services:
     #
     # !! Changing POSTGRES_USER does not re-initialise an existing volume. A
     # !! checkout that already has `platform-db-data` will start a server with no
-    # !! `qoida_migrator` role and fail its healthcheck. Recreate it once:
+    # !! `horecaos_migrator` role and fail its healthcheck. Recreate it once:
     # !!     docker compose down -v && docker compose up -d
     # !! Local data is disposable; that is the only reason this is acceptable.
     build: ./infra/postgres
-    image: qoida/postgres-postgis:18
+    image: horecaos/postgres-postgis:18
     environment:
-      POSTGRES_DB: qoida
-      POSTGRES_USER: qoida_migrator
-      POSTGRES_PASSWORD: qoida_migrator
+      POSTGRES_DB: horecaos
+      POSTGRES_USER: horecaos_migrator
+      POSTGRES_PASSWORD: horecaos_migrator
       # Read by the init script below. Production takes the same value from a
       # tmpfs that deploy.sh fills from OpenBao; there is no OpenBao at initdb
       # time and no secret mount here, and this value is as worthless outside a
       # laptop as every other credential in this file.
-      QOIDA_APP_PASSWORD: qoida_app
+      HORECAOS_APP_PASSWORD: horecaos_app
     ports:
       - "5432:5432"
     volumes:
@@ -40,7 +40,7 @@ services:
       # variant would drift, and the drift would be invisible until a deploy.
       - ./infra/production/postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U qoida_migrator -d qoida"]
+      test: ["CMD-SHELL", "pg_isready -U horecaos_migrator -d horecaos"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -116,7 +116,7 @@ services:
     image: openbao/openbao:2.4.1
     command: ["server", "-dev", "-dev-listen-address=0.0.0.0:8200"]
     environment:
-      BAO_DEV_ROOT_TOKEN_ID: qoida-local-root
+      BAO_DEV_ROOT_TOKEN_ID: horecaos-local-root
       BAO_ADDR: http://127.0.0.1:8200
     cap_add:
       - IPC_LOCK
@@ -138,19 +138,19 @@ services:
         condition: service_healthy
     environment:
       BAO_ADDR: http://openbao:8200
-      BAO_TOKEN: qoida-local-root
+      BAO_TOKEN: horecaos-local-root
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         set -e
-        bao secrets enable -path=qoida -version=2 kv 2>/dev/null || true
-        bao kv put qoida/local/data_encryption/platform/kek \
+        bao secrets enable -path=horecaos -version=2 kv 2>/dev/null || true
+        bao kv put horecaos/local/data_encryption/platform/kek \
           value=local-development-key-encryption-key-not-for-any-other-use
-        bao kv put qoida/local/identity_admin/keycloak/provisioning-secret \
+        bao kv put horecaos/local/identity_admin/keycloak/provisioning-secret \
           value=local-provisioning-secret
-        bao kv put qoida/local/identity_admin/keycloak/reader-secret \
+        bao kv put horecaos/local/identity_admin/keycloak/reader-secret \
           value=local-reader-secret
-        echo "seeded qoida local secrets"
+        echo "seeded horecaos local secrets"
 
   minio:
     # ADR 0034: stands in for the off-site object store until a real bucket
@@ -160,8 +160,8 @@ services:
     image: minio/minio:RELEASE.2025-07-23T15-54-02Z
     command: ["server", "/data", "--console-address", ":9090"]
     environment:
-      MINIO_ROOT_USER: qoida
-      MINIO_ROOT_PASSWORD: qoida-local-secret
+      MINIO_ROOT_USER: horecaos
+      MINIO_ROOT_PASSWORD: horecaos-local-secret
     ports:
       - "9000:9000"
       - "9090:9090"
@@ -180,8 +180,8 @@ services:
     image: minio/minio:RELEASE.2025-07-23T15-54-02Z
     command: ["server", "/data", "--console-address", ":9091"]
     environment:
-      MINIO_ROOT_USER: qoida
-      MINIO_ROOT_PASSWORD: qoida-offsite-secret
+      MINIO_ROOT_USER: horecaos
+      MINIO_ROOT_PASSWORD: horecaos-offsite-secret
     ports:
       - "9002:9000"
       - "9091:9091"
@@ -204,13 +204,13 @@ services:
     command:
       - |
         set -e
-        mc alias set local http://minio:9000 qoida qoida-local-secret
-        mc mb --ignore-existing local/qoida-backups
-        mc version enable local/qoida-backups
-        mc alias set offsite http://minio-offsite:9000 qoida qoida-offsite-secret
-        mc mb --ignore-existing offsite/qoida-backups
-        mc version enable offsite/qoida-backups
-        echo "created qoida-backups with versioning on both sites"
+        mc alias set local http://minio:9000 horecaos horecaos-local-secret
+        mc mb --ignore-existing local/horecaos-backups
+        mc version enable local/horecaos-backups
+        mc alias set offsite http://minio-offsite:9000 horecaos horecaos-offsite-secret
+        mc mb --ignore-existing offsite/horecaos-backups
+        mc version enable offsite/horecaos-backups
+        echo "created horecaos-backups with versioning on both sites"
 
 volumes:
   minio-data:

@@ -1071,7 +1071,7 @@ was computed. A stale availability explainer is worse than none.
 | Zone tariff outranking branch tariff | ADR 0037 fee-resolution step 4, stated once and in one place — which Delever never does |
 | Regions with SW/NE bounding box constraining the geocoder | ADR 0037 `fulfillment.regions`. This is a good idea and prevents a genuine failure: an unconstrained geocoder returns a same-named street in another country and the error surfaces when a courier is standing somewhere else |
 | Branch tags | Cheap, useful for grouping; not built, no ADR |
-| Per-branch Telegram chat IDs for five event classes | ADR 0020; the legacy Qoida dashboard had two of them (`tg_chat_id`, `tg_delivery_chat_id`) and staff use them |
+| Per-branch Telegram chat IDs for five event classes | ADR 0020; the legacy HorecaOS dashboard had two of them (`tg_chat_id`, `tg_delivery_chat_id`) and staff use them |
 | Bulk "load geozones" from the registry | Keep as a proper import wizard with row-level outcomes |
 
 ### Beat
@@ -1112,7 +1112,7 @@ was computed. A stale availability explainer is worse than none.
 | Venue attributes — seats, average cheque, parking, playground, 3D virtual tour | Storefront marketing content, not operations. Nothing in the console reads them and no order depends on them. If a storefront needs them, they belong to a CMS/merchandising surface, not the branch record a manager opens during service |
 | "Free geozone" as a separate layer | Collapsed into a DELIVERY zone whose tariff resolves to zero (ADR 0037) |
 | Branch geozone as a separate table | It is the `CATCHMENT` role |
-| Delever's own SaaS commerce inside the merchant console — Тарифы (subscription), Баланс, dunning | That is Qoida's billing, not the restaurant's structure; it lives in the plan/entitlement surface |
+| Delever's own SaaS commerce inside the merchant console — Тарифы (subscription), Баланс, dunning | That is HorecaOS's billing, not the restaurant's structure; it lives in the plan/entitlement surface |
 | Version management / v1-v2 feature flags per tenant | An artefact of Delever shipping two admin panels at once. Do not reproduce the condition |
 | Per-branch POS/integration credentials on the branch form | Real and needed, but owned by 10.8 Integrations; this section links to them and does not duplicate the fields |
 | Floor plan (sections and tables) on the branch record | ADR 0047 dine-in; a genuinely separate surface with its own canvas |

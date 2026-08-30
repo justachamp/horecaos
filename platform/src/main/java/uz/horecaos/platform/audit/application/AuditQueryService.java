@@ -1,0 +1,136 @@
+package uz.horecaos.platform.audit.application;
+
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Service;
+
+/**
+ * Reads audit evidence (ADR 0027).
+ *
+ * <p>Every query is bounded by a tenant or is explicitly platform-wide, and the
+ * caller's capability decides which. There is no unfiltered "select everything"
+ * path: an audit trail that can be read wholesale by anyone with one capability
+ * is a second copy of the data it protects.
+ *
+ * <p>Reading audit is itself audited. That is not ceremony — the most sensitive
+ * thing in the system is the record of who did what, and an unlogged reader of
+ * it is a gap.
+ */
+@Service
+public class AuditQueryService {
+
+    /** Bounded so a broad query cannot become an export. */
+    public static final int MAXIMUM_PAGE = 200;
+
+    private final JdbcClient jdbc;
+
+    public AuditQueryService(JdbcClient jdbc) {
+        this.jdbc = jdbc;
+    }
+
+    public List<AuditEventView> search(AuditQuery query) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT id, recorded_at, tenant_id, audit_class, action_code,
+                       actor_type, actor_subject, actor_display, scope_type, scope_id,
+                       target_type, target_id, outcome, reason, capability_used,
+                       approval_request_id, correlation_id, occurred_at
+                  FROM audit.audit_events
+                 WHERE 1 = 1
+                """);
+
+        if (query.tenantId() != null) {
+            sql.append(" AND tenant_id = :tenantId");
+        }
+        if (query.actorSubject() != null) {
+            sql.append(" AND actor_subject = :actorSubject");
+        }
+        if (query.actionCode() != null) {
+            sql.append(" AND action_code = :actionCode");
+        }
+        if (query.targetId() != null) {
+            sql.append(" AND target_id = :targetId");
+        }
+        if (query.auditClass() != null) {
+            sql.append(" AND audit_class = :auditClass");
+        }
+        if (query.from() != null) {
+            sql.append(" AND recorded_at >= :from");
+        }
+        if (query.to() != null) {
+            sql.append(" AND recorded_at < :to");
+        }
+        sql.append(" ORDER BY recorded_at DESC, id DESC LIMIT :limit");
+
+        var statement = jdbc.sql(sql.toString()).param("limit", boundedLimit(query.limit()));
+        if (query.tenantId() != null) {
+            statement = statement.param("tenantId", query.tenantId());
+        }
+        if (query.actorSubject() != null) {
+            statement = statement.param("actorSubject", query.actorSubject());
+        }
+        if (query.actionCode() != null) {
+            statement = statement.param("actionCode", query.actionCode());
+        }
+        if (query.targetId() != null) {
+            statement = statement.param("targetId", query.targetId());
+        }
+        if (query.auditClass() != null) {
+            statement = statement.param("auditClass", query.auditClass());
+        }
+        if (query.from() != null) {
+            statement = statement.param("from", query.from().atOffset(ZoneOffset.UTC));
+        }
+        if (query.to() != null) {
+            statement = statement.param("to", query.to().atOffset(ZoneOffset.UTC));
+        }
+
+        return statement.query((rs, rowNumber) -> new AuditEventView(
+                rs.getObject("id", UUID.class),
+                rs.getObject("recorded_at", OffsetDateTime.class).toInstant(),
+                rs.getObject("tenant_id", UUID.class),
+                rs.getString("audit_class"),
+                rs.getString("action_code"),
+                rs.getString("actor_type"),
+                rs.getString("actor_subject"),
+                rs.getString("actor_display"),
+                rs.getString("scope_type"),
+                rs.getObject("scope_id", UUID.class),
+                rs.getString("target_type"),
+                rs.getObject("target_id", UUID.class),
+                rs.getString("outcome"),
+                rs.getString("reason"),
+                rs.getString("capability_used"),
+                rs.getObject("approval_request_id", UUID.class),
+                rs.getString("correlation_id"),
+                rs.getObject("occurred_at", OffsetDateTime.class).toInstant()))
+                .list();
+    }
+
+    private static int boundedLimit(Integer requested) {
+        if (requested == null) {
+            return 50;
+        }
+        return Math.max(1, Math.min(requested, MAXIMUM_PAGE));
+    }
+
+    /**
+     * The change document is deliberately absent from this view. It can carry
+     * redacted structure that is still revealing in bulk, so retrieving it is a
+     * separate, individually audited read rather than a field on every row.
+     */
+    public record AuditEventView(
+            UUID id, Instant recordedAt, UUID tenantId, String auditClass, String actionCode,
+            String actorType, String actorSubject, String actorDisplay,
+            String scopeType, UUID scopeId, String targetType, UUID targetId,
+            String outcome, String reason, String capabilityUsed,
+            UUID approvalRequestId, String correlationId, Instant occurredAt) { }
+
+    public record AuditQuery(
+            UUID tenantId, String actorSubject, String actionCode, UUID targetId,
+            String auditClass, Instant from, Instant to, Integer limit) { }
+}

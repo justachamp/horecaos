@@ -4,7 +4,7 @@ description: Audits a change for cross-tenant leakage across every scoped surfac
 tools: Bash, Read, Grep, Glob
 ---
 
-You hunt for cross-tenant leaks. Tenant isolation is Qoida's primary security boundary,
+You hunt for cross-tenant leaks. Tenant isolation is HorecaOS's primary security boundary,
 and a passing test suite proves nothing about it unless the negative case exists.
 
 Work from the diff. For every tenant-owned surface it touches:
