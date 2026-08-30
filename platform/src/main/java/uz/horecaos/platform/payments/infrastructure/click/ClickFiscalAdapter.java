@@ -220,16 +220,48 @@ public class ClickFiscalAdapter implements FiscalReceiptPort {
      * <p>Read from the captured attempt rather than passed in, because
      * {@link FiscalReceiptPort} is deliberately provider-neutral and a
      * {@code payment_id} is not a concept Payme has.
+     *
+     * <p><strong>Almost always resolved live, not stored.</strong> A Click
+     * {@code Complete} callback carries {@code click_trans_id} and
+     * {@code click_paydoc_id}, and {@link ClickCallbackProcessor} records neither
+     * as {@link PaymentAttempt#externalPaymentId()} — nothing documents that either
+     * one <em>is</em> the {@code payment_id} the reversal and fiscal paths want, so
+     * recording a guess there would be exactly the guessed identifier
+     * {@code ClickPaymentAdapter.reverse} already refuses to send a DELETE at. This
+     * is the resolution the class-level javadoc forecasts ("the payment id is
+     * resolved through {@code status_by_mti} when one is needed") and it is the same
+     * call {@code ClickPaymentAdapter.resolvePaymentId} makes for a reversal, kept
+     * here rather than shared because the two live behind different ports and a
+     * {@code payment_id} cache on the attempt row is not this change's to add.
      */
     private Optional<String> capturedPaymentId(FiscalDocument document, ProviderBinding binding) {
         if (document.paymentIntentId() == null) {
             return Optional.empty();
         }
-        return attempts.listForIntent(binding.tenantId(), document.paymentIntentId()).stream()
-                .filter(attempt -> attempt.status() == PaymentAttemptStatus.CAPTURED)
-                .map(PaymentAttempt::externalPaymentId)
-                .filter(id -> id != null && !id.isBlank())
-                .findFirst();
+        Optional<PaymentAttempt> captured =
+                attempts.listForIntent(binding.tenantId(), document.paymentIntentId()).stream()
+                        .filter(attempt -> attempt.status() == PaymentAttemptStatus.CAPTURED)
+                        .findFirst();
+        if (captured.isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<String> stored =
+                captured.map(PaymentAttempt::externalPaymentId).filter(id -> id != null && !id.isBlank());
+        return stored.isPresent() ? stored : resolveLive(captured.get(), binding);
+    }
+
+    /**
+     * {@code GET payment/status_by_mti/{service_id}/{merchant_trans_id}/{date}},
+     * the same read {@code ClickPaymentAdapter}'s uncertainty resolver and its
+     * reversal path already use to turn HorecaOS's own id into Click's.
+     */
+    private Optional<String> resolveLive(PaymentAttempt attempt, ProviderBinding binding) {
+        ClickResponse resolved =
+                click.statusByMerchantTransId(binding, attempt.merchantTransId(), attempt.businessDate());
+        if (!resolved.successful()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(resolved.field("payment_id")).filter(id -> !id.isBlank());
     }
 
     private static String trim(String name) {
