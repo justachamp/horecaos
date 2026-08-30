@@ -486,15 +486,16 @@ answers with:
   method on every channel — which is what `PaymentLegalEntityConfiguration`
   already declares, now enforced at the one place a customer meets it.
 
-What is still missing is the far half of the edge out of `PAYMENT_AUTHORIZING`.
-ADR 0013's V0045 work now opens an attempt after commit and presents a checkout
-link — `POST .../orders/{orderId}/payment-sessions` — but **nothing moves the
-order on when the provider credits it**: `ClickCallbackProcessor` and
-`PaymeMerchantApi` capture the attempt and neither calls back into ordering, so a
-paid card order stays in `PAYMENT_AUTHORIZING`. Until that ships, a provider
-method is in practice refused at serviceability by the absence of a merchant
-binding — nothing writes `payments.merchant_bindings` — rather than reaching the
-branch.
+**Amended: the far half of the edge out of `PAYMENT_AUTHORIZING` has since
+closed too.** ADR 0013's V0045 work opens an attempt after commit and presents a
+checkout link — `POST .../orders/{orderId}/payment-sessions` — and `PaymentAttemptService`
+now publishes `PaymentCaptured` when `ClickCallbackProcessor` or `PaymeMerchantApi`
+capture an attempt; `PaymentCaptureConfirmationTrigger` in `ordering` listens for it
+before commit and calls `OrderStateService.paymentCaptured`, so a paid card order
+confirms or moves to restaurant approval instead of staying in `PAYMENT_AUTHORIZING`.
+`MerchantBindingController` and `MerchantBindingService` also now write
+`payments.merchant_bindings` over HTTP, so a provider method is no longer refused at
+serviceability for the binding's absence alone.
 
 The five process managers other than `ORDER_INVENTORY` are named in the
 `ck_order_process_name` constraint and written by nothing. A row for a process

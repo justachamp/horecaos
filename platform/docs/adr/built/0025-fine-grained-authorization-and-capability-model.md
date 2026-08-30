@@ -7,7 +7,7 @@
   `RoleRegistrySynchronizer`; `JdbcAuthorizationService` resolves grants and scope
   covering, behind the ADR 0033 `iam.grants` cache that `GrantManagementService` evicts
   on every grant and revocation; `@RequiresCapability` refuses with ADR 0031's
-  `INSUFFICIENT_CAPABILITY`; `qoida.authorization.enforce` defaults to true.
+  `INSUFFICIENT_CAPABILITY`; `horecaos.authorization.enforce` defaults to true.
   `ResourceScopeVerifier` now proves the path hierarchy is real after the capability
   check, closing the gap where a tenant-scoped grant authorised any brand identifier a
   caller cared to name. A platform admin passes `IAM_GRANT_MANAGE` without a grant row
@@ -260,10 +260,10 @@ shadow mode while grants and audit evidence are retained.
 - [x] Implement `require` and `AccessDeniedException`, and map it in `GlobalApiErrorHandler` to ADR 0031's `INSUFFICIENT_CAPABILITY`. The mapping was missing until enforcement was turned on: the exception is Qoida's own rather than Spring Security's, so every refusal would have been a 500. Nothing reached it while the declaration ran in shadow mode.
 - [x] Implement `viewFor`, which backs `GET /api/v1/session/context`. The endpoint is live on `GrantController`, and `JdbcAuthorizationServiceTests.theCapabilityViewMatchesServerEnforcement` walks every capability to prove the view and the server agree. ADR 0022, which was to have delivered it, is superseded by ADR 0035.
 - [x] Add grant management APIs with ADR 0027 audit facts, and `GET /api/v1/session/context`.
-- [x] Implement the narrowing of ADR 0003's read rule behind `qoida.authorization.enforce`.
-- [x] Add shadow-mode comparison and the `qoida.authorization.shadow` metric. Dashboards and alerts follow deployment.
+- [x] Implement the narrowing of ADR 0003's read rule behind `horecaos.authorization.enforce`.
+- [x] Add shadow-mode comparison and the `horecaos.authorization.shadow` metric. Dashboards and alerts follow deployment.
 - [x] Add scope, isolation, expiry, and registry coverage tests.
-- [x] `qoida.authorization.enforce` now defaults to true, and shadow mode is the opt-out. Flipped before the frontends exist rather than after a quiet shadow log, because there was no estate to be quiet: no grant had ever been created, so the log said "would_deny" about everything and could never have said anything else. The evidence a shadow comparison was meant to produce is not available before the first tenant, and waiting for it would have meant a first denial on a restaurant's first trading day.
+- [x] `horecaos.authorization.enforce` now defaults to true, and shadow mode is the opt-out. Flipped before the frontends exist rather than after a quiet shadow log, because there was no estate to be quiet: no grant had ever been created, so the log said "would_deny" about everything and could never have said anything else. The evidence a shadow comparison was meant to produce is not available before the first tenant, and waiting for it would have meant a first denial on a restaurant's first trading day.
 - [x] Decide how the first grant is created. Decided and built as a bypass inside `JdbcAuthorizationService.has`: a subject holding the Keycloak realm role `platform-admin` passes `IAM_GRANT_MANAGE` with no grant row, and passes nothing else, so it can create the first grant through the ordinary audited `GrantManagementService` and must then grant itself everything further. The role is read from the calling actor and compared against the subject being asked about, so it cannot answer for somebody else, and `viewFor` does not report it — a platform admin holding no grants sees no capabilities, which is what the grant table says.
 - [x] Decide what a non-staff principal is in this model. ADR 0049 keeps grants as delegated staff authority and adds three typed relationship declarations: customer ownership, active partner bindings, and courier self-ownership. The five unused constants were removed; the three live partner/courier operation names remain code-owned vocabulary without pretending their principals hold staff roles.
 

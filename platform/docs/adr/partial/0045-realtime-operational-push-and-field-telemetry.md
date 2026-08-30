@@ -660,7 +660,7 @@ collection at the source rather than at a screen.
 
 ## Implementation checklist
 
-Built in migration `V0041` and `uz.qoida.platform.telemetry`.
+Built in migration `V0041` and `uz.horecaos.platform.telemetry`.
 
 - [x] Register the channel catalogue in code, with scope type, capability, frame
       class, source, and cadence cap, and fail startup on a channel with no
@@ -700,7 +700,7 @@ Built in migration `V0041` and `uz.qoida.platform.telemetry`.
       configuration mistake.
 - [x] Add the 500-stream cap and the 350-stream dashboard threshold, and confirm
       neither becomes a night page. `SseStreamRegistry` refuses past the cap with
-      `RATE_LIMIT_EXCEEDED` and publishes `qoida.realtime.streams.open` and
+      `RATE_LIMIT_EXCEEDED` and publishes `horecaos.realtime.streams.open` and
       `.headroom`; the threshold logs a warning and raises no alert, because ADR
       0034's night-alert budget is three and this is not one of them.
 - [x] Add `courier.position.read`, `courier.track.reveal`, and
@@ -722,7 +722,7 @@ Built in migration `V0041` and `uz.qoida.platform.telemetry`.
       partly written minute replaces it.
 - [x] Implement the live table, the daily-partitioned encrypted track, and the
       per-assignment summary, with the reporting and support roles ungranted.
-      `V0041` grants nothing to `qoida_reporting_read` and revokes explicitly, so
+      `V0041` grants nothing to `horecaos_reporting_read` and revokes explicitly, so
       a future schema-wide grant cannot pick these tables up by accident.
 - [x] Implement the retention jobs and the startup check on
       `track_retention_days >= settlement_period_days + statement_dispute_days`,

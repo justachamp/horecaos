@@ -12,9 +12,7 @@
   roll-up, `KitchenReleaseWorker` runs the release modes on a timer with `FOR
   UPDATE SKIP LOCKED`, and `KitchenStationController` and `KitchenBoardController`
   carry the station and board surfaces. Tests are
-  `src/test/java/uz/qoida/platform/kitchen/KitchenExecutionTests.java` — the
-  checklist below names `.../fulfillment/kitchen/...`, which is not where they
-  live. The Implementation status of the ADR 0019 proposal has advanced: it now
+  `src/test/java/uz/horecaos/platform/kitchen/KitchenExecutionTests.java`. The Implementation status of the ADR 0019 proposal has advanced: it now
   reaches ordering. `ordering.application.OrderProgressAdapter` implements
   `fulfillment.api.OrderProgressPort` over
   `OrderStateService.proposeProgress`, which weighs the proposal against
@@ -267,13 +265,13 @@ unanswerable challenge is ADR 0040's `marketplace.handover.bypass`, which no kit
 bundle holds and which writes an ADR 0027 audit fact: a cook who cannot read a
 courier's code should not also be the person deciding the code does not matter.
 
-**Interim behaviour.** ADR 0040 is Proposed and this ADR is Accepted, so the expo
-station may ship before the challenge table exists. Until it does, the expo station
-records handover completion on the ticket with no challenge, and those records
-carry no verification evidence — they must not be reported or read as verified
-handovers. The challenge check is added to the expo screen when ADR 0040's table
-arrives; no kitchen-owned substitute is built in the meantime, because a temporary
-second table is how two verification records become permanent.
+**Interim behaviour.** ADR 0040 is now Accepted (decided 2026-08-23) and its
+challenge table was built in V0038, so the sequencing risk this section was
+written against did not occur: this ADR's own expo and handover work has not
+shipped yet (see the checklist below), and it will verify against ADR 0040's
+table from the start rather than recording unverified handovers first. No
+kitchen-owned substitute is built in the meantime, because a temporary second
+table is how two verification records become permanent.
 
 ## Capabilities
 
@@ -451,7 +449,7 @@ evidence for whatever went wrong.
 - [ ] Device enrolment, revocation, station-filtered reads, and expo handover.
       **Not done** — rollout step 4.
 - [x] Concurrency, replay, routing, capability-shape and isolation tests, in
-      `src/test/java/uz/qoida/platform/fulfillment/kitchen/KitchenExecutionTests.java`.
+      `src/test/java/uz/horecaos/platform/kitchen/KitchenExecutionTests.java`.
 
 ### What the legacy `kitchens` table turned out to be
 

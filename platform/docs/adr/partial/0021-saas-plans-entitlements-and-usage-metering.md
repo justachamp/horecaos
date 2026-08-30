@@ -10,7 +10,7 @@
   covered by `CommercialPlatformTests`, `EntitlementBoundaryTests` and
   `EnforcementCeilingKeyTests`. Not built, and it is what keeps this from being
   usable: **no product module calls `EntitlementService` or `UsageMeter`** — the
-  grep for either outside `uz.qoida.platform.commercial` is empty, so no feature
+  grep for either outside `uz.horecaos.platform.commercial` is empty, so no feature
   is gated and no usage is metered; no consumer is wired to the ADR 0005 inbox;
   there is no period close, invoice export, dashboard, alert or runbook; and no
   onboarding path creates a subscription.
@@ -240,7 +240,7 @@ events, and evidence; it never rewrites historical usage.
 ## What was built, and where it departs from the text above
 
 Migration `V0033` creates a `commercial` schema and the Java module lives at
-`uz.qoida.platform.commercial`. Seven departures from the plan sketched above are
+`uz.horecaos.platform.commercial`. Seven departures from the plan sketched above are
 deliberate and each is recorded here rather than left to be discovered.
 
 **The boundary is six answers, not four modes.** A mode says how the platform

@@ -3,8 +3,9 @@
 - Decision status: Accepted
 - Implementation status: Partial — the HorecaOS monorepo exists and holds the imported
   platform tree, the three Angular applications, the Flutter application, and a canonical
-  design-token file; root CI, the frontend workspace toolchain, and per-application
-  history preservation do not exist yet.
+  design-token file; root CI now exists, path-filtered on `platform/**` versus
+  `frontend/**`/`mobile/**` (`.github/workflows/ci.yml`), but the frontend workspace
+  toolchain decision and per-application history preservation do not exist yet.
 - Date proposed: 2026-08-30
 - Date decided: 2026-08-30
 - Deciders: platform owner (proposed the monorepo), Claude (assessment and layout)
@@ -95,7 +96,13 @@ pre-import history.
 - [x] Import `qoida-platform` main tree into `platform/`
 - [x] Import the three Angular applications and the Flutter application
 - [x] Establish `frontend/design-tokens/tokens.css` as the single canonical copy
-- [ ] Root CI with path filters (platform lint/verify; per-app frontend jobs)
+- [x] Root CI with path filters (platform lint/verify; per-app frontend jobs) —
+      `.github/workflows/ci.yml`'s `changes` job filters on `platform/**` versus
+      `frontend/**`/`mobile/**`, gating `lint`/`verify` and a `frontend-build` matrix
+      (control-plane, operations, storefront) accordingly. The frontend jobs build each
+      app independently — the file's own comment says they are "placeholders until the
+      workspace toolchain decision (ADR 0052 checklist) is made" — so the next checklist
+      item stays open.
 - [ ] Point the four apps' token references/drift checks at the canonical file
 - [ ] Frontend workspace toolchain decision (pnpm workspace vs per-app npm)
 - [ ] Archive-of-record note in each source repository under `../Qoida`

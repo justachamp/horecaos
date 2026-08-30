@@ -8,7 +8,7 @@
   environment resolver outside local. `SecretCategory` names the eight categories.
   OpenBao runs in both `compose.yaml` (dev mode, seeded) and `compose.production.yaml`
   (sealed, raft, agent-delivered AppRole token), with least-privilege policies in
-  `infra/openbao/policies/qoida-platform.hcl` and `qoida-deploy.hcl`. Not built: creation,
+  `infra/openbao/policies/horecaos-platform.hcl` and `horecaos-deploy.hcl`. Not built: creation,
   rotation and revocation APIs — nothing writes a secret, so every rotation is a manual
   `bao kv put`; no audit device is enabled and no raft-snapshot backup job exists on the
   colocated host, only a note in `docs/runbooks/restore.md`; rotation periods and expiry
@@ -45,7 +45,7 @@ live provider integrations means touching payment and POS paths.
   secret reference only.
 - **A secret reference is a structured, non-guessable identifier**, not a path a
   caller can construct:
-  `qoida:{environment}:{category}:{ownerScope}:{opaqueId}`. Reference format is
+  `horecaos:{environment}:{category}:{ownerScope}:{opaqueId}`. Reference format is
   stable across rotations; the value behind it changes.
 - **OpenBao is the default self-hosted secrets manager.** It is MPL-2.0 under
   Linux Foundation governance, is API-compatible with HashiCorp Vault, and
@@ -56,7 +56,7 @@ live provider integrations means touching payment and POS paths.
 - **OpenBao is self-hosted in ADR 0034 phase one.** Colocation offers no managed
   secrets service, so this is settled rather than preferred. It runs locally
   through `compose.yaml` in dev mode, seeded with worthless local values, and
-  `qoida.secrets.provider` selects between it and the environment resolver.
+  `horecaos.secrets.provider` selects between it and the environment resolver.
 - **AWS Secrets Manager or KMS replaces it in phase two.** The `SecretResolver`
   port exists to make that a deployment change rather than a code change, which
   means it must never leak a provider concept: no ARNs, no provider-specific

@@ -2,7 +2,7 @@
 
 - Decision status: Accepted
 - Implementation status: Not applicable — this record governs documents, not
-  code. Verified in `docs/adr/`: `TEMPLATE.md` exists, all 48 numbered records
+  code. Verified in `docs/adr/`: `TEMPLATE.md` exists, all 57 numbered records
   carry both status fields, `Open inputs`, `## Alternatives considered` and
   `## Consequences`, and the roadmap table lives only in `README.md`.
 - Date proposed: 2026-08-20
@@ -34,7 +34,7 @@ onboarding, and review all depend on telling those apart.
   - **Decision status** describes the decision: `Proposed`, `Accepted`,
     `Rejected`, or `Superseded`.
   - **Implementation status** describes the code: `Not started`,
-    `In progress`, `Done`, or `Not applicable`.
+    `Partial`, `Built`, or `Not applicable`.
 - `Accepted` plus `Not started` is a normal and common state. It means the
   design is settled and may be built without reopening the argument.
 - `Proposed` means the structure could still change because an `Open inputs`

@@ -14,7 +14,7 @@
   partitioned `audit.audit_events`, plus `audit.approval_policies` and
   `audit.approval_requests`;
   `JdbcAuditRecorder` and `ChangeDocuments` record classification-aware facts in the
-  caller's transaction; `qoida_application` holds insert and select on `audit` and one
+  caller's transaction; `horecaos_application` holds insert and select on `audit` and one
   column-level `UPDATE` (V0059, below) and nothing else;
   `AuditPartitionManager` rolls partitions; and `GET /control-plane/tenants/{id}/audit-events`
   serves reads behind `audit.read`, auditing the read itself. The maker-checker half is now
@@ -148,7 +148,7 @@ tables, and the shared maker-checker service with policy snapshotting.
 Two guarantees are proven by test rather than asserted:
 
 - **Evidence cannot be rewritten.** A test connects as the restricted
-  `qoida_application` role, reads and inserts successfully, and fails on both
+  `horecaos_application` role, reads and inserts successfully, and fails on both
   `UPDATE` and `DELETE`.
 - **A committed change always has its fact.** The recorder joins the caller's
   transaction with no annotation of its own, so a business failure after the
@@ -265,7 +265,7 @@ features but never disables audit writing for an action that still executes.
 
 - [ ] Approve retention periods and archival destinations per audit class (legal, finance).
 - [x] Add partitioned audit, approval request, and approval policy tables (`V0007`).
-- [x] Restrict the application database role to insert and select on `audit` (`qoida_application`), proven by a test that connects as that role and fails to update or delete.
+- [x] Restrict the application database role to insert and select on `audit` (`horecaos_application`), proven by a test that connects as that role and fails to update or delete.
 - [x] Implement the transactional recorder and classification-aware serializer (`JdbcAuditRecorder`, `ChangeDocuments`).
 - [x] Implement approval policy resolution using the ADR 0030 scope chain, with the policy version and threshold snapshotted onto the request.
 - [x] Make missing-policy behavior explicit per registered action and expose configured coverage (ADR 0050).

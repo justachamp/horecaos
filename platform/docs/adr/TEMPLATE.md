@@ -1,7 +1,7 @@
 # ADR NNNN: Short decision title
 
 - Decision status: Proposed | Accepted | Rejected | Superseded
-- Implementation status: Not started | In progress | Done | Not applicable
+- Implementation status: Not started | Partial | Built | Not applicable
 - Date proposed: YYYY-MM-DD
 - Date decided: YYYY-MM-DD or `—`
 - Deciders: names and roles that own this decision

@@ -10,7 +10,7 @@
   customer profiles and recipient contacts, courier engagement, shifts, accruals and track
   reveal, ordering carts, checkout, order queries and outcomes, dine-in reservations,
   telemetry tracks, marketplace ingestion, POS order sourcing — and `SubjectPseudonym`
-  keeps reporting off raw identifiers behind the `qoida_reporting_read` role. Two of those
+  keeps reporting off raw identifiers behind the `horecaos_reporting_read` role. Two of those
   arrived today and are the scheme's hardest uses: V0055 verification challenges, where
   `CodeProtection` and `VerificationChallengeIssuer` hold the phone as randomized AEAD
   beside the same keyed lookup hash `customer.contact_points` uses, and the six-digit code

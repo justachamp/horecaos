@@ -94,7 +94,7 @@
   `media.migration_items` have never held a row and no legacy image has a
   migration path (`LegacyPath` and `LegacyPathMapping` are value objects with a
   unit test and no store); malware scanning; media audit facts, the worker's
-  `qoida.media.derivative.jobs` counters being the only observability the module
+  `horecaos.media.derivative.jobs` counters being the only observability the module
   has; and the production media origin, still listed as unproven in
   `infra/production/README.md`.
 - Date proposed: 2026-08-19

@@ -58,7 +58,7 @@ and does not add a second JWT issuer.**
   SHA-256 digest in `customer.customer_sessions`. It encodes nothing. Tenant, brand,
   account and identity partition are columns on the row the digest finds.
 - Sign-in resolves the account through `customer.principal_links` on
-  `(urn:qoida:customer-identity:proven-phone, <ADR 0029 per-tenant keyed hash of the
+  `(urn:horecaos:customer-identity:proven-phone, <ADR 0029 per-tenant keyed hash of the
   number>)`. The issuer is a code constant, not configuration.
 - A filter placed before the resource server's bearer filter resolves the token and sets a
   `CustomerSessionAuthentication` carrying no authorities. A `BearerTokenResolver` returns
@@ -165,7 +165,7 @@ and cannot collide with a Keycloak subject.
 
 ### Expiry
 
-Default lifetime `P30D` (`qoida.customers.session.ttl`). An expired or revoked session is
+Default lifetime `P30D` (`horecaos.customers.session.ttl`). An expired or revoked session is
 401 `SESSION_EXPIRED`; an unknown token is 401 `UNAUTHENTICATED`. A client that branched on
 status alone would treat them identically, which is how a customer whose token expired
 mid-basket gets shown the screen a first-time visitor sees, with no explanation that
@@ -179,7 +179,7 @@ itself, so a sweeper that stopped would leave rows and would let nobody in.
 
 They are not the same kind of thing and must not be built as though they were.
 
-**The fixed-code number.** `qoida.customers.verification.preset.phone` and
+**The fixed-code number.** `horecaos.customers.verification.preset.phone` and
 `.code`, set only in `application-local.yml`, which is activated by the `local` profile —
 the same binding `db/local-fixtures` has. `PresetVerificationCodeSource` is `@Profile({local,
 test, default})` and conditional on the phone property, and it answers exactly one

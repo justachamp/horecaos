@@ -2,7 +2,7 @@
 
 - Decision status: Accepted
 - Implementation status: Built — every convention is implemented and enforced in
-  `uz.qoida.platform.web`: `ErrorCode` (eighteen codes), `ApiProblem` and
+  `uz.horecaos.platform.web`: `ErrorCode` (eighteen codes), `ApiProblem` and
   `GlobalApiErrorHandler` for Problem Details across all surfaces, with
   `TenantApiErrorHandler` reduced to tenancy-only mappings; `IdempotencyService`,
   `IdempotencyInterceptor`, `CachedBodyRequestFilter` and `IdempotencyPurgeJob` over V0006
@@ -16,7 +16,7 @@
   `@Idempotent` as well as from `mutating = true` — so dropping a capability from a
   storefront handler can no longer drop its replay protection silently.
   `OpenApiContractTests` now gets Springdoc's real MVC document, canonicalizes it, checks it
-  structurally against the released `api/openapi/v1/qoida-api.json` baseline, and refuses any
+  structurally against the released `api/openapi/v1/horecaos-api.json` baseline, and refuses any
   undocumented drift; `tools/openapi/generate_types.py` produces the checked-in typed
   TypeScript transport contract under `api/generated/`, with CI regenerating and diffing it.
   `OpenApiSurface` now turns this record's surfaces into four additive Springdoc
@@ -79,7 +79,7 @@ All errors are RFC 9457 Problem Details, `application/problem+json`:
 
 ```json
 {
-  "type": "https://docs.qoida.uz/problems/insufficient-capability",
+  "type": "https://docs.horecaos.uz/problems/insufficient-capability",
   "title": "Insufficient capability",
   "status": 403,
   "detail": "Requires order.approve at LOCATION scope.",

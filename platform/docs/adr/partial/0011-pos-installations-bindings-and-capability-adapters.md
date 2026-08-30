@@ -30,7 +30,7 @@
   session token cache is an in-process `ConcurrentHashMap` in `CloposSession`
   rather than ADR 0033 shared state; there is no ADR 0030 polling-cadence policy
   and no `RateLimit-Remaining` back-off; the only POS meter is the route counter
-  `qoida.pos.route` in `PosProcessor` — there is no export or operator-queue
+  `horecaos.pos.route` in `PosProcessor` — there is no export or operator-queue
   metric, no POS health check and no `AWAITING_OPERATOR` runbook in
   `docs/runbooks/`; `CUSTOMER_UPSERT` is declared `UNSUPPORTED` by `CloposAdapter`
   and not implemented; and `clopos.correlationEchoVerified` has never been set by
@@ -148,11 +148,11 @@ policy exists.
 
 ```text
 id, tenant_id, installation_id, binding_id
-entity_type, qoida_entity_id, external_entity_id
+entity_type, horecaos_entity_id, external_entity_id
 external_parent_id, status, mapping_source
 last_seen_at, version, created_at, updated_at
 unique(binding_id, entity_type, external_entity_id)
-unique(binding_id, entity_type, qoida_entity_id)
+unique(binding_id, entity_type, horecaos_entity_id)
 ```
 
 Ambiguous mappings are conflicts, never last-write-wins.

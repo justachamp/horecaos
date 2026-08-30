@@ -405,11 +405,11 @@ remain open and are legal decisions. What the build fixes is the *shape*: the
 purpose is explicit per template, consent resolves per purpose, and every default
 is a stated configuration value rather than an assumption buried in code.
 
-- `qoida.notifications.order-expiry` (default `PT6H`) — how long an unsent
+- `horecaos.notifications.order-expiry` (default `PT6H`) — how long an unsent
   confirmation is still worth sending. A product decision, not a considered answer.
-- `qoida.notifications.max-attempts` (default 8) and
-  `qoida.notifications.retry-backoff` (default `PT30S`).
-- `qoida.notifications.order-channel` (default `SMS`) — the one wired channel.
+- `horecaos.notifications.max-attempts` (default 8) and
+  `horecaos.notifications.retry-backoff` (default `PT30S`).
+- `horecaos.notifications.order-channel` (default `SMS`) — the one wired channel.
 - Message retention: nothing expires a notification row today. The row holds no
   contact value and no rendered body, which is what makes that survivable until a
   retention decision lands.

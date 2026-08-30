@@ -9,7 +9,7 @@
   version and fails startup on a collision; `TenancyEventListener` is a
   `@KafkaListener` on `tenancy.events` using the `AckMode.MANUAL` container from
   `InboxListenerConfiguration` and acknowledges only after every consumer's
-  inbox transaction commits. `InboxExecutor` emits `qoida.inbox.records`
+  inbox transaction commits. `InboxExecutor` emits `horecaos.inbox.records`
   outcome metrics. The first real consumer runs:
   `TenantSummaryProjection` (`control-plane-tenant-summary`) projects tenancy
   events into `reporting.tenant_summaries` (`V0011`) in the same transaction.
@@ -281,7 +281,7 @@ retained and Kafka offsets are not manually advanced.
 - [x] Implement envelope and header validation and payload hashing (`EnvelopeValidator`).
 - [x] Implement `JdbcInboxStore` claim, complete, retry, and dead-letter operations.
 - [x] Implement the explicit handler registry, the Kafka listener with manual acknowledgement, and the acknowledge-only-after-commit contract.
-- [x] Add `qoida.inbox.records` outcome metrics and structured logging. Health information lands with the listener.
+- [x] Add `horecaos.inbox.records` outcome metrics and structured logging. Health information lands with the listener.
 - [x] Add duplicate, rollback, collision, concurrency, and multi-consumer tests.
 - [x] Document the first real consumer and its owner: `control-plane-tenant-summary`, owned by the tenancy control plane, projecting tenancy events into `reporting.tenant_summaries`.
 

@@ -8,10 +8,10 @@
   `TenantAccessPolicy` matches the URL tenant to that claim, treats membership
   as tenant read context and requires `tenant-owner`/`tenant-admin` from the
   matching organization's nested roles for writes, never a top-level role;
-  `platform-admin` is the single global `qoida-api` client role.
+  `platform-admin` is the single global `horecaos-api` client role.
   `SecurityConfiguration` validates the JWT against `issuer-uri` and
-  `audiences: qoida-api` from `application.yml`.
-  `infra/keycloak/realm/qoida-realm.json` has `organizationsEnabled` with the
+  `audiences: horecaos-api` from `application.yml`.
+  `infra/keycloak/realm/horecaos-realm.json` has `organizationsEnabled` with the
   `oidc-organization-membership-mapper` (`addOrganizationId: true`) and the
   `oidc-organization-group-membership-mapper` (`addGroupRoleMappings: true`) on
   the `organization` scope. Fine-grained grants stay in `iam.grants` (`V0008`)
@@ -58,7 +58,7 @@ location, entitlement, and resource relationships.
 - Frontends request `organization:<alias>` for their selected tenant.
   Administrative clients may explicitly request `organization:*` when they
   need multiple memberships.
-- Use `platform-admin` as a global `qoida-api` client role. It is the only
+- Use `platform-admin` as a global `horecaos-api` client role. It is the only
   current global control-plane role.
 - Treat organization membership as sufficient for tenant reads. Require
   `tenant-owner` or `tenant-admin` from the matching organization's nested role
@@ -66,7 +66,7 @@ location, entitlement, and resource relationships.
 - Never treat a top-level `tenant-owner`, `tenant-admin`, or `tenant-viewer`
   role as authorization for every tenant. Top-level role aggregation can
   include roles originating from another organization.
-- Continue to validate token signature, issuer, expiry, and the `qoida-api`
+- Continue to validate token signature, issuer, expiry, and the `horecaos-api`
   audience with Spring Security.
 - Keep fine-grained brand, location, plan, entitlement, and resource grants in
   Qoida projections rather than placing unbounded relationship lists in JWTs.

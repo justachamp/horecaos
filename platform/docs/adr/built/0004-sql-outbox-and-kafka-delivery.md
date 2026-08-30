@@ -11,8 +11,8 @@
   `TenancyOutboxEventListener` and `OrderingOutboxEventListener` persist typed
   events on `TransactionPhase.BEFORE_COMMIT`. `OutboxRelay` polls on a
   `@Scheduled` fixed delay outside any open transaction, retries with bounded
-  exponential backoff to `qoida.messaging.outbox.max-attempts` and then dead
-  letters, and emits `qoida.outbox.publications`.
+  exponential backoff to `horecaos.messaging.outbox.max-attempts` and then dead
+  letters, and emits `horecaos.outbox.publications`.
   `KafkaOutboxPublisher` keys records by aggregate id and carries the event id
   in envelope and headers. Persistence is JdbcClient with Flyway and no JPA.
   Covered by `JdbcOutboxStoreTests` and `KafkaOutboxPublisherTests`.

@@ -195,11 +195,11 @@ integration.binding_capabilities
 
 integration.provider_entity_mappings
   id, tenant_id, installation_id, binding_id
-  entity_type, qoida_entity_id, external_entity_id, external_parent_id null
+  entity_type, horecaos_entity_id, external_entity_id, external_parent_id null
   status, mapping_source, last_seen_at
   version, created_at, updated_at
   unique(binding_id, entity_type, external_entity_id)
-  unique(binding_id, entity_type, qoida_entity_id)
+  unique(binding_id, entity_type, horecaos_entity_id)
 
 integration.provider_environments
   code, provider_type, base_url, is_production
@@ -218,8 +218,8 @@ interface ProviderInstallationLookup {
 }
 
 interface ProviderEntityMappingLookup {
-    Optional<ExternalId> externalIdFor(BindingId binding, EntityType type, UUID qoidaEntityId);
-    Optional<UUID> qoidaIdFor(BindingId binding, EntityType type, String externalId);
+    Optional<ExternalId> externalIdFor(BindingId binding, EntityType type, UUID horecaosEntityId);
+    Optional<UUID> horecaosIdFor(BindingId binding, EntityType type, String externalId);
 }
 ```
 
