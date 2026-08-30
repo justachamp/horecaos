@@ -12,6 +12,23 @@ import java.util.UUID;
  * this must never do is create a replacement organization when a stored id is
  * missing externally: that produces two identities for one tenant and orphans
  * the memberships attached to the first.
+ *
+ * <p><strong>Deliberately no {@code ensureOrganizationRoles}.</strong> ADR 0009's
+ * port sketch names one for org-internal roles, and it is not implemented here:
+ * Keycloak's Organizations Admin REST API (26.7) has no organization-scoped
+ * role sub-resource — no {@code
+ * /organizations/{orgId}/members/{memberId}/role-mappings} of any kind. Roles
+ * in Keycloak stay realm- or client-wide, assigned per user through the
+ * ordinary {@code /users/{id}/role-mappings/...} endpoints, never scoped to an
+ * organization by the API itself. Implementing the method honestly would mean
+ * synthesizing organization scoping ourselves — a group per organization, or a
+ * user-level role mapping that is not actually organization-scoped no matter
+ * what it is named — which is a real design decision this record does not
+ * cover and not something to smuggle in under a method name that promises
+ * more precision than the platform underneath it has. {@link
+ * uz.horecaos.platform.iam.api.grants.TenantOwnerAuthorityGrantor} is the v1
+ * answer instead: platform-side authority through ADR 0025's own grant model,
+ * which already has tenant scoping as a first-class concept.
  */
 public interface OrganizationProvisioner {
 

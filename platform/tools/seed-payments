@@ -1,0 +1,212 @@
+#!/usr/bin/env bash
+#
+# Seeds a local dev payment setup for the local-fixtures demo tenant
+# (docs/local-fixtures.md), so PAYMENT_CONFIGURATION_VALIDATE (ADR 0008,
+# ADR 0013) has something real to check against on a laptop, without a real
+# Click or Payme account.
+#
+# Deliberately dev-only, and structurally so rather than by convention:
+# every write below targets the fixed local addresses `make up` starts
+# (`http://localhost:8200` for OpenBao, the `platform-db` compose service for
+# Postgres) with no environment variable that could repoint it at a real
+# deployment. ADR 0028's production secret-write path is the deploy bootstrap
+# in docs/runbooks/deploy.md, which this script does not touch, call, or
+# imitate — this one writes a value nobody will ever bill against, to a
+# store that is deleted with `docker compose down -v`.
+#
+# What it does, honestly:
+#   1. Writes a fake CLICK provider secret into the local OpenBao at the
+#      ADR 0028 reference format payments actually resolves.
+#   2. Seeds the ADR 0026 platform-owned PAYMENT/CLICK provider environment —
+#      there is no endpoint for this by design (integration.provider_environments
+#      is "platform-owned reference data... never tenant-writable", V0013).
+#   3. Prints the two real control-plane requests an operator would send —
+#      install the provider, then bind it — exactly as ProviderInstallationController
+#      accepts them. They are not run automatically: both need a capability-bearing
+#      Keycloak bearer token (INTEGRATION_INSTALLATION_MANAGE) that only a signed-in
+#      operator has, the same one docs/development.md points at getting through
+#      Swagger UI's Authorize button. A script minting its own is the thing ADR 0025
+#      exists to prevent.
+#   4. Seeds a legal entity, its assignment to the fixture location, and the
+#      matching payments.merchant_bindings row directly in Postgres — because,
+#      unlike step 3, nothing in this codebase exposes an HTTP endpoint for
+#      either yet: LegalEntityService (tenancy) has no web controller, and
+#      PAYMENT_MERCHANT_BINDING_MANAGE (iam/api/Capability.java) is declared
+#      but no controller uses it. This is the same direct-SQL shape the test
+#      suite already uses to build this fixture (e.g.
+#      PaymentCheckoutSurfaceTests), not a new production write path — there
+#      is no other path today, and pretending otherwise would be the
+#      dishonest version of this script.
+#
+# Idempotent: safe to run again. Run it after `make up` and after `make run`
+# has applied the local-fixtures migration at least once (the fixture
+# tenant/brand/location must already exist).
+
+set -euo pipefail
+
+BAO_URL="http://localhost:8200"
+BAO_TOKEN="horecaos-local-root"
+COMPOSE_DB_SERVICE="platform-db"
+# horecaos_migrator, not horecaos_app: integration.provider_environments is
+# "platform-owned reference data... never tenant-writable" (V0013), and
+# horecaos_app is granted no write on it for exactly that reason — only a
+# migration, running as the owner, seeds it. This script is standing in for
+# that migration on a laptop, the same way it stands in for the legal-entity
+# and merchant-binding endpoints that do not exist yet.
+DB_USER="horecaos_migrator"
+DB_PASSWORD="horecaos_migrator"
+DB_NAME="horecaos"
+
+TENANT="10000000-0000-0000-0000-000000000001"
+BRAND="10000000-0000-0000-0000-000000000002"
+LOCATION="10000000-0000-0000-0000-000000000003"
+
+PROVIDER_TYPE="CLICK"
+ENVIRONMENT_CODE="click-local-sandbox"
+LEGAL_ENTITY_CODE="LOCALFIX"
+SECRET_REFERENCE="horecaos:local:provider_payment:tenant:click"
+
+echo "==> Seeding a local CLICK payment setup for the fixture tenant (${TENANT})"
+
+# ---------------------------------------------------------------------------
+# 1. The fake provider secret, at the exact reference payments resolves.
+# ---------------------------------------------------------------------------
+echo "==> Writing the fake CLICK secret to OpenBao at ${SECRET_REFERENCE}"
+if ! curl -sf -o /dev/null "${BAO_URL}/v1/sys/health"; then
+  echo "!! OpenBao is not answering at ${BAO_URL}. Run 'make up' first." >&2
+  exit 1
+fi
+curl -sf -X POST \
+  -H "X-Vault-Token: ${BAO_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"data":{"value":"local-fixture-click-secret-key-not-a-real-credential"}}' \
+  "${BAO_URL}/v1/horecaos/data/local/provider_payment/tenant/click" \
+  > /dev/null
+echo "    done"
+
+# ---------------------------------------------------------------------------
+# 2.-4. Everything else is one SQL script, run inside the compose Postgres so
+# this needs no local psql install.
+# ---------------------------------------------------------------------------
+echo "==> Seeding provider environment, legal entity, and merchant binding in Postgres"
+docker compose exec -T -e PGPASSWORD="${DB_PASSWORD}" "${COMPOSE_DB_SERVICE}" \
+  psql -v ON_ERROR_STOP=1 -U "${DB_USER}" -d "${DB_NAME}" <<SQL
+-- 2. Platform-owned reference data (ADR 0026). No tenant-facing endpoint
+--    writes this table on purpose; a sandbox environment for local testing
+--    is exactly what a real deployment's own migration would seed for a
+--    provider it actually integrates.
+INSERT INTO integration.provider_environments
+    (code, provider_category, provider_type, base_url, is_production, egress_allowlist, notes)
+VALUES ('${ENVIRONMENT_CODE}', 'PAYMENT', '${PROVIDER_TYPE}',
+        'https://api.click.uz/local-fixture-sandbox', false, 'api.click.uz',
+        'tools/seed-payments: local dev only, never a real Click endpoint')
+ON CONFLICT (code) DO NOTHING;
+
+-- 3. The ADR 0026 installation and binding a signed-in operator would create
+--    through ProviderInstallationController (printed below). Seeded directly
+--    here so this script produces a working fixture without an interactive
+--    token, and activated the same way the endpoint would after a successful
+--    connection check — there is no real Click sandbox to check against
+--    locally, so this script is the thing standing in for that check.
+INSERT INTO integration.installations
+    (id, tenant_id, provider_category, provider_type, environment_code,
+     display_name, status, secret_reference, last_connection_status)
+SELECT '20000000-0000-0000-0000-000000000001'::uuid, '${TENANT}'::uuid, 'PAYMENT', '${PROVIDER_TYPE}',
+       '${ENVIRONMENT_CODE}', 'Click (local fixture)', 'ACTIVE', '${SECRET_REFERENCE}', 'SUCCEEDED'
+WHERE NOT EXISTS (
+    SELECT 1 FROM integration.installations
+     WHERE tenant_id = '${TENANT}'::uuid AND provider_type = '${PROVIDER_TYPE}'
+       AND environment_code = '${ENVIRONMENT_CODE}');
+
+INSERT INTO integration.bindings (id, tenant_id, installation_id, brand_id, status)
+SELECT '20000000-0000-0000-0000-000000000002'::uuid, '${TENANT}'::uuid,
+       '20000000-0000-0000-0000-000000000001'::uuid, '${BRAND}'::uuid, 'ACTIVE'
+WHERE NOT EXISTS (SELECT 1 FROM integration.bindings WHERE id = '20000000-0000-0000-0000-000000000002'::uuid);
+
+-- 4. A legal entity assigned to the fixture location (ADR 0038), and the
+--    merchant binding itself (ADR 0013) — the row PAYMENT_CONFIGURATION_VALIDATE
+--    and real checkout both look for once CLICK is enabled on a channel.
+--    docs/local-fixtures.md's own demo data already assigns one entity to
+--    the fixture location (LOCAL_CAFE, as of writing) — reused rather than
+--    duplicated when present, since two entities live at one location on one
+--    day is exactly what tenant.location_fiscal_assignments' exclusion
+--    constraint refuses. LegalEntityService has no web controller yet, so
+--    creating one (the ELSE branch, for a fixture that changes shape later)
+--    is, like the merchant binding itself, only possible directly in
+--    Postgres today.
+DO \$\$
+DECLARE
+    seller_id uuid;
+BEGIN
+    SELECT legal_entity_id INTO seller_id
+      FROM tenant.location_fiscal_assignments
+     WHERE tenant_id = '${TENANT}'::uuid AND location_id = '${LOCATION}'::uuid
+       AND effective_from <= CURRENT_DATE AND (effective_until IS NULL OR effective_until > CURRENT_DATE)
+     ORDER BY effective_from DESC LIMIT 1;
+
+    IF seller_id IS NULL THEN
+        seller_id := '20000000-0000-0000-0000-000000000003'::uuid;
+        INSERT INTO tenant.legal_entities (id, tenant_id, code, legal_name, tin, vat_registered, status)
+        VALUES (seller_id, '${TENANT}'::uuid, '${LEGAL_ENTITY_CODE}',
+                'Local Fixture Foods LLC', '987654321', false, 'ACTIVE')
+        ON CONFLICT (id) DO NOTHING;
+
+        INSERT INTO tenant.location_fiscal_assignments
+            (id, tenant_id, brand_id, location_id, legal_entity_id, effective_from, approved_by)
+        VALUES ('20000000-0000-0000-0000-000000000004'::uuid, '${TENANT}'::uuid, '${BRAND}'::uuid,
+                '${LOCATION}'::uuid, seller_id, DATE '2020-01-01', 'tools/seed-payments')
+        ON CONFLICT (id) DO NOTHING;
+    END IF;
+
+    INSERT INTO payments.merchant_bindings
+        (id, tenant_id, legal_entity_id, provider_type, installation_id, binding_id,
+         merchant_account_reference, secret_reference, callback_path_segment,
+         supports_reversal, supports_partner_fiscalization, status, effective_from)
+    SELECT '20000000-0000-0000-0000-000000000005'::uuid, '${TENANT}'::uuid, seller_id, '${PROVIDER_TYPE}',
+           '20000000-0000-0000-0000-000000000001'::uuid, '20000000-0000-0000-0000-000000000002'::uuid,
+           'local-fixture-service-1', '${SECRET_REFERENCE}', 'click-local-fixture-1', true, true,
+           'ACTIVE', DATE '2020-01-01'
+     WHERE NOT EXISTS (
+         SELECT 1 FROM payments.merchant_bindings
+          WHERE tenant_id = '${TENANT}'::uuid AND legal_entity_id = seller_id
+            AND provider_type = '${PROVIDER_TYPE}' AND status = 'ACTIVE');
+END \$\$;
+SQL
+echo "    done"
+
+echo
+echo "==> Local fixture is payment-ready: an active CLICK merchant binding now exists for whichever"
+echo "    legal entity is assigned to location ${LOCATION} (the fixture's own LOCAL_CAFE, if present;"
+echo "    otherwise a new ${LEGAL_ENTITY_CODE} entity created just now)."
+echo
+echo "==> For reference, the real control-plane requests an operator would send instead of steps 2-3"
+echo "    above (need a bearer token with INTEGRATION_INSTALLATION_MANAGE — get one through Swagger UI's"
+echo "    Authorize button per docs/development.md, then export it as \$TOKEN):"
+cat <<CURL
+
+curl -sX POST "http://localhost:8080/api/v1/control-plane/tenants/${TENANT}/integrations" \\
+  -H "Authorization: Bearer \$TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -H "Idempotency-Key: \$(uuidgen)" \\
+  -d '{
+    "category": "PAYMENT",
+    "providerType": "${PROVIDER_TYPE}",
+    "environmentCode": "${ENVIRONMENT_CODE}",
+    "displayName": "Click (local fixture)",
+    "secretReference": "${SECRET_REFERENCE}"
+  }'
+# -> {"installationId": "<id>", "status": "DRAFT"}
+
+curl -sX POST "http://localhost:8080/api/v1/control-plane/tenants/${TENANT}/integrations/<installationId>/bindings" \\
+  -H "Authorization: Bearer \$TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -H "Idempotency-Key: \$(uuidgen)" \\
+  -d '{
+    "brandId": "${BRAND}",
+    "priority": 100,
+    "capabilities": ["PAYMENT_INITIATE"],
+    "primaryCapabilities": ["PAYMENT_INITIATE"]
+  }'
+# -> {"bindingId": "<id>", "status": "SUSPENDED"} — then activate it with
+#    POST .../bindings/<bindingId>/activate {"reason": "local fixture"}
+CURL

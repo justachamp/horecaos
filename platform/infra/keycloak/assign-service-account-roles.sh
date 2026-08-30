@@ -38,11 +38,62 @@ token() {
     | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])"
 }
 
+# `docker compose up -d` returns as soon as the container starts, not once
+# Keycloak has finished `--import-realm` and is answering admin requests — the
+# keycloak service declares no healthcheck for another service to wait on.
+# Called right after `docker compose up`, the first token request would race a
+# server that is still importing the realm and fail with a connection refusal
+# that has nothing to do with credentials. Retry briefly rather than making
+# every `make up` racy, and say plainly what is being waited for so a genuine
+# outage does not read as a silent hang.
+WAIT_ATTEMPTS="${HORECAOS_KEYCLOAK_WAIT_ATTEMPTS:-30}"
+WAIT_INTERVAL_SECONDS="${HORECAOS_KEYCLOAK_WAIT_INTERVAL_SECONDS:-2}"
+
+wait_for_keycloak() {
+  local attempt=1
+  while [ "${attempt}" -le "${WAIT_ATTEMPTS}" ]; do
+    if curl -sf -o /dev/null "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/certs"; then
+      return 0
+    fi
+    echo "==> Waiting for Keycloak at ${KEYCLOAK_URL} (attempt ${attempt}/${WAIT_ATTEMPTS})..." >&2
+    sleep "${WAIT_INTERVAL_SECONDS}"
+    attempt=$((attempt + 1))
+  done
+  echo "!! Keycloak at ${KEYCLOAK_URL} did not become reachable after $((WAIT_ATTEMPTS * WAIT_INTERVAL_SECONDS))s.
+   Check it is running and importing the realm: docker compose ps keycloak && docker compose logs keycloak.
+   Increase the wait with HORECAOS_KEYCLOAK_WAIT_ATTEMPTS if the machine is just slow." >&2
+  exit 1
+}
+
+wait_for_keycloak
 TOKEN="$(token)"
 api() { curl -sf -H "Authorization: Bearer ${TOKEN}" "$@"; }
 
-RM_ID="$(api "${KEYCLOAK_URL}/admin/realms/${REALM}/clients?clientId=realm-management" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")"
+# The master realm answering (waited for above) does not guarantee the
+# `--import-realm` pass for the *target* realm has finished registering its
+# clients yet. A short retry here absorbs that gap instead of failing on
+# a still-importing realm right after Keycloak became reachable.
+realm_management_client_id() {
+  local attempt=1
+  local found
+  while [ "${attempt}" -le "${WAIT_ATTEMPTS}" ]; do
+    found="$(api "${KEYCLOAK_URL}/admin/realms/${REALM}/clients?clientId=realm-management" \
+      | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['id'] if d else '')" 2>/dev/null || true)"
+    if [ -n "${found}" ]; then
+      echo "${found}"
+      return 0
+    fi
+    echo "==> Waiting for realm ${REALM} to finish importing (attempt ${attempt}/${WAIT_ATTEMPTS})..." >&2
+    sleep "${WAIT_INTERVAL_SECONDS}"
+    attempt=$((attempt + 1))
+  done
+  echo "!! Realm ${REALM} never appeared with a realm-management client after
+   $((WAIT_ATTEMPTS * WAIT_INTERVAL_SECONDS))s. Check the import succeeded:
+   docker compose logs keycloak | grep -i import" >&2
+  exit 1
+}
+
+RM_ID="$(realm_management_client_id)"
 
 assign() {
   local client_id="$1" roles="$2"

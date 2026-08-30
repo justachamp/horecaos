@@ -34,10 +34,12 @@ import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
+import uz.horecaos.platform.iam.api.grants.TenantOwnerAuthorityGrantor;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
 import uz.horecaos.platform.integration.outbox.JdbcOutboxStore;
 import uz.horecaos.platform.integration.outbox.TenancyOutboxEventListener;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStep;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
 import uz.horecaos.platform.tenancy.application.port.TenantControlPlaneStore;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcTenantControlPlaneStore;
@@ -155,12 +157,20 @@ class OnboardingOutboxIntegrationTests {
         // In any order rather than in sequence: `now()` in PostgreSQL is the
         // transaction's start time, so the last step's completion and the READY
         // it produces share a created_at and cannot be ordered by it. The unit
-        // test next door asserts the sequence; what matters here is that all
-        // seven facts are durable.
+        // test next door asserts the sequence; what matters here is that every
+        // fact is durable — one per completed step (all eleven buildable ones,
+        // as of 2026-08-30), plus start, ready and activated.
         assertThat(outboxRows())
                 .extracting(row -> row.get("eventType"))
                 .containsExactlyInAnyOrder(
                         "TenantOnboardingStarted",
+                        "TenantOnboardingStepCompleted",
+                        "TenantOnboardingStepCompleted",
+                        "TenantOnboardingStepCompleted",
+                        "TenantOnboardingStepCompleted",
+                        "TenantOnboardingStepCompleted",
+                        "TenantOnboardingStepCompleted",
+                        "TenantOnboardingStepCompleted",
                         "TenantOnboardingStepCompleted",
                         "TenantOnboardingStepCompleted",
                         "TenantOnboardingStepCompleted",
@@ -318,14 +328,51 @@ class OnboardingOutboxIntegrationTests {
             };
         }
 
+        /** A no-op: this file proves outbox atomicity, not ADR 0025 grant plumbing. */
+        @Bean
+        TenantOwnerAuthorityGrantor tenantOwnerAuthorityGrantor() {
+            return (tenantId, subjectId, reason) -> {};
+        }
+
+        /**
+         * The four real handlers, plus a trivial always-completes fake for each
+         * of the seven newly-required steps this file's fixture (one tenant,
+         * one brand, one location) sets up no data for. This file's subject is
+         * the outbox's atomicity, not the seven steps' own business rules,
+         * which are proved next to {@code OnboardingStepHandlers} itself.
+         */
         @Bean
         List<OnboardingStepHandler> onboardingStepHandlers(
-                OrganizationProvisioner organizations, TenantControlPlaneStore tenants) {
-            return List.of(
+                OrganizationProvisioner organizations,
+                TenantOwnerAuthorityGrantor authority,
+                TenantControlPlaneStore tenants) {
+            List<OnboardingStepHandler> handlers = new java.util.ArrayList<>(List.of(
                     new OnboardingStepHandlers.KeycloakOrganizationReconcile(organizations, tenants),
-                    new OnboardingStepHandlers.TenantOwnerLinkOrInvite(organizations),
+                    new OnboardingStepHandlers.TenantOwnerLinkOrInvite(organizations, authority),
                     new OnboardingStepHandlers.DefaultConfigurationApply(),
-                    new OnboardingStepHandlers.BrandsAndLocationsValidate(tenants));
+                    new OnboardingStepHandlers.BrandsAndLocationsValidate(tenants)));
+            for (OnboardingStep step : new OnboardingStep[] {
+                OnboardingStep.PAYMENT_CONFIGURATION_VALIDATE,
+                OnboardingStep.DELIVERY_CONFIGURATION_VALIDATE,
+                OnboardingStep.POS_BINDINGS_VALIDATE,
+                OnboardingStep.CATALOG_READINESS_VALIDATE,
+                OnboardingStep.MEDIA_READINESS_VALIDATE,
+                OnboardingStep.FRONTEND_DOMAIN_VALIDATE,
+                OnboardingStep.ACTIVATION_SMOKE_TEST
+            }) {
+                handlers.add(new OnboardingStepHandler() {
+                    @Override
+                    public OnboardingStep step() {
+                        return step;
+                    }
+
+                    @Override
+                    public StepResult execute(StepContext context) {
+                        return StepResult.completed(Map.of(), null);
+                    }
+                });
+            }
+            return handlers;
         }
 
         @Bean

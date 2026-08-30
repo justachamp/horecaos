@@ -12,9 +12,21 @@ Wrapper and pins Maven 3.9.16.
 ## Start dependencies
 
 ```bash
-docker compose up -d
-docker compose ps
+make up
 ```
+
+Equivalent to `docker compose up -d && docker compose ps`, plus one more step:
+it also runs `infra/keycloak/assign-service-account-roles.sh`, which grants the
+ADR 0009 `horecaos-provisioning` and `horecaos-identity-reader` service accounts
+their `realm-management` roles. The realm import file declares the two clients
+but cannot express client role mappings, so without this step every Keycloak
+Admin API call the application makes returns 403 — the tenant-onboarding
+`KEYCLOAK_ORGANIZATION_RECONCILE` step fails on a fresh checkout otherwise. The
+script waits and retries briefly for Keycloak to finish starting and importing
+the realm (`docker compose up -d` returns before that finishes; the `keycloak`
+service declares no healthcheck), then fails loudly, naming what to check,
+rather than leaving a checkout silently half-configured. It is idempotent —
+safe to run again — so `make up` on an already-running stack is also safe.
 
 The local stack provides:
 
@@ -24,10 +36,76 @@ The local stack provides:
 | Keycloak PostgreSQL | `localhost:5433/keycloak` | `keycloak` / `keycloak` |
 | Kafka | `localhost:9092` | none |
 | Keycloak | `http://localhost:8081` | `admin` / `admin` |
+| OpenBao | `http://localhost:8200` | root token `horecaos-local-root` |
 
 These credentials are development-only and must never be reused outside a
 developer machine. Keycloak imports the `horecaos` realm and a PKCE-only public
 client for a future frontend at `http://localhost:5173`.
+
+### Keycloak service-account secrets (ADR 0009)
+
+`horecaos-provisioning` and `horecaos-identity-reader` each fall back to a
+development placeholder secret when the realm import runs with no
+`HORECAOS_KEYCLOAK_PROVISIONING_SECRET` / `_READER_SECRET` set — see
+`infra/keycloak/README.md`, "Secrets". The `openbao-seed` compose service seeds
+the same two values into OpenBao under `horecaos/local/identity_admin/keycloak/`
+so the ADR 0028 `SecretResolver` reads back exactly what Keycloak actually
+issued. **Both places must carry the same value**; they were briefly out of
+sync (the seed wrote `local-provisioning-secret` while the realm fell back to
+`development-only-not-a-secret-provisioning`), which made every service-account
+login fail on a stock `docker compose up`. If you ever change one, change the
+other in the same commit.
+
+To run the application itself against this stack with secrets resolved from
+OpenBao rather than the `environment` provider default, copy `.env.example` to
+`.env`, export it (`set -a && source .env && set +a`), and run `make run`. Only
+`HORECAOS_SECRETS_PROVIDER=openbao` plus the identity_admin path above makes
+Keycloak organization provisioning resolvable locally without also exporting
+`HORECAOS_KEYCLOAK_PROVISIONING_SECRET` / `_READER_SECRET` by hand.
+
+### Seeding a local payment setup
+
+```bash
+make run           # applies the local-fixtures demo tenant at least once
+make seed-payments
+```
+
+Gives the [local-fixtures](local-fixtures.md) demo tenant a working CLICK
+payment setup, so `PAYMENT_CONFIGURATION_VALIDATE` (ADR 0008, ADR 0013) has
+something real to check and a checkout carrying a non-cash method has a
+merchant binding to resolve. `tools/seed-payments` is dev-only tooling and
+structurally so: every write targets the fixed local addresses `make up`
+starts (OpenBao at `http://localhost:8200`, Postgres through the `platform-db`
+compose service) with no environment variable that could repoint it anywhere
+else. It is not, and must never become, the ADR 0028 production secret-write
+path — that is the deploy bootstrap in `docs/runbooks/deploy.md`.
+
+It does four things:
+
+1. Writes a fake CLICK secret into OpenBao at the exact ADR 0028 reference
+   `payments` resolves at call time.
+2. Seeds an `integration.provider_environments` row for a CLICK sandbox — ADR
+   0026 platform-owned reference data with no tenant-facing endpoint by
+   design (`horecaos_app` is granted no write on it), so the script runs this
+   one statement as `horecaos_migrator`, standing in for the deployment
+   migration that would seed a provider actually in use.
+3. Prints, rather than sends, the two real `ProviderInstallationController`
+   requests an operator would use instead of step 4's installation and
+   binding rows: both need a bearer token carrying `INTEGRATION_INSTALLATION_MANAGE`,
+   which only a signed-in operator has (get one through Swagger UI's
+   **Authorize**, as above) — a script minting its own capability token is
+   exactly what ADR 0025 exists to prevent.
+4. Seeds the installation, the binding, and the `payments.merchant_bindings`
+   row directly in Postgres, reusing the fixture's own legal entity when one
+   is already assigned to the fixture location. Direct SQL because, unlike
+   step 3, no HTTP endpoint exists yet for either a merchant binding or a
+   legal entity: `LegalEntityService` has no web controller, and
+   `PAYMENT_MERCHANT_BINDING_MANAGE` is declared in `Capability` but no
+   controller uses it. This is the same shape the test suite already uses to
+   build this fixture (e.g. `PaymentCheckoutSurfaceTests`), not a new write
+   path invented for this script.
+
+Idempotent — safe to run again.
 
 ## Build and test
 

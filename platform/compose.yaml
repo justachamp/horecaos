@@ -146,10 +146,18 @@ services:
         bao secrets enable -path=horecaos -version=2 kv 2>/dev/null || true
         bao kv put horecaos/local/data_encryption/platform/kek \
           value=local-development-key-encryption-key-not-for-any-other-use
+        # These must equal the fallback client secrets the realm import falls
+        # back to when HORECAOS_KEYCLOAK_PROVISIONING_SECRET and
+        # _READER_SECRET are unset (see infra/keycloak/realm/horecaos-realm.json
+        # and infra/keycloak/README.md, "Secrets"). This seed used to write a
+        # different value than what Keycloak actually issued, so the ADR 0009
+        # adapter's client-credentials login failed with every checkout on a
+        # stock `docker compose up` — reconciled 2026-08-30, one canonical
+        # local value per client, set in both places.
         bao kv put horecaos/local/identity_admin/keycloak/provisioning-secret \
-          value=local-provisioning-secret
+          value=development-only-not-a-secret-provisioning
         bao kv put horecaos/local/identity_admin/keycloak/reader-secret \
-          value=local-reader-secret
+          value=development-only-not-a-secret-reader
         echo "seeded horecaos local secrets"
 
   minio:
