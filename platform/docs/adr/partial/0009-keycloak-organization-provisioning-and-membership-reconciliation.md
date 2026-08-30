@@ -2,8 +2,15 @@
 
 - Decision status: Accepted
 - Implementation status: Partial — the provisioning adapter and the
-  organization-level drift report work; the IAM evidence tables now exist and no
-  code writes them. Pointing the adapter at a real realm found
+  organization-level drift report work, and as of 2026-08-30 they work from a
+  fresh `make up`: the OpenBao seed and the realm's client secrets are
+  reconciled, `assign-service-account-roles.sh` runs inside `make up` with
+  wait/retry, and `KeycloakOrganizationIntegrationTests` — previously
+  skip-only — passes 8/8 against the live realm. `ensureOrganizationRoles` is
+  deliberately not implemented: Keycloak 26.7's Organizations API has no
+  org-scoped roles, so the platform-side `tenant-owner` grant (ADR 0008) is
+  the v1 answer, recorded in `OrganizationProvisioner`'s javadoc. The IAM
+  evidence tables still exist with no code writing them. Pointing the adapter at a real realm found
   that `ensureMembership` had never worked: Spring's `RestClient` sends a
   `String` body with no `Content-Type`, and the organization members endpoint
   answers 415 every time, so owner linking failed against any Keycloak and passed

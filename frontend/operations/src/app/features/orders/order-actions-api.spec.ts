@@ -28,7 +28,14 @@ describe('OrderActionsApi', () => {
     expect(request.request.body).toEqual({ decisionId: 'decision-1', action: 'APPROVE' });
     expect(request.request.headers.has('Idempotency-Key')).toBe(true);
     expect(request.request.headers.has('If-Match')).toBe(false);
-    request.flush({ orderId: 'o1', status: 'CONFIRMED', version: 2, applied: true, effectiveDecisionId: null, effectiveAction: null });
+    request.flush({
+      orderId: 'o1',
+      status: 'CONFIRMED',
+      version: 2,
+      applied: true,
+      effectiveDecisionId: null,
+      effectiveAction: null,
+    });
   });
 
   it('rejects with the reason code', () => {

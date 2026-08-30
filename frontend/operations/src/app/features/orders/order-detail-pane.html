@@ -3,7 +3,8 @@
        log, and the old placeholder's own reason for existing was "the route
        binding... deep-linkable" — this is the visible proof it worked. -->
   <p class="q-caption pane__id-ref">
-    {{ 'orders.detail.reference' | t }} <span class="q-mono" data-testid="order-detail-id">{{ orderId() }}</span>
+    {{ 'orders.detail.reference' | t }}
+    <span class="q-mono" data-testid="order-detail-id">{{ orderId() }}</span>
   </p>
 
   @if (notice(); as text) {
@@ -21,13 +22,19 @@
   }
 
   @if (loading()) {
-    <div class="pane__skeleton" [attr.aria-label]="'orders.detail.loading' | t" data-testid="order-detail-loading">
+    <div
+      class="pane__skeleton"
+      [attr.aria-label]="'orders.detail.loading' | t"
+      data-testid="order-detail-loading"
+    >
       @for (i of [1, 2, 3, 4]; track i) {
         <div class="pane__skeleton-row"></div>
       }
     </div>
   } @else if (denied()) {
-    <p class="q-body-sm pane__state" data-testid="order-detail-denied">{{ 'orders.detail.denied' | t }}</p>
+    <p class="q-body-sm pane__state" data-testid="order-detail-denied">
+      {{ 'orders.detail.denied' | t }}
+    </p>
   } @else if (notFound()) {
     <p class="q-body-sm pane__state" data-testid="order-detail-not-found">
       {{ 'error.RESOURCE_NOT_FOUND' | t }}
@@ -88,7 +95,10 @@
             </button>
             @if (headerOverflowOpen()) {
               <div class="pane__overflow-menu" data-testid="order-detail-overflow-menu">
-                @for (action of overflowActions(); track action.action + (action.targetStatus ?? '')) {
+                @for (
+                  action of overflowActions();
+                  track action.action + (action.targetStatus ?? '')
+                ) {
                   <button
                     type="button"
                     class="pane__overflow-item"
@@ -139,7 +149,9 @@
                   @if (revealedNote(line.lineId); as note) {
                     <p class="q-caption pane__line-note">{{ note }}</p>
                   } @else if (revealedNote(line.lineId) === null) {
-                    <p class="q-caption pane__line-note">{{ 'orders.detail.lines.note.empty' | t }}</p>
+                    <p class="q-caption pane__line-note">
+                      {{ 'orders.detail.lines.note.empty' | t }}
+                    </p>
                   } @else {
                     <button
                       type="button"
@@ -172,15 +184,21 @@
           <dl class="pane__money">
             <div class="pane__money-row">
               <dt class="q-body-sm">{{ 'orders.detail.money.subtotal' | t }}</dt>
-              <dd class="q-mono q-tnum">{{ formatMoneyMinor(money.subtotalMinor, detail.value.summary.currency) }}</dd>
+              <dd class="q-mono q-tnum">
+                {{ formatMoneyMinor(money.subtotalMinor, detail.value.summary.currency) }}
+              </dd>
             </div>
             <div class="pane__money-row">
               <dt class="q-body-sm">{{ 'orders.detail.money.tax' | t }}</dt>
-              <dd class="q-mono q-tnum">{{ formatMoneyMinor(detail.value.taxMinor, detail.value.summary.currency) }}</dd>
+              <dd class="q-mono q-tnum">
+                {{ formatMoneyMinor(detail.value.taxMinor, detail.value.summary.currency) }}
+              </dd>
             </div>
             <div class="pane__money-row pane__money-row--total">
               <dt class="q-body-sm">{{ 'orders.detail.money.total' | t }}</dt>
-              <dd class="q-mono q-tnum">{{ formatMoneyMinor(money.totalMinor, detail.value.summary.currency) }}</dd>
+              <dd class="q-mono q-tnum">
+                {{ formatMoneyMinor(money.totalMinor, detail.value.summary.currency) }}
+              </dd>
             </div>
           </dl>
         } @else {
@@ -191,8 +209,14 @@
                 'orders.detail.money.errorDetail'
                   | t
                     : {
-                        lineSum: formatMoneyMinor(money.lineSumMinor, detail.value.summary.currency),
-                        subtotal: formatMoneyMinor(money.subtotalMinor, detail.value.summary.currency)
+                        lineSum: formatMoneyMinor(
+                          money.lineSumMinor,
+                          detail.value.summary.currency
+                        ),
+                        subtotal: formatMoneyMinor(
+                          money.subtotalMinor,
+                          detail.value.summary.currency
+                        ),
                       }
               }}
             </p>
@@ -225,7 +249,9 @@
             <dt class="q-caption">{{ 'orders.detail.customer.phone' | t }}</dt>
             <dd class="q-body-sm">
               @if (detail.value.customer.phoneMasked) {
-                <span class="q-mono">{{ revealedPhone() ?? detail.value.customer.phoneMasked }}</span>
+                <span class="q-mono">{{
+                  revealedPhone() ?? detail.value.customer.phoneMasked
+                }}</span>
                 <button
                   type="button"
                   class="pane__reveal-link"
@@ -251,7 +277,9 @@
           </div>
 
           @if (!detail.value.customer.transactionalContactAllowed) {
-            <p class="q-caption pane__contact-blocked">{{ 'orders.detail.customer.contactBlocked' | t }}</p>
+            <p class="q-caption pane__contact-blocked">
+              {{ 'orders.detail.customer.contactBlocked' | t }}
+            </p>
           }
         </dl>
       }
@@ -272,7 +300,10 @@
               <div class="pane__field">
                 <dt class="q-caption">{{ 'orders.detail.address.line' | t }}</dt>
                 <dd class="q-body-sm">
-                  {{ address.line1 }}@if (address.line2) {<span>, {{ address.line2 }}</span>}
+                  {{ address.line1 }}
+                  @if (address.line2) {
+                    <span>, {{ address.line2 }}</span>
+                  }
                 </dd>
               </div>
             }
@@ -332,7 +363,9 @@
       <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.timeline' | t }}</h2>
 
       <div class="pane__timeline-lane">
-        <p class="q-caption pane__timeline-lane-label">{{ 'orders.detail.timeline.lane.commercial' | t }}</p>
+        <p class="q-caption pane__timeline-lane-label">
+          {{ 'orders.detail.timeline.lane.commercial' | t }}
+        </p>
         @if (timeline(); as entries) {
           @if (entries.length === 0) {
             <p class="q-body-sm pane__state-inline">{{ 'orders.detail.timeline.empty' | t }}</p>
@@ -345,7 +378,9 @@
                   </li>
                 }
                 <li class="pane__timeline-entry">
-                  <span class="q-body-sm">{{ statusLabel(entry.fromStatus) }} → {{ statusLabel(entry.toStatus) }}</span>
+                  <span class="q-body-sm"
+                    >{{ statusLabel(entry.fromStatus) }} → {{ statusLabel(entry.toStatus) }}</span
+                  >
                   <span class="q-caption pane__timeline-meta">
                     {{ triggerLabel(entry.trigger) }}
                     @if (entry.reasonCode) {
@@ -365,12 +400,16 @@
       </div>
 
       <div class="pane__timeline-lane pane__timeline-lane--not-built">
-        <p class="q-caption pane__timeline-lane-label">{{ 'orders.detail.timeline.lane.production' | t }}</p>
+        <p class="q-caption pane__timeline-lane-label">
+          {{ 'orders.detail.timeline.lane.production' | t }}
+        </p>
         <p class="q-caption">{{ 'orders.detail.timeline.lane.notBuilt' | t }}</p>
       </div>
 
       <div class="pane__timeline-lane pane__timeline-lane--not-built">
-        <p class="q-caption pane__timeline-lane-label">{{ 'orders.detail.timeline.lane.delivery' | t }}</p>
+        <p class="q-caption pane__timeline-lane-label">
+          {{ 'orders.detail.timeline.lane.delivery' | t }}
+        </p>
         <p class="q-caption">{{ 'orders.detail.timeline.lane.notBuilt' | t }}</p>
       </div>
     </section>

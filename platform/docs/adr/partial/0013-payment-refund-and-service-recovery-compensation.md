@@ -28,11 +28,15 @@
   remedy policy and execution outbox (`recovery.case.manage` and
   `recovery.remedy.approve` are still bare capability constants, and the model
   that would have used them is superseded by ADR 0048); and the ArchUnit money
-  rule. **One thing still blocks an operator.**
-  Nothing writes `payments.merchant_bindings` over HTTP —
-  `JdbcPaymentBindingResolver` only reads it, so a merchant account is still
-  hand-written SQL (`tenant.legal_entities` now has a controller, via ADR
-  0038's `LegalEntityController`). The callback-to-order edge is closed:
+  rule. **Neither HTTP blocker stands any more.** `MerchantBindingController`
+  registers, activates, suspends and archives a `payments.merchant_bindings`
+  row under `payment.merchant-binding.manage` (tenant-owner only), validating
+  the legal entity through tenancy's exported api and carrying only an ADR
+  0028 secret reference — and `tenant.legal_entities` has ADR 0038's
+  `LegalEntityController`. The `payment_status_projection` column now follows
+  the payment too: `PaymentProjectionTrigger` applies CAPTURED, FAILED, VOIDED
+  and REFUNDED idempotently, with checkout's `NOT_REQUIRED` permanently
+  untouched. The callback-to-order edge is closed:
   `PaymentAttemptService.applyToIntent` publishes `ordering.api.PaymentCaptured`
   on a capture, and `OrderStateService.paymentCaptured` (delivered by
   `PaymentCaptureConfirmationTrigger`) moves the order out of

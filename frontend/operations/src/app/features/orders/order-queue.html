@@ -134,7 +134,10 @@
               </td>
               <td class="order-queue__actions-col" data-testid="order-row-actions">
                 <div class="row-actions">
-                  @for (action of inlineActions(row.order); track action.action + (action.targetStatus ?? '')) {
+                  @for (
+                    action of inlineActions(row.order);
+                    track action.action + (action.targetStatus ?? '')
+                  ) {
                     <button
                       type="button"
                       class="row-actions__inline"
@@ -159,7 +162,10 @@
                         <span aria-hidden="true">⋯</span>
                       </button>
                       @if (openOverflowFor() === row.order.orderId) {
-                        <div class="row-actions__overflow-menu" data-testid="order-row-overflow-menu">
+                        <div
+                          class="row-actions__overflow-menu"
+                          data-testid="order-row-overflow-menu"
+                        >
                           @for (
                             action of overflowActions(row.order);
                             track action.action + (action.targetStatus ?? '')

@@ -264,9 +264,12 @@ Other costs:
 - **There is no `evidence_reference`.** ADR 0013 specified an ADR 0029 protected
   reference to the console export or screen capture; V0052 carries none, so the
   cabinet evidence lives outside the platform.
-- **Nothing publishes an event.** The remedies raise audit facts and write no
-  outbox row, so no other module and no external consumer learns that an order was
-  refunded. Reporting would have to read the table.
+- **Nothing publishes an external event.** The remedies raise audit facts and
+  write no outbox row, so no external consumer learns that an order was refunded.
+  One in-process exception since 2026-08-30: `recordMoneyRemedy` publishes
+  `ordering.api.PaymentRefunded` so ordering's `payment_status_projection`
+  follows the refund — synchronous, never via Kafka, and it drives no order
+  state. Reporting would have to read the table.
 - **`reason` is operator free text** — stored on the row and passed to
   `AuditFact.because`. Nothing stops an operator typing a customer's name or phone
   number into it, and ADR 0029 does not cover it. It reaches no event, log, trace

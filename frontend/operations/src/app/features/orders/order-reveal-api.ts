@@ -28,9 +28,15 @@ export class OrderRevealApi {
    * contained the number" (§1.5) — reusing an in-memory value here would be
    * the same mistake the spec calls out, just moved one layer up.
    */
-  revealPhone(scope: LocationScope, orderId: string, purpose: string): Observable<OrderPhoneReveal> {
+  revealPhone(
+    scope: LocationScope,
+    orderId: string,
+    purpose: string,
+  ): Observable<OrderPhoneReveal> {
     return this.api
-      .get<OrderPhoneReveal>(operationsPaths.orderCustomerPhone(scope, orderId), { params: { purpose } })
+      .get<OrderPhoneReveal>(operationsPaths.orderCustomerPhone(scope, orderId), {
+        params: { purpose },
+      })
       .pipe(map((response) => response.value));
   }
 

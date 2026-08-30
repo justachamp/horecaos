@@ -1,9 +1,18 @@
 # ADR 0008: Resumable tenant onboarding workflow
 
 - Decision status: Accepted
-- Implementation status: Partial — the v1 workflow runs as of 2026-08-25, four
-  of the twelve catalogued steps have handlers, seven of the other eight are
-  materialised `BLOCKED`, and the stuck-run alert is wired end to end.
+- Implementation status: Partial — eleven of the twelve catalogued steps have
+  handlers as of 2026-08-30; only `TENANT_ACTIVATE` has none, by design (it
+  parks awaiting a platform-admin's approval). The seven formerly-BLOCKED
+  validators are real and `requiredInV1`: six live in `tenancy`
+  (`OnboardingStepHandlers`, five reading sibling schemas via SQL because a
+  genuine module cycle forbids the api edge — documented in the class javadoc)
+  and the activation smoke test lives in `ordering`, where its pricing
+  dependency is legal. `TenantOwnerLinkOrInvite` now grants `tenant-owner`
+  through `GrantManagementService.grantSystemInitiated` after membership
+  succeeds, and `OnboardingFullRunIntegrationTests` proves a realistic
+  cash-only pickup tenant reaches `READY` on every step with a real ADR 0025
+  grant in `iam.grants`. The stuck-run alert is wired end to end.
   All five onboarding facts
   (`TenantOnboardingStarted`, `TenantOnboardingStepCompleted`,
   `TenantOnboardingFailed`, `TenantReady`, `TenantActivated`) are published

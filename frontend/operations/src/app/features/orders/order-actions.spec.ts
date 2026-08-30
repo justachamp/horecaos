@@ -27,7 +27,11 @@ describe('splitInlineOverflow', () => {
   });
 
   it('takes at most two actions inline, in the server’s own order (§2.9)', () => {
-    const actions = [action({ action: 'APPROVE' }), action({ action: 'REJECT' }), action({ action: 'CANCEL' })];
+    const actions = [
+      action({ action: 'APPROVE' }),
+      action({ action: 'REJECT' }),
+      action({ action: 'CANCEL' }),
+    ];
     const split = splitInlineOverflow(actions);
     expect(split.inline).toEqual([actions[0], actions[1]]);
     expect(split.overflow).toEqual([actions[2]]);
@@ -47,21 +51,38 @@ describe('actionLabel', () => {
   });
 
   it('labels an advance by its target status, not the status’s own noun', () => {
-    expect(actionLabel(action({ action: 'ADVANCE', targetStatus: 'PREPARING' }), null, t, statusLabel)).toBe(
-      'Send to kitchen',
-    );
-    expect(actionLabel(action({ action: 'ADVANCE', targetStatus: 'READY' }), null, t, statusLabel)).toBe('Ready');
     expect(
-      actionLabel(action({ action: 'ADVANCE', targetStatus: 'FULFILLING' }), 'DELIVERY', t, statusLabel),
+      actionLabel(action({ action: 'ADVANCE', targetStatus: 'PREPARING' }), null, t, statusLabel),
+    ).toBe('Send to kitchen');
+    expect(
+      actionLabel(action({ action: 'ADVANCE', targetStatus: 'READY' }), null, t, statusLabel),
+    ).toBe('Ready');
+    expect(
+      actionLabel(
+        action({ action: 'ADVANCE', targetStatus: 'FULFILLING' }),
+        'DELIVERY',
+        t,
+        statusLabel,
+      ),
     ).toBe('Send out for delivery');
   });
 
   it('splits COMPLETED by fulfilment mode', () => {
     expect(
-      actionLabel(action({ action: 'ADVANCE', targetStatus: 'COMPLETED' }), 'DELIVERY', t, statusLabel),
+      actionLabel(
+        action({ action: 'ADVANCE', targetStatus: 'COMPLETED' }),
+        'DELIVERY',
+        t,
+        statusLabel,
+      ),
     ).toBe('Delivered');
     expect(
-      actionLabel(action({ action: 'ADVANCE', targetStatus: 'COMPLETED' }), 'PICKUP', t, statusLabel),
+      actionLabel(
+        action({ action: 'ADVANCE', targetStatus: 'COMPLETED' }),
+        'PICKUP',
+        t,
+        statusLabel,
+      ),
     ).toBe('Handed over');
     expect(
       actionLabel(action({ action: 'ADVANCE', targetStatus: 'COMPLETED' }), null, t, statusLabel),

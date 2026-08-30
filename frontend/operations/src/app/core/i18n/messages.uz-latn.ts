@@ -113,15 +113,15 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.detail.lines.column.name': 'Nomi',
   'orders.detail.lines.column.quantity': 'Soni',
   'orders.detail.lines.column.amount': 'Summa',
-  'orders.detail.lines.snapshotNotice':
-    'Nomlar va narxlar buyurtma berilgan paytda qayd etilgan.',
+  'orders.detail.lines.snapshotNotice': 'Nomlar va narxlar buyurtma berilgan paytda qayd etilgan.',
   'orders.detail.lines.note.hidden': '💬 izoh bor',
   'orders.detail.lines.note.empty': 'izoh yoʻq',
 
   'orders.detail.money.subtotal': 'Pozitsiyalar summasi',
   'orders.detail.money.tax': 'QQS (summa ichida)',
   'orders.detail.money.total': 'Jami',
-  'orders.detail.money.error': 'Summa mos kelmayapti — qoʻllab-quvvatlash xizmatiga murojaat qiling.',
+  'orders.detail.money.error':
+    'Summa mos kelmayapti — qoʻllab-quvvatlash xizmatiga murojaat qiling.',
   'orders.detail.money.errorDetail': 'pozitsiyalar summasi {lineSum}, buyurtmada {subtotal}',
 
   'orders.detail.customer.name': 'Ism',

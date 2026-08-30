@@ -94,7 +94,9 @@ describe('OrderCounts: the client-derived fallback (no counts endpoint reachable
   it('falls back to full client derivation on a denied capability, not just a network error', async () => {
     const denied = vi
       .fn()
-      .mockReturnValue(throwError(() => new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, null)));
+      .mockReturnValue(
+        throwError(() => new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, null)),
+      );
     const counts = configure(denied);
     const orders = [order({ status: 'FULFILLING' })];
 

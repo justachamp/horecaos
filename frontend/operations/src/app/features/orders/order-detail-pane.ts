@@ -216,7 +216,9 @@ export class OrderDetailPane {
       {
         status: summary.status,
         createdAt: new Date(summary.createdAt),
-        approvalDeadlineAt: summary.approvalDeadlineAt ? new Date(summary.approvalDeadlineAt) : null,
+        approvalDeadlineAt: summary.approvalDeadlineAt
+          ? new Date(summary.approvalDeadlineAt)
+          : null,
         // order_process_states is not on this response either — see order-severity.ts.
         hasBlockedProcess: false,
       },
@@ -441,7 +443,11 @@ export class OrderDetailPane {
     if (!detail) {
       return null;
     }
-    return reconcileMoney(detail.value.lines, detail.value.subtotalMinor, detail.value.summary.totalMinor);
+    return reconcileMoney(
+      detail.value.lines,
+      detail.value.subtotalMinor,
+      detail.value.summary.totalMinor,
+    );
   }
 
   // ------------------------------------------------------------ §3.7 customer
@@ -531,7 +537,10 @@ export class OrderDetailPane {
    * because hiding it hides a bug." Reports the first sequence number missing
    * immediately before `entries[index]`, or null when there is none.
    */
-  protected missingSequenceBefore(entries: readonly OrderTimelineEntry[], index: number): number | null {
+  protected missingSequenceBefore(
+    entries: readonly OrderTimelineEntry[],
+    index: number,
+  ): number | null {
     if (index === 0) {
       return null;
     }

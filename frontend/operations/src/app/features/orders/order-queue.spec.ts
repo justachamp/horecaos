@@ -10,6 +10,7 @@ import { ApiClient } from '../../core/api/api-client';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
+import { OrderActionsApi } from './order-actions-api';
 import { OrderCounts, zeroTabCounts } from './order-counts';
 import { OrderQueue } from './order-queue';
 import { OrderSummaryResponse } from './order-summary';
@@ -384,5 +385,217 @@ describe('OrderQueue: empty, error and denied states (§2.11)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+/**
+ * §2.9 row actions and §4.3's mutation contract. `OrderActionsApi` is
+ * overridden per test (not part of `configure()` above) because most of
+ * this file never touches it.
+ */
+function configureWithActions(
+  orders: readonly OrderSummaryResponse[],
+  actionsApi: Partial<OrderActionsApi>,
+): void {
+  TestBed.configureTestingModule({
+    providers: [
+      provideRouter([{ path: 'orders', component: OrderQueue }]),
+      {
+        provide: CurrentLocation,
+        useValue: {
+          scope: signal(FAKE_SCOPE),
+          denied: signal(false),
+          ensureLoaded: () => Promise.resolve(),
+        },
+      },
+      { provide: ApiClient, useValue: { get: ordersResponse(orders) } },
+      { provide: OrderCounts, useValue: { forOrders: () => Promise.resolve(zeroTabCounts()) } },
+      { provide: OrderActionsApi, useValue: actionsApi },
+    ],
+  });
+  TestBed.inject(I18n).setLocale('en');
+}
+
+describe('OrderQueue: row actions render exactly from actions[] (§2.9, §4.2)', () => {
+  it('renders no action cell content for a status whose actions[] is empty — never a disabled control', async () => {
+    configureWithActions([order({ status: 'COMPLETED', actions: [] })], {});
+    const harness = await RouterTestingHarness.create('/orders?tab=completed');
+    await flushMicrotasks();
+
+    const cell = harness.routeNativeElement!.querySelector('[data-testid="order-row-actions"]');
+    expect(cell?.querySelector('button')).toBeNull();
+  });
+
+  it('renders the first two actions inline and the rest in the overflow menu', async () => {
+    configureWithActions(
+      [
+        order({
+          status: 'AWAITING_APPROVAL',
+          actions: [{ action: 'APPROVE' }, { action: 'REJECT' }, { action: 'CANCEL' }],
+        }),
+      ],
+      {},
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=attention');
+    await flushMicrotasks();
+
+    const host = harness.routeNativeElement!;
+    expect(
+      host.querySelector('[data-testid="order-row-action-APPROVE"]')?.textContent?.trim(),
+    ).toBe('Accept');
+    expect(host.querySelector('[data-testid="order-row-action-REJECT"]')?.textContent?.trim()).toBe(
+      'Reject',
+    );
+    // CANCEL is the third action — overflow only, not inline.
+    expect(host.querySelectorAll('.row-actions__inline')).toHaveLength(2);
+    expect(host.querySelector('[data-testid="order-row-overflow-trigger"]')).not.toBeNull();
+  });
+
+  it('clicking an action does not also open the row (stopPropagation)', async () => {
+    const approve = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'CONFIRMED',
+        version: 2,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+      }),
+    );
+    configureWithActions(
+      [order({ status: 'AWAITING_APPROVAL', actions: [{ action: 'APPROVE' }] })],
+      { approve },
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=attention');
+    await flushMicrotasks();
+
+    (
+      harness.routeNativeElement!.querySelector(
+        '[data-testid="order-row-action-APPROVE"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(approve).toHaveBeenCalledTimes(1);
+    // Still on the board — the row-open navigation never fired.
+    expect(TestBed.inject(Location).path()).toBe('/orders?tab=attention');
+  });
+
+  it('renders the settling decision on a lost approval race, not a generic failure', async () => {
+    const approve = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'REJECTED',
+        version: 2,
+        applied: false,
+        effectiveDecisionId: 'someone-elses',
+        effectiveAction: 'REJECT',
+      }),
+    );
+    configureWithActions(
+      [order({ status: 'AWAITING_APPROVAL', actions: [{ action: 'APPROVE' }] })],
+      { approve },
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=attention');
+    await flushMicrotasks();
+
+    (
+      harness.routeNativeElement!.querySelector(
+        '[data-testid="order-row-action-APPROVE"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    const notice = harness.routeNativeElement!.querySelector('[data-testid="order-queue-notice"]');
+    expect(notice?.textContent).toContain('Already rejected');
+    expect(notice?.textContent).toContain('another operator');
+  });
+
+  it('on STALE_VERSION, re-reads the board and says the order changed — never retries the mutation', async () => {
+    const advance = vi
+      .fn()
+      .mockReturnValue(
+        throwError(
+          () =>
+            new ApiError(
+              ApiErrorCode.STALE_VERSION,
+              409,
+              { status: 409, expected: 2, actual: 3 },
+              null,
+            ),
+        ),
+      );
+    configureWithActions(
+      [
+        order({
+          orderId: 'order-1',
+          status: 'CONFIRMED',
+          version: 2,
+          actions: [{ action: 'ADVANCE', targetStatus: 'PREPARING' }],
+        }),
+      ],
+      { advance },
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+    await flushMicrotasks();
+
+    (
+      harness.routeNativeElement!.querySelector(
+        '[data-testid="order-row-action-ADVANCE"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(advance).toHaveBeenCalledTimes(1);
+    const notice = harness.routeNativeElement!.querySelector('[data-testid="order-queue-notice"]');
+    expect(notice?.textContent).toContain('changed');
+  });
+
+  it('opens the reason dialog for Reject and submits it with the entered reason code', async () => {
+    const reject = vi.fn().mockReturnValue(
+      of({
+        orderId: 'order-1',
+        status: 'REJECTED',
+        version: 2,
+        applied: true,
+        effectiveDecisionId: null,
+        effectiveAction: null,
+      }),
+    );
+    configureWithActions(
+      [
+        order({
+          orderId: 'order-1',
+          status: 'AWAITING_APPROVAL',
+          actions: [{ action: 'APPROVE' }, { action: 'REJECT' }],
+        }),
+      ],
+      { reject },
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=attention');
+    await flushMicrotasks();
+
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="order-row-action-REJECT"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(host.querySelector('[data-testid="order-reason-dialog"]')).not.toBeNull();
+
+    const codeInput = host.querySelector(
+      '[data-testid="order-reason-dialog-code"]',
+    ) as HTMLInputElement;
+    codeInput.value = 'CUSTOMER_ASKED';
+    codeInput.dispatchEvent(new Event('input'));
+    (
+      host.querySelector('[data-testid="order-reason-dialog-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(reject).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'order-1',
+      expect.any(String),
+      'CUSTOMER_ASKED',
+    );
   });
 });

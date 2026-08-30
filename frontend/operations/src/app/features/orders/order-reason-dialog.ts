@@ -47,7 +47,9 @@ export class OrderReasonDialog {
   protected readonly note = signal('');
   private readonly touched = signal(false);
 
-  protected readonly reasonMissing = computed(() => this.touched() && this.reasonCode().trim() === '');
+  protected readonly reasonMissing = computed(
+    () => this.touched() && this.reasonCode().trim() === '',
+  );
 
   protected setReasonCode(value: string): void {
     this.reasonCode.set(value);

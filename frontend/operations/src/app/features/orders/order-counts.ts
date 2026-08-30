@@ -105,7 +105,10 @@ function isOrderCountsResponse(value: unknown): value is OrderCountsResponse {
 
 function countMembers(tab: OrderTabId, orders: readonly CountableOrder[], now: Date): number {
   return orders.filter((order) =>
-    isOrderTabMember(tab, { status: order.status, severityLevel: computeOrderSeverity(order, now).level }),
+    isOrderTabMember(tab, {
+      status: order.status,
+      severityLevel: computeOrderSeverity(order, now).level,
+    }),
   ).length;
 }
 

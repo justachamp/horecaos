@@ -348,7 +348,11 @@ export class OrderQueue implements OnInit {
   }
 
   /** Dispatches whichever action was clicked, inline or from the overflow menu. */
-  protected onActionClick(order: OrderSummaryResponse, action: OrderActionResponse, event: Event): void {
+  protected onActionClick(
+    order: OrderSummaryResponse,
+    action: OrderActionResponse,
+    event: Event,
+  ): void {
     event.stopPropagation();
     this.openOverflowFor.set(null);
     const scope = this.location.scope();
@@ -387,7 +391,9 @@ export class OrderQueue implements OnInit {
   }
 
   protected dialogTitleKey(): MessageKey {
-    return this.dialog()?.kind === 'cancel' ? 'orders.dialog.cancel.title' : 'orders.dialog.reject.title';
+    return this.dialog()?.kind === 'cancel'
+      ? 'orders.dialog.cancel.title'
+      : 'orders.dialog.reject.title';
   }
 
   protected dialogConfirmLabelKey(): MessageKey {
@@ -427,7 +433,13 @@ export class OrderQueue implements OnInit {
           )
         : this.submitStateMutation(
             state.orderId,
-            this.actionsApi.cancel(scope, state.orderId, state.version, submission.reasonCode, submission.note),
+            this.actionsApi.cancel(
+              scope,
+              state.orderId,
+              state.version,
+              submission.reasonCode,
+              submission.note,
+            ),
           );
 
     void task.finally(() => this.dialog.set(null));
@@ -440,7 +452,10 @@ export class OrderQueue implements OnInit {
    * than an error" — a lost race is not an error, so it renders the settling
    * decision rather than a failure message.
    */
-  private async submitDecision(orderId: string, request: Observable<DecisionResponse>): Promise<void> {
+  private async submitDecision(
+    orderId: string,
+    request: Observable<DecisionResponse>,
+  ): Promise<void> {
     this.setRowBusy(orderId, true);
     try {
       const result = await firstValueFrom(request);
@@ -465,7 +480,10 @@ export class OrderQueue implements OnInit {
    * §4.1: a `409 STALE_VERSION` is handled by re-reading and telling the
    * operator what changed, never by retrying.
    */
-  private async submitStateMutation(orderId: string, request: Observable<DecisionResponse>): Promise<void> {
+  private async submitStateMutation(
+    orderId: string,
+    request: Observable<DecisionResponse>,
+  ): Promise<void> {
     this.setRowBusy(orderId, true);
     try {
       await firstValueFrom(request);

@@ -34,7 +34,9 @@ describe('OrderReasonDialog', () => {
     const submissions: OrderReasonSubmission[] = [];
     fixture.componentInstance.confirm.subscribe((s) => submissions.push(s));
 
-    (host.querySelector('[data-testid="order-reason-dialog-confirm"]') as HTMLButtonElement).click();
+    (
+      host.querySelector('[data-testid="order-reason-dialog-confirm"]') as HTMLButtonElement
+    ).click();
     fixture.detectChanges();
 
     expect(host.querySelector('[data-testid="order-reason-dialog-required"]')).not.toBeNull();
@@ -47,17 +49,23 @@ describe('OrderReasonDialog', () => {
     const submissions: OrderReasonSubmission[] = [];
     fixture.componentInstance.confirm.subscribe((s) => submissions.push(s));
 
-    const input = host.querySelector('[data-testid="order-reason-dialog-code"]') as HTMLInputElement;
+    const input = host.querySelector(
+      '[data-testid="order-reason-dialog-code"]',
+    ) as HTMLInputElement;
     input.value = '  NO_STOCK  ';
     input.dispatchEvent(new Event('input'));
-    (host.querySelector('[data-testid="order-reason-dialog-confirm"]') as HTMLButtonElement).click();
+    (
+      host.querySelector('[data-testid="order-reason-dialog-confirm"]') as HTMLButtonElement
+    ).click();
 
     expect(submissions).toEqual([{ reasonCode: 'NO_STOCK', note: undefined }]);
   });
 
   it('does not render a note field when noteEnabled is false', () => {
     const { fixture } = render();
-    expect(fixture.nativeElement.querySelector('[data-testid="order-reason-dialog-note"]')).toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-reason-dialog-note"]'),
+    ).toBeNull();
   });
 
   it('includes the note when enabled and filled in', () => {
@@ -72,13 +80,19 @@ describe('OrderReasonDialog', () => {
     code.value = 'CUSTOMER_CHANGED_MIND';
     code.dispatchEvent(new Event('input'));
 
-    const note = host.querySelector('[data-testid="order-reason-dialog-note"]') as HTMLTextAreaElement;
+    const note = host.querySelector(
+      '[data-testid="order-reason-dialog-note"]',
+    ) as HTMLTextAreaElement;
     note.value = 'Called to cancel';
     note.dispatchEvent(new Event('input'));
 
-    (host.querySelector('[data-testid="order-reason-dialog-confirm"]') as HTMLButtonElement).click();
+    (
+      host.querySelector('[data-testid="order-reason-dialog-confirm"]') as HTMLButtonElement
+    ).click();
 
-    expect(submissions).toEqual([{ reasonCode: 'CUSTOMER_CHANGED_MIND', note: 'Called to cancel' }]);
+    expect(submissions).toEqual([
+      { reasonCode: 'CUSTOMER_CHANGED_MIND', note: 'Called to cancel' },
+    ]);
   });
 
   it('emits dismiss and clears its own fields on close', () => {
