@@ -63,6 +63,21 @@ OpenBao rather than the `environment` provider default, copy `.env.example` to
 Keycloak organization provisioning resolvable locally without also exporting
 `HORECAOS_KEYCLOAK_PROVISIONING_SECRET` / `_READER_SECRET` by hand.
 
+### Phone/OTP sign-in locally
+
+The `local` profile (`src/main/resources/application-local.yml`) presets a fixed
+verification code for one number: `+998000000000` codes as `000000` (override with
+`HORECAOS_VERIFICATION_PRESET_PHONE` / `_PRESET_CODE`), so the customer session
+journey (ADR 0051) is exercisable end to end without a bound SMS gateway or a
+message ever leaving the laptop. `+998 00 000 00 00` is deliberately not a number
+anyone has — `00` is unallocated in the Uzbek numbering plan — so it passes
+`PhoneNumber` validation without naming a real subscriber. `PresetVerificationCodeSource`
+refuses to be created outside a `local` profile and `PresetVerificationCodeGuard`
+refuses to let a non-local profile start with either override set: a fixed one-time
+code reaching a deployment would be a full authentication bypass, not a weakened
+control. Every other number on this profile still draws a random code and still
+needs a real transport, so the preset cannot hide a broken SMS path.
+
 ### Seeding a local payment setup
 
 ```bash

@@ -17,8 +17,9 @@ frontend/
   control-plane/   Angular — platform administration
   operations/      Angular — brand and location operations
   storefront/      Angular — customer storefront
-mobile/       Flutter customer application
-docs/         Monorepo-level documents (founding review, workspace plans)
+mobile/       Flutter customer application — on hold for launch (ADR 0055); Angular
+              storefront is the customer surface until it resumes
+docs/         Monorepo-level documents — the founding review
 ```
 
 The platform's code identity is HorecaOS throughout — package root `uz.horecaos`,
@@ -38,7 +39,27 @@ make run      # API on :8080 with local fixture data
 ```
 
 Per-surface commands live in each project's own README. The root Makefile only composes;
-it never replaces a project's build.
+it never replaces a project's build — `platform/Makefile` has the rest, including
+`make format` and `make seed-payments` (run from `platform/`, or `make -C platform ...`
+from here).
+
+## Current phase
+
+HorecaOS launches greenfield: the first production tenants are onboarded natively, with
+no legacy data, identity, or traffic in scope
+([ADR 0055](platform/docs/adr/meta/0055-greenfield-launch-scope.md)). Migrating existing
+restaurants off the legacy system is a separate program that starts only once production
+exists for greenfield tenants. The launch path — storefront, then the Operations
+application, then payments, then tenant onboarding, proven in dev/test before production
+is even planned — is ADR 0055's own specification; read it rather than a restatement
+here, since a copy is exactly what goes stale.
+
+Build-time quality gates ([ADR 0054](platform/docs/adr/built/0054-build-time-quality-gates.md)),
+the per-surface OpenAPI contract ([ADR 0057](platform/docs/adr/built/0057-openapi-per-surface-document-groups.md)),
+and the tenant-isolation stance — application-enforced now, PostgreSQL row-level security
+as a pre-production backstop
+([ADR 0056](platform/docs/adr/not-started/0056-tenant-isolation-enforcement-and-rls.md)) —
+are the other three decisions from this phase worth knowing before touching the backend.
 
 ## Where the truth lives
 

@@ -1,5 +1,15 @@
 # HorecaOS Platform Migration Plan
 
+> **This document belongs to the post-production legacy-migration program**
+> ([ADR 0055](adr/meta/0055-greenfield-launch-scope.md)), not to the current
+> greenfield launch. Nothing here gates the launch in progress; the program this
+> describes starts only after production exists for greenfield tenants. It was last
+> verified against the legacy `milliy` system before the HorecaOS founding
+> (2026-08-30) — see [the founding review](../../docs/qoida-review.md) — and has not
+> been re-verified against a production `milliy` since, because Phase 0 below (the
+> step that would do that) has not run. Treat every specific figure, table name, and
+> "unimplemented" claim below as of that date, not of today.
+
 ## 1. Purpose
 
 This plan describes the incremental migration from the legacy FastAPI platform
@@ -1215,10 +1225,12 @@ Final thresholds must be quantified before each cutover. At minimum:
 
 The dependency-ordered implementation design is in the
 [ADR roadmap](adr/README.md), which is the authoritative execution sequence and
-is organized as parallel tracks rather than a single line. ADRs 0005 through
-0034 are unimplemented; an `Accepted` decision status means the design is
-settled, not that code exists. Their checklists and exit criteria drive one
-vertical slice at a time. For first-release scope, see
+is organized as parallel tracks rather than a single line. Per-ADR implementation
+status is the [generated status summary](adr/README.md#by-implementation-status)
+there, not a claim restated here — an `Accepted` decision status means the design
+is settled, not that code exists, and status drifts in exactly the direction a
+hand-written figure in this document cannot track. Each ADR's checklist and exit
+criteria drive one vertical slice at a time. For first-release scope, see
 [minimum-viable-cutover.md](minimum-viable-cutover.md).
 
 Before each capability becomes a production implementation or authoritative

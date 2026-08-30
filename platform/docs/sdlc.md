@@ -3,8 +3,9 @@
 How a change moves from someone noticing a problem to running in production, and where a
 person has to make a decision.
 
-This repository already had the hard part: [AGENTS.md](../AGENTS.md), 35 ADRs, an approved
-domain model, and a migration coverage register. What the SDLC adds is the machinery that
+This repository already had the hard part: [AGENTS.md](../AGENTS.md), an
+[ADR set](adr/README.md), an approved domain model, and a migration coverage
+register. What the SDLC adds is the machinery that
 makes those rules apply *while* code is being written rather than after — and that turns a
 review comment written three times into a check that runs every time.
 
@@ -145,10 +146,11 @@ make lint     # do the repository's own rules hold?   (< 1 minute, no JVM)
 make eval     # does the agent configuration still steer behaviour?
 ```
 
-`make lint` runs [`tools/checks/repo_hygiene.py`](../tools/checks/repo_hygiene.py) — ten
+`make lint` runs [`tools/checks/repo_hygiene.py`](../tools/checks/repo_hygiene.py) —
 deterministic rules drawn from real bugs in this repo, including the migration-order-aware
 GRANT check that V0035 had to exist to repair — plus the hook and control-band test
-suites.
+suites. The rule count is whatever `CHECKS` in that file currently holds; read the file
+rather than a number here.
 
 `make eval` is the regression suite for the agent's *configuration*. Changing `CLAUDE.md`
 or a skill changes how every future session behaves, and the Maven build will not notice.
