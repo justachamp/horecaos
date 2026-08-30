@@ -230,13 +230,19 @@ def check_secrets() -> None:
 def check_adr_statuses() -> None:
     """ADR 0000: every ADR carries a decision status and an implementation status."""
     problems = []
-    for path in sorted(ADR.glob("[0-9]*.md")):
+    # rglob, not glob: records live under built/, partial/, not-started/ and
+    # meta/ since they were filed by status — a flat glob matched zero files
+    # and this check silently passed on nothing for weeks of commits.
+    records = sorted(ADR.rglob("[0-9]*.md"))
+    if not records:
+        problems.append(f"{rel(ADR)}: no ADR records found — the glob is broken again")
+    for path in records:
         text = path.read_text(errors="replace")
         if not re.search(r"decision status", text, re.I):
             problems.append(f"{rel(path)}: no decision status")
         if not re.search(r"implementation status", text, re.I):
             problems.append(f"{rel(path)}: no implementation status")
-    result("adr: every ADR carries both status fields", problems)
+    result(f"adr: every ADR carries both status fields ({len(records)} records)", problems)
 
 
 def check_print_debugging() -> None:
