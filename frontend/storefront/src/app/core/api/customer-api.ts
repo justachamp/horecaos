@@ -7,9 +7,11 @@ import { ApiClient } from './api-client';
  * The `me` surface: what a customer may read and change about themselves.
  *
  * A faithful transcription of `StorefrontCustomerController` on the day it
- * landed, built on {@link ApiClient} rather than added to `storefront-api.ts` —
- * that file says of itself that it is to be replaced wholesale by generated
- * output (ADR 0035) and not extended by hand.
+ * landed, built directly on {@link ApiClient}. An earlier hand-written
+ * `storefront-api.ts` existed alongside this file and said of itself that
+ * ADR 0035 would replace it wholesale with generated output; it never grew a
+ * second consumer and was deleted rather than extended -- generated output is
+ * still the intended replacement for hand-written clients like this one.
  *
  * **The account is never in a path here.** Every method below addresses
  * `/me`, and the server resolves the account from the caller's own verified

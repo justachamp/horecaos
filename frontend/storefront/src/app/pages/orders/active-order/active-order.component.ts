@@ -11,6 +11,9 @@ import { NotificationService } from '../../../services/notification.service';
 /** API status values for active (in-progress) orders tab */
 const ACTIVE_ORDER_STATUSES = ['new', 'accepted', 'cooking', 'ready', 'delivering'] as const;
 
+/** How often the list re-reads while this screen is open and visible. */
+const POLL_INTERVAL_MS = 10_000;
+
 @Component({
   selector: 'app-active-order',
   standalone: true,
@@ -25,8 +28,12 @@ export class ActiveOrderComponent implements OnInit, OnDestroy {
   cancellingId = signal<string | null>(null);
   cancelError = signal<string | null>(null);
 
+  /** When the list was last confirmed current -- the initial load, or a poll tick. */
+  readonly lastUpdated = signal<Date | null>(null);
+
   private readonly translate = inject(TranslateService);
   private reloadSub?: Subscription;
+  private pollSub?: Subscription;
 
   constructor(
     private ordersService: OrdersService,
@@ -40,12 +47,24 @@ export class ActiveOrderComponent implements OnInit, OnDestroy {
       const actual = [...ev.statuses].sort().join();
       if (actual === expected) {
         this.orders.set(this.mapApiOrdersToItems(ev.orders));
+        this.lastUpdated.set(new Date());
       }
     });
+    // A manual reload (the "orders.refresh" button elsewhere, or the retry
+    // button below) already keeps the screen current; this is what keeps it
+    // current when nobody touches anything -- an order left open on this
+    // screen otherwise shows "TASDIQLANDI" long after the kitchen moved on.
+    this.pollSub = this.ordersService
+      .poll(POLL_INTERVAL_MS, () => this.ordersService.getOrders([...ACTIVE_ORDER_STATUSES]))
+      .subscribe((apiOrders) => {
+        this.orders.set(this.mapApiOrdersToItems(apiOrders));
+        this.lastUpdated.set(new Date());
+      });
   }
 
   ngOnDestroy(): void {
     this.reloadSub?.unsubscribe();
+    this.pollSub?.unsubscribe();
   }
 
   loadOrders(): void {
@@ -56,6 +75,7 @@ export class ActiveOrderComponent implements OnInit, OnDestroy {
       next: (apiOrders) => {
         this.loading.set(false);
         this.orders.set(this.mapApiOrdersToItems(apiOrders));
+        this.lastUpdated.set(new Date());
       },
       error: (err) => {
         this.loading.set(false);

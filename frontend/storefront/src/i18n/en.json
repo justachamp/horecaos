@@ -103,7 +103,12 @@
     "payme": "Payme",
     "minutes": "30 minutes",
     "orderRejected": "This order could not be placed. Please check your basket and try again.",
-    "addressRequired": "Choose a delivery address and a contact number first."
+    "addressRequired": "Choose a delivery address and a contact number first.",
+    "noPaymentMethodSelected": "Choose a payment method to continue.",
+    "noPaymentMethods": "No payment method is available for this order right now.",
+    "paymentSessionError": "The order was placed, but the payment page could not be opened. Check your orders.",
+    "paymentReturnChecking": "Checking your payment...",
+    "deliveryNotServiceable": "Delivery is not available to this address."
   },
   "orders": {
     "title": "Orders",
@@ -147,7 +152,22 @@
     "statusCancelled": "CANCELLED",
     "statusTasdiqlandi": "Accepted",
     "statusTayyorlanmoqda": "Cooking",
-    "statusYetkazilmoqda": "Delivering"
+    "statusYetkazilmoqda": "Delivering",
+    "lastUpdated": "Updated",
+    "platformStatus": {
+      "RECEIVED": "Received",
+      "PAYMENT_AUTHORIZING": "Awaiting payment",
+      "AWAITING_APPROVAL": "Awaiting approval",
+      "CONFIRMED": "Confirmed",
+      "PREPARING": "Preparing",
+      "READY": "Ready",
+      "FULFILLING": "On the way",
+      "COMPLETED": "Completed",
+      "CANCELLED": "Cancelled",
+      "REJECTED": "Rejected",
+      "EXPIRED": "Expired",
+      "PAYMENT_FAILED": "Payment failed"
+    }
   },
   "locations": {
     "title": "Location",
@@ -206,7 +226,11 @@
     "productNotFound": "Product not found.",
     "favorites": "Favorites",
     "fromPricePortion": "from {{price}} / portion",
-    "goToPayment": "Go to payment"
+    "goToPayment": "Go to payment",
+    "modifiersTitle": "Customize",
+    "modifierRequired": "Required",
+    "modifierOption": "Option",
+    "modifiersIncomplete": "Choose the required options above before adding to cart."
   },
   "terms": {
     "agreementTitle": "Public offer agreement",

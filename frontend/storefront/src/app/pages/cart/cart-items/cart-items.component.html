@@ -39,6 +39,11 @@
             </div>
             <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5 py-0.5">
               <h2 class="pr-1 text-[15px] font-bold leading-snug text-jizbiz-text">{{ item.name }}</h2>
+              @if (item.modifiers.length > 0) {
+                <p class="pr-1 text-[12px] leading-snug text-zinc-400">
+                  {{ modifiersSummary(item) }}
+                </p>
+              }
               <div class="mt-auto flex items-center gap-1.5 pt-2">
                 <button
                   type="button"

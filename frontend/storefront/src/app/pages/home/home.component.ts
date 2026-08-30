@@ -27,6 +27,7 @@ import { CustomerProfileService } from '../../services/customer-profile.service'
 import { TelegramWebappService } from '../../services/telegram-webapp.service';
 import { hardReloadTelegramEntryPage } from '../../utils/telegram-entry-reload';
 import type { CustomerUiResponse, MenuItem, PopularCategory } from '../../types/home.types';
+import { FEATURES } from '../../core/config/features';
 
 @Component({
   selector: 'app-home',
@@ -111,10 +112,15 @@ export class HomeComponent implements OnInit {
       .finally(() => this.loading.set(false));
     void this.cartService.load();
     // The hearts on the food cards read this, so it has to be loaded before
-    // they are drawn or every card starts unmarked and flickers.
-    this.favourites.load().catch(() => {
-      // A guest has no list; the interceptor reports anything else.
-    });
+    // they are drawn or every card starts unmarked and flickers. Skipped
+    // entirely while FEATURES.favourites is off: there is no backend for it
+    // yet, and every card renders with no heart at all (see FoodCardComponent),
+    // so nothing needs the list.
+    if (FEATURES.favourites) {
+      this.favourites.load().catch(() => {
+        // A guest has no list; the interceptor reports anything else.
+      });
+    }
 
     // Read once into the shared service rather than mirrored into localStorage.
     // The copy in storage was the app's only record of who the customer was, and

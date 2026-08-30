@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable, Subject, from } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { EMPTY, Observable, Subject, from, interval } from 'rxjs';
+import { catchError, filter, map, switchMap } from 'rxjs/operators';
 
 import { ApiClient } from '../core/api/api-client';
 import { APP_CONFIG } from '../core/config/app-config';
@@ -73,6 +73,26 @@ export class OrdersService {
           .filter((row) => wanted.size === 0 || wanted.has(row.status))
           .map((row) => this.toApiOrder(row));
       }),
+    );
+  }
+
+  /**
+   * Repeats `source` every `intervalMs`, so a screen can show a status that
+   * stays true without the customer having to pull to refresh.
+   *
+   * Skipped entirely while the tab is hidden (`document.hidden`): a screen
+   * nobody is looking at has no reason to keep spending the customer's data
+   * plan or the platform's request budget on an answer nothing will show. A
+   * failed tick is swallowed rather than propagated, so one dropped request
+   * does not end the whole polling subscription -- the next tick tries again.
+   *
+   * Does **not** emit immediately; pair this with a normal one-shot read for
+   * the first paint and use this for the refreshes after it.
+   */
+  poll<T>(intervalMs: number, source: () => Observable<T>): Observable<T> {
+    return interval(intervalMs).pipe(
+      filter(() => typeof document === 'undefined' || !document.hidden),
+      switchMap(() => source().pipe(catchError(() => EMPTY))),
     );
   }
 

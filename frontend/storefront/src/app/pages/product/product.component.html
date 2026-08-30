@@ -55,31 +55,33 @@
             </svg>
           </button> -->
 
-          <button
-            type="button"
-            class="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-jizbiz-surface text-jizbiz-text"
-            [attr.aria-label]="'product.favorites' | t"
-            (click)="toggleFavourite($event)"
-            [disabled]="favouriting()"
-          >
-            <svg
-              width="18"
-              height="16"
-              viewBox="333 46 16 16"
-              [attr.fill]="isFavourite() ? '#ef4444' : 'none'"
-              aria-hidden="true"
+          @if (favouritesEnabled) {
+            <button
+              type="button"
+              class="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-jizbiz-surface text-jizbiz-text"
+              [attr.aria-label]="'product.favorites' | t"
+              (click)="toggleFavourite($event)"
+              [disabled]="favouriting()"
             >
-              <path
-                fill-rule="evenodd"
-                clip-rule="evenodd"
-                d="M333.393 53.6653C332.499 50.8736 333.544 47.6828 336.475 46.7386C338.016 46.2411 339.718 46.5344 341 47.4986C342.212 46.5611 343.976 46.2444 345.516 46.7386C348.447 47.6828 349.499 50.8736 348.606 53.6653C347.214 58.0903 341 61.4986 341 61.4986C341 61.4986 334.831 58.1419 333.393 53.6653Z"
-                [attr.stroke]="isFavourite() ? '#ef4444' : 'currentColor'"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </button>
+              <svg
+                width="18"
+                height="16"
+                viewBox="333 46 16 16"
+                [attr.fill]="isFavourite() ? '#ef4444' : 'none'"
+                aria-hidden="true"
+              >
+                <path
+                  fill-rule="evenodd"
+                  clip-rule="evenodd"
+                  d="M333.393 53.6653C332.499 50.8736 333.544 47.6828 336.475 46.7386C338.016 46.2411 339.718 46.5344 341 47.4986C342.212 46.5611 343.976 46.2444 345.516 46.7386C348.447 47.6828 349.499 50.8736 348.606 53.6653C347.214 58.0903 341 61.4986 341 61.4986C341 61.4986 334.831 58.1419 333.393 53.6653Z"
+                  [attr.stroke]="isFavourite() ? '#ef4444' : 'currentColor'"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
+          }
 
           @if (item.badge) {
             <span
@@ -97,6 +99,49 @@
             <p class="line-clamp-3 text-[13px] leading-5 text-zinc-300">{{ item.description }}</p>
           }
         </div>
+
+        @if (modifierGroups().length > 0) {
+          <div class="border-b border-zinc-700 pb-4">
+            <h2 class="mb-3 text-sm font-bold text-jizbiz-text">{{ 'product.modifiersTitle' | t }}</h2>
+            <div class="flex flex-col gap-4">
+              @for (group of modifierGroups(); track group.id) {
+                <div>
+                  <div class="mb-2 flex items-center justify-between gap-2">
+                    <span class="text-[13px] font-medium text-jizbiz-text">{{ group.name }}</span>
+                    @if (group.required) {
+                      <span class="shrink-0 rounded-full bg-jizbiz-accent/15 px-2 py-0.5 text-[11px] font-semibold text-jizbiz-accent">
+                        {{ 'product.modifierRequired' | t }}
+                      </span>
+                    }
+                  </div>
+                  <div class="flex flex-col gap-2">
+                    @for (option of group.options; track option.id) {
+                      <label
+                        class="flex cursor-pointer items-center justify-between gap-2 rounded-xl bg-jizbiz-bg px-3 py-2.5 text-jizbiz-text"
+                      >
+                        <span class="flex min-w-0 items-center gap-2 text-[13px]">
+                          <input
+                            type="checkbox"
+                            [checked]="isOptionSelected(group.id, option.id)"
+                            (change)="toggleOption(group, option.id)"
+                            class="h-4 w-4 shrink-0 accent-jizbiz-accent"
+                          />
+                          <span class="truncate">{{ option.label || ('product.modifierOption' | t) }}</span>
+                        </span>
+                        @if (option.amountMinor) {
+                          <span class="shrink-0 text-[12px] text-zinc-400">+{{ formatPrice(option.amountMinor) }}</span>
+                        }
+                      </label>
+                    }
+                  </div>
+                </div>
+              }
+              @if (!modifiersValid()) {
+                <p class="text-[12px] text-red-400">{{ 'product.modifiersIncomplete' | t }}</p>
+              }
+            </div>
+          </div>
+        }
 
         @if (hasActiveVariants()) {
           <div class="border-b border-zinc-700 pb-4">
@@ -129,7 +174,7 @@
                       <button
                         type="button"
                         class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-jizbiz-surface-2 text-lg font-light leading-none text-jizbiz-text transition-colors hover:bg-jizbiz-hover disabled:opacity-50"
-                        [disabled]="cartService.updating()"
+                        [disabled]="cartService.updating() || !modifiersValid()"
                         [attr.aria-label]="'common.increase' | t"
                         (click)="increaseVariant(variant.id)"
                       >
@@ -140,7 +185,7 @@
                     <button
                       type="button"
                       class="flex w-full min-w-0 items-center justify-between gap-2 rounded-full bg-jizbiz-accent px-4 py-3 text-left text-xs font-semibold leading-tight text-white transition-opacity hover:opacity-90 disabled:opacity-50 sm:text-[13px]"
-                      [disabled]="cartService.updating()"
+                      [disabled]="cartService.updating() || !modifiersValid()"
                       [attr.aria-label]="'cart.addToCart' | t"
                       (click)="increaseVariant(variant.id)"
                     >
@@ -172,7 +217,7 @@
         <button
           type="button"
           (click)="add()"
-          [disabled]="cartService.updating()"
+          [disabled]="cartService.updating() || !modifiersValid()"
           class="w-full rounded-t-2xl bg-jizbiz-accent py-4 text-base font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {{ 'cart.addToCart' | t }}
@@ -203,7 +248,7 @@
               <button
                 type="button"
                 (click)="add()"
-                [disabled]="cartService.updating()"
+                [disabled]="cartService.updating() || !modifiersValid()"
                 class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-jizbiz-surface-2 text-xl font-light leading-none text-jizbiz-text transition-colors hover:bg-jizbiz-hover disabled:opacity-50"
                 [attr.aria-label]="'common.increase' | t"
               >

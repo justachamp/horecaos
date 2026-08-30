@@ -29,7 +29,6 @@
     "@angular/forms": "^21.1.0",
     "@angular/platform-browser": "^21.1.0",
     "@angular/router": "^21.1.0",
-    "@ngrx/signals": "^21.0.1",
     "angular-device-information": "^4.0.0",
     "angular8-yandex-maps": "^21.0.0",
     "rxjs": "~7.8.0",

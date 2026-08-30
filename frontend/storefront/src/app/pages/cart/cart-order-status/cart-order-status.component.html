@@ -1,7 +1,15 @@
 <div class="relative flex min-h-screen min-h-[100dvh] flex-col bg-jizbiz-bg text-jizbiz-text">
   <!-- Header -->
-  <header class="flex shrink-0 items-center justify-end py-4">
-    @if (step === 'reviewing' || step === 'preparing') {
+  <header class="flex shrink-0 items-center justify-between px-4 py-4">
+    <button
+      type="button"
+      (click)="close()"
+      class="text-sm font-medium text-jizbiz-text transition-opacity hover:opacity-90"
+      [attr.aria-label]="'common.close' | t"
+    >
+      {{ 'common.close' | t }}
+    </button>
+    @if (isCancellable()) {
       <button
         type="button"
         (click)="cancelOrder()"
@@ -14,199 +22,80 @@
           {{ 'orders.cancel' | t }}
         }
       </button>
-    } @else if (step === 'delivering') {
-      <button
-        type="button"
-        (click)="callCourier()"
-        class="text-sm font-medium text-jizbiz-text transition-opacity hover:opacity-90"
-      >
-        {{ 'orders.callCourier' | t }}
-      </button>
-    } @else {
-      <span class="w-10"></span>
     }
   </header>
 
   <!-- Main content -->
-  <main class="mx-auto flex w-full max-w-[420px] flex-1 flex-col items-center px-4 pb-28 pt-4 text-center">
-    @if (cancelError()) {
-      <p class="mb-4 text-center text-sm text-red-400">{{ cancelError() }}</p>
-    }
-    <!-- State 1: Reviewing -->
-    @if (step === 'reviewing') {
-      <div class="flex flex-1 flex-col items-center">
-        <div class="mb-6 flex h-32 w-32 items-center justify-center rounded-full bg-jizbiz-accent ring-4 ring-jizbiz-accent/30">
-          <svg class="h-16 w-16 text-[#111111]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </div>
-        <h1 class="text-xl font-bold text-jizbiz-text sm:text-2xl">{{ 'orders.statusReviewing' | t }}</h1>
-        <p class="mt-2 max-w-xs text-sm text-zinc-400">
-          {{ 'orders.restaurantAccepted' | t }}
-        </p>
-        <!-- Progress -->
-        @if (true) {
-          <div class="mt-8 flex items-center justify-center gap-1">
-            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-jizbiz-accent ring-2 ring-emerald-500/80">
-              <svg class="h-6 w-6 text-[#111111]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+  <main class="mx-auto flex w-full max-w-[420px] flex-1 flex-col px-4 pb-28 pt-2">
+    @if (loading()) {
+      <div class="flex flex-1 flex-col items-center justify-center gap-3 py-12">
+        <span class="h-8 w-8 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"></span>
+        <p class="text-sm text-zinc-400">{{ 'common.loading' | t }}</p>
+      </div>
+    } @else if (loadError()) {
+      <div class="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+        <p class="text-sm text-red-400">{{ loadError() }}</p>
+      </div>
+    } @else if (order(); as o) {
+      @if (cancelError()) {
+        <p class="mb-4 text-center text-sm text-red-400">{{ cancelError() }}</p>
+      }
+
+      <div class="flex flex-col items-center gap-2 pb-6 pt-2 text-center">
+        <span
+          class="inline-flex items-center rounded-full bg-jizbiz-accent px-4 py-1.5 text-sm font-bold text-white"
+        >
+          {{ statusLabel() }}
+        </span>
+        <h1 class="mt-2 text-lg font-bold text-jizbiz-text">
+          {{ 'orders.order' | t }} N: {{ o.order_number }}
+        </h1>
+        @if (placedAtLabel()) {
+          <p class="text-xs text-zinc-400">{{ placedAtLabel() }}</p>
+        }
+      </div>
+
+      <!-- Line items -->
+      <div class="flex flex-col divide-y divide-zinc-700 border-y border-zinc-700">
+        @for (item of lineItems(); track $index) {
+          <div class="flex items-center justify-between gap-3 py-3">
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium text-jizbiz-text">{{ item.name }}</p>
+              <p class="text-xs text-zinc-400">{{ item.quantity }} {{ 'common.itemsUnit' | t }}</p>
             </div>
-            <div class="h-0.5 w-4 bg-zinc-600"></div>
-            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-jizbiz-surface-2">
-              <svg class="h-6 w-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
-              </svg>
-            </div>
-            <div class="h-0.5 w-4 bg-zinc-600"></div>
-            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-jizbiz-surface-2">
-              <svg class="h-6 w-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-              </svg>
-            </div>
-            <div class="h-0.5 w-4 bg-zinc-600"></div>
-            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-jizbiz-surface-2">
-              <svg class="h-6 w-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
+            <span class="shrink-0 text-sm font-semibold text-jizbiz-text">
+              {{ formatPrice(lineTotal(item)) }}
+            </span>
           </div>
         }
-        <p class="mt-6 text-sm text-jizbiz-text">{{ 'orders.cancelTime' | t }}</p>
-        <p class="mt-1 text-3xl font-bold text-red-500">{{ cancelTimeRemaining }}</p>
       </div>
-    }
 
-    <!-- State 2: Preparing -->
-    @if (step === 'preparing') {
-      <div class="flex flex-1 flex-col items-center">
-        <div class="mb-6 flex h-32 w-32 items-center justify-center rounded-full bg-jizbiz-accent ring-4 ring-jizbiz-accent/30">
-          <svg class="h-16 w-16 text-[#111111]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
-          </svg>
+      <!-- Totals -->
+      <div class="mt-4 flex flex-col gap-1.5 text-sm">
+        <div class="flex items-center justify-between text-zinc-400">
+          <span>{{ 'cart.order' | t }}</span>
+          <span>{{ subtotalFormatted() }}</span>
         </div>
-        <h1 class="text-xl font-bold text-jizbiz-text sm:text-2xl">{{ 'orders.statusPreparing' | t }}</h1>
-        <p class="mt-2 max-w-xs text-sm text-zinc-400">
-          {{ 'orders.restaurantAccepted' | t }}
-        </p>
-        <div class="mt-8 flex items-center justify-center gap-1">
-          <div class="flex h-12 w-12 items-center justify-center rounded-full bg-jizbiz-accent">
-            <svg class="h-6 w-6 text-[#111111]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <div class="h-0.5 w-4 bg-zinc-600"></div>
-          <div class="flex h-12 w-12 items-center justify-center rounded-full bg-jizbiz-accent ring-2 ring-emerald-500/80">
-            <svg class="h-6 w-6 text-[#111111]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
-            </svg>
-          </div>
-          <div class="h-0.5 w-4 bg-zinc-600"></div>
-          <div class="flex h-12 w-12 items-center justify-center rounded-full bg-jizbiz-surface-2">
-            <svg class="h-6 w-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-            </svg>
-          </div>
-          <div class="h-0.5 w-4 bg-zinc-600"></div>
-          <div class="flex h-12 w-12 items-center justify-center rounded-full bg-jizbiz-surface-2">
-            <svg class="h-6 w-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
+        <div class="flex items-center justify-between text-base font-bold text-jizbiz-text">
+          <span>{{ 'cart.totalAmount' | t }}</span>
+          <span>{{ totalFormatted() }}</span>
         </div>
       </div>
-    }
 
-    <!-- State 3: Delivering -->
-    @if (step === 'delivering') {
-      <div class="flex flex-1 flex-col items-center">
-        <div class="mb-6 flex h-36 w-36 items-center justify-center rounded-full bg-jizbiz-accent/20">
-          <svg class="h-24 w-24 text-jizbiz-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-          </svg>
-        </div>
-        <h1 class="text-xl font-bold text-jizbiz-text sm:text-2xl">{{ 'orders.statusDelivering' | t }}</h1>
-        <p class="mt-2 text-2xl font-bold text-jizbiz-accent sm:text-3xl">{{ deliveryTimeFrom }} dan – {{ deliveryTimeTo }} gacha</p>
-        <p class="mt-2 max-w-xs text-sm text-zinc-400">
-          {{ 'orders.orderReady' | t }}
+      @if (lastUpdated()) {
+        <p class="mt-6 text-center text-[11px] text-zinc-500">
+          {{ 'orders.lastUpdated' | t }} {{ lastUpdated()?.toLocaleTimeString() }}
         </p>
-        <div class="mt-8 flex items-center justify-center gap-1">
-          <div class="flex h-12 w-12 items-center justify-center rounded-full bg-jizbiz-accent">
-            <svg class="h-6 w-6 text-[#111111]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <div class="h-0.5 w-4 bg-zinc-600"></div>
-          <div class="flex h-12 w-12 items-center justify-center rounded-full bg-jizbiz-accent">
-            <svg class="h-6 w-6 text-[#111111]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
-            </svg>
-          </div>
-          <div class="h-0.5 w-4 bg-zinc-600"></div>
-          <div class="flex h-12 w-12 items-center justify-center rounded-full bg-jizbiz-accent ring-2 ring-emerald-500/80">
-            <svg class="h-6 w-6 text-[#111111]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-            </svg>
-          </div>
-          <div class="h-0.5 w-4 bg-zinc-600"></div>
-          <div class="flex h-12 w-12 items-center justify-center rounded-full bg-jizbiz-surface-2">
-            <svg class="h-6 w-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-        </div>
-      </div>
-    }
-
-    <!-- State 4: Delivered (feedback) -->
-    @if (step === 'delivered') {
-      <div class="flex flex-1 flex-col items-center">
-        <span class="mb-4 text-7xl" aria-hidden="true">😋</span>
-        <h1 class="text-xl font-bold text-jizbiz-text sm:text-2xl">{{ 'orders.statusDelivered' | t }}</h1>
-        <p class="mt-3 max-w-xs text-sm text-zinc-400">
-          {{ 'orders.rateDelivery' | t }}
-        </p>
-        <div class="mt-6 flex gap-1">
-          @for (star of [1,2,3,4,5]; track star) {
-            <button
-              type="button"
-              (click)="setRating(star)"
-              class="p-1 transition-transform hover:scale-110"
-              [attr.aria-label]="'Baholash ' + star"
-            >
-              <svg
-                class="h-10 w-10"
-                [class.text-jizbiz-accent]="star <= rating"
-                [class.text-zinc-600]="star > rating"
-                fill="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-              </svg>
-            </button>
-          }
-        </div>
-        <p class="mt-8 max-w-xs text-xs text-zinc-400">
-          {{ 'orders.supportNote' | t }}
-        </p>
-      </div>
+      }
     }
   </main>
 
   <!-- Bottom button -->
-  <div
-    class="fixed left-1/2 z-40 w-full max-w-[420px] -translate-x-1/2 px-4 pt-2"
-    style="bottom: 5.5rem"
-  >
-    @if (step === 'delivered') {
-      <button
-        type="button"
-        (click)="submitRating()"
-        class="w-full rounded-xl bg-jizbiz-accent py-3.5 text-base font-bold text-white transition-opacity hover:opacity-95"
-      >
-        {{ 'common.submit' | t }}
-      </button>
-    } @else {
+  @if (order() && !loading()) {
+    <div
+      class="fixed left-1/2 z-40 w-full max-w-[420px] -translate-x-1/2 px-4 pt-2"
+      style="bottom: 5.5rem"
+    >
       <button
         type="button"
         (click)="openOrderDetails()"
@@ -214,6 +103,6 @@
       >
         {{ 'orders.orderDetails' | t }}
       </button>
-    }
-  </div>
+    </div>
+  }
 </div>

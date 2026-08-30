@@ -243,13 +243,19 @@ export class CartService {
   /**
    * Turns a priced cart into an order.
    *
+   * @param paymentMethodCode required: `CheckoutRequest.paymentMethodCode` is a
+   *        required field on the wire, and sending `undefined` is not "let the
+   *        platform pick" -- it is a request the server refuses. A screen with
+   *        nothing to send here must not call this at all; see
+   *        `UiCartService.paymentMethods` for what "nothing available" looks
+   *        like.
    * @param idempotencyKey formed when the customer pressed the button and reused
    *        on every retry of that one intent. A fresh key on a retry is how one
    *        press becomes two orders.
    */
   async checkout(input: {
     priced: PricedCart;
-    paymentMethodCode?: string;
+    paymentMethodCode: string;
     idempotencyKey: string;
   }): Promise<CheckoutResult> {
     return this.api.mutate<CheckoutResult>('POST', `${this.brandPath}/checkouts`, {
@@ -331,6 +337,34 @@ export function lineKeyFor(variantId: string, modifierOptionIds: readonly string
   return modifierOptionIds.length === 0
     ? variantId
     : `${variantId}+${[...modifierOptionIds].sort().join('.')}`;
+}
+
+/**
+ * The inverse of {@link lineKeyFor}.
+ *
+ * The server's own `CartLineResponse` carries a `lineKey` and a `variantId`
+ * and nothing about which modifiers were chosen -- `modifierOptionIds` is a
+ * request field, never echoed back. This client chose the key's shape, so it
+ * alone can read it back apart: `variantId` is a UUID (no `+` or `.` in it)
+ * and each modifier option id is a UUID (no `.` in it), so splitting on the
+ * one `+` and then on `.` is exact and never ambiguous with either id.
+ */
+export function modifierOptionIdsFromLineKey(
+  lineKey: string,
+  variantId: string,
+): readonly string[] {
+  if (lineKey === variantId) {
+    return [];
+  }
+  const prefix = `${variantId}+`;
+  if (!lineKey.startsWith(prefix)) {
+    // A line key this client did not mint (should not happen; the server only
+    // ever echoes keys this client wrote). Treated as having no modifiers
+    // rather than thrown, so a display screen degrades instead of breaking.
+    return [];
+  }
+  const suffix = lineKey.slice(prefix.length);
+  return suffix ? suffix.split('.') : [];
 }
 
 const STORAGE_PREFIX = 'horecaos_cart_';

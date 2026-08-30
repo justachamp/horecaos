@@ -8,6 +8,36 @@ export interface MenuItemVariant {
   price_without_discount: number;
 }
 
+/**
+ * One selectable option inside a modifier group (e.g. "extra cheese").
+ *
+ * `label` is what the publication actually carries for an option: a `code`,
+ * which is an authoring identifier, and never a customer-facing name -- the
+ * wire's `MenuModifierOption` has no name field at all. This mirrors
+ * `MenuService`'s own fallback for a variant with no translated label: shown
+ * as what the platform sent rather than invented.
+ */
+export interface MenuItemModifierOption {
+  id: string;
+  label: string;
+  /** Extra charge for choosing this option. Null means no surcharge. */
+  amountMinor: number | null;
+  /** How many times this one option may be picked within its group. */
+  maximumQuantity: number;
+}
+
+/** One group of modifier options a product offers (e.g. "Toppings"). */
+export interface MenuItemModifierGroup {
+  id: string;
+  name: string;
+  /** Least one selection must satisfy add-to-cart when this is true. */
+  required: boolean;
+  minimumSelections: number;
+  maximumSelections: number;
+  allowSameOptionMultipleTimes: boolean;
+  options: MenuItemModifierOption[];
+}
+
 /** Menu item (product) */
 export interface MenuItem {
   id: string;
@@ -25,6 +55,8 @@ export interface MenuItem {
   is_favourite: boolean;
   delivery_duration: number;
   variants: MenuItemVariant[];
+  /** The modifier groups this product offers, resolved from the publication. */
+  modifierGroups: MenuItemModifierGroup[];
 }
 
 /** Menu category (id + name only) */

@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { UiCartService } from '../../../services/ui-cart.service';
 import { TranslateService } from '../../../services/translate.service';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
+import type { CartResponseItem } from '../../../types/cart.types';
 
 @Component({
   selector: 'app-cart-items',
@@ -25,6 +26,11 @@ export class CartItemsComponent implements OnInit {
   formatPrice(n: number): string {
     const c = this.translate.get('common.currency') || "so'm";
     return n.toLocaleString('uz-UZ') + ' ' + c;
+  }
+
+  /** The chosen modifiers for one line, as a single readable row. */
+  modifiersSummary(item: CartResponseItem): string {
+    return item.modifiers.map((m) => m.label || m.groupName).join(', ');
   }
 
   constructor(
@@ -72,8 +78,12 @@ export class CartItemsComponent implements OnInit {
       // The note is written with the line, because the platform's PUT replaces
       // it: there is no note-only endpoint. It cannot be read back afterwards --
       // a line reports that a note exists and never what it says.
+      //
+      // The line's own modifierOptionIds are resent here too, and must be:
+      // this PUT replaces the whole line, so leaving them out would silently
+      // strip whatever the customer chose while only meaning to add a note.
       this.cart
-        .add(firstItem.variant_id, firstItem.quantity, comment)
+        .add(firstItem.variant_id, firstItem.quantity, comment, firstItem.modifierOptionIds)
         .finally(() => this.router.navigate(['/cart/confirmation']));
     } else {
       this.router.navigate(['/cart/confirmation']);

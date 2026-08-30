@@ -1,0 +1,8 @@
+{
+  "apiBaseUrl": "${APP_API_BASE_URL}",
+  "tenantId": "${APP_TENANT_ID}",
+  "brandId": "${APP_BRAND_ID}",
+  "defaultLocationId": "${APP_DEFAULT_LOCATION_ID}",
+  "channel": "${APP_CHANNEL}",
+  "yandexMapsApiKey": "${APP_YANDEX_MAPS_API_KEY}"
+}

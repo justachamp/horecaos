@@ -1,15 +1,18 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 
+import { ApiClient } from '../core/api/api-client';
 import { APP_CONFIG } from '../core/config/app-config';
-import type { CartResponse, CartResponseItem } from '../types/cart.types';
+import { CustomerApi } from '../core/api/customer-api';
+import type { CartResponse, CartResponseItem, CartResponseModifierSelection } from '../types/cart.types';
 import {
   CartService,
+  modifierOptionIdsFromLineKey,
   type CheckoutResult,
   type FulfillmentMode,
   type PlatformCart,
   type PricedCart,
 } from './cart.service';
-import { MenuService } from './menu.service';
+import { MenuService, type PublishedModifierGroup } from './menu.service';
 import { LangService } from './lang.service';
 import { DeliverySelectionService } from './delivery-selection.service';
 import { TranslateService } from './translate.service';
@@ -63,6 +66,8 @@ export class UiCartService {
   private readonly delivery = inject(DeliverySelectionService);
   private readonly translate = inject(TranslateService);
   private readonly config = inject(APP_CONFIG);
+  private readonly api = inject(ApiClient);
+  private readonly customerApi = inject(CustomerApi);
 
   /** The display projection the templates bind to. */
   readonly cartData = signal<CartResponse | null>(null);
@@ -76,6 +81,13 @@ export class UiCartService {
 
   /** How the cart is being fulfilled. Bound at creation and owned by the server. */
   readonly fulfillmentMode = signal<FulfillmentMode>('DELIVERY');
+
+  /**
+   * The delivery-fee preview for the currently chosen destination, or null
+   * when there is nothing to show one for -- not a delivery cart, no
+   * destination chosen yet, or the read has not resolved (see `deliveryFee`).
+   */
+  readonly deliveryFeeQuote = signal<DeliveryFeeQuote | null>(null);
 
   orderComment = '';
 
@@ -99,18 +111,33 @@ export class UiCartService {
   readonly totalWithDelivery = computed(() => this.totalAmount());
 
   /**
-   * Delivery is priced against a destination by its own endpoint (ADR 0037) and
-   * is not a cart field, so until a destination is set there is no fee to show.
+   * A preview of what delivery will cost, from `GET .../delivery-fee`
+   * (`DeliveryFeeController.quote`) -- unauthenticated, like the menu, and
+   * priced against a point rather than against the cart, so it is available
+   * before the cart's own destination is ever set.
    *
-   * Rendered as a dash rather than as "0 so'm". A zero here would read as free
-   * delivery, which is a price the customer would reasonably expect to be
-   * honoured -- and the total beside it already excludes a fee nobody has
-   * resolved. An unknown that looks unknown is the only honest option until
-   * `PUT /carts/{id}/destination` is wired.
+   * Three states, and each is shown as itself rather than folded into the
+   * others:
+   * - no delivery destination chosen yet, or this is not a delivery cart: a
+   *   dash, because a zero here would read as free delivery;
+   * - chosen but outside every zone this branch delivers to: the platform's
+   *   own refusal, honestly, and never re-homed to "delivery unavailable"
+   *   generically -- the reason is what the customer needs to act on;
+   * - resolved: the fee itself.
    */
   readonly deliveryFee = computed(() => {
     this.translate.current();
-    return UNRESOLVED;
+    if (this.fulfillmentMode() !== 'DELIVERY') {
+      return UNRESOLVED;
+    }
+    const quote = this.deliveryFeeQuote();
+    if (!quote) {
+      return UNRESOLVED;
+    }
+    if (!quote.available) {
+      return this.translate.get('cart.deliveryNotServiceable');
+    }
+    return this.formatPrice(quote.feeMinor ?? 0);
   });
 
   /** No packaging charge exists on the platform, so there is nothing to state. */
@@ -149,7 +176,11 @@ export class UiCartService {
     }
     const existing = this.carts.cart();
     const carried =
-      existing?.lines.map((line) => ({ variantId: line.variantId, quantity: line.quantity })) ?? [];
+      existing?.lines.map((line) => ({
+        variantId: line.variantId,
+        quantity: line.quantity,
+        modifierOptionIds: modifierOptionIdsFromLineKey(line.lineKey, line.variantId),
+      })) ?? [];
 
     this.fulfillmentMode.set(mode);
     if (!existing) {
@@ -163,7 +194,11 @@ export class UiCartService {
       this.carts.discard(location);
       await this.carts.create(location, mode);
       for (const line of carried) {
-        await this.carts.putLine({ variantId: line.variantId, quantity: line.quantity });
+        await this.carts.putLine({
+          variantId: line.variantId,
+          quantity: line.quantity,
+          modifierOptionIds: line.modifierOptionIds,
+        });
       }
       await this.project(this.carts.cart());
     } catch {
@@ -192,13 +227,32 @@ export class UiCartService {
     }
   }
 
-  /** Adds one variant, creating the cart on first use. */
-  async add(variantId: string, quantity = 1, note?: string): Promise<void> {
+  /**
+   * Adds one variant, creating the cart on first use.
+   *
+   * @param modifierOptionIds the customer's chosen modifiers, if the product
+   *        has any. Determines the line this lands on: the platform addresses
+   *        a line by variant *and* the exact modifier selection
+   *        (`CartService.lineKeyFor`), so "osh" and "osh with extra meat" are
+   *        two lines and never one whose modifiers depend on which request
+   *        landed last.
+   */
+  async add(
+    variantId: string,
+    quantity = 1,
+    note?: string,
+    modifierOptionIds?: readonly string[],
+  ): Promise<void> {
     this.updating.set(true);
     this.error.set(null);
     try {
       await this.carts.ensure(this.locationId(), this.fulfillmentMode(), true);
-      const cart = await this.carts.putLine({ variantId, quantity, customerNote: note });
+      const cart = await this.carts.putLine({
+        variantId,
+        quantity,
+        customerNote: note,
+        modifierOptionIds,
+      });
       await this.project(cart);
     } catch {
       this.error.set(this.translate.get('errors.generic'));
@@ -213,6 +267,12 @@ export class UiCartService {
    * The platform's PUT replaces the line, so this is an absolute quantity and
    * never a delta. The legacy API took `quantity: -1` to mean "one fewer", and
    * sending that here would ask for a line of minus one.
+   *
+   * `item.modifierOptionIds` is resent on every write. `CartService.putLine`
+   * replaces the whole line, so leaving it out on a quantity change would send
+   * an empty list and strip whatever the customer chose -- the cart would still
+   * hold the right variant and quantity, and the modifiers would simply be
+   * gone.
    */
   async setQuantity(item: CartResponseItem, quantity: number): Promise<void> {
     this.updating.set(true);
@@ -221,7 +281,11 @@ export class UiCartService {
       const cart =
         quantity <= 0
           ? await this.carts.removeLine(item.item_id)
-          : await this.carts.putLine({ variantId: item.variant_id, quantity });
+          : await this.carts.putLine({
+              variantId: item.variant_id,
+              quantity,
+              modifierOptionIds: item.modifierOptionIds,
+            });
       await this.project(cart);
     } catch {
       this.error.set(this.translate.get('errors.generic'));
@@ -308,7 +372,7 @@ export class UiCartService {
    */
   async checkout(input: {
     priced: PricedCart;
-    paymentMethodCode?: string;
+    paymentMethodCode: string;
     idempotencyKey: string;
   }): Promise<CheckoutResult> {
     return this.carts.checkout(input);
@@ -325,6 +389,7 @@ export class UiCartService {
     this.carts.discard(this.locationId());
     this.cartData.set(null);
     this.priced.set(null);
+    this.deliveryFeeQuote.set(null);
   }
 
   private locationId(): string {
@@ -346,6 +411,7 @@ export class UiCartService {
     if (!cart || cart.lines.length === 0) {
       this.cartData.set(null);
       this.priced.set(null);
+      this.deliveryFeeQuote.set(null);
       return;
     }
 
@@ -376,6 +442,20 @@ export class UiCartService {
         });
       }
     }
+    const modifierOptionsById = new Map<
+      string,
+      { groupName: string; label: string; amountMinor: number | null }
+    >();
+    for (const group of menu.modifierGroups as readonly PublishedModifierGroup[]) {
+      for (const option of group.options) {
+        modifierOptionsById.set(option.optionId, {
+          groupName: group.name,
+          // Not a name: the wire's MenuModifierOption carries no name field.
+          label: option.code ?? '',
+          amountMinor: option.amountMinor,
+        });
+      }
+    }
 
     const items: CartResponseItem[] = cart.lines
       .map((line) => {
@@ -383,6 +463,15 @@ export class UiCartService {
         if (!known) {
           return null;
         }
+        const modifierOptionIds = modifierOptionIdsFromLineKey(line.lineKey, line.variantId);
+        const modifiers: CartResponseModifierSelection[] = modifierOptionIds
+          .map((optionId) => {
+            const resolved = modifierOptionsById.get(optionId);
+            return resolved
+              ? { optionId, groupName: resolved.groupName, label: resolved.label, amountMinor: resolved.amountMinor }
+              : null;
+          })
+          .filter((selection): selection is CartResponseModifierSelection => selection !== null);
         const projected: CartResponseItem = {
           variant_id: line.variantId,
           // The line key, which is what an update or a removal addresses. The
@@ -396,6 +485,8 @@ export class UiCartService {
           quantity: line.quantity,
           // Write-only on the platform; only its existence is reported.
           note: null,
+          modifierOptionIds,
+          modifiers,
         };
         return projected;
       })
@@ -418,6 +509,53 @@ export class UiCartService {
       promo_code: null,
       delivery_duration: 0,
     });
+
+    await this.refreshDeliveryFee(cart);
+  }
+
+  /**
+   * Refreshes the delivery-fee preview for the chosen destination.
+   *
+   * Best effort, like pricing above: a failed read leaves the preview
+   * unresolved (a dash) rather than surfacing as a basket-blocking error --
+   * this is a preview, not the fee checkout will actually charge, which comes
+   * from `POST /pricing` once the cart's own destination has been set.
+   */
+  private async refreshDeliveryFee(cart: PlatformCart): Promise<void> {
+    if (this.fulfillmentMode() !== 'DELIVERY') {
+      this.deliveryFeeQuote.set(null);
+      return;
+    }
+    const addressId = this.delivery.addressId();
+    if (!addressId) {
+      this.deliveryFeeQuote.set(null);
+      return;
+    }
+    try {
+      const address = await this.customerApi.address(addressId);
+      if (address.latitude == null || address.longitude == null) {
+        // A saved address with no marker (NOT_GEOCODED): there is no point to
+        // ask the resolver about, so this is "unknown", not "refused".
+        this.deliveryFeeQuote.set(null);
+        return;
+      }
+      const view = await this.api.get<DeliveryFeeView>(
+        `/storefront/tenants/${this.config.tenantId}/brands/${this.config.brandId}` +
+          `/locations/${cart.locationId}/delivery-fee`,
+        {
+          query: {
+            lat: address.latitude,
+            lon: address.longitude,
+            currency: cart.currency,
+            subtotalMinor: this.priced()?.subtotalMinor ?? 0,
+          },
+          anonymous: true,
+        },
+      );
+      this.deliveryFeeQuote.set({ available: view.available, feeMinor: view.feeMinor });
+    } catch {
+      this.deliveryFeeQuote.set(null);
+    }
   }
 
   private getZeroPrice(): string {
@@ -429,4 +567,23 @@ export class UiCartService {
     // Minor units, and for UZS that is whole som -- nothing divides by a hundred.
     return `${value.toLocaleString('uz-UZ')} ${currency}`;
   }
+}
+
+/** The two facts a screen needs from `DeliveryFeeController.DeliveryFeeView`. */
+export interface DeliveryFeeQuote {
+  readonly available: boolean;
+  readonly feeMinor: number | null;
+}
+
+/** `DeliveryFeeController.DeliveryFeeView`, transcribed from the controller. */
+interface DeliveryFeeView {
+  readonly outcome: string;
+  readonly reasonCode: string | null;
+  readonly available: boolean;
+  readonly feeMinor: number | null;
+  readonly currency: string | null;
+  readonly minBasketMinor: number | null;
+  readonly freeDeliveryFromMinor: number | null;
+  readonly distanceMeters: number | null;
+  readonly distanceSource: string | null;
 }

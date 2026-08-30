@@ -32,54 +32,6 @@
       </svg> -->
     </a>
 
-    <!-- Promokod -->
-    <!-- <div class="border-b border-zinc-700/80">
-      <button
-        type="button"
-        class="flex w-full items-center gap-3 py-4 text-left"
-        aria-label="Promokod qo'shish"
-        (click)="togglePromoInput()"
-      >
-        <span class="flex h-9 w-9 shrink-0 items-center justify-center text-jizbiz-accent">
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
-            />
-          </svg>
-        </span>
-        <div class="min-w-0 flex-1">
-          <p class="text-sm font-medium text-jizbiz-text">Promokod bormi?</p>
-          <p class="mt-0.5 text-xs text-zinc-400">{{ promocodeLabel }}</p>
-        </div>
-        <svg class="h-5 w-5 shrink-0 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-        </svg>
-      </button>
-      @if (showPromoInput) {
-        <div class="flex flex-col gap-3 pb-4">
-          <input
-            type="text"
-            [(ngModel)]="promoCode"
-            placeholder="Promokodni kiriting"
-            class="rounded-lg border border-zinc-600 bg-jizbiz-surface-2 px-4 py-2.5 text-sm text-jizbiz-text placeholder-zinc-500 focus:border-jizbiz-accent focus:outline-none"
-          />
-          @if (promoError) {
-            <p class="text-xs text-red-400">{{ promoError }}</p>
-          }
-        <button
-          type="button"
-          class="w-fit rounded-lg bg-jizbiz-accent px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-95"
-          (click)="applyPromo()"
-        >
-          Применить
-        </button>
-        </div>
-      }
-    </div> -->
-
     <!-- To'lov usuli -->
     <div class="border-b border-zinc-700/80">
       <p class="py-2 text-sm font-bold text-jizbiz-text">{{ 'cart.pay' | t }}</p>
@@ -107,6 +59,11 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
         </svg>
       </button>
+
+      <!-- No payment method the platform will accept from this build -->
+      @if (noPaymentMethods()) {
+        <p class="pb-4 text-xs text-red-400">{{ 'cart.noPaymentMethods' | t }}</p>
+      }
 
       <!-- Payment options panel (below button) -->
       @if (showPaymentOptions) {
@@ -198,7 +155,7 @@
     <button
       type="button"
       (click)="submitOrder()"
-      [disabled]="submitting() || !cart.cartData()"
+      [disabled]="submitting() || !cart.cartData() || !selectedPaymentId || noPaymentMethods()"
       class="flex w-full items-center justify-center rounded-xl bg-jizbiz-accent py-3.5 text-base font-bold text-white transition-opacity hover:opacity-95 disabled:opacity-50"
     >
       @if (submitting()) {

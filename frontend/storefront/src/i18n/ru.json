@@ -103,7 +103,12 @@
     "payme": "Payme",
     "minutes": "30 минут",
     "orderRejected": "Заказ не удалось оформить. Проверьте корзину и попробуйте снова.",
-    "addressRequired": "Сначала выберите адрес доставки и контактный номер."
+    "addressRequired": "Сначала выберите адрес доставки и контактный номер.",
+    "noPaymentMethodSelected": "Выберите способ оплаты, чтобы продолжить.",
+    "noPaymentMethods": "Сейчас для этого заказа нет доступного способа оплаты.",
+    "paymentSessionError": "Заказ оформлен, но страницу оплаты не удалось открыть. Проверьте раздел «Заказы».",
+    "paymentReturnChecking": "Проверяем оплату...",
+    "deliveryNotServiceable": "Доставка по этому адресу недоступна."
   },
   "orders": {
     "title": "Заказы",
@@ -147,7 +152,22 @@
     "statusCancelled": "ОТМЕНЁН",
     "statusTasdiqlandi": "Подтверждён",
     "statusTayyorlanmoqda": "Готовится",
-    "statusYetkazilmoqda": "Доставляется"
+    "statusYetkazilmoqda": "Доставляется",
+    "lastUpdated": "Обновлено",
+    "platformStatus": {
+      "RECEIVED": "Получен",
+      "PAYMENT_AUTHORIZING": "Ожидает оплаты",
+      "AWAITING_APPROVAL": "Ожидает подтверждения",
+      "CONFIRMED": "Подтверждён",
+      "PREPARING": "Готовится",
+      "READY": "Готов",
+      "FULFILLING": "В пути",
+      "COMPLETED": "Завершён",
+      "CANCELLED": "Отменён",
+      "REJECTED": "Отклонён",
+      "EXPIRED": "Истёк",
+      "PAYMENT_FAILED": "Оплата не прошла"
+    }
   },
   "locations": {
     "title": "Местоположение",
@@ -206,7 +226,11 @@
     "productNotFound": "Товар не найден.",
     "favorites": "Избранное",
     "fromPricePortion": "от {{price}} / порция",
-    "goToPayment": "Перейти к оплате"
+    "goToPayment": "Перейти к оплате",
+    "modifiersTitle": "Настройка",
+    "modifierRequired": "Обязательно",
+    "modifierOption": "Опция",
+    "modifiersIncomplete": "Выберите обязательные опции выше, прежде чем добавить в корзину."
   },
   "terms": {
     "agreementTitle": "Договор публичной оферты",

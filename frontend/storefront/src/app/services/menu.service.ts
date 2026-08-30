@@ -7,6 +7,7 @@ import type {
   CategoryItemsResponse,
   CustomerUiResponse,
   MenuItem,
+  MenuItemModifierGroup,
   MenuItemVariant,
 } from '../types/home.types';
 
@@ -93,11 +94,12 @@ export class MenuService {
     const menu = await this.menu(locale, locationId);
     const byId = new Map(menu.products.map((product) => [product.productId, product]));
 
+    const groupsById = modifierGroupsById(menu);
     const categoryItems: CategoryItem[] = menu.categories.map((category) => {
       const items = category.productIds
         .map((id) => byId.get(id))
         .filter((product): product is PublishedProduct => product !== undefined)
-        .map((product) => this.toMenuItem(product, menu.currency));
+        .map((product) => this.toMenuItem(product, menu.currency, groupsById));
       return {
         id: category.categoryId,
         name: category.name,
@@ -130,19 +132,20 @@ export class MenuService {
       return { name: '', items: [] };
     }
     const byId = new Map(menu.products.map((product) => [product.productId, product]));
+    const groupsById = modifierGroupsById(menu);
     return {
       name: category.name,
       items: category.productIds
         .map((id) => byId.get(id))
         .filter((product): product is PublishedProduct => product !== undefined)
-        .map((product) => this.toMenuItem(product, menu.currency)),
+        .map((product) => this.toMenuItem(product, menu.currency, groupsById)),
     };
   }
 
   async item(productId: string, locale: string): Promise<MenuItem | null> {
     const menu = await this.menu(locale);
     const product = menu.products.find((entry) => entry.productId === productId);
-    return product ? this.toMenuItem(product, menu.currency) : null;
+    return product ? this.toMenuItem(product, menu.currency, modifierGroupsById(menu)) : null;
   }
 
   /**
@@ -160,13 +163,14 @@ export class MenuService {
       return [];
     }
     const menu = await this.menu(locale);
+    const groupsById = modifierGroupsById(menu);
     return menu.products
       .filter(
         (product) =>
           product.name.toLocaleLowerCase().includes(needle) ||
           (product.description ?? '').toLocaleLowerCase().includes(needle),
       )
-      .map((product) => this.toMenuItem(product, menu.currency));
+      .map((product) => this.toMenuItem(product, menu.currency, groupsById));
   }
 
   /**
@@ -176,7 +180,11 @@ export class MenuService {
    * is whole som. The legacy field carried the same units, so nothing downstream
    * divides — and nothing must start.
    */
-  private toMenuItem(product: PublishedProduct, currency: string | null): MenuItem {
+  private toMenuItem(
+    product: PublishedProduct,
+    currency: string | null,
+    modifierGroups: ReadonlyMap<string, PublishedModifierGroup>,
+  ): MenuItem {
     const preferred = preferredVariant(product);
     const variants: MenuItemVariant[] = product.variants.map((variant) => ({
       id: variant.variantId,
@@ -206,8 +214,36 @@ export class MenuService {
       is_favourite: false,
       delivery_duration: 0,
       variants,
+      modifierGroups: product.modifierGroupIds
+        .map((id) => modifierGroups.get(id))
+        .filter((group): group is PublishedModifierGroup => group !== undefined)
+        .map(toMenuItemModifierGroup),
     };
   }
+}
+
+/** Indexes a menu's modifier groups by id, for resolving a product's ids against. */
+function modifierGroupsById(menu: PublishedMenu): ReadonlyMap<string, PublishedModifierGroup> {
+  return new Map(menu.modifierGroups.map((group) => [group.modifierGroupId, group]));
+}
+
+function toMenuItemModifierGroup(group: PublishedModifierGroup): MenuItemModifierGroup {
+  return {
+    id: group.modifierGroupId,
+    name: group.name,
+    required: group.required,
+    minimumSelections: group.minimumSelections,
+    maximumSelections: group.maximumSelections,
+    allowSameOptionMultipleTimes: group.allowSameOptionMultipleTimes,
+    options: group.options.map((option) => ({
+      id: option.optionId,
+      // Not a name -- see MenuItemModifierOption. The wire's MenuModifierOption
+      // has no name field, only a `code`, which is what a customer sees here.
+      label: option.code ?? '',
+      amountMinor: option.amountMinor,
+      maximumQuantity: option.maximumQuantity,
+    })),
+  };
 }
 
 /**

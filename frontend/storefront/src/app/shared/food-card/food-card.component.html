@@ -16,34 +16,36 @@
         decoding="async"
       />
     </div>
-    <button
-      type="button"
-      class="absolute right-0 top-0 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-jizbiz-accent shadow-md transition-colors"
-      [attr.aria-label]="'product.favorites' | t"
-      (click)="toggleFavourite($event)"
-      [disabled]="favouriting()"
-    >
-      @if (isFavourite()) {
-        <svg width="16" height="14" viewBox="0 0 18 16" aria-hidden="true">
-          <path
-            fill="white"
-            stroke="white"
-            stroke-width="1.2"
-            stroke-linejoin="round"
-            d="M8.999 14.122c-3.12-2.79-6.25-4.93-6.25-8.104C2.75 4.02 4.365 2.5 6.37 2.5c1.12 0 2.196.53 2.63 1.37.434-.84 1.51-1.37 2.63-1.37 2.005 0 3.62 1.52 3.62 3.518 0 3.174-3.13 5.314-6.25 8.104Z"
-          />
-        </svg>
-      } @else {
-        <svg width="16" height="14" viewBox="0 0 18 16" fill="none" aria-hidden="true">
-          <path
-            d="M8.999 14.122c-3.12-2.79-6.25-4.93-6.25-8.104C2.75 4.02 4.365 2.5 6.37 2.5c1.12 0 2.196.53 2.63 1.37.434-.84 1.51-1.37 2.63-1.37 2.005 0 3.62 1.52 3.62 3.518 0 3.174-3.13 5.314-6.25 8.104Z"
-            stroke="white"
-            stroke-width="1.4"
-            stroke-linejoin="round"
-          />
-        </svg>
-      }
-    </button>
+    @if (favouritesEnabled) {
+      <button
+        type="button"
+        class="absolute right-0 top-0 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-jizbiz-accent shadow-md transition-colors"
+        [attr.aria-label]="'product.favorites' | t"
+        (click)="toggleFavourite($event)"
+        [disabled]="favouriting()"
+      >
+        @if (isFavourite()) {
+          <svg width="16" height="14" viewBox="0 0 18 16" aria-hidden="true">
+            <path
+              fill="white"
+              stroke="white"
+              stroke-width="1.2"
+              stroke-linejoin="round"
+              d="M8.999 14.122c-3.12-2.79-6.25-4.93-6.25-8.104C2.75 4.02 4.365 2.5 6.37 2.5c1.12 0 2.196.53 2.63 1.37.434-.84 1.51-1.37 2.63-1.37 2.005 0 3.62 1.52 3.62 3.518 0 3.174-3.13 5.314-6.25 8.104Z"
+            />
+          </svg>
+        } @else {
+          <svg width="16" height="14" viewBox="0 0 18 16" fill="none" aria-hidden="true">
+            <path
+              d="M8.999 14.122c-3.12-2.79-6.25-4.93-6.25-8.104C2.75 4.02 4.365 2.5 6.37 2.5c1.12 0 2.196.53 2.63 1.37.434-.84 1.51-1.37 2.63-1.37 2.005 0 3.62 1.52 3.62 3.518 0 3.174-3.13 5.314-6.25 8.104Z"
+              stroke="white"
+              stroke-width="1.4"
+              stroke-linejoin="round"
+            />
+          </svg>
+        }
+      </button>
+    }
   </a>
 
   <div class="relative z-10 flex min-h-0 min-w-0 flex-col gap-1.5 py-0.5">

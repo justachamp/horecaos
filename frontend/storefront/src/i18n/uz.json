@@ -103,7 +103,12 @@
     "payme": "Payme",
     "minutes": "30 minut",
     "orderRejected": "Buyurtma rasmiylashtirilmadi. Savatchani tekshirib, qayta urinib ko'ring.",
-    "addressRequired": "Avval yetkazish manzili va aloqa raqamini tanlang."
+    "addressRequired": "Avval yetkazish manzili va aloqa raqamini tanlang.",
+    "noPaymentMethodSelected": "Davom etish uchun to'lov usulini tanlang.",
+    "noPaymentMethods": "Hozircha bu buyurtma uchun to'lov usuli mavjud emas.",
+    "paymentSessionError": "Buyurtma qabul qilindi, lekin to'lov sahifasi ochilmadi. \"Buyurtmalar\" bo'limini tekshiring.",
+    "paymentReturnChecking": "To'lov tekshirilmoqda...",
+    "deliveryNotServiceable": "Bu manzilga yetkazib berish mavjud emas."
   },
   "orders": {
     "title": "Buyurtmalar",
@@ -147,7 +152,22 @@
     "statusCancelled": "BEKOR QILINDI",
     "statusTasdiqlandi": "Tasdiqlandi",
     "statusTayyorlanmoqda": "Tayyorlanmoqda",
-    "statusYetkazilmoqda": "Yetkazilmoqda"
+    "statusYetkazilmoqda": "Yetkazilmoqda",
+    "lastUpdated": "Yangilandi",
+    "platformStatus": {
+      "RECEIVED": "Qabul qilindi",
+      "PAYMENT_AUTHORIZING": "To'lov kutilmoqda",
+      "AWAITING_APPROVAL": "Tasdiq kutilmoqda",
+      "CONFIRMED": "Tasdiqlandi",
+      "PREPARING": "Tayyorlanmoqda",
+      "READY": "Tayyor",
+      "FULFILLING": "Yo'lda",
+      "COMPLETED": "Yakunlandi",
+      "CANCELLED": "Bekor qilindi",
+      "REJECTED": "Rad etildi",
+      "EXPIRED": "Muddati o'tdi",
+      "PAYMENT_FAILED": "To'lov amalga oshmadi"
+    }
   },
   "locations": {
     "title": "Joylashuv",
@@ -206,7 +226,11 @@
     "productNotFound": "Mahsulot topilmadi.",
     "favorites": "Sevimlilar",
     "fromPricePortion": "dan {{price}} / porsiya",
-    "goToPayment": "To'lovga o'tish"
+    "goToPayment": "To'lovga o'tish",
+    "modifiersTitle": "Moslashtirish",
+    "modifierRequired": "Majburiy",
+    "modifierOption": "Variant",
+    "modifiersIncomplete": "Savatga qo'shishdan oldin yuqoridagi majburiy variantlarni tanlang."
   },
   "terms": {
     "agreementTitle": "Ommaviy oferta bo'yicha shartnoma",

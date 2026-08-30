@@ -15,6 +15,7 @@ import { TranslateService } from '../../../services/translate.service';
 import { AvatarService } from '../../../services/avatar.service';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import { BackDirective } from '../../../shared/back/back.directive';
+import { FEATURES } from '../../../core/config/features';
 
 export interface UserProfile {
   id?: string;
@@ -51,13 +52,11 @@ export class ProfileDetailsComponent implements OnInit {
   readonly lastName = signal('');
 
   /**
-   * Always null: there is no customer-facing media endpoint on the platform.
-   *
-   * The legacy value was the old backend's origin plus a path off the profile
-   * document. Both are gone, so the template falls through to its placeholder
-   * person icon -- which is what a customer with no photo always saw.
+   * A short-lived signed URL the platform minted for this customer's own
+   * asset -- once the avatar endpoints exist on this build's backend. Until
+   * then `avatarAvailable` is false, `load()` below is never called, and this
+   * stays null, which is exactly what a customer with no photo always saw.
    */
-  /** A short-lived signed URL the platform minted for this customer's own asset. */
   readonly avatarUrl = computed<string | null>(() => this.avatars.url());
 
   ngOnInit(): void {
@@ -74,10 +73,13 @@ export class ProfileDetailsComponent implements OnInit {
       .catch(() => this.error.set(this.translate.get('errors.generic')))
       .finally(() => this.loading.set(false));
     // The signed URL expires, so it is fetched when the screen opens rather
-    // than cached with the profile.
-    this.avatars.load().catch(() => {
-      // A customer with no picture, or a guest. Neither is worth a message.
-    });
+    // than cached with the profile. Skipped while FEATURES.avatar is off --
+    // the endpoint it calls does not exist on this build's backend yet.
+    if (FEATURES.avatar) {
+      this.avatars.load().catch(() => {
+        // A customer with no picture, or a guest. Neither is worth a message.
+      });
+    }
   }
 
   onFirstNameChange(value: string): void {
@@ -112,7 +114,8 @@ export class ProfileDetailsComponent implements OnInit {
     }
   }
 
-  readonly avatarAvailable = true;
+  /** Gates the upload/remove UI until the platform's avatar endpoints exist. See `FEATURES`. */
+  readonly avatarAvailable = FEATURES.avatar;
 
   /**
    * Uploads a chosen file and attaches it.
@@ -125,7 +128,7 @@ export class ProfileDetailsComponent implements OnInit {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
-    if (!file || !file.type.startsWith('image/') || this.uploadingAvatar()) {
+    if (!this.avatarAvailable || !file || !file.type.startsWith('image/') || this.uploadingAvatar()) {
       return;
     }
     this.error.set(null);
@@ -142,7 +145,7 @@ export class ProfileDetailsComponent implements OnInit {
   }
 
   removeAvatar(): void {
-    if (this.removingImage()) {
+    if (!this.avatarAvailable || this.removingImage()) {
       return;
     }
     this.error.set(null);

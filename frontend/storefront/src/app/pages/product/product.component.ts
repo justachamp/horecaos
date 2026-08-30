@@ -14,11 +14,12 @@ import { FoodCarouselComponent } from '../../shared/food-carousel/food-carousel.
 import { MenuService } from '../../services/menu.service';
 import { LangService } from '../../services/lang.service';
 import { UiCartService } from '../../services/ui-cart.service';
-import type { MenuItem, MenuItemVariant, PopularCategory } from '../../types/home.types';
+import type { MenuItem, MenuItemModifierGroup, MenuItemVariant, PopularCategory } from '../../types/home.types';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { TranslateService } from '../../services/translate.service';
 import { FavouritesService } from '../../services/favourites.service';
 import { NavigationHistoryService } from '../../services/navigation-history.service';
+import { FEATURES } from '../../core/config/features';
 
 export interface ProductVariantDisplay {
   id: string;
@@ -55,6 +56,14 @@ function menuItemToDisplay(item: MenuItem, formatPriceFn: (n: number) => string)
   };
 }
 
+/** Sorted-value comparison; the order a customer picked options in never matters. */
+function sameOptionIds(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sortedA = [...a].sort();
+  const sortedB = [...b].sort();
+  return sortedA.every((id, index) => id === sortedB[index]);
+}
+
 @Component({
   selector: 'app-product',
   standalone: true,
@@ -71,6 +80,9 @@ export class ProductComponent {
   private readonly translate = inject(TranslateService);
   private readonly favourites = inject(FavouritesService);
   readonly cartService = inject(UiCartService);
+
+  /** Gates the favourites heart until the backend exists. See `FEATURES`. */
+  readonly favouritesEnabled = FEATURES.favourites;
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
@@ -93,21 +105,82 @@ export class ProductComponent {
     return activeVariants[0]?.id ?? item?.id ?? null;
   });
 
-  /** Quantity in cart - synced from cart */
+  /** The modifier groups this product offers (add-ons, sizes-of-topping, and so on). */
+  readonly modifierGroups = computed<MenuItemModifierGroup[]>(() => this.rawItem()?.modifierGroups ?? []);
+
+  /** groupId -> the option ids currently chosen within it. */
+  private readonly selectedOptions = signal<Record<string, readonly string[]>>({});
+
+  /**
+   * Whether every required group has a selection within its min/max bounds.
+   *
+   * Blocks add-to-cart rather than sending a line the platform would reject
+   * (or, worse, accept as "no modifiers" when the customer meant to choose
+   * one) -- there is no server-side echo of what was picked to correct a
+   * client guess against.
+   */
+  readonly modifiersValid = computed(() => {
+    const selections = this.selectedOptions();
+    return this.modifierGroups().every((group) => {
+      const count = (selections[group.id] ?? []).length;
+      const min = group.required ? Math.max(group.minimumSelections, 1) : group.minimumSelections;
+      const max = group.maximumSelections > 0 ? group.maximumSelections : Number.POSITIVE_INFINITY;
+      return count >= min && count <= max;
+    });
+  });
+
+  /** The chosen options, flattened for the wire -- order does not matter to the platform. */
+  private flattenedSelection(): readonly string[] {
+    return Object.values(this.selectedOptions()).flat();
+  }
+
+  isOptionSelected(groupId: string, optionId: string): boolean {
+    return (this.selectedOptions()[groupId] ?? []).includes(optionId);
+  }
+
+  /**
+   * Toggles one option, respecting the group's own selection limit.
+   *
+   * A group whose `maximumSelections` is 1 behaves like a radio: choosing a
+   * second option replaces the first rather than adding to it, because two
+   * selections in a one-choice group is not a state the platform would accept
+   * either.
+   */
+  toggleOption(group: MenuItemModifierGroup, optionId: string): void {
+    this.selectedOptions.update((current) => {
+      const chosen = current[group.id] ?? [];
+      const isSelected = chosen.includes(optionId);
+      let next: readonly string[];
+      if (isSelected) {
+        next = chosen.filter((id) => id !== optionId);
+      } else if (group.maximumSelections === 1) {
+        next = [optionId];
+      } else if (group.maximumSelections > 0 && chosen.length >= group.maximumSelections) {
+        return current;
+      } else {
+        next = [...chosen, optionId];
+      }
+      return { ...current, [group.id]: next };
+    });
+  }
+
+  /** Quantity in cart for the current variant *and* the currently chosen modifiers. */
   qty = computed(() => {
     const vid = this.variantId();
     if (!vid) return 0;
-    const items = this.cartService.items();
-    const found = items.find((i) => i.variant_id === vid);
-    return found?.quantity ?? 0;
+    return this.qtyForVariant(vid);
   });
 
-  /** Cart line for current variant (for line total in bottom bar) */
+  /** Cart line for current variant and selection (for line total in bottom bar) */
   readonly cartLine = computed(() => {
     const vid = this.variantId();
     if (!vid) return null;
-    this.cartService.items();
-    return this.cartService.items().find((i) => i.variant_id === vid) ?? null;
+    const selection = this.flattenedSelection();
+    return (
+      this.cartService.items().find(
+        (i) => i.variant_id === vid && sameOptionIds(i.modifierOptionIds, selection),
+      ) ?? null
+    );
   });
 
   /** Formatted line total (unit × qty) for bottom bar */
@@ -163,6 +236,10 @@ export class ProductComponent {
         next: (item) => {
           this.loading.set(false);
           this.rawItem.set(item);
+          // A fresh product is a fresh set of choices -- a selection left over
+          // from the previous item on this route could name an option id that
+          // does not even exist on this one.
+          this.selectedOptions.set({});
           this.product.set(menuItemToDisplay(item, (n) => this.formatPrice(n)));
           this.loadRecommendations(item.id, item);
           if (typeof window !== 'undefined') window.scrollTo(0, 0);
@@ -211,24 +288,44 @@ export class ProductComponent {
   }
 
   qtyForVariant(variantId: string): number {
-    return this.cartService.items().find((i) => i.variant_id === variantId)?.quantity ?? 0;
+    const selection = this.flattenedSelection();
+    return (
+      this.cartService
+        .items()
+        .find((i) => i.variant_id === variantId && sameOptionIds(i.modifierOptionIds, selection))
+        ?.quantity ?? 0
+    );
   }
 
   lineTotalForVariant(variantId: string): string {
     this.translate.current();
-    const line = this.cartService.items().find((i) => i.variant_id === variantId);
+    const selection = this.flattenedSelection();
+    const line = this.cartService
+      .items()
+      .find((i) => i.variant_id === variantId && sameOptionIds(i.modifierOptionIds, selection));
     if (!line) return '';
     return this.formatPrice(line.price * line.quantity);
   }
 
+  /**
+   * Adds to, or bumps, the line for this variant and the currently selected
+   * modifiers.
+   *
+   * Blocked while a required group is unsatisfied -- the template disables
+   * the button on `!modifiersValid()`, and this is the second guard, since a
+   * disabled button is not a security boundary against a stray call.
+   */
   increaseVariant(variantId: string): void {
-    if (!variantId || this.cartService.updating()) return;
+    if (!variantId || this.cartService.updating() || !this.modifiersValid()) return;
+    const selection = this.flattenedSelection();
     const run = (): void => {
-      const line = this.cartService.items().find((i) => i.variant_id === variantId);
+      const line = this.cartService
+        .items()
+        .find((i) => i.variant_id === variantId && sameOptionIds(i.modifierOptionIds, selection));
       if (line) {
         this.cartService.increaseQuantity(line);
       } else {
-        void this.cartService.add(variantId, 1);
+        void this.cartService.add(variantId, 1, undefined, selection);
       }
     };
     if (!this.cartService.cartData()) {
@@ -239,7 +336,10 @@ export class ProductComponent {
   }
 
   decreaseVariant(variantId: string): void {
-    const line = this.cartService.items().find((i) => i.variant_id === variantId);
+    const selection = this.flattenedSelection();
+    const line = this.cartService
+      .items()
+      .find((i) => i.variant_id === variantId && sameOptionIds(i.modifierOptionIds, selection));
     if (!line || this.cartService.updating()) return;
     this.cartService.decreaseQuantity(line);
   }
@@ -253,7 +353,7 @@ export class ProductComponent {
       event.stopPropagation();
       event.preventDefault();
     }
-    if (this.favouriting()) return;
+    if (!this.favouritesEnabled || this.favouriting()) return;
     const item = this.rawItem();
     if (!item) return;
     this.favouriting.set(true);

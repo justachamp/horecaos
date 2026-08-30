@@ -61,9 +61,6 @@
           "builder": "@angular/build:dev-server",
           "options": {
             "port": 5000,
-            "allowedHosts": [
-              "unslimly-nonrevocable-jutta.ngrok-free.dev"
-            ],
             "proxyConfig": "proxy.conf.json"
           },
           "configurations": {

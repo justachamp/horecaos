@@ -22,6 +22,22 @@ export interface CartPriceDiscount {
   discount: number;
 }
 
+/**
+ * One chosen modifier option, resolved against the menu for display.
+ *
+ * The cart itself never carries this -- `CartLineResponse` has no field for
+ * it, only the `lineKey` that encodes it (see
+ * `modifierOptionIdsFromLineKey`). `label` follows the same rule as
+ * `MenuItemModifierOption`: the wire has no customer-facing name for an
+ * option, only a `code`.
+ */
+export interface CartResponseModifierSelection {
+  readonly optionId: string;
+  readonly groupName: string;
+  readonly label: string;
+  readonly amountMinor: number | null;
+}
+
 /** Cart item from GET /customers/carts/ response */
 export interface CartResponseItem {
   variant_id: string;
@@ -32,6 +48,14 @@ export interface CartResponseItem {
   image: string | null;
   quantity: number;
   note: string | null;
+  /**
+   * Decoded from the line's own key. Must be resent on every write to this
+   * line -- see `CartService.putLine` -- or a quantity change silently strips
+   * whatever the customer chose.
+   */
+  modifierOptionIds: readonly string[];
+  /** The same selections, resolved against the menu for display. */
+  modifiers: readonly CartResponseModifierSelection[];
 }
 
 /** Vendor from cart response */

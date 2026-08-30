@@ -6,6 +6,7 @@ import { FavouritesService } from '../../services/favourites.service';
 import { UiCartService } from '../../services/ui-cart.service';
 import { TranslatePipe } from '../translate/translate.pipe';
 import type { MenuItem, MenuItemVariant } from '../../types/home.types';
+import { FEATURES } from '../../core/config/features';
 
 @Component({
   selector: 'app-food-card',
@@ -18,6 +19,9 @@ import type { MenuItem, MenuItemVariant } from '../../types/home.types';
 export class FoodCardComponent {
   /** Full menu item from API (response.menu.category_items[].items or populars) */
   item = input.required<MenuItem>();
+
+  /** Gates the favourites heart until the backend exists. See `FEATURES`. */
+  readonly favouritesEnabled = FEATURES.favourites;
 
   favouriting = signal(false);
 
@@ -79,7 +83,7 @@ export class FoodCardComponent {
   toggleFavourite(event: Event): void {
     event.stopPropagation();
     event.preventDefault();
-    if (this.favouriting()) return;
+    if (!this.favouritesEnabled || this.favouriting()) return;
     const id = this.item().id;
     this.favouriting.set(true);
     // Optimistic: the heart flips at once and is put back if the platform

@@ -6,6 +6,7 @@ import { ProfileFaqComponent } from './profile-faq/profile-faq';
 import { ProfileSupportComponent } from './profile-support/profile-support';
 import { ProfileInviteComponent } from './profile-invite/profile-invite';
 import { ProfileDetailsComponent } from './profile-details/profile-details';
+import { favouritesEnabledGuard } from '../../guards/features.guard';
 
 export const PROFILE_ROUTES: Routes = [
   {
@@ -18,7 +19,8 @@ export const PROFILE_ROUTES: Routes = [
   },
   {
     path: 'favorites',
-    component: ProfileFavoritesComponent
+    component: ProfileFavoritesComponent,
+    canActivate: [favouritesEnabledGuard]
   },
   {
     path: 'locations',

@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { LangService, LANG_LABELS } from '../../../services/lang.service';
 import { ThemeService, type ThemeMode } from '../../../services/theme.service';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
+import { FEATURES } from '../../../core/config/features';
 
 export interface ProfileMenuItem {
   id: string;
@@ -41,9 +42,15 @@ export class ProfileMenuComponent implements OnInit {
 
   readonly items = computed(() => {
     const authorized = this.isAuthorized();
-    const list = authorized
+    let list = authorized
       ? this.allItems
       : this.allItems.filter((i) => !i.isLogout && !i.authorizedOnly);
+    // Favourites has no backend yet -- see FEATURES.favourites. Hidden here
+    // rather than left to fail after a tap, and `favouritesEnabledGuard`
+    // covers a customer who reaches the route another way.
+    if (!FEATURES.favourites) {
+      list = list.filter((i) => i.id !== 'favorites');
+    }
     const id = this.lang.langId();
     const langValue = LANG_LABELS[id] ?? LANG_LABELS['ru'];
     return list.map((item) =>
