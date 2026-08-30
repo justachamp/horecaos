@@ -1,0 +1,18 @@
+@if (showBadge) {
+  <a
+    routerLink="/cart"
+    class="cart-hint-badge fixed right-4 z-[60] flex items-center gap-2.5 rounded-2xl border border-jizbiz-accent/50 bg-jizbiz-surface-2 px-3.5 py-2.5 shadow-jizbiz-nav ring-1 ring-jizbiz-border transition-[transform,box-shadow] hover:scale-[1.03]"
+  >
+    <span
+      class="cart-hint-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-jizbiz-accent"
+    >
+      <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+      </svg>
+    </span>
+    <div class="flex flex-col gap-0.5">
+      <span class="text-base font-bold leading-tight text-jizbiz-text">{{ cart.totalAmount() }}</span>
+      <span class="text-xs leading-tight text-zinc-300">{{ 'cart.minutes' | t }}</span>
+    </div>
+  </a>
+}

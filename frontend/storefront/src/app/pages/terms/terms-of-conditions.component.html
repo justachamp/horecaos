@@ -1,0 +1,56 @@
+<div class="min-h-screen bg-jizbiz-bg pb-24 text-jizbiz-text">
+  <div class="mx-auto max-w-[420px] px-4 py-6">
+    <header class="flex shrink-0 flex-col gap-2 pb-6">
+      <button
+        type="button"
+        appBack="/auth/login"
+        class="app-back flex items-center gap-2 text-sm transition-opacity hover:opacity-90"
+      >
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M15 19l-7-7 7-7"
+          />
+        </svg>
+        {{ 'common.back' | t }}
+      </button>
+      <p class="text-center text-base font-semibold text-jizbiz-text">{{ 'terms.agreementTitle' | t }}</p>
+    </header>
+
+    @if (selectedLangId() === 'uz') {
+      <div
+        class="terms-uz-content text-sm leading-relaxed text-zinc-300"
+        lang="uz"
+      >
+        <p class="mb-4 text-center font-medium text-zinc-200">Sotuv Ommaviy oferta bo'yicha shartnoma</p>
+        @for (section of termsUzContent | termsSections; track $index) {
+          <section class="mt-4 block first:mt-0">{{ section }}</section>
+        }
+      </div>
+    }
+    @if (selectedLangId() === 'en') {
+      <div
+        class="terms-en-content text-sm leading-relaxed text-zinc-300"
+        lang="en"
+      >
+        <p class="mb-4 text-center font-medium text-zinc-200">Public offer agreement</p>
+        @for (section of termsEnContent | termsSections; track $index) {
+          <section class="mt-4 block first:mt-0">{{ section }}</section>
+        }
+      </div>
+    }
+    @if (selectedLangId() === 'ru') {
+      <div
+        class="terms-ru-content text-sm leading-relaxed text-zinc-300"
+        lang="ru"
+      >
+        <p class="mb-4 text-center font-medium text-zinc-200">Договор публичной оферты</p>
+        @for (section of termsRuContent | termsSections; track $index) {
+          <section class="mt-4 block first:mt-0">{{ section }}</section>
+        }
+      </div>
+    }
+  </div>
+</div>

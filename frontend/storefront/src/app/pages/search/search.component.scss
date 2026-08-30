@@ -1,0 +1,7 @@
+/* Hide browser-native clear on type="search" — we use a custom clear button */
+input[type='search']::-webkit-search-cancel-button,
+input[type='search']::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}

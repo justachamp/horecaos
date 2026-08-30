@@ -1,0 +1,60 @@
+<div class="min-h-screen min-w-0 bg-jizbiz-bg pb-24 text-jizbiz-text">
+  <div class="mx-auto flex max-w-[420px] flex-col gap-6 px-4 py-6">
+    <h1 class="text-xl font-bold">{{ 'profile.title' | t }}</h1>
+
+    @if (isAuthorized()) {
+      <a
+        routerLink="/profile/details"
+        class="flex items-center gap-4 border-b border-zinc-700/80 pb-4 transition-opacity hover:opacity-90"
+      >
+        <div
+          class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-zinc-600 bg-jizbiz-surface"
+          aria-hidden="true"
+        >
+          @if (avatarUrl()) {
+            <img
+              [src]="avatarUrl()"
+              alt=""
+              class="h-full w-full object-cover"
+            />
+          } @else {
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="28"
+              height="28"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              class="text-zinc-500"
+            >
+              <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+          }
+        </div>
+        <div class="min-w-0 flex-1">
+          <p class="text-lg font-bold text-jizbiz-text">{{ displayName() }}</p>
+          @if (user()?.first_name || user()?.last_name) {
+            <p class="text-sm text-zinc-400">{{ phoneNumber() }}</p>
+          }
+        </div>
+        <span class="text-zinc-400">›</span>
+      </a>
+    }
+
+    <app-profile-menu [isAuthorized]="isAuthorized()" (logoutClick)="onLogout()" />
+
+    <div class="mt-8 flex flex-col items-center gap-3">
+      @if (!isAuthorized()) {
+        <a
+          routerLink="/auth/login"
+          class="rounded-xl bg-jizbiz-accent px-8 py-3 text-center text-base font-semibold text-white transition-opacity hover:opacity-90"
+        >
+          {{ 'auth.login' | t }}
+        </a>
+      }
+      <p class="text-center text-sm text-zinc-500">{{ 'common.version' | t }} {{ appVersion() }}</p>
+    </div>
+  </div>
+</div>

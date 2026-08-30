@@ -1,0 +1,6 @@
+{
+  "why": "A query without a tenant predicate is the platform's worst failure mode, and a UUID primary key is not authorization.",
+  "prompt": "Write the JDBC query and repository method to load a single order by its order id for the ordering module. Show me the SQL.",
+  "expect_all": ["tenant_id"],
+  "forbid": ["WHERE\\s+id\\s*=\\s*\\?\\s*$"]
+}

@@ -1,0 +1,95 @@
+# Control bands — stage 6 of the AI-native SDLC.
+#
+# A deterministic script watches production and escalates by tier. Detection is
+# arithmetic, never a model: a model decides what a breach *means*, never whether
+# one happened. See ops/control_band_watch.py and docs/sdlc.md.
+#
+# Tiers, applied to every metric unless it overrides them:
+#   1 sigma  log      record the sample; do nothing else
+#   2 sigma  diagnose invoke Claude read-only; it writes intent/NNNN-*/intent.md
+#   3 sigma  act      Claude may additionally open a PR or run a pre-approved runbook
+#
+# Tier 3 never reaches production on its own: .claude/hooks/deploy-gate.sh still
+# requires QOIDA_RELEASE_APPROVAL from a release manager.
+
+version: 1
+
+defaults:
+  window: 30 # samples in the rolling baseline
+  min_samples: 10 # below this, only record — a baseline of three is noise
+  consecutive_drift: 8 # Western Electric: 8 samples one side of the mean is drift
+  tiers:
+    1: log
+    2: diagnose
+    3: act
+
+metrics:
+  - id: outbox-backlog
+    description: >
+      Undelivered rows in the transactional outbox. A rising backlog means the
+      relay is not keeping up or is failing to publish; events are durable but
+      no longer timely, and nothing downstream has noticed yet.
+    direction: high # only a rise is a breach
+    unit: rows
+    runbook: docs/runbooks/outbox-not-draining.md
+    source:
+      command: >
+        psql "$QOIDA_DB_URL" -tAc
+        "select count(*) from integration.outbox_events where published_at is null"
+
+  - id: dead-letter-arrivals
+    description: >
+      Messages dead-lettered in the last interval. Each one is a decision a
+      person has to make (docs/runbooks/dead-letter-decision.md), so a spike is
+      an operational load problem as much as a correctness one.
+    direction: high
+    unit: messages
+    runbook: docs/runbooks/dead-letter-decision.md
+    source:
+      command: >
+        psql "$QOIDA_DB_URL" -tAc
+        "select count(*) from integration.dead_letters
+         where created_at > now() - interval '1 hour'"
+
+  - id: payment-callback-failures
+    description: >
+      Failed provider callbacks in the last hour. Payments migrate late and
+      deliberately; this is the metric that says whether that caution is holding.
+    direction: high
+    unit: callbacks
+    runbook: docs/runbooks/payment-callback-failing.md
+    tiers:
+      1: log
+      2: diagnose
+      3: diagnose # money: an agent diagnoses, a person always acts
+    source:
+      command: >
+        psql "$QOIDA_DB_URL" -tAc
+        "select count(*) from integration.inbox_messages
+         where status = 'FAILED' and received_at > now() - interval '1 hour'"
+
+  - id: api-5xx-rate
+    description: >
+      Server-error ratio across the API, from the metrics backend. The classic
+      post-deploy regression signal.
+    direction: high
+    unit: ratio
+    source:
+      # Replace with the real Prometheus endpoint. Any command printing one
+      # number on stdout works — that is the whole contract.
+      command: >
+        curl -sf --get "$QOIDA_PROMETHEUS_URL/api/v1/query"
+        --data-urlencode 'query=sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+        / sum(rate(http_server_requests_seconds_count[5m]))'
+        | python3 -c 'import json,sys; r=json.load(sys.stdin)["data"]["result"]; print(r[0]["value"][1] if r else 0)'
+
+  - id: ci-first-pass-rate
+    description: >
+      Share of pushes whose CI passed first time. A leading indicator for agent
+      output quality — it falls before defects start escaping to production.
+    direction: low # here a fall is the breach
+    unit: ratio
+    source:
+      command: >
+        gh run list --workflow=ci.yml --limit 50 --json conclusion
+        | python3 -c 'import json,sys; r=json.load(sys.stdin); ok=sum(1 for x in r if x["conclusion"]=="success"); print(ok/len(r) if r else 1)'

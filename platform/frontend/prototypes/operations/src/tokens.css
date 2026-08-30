@@ -1,0 +1,72 @@
+/* Qoida Design System tokens, console surface.
+   Copied verbatim from the design project rather than approximated — a prototype
+   that invents its own palette validates nothing. */
+:root {
+  --q-primary: #0f62fe;
+  --q-primary-hover: #0050e6;
+  --q-primary-active: #002d9c;
+
+  --q-ink: #161616;
+  --q-ink-muted: #525252;
+  --q-ink-subtle: #8c8c8c;
+
+  --q-canvas: #ffffff;
+  --q-surface-1: #f4f4f4;
+  --q-surface-2: #e0e0e0;
+  --q-hairline: #e0e0e0;
+
+  --q-inverse: #161616;
+  --q-inverse-ink: #ffffff;
+  --q-inverse-ink-muted: #c6c6c6;
+
+  --q-success: #24a148;
+  --q-warning: #f1c21b;   /* dot only — never text on white */
+  --q-error: #da1e28;
+
+  --q-info-tint: #edf5ff;      --q-info-text: #0043ce;
+  --q-success-tint: #defbe6;   --q-success-text: #0e6027;
+  --q-warning-tint: #fcf4d6;   --q-warning-text: #8e6a00;
+  --q-error-tint: #fff1f1;     --q-error-text: #a2191f;
+
+  --q-font-sans: 'IBM Plex Sans', system-ui, 'Helvetica Neue', Arial, sans-serif;
+  --q-font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+
+  /* Console is flat-square. This is the brand, not a preference. */
+  --q-radius: 0px;
+
+  --q-dur-fast: 110ms;
+  --q-dur-base: 150ms;
+  --q-ease-productive: cubic-bezier(0.2, 0, 0.38, 0.9);
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--q-surface-1);
+  color: var(--q-ink);
+  font-family: var(--q-font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Closed type scale. Never set a font-size inline. */
+.q-display  { font-size: 42px; font-weight: 300; line-height: 1.20; letter-spacing: -0.02em; }
+.q-headline { font-size: 32px; font-weight: 400; line-height: 1.25; }
+.q-title    { font-size: 24px; font-weight: 400; line-height: 1.33; }
+.q-subhead  { font-size: 20px; font-weight: 400; line-height: 1.40; }
+.q-body     { font-size: 16px; font-weight: 400; line-height: 1.50; letter-spacing: 0.16px; }
+.q-body-sm  { font-size: 14px; font-weight: 400; line-height: 1.29; letter-spacing: 0.16px; }
+.q-emphasis { font-size: 14px; font-weight: 600; line-height: 1.29; letter-spacing: 0.16px; }
+.q-caption  { font-size: 12px; font-weight: 400; line-height: 1.33; letter-spacing: 0.32px; }
+.q-data-lg  { font-size: 28px; font-weight: 300; line-height: 1.20; font-variant-numeric: tabular-nums; }
+.q-tnum     { font-variant-numeric: tabular-nums; }
+
+/* Only transform and opacity animate. Console table data never animates. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+button { font-family: inherit; }
+input, select, textarea { font-family: inherit; }

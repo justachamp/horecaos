@@ -1,0 +1,43 @@
+.lead {
+  color: var(--q-ink-muted);
+  margin-top: 4px;
+  max-width: 640px;
+}
+
+.panel {
+  margin-top: 24px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  padding: 24px;
+  max-width: 760px;
+}
+
+/* A one-pixel gap over the hairline colour, which is how the design system
+   draws a divided grid without giving any cell a border of its own. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1px;
+  background: var(--q-hairline);
+  border: 1px solid var(--q-hairline);
+  margin: 16px 0 0;
+}
+
+.cell {
+  background: var(--q-canvas);
+  padding: 10px 12px;
+}
+
+.label {
+  color: var(--q-ink-subtle);
+}
+
+.value {
+  color: var(--q-ink);
+  margin: 4px 0 0;
+}
+
+.note {
+  color: var(--q-ink-subtle);
+  margin-top: 12px;
+}

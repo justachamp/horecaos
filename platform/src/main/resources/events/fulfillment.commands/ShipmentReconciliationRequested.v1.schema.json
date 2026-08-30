@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.qoida.uz/events/fulfillment.commands/ShipmentReconciliationRequested.v1.schema.json",
+  "title": "ShipmentReconciliationRequested v1 payload",
+  "description": "A courier call came back UNCERTAIN and the in-route status query did not settle it. The consumer asks the partner again, later; it never repeats the original call. Identifiers only: no address, contact name, phone number, or provider body, because ADR 0029 keeps personal data off every topic and a courier command is exactly where it would otherwise leak.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operationCommandId",
+    "bindingId",
+    "brandId",
+    "providerType",
+    "capability",
+    "externalReference"
+  ],
+  "properties": {
+    "operationCommandId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "The delivery command whose outcome is unknown. Also the provider idempotency key, so a reconciliation cannot be mistaken for a fresh operation."
+    },
+    "bindingId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "The ADR 0026 binding to re-resolve. Never trusted as authority: the consumer resolves the candidate bindings for the envelope's tenant and refuses a binding that is not among them."
+    },
+    "brandId": { "type": "string", "format": "uuid" },
+    "locationId": { "type": ["string", "null"], "format": "uuid" },
+    "providerType": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "capability": {
+      "type": "string",
+      "enum": [
+        "QUOTE_DELIVERY",
+        "RESERVE_SHIPMENT",
+        "CREATE_ON_DEMAND_SHIPMENT",
+        "SCHEDULE_SHIPMENT",
+        "CONFIRM_SHIPMENT",
+        "CANCEL_SHIPMENT",
+        "QUERY_CANCELLATION_COST",
+        "QUERY_SHIPMENT",
+        "TRACK_SHIPMENT",
+        "RESCHEDULE_SHIPMENT",
+        "VERIFY_DELIVERY_WEBHOOK"
+      ],
+      "description": "The operation whose outcome is unknown, for the runbook and the metric. The reconciliation itself is always a status query."
+    },
+    "externalReference": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "The partner's own identifier for the shipment. Required: with nothing to query by there is no safe automated move, so the route escalates to a person instead of issuing this command."
+    },
+    "uncertainErrorCode": {
+      "type": ["string", "null"],
+      "maxLength": 64,
+      "description": "The classification that made this uncertain, such as READ_TIMEOUT. A code, never a provider message."
+    }
+  }
+}

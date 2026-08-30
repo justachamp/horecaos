@@ -1,0 +1,174 @@
+/* Geometry only. Every colour, font and duration is a token.
+ *
+ * The rail is 256px and the top bar 48px, matching the prototype: those two
+ * numbers set the density of everything placed inside them.
+ */
+
+:host {
+  display: flex;
+  min-height: 100%;
+}
+
+.skip {
+  position: absolute;
+  left: -9999px;
+  background: var(--q-canvas);
+  color: var(--q-primary);
+  padding: 8px 12px;
+  z-index: 20;
+}
+
+.skip:focus {
+  left: 8px;
+  top: 8px;
+}
+
+/* ── rail ─────────────────────────────────────────────────────────────── */
+
+.rail {
+  width: 256px;
+  flex-shrink: 0;
+  background: var(--q-inverse);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.rail-head {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+
+.wordmark {
+  color: var(--q-inverse-ink);
+  letter-spacing: 0.16px;
+}
+
+/* One of the four places blue is spent. A full stop, not an accent bar. */
+.dot {
+  color: var(--q-primary);
+}
+
+.rail-muted {
+  color: var(--q-inverse-ink-muted);
+}
+
+.rail-sections {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0 0;
+  margin: 0;
+  list-style: none;
+}
+
+.rail-link {
+  display: block;
+  padding: 10px 16px;
+  color: var(--q-inverse-ink-muted);
+  text-decoration: none;
+  /* A transparent border of the same width as the active one, so selecting a
+     section does not shift its label three pixels to the right. */
+  border-left: 3px solid transparent;
+  transition: background var(--q-dur-base) var(--q-ease-productive);
+}
+
+.rail-link:hover {
+  background: #262626;
+  color: var(--q-inverse-ink);
+}
+
+.rail-link.active {
+  background: #262626;
+  color: var(--q-inverse-ink);
+  border-left-color: var(--q-primary);
+}
+
+.rail-foot {
+  padding: 16px;
+  border-top: 1px solid #393939;
+  flex-shrink: 0;
+}
+
+.rail-name {
+  color: var(--q-inverse-ink);
+  margin-top: 2px;
+}
+
+.rail-action {
+  margin-top: 8px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--q-inverse-ink-muted);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.rail-action:hover {
+  color: var(--q-inverse-ink);
+}
+
+/* ── content ──────────────────────────────────────────────────────────── */
+
+.frame {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  height: 48px;
+  flex-shrink: 0;
+  background: var(--q-canvas);
+  border-bottom: 1px solid var(--q-hairline);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.locales {
+  display: flex;
+  gap: 1px;
+  background: var(--q-hairline);
+}
+
+.locale {
+  background: var(--q-canvas);
+  border: none;
+  color: var(--q-ink-muted);
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.locale.on {
+  color: var(--q-ink);
+  background: var(--q-surface-1);
+}
+
+.content {
+  flex: 1;
+  padding: 24px;
+  min-width: 0;
+}

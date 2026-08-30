@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.qoida.uz/events/ordering.events/OrderReceived.v1.schema.json",
+  "title": "OrderReceived v1 payload",
+  "description": "Emitted inside the ADR 0019 checkout transaction once the order is durable. Carries identifiers, state and totals only: no address, contact, note, or line payload.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["orderId", "status", "orderVersion", "totalMinor"],
+  "properties": {
+    "orderId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": ["string", "null"], "format": "uuid" },
+    "locationId": { "type": ["string", "null"], "format": "uuid" },
+    "channelCode": { "type": ["string", "null"], "maxLength": 32 },
+    "publicOrderNumber": { "type": ["string", "null"], "maxLength": 24 },
+    "fulfillmentMode": {
+      "type": ["string", "null"],
+      "enum": ["DELIVERY", "PICKUP", "DINE_IN", null]
+    },
+    "acceptanceMode": {
+      "type": ["string", "null"],
+      "enum": ["AUTO_CONFIRM", "RESTAURANT_APPROVAL", null]
+    },
+    "acceptancePolicyId": { "type": ["string", "null"], "format": "uuid" },
+    "acceptancePolicyVersion": { "type": "integer", "minimum": 0 },
+    "status": {
+      "type": "string",
+      "enum": [
+        "RECEIVED", "PAYMENT_AUTHORIZING", "AWAITING_APPROVAL", "PAYMENT_FAILED",
+        "CONFIRMED", "REJECTED", "EXPIRED", "PREPARING", "READY", "FULFILLING",
+        "COMPLETED", "CANCELLED"
+      ]
+    },
+    "orderVersion": { "type": "integer", "minimum": 1 },
+    "currency": { "type": ["string", "null"], "pattern": "^[A-Z]{3}$" },
+    "totalMinor": { "type": "integer", "minimum": 0 },
+    "lineCount": { "type": "integer", "minimum": 0 }
+  }
+}

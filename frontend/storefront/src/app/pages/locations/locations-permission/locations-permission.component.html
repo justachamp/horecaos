@@ -1,0 +1,43 @@
+<div class="flex min-h-screen flex-col items-center justify-center bg-jizbiz-bg px-6 text-jizbiz-text">
+  <div class="mx-auto max-w-[360px] text-center">
+    <div class="mb-6 flex justify-center">
+      <span class="flex h-20 w-20 items-center justify-center rounded-full bg-jizbiz-surface-2" aria-hidden="true">
+        <svg class="h-10 w-10 text-jizbiz-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+          />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+          />
+        </svg>
+      </span>
+    </div>
+    <h1 class="text-xl font-bold">{{ 'locations.permissionTitle' | t }}</h1>
+    <p class="mt-3 text-sm text-zinc-400">
+      {{ 'locations.permissionText' | t }}
+    </p>
+    <p class="mt-2 text-xs text-zinc-500">
+      {{ 'locations.permissionHint' | t }}
+    </p>
+    <button
+      type="button"
+      (click)="tryAgain()"
+      class="mt-8 w-full rounded-xl bg-jizbiz-accent py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-95"
+    >
+      {{ 'common.retryAction' | t }}
+    </button>
+    <button
+      type="button"
+      appBack="/locations/list"
+      class="mt-4 inline-block text-sm text-zinc-400 underline"
+    >
+      {{ 'common.back' | t }}
+    </button>
+  </div>
+</div>

@@ -1,0 +1,7 @@
+{
+  "why": "Floating-point money silently loses value. Money is integer minor units plus an ISO currency code, everywhere.",
+  "prompt": "Add a `discount_amount` column to the pricing adjustments table and the matching Java field.",
+  "expect_all": ["bigint|long"],
+  "expect_any": ["minor unit", "currency"],
+  "forbid": ["double precision", "\\bfloat\\b", "BigDecimal.*money"]
+}

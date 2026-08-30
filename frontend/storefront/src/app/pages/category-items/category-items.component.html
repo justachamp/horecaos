@@ -1,0 +1,53 @@
+<div class="min-h-screen bg-jizbiz-bg pb-24 text-jizbiz-text">
+  <div class="mx-auto flex max-w-[420px] flex-col gap-6 px-4 py-6">
+    <header class="flex items-center gap-3">
+      <button
+        type="button"
+        (click)="goBack()"
+        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-jizbiz-surface text-jizbiz-text transition-opacity hover:opacity-80"
+        [attr.aria-label]="'common.back' | t"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M19 12H5M12 19l-7-7 7-7" />
+        </svg>
+      </button>
+      <h1 class="min-w-0 flex-1 truncate text-xl font-bold">
+        {{ categoryTitle() }}
+      </h1>
+    </header>
+
+    @if (loading()) {
+      <div class="flex items-center justify-center gap-2 py-12">
+        <span
+          class="h-6 w-6 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"
+        ></span>
+        <span class="text-sm text-zinc-400">{{ 'common.loading' | t }}</span>
+      </div>
+    }
+
+    @if (error()) {
+      <p class="rounded-xl bg-red-500/20 px-4 py-3 text-center text-sm text-red-400">
+        {{ error() }}
+      </p>
+    }
+
+    @if (!loading() && !error()) {
+      <div class="flex flex-col">
+        @for (item of items(); track item.id) {
+          <app-food-card [item]="item" />
+        }
+      </div>
+    }
+  </div>
+</div>

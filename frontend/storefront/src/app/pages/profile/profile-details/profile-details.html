@@ -1,0 +1,175 @@
+<div class="min-h-screen bg-jizbiz-bg pb-24 text-jizbiz-text">
+  <div class="mx-auto max-w-[420px] px-4 py-6">
+    <header class="flex shrink-0 flex-col gap-2 pb-3">
+      <button
+        type="button"
+        appBack="/profile"
+        class="app-back flex items-center gap-2 text-sm transition-opacity hover:opacity-90"
+      >
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M15 19l-7-7 7-7"
+          />
+        </svg>
+        {{ 'common.back' | t }}
+      </button>
+      <div class="flex justify-center py-1">
+        <h1 class="text-xl font-bold text-jizbiz-text">{{ 'profile.details' | t }}</h1>
+      </div>
+    </header>
+
+    @if (loading()) {
+      <div class="flex items-center justify-center gap-2 py-12">
+        <span
+          class="h-6 w-6 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"
+        ></span>
+        <span class="text-sm text-zinc-400">{{ 'common.loading' | t }}</span>
+      </div>
+    }
+
+    @if (error()) {
+      <p class="rounded-xl bg-red-500/20 px-4 py-3 text-center text-sm text-red-400">
+        {{ error() }}
+      </p>
+    }
+
+    @if (!loading()) {
+      <form
+        class="flex flex-col gap-6"
+        (ngSubmit)="saveProfile()"
+      >
+        <!-- Avatar -->
+        <div class="flex flex-col items-center gap-3">
+          <div
+            class="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-2 border-zinc-600 bg-jizbiz-surface"
+          >
+            @if (avatarUrl()) {
+              <img
+                [src]="avatarUrl()"
+                alt="Avatar"
+                class="h-full w-full object-cover"
+                (error)="onAvatarError($event)"
+              />
+            } @else {
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="40"
+                height="40"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                class="text-zinc-500"
+              >
+                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            }
+            @if (uploadingAvatar()) {
+              <span
+                class="absolute inset-0 flex items-center justify-center bg-black/60"
+              >
+                <span
+                  class="h-8 w-8 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"
+                ></span>
+              </span>
+            }
+          </div>
+          @if (avatarAvailable) {
+            <input
+              #avatarInput
+              type="file"
+              accept="image/*"
+              class="sr-only"
+              (change)="onAvatarSelected($event)"
+            />
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                [disabled]="uploadingAvatar()"
+                (click)="avatarInput.click()"
+                class="flex items-center gap-2 rounded-lg border border-zinc-600 bg-transparent px-4 py-2 text-sm font-medium text-zinc-400 transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                {{ 'profile.uploadImage' | t }}
+              </button>
+              @if (avatarUrl()) {
+                <button
+                  type="button"
+                  [disabled]="uploadingAvatar() || removingImage()"
+                  (click)="removeAvatar()"
+                  class="flex items-center gap-2 rounded-lg border border-zinc-600 bg-transparent px-4 py-2 text-sm font-medium text-zinc-400 transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 6h18"/>
+                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                    <line x1="10" y1="11" x2="10" y2="17"/>
+                    <line x1="14" y1="11" x2="14" y2="17"/>
+                  </svg>
+                  {{ 'profile.removeImage' | t }}
+                </button>
+              }
+            </div>
+          }
+        </div>
+
+        <!-- Form fields -->
+        <div class="flex flex-col gap-4">
+          <div>
+            <label for="firstName" class="mb-1 block text-sm font-medium text-zinc-400">
+              {{ 'profile.firstName' | t }}
+            </label>
+            <input
+              id="firstName"
+              type="text"
+              [ngModel]="firstName()"
+              (ngModelChange)="onFirstNameChange($event)"
+              name="firstName"
+              class="w-full rounded-xl border border-zinc-500 bg-jizbiz-surface-2 px-4 py-3 text-jizbiz-text placeholder:text-zinc-500 focus:border-jizbiz-accent focus:outline-none focus:ring-2 focus:ring-jizbiz-accent"
+              [placeholder]="'profile.firstNamePlaceholder' | t"
+            />
+          </div>
+          <div>
+            <label for="lastName" class="mb-1 block text-sm font-medium text-zinc-400">
+              {{ 'profile.lastName' | t }}
+            </label>
+            <input
+              id="lastName"
+              type="text"
+              [ngModel]="lastName()"
+              (ngModelChange)="onLastNameChange($event)"
+              name="lastName"
+              class="w-full rounded-xl border border-zinc-500 bg-jizbiz-surface-2 px-4 py-3 text-jizbiz-text placeholder:text-zinc-500 focus:border-jizbiz-accent focus:outline-none focus:ring-2 focus:ring-jizbiz-accent"
+              [placeholder]="'profile.lastNamePlaceholder' | t"
+            />
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          [disabled]="saving()"
+          class="w-full rounded-xl bg-jizbiz-accent py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          @if (saving()) {
+            <span class="inline-flex items-center justify-center gap-2">
+              <span
+                class="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"
+              ></span>
+              {{ 'common.saving' | t }}
+            </span>
+          } @else {
+            {{ 'common.save' | t }}
+          }
+        </button>
+      </form>
+    }
+  </div>
+</div>

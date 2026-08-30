@@ -1,0 +1,114 @@
+<ul class="divide-y divide-zinc-700/80">
+  @for (item of items(); track item.id) {
+    <li>
+      @if (item.isTheme) {
+        <div class="flex w-full items-center gap-4 py-4">
+          <span class="flex h-6 w-6 shrink-0 items-center justify-center text-jizbiz-accent" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="4"/>
+              <path d="M12 2v2"/>
+              <path d="M12 20v2"/>
+              <path d="m4.93 4.93 1.41 1.41"/>
+              <path d="m17.66 17.66 1.41 1.41"/>
+              <path d="M2 12h2"/>
+              <path d="M20 12h2"/>
+              <path d="m6.34 17.66-1.41 1.41"/>
+              <path d="m19.07 4.93-1.41 1.41"/>
+            </svg>
+          </span>
+          <span class="min-w-0 flex-1 font-medium text-jizbiz-text">{{ item.labelKey | t }}</span>
+          <div
+            class="inline-flex shrink-0 rounded-full bg-jizbiz-surface-2 p-0.5 ring-1 ring-jizbiz-border"
+            role="group"
+            [attr.aria-label]="'profile.theme' | t"
+          >
+            <button
+              type="button"
+              class="flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-jizbiz-muted transition-colors"
+              [class.bg-jizbiz-accent]="theme.mode() === 'light'"
+              [class.text-white]="theme.mode() === 'light'"
+              [attr.aria-pressed]="theme.mode() === 'light'"
+              (click)="setTheme('light')"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="4"/>
+                <path d="M12 2v2"/>
+                <path d="M12 20v2"/>
+                <path d="m4.93 4.93 1.41 1.41"/>
+                <path d="m17.66 17.66 1.41 1.41"/>
+                <path d="M2 12h2"/>
+                <path d="M20 12h2"/>
+                <path d="m6.34 17.66-1.41 1.41"/>
+                <path d="m19.07 4.93-1.41 1.41"/>
+              </svg>
+              {{ 'profile.themeLight' | t }}
+            </button>
+            <button
+              type="button"
+              class="flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-jizbiz-muted transition-colors"
+              [class.bg-jizbiz-accent]="theme.mode() === 'dark'"
+              [class.text-white]="theme.mode() === 'dark'"
+              [attr.aria-pressed]="theme.mode() === 'dark'"
+              (click)="setTheme('dark')"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+              </svg>
+              {{ 'profile.themeDark' | t }}
+            </button>
+          </div>
+        </div>
+      } @else if (item.isLogout) {
+        <button
+          type="button"
+          class="flex w-full items-center gap-4 py-4 text-left text-jizbiz-text transition-opacity hover:opacity-90"
+          (click)="onLogout()"
+        >
+          <span class="flex h-6 w-6 shrink-0 items-center justify-center text-jizbiz-accent">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          </span>
+          <span class="flex-1 font-medium">{{ item.labelKey | t }}</span>
+        </button>
+      } @else {
+        <a
+          [routerLink]="item.route"
+          class="flex w-full items-center gap-4 py-4 text-left text-jizbiz-text transition-opacity hover:opacity-90"
+        >
+          <span class="flex h-6 w-6 shrink-0 items-center justify-center text-jizbiz-accent">
+            @switch (item.id) {
+              @case ('details') {
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              }
+              @case ('payment') {
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+              }
+              @case ('favorites') {
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+              }
+              @case ('locations') {
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+              }
+              @case ('language') {
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              }
+              @case ('faq') {
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z"/></svg>
+              }
+              @case ('support') {
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+              }
+              @case ('invite') {
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              }
+            }
+          </span>
+          <span class="flex-1 font-medium">{{ item.labelKey | t }}</span>
+          @if (item.value) {
+            <span class="text-sm text-jizbiz-text">{{ item.value }}</span>
+          }
+          <span class="text-zinc-400">›</span>
+        </a>
+      }
+    </li>
+  }
+</ul>

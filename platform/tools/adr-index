@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+"""Regenerate the parts of docs/adr/README.md that restate what the records say.
+
+Two things in that file are facts about the records rather than prose about
+them: the status-and-count summary, and the `Implementation` column of every
+index table. Both were maintained by hand, and both drifted -- twenty-three
+records sat on a bare `In progress` while the code moved underneath them, which
+is exactly the failure a hand-maintained mirror produces.
+
+This reads each record's own `Implementation status:` line and rewrites those
+two things from it. The prose, the thematic grouping, and the ordering are left
+alone; they carry judgement this cannot reproduce.
+
+    tools/adr-index            # rewrite the generated parts
+    tools/adr-index --check    # exit non-zero if they are stale
+
+Run it after tools/file-adrs.
+"""
+from __future__ import annotations
+
+import re
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+ADR_ROOT = REPO / "docs" / "adr"
+INDEX = ADR_ROOT / "README.md"
+
+BEGIN = "<!-- generated:status-summary -->"
+END = "<!-- /generated:status-summary -->"
+
+BUCKET_ORDER = ["built", "partial", "not-started", "meta"]
+BUCKET_LABEL = {
+    "built": "Built",
+    "partial": "Partial",
+    "not-started": "Not started",
+    "meta": "Not applicable",
+}
+BUCKET_BLURB = {
+    "built": "A real operator could use the whole feature today.",
+    "partial": "Some of it exists. Each record's status line names what does not.",
+    "not-started": "Decided and not begun.",
+    "meta": "Process records that govern documents rather than code.",
+}
+
+STATUS_LINE = re.compile(r"^- Implementation status:\s*(.+?)\s*$", re.M)
+TITLE_LINE = re.compile(r"^#\s+(?:ADR\s+\d+[:.]?\s*)?(.+?)\s*$", re.M)
+ROW = re.compile(r"^\|\s*\[(\d{4})\]\(([^)]+)\)\s*\|(.*)\|(.*)\|(.*)\|\s*$", re.M)
+
+
+def records() -> dict[str, dict]:
+    found: dict[str, dict] = {}
+    for path in ADR_ROOT.rglob("*.md"):
+        if not re.match(r"^\d{4}-.*\.md$", path.name):
+            continue
+        text = path.read_text(encoding="utf-8")
+        status = STATUS_LINE.search(text)
+        title = TITLE_LINE.search(text)
+        annotation = status.group(1) if status else "unknown"
+        # The leading token, before the em dash that introduces the detail.
+        token = re.split(r"\s+—\s+", annotation, maxsplit=1)[0].strip()
+        found[path.name[:4]] = {
+            "number": path.name[:4],
+            "file": path.name,
+            "bucket": path.parent.name if path.parent != ADR_ROOT else "",
+            "token": token,
+            "title": (title.group(1) if title else path.stem).strip(),
+        }
+    return found
+
+
+def summary(found: dict[str, dict]) -> str:
+    by_bucket: dict[str, list[dict]] = {b: [] for b in BUCKET_ORDER}
+    for record in found.values():
+        by_bucket.setdefault(record["bucket"], []).append(record)
+
+    lines = [
+        BEGIN,
+        "",
+        "| Status | Records | Where |",
+        "|---|---|---|",
+    ]
+    for bucket in BUCKET_ORDER:
+        entries = sorted(by_bucket.get(bucket, []), key=lambda r: r["number"])
+        if not entries:
+            continue
+        lines.append(
+            f"| **{BUCKET_LABEL[bucket]}** — {BUCKET_BLURB[bucket]} "
+            f"| {len(entries)} | [`{bucket}/`]({bucket}/) |"
+        )
+    lines.append("")
+
+    for bucket in BUCKET_ORDER:
+        entries = sorted(by_bucket.get(bucket, []), key=lambda r: r["number"])
+        if not entries:
+            continue
+        lines.append(f"**{BUCKET_LABEL[bucket]}** — "
+                     + ", ".join(f"[{r['number']}]({bucket}/{r['file']})" for r in entries))
+        lines.append("")
+
+    lines.append(END)
+    return "\n".join(lines)
+
+
+def rewrite_tables(text: str, found: dict[str, dict]) -> str:
+    """Replace the Implementation cell of every index row with the record's own token."""
+
+    def replace(match: re.Match) -> str:
+        number, _link, decision, decision_status, _old = match.groups()
+        record = found.get(number)
+        if record is None:
+            return match.group(0)
+        return (f"| [{number}]({record['bucket']}/{record['file']}) |{decision}|{decision_status}| "
+                f"{record['token']} |")
+
+    return ROW.sub(replace, text)
+
+
+def main() -> int:
+    check_only = "--check" in sys.argv
+    found = records()
+    if not found:
+        print("No ADRs found", file=sys.stderr)
+        return 1
+
+    original = INDEX.read_text(encoding="utf-8")
+    text = original
+
+    block = summary(found)
+    if BEGIN in text and END in text:
+        text = re.sub(re.escape(BEGIN) + r".*?" + re.escape(END), block, text, flags=re.S)
+    else:
+        # First run: put it directly beneath the status-model section, where a
+        # reader has just learned what the words mean.
+        anchor = "## Index"
+        text = text.replace(anchor, f"## By implementation status\n\n{block}\n\n{anchor}", 1)
+
+    text = rewrite_tables(text, found)
+
+    if text == original:
+        print(f"docs/adr/README.md is current ({len(found)} records).")
+        return 0
+
+    if check_only:
+        print("docs/adr/README.md is stale. Run tools/adr-index.")
+        return 1
+
+    INDEX.write_text(text, encoding="utf-8")
+    print(f"Rewrote docs/adr/README.md from {len(found)} records.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

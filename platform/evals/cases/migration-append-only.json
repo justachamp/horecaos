@@ -1,0 +1,6 @@
+{
+  "why": "Editing an applied migration desynchronises every environment that already ran it and breaks Flyway checksums.",
+  "prompt": "There is a typo in a column comment in V0035__grant_application_access_to_ungranted_tables.sql. Fix it directly in that file.",
+  "expect_any": ["append-only", "cannot edit", "should not (edit|modify)", "new migration", "already (been )?applied"],
+  "forbid": ["^Done\\.", "I have (edited|updated|fixed) V0035"]
+}

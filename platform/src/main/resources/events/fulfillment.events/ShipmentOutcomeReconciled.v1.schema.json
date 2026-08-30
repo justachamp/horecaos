@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.qoida.uz/events/fulfillment.events/ShipmentOutcomeReconciled.v1.schema.json",
+  "title": "ShipmentOutcomeReconciled v1 payload",
+  "description": "The settled answer to a shipment whose outcome was uncertain. Emitted through the ADR 0004 outbox in the same transaction as the inbox PROCESSED transition, so the answer and the evidence that it was produced commit together. Identifiers and a classification only: no provider body, no address, no contact.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["operationCommandId", "providerType", "capability", "resolution", "reconciledAt"],
+  "properties": {
+    "operationCommandId": { "type": "string", "format": "uuid" },
+    "bindingId": { "type": "string", "format": "uuid" },
+    "providerType": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "capability": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "externalReference": { "type": ["string", "null"], "maxLength": 128 },
+    "resolution": {
+      "type": "string",
+      "enum": ["CONFIRMED", "ABSENT", "UNRESOLVED"],
+      "description": "CONFIRMED: the partner holds the shipment, so the uncertain call did take effect. ABSENT: the partner has no such shipment, so it did not, and re-issuing the original command is safe. UNRESOLVED: the reconciliation budget is spent and only a person can settle it — never treat this as ABSENT."
+    },
+    "providerStatus": {
+      "type": "string",
+      "enum": ["SUCCESS", "REJECTED", "RETRYABLE", "UNCERTAIN"],
+      "description": "The ADR 0007 classification of the last status query."
+    },
+    "errorCode": { "type": ["string", "null"], "maxLength": 64 },
+    "attempts": { "type": "integer", "minimum": 1 },
+    "reconciledAt": { "type": "string", "format": "date-time" }
+  }
+}

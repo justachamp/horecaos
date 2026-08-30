@@ -1,0 +1,79 @@
+<div class="min-h-screen bg-jizbiz-bg pb-24 text-jizbiz-text">
+  <div class="mx-auto max-w-[420px] px-4 py-6">
+    <header class="flex shrink-0 flex-col gap-2 pb-3">
+      <button
+        type="button"
+        appBack="/profile"
+        class="app-back flex items-center gap-2 text-sm transition-opacity hover:opacity-90"
+      >
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+        Orqaga
+      </button>
+      <div class="relative flex items-center justify-center py-1">
+        <h1 class="text-xl font-bold text-jizbiz-text">FAQ</h1>
+      </div>
+    </header>
+
+    @if (loading()) {
+      <div class="flex items-center justify-center gap-2 py-12">
+        <span
+          class="h-6 w-6 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"
+        ></span>
+        <span class="text-sm text-zinc-400">Yuklanmoqda...</span>
+      </div>
+    }
+
+    @if (error()) {
+      <p class="rounded-xl bg-red-500/20 px-4 py-3 text-center text-sm text-red-400">
+        {{ error() }}
+      </p>
+    }
+
+    @if (!loading() && !error() && categories().length === 0) {
+      <p class="py-8 text-center text-sm text-zinc-400">
+        Savollar hozircha mavjud emas.
+      </p>
+    }
+
+    @if (!loading() && !error() && categories().length > 0) {
+      <div class="space-y-6">
+        @for (category of categories(); track category.id) {
+          <section>
+            <h2 class="mb-3 text-base font-semibold text-jizbiz-accent">{{ category.name }}</h2>
+            <ul class="divide-y divide-zinc-700/80">
+              @for (item of category.items; track item.id) {
+                <li>
+                  <button
+                    type="button"
+                    (click)="toggle(item)"
+                    class="flex w-full items-start justify-between gap-3 py-4 text-left text-jizbiz-text transition-opacity hover:opacity-90"
+                  >
+                    <span class="flex-1 font-medium">{{ item.question }}</span>
+                    <span class="shrink-0 text-jizbiz-accent">
+                      @if (isExpanded(item)) {
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                        </svg>
+                      } @else {
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      }
+                    </span>
+                  </button>
+                  @if (isExpanded(item) && item.answer) {
+                    <div class="pb-4 pl-0 pr-8 text-sm text-zinc-400">
+                      {{ item.answer }}
+                    </div>
+                  }
+                </li>
+              }
+            </ul>
+          </section>
+        }
+      </div>
+    }
+  </div>
+</div>

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.qoida.uz/events/tenancy.events/BrandCreated.v1.schema.json",
+  "title": "BrandCreated v1 payload",
+  "description": "Emitted after a brand is created under a tenant. Carries no personal data.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["brandId", "status"],
+  "properties": {
+    "brandId": { "type": "string", "format": "uuid" },
+    "code": { "type": ["string", "null"], "pattern": "^[A-Z0-9][A-Z0-9_-]{0,31}$" },
+    "slug": { "type": ["string", "null"], "maxLength": 63 },
+    "displayName": { "type": ["string", "null"], "maxLength": 255 },
+    "status": {
+      "type": "string",
+      "enum": ["DRAFT", "ACTIVE", "SUSPENDED", "ARCHIVED"]
+    }
+  }
+}

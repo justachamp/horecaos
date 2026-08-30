@@ -1,0 +1,42 @@
+<div class="flex min-h-screen min-w-0 flex-col items-center bg-jizbiz-bg text-jizbiz-text">
+  <header class="flex w-full max-w-[420px] shrink-0 items-start justify-between gap-2 bg-jizbiz-bg px-4 py-4">
+    <div class="mx-auto flex w-full max-w-[420px] items-start justify-between gap-2">
+      <button
+        type="button"
+        (click)="close()"
+        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-jizbiz-text transition-colors hover:bg-white/10"
+        [attr.aria-label]="'common.back' | t"
+      >
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+      <div class="flex min-w-0 flex-1 flex-col items-center justify-center gap-1 overflow-visible text-center">
+        <h1 class="text-lg font-bold">{{ 'cart.title' | t }}</h1>
+        <p class="min-w-0 text-xs text-zinc-400">
+          <span>{{ deliveryTime }}</span>
+          <span class="mx-1.5 inline-block h-1 w-1 shrink-0 rounded-full bg-jizbiz-accent"></span>
+          <span>{{ deliveryPartner }}</span>
+        </p>
+      </div>
+      <button
+        type="button"
+        (click)="clearCart()"
+        [attr.aria-disabled]="items.length === 0"
+        [disabled]="items.length === 0"
+        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-jizbiz-text transition-colors hover:bg-white/10 disabled:opacity-40"
+        [attr.aria-label]="'cart.clearCart' | t"
+      >
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="flex min-h-0 w-full max-w-[420px] flex-1 flex-col px-4 pb-4">
+    <div class="flex min-h-0 w-full flex-1 flex-col">
+      <router-outlet></router-outlet>
+    </div>
+  </div>
+</div>

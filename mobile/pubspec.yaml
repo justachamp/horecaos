@@ -1,0 +1,48 @@
+name: qoida_mobile
+description: The Qoida customer ordering application for iOS and Android.
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.0
+  flutter: ">=3.47.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # flutter_localizations pins intl to one exact version. A caret range here
+  # fights that pin and fails resolution rather than picking a compatible
+  # version, so the constraint is deliberately open and the pin is the
+  # authority. Verified current release at the time of writing: 0.20.3.
+  intl: any
+
+  go_router: ^17.5.0
+  http: ^1.6.0
+  crypto: ^3.0.7
+  uuid: ^4.6.0
+
+  # The refresh token only, per ADR 0035. The access token never leaves memory.
+  flutter_secure_storage: ^11.0.0
+
+  # Opens the Keycloak authorization endpoint in the system browser
+  # (ASWebAuthenticationSession / Custom Tabs) and returns the redirect. A
+  # WebView would put the customer's Keycloak password inside our own process.
+  flutter_web_auth_2: ^5.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  # Enables gen_l10n, configured by l10n.yaml.
+  generate: true
+
+  # IBM Plex Sans is not committed here: see assets/fonts/README.md for the
+  # faces to add and the block to paste back. Declaring an asset that is absent
+  # fails the build, so the declaration lands in the same commit as the files.

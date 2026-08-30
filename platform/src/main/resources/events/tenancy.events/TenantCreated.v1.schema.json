@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.qoida.uz/events/tenancy.events/TenantCreated.v1.schema.json",
+  "title": "TenantCreated v1 payload",
+  "description": "Emitted after a tenant is created in the control plane. Carries no personal data.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tenantId", "status", "customerIdentityMode"],
+  "properties": {
+    "tenantId": { "type": "string", "format": "uuid" },
+    "slug": { "type": ["string", "null"], "maxLength": 63 },
+    "legalName": { "type": ["string", "null"], "maxLength": 255 },
+    "displayName": { "type": ["string", "null"], "maxLength": 255 },
+    "defaultCurrency": { "type": ["string", "null"], "pattern": "^[A-Z]{3}$" },
+    "defaultTimezone": { "type": ["string", "null"], "maxLength": 64 },
+    "status": {
+      "type": "string",
+      "enum": ["PROVISIONING", "ACTIVE", "SUSPENDED", "ARCHIVED"]
+    },
+    "customerIdentityMode": {
+      "type": "string",
+      "enum": ["TENANT_SHARED", "BRAND_ISOLATED"]
+    }
+  }
+}

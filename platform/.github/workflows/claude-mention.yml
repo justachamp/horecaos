@@ -1,0 +1,40 @@
+name: Claude mention
+
+# Tag @claude on an issue, a PR comment, or a review comment and Claude picks up
+# the work — usually "address this review finding", which it pushes to the branch.
+# You still own the merge.
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+  issues:
+    types: [opened, assigned]
+
+jobs:
+  respond:
+    name: Respond to @claude
+    if: |
+      contains(github.event.comment.body, '@claude') ||
+      contains(github.event.review.body, '@claude') ||
+      contains(github.event.issue.body, '@claude')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: |
+            --allowedTools "Read,Grep,Glob,Edit,Write,Bash(make lint),Bash(make verify),Bash(./mvnw:*),Bash(git diff:*),Bash(git log:*),Bash(python3 tools/checks/repo_hygiene.py)"

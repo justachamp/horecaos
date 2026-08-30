@@ -1,0 +1,36 @@
+<div class="min-h-screen bg-jizbiz-bg pb-24 text-jizbiz-text">
+  <div class="mx-auto max-w-[420px] px-4 py-6">
+    <header class="flex shrink-0 flex-col gap-2 pb-3">
+      <button
+        type="button"
+        appBack="/profile"
+        class="app-back flex items-center gap-2 text-sm transition-opacity hover:opacity-90"
+      >
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+        {{ 'common.back' | t }}
+      </button>
+      <h1 class="text-center text-xl font-bold text-jizbiz-text">{{ 'profile.favorites' | t }}</h1>
+    </header>
+
+    @if (loading()) {
+      <div class="flex items-center justify-center gap-2 py-12">
+        <span class="h-6 w-6 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"></span>
+        <span class="text-sm text-zinc-400">{{ 'common.loading' | t }}</span>
+      </div>
+    } @else if (error()) {
+      <p class="rounded-xl bg-red-500/20 px-4 py-3 text-center text-sm text-red-400">
+        {{ error() }}
+      </p>
+    } @else if (favorites().length === 0) {
+      <p class="py-8 text-center text-sm text-zinc-400">{{ 'profile.favoritesEmpty' | t }}</p>
+    } @else {
+      <div class="flex flex-col">
+        @for (item of favorites(); track item.id) {
+          <app-food-card [item]="item" />
+        }
+      </div>
+    }
+  </div>
+</div>

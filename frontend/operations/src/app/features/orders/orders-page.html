@@ -1,0 +1,20 @@
+<div class="orders" [class.orders--docked]="docked()">
+  <section class="queue" [attr.aria-label]="'orders.title' | t">
+    <header class="queue__head">
+      <h1 class="q-subhead">{{ 'orders.title' | t }}</h1>
+    </header>
+
+    <!-- The queue table goes here. It scrolls its own body under this fixed
+         header; the pane, not the page, is what scrolls. -->
+    <div class="queue__body" data-testid="queue-body"></div>
+  </section>
+
+  <!-- The dock. Collapsed to zero width by CSS while no detail route is active,
+       so an empty dock never takes width from the queue. The outlet itself stays
+       mounted rather than being wrapped in a @if: an outlet that is created and
+       destroyed cannot report its own activation, which is what drives the
+       layout. -->
+  <aside class="dock" data-testid="order-dock" [attr.aria-hidden]="docked() ? null : 'true'">
+    <router-outlet (activate)="docked.set(true)" (deactivate)="docked.set(false)" />
+  </aside>
+</div>

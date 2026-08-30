@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.qoida.uz/events/media.events/MediaAssetAvailable.v1.schema.json",
+  "title": "MediaAssetAvailable v1 payload",
+  "description": "Emitted after an upload is verified against the object store and becomes displayable (ADR 0010). Carries identifiers and verified technical facts. Deliberately has no object key, no signed URL and no original filename: the key and the URL are read capabilities, and the filename is text a customer typed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["assetId", "ownerScope", "ownerId", "visibility", "contentType", "sizeBytes", "widthPx", "heightPx"],
+  "properties": {
+    "assetId": { "type": "string", "format": "uuid" },
+    "ownerScope": { "type": "string", "enum": ["TENANT", "BRAND", "LOCATION"] },
+    "ownerId": { "type": "string", "format": "uuid" },
+    "visibility": { "type": "string", "enum": ["PUBLIC", "PRIVATE"] },
+    "contentType": {
+      "type": "string",
+      "description": "What the stored image's own header says, not what the client declared.",
+      "enum": ["image/jpeg", "image/png", "image/webp", "image/avif"]
+    },
+    "sizeBytes": { "type": "integer", "minimum": 1 },
+    "widthPx": { "type": "integer", "minimum": 1 },
+    "heightPx": { "type": "integer", "minimum": 1 }
+  }
+}

@@ -1,0 +1,12 @@
+:host {
+  display: block;
+}
+
+/* Uzbek terms content - formatted legal document */
+.terms-uz-content {
+  a {
+    color: var(--jizbiz-accent);
+    text-decoration: underline;
+    word-break: break-all;
+  }
+}

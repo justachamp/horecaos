@@ -1,0 +1,892 @@
+# Qoida Platform — production stack for the colocated server in Uzbekistan.
+#
+# Why this file is named `compose.production.yaml`
+# ------------------------------------------------
+# `docker compose` with no `-f` reads `compose.yaml` and, if present,
+# `compose.override.yaml`. Nothing else is picked up automatically. Naming this
+# file so that it can only be reached by typing `-f compose.production.yaml`
+# is the point: production must be an explicit act, never a default.
+#
+# It is also NOT an override of `compose.yaml`. An override would inherit the
+# development file's environment blocks, and the placeholder credentials in
+# there are deliberately worthless — a production stack that inherited them
+# would start, look healthy, and be wrong. This file stands alone and shares no
+# line with the development one, so nothing can leak across.
+#
+# `name:` differs from the development stack's, so the two can never collide on
+# a volume, a network, or a container name if both are ever brought up on the
+# same machine.
+#
+# What this file enforces
+# -----------------------
+#   restart policies      every long-running service comes back by itself
+#   health checks         every service, including the ones dependents wait on
+#   dependency ordering   `service_healthy`, not `service_started`, wherever the
+#                         dependent would misbehave against a half-started one
+#   resource limits       one runaway container cannot take the host with it
+#   log rotation          see the note on the logging anchor below
+#   no published ports    except 80/443 on the edge; the database, Kafka, MinIO
+#                         and OpenBao are not reachable from outside the host
+#   no baked credentials  every secret arrives at runtime; see `secrets:` below
+#
+# Usage is in docs/runbooks/deploy.md. Do not improvise against this file.
+
+name: qoida-production
+
+
+# Log rotation is not a detail on this topology. There is one machine and one
+# disk. An unbounded container log fills that disk, and a full disk stops
+# PostgreSQL from writing WAL, stops the backup job from staging a dump, and
+# stops Docker from starting a replacement container — an outage with nothing to
+# fail over to and no room left to fix it in.
+#
+# 20 MB x 5 files x ~12 services is a hard ceiling of roughly 1.2 GB for all
+# container logs combined, which is a number that can be reasoned about when
+# sizing the disk. `compress` applies to the rotated files, not the live one.
+#
+# This is per-container and deliberately does not rely on the daemon-wide
+# default in /etc/docker/daemon.json: that file is not in this repository, and a
+# reinstalled host would silently lose the setting.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+    compress: "true"
+
+# Applied to everything except the two PostgreSQL services. Dropping all
+# capabilities and forbidding privilege escalation costs nothing for a process
+# that never binds a low port, changes uid, or loads a module — but the
+# PostgreSQL image does change uid, with gosu, before it has written a byte, and
+# CAP_SETUID/CAP_SETGID are exactly what gosu needs. Both databases therefore
+# keep no-new-privileges and their capabilities, declared inline rather than
+# through this anchor so the exception is visible where it applies.
+x-hardening: &hardening
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Edge
+  # ---------------------------------------------------------------------------
+
+  edge:
+    # The only service with a published port. Everything else is reachable only
+    # from inside the compose networks, which is what makes it defensible to run
+    # PostgreSQL, Kafka, MinIO and OpenBao without TLS between them.
+    image: caddy:2.10-alpine
+    <<: *hardening
+    restart: unless-stopped
+    cap_add:
+      # Binding 80 and 443. This is the one place a capability is actually
+      # needed, and it is added back on its own rather than by running as root.
+      - NET_BIND_SERVICE
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      QOIDA_API_ORIGIN: ${QOIDA_API_ORIGIN:?set the public API origin, for example https://api.qoida.uz}
+      QOIDA_AUTH_ORIGIN: ${QOIDA_AUTH_ORIGIN:?set the public auth origin, for example https://auth.qoida.uz}
+      QOIDA_ACME_EMAIL: ${QOIDA_ACME_EMAIL:?set the address ACME certificate expiry notices should go to}
+    volumes:
+      - ./infra/production/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - edge-data:/data
+      - edge-config:/config
+    networks:
+      public:
+        aliases:
+          # The application validates JWTs against the *public* issuer URL, so it
+          # has to resolve the auth hostname. Sending that request out to the
+          # public IP and back in relies on the colocation provider's router
+          # hairpinning NAT, which many do not. These aliases make the hostname
+          # resolve to this container from inside Docker, so the request never
+          # leaves the host and never depends on the network doing something
+          # clever. TLS still verifies, because Caddy is serving the real
+          # certificate for that name.
+          - ${QOIDA_API_HOSTNAME:?set the API hostname without a scheme}
+          - ${QOIDA_AUTH_HOSTNAME:?set the auth hostname without a scheme}
+          # Same reasoning for media: the application signs URLs against the
+          # public media origin, and it also talks to that origin itself. The
+          # alias keeps its own traffic inside the host.
+          - ${QOIDA_MEDIA_HOSTNAME:?set the media hostname without a scheme}
+      # A third network, holding exactly this container and MinIO. The edge has
+      # to reach the object store to serve presigned URLs, and neither of the
+      # two obvious ways to arrange that is acceptable: putting MinIO on `public`
+      # gives the store that holds the backups a route to the internet, and
+      # putting the edge on `core` gives the one internet-facing process a path
+      # to PostgreSQL, Kafka and OpenBao. This link is `internal: true` and has
+      # two members.
+      media: {}
+    # No `depends_on`, and that is the ordering decision rather than an omission.
+    # The edge comes up first and answers 502 while its upstreams are still
+    # starting, which is a far more useful signal to an operator and to the
+    # external uptime check than a refused connection from a host that looks
+    # switched off.
+    #
+    # It also has to be first, because the application resolves the auth hostname
+    # through this container's network alias while validating the token issuer at
+    # startup. Starting the edge after the application would make every first
+    # boot fail and recover on the restart — a crash loop on every deploy, which
+    # is exactly the signal an operator must never be trained to ignore.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:2019/config/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    labels:
+      autoheal: "true"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+
+  # ---------------------------------------------------------------------------
+  # Application
+  # ---------------------------------------------------------------------------
+
+  platform-app:
+    # Built from the repository root Dockerfile. `image:` is set as well so that
+    # a build produces a tagged, referable artifact rather than a dangling id —
+    # the rollback procedure names a tag.
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        GIT_SHA: ${QOIDA_GIT_SHA:-unknown}
+    image: qoida/platform:${QOIDA_IMAGE_TAG:?set the release tag, normally the short git sha}
+    <<: *hardening
+    restart: unless-stopped
+    # Nothing writes to the image. A compromised process cannot drop a binary
+    # anywhere it could later execute, and an accidental write fails loudly in
+    # testing rather than filling the disk in production.
+    read_only: true
+    tmpfs:
+      # Heap dumps land here on OutOfMemoryError, which is why it is sized rather
+      # than left to default to half of RAM.
+      - /tmp:size=512m,mode=1777
+    environment:
+      # ADR 0023: the migration job owns schema changes, not the application.
+      # Flyway on every replica during a deploy is a race with no lock behind it,
+      # and even on a single-replica deployment it means a rollback to an older
+      # image cannot start without first arguing with the schema history.
+      SPRING_FLYWAY_ENABLED: "false"
+      SPRING_PROFILES_ACTIVE: production
+      QOIDA_ENVIRONMENT: production
+
+      QOIDA_DB_URL: jdbc:postgresql://platform-db:5432/qoida
+      QOIDA_DB_USERNAME: qoida_app
+      # QOIDA_DB_PASSWORD is absent on purpose. It arrives from the OpenBao agent
+      # through /run/bao/qoida.env at container start. See infra/openbao/agent.hcl.
+      QOIDA_DB_MAX_POOL_SIZE: ${QOIDA_DB_MAX_POOL_SIZE:-20}
+      QOIDA_DB_MIN_IDLE: ${QOIDA_DB_MIN_IDLE:-4}
+
+      QOIDA_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+
+      QOIDA_OIDC_ISSUER_URI: ${QOIDA_AUTH_ORIGIN}/realms/qoida
+      QOIDA_OIDC_AUDIENCE: qoida-api
+      QOIDA_KEYCLOAK_BASE_URL: http://keycloak:8080
+      QOIDA_KEYCLOAK_REALM: qoida
+
+      QOIDA_SECRETS_PROVIDER: openbao
+      QOIDA_OPENBAO_URL: http://openbao:8200
+      QOIDA_OPENBAO_MOUNT: qoida
+
+      # The public origin, not `http://minio:9000`. This endpoint is what the
+      # presigner signs against, and a presigned URL is handed to a browser: an
+      # internal Docker hostname does not resolve on a phone, and `http` would
+      # put the signature, the object key and the response on the wire in clear
+      # text on whatever café network the customer is using.
+      #
+      # The SDK's own server-side calls use the same value, because the presigner
+      # takes one endpoint and a signature computed for one host is not valid for
+      # another. Those calls do not leave the machine: the media hostname is an
+      # alias for the edge container on this network, exactly as the API and auth
+      # hostnames are. Caddy needs a site block for this origin — see
+      # docs/runbooks/deploy.md, "The media origin".
+      QOIDA_MEDIA_ENDPOINT: ${QOIDA_MEDIA_ORIGIN:?set the public media origin, for example https://media.qoida.uz}
+      QOIDA_MEDIA_BUCKET: ${QOIDA_MEDIA_BUCKET:-qoida-media}
+      QOIDA_MEDIA_REGION: ${QOIDA_MEDIA_REGION:-us-east-1}
+      # References, never values. The credentials behind these live in OpenBao
+      # and are fetched at call time, so rotating them needs no restart.
+      QOIDA_MEDIA_ACCESS_KEY_REF: qoida:production:object_storage:platform:media-access-key
+      QOIDA_MEDIA_SECRET_KEY_REF: qoida:production:object_storage:platform:media-secret-key
+
+      # A public OpenAPI document on a production host is a free map of every
+      # endpoint and parameter for anyone scanning. The contract is published
+      # from CI to the frontend repositories instead.
+      QOIDA_API_DOCS_ENABLED: "false"
+      QOIDA_SWAGGER_UI_ENABLED: "false"
+
+      TZ: Asia/Tashkent
+    volumes:
+      - bao-runtime:/run/bao:ro
+    networks:
+      # `public` is not about being published — nothing here is. It is the
+      # network that has a route out, which this container needs for POS,
+      # payment, and delivery provider calls. The `core` network has no route
+      # out at all, which is why PostgreSQL and Kafka sit only on that one.
+      - public
+      - core
+    depends_on:
+      platform-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      edge:
+        # Not a typo and not a cycle. The application validates the token issuer
+        # against the public auth URL at startup, and that hostname resolves to
+        # the edge container through a network alias. Without the edge running,
+        # the very first startup fails on issuer discovery.
+        condition: service_started
+      openbao-agent:
+        # The strictest of the five. Starting before the agent has rendered a
+        # token means the container waits and then exits, and a crash loop during
+        # every deploy would train an operator to ignore crash loops.
+        condition: service_healthy
+    labels:
+      autoheal: "true"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  platform-migrate:
+    # ADR 0023's one-shot migration job. Flyway's own CLI at exactly the version
+    # Spring Boot 4.1 manages for flyway-core (12.4.0), so the tool that writes
+    # `flyway_schema_history` and the library that would read it can never
+    # disagree about its format.
+    #
+    # A separate image rather than the application one because this job must be
+    # runnable when the application image is broken — a failed deploy that needs
+    # a migration reverted is exactly when you cannot rely on the new jar.
+    profiles: ["migrate"]
+    build:
+      context: .
+      dockerfile: infra/production/migrate/Dockerfile
+    image: qoida/platform-migrate:${QOIDA_IMAGE_TAG:-latest}
+    <<: *hardening
+    restart: "no"
+    environment:
+      FLYWAY_URL: jdbc:postgresql://platform-db:5432/qoida
+      FLYWAY_USER: qoida_migrator
+      # Handed in by the deploy script from the operator's own authenticated
+      # OpenBao session. It exists for the lifetime of one `run --rm` container
+      # and is never written anywhere. See docs/runbooks/deploy.md.
+      # Deliberately defaulted to empty rather than declared required. A `:?`
+      # here would be interpolated on every compose command, including `ps` and
+      # `logs`, so an operator debugging an incident would be blocked by a
+      # variable that only the migration job needs. Empty fails as
+      # "password authentication failed for user qoida_migrator", which is a
+      # clear message at the only moment it can appear.
+      FLYWAY_PASSWORD: ${FLYWAY_PASSWORD:-}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_DEFAULT_SCHEMA: public
+      FLYWAY_CONNECT_RETRIES: "10"
+      # Forward-only, in order, and never destructive. `clean` is disabled by
+      # default in modern Flyway; it is set here anyway because the cost of the
+      # line is nothing and the cost of the default changing is the database.
+      FLYWAY_CLEAN_DISABLED: "true"
+      FLYWAY_OUT_OF_ORDER: "false"
+      FLYWAY_BASELINE_ON_MIGRATE: "false"
+      FLYWAY_VALIDATE_ON_MIGRATE: "true"
+    networks:
+      - core
+    depends_on:
+      platform-db:
+        condition: service_healthy
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 512M
+
+  # ---------------------------------------------------------------------------
+  # Data
+  # ---------------------------------------------------------------------------
+
+  platform-db:
+    # The same image the development stack builds, for the reasons in
+    # infra/postgres/Dockerfile. Building it here rather than pulling means the
+    # production database and the one every test runs against are the same
+    # PostgreSQL and the same PostGIS.
+    build: ./infra/postgres
+    image: qoida/postgres-postgis:18
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    shm_size: 512mb
+    environment:
+      POSTGRES_DB: qoida
+      # The migration role. It owns every object and is the only role that can
+      # change the schema. The application connects as `qoida_app`, which the
+      # init script below creates and which holds only the privileges the
+      # migrations grant it explicitly — insert-only on audit tables, no DDL
+      # anywhere, and no access to a table a migration did not name.
+      POSTGRES_USER: qoida_migrator
+      POSTGRES_PASSWORD_FILE: /run/secrets/platform-db-migrator-password
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+      TZ: Asia/Tashkent
+      PGTZ: Asia/Tashkent
+    secrets:
+      - platform-db-migrator-password
+      - platform-db-app-password
+    volumes:
+      - platform-db-data:/var/lib/postgresql/18/docker
+      # Runs once, on an empty data directory. It is idempotent anyway, because
+      # the alternative is a script that can only ever be tested by destroying
+      # the database.
+      - ./infra/production/postgres-init:/docker-entrypoint-initdb.d:ro
+    command:
+      # Tuned for a 16 GB host with PostgreSQL as the largest consumer. These are
+      # arguments rather than a mounted postgresql.conf so that the value and the
+      # reason for it stay in one file under review.
+      - postgres
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - effective_cache_size=3GB
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - max_connections=100
+      # Write-ahead log settings sized for the backup story rather than for
+      # throughput: 1 GB of WAL kept means `pg_dump` and a future PITR base
+      # backup can run without the checkpointer removing segments underneath them.
+      - -c
+      - wal_compression=on
+      - -c
+      - max_wal_size=2GB
+      - -c
+      - min_wal_size=256MB
+      - -c
+      - checkpoint_completion_target=0.9
+      # Logs every statement that takes longer than a second and every lock wait.
+      # On a single-operator deployment the slow-query log is the only profiler
+      # that will ever be running when the problem happens.
+      - -c
+      - log_min_duration_statement=1000
+      - -c
+      - log_lock_waits=on
+      - -c
+      - log_checkpoints=on
+      - -c
+      - log_line_prefix=%m [%p] %q%u@%d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qoida_migrator -d qoida"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    networks:
+      - core
+    labels:
+      autoheal: "true"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  keycloak-db:
+    image: postgres:18.4-alpine
+    restart: unless-stopped
+    # No cap_drop: ALL, for the same reason as platform-db. The PostgreSQL image
+    # starts as root, initialises and chowns the data directory, and then drops
+    # to the postgres user with gosu — which needs CAP_SETUID and CAP_SETGID.
+    # Taking them away breaks the container before it has written a byte.
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD_FILE: /run/secrets/keycloak-db-password
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+      TZ: Asia/Tashkent
+    secrets:
+      - keycloak-db-password
+    volumes:
+      - keycloak-db-data:/var/lib/postgresql/18/docker
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - core
+    labels:
+      autoheal: "true"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  kafka:
+    image: apache/kafka:4.3.1
+    <<: *hardening
+    restart: unless-stopped
+    hostname: kafka
+    environment:
+      CLUSTER_ID: ${QOIDA_KAFKA_CLUSTER_ID:?generate once with kafka-storage.sh random-uuid and keep it forever}
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      # No EXTERNAL listener. The development stack publishes 9092 so a developer
+      # can attach a console consumer; here the only client is on the compose
+      # network, and a broker reachable from the internet with PLAINTEXT is an
+      # unauthenticated write to every topic.
+      KAFKA_LISTENERS: INTERNAL://:29092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      # One broker means one replica. This is stated rather than defaulted so
+      # that nobody reads a green cluster as a redundant one: losing this
+      # container's volume loses every unconsumed message, and the outbox in
+      # PostgreSQL is what makes that survivable (ADR 0004).
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 3000
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      # Bounded retention, for the same reason the logs are rotated: this is one
+      # disk. Seven days is longer than any replay window in ADR 0006.
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_RETENTION_BYTES: 8589934592
+      KAFKA_HEAP_OPTS: -Xms512m -Xmx1g
+      TZ: Asia/Tashkent
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:29092 --list > /dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - core
+    labels:
+      autoheal: "true"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  minio:
+    # ADR 0010/0034: S3-compatible, never S3-specific. This is the phase-one
+    # implementation of the same interface AWS S3 will provide in phase two.
+    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+    <<: *hardening
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9090"]
+    environment:
+      MINIO_ROOT_USER: ${QOIDA_MINIO_ROOT_USER:?set a non-obvious root user name}
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio-root-password
+      # The browser console is a second authenticated surface with no reason to
+      # exist here; every operation the runbooks need is an `mc` command.
+      MINIO_BROWSER: "off"
+      TZ: Asia/Tashkent
+    secrets:
+      - minio-root-password
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - core
+      # Reachable from the edge, and from nothing else that is on `public`. See
+      # the note on the `media` network under the edge service.
+      - media
+    labels:
+      autoheal: "true"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+
+  # ---------------------------------------------------------------------------
+  # Identity
+  # ---------------------------------------------------------------------------
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.0
+    <<: *hardening
+    restart: unless-stopped
+    # `start`, not `start-dev`, and no `--import-realm`. Importing on every boot
+    # would let a realm file in the repository overwrite production configuration
+    # that was changed through the admin console — silently, on a restart nobody
+    # associated with a configuration change. The realm is imported once, by
+    # hand, during bootstrap; after that Keycloak's own database is the truth.
+    # The password is read from a file by a wrapper rather than passed as an
+    # environment value; see infra/production/keycloak/entrypoint.sh for why
+    # KC_DB_PASSWORD_FILE does not work here.
+    entrypoint: ["/bin/bash", "/opt/qoida/kc-entrypoint.sh"]
+    command: ["start"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_HOSTNAME: ${QOIDA_AUTH_ORIGIN}
+      # TLS ends at the edge. Keycloak has to be told so explicitly, or it will
+      # build redirect URLs on http and refuse cookies as insecure.
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      # No KC_BOOTSTRAP_ADMIN_*. A bootstrap admin is created once during the
+      # bootstrap runbook and then removed in favour of a named account with a
+      # second factor; leaving the variables here would recreate it on every
+      # restart with whatever value was last in the environment.
+      TZ: Asia/Tashkent
+    secrets:
+      - keycloak-db-password
+    volumes:
+      - ./infra/production/keycloak/entrypoint.sh:/opt/qoida/kc-entrypoint.sh:ro
+    healthcheck:
+      # The image ships neither curl nor wget. bash's /dev/tcp is the documented
+      # way to probe the management port from inside this container.
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"status": "UP"' <&3
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 120s
+    networks:
+      - public
+      - core
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    labels:
+      autoheal: "true"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # ---------------------------------------------------------------------------
+  # Secrets
+  # ---------------------------------------------------------------------------
+
+  openbao:
+    image: openbao/openbao:2.4.1
+    restart: unless-stopped
+    <<: *hardening
+    # Started directly as the image's own unprivileged user rather than as root.
+    # The entrypoint would otherwise start as root and drop privileges with
+    # su-exec, which needs CAP_SETUID and CAP_SETGID back — and a container that
+    # never has them is better than one that has them and gives them up.
+    user: "100:1000"
+    # No IPC_LOCK. The development stack grants it because dev mode still asks
+    # for mlock; OpenBao 2.x dropped mlock support and refuses to start with
+    # `disable_mlock` present at all. Keeping the master key out of swap is now
+    # a host responsibility — see the note in infra/openbao/config.hcl, and the
+    # `swapoff` line in the bootstrap runbook.
+    command: ["server", "-config=/openbao/config/config.hcl"]
+    environment:
+      BAO_ADDR: http://127.0.0.1:8200
+      TZ: Asia/Tashkent
+    volumes:
+      - ./infra/openbao/config.hcl:/openbao/config/config.hcl:ro
+      - openbao-data:/openbao/file
+    healthcheck:
+      # `bao status` exits 0 only when the server is unsealed, 2 when it is
+      # sealed. That is exactly the condition dependents care about: a sealed
+      # OpenBao is reachable and useless.
+      test: ["CMD-SHELL", "bao status > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    networks:
+      - core
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+
+  openbao-agent:
+    # Same image, different role: this one holds the only live token on the host
+    # and keeps it renewed. See infra/openbao/agent.hcl for why the application
+    # cannot simply be given a token of its own.
+    image: openbao/openbao:2.4.1
+    <<: *hardening
+    restart: unless-stopped
+    # uid 100 is the image's own openbao user and owns the tmpfs volume; the
+    # group is deliberately 10001 rather than the image's own 1000, because the
+    # files this writes are mode 0640 and the application — uid 10001, gid 10001 —
+    # reads them through the group bit. Leaving the image's group here produces a
+    # perfectly healthy agent whose output the application cannot open.
+    user: "100:10001"
+    command: ["agent", "-config=/openbao/config/agent.hcl"]
+    environment:
+      BAO_ADDR: http://openbao:8200
+      TZ: Asia/Tashkent
+    secrets:
+      - openbao-role-id
+      - openbao-secret-id
+    volumes:
+      - ./infra/openbao/agent.hcl:/openbao/config/agent.hcl:ro
+      - bao-runtime:/run/bao
+    healthcheck:
+      # Both artefacts, not just the token. A rendered token with an unrendered
+      # template means a secret path is missing or the policy is too narrow, and
+      # the application would start and then fail on its first secret lookup.
+      test: ["CMD-SHELL", "test -s /run/bao/token && test -s /run/bao/qoida.env"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - core
+    depends_on:
+      openbao:
+        condition: service_healthy
+    labels:
+      autoheal: "true"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+
+  # ---------------------------------------------------------------------------
+  # Recovery
+  # ---------------------------------------------------------------------------
+
+  autoheal:
+    # "Automated recovery beats good paging" made concrete. Docker restarts a
+    # container that exits; it does nothing about one that is running, answering
+    # the port, and failing its health check — a wedged JVM, a broker that has
+    # stopped accepting connections. This watches the health status and restarts
+    # what has gone red.
+    #
+    # The trade is explicit and unpleasant: this container mounts the Docker
+    # socket, and access to the Docker socket is equivalent to root on the host.
+    # It is accepted because the alternative on a single-operator deployment is
+    # that a wedged container stays wedged until a human wakes up, and because
+    # this is a 4 MB image doing one thing. It is on the `core` network, which
+    # has no route out, so a compromise of it cannot reach anything by itself.
+    #
+    # Revisit if this deployment ever gains a second operator or a paging
+    # rotation, at which point the calculus changes.
+    #
+    # Kept, but pinned by digest. Accepting the socket mount is a decision about
+    # *this* image; a tag is a mutable pointer, so `1.2.0` alone means the
+    # decision is renewed on every `docker compose pull` by whoever can push to
+    # that repository. On a container holding the Docker socket that is a
+    # supply-chain change with root on the host at the end of it, and nothing in
+    # the deploy would report it. The digest makes replacing this image an edit
+    # to this file that somebody reviews.
+    #
+    # A socket proxy filtering the API down to "list containers, restart
+    # container" would be better still, and is the obvious next step — but it is
+    # one more third-party image in the same position, so it is worth doing
+    # deliberately rather than as part of a pin.
+    #
+    # sha256:31f580… is willfarrell/autoheal:1.2.0 as of 2026-08-24.
+    image: willfarrell/autoheal:1.2.0@sha256:31f580ef0279eaced5b38d631b08c474d70d8403c1c2fdd6ddcf2e879d5f3f7c
+    <<: *hardening
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: "15"
+      # Long enough that a JVM starting up under load is never restarted for
+      # being slow. Restarting a container that was about to become healthy is
+      # how an automated recovery loop becomes an automated outage.
+      AUTOHEAL_START_PERIOD: "180"
+      AUTOHEAL_DEFAULT_STOP_TIMEOUT: "60"
+      TZ: Asia/Tashkent
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - core
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 64M
+
+  # ---------------------------------------------------------------------------
+  # Operator tooling
+  # ---------------------------------------------------------------------------
+
+  ops:
+    # Not a service. A shell with pg_dump, psql, mc and openssl on the same
+    # networks as the stack, so the backup and restore runbooks are one command
+    # each and do not depend on what happens to be installed on the host.
+    #
+    # `docker compose -f compose.production.yaml run --rm ops <command>`
+    profiles: ["ops"]
+    build:
+      context: .
+      dockerfile: infra/production/ops/Dockerfile
+    image: qoida/platform-ops:${QOIDA_IMAGE_TAG:-latest}
+    <<: *hardening
+    restart: "no"
+    # Root, but in the application's group. The nightly backup reads the
+    # agent's token at /run/bao/token, which is mode 0640 owned by uid 100 and
+    # gid 10001. With `cap_drop: ALL` even root cannot open that file — DAC_OVERRIDE
+    # is what normally lets it, and this container does not have it. Joining the
+    # group is the smaller privilege than handing the capability back.
+    user: "0:10001"
+    environment:
+      QOIDA_BACKUP_BUCKET: ${QOIDA_BACKUP_BUCKET:-qoida-backups}
+      QOIDA_BACKUP_S3_ENDPOINT: ${QOIDA_BACKUP_S3_ENDPOINT:-http://minio:9000}
+      QOIDA_BACKUP_RETENTION_DAYS: ${QOIDA_BACKUP_RETENTION_DAYS:-30}
+      QOIDA_BACKUP_OFFSITE_ENDPOINT: ${QOIDA_BACKUP_OFFSITE_ENDPOINT:-}
+      # Bucket name only. The access and secret keys for this destination are
+      # resolved from OpenBao inside the container by ops/backup-job.sh, never
+      # passed here: an environment value is visible in `docker inspect` and in
+      # the host process table, and these are the keys to the off-site copy.
+      QOIDA_BACKUP_OFFSITE_BUCKET: ${QOIDA_BACKUP_OFFSITE_BUCKET:-}
+      BAO_ADDR: http://openbao:8200
+      TZ: Asia/Tashkent
+    volumes:
+      # Read-only, and only for the token. The nightly backup borrows the agent's
+      # renewed token to fetch its own passphrase rather than holding a second
+      # long-lived credential of its own. See infra/production/ops/bao-get.sh.
+      - bao-runtime:/run/bao:ro
+    networks:
+      - core
+      - public
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+
+
+# -----------------------------------------------------------------------------
+# Secrets
+# -----------------------------------------------------------------------------
+#
+# Every entry points at a file under QOIDA_SECRET_DIR, which
+# infra/production/deploy.sh creates as a **tmpfs** — RAM, mode 0700, owned by
+# root — and fills by reading OpenBao with the operator's own authenticated
+# session. Nothing here is in the repository, nothing survives a reboot, and
+# nothing is in the image.
+#
+# Three services need a value rather than a reference because they have no
+# OpenBao client of their own: PostgreSQL, Keycloak and MinIO all read a password
+# from a file at startup. PostgreSQL and MinIO do that natively through
+# POSTGRES_PASSWORD_FILE and MINIO_ROOT_PASSWORD_FILE; Keycloak 26.7 ignores the
+# equivalent and needs the wrapper in infra/production/keycloak/entrypoint.sh.
+#
+# The application is different — it holds a *renewed token* rather than a value,
+# which is why it goes through the agent instead.
+#
+# The AppRole pair is the one bootstrap credential on the host. Its policy is
+# read-only and production-only (infra/openbao/policies/qoida-platform.hcl), the
+# secret-id is reissued on every deploy, and both files are gone the moment the
+# machine reboots.
+#
+# If a file is missing, compose refuses to start rather than substituting an
+# empty string. That is the intended failure: a stack that starts with a blank
+# database password is a stack that will be discovered by an attacker.
+secrets:
+  platform-db-migrator-password:
+    file: ${QOIDA_SECRET_DIR:?run infra/production/deploy.sh, which sets this}/platform-db-migrator-password
+  platform-db-app-password:
+    file: ${QOIDA_SECRET_DIR}/platform-db-app-password
+  keycloak-db-password:
+    file: ${QOIDA_SECRET_DIR}/keycloak-db-password
+  minio-root-password:
+    file: ${QOIDA_SECRET_DIR}/minio-root-password
+  openbao-role-id:
+    file: ${QOIDA_SECRET_DIR}/openbao-role-id
+  openbao-secret-id:
+    file: ${QOIDA_SECRET_DIR}/openbao-secret-id
+
+
+networks:
+  # Reachable from the internet through the edge, and — more importantly — able
+  # to reach the internet. Only the services that genuinely need outbound
+  # connectivity are on it.
+  public:
+    driver: bridge
+
+  # `internal: true` removes the default route. PostgreSQL, Kafka, MinIO and
+  # OpenBao can be reached by the application and by nothing else, and if any of
+  # them is ever compromised it has no path off this host to exfiltrate over.
+  core:
+    driver: bridge
+    internal: true
+
+  # The edge and MinIO, and nothing else. It exists so that presigned media URLs
+  # can be served over the public certificate without either widening `core` to
+  # the internet-facing proxy or giving the object store a route out.
+  media:
+    driver: bridge
+    internal: true
+
+
+volumes:
+  platform-db-data:
+  keycloak-db-data:
+  kafka-data:
+  minio-data:
+  openbao-data:
+  edge-data:
+  edge-config:
+
+  # The channel between the OpenBao agent and the application. tmpfs, so the
+  # rendered token and the datasource password exist in RAM and nowhere else:
+  # not in a Docker volume on the disk, not in a backup, and not on a stolen
+  # drive. Sized at 1 MB because it holds two small files and a pid.
+  #
+  # uid 100 is the OpenBao agent's user and writes here; gid 10001 is the
+  # application's group and reads. Mode 0750 with 0640 files means no other
+  # container and no other uid on the host can read either file.
+  bao-runtime:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "uid=100,gid=10001,mode=0750,size=1m"

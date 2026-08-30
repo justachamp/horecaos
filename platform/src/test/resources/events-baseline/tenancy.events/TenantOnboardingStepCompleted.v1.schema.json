@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.qoida.uz/events/tenancy.events/TenantOnboardingStepCompleted.v1.schema.json",
+  "title": "TenantOnboardingStepCompleted v1 payload",
+  "description": "One ADR 0008 onboarding step completed. Names the step; never carries what the step produced, because a step result holds organization and subject identifiers and applied configuration.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tenantId", "runId", "stepKey"],
+  "properties": {
+    "tenantId": { "type": "string", "format": "uuid" },
+    "runId": { "type": "string", "format": "uuid" },
+    "stepKey": {
+      "type": "string",
+      "enum": [
+        "KEYCLOAK_ORGANIZATION_RECONCILE",
+        "TENANT_OWNER_LINK_OR_INVITE",
+        "DEFAULT_CONFIGURATION_APPLY",
+        "BRANDS_AND_LOCATIONS_VALIDATE",
+        "PAYMENT_CONFIGURATION_VALIDATE",
+        "DELIVERY_CONFIGURATION_VALIDATE",
+        "POS_BINDINGS_VALIDATE",
+        "CATALOG_READINESS_VALIDATE",
+        "MEDIA_READINESS_VALIDATE",
+        "FRONTEND_DOMAIN_VALIDATE",
+        "ACTIVATION_SMOKE_TEST",
+        "TENANT_ACTIVATE"
+      ]
+    },
+    "stepVersion": { "type": "integer", "minimum": 1 },
+    "attemptCount": { "type": "integer", "minimum": 1 }
+  }
+}

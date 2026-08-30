@@ -1,0 +1,27 @@
+CREATE SCHEMA IF NOT EXISTS iam;
+CREATE SCHEMA IF NOT EXISTS tenant;
+CREATE SCHEMA IF NOT EXISTS catalog;
+CREATE SCHEMA IF NOT EXISTS inventory;
+CREATE SCHEMA IF NOT EXISTS pricing;
+CREATE SCHEMA IF NOT EXISTS ordering;
+CREATE SCHEMA IF NOT EXISTS payments;
+CREATE SCHEMA IF NOT EXISTS fulfillment;
+CREATE SCHEMA IF NOT EXISTS media;
+CREATE SCHEMA IF NOT EXISTS notifications;
+CREATE SCHEMA IF NOT EXISTS integration;
+CREATE SCHEMA IF NOT EXISTS reporting;
+CREATE SCHEMA IF NOT EXISTS audit;
+
+COMMENT ON SCHEMA iam IS 'Identity links and authorization projections owned by the iam module';
+COMMENT ON SCHEMA tenant IS 'Tenant, brand, location, entitlement, and onboarding data';
+COMMENT ON SCHEMA catalog IS 'Catalog and location-offering data';
+COMMENT ON SCHEMA inventory IS 'Inventory balances, reservations, and movements';
+COMMENT ON SCHEMA pricing IS 'Prices, promotions, coupons, and adjustments';
+COMMENT ON SCHEMA ordering IS 'Cart and immutable commercial order data';
+COMMENT ON SCHEMA payments IS 'Payment intents, attempts, refunds, and reconciliation';
+COMMENT ON SCHEMA fulfillment IS 'Shipment, assignment, courier, and delivery-partner data';
+COMMENT ON SCHEMA media IS 'Object-storage asset metadata and ownership relations';
+COMMENT ON SCHEMA notifications IS 'Notification preferences, messages, and attempts';
+COMMENT ON SCHEMA integration IS 'Outbox, inbox, integration installation, and synchronization data';
+COMMENT ON SCHEMA reporting IS 'Tenant-aware reporting projections';
+COMMENT ON SCHEMA audit IS 'Immutable security and business audit data';

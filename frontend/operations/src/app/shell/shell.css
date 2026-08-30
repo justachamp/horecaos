@@ -1,0 +1,219 @@
+/* CONSOLE surface. Flat-square, hairline elevation, platform blue spent
+ * scarcely. Every value below is a token or a layout number; a literal colour
+ * here would be a bug. */
+
+:host {
+  display: block;
+  height: 100%;
+}
+
+.shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ── rail ──────────────────────────────────────────────────────────────────
+ * 208px, inverse. Wide enough for "Brands and locations" in three languages
+ * without truncation, narrow enough to leave the queue its width on the 1366px
+ * laptop this console is actually used on. */
+
+.rail {
+  width: 208px;
+  flex-shrink: 0;
+  background: var(--q-inverse);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.rail__brand {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  flex-shrink: 0;
+  color: var(--q-inverse-ink);
+}
+
+/* The one decorative use of platform blue in the whole console, and it is a
+ * full stop. */
+.rail__dot {
+  color: var(--q-primary);
+}
+
+.rail__primary {
+  padding: 0 12px 12px;
+}
+
+.primary-action {
+  width: 100%;
+  height: 40px;
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  border: none;
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.primary-action:hover {
+  background: var(--q-primary-hover);
+}
+
+.primary-action:active {
+  background: var(--q-primary-active);
+}
+
+/* The shortcut is shown, not hidden in a help screen. A shortcut nobody knows
+ * about is a shortcut nobody uses. */
+.primary-action__key {
+  opacity: 0.75;
+}
+
+.rail__groups {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 8px;
+}
+
+.rail__group {
+  margin-bottom: 4px;
+}
+
+.rail__group-label {
+  margin: 0;
+  padding: 10px 16px 4px;
+  color: var(--q-ink-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.32px;
+  font-weight: 400;
+}
+
+.rail__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 16px;
+  text-decoration: none;
+  color: var(--q-inverse-ink-muted);
+  /* A transparent 3px border, not a margin, so the active item does not shift
+     its neighbours by three pixels when it becomes active. */
+  border-left: 3px solid transparent;
+}
+
+.rail__item:hover {
+  color: var(--q-inverse-ink);
+}
+
+.rail__item--on {
+  background: #262626;
+  color: var(--q-inverse-ink);
+  border-left-color: var(--q-primary);
+}
+
+.rail__badge {
+  margin-left: auto;
+  color: var(--q-inverse-ink-muted);
+}
+
+/* The only coloured badge on the rail. Everything coloured stops being a signal. */
+.rail__badge--late {
+  color: var(--q-error);
+}
+
+.rail__foot {
+  padding: 16px;
+  border-top: 1px solid #393939;
+  flex-shrink: 0;
+}
+
+.rail__account {
+  color: var(--q-inverse-ink);
+  /* An operator name can be long. Truncating is better than reflowing the rail. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail__signout {
+  margin-top: 4px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--q-inverse-ink-muted);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* ── content ───────────────────────────────────────────────────────────── */
+
+.content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  height: 48px;
+  flex-shrink: 0;
+  background: var(--q-canvas);
+  border-bottom: 1px solid var(--q-hairline);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.late {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  text-decoration: none;
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+/* Tone is carried by a dot plus text, never by colour alone. A status a
+ * colour-blind operator cannot read is not a status. */
+.late__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--q-error);
+}
+
+.locale {
+  margin-left: auto;
+}
+
+.locale__select {
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  padding: 2px 4px;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  /* No padding. Every routed view owns its own frame, because the order board
+     scrolls its own body under a fixed header and a padded parent would give it
+     a second scrollbar. */
+}
+
+/* The skip link's target must not draw a focus ring around the whole page. */
+.main:focus {
+  outline: none;
+}

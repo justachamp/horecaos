@@ -1,0 +1,1237 @@
+{
+  "@@locale": "en",
+  "appTitle": "Qoida",
+  "@appTitle": {
+    "description": "The application name, shown in the task switcher. A brand name and never translated."
+  },
+  "navHome": "Menu",
+  "@navHome": {
+    "description": "Bottom navigation label for the browse-and-order tab."
+  },
+  "navOrders": "Orders",
+  "@navOrders": {
+    "description": "Bottom navigation label for the tab listing the customer's own orders."
+  },
+  "signInTitle": "Sign in to order",
+  "@signInTitle": {
+    "description": "Heading on the sign-in screen. Sentence case, as the design system requires."
+  },
+  "signInBody": "Ordering, saved addresses and order history need an account.",
+  "@signInBody": {
+    "description": "Body text on the sign-in screen explaining why an account is needed."
+  },
+  "signInAction": "Continue",
+  "@signInAction": {
+    "description": "Primary button that opens the Keycloak login page in the system browser."
+  },
+  "signInFailed": "Sign-in did not complete. Try again.",
+  "@signInFailed": {
+    "description": "Shown when the authorization flow fails for a reason other than the customer cancelling. Deliberately carries no technical detail: the correlation identifier goes to telemetry, not to the customer."
+  },
+  "signOut": "Sign out",
+  "@signOut": {
+    "description": "Action that ends the session on this device."
+  },
+  "retry": "Try again",
+  "@retry": {
+    "description": "Generic retry action on an error state."
+  },
+  "notBuiltTitle": "Not built yet",
+  "@notBuiltTitle": {
+    "description": "Placeholder heading on a route that exists to prove routing works and has no screen behind it. It is removed when the real screen lands."
+  },
+  "notBuiltBody": "This route is part of the application shell. The screen is built separately.",
+  "@notBuiltBody": {
+    "description": "Placeholder body explaining that the route is scaffolding rather than an unfinished feature."
+  },
+  "currencySymbolUzs": "so'm",
+  "@currencySymbolUzs": {
+    "description": "The marker shown after a UZS amount, as in '84 000 so'm'. Comes from here and never from ICU, whose UZS scale disagrees with the platform's."
+  },
+  "pickupLocationsTitle": "Choose a pickup location",
+  "@pickupLocationsTitle": {
+    "description": "Title of the public storefront entry screen, shown before a customer has chosen a branch."
+  },
+  "pickupLocationsNearby": "Nearest pickup locations",
+  "@pickupLocationsNearby": {
+    "description": "Heading above the location list, which is ordered by the server's geodesic distance calculation."
+  },
+  "pickupLocationsEmptyTitle": "No pickup locations nearby",
+  "@pickupLocationsEmptyTitle": {
+    "description": "Heading when no active storefront branch with a published pickup menu is close to the configured search point."
+  },
+  "pickupLocationsEmptyBody": "Try again later.",
+  "@pickupLocationsEmptyBody": {
+    "description": "Body for an empty nearby pickup location result."
+  },
+  "pickupLocationsUnavailableTitle": "Pickup locations did not load",
+  "@pickupLocationsUnavailableTitle": {
+    "description": "Heading when the platform answered with an error or a malformed nearby-pickup response."
+  },
+  "pickupLocationsUnavailableBody": "Something went wrong on our side. Try again in a moment.",
+  "@pickupLocationsUnavailableBody": {
+    "description": "Body for a server-side pickup location discovery failure."
+  },
+  "pickupLocationsOfflineTitle": "No connection",
+  "@pickupLocationsOfflineTitle": {
+    "description": "Heading when nearby pickup discovery could not reach the platform."
+  },
+  "pickupLocationsOfflineBody": "Check your connection and try again.",
+  "@pickupLocationsOfflineBody": {
+    "description": "Body for a pickup discovery transport failure."
+  },
+  "pickupLocationsDistance": "{meters} m away",
+  "@pickupLocationsDistance": {
+    "description": "Distance from the configured public search point to a pickup branch, in whole metres.",
+    "placeholders": {
+      "meters": {
+        "type": "int"
+      }
+    }
+  },
+  "pickupLocationAvailable": "Available for pickup",
+  "@pickupLocationAvailable": {
+    "description": "Current serviceability status for a branch that can accept an immediate pickup order."
+  },
+  "pickupLocationUnavailable": "Pickup currently unavailable",
+  "@pickupLocationUnavailable": {
+    "description": "Current serviceability status for a browseable branch that cannot accept an immediate pickup order."
+  },
+  "catalogueMenuTitle": "Menu",
+  "@catalogueMenuTitle": {
+    "description": "Title of the home screen, which is the branch's live menu."
+  },
+  "catalogueCategoriesTitle": "Categories",
+  "@catalogueCategoriesTitle": {
+    "description": "Heading above the list of menu categories on the home screen."
+  },
+  "catalogueSoldOut": "Sold out",
+  "@catalogueSoldOut": {
+    "description": "Status text beside an item the branch has stopped serving. Shown with a dot, never as colour alone."
+  },
+  "cataloguePriceInBasket": "Price is confirmed in your basket",
+  "@cataloguePriceInBasket": {
+    "description": "Caption in place of a price. The published menu carries no amount at all — only the quote does — so no price is shown while browsing."
+  },
+  "catalogueNoMenuTitle": "No menu published",
+  "@catalogueNoMenuTitle": {
+    "description": "Heading when the brand has never published a menu. Different from a menu that is published and empty."
+  },
+  "catalogueNoMenuBody": "This brand has not published a menu for this branch yet.",
+  "@catalogueNoMenuBody": {
+    "description": "Body explaining that nothing has been published, so there is nothing to retry."
+  },
+  "catalogueEmptyTitle": "Nothing on the menu",
+  "@catalogueEmptyTitle": {
+    "description": "Heading when a menu is published but this branch offers no items."
+  },
+  "catalogueEmptyBody": "This branch is not offering anything right now.",
+  "@catalogueEmptyBody": {
+    "description": "Body for a published but empty menu."
+  },
+  "catalogueUnavailableTitle": "The menu did not load",
+  "@catalogueUnavailableTitle": {
+    "description": "Heading when the platform answered with an error the customer cannot act on."
+  },
+  "catalogueUnavailableBody": "Something went wrong on our side. Try again in a moment.",
+  "@catalogueUnavailableBody": {
+    "description": "Body for a server-side failure. Carries no technical detail; the correlation identifier goes to telemetry."
+  },
+  "catalogueOfflineTitle": "No connection",
+  "@catalogueOfflineTitle": {
+    "description": "Heading when the request never reached the platform."
+  },
+  "catalogueOfflineBody": "Check your connection and try again.",
+  "@catalogueOfflineBody": {
+    "description": "Body for a transport failure, where retrying is the customer's own next step."
+  },
+  "catalogueForbiddenTitle": "The menu is closed to this account",
+  "@catalogueForbiddenTitle": {
+    "description": "Heading when the platform refused the request with 403."
+  },
+  "catalogueForbiddenBody": "Sign in again, or contact support if this keeps happening.",
+  "@catalogueForbiddenBody": {
+    "description": "Body for a refused request. Deliberately says nothing about capabilities, which are a platform concept and not a customer one."
+  },
+  "catalogueVariantsTitle": "Choose an option",
+  "@catalogueVariantsTitle": {
+    "description": "Heading above the variant picker on product detail, shown only when a product has more than one variant."
+  },
+  "catalogueVariantUnnamed": "Standard",
+  "@catalogueVariantUnnamed": {
+    "description": "Fallback label for a variant, used when the published menu carries neither a SKU nor a unit code for it. The contract has no display name for a variant."
+  },
+  "catalogueRequired": "Required",
+  "@catalogueRequired": {
+    "description": "Marker on a modifier group the customer must answer."
+  },
+  "catalogueOptional": "Optional",
+  "@catalogueOptional": {
+    "description": "Marker on a modifier group the customer may skip."
+  },
+  "catalogueChooseExactly": "Choose {count}",
+  "@catalogueChooseExactly": {
+    "description": "Instruction for a modifier group whose minimum and maximum are the same number.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "catalogueChooseAtLeast": "Choose at least {count}",
+  "@catalogueChooseAtLeast": {
+    "description": "Instruction for a modifier group with a minimum below its maximum.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "catalogueChooseUpTo": "Choose up to {count}",
+  "@catalogueChooseUpTo": {
+    "description": "Instruction for a modifier group with no minimum and a maximum above one.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "catalogueGroupUnavailable": "This choice is unavailable right now",
+  "@catalogueGroupUnavailable": {
+    "description": "Shown in place of a modifier group whose own minimum and maximum cannot both be satisfied. The bounds are the server's and are not repaired by the client."
+  },
+  "catalogueOptionUnnamed": "Option",
+  "@catalogueOptionUnnamed": {
+    "description": "Fallback label for a modifier option. The published menu carries no translated name for one, only an authoring code."
+  },
+  "catalogueAddToBasket": "Add to basket",
+  "@catalogueAddToBasket": {
+    "description": "Primary action on product detail. Disabled while a required choice is unanswered or the branch has stopped the item."
+  },
+  "catalogueProductSoldOutBody": "This item is not being served at this branch right now.",
+  "@catalogueProductSoldOutBody": {
+    "description": "Explanation on product detail for an item none of whose variants the branch is currently serving."
+  },
+  "ordersEmptyTitle": "No orders yet",
+  "@ordersEmptyTitle": {
+    "description": "Heading on the order history when the customer has never placed an order."
+  },
+  "ordersEmptyBody": "Your orders will appear here after your first one.",
+  "@ordersEmptyBody": {
+    "description": "Body of the empty order history. A statement of fact, not an invitation with an illustration."
+  },
+  "ordersUnavailableTitle": "Orders did not load",
+  "@ordersUnavailableTitle": {
+    "description": "Heading when the platform refused or failed the order list or one order. Covers 403 as well as 5xx: a capability the principal lacks is a platform concept, and a customer is told what happened rather than which grant is missing."
+  },
+  "ordersUnavailableBody": "Something went wrong on our side. Try again in a moment.",
+  "@ordersUnavailableBody": {
+    "description": "Body for a refused or failed order read. Carries no technical detail; the correlation identifier goes to telemetry."
+  },
+  "ordersOfflineTitle": "No connection",
+  "@ordersOfflineTitle": {
+    "description": "Heading when the request never reached the platform, which is the one failure the customer can act on."
+  },
+  "ordersOfflineBody": "Check your connection and try again.",
+  "@ordersOfflineBody": {
+    "description": "Body for a transport failure on the order screens."
+  },
+  "ordersLoadMore": "Load more",
+  "@ordersLoadMore": {
+    "description": "Footer action that fetches the next cursor page after a continuation failed. There is no page number: the list is a cursor and an end."
+  },
+  "ordersNumber": "Order {number}",
+  "@ordersNumber": {
+    "description": "Names an order by its public order number, which is what the customer and the branch both say out loud. The UUID is never shown.",
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "ordersPlacedAt": "Placed {when}",
+  "@ordersPlacedAt": {
+    "description": "Caption under an order, carrying the local date and time it was placed.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "orderNotFoundTitle": "Order not found",
+  "@orderNotFoundTitle": {
+    "description": "Heading when an order read returns 404. The storefront scopes the query to the caller's own account, so another customer's order is a 404 rather than a refusal."
+  },
+  "orderNotFoundBody": "This order is not in your history.",
+  "@orderNotFoundBody": {
+    "description": "Body for a missing order."
+  },
+  "orderStatusReceived": "Placed",
+  "@orderStatusReceived": {
+    "description": "Status pill for ADR 0019 RECEIVED: durable, and nothing external has happened yet."
+  },
+  "orderStatusPaymentAuthorizing": "Confirming payment",
+  "@orderStatusPaymentAuthorizing": {
+    "description": "Status pill for ADR 0019 PAYMENT_AUTHORIZING."
+  },
+  "orderStatusAwaitingApproval": "Waiting for the restaurant",
+  "@orderStatusAwaitingApproval": {
+    "description": "Status pill for ADR 0019 AWAITING_APPROVAL, where the branch has not accepted or refused yet."
+  },
+  "orderStatusPaymentFailed": "Payment failed",
+  "@orderStatusPaymentFailed": {
+    "description": "Status pill for ADR 0019 PAYMENT_FAILED, and the payment line for the FAILED projection. Terminal: a new attempt is a new order."
+  },
+  "orderStatusConfirmed": "Accepted",
+  "@orderStatusConfirmed": {
+    "description": "Status pill for ADR 0019 CONFIRMED, the commercial commitment."
+  },
+  "orderStatusRejected": "Not accepted",
+  "@orderStatusRejected": {
+    "description": "Status pill for ADR 0019 REJECTED. Deliberately not the same word as cancelled: ADR 0039 keeps a refusal, an expiry and a cancellation apart, and so does this."
+  },
+  "orderStatusExpired": "No answer",
+  "@orderStatusExpired": {
+    "description": "Status pill for ADR 0019 EXPIRED, where nobody decided in time. Not a refusal, and worded so it cannot be read as one."
+  },
+  "orderStatusPreparing": "Being prepared",
+  "@orderStatusPreparing": {
+    "description": "Status pill for ADR 0019 PREPARING."
+  },
+  "orderStatusReady": "Ready",
+  "@orderStatusReady": {
+    "description": "Status pill for ADR 0019 READY, and the milestone label where the fulfilment mode is unknown."
+  },
+  "orderStatusFulfilling": "On the way",
+  "@orderStatusFulfilling": {
+    "description": "Status pill for ADR 0019 FULFILLING, entered at handover to the courier."
+  },
+  "orderStatusCompleted": "Completed",
+  "@orderStatusCompleted": {
+    "description": "Status pill for ADR 0019 COMPLETED, and the handover milestone where the fulfilment mode is unknown."
+  },
+  "orderStatusCancelled": "Cancelled",
+  "@orderStatusCancelled": {
+    "description": "Status pill for ADR 0019 CANCELLED."
+  },
+  "orderStatusUnknown": "Status unavailable",
+  "@orderStatusUnknown": {
+    "description": "Status pill for a status this build does not recognise. ADR 0031 adds enum values additively, so the client says it does not know rather than printing the wire value or crashing."
+  },
+  "orderProgressHeading": "Progress",
+  "@orderProgressHeading": {
+    "description": "Heading above the milestone list on order detail. ADR 0045: milestones only, and never a courier's position."
+  },
+  "orderMilestoneAccepted": "Order accepted",
+  "@orderMilestoneAccepted": {
+    "description": "Milestone from OrderConfirmed / ADR 0019 CONFIRMED."
+  },
+  "orderMilestonePreparing": "The kitchen has started",
+  "@orderMilestonePreparing": {
+    "description": "Milestone from ADR 0019 PREPARING, proposed by ADR 0041's ticket reaching IN_PRODUCTION."
+  },
+  "orderMilestoneReadyPickup": "Ready to collect",
+  "@orderMilestoneReadyPickup": {
+    "description": "Milestone from ADR 0019 READY on a pickup order."
+  },
+  "orderMilestoneReadyDelivery": "Waiting for a courier",
+  "@orderMilestoneReadyDelivery": {
+    "description": "Milestone from ADR 0019 READY on a delivery order, which ADR 0045 words as awaiting a courier rather than as ready."
+  },
+  "orderMilestoneOnTheWay": "On the way",
+  "@orderMilestoneOnTheWay": {
+    "description": "Milestone from ADR 0019 FULFILLING. This is the milestone that replaces the legacy courier map, and it is a recorded handover rather than an inference from a position."
+  },
+  "orderMilestoneOnTheWayWith": "On the way with {name}",
+  "@orderMilestoneOnTheWayWith": {
+    "description": "The handover milestone where the platform published the courier's first name. A first name is the whole of what ADR 0045 permits about a courier: no position, no phone number, no vehicle, no plate.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "orderMilestoneDelivered": "Delivered",
+  "@orderMilestoneDelivered": {
+    "description": "Handover milestone on a delivery order."
+  },
+  "orderMilestoneCollected": "Collected",
+  "@orderMilestoneCollected": {
+    "description": "Handover milestone on a pickup order."
+  },
+  "orderMilestoneServed": "Served",
+  "@orderMilestoneServed": {
+    "description": "Handover milestone on a dine-in order."
+  },
+  "orderAwaitingRestaurant": "Waiting for the restaurant to accept this order",
+  "@orderAwaitingRestaurant": {
+    "description": "Headline while the order is before acceptance. The milestone list is shown with nothing done rather than hidden, so the customer can see what will happen next."
+  },
+  "orderPromisedBy": "By {time}",
+  "@orderPromisedBy": {
+    "description": "The stored promise (V0023), shown as the instant the platform recorded. Not a window and not a countdown: the platform stores one instant, and ADR 0045 refuses a continuously recomputed ETA because it is a position feed wearing a clock face.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "orderPromisedNone": "No time was promised for this order.",
+  "@orderPromisedNone": {
+    "description": "Shown when promise_basis is NOT_PROMISED. 'We never promised' and 'on time' must not look the same, so the absence is stated rather than left blank."
+  },
+  "orderLate": "Later than promised",
+  "@orderLate": {
+    "description": "Derived from promised_at against the clock on an order that has not finished. There is no late field on the platform and there never will be one."
+  },
+  "orderUpdatedAt": "Updated at {time}",
+  "@orderUpdatedAt": {
+    "description": "Caption on a live order saying when the last poll landed. A live screen showing stale content silently is worse than one that says how old it is.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "orderItemsHeading": "What you ordered",
+  "@orderItemsHeading": {
+    "description": "Heading above the order lines, which are the snapshot taken at checkout and not the current catalogue."
+  },
+  "orderSubtotal": "Subtotal",
+  "@orderSubtotal": {
+    "description": "Total of the lines, before tax and fees."
+  },
+  "orderTax": "Tax",
+  "@orderTax": {
+    "description": "Row label for the tax component of an order total."
+  },
+  "orderDiscount": "Discount",
+  "@orderDiscount": {
+    "description": "Row label for a discount. Shown only when the order carries one: an absent discount and a discount of nothing are different facts."
+  },
+  "orderFee": "Delivery and fees",
+  "@orderFee": {
+    "description": "Row label for the fee component of an order total."
+  },
+  "orderTotal": "Total",
+  "@orderTotal": {
+    "description": "The figure the customer was charged, or will be."
+  },
+  "orderPaymentHeading": "Payment",
+  "@orderPaymentHeading": {
+    "description": "Heading of the payment block on order detail."
+  },
+  "orderPaymentMethod": "Method",
+  "@orderPaymentMethod": {
+    "description": "Label beside the payment method's display name. The tenant-defined method code is never rendered: it is a database row, not the name of anything."
+  },
+  "orderPaymentNotRequired": "Payable on handover",
+  "@orderPaymentNotRequired": {
+    "description": "Payment line for the NOT_REQUIRED projection: no online payment is expected and the order is paid when it arrives or is collected."
+  },
+  "orderPaymentPending": "Payment in progress",
+  "@orderPaymentPending": {
+    "description": "Payment line for the PENDING projection."
+  },
+  "orderPaymentAuthorized": "Payment held",
+  "@orderPaymentAuthorized": {
+    "description": "Payment line for the AUTHORIZED projection: the money is reserved and not yet taken."
+  },
+  "orderPaymentCaptured": "Paid",
+  "@orderPaymentCaptured": {
+    "description": "Payment line for the CAPTURED projection."
+  },
+  "orderPaymentVoided": "Payment released",
+  "@orderPaymentVoided": {
+    "description": "Payment line for the VOIDED projection: an authorization that was never taken has been let go."
+  },
+  "orderPaymentRefunded": "Refunded",
+  "@orderPaymentRefunded": {
+    "description": "Payment line for the REFUNDED projection. This one is a fact about money that has moved, unlike the refund posture on a cancellation reason."
+  },
+  "orderPaymentUnknown": "Payment status unavailable",
+  "@orderPaymentUnknown": {
+    "description": "Payment line for a projection value this build does not recognise."
+  },
+  "orderOutcomeCancelledTitle": "Order cancelled",
+  "@orderOutcomeCancelledTitle": {
+    "description": "Title of the outcome panel for ADR 0039 CANCELLED. A cancellation, a refusal and an expiry are three different facts and get three different titles."
+  },
+  "orderOutcomeRejectedTitle": "The restaurant could not take this order",
+  "@orderOutcomeRejectedTitle": {
+    "description": "Title of the outcome panel for ADR 0039 REJECTED: the branch looked and declined."
+  },
+  "orderOutcomeExpiredTitle": "The restaurant did not answer in time",
+  "@orderOutcomeExpiredTitle": {
+    "description": "Title of the outcome panel for ADR 0039 EXPIRED: nobody looked. Deliberately not worded as a refusal, because the branch never made one."
+  },
+  "orderOutcomePaymentFailedTitle": "Payment did not go through",
+  "@orderOutcomePaymentFailedTitle": {
+    "description": "Title of the outcome panel for ADR 0019 PAYMENT_FAILED, which is terminal: a new attempt is a new order."
+  },
+  "orderReasonCustomerCancelled": "You cancelled this order.",
+  "@orderReasonCustomerCancelled": {
+    "description": "Customer wording for the CUSTOMER_CANCELLED outcome category."
+  },
+  "orderReasonUnreachable": "We could not reach you.",
+  "@orderReasonUnreachable": {
+    "description": "Customer wording for the CUSTOMER_UNREACHABLE and CUSTOMER_NO_SHOW categories."
+  },
+  "orderReasonRestaurant": "The restaurant could not take it.",
+  "@orderReasonRestaurant": {
+    "description": "Customer wording for the RESTAURANT_REFUSED and KITCHEN_CAPACITY categories."
+  },
+  "orderReasonItemUnavailable": "Something you ordered had run out.",
+  "@orderReasonItemUnavailable": {
+    "description": "Customer wording for the ITEM_UNAVAILABLE category."
+  },
+  "orderReasonDelivery": "The order could not be delivered.",
+  "@orderReasonDelivery": {
+    "description": "Customer wording for the DELIVERY_FAILED, COURIER_UNAVAILABLE and ADDRESS_UNSERVICEABLE categories."
+  },
+  "orderReasonPaymentNotReceived": "Payment was not received.",
+  "@orderReasonPaymentNotReceived": {
+    "description": "Customer wording for the PAYMENT_NOT_RECEIVED category."
+  },
+  "orderReasonDeadline": "Nobody answered in time.",
+  "@orderReasonDeadline": {
+    "description": "Customer wording for the APPROVAL_DEADLINE_LAPSED category, which no operator ever picks: it is the system recording that a deadline lapsed."
+  },
+  "orderReasonUnspecified": "No further detail was recorded.",
+  "@orderReasonUnspecified": {
+    "description": "Customer wording for the categories a customer is not told in these words: DUPLICATE_ORDER, TEST_ORDER, SUSPECTED_FRAUD, PRICING_ERROR, OTHER, and any category this build does not recognise. Telling a customer that fraud was suspected is a legal decision no client makes on its own."
+  },
+  "orderRefundFull": "The full amount will be returned.",
+  "@orderRefundFull": {
+    "description": "The FULL refund posture from the cancellation reason. A posture, not a receipt: ADR 0013 owns the money, so the wording says what is due rather than that it has been paid."
+  },
+  "orderRefundNone": "No refund is due for this order.",
+  "@orderRefundNone": {
+    "description": "The NONE refund posture from the cancellation reason."
+  },
+  "orderRefundDiscretionary": "A refund is being decided.",
+  "@orderRefundDiscretionary": {
+    "description": "The DISCRETIONARY refund posture, where a person decides and above a threshold an approval is needed."
+  },
+  "orderClosedAt": "Closed {when}",
+  "@orderClosedAt": {
+    "description": "Caption in the outcome panel carrying when the order ended.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "@_cart_and_checkout": {
+    "description": "The basket, the checkout, and the confirmation screen."
+  },
+  "cartTitle": "Basket",
+  "@cartTitle": {
+    "description": "Title of the basket screen."
+  },
+  "cartEmptyTitle": "Your basket is empty",
+  "@cartEmptyTitle": {
+    "description": "Heading when the basket has no lines."
+  },
+  "cartEmptyBody": "Add something from the menu and it appears here.",
+  "@cartEmptyBody": {
+    "description": "Body of the empty basket state. A caption and a tertiary action, per the design system."
+  },
+  "cartLineUnnamed": "Item",
+  "@cartLineUnnamed": {
+    "description": "Neutral label for a basket line whose variant the loaded menu does not name. The cart endpoint returns a variant id and no name, so this is what is shown while the menu is unknown rather than a claim that the item was withdrawn."
+  },
+  "cartLineSoldOut": "Sold out at this branch",
+  "@cartLineSoldOut": {
+    "description": "Marker on a basket line the branch has stopped serving. Shown with a dot, never as colour alone."
+  },
+  "cartLineNote": "You left a note",
+  "@cartLineNote": {
+    "description": "Marker that a line carries a customer note. The note text itself is personal data and the storefront endpoint never returns it."
+  },
+  "cartQuantityIncrease": "One more",
+  "@cartQuantityIncrease": {
+    "description": "Accessibility label for the control that raises a line's quantity by one."
+  },
+  "cartQuantityDecrease": "One fewer",
+  "@cartQuantityDecrease": {
+    "description": "Accessibility label for the control that lowers a line's quantity by one."
+  },
+  "cartRemoveLine": "Remove",
+  "@cartRemoveLine": {
+    "description": "Action that removes a line from the basket."
+  },
+  "cartSubtotal": "Items",
+  "@cartSubtotal": {
+    "description": "Label for the goods subtotal in the totals block. The server's figure, never a client sum."
+  },
+  "cartTax": "Tax",
+  "@cartTax": {
+    "description": "Label for the tax figure in the totals block."
+  },
+  "cartTotal": "Total",
+  "@cartTotal": {
+    "description": "Label for the order total in the totals block."
+  },
+  "cartPriceNotConfirmed": "The price is not confirmed yet.",
+  "@cartPriceNotConfirmed": {
+    "description": "Shown in place of a total when the basket has been edited since it was priced. Every edit clears the quote on the server, so there is no number to show."
+  },
+  "cartConfirmPrice": "Confirm the price",
+  "@cartConfirmPrice": {
+    "description": "Action that prices the basket and binds a quote to it."
+  },
+  "cartGoToCheckout": "Checkout",
+  "@cartGoToCheckout": {
+    "description": "Primary action that leaves the basket for the checkout screen."
+  },
+  "cartGoneTitle": "This basket is closed",
+  "@cartGoneTitle": {
+    "description": "Heading when the basket lapsed, was abandoned, or already became an order."
+  },
+  "cartGoneBody": "A basket lasts four hours. This one has passed that, or it already became an order.",
+  "@cartGoneBody": {
+    "description": "Body explaining that the basket cannot be edited any more and a new one is the next step."
+  },
+  "cartBranchClosedTitle": "This branch cannot take the order now",
+  "@cartBranchClosedTitle": {
+    "description": "Heading when serviceability refused the branch: closed, out of hours, or the channel stopped selling."
+  },
+  "cartBranchClosedBody": "It is closed or not serving this way at the moment.",
+  "@cartBranchClosedBody": {
+    "description": "Body for a serviceability refusal."
+  },
+  "cartUnpriceableTitle": "One item cannot be priced",
+  "@cartUnpriceableTitle": {
+    "description": "Heading when pricing refused the whole basket because of a single item."
+  },
+  "cartUnpriceableBody": "Something in the basket is not being sold at this branch right now. Remove it and try again.",
+  "@cartUnpriceableBody": {
+    "description": "Body for a pricing refusal, which names the offending item where the platform supplied its identifier."
+  },
+  "cartNotPermittedTitle": "Ordering is not open to this account yet",
+  "@cartNotPermittedTitle": {
+    "description": "Heading when the platform refused with 403. Expected for every customer principal until ADR 0025 settles what a non-staff principal is."
+  },
+  "cartNotPermittedBody": "Nothing you did caused this. Contact support if you need to order now.",
+  "@cartNotPermittedBody": {
+    "description": "Body for a refused principal. Says nothing about capabilities, which are a platform concept and not a customer one."
+  },
+  "cartOfflineTitle": "No connection",
+  "@cartOfflineTitle": {
+    "description": "Heading when a basket request never reached the platform."
+  },
+  "cartOfflineBody": "Check your connection and try again.",
+  "@cartOfflineBody": {
+    "description": "Body for a transport failure on a basket request."
+  },
+  "cartFailedTitle": "The basket did not update",
+  "@cartFailedTitle": {
+    "description": "Heading for a basket failure the customer cannot act on."
+  },
+  "cartFailedBody": "Try again in a moment.",
+  "@cartFailedBody": {
+    "description": "Body for an unexpected basket failure. Carries no technical detail."
+  },
+  "supportReference": "Reference {id}",
+  "@supportReference": {
+    "description": "The correlation identifier, shown so a customer can quote it to support. Never an error message and never a stack trace.",
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "checkoutTitle": "Checkout",
+  "@checkoutTitle": {
+    "description": "Title of the checkout screen."
+  },
+  "checkoutFulfilmentTitle": "How you get it",
+  "@checkoutFulfilmentTitle": {
+    "description": "Heading of the fulfilment section."
+  },
+  "checkoutModeDelivery": "Delivery",
+  "@checkoutModeDelivery": {
+    "description": "Fulfilment mode: the order is brought to the customer."
+  },
+  "checkoutModePickup": "Pickup",
+  "@checkoutModePickup": {
+    "description": "Fulfilment mode: the customer collects the order from the branch."
+  },
+  "checkoutModeDineIn": "At the table",
+  "@checkoutModeDineIn": {
+    "description": "Fulfilment mode: the order is served at a table in the branch."
+  },
+  "checkoutModeFixedNote": "Chosen when the basket was opened. Changing it starts a new basket.",
+  "@checkoutModeFixedNote": {
+    "description": "Explains why the fulfilment mode is shown and not editable: a cart belongs to one mode and one location for its whole life, and moving rebuilds it."
+  },
+  "checkoutDeliveryTitle": "Where we deliver",
+  "@checkoutDeliveryTitle": {
+    "description": "Heading of the delivery destination section."
+  },
+  "checkoutDeliveryBody": "Used to check this branch delivers to you and what it charges.",
+  "@checkoutDeliveryBody": {
+    "description": "Explains what the delivery point is used for. It is a serviceability check: no address is stored anywhere in this release."
+  },
+  "checkoutDeliveryNotSet": "Not set yet",
+  "@checkoutDeliveryNotSet": {
+    "description": "Placeholder when no delivery point has been chosen."
+  },
+  "checkoutDeliveryFeeLabel": "Delivery from this branch",
+  "@checkoutDeliveryFeeLabel": {
+    "description": "Label for the delivery charge the branch publishes for this point. Resolved by the platform and never computed here."
+  },
+  "checkoutDeliveryNotServed": "This branch does not deliver to that point.",
+  "@checkoutDeliveryNotServed": {
+    "description": "Shown when the fee resolver refused the point. The branch is never silently swapped for one that does cover it."
+  },
+  "checkoutDeliveryMinimumBasket": "Delivery needs a basket of at least {amount}.",
+  "@checkoutDeliveryMinimumBasket": {
+    "description": "The zone's minimum basket, as published by the fee resolver.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "checkoutDeliveryShortfall": "Add {amount} to reach the delivery minimum.",
+  "@checkoutDeliveryShortfall": {
+    "description": "How far the basket is from the delivery minimum. A comparison of two figures the resolver published, not a fee this application worked out.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "checkoutFreeDeliveryFrom": "Delivery is free from {amount}.",
+  "@checkoutFreeDeliveryFrom": {
+    "description": "The zone's free-delivery threshold, as published by the fee resolver.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "checkoutDeliveryFeeUnknown": "The delivery charge could not be checked.",
+  "@checkoutDeliveryFeeUnknown": {
+    "description": "Shown when the fee resolver could not be reached. No fallback figure is shown, because the only correct source for one is the resolver."
+  },
+  "checkoutPaymentTitle": "Payment",
+  "@checkoutPaymentTitle": {
+    "description": "Heading of the payment method section."
+  },
+  "checkoutPaymentCash": "Cash on handover",
+  "@checkoutPaymentCash": {
+    "description": "Payment method: cash, collected when the order is handed over. It has no online step."
+  },
+  "checkoutPaymentCard": "Card, in the application",
+  "@checkoutPaymentCard": {
+    "description": "Subtitle under a provider payment method. The provider's own name is a brand name and is not translated."
+  },
+  "checkoutPlaceOrder": "Place the order",
+  "@checkoutPlaceOrder": {
+    "description": "The primary action, and the one that creates an order."
+  },
+  "checkoutPlacingOrder": "Placing the order",
+  "@checkoutPlacingOrder": {
+    "description": "Shown while the checkout request is in flight. The button is not offered again while this is on screen."
+  },
+  "checkoutToPay": "To pay",
+  "@checkoutToPay": {
+    "description": "Label above the total the customer is agreeing to."
+  },
+  "checkoutPriceChangedTitle": "The price changed",
+  "@checkoutPriceChangedTitle": {
+    "description": "Heading when the platform refused the quote because a price moved under it. This is the system working, not an error."
+  },
+  "checkoutPriceChangedBody": "The order was not placed. Look at the new price before you decide.",
+  "@checkoutPriceChangedBody": {
+    "description": "Body under a price-changed refusal. States plainly that nothing was ordered."
+  },
+  "checkoutQuoteExpiredTitle": "The price is out of date",
+  "@checkoutQuoteExpiredTitle": {
+    "description": "Heading when the fifteen-minute quote lapsed before the order was placed."
+  },
+  "checkoutQuoteExpiredBody": "A price is held for fifteen minutes, and that time has passed.",
+  "@checkoutQuoteExpiredBody": {
+    "description": "Body explaining the quote time-to-live from ADR 0018."
+  },
+  "checkoutMenuChangedTitle": "The menu changed",
+  "@checkoutMenuChangedTitle": {
+    "description": "Heading when the branch republished its menu between pricing and checkout."
+  },
+  "checkoutMenuChangedBody": "This branch republished its menu while you were choosing, so the old price no longer applies.",
+  "@checkoutMenuChangedBody": {
+    "description": "Body for a republished menu. Honouring the old price for a changed dish would be wrong in both directions."
+  },
+  "checkoutBasketChangedTitle": "The basket changed",
+  "@checkoutBasketChangedTitle": {
+    "description": "Heading when the basket moved — usually edited on the customer's other device — so the quote belongs to a basket that no longer exists."
+  },
+  "checkoutBasketChangedBody": "It was edited somewhere else, so it has been priced again.",
+  "@checkoutBasketChangedBody": {
+    "description": "Body for a basket that changed underneath the quote."
+  },
+  "checkoutPriceBefore": "Before",
+  "@checkoutPriceBefore": {
+    "description": "Label on the total the customer was shown before the refusal."
+  },
+  "checkoutPriceNow": "Now",
+  "@checkoutPriceNow": {
+    "description": "Label on the total after the basket was priced again."
+  },
+  "checkoutPriceSame": "The total is the same as before.",
+  "@checkoutPriceSame": {
+    "description": "Shown when a quote was refused but the number did not move — a republished menu invalidates a hash without necessarily changing a price."
+  },
+  "checkoutRepricing": "Getting the new price",
+  "@checkoutRepricing": {
+    "description": "Shown while the basket is being priced again after a refusal."
+  },
+  "checkoutAcceptNewPrice": "Accept and place the order",
+  "@checkoutAcceptNewPrice": {
+    "description": "The action that places the order at the new price. Deliberately a separate, explicit decision: the platform will not charge a price nobody agreed to."
+  },
+  "checkoutCapacityTitle": "The kitchen is full",
+  "@checkoutCapacityTitle": {
+    "description": "Heading when the branch is at its concurrent-order limit."
+  },
+  "checkoutCapacityBody": "This branch is cooking as many orders as it can. Try again shortly.",
+  "@checkoutCapacityBody": {
+    "description": "Body for a capacity refusal."
+  },
+  "checkoutSoldOutTitle": "Something ran out",
+  "@checkoutSoldOutTitle": {
+    "description": "Heading when stock ran out between pricing and placing."
+  },
+  "checkoutSoldOutBody": "The branch cannot supply part of this order.",
+  "@checkoutSoldOutBody": {
+    "description": "Body for an inventory refusal."
+  },
+  "checkoutPaymentUnavailableTitle": "That payment method is not available here",
+  "@checkoutPaymentUnavailableTitle": {
+    "description": "Heading when the branch cannot take the chosen method."
+  },
+  "checkoutPaymentUnavailableBody": "Choose another one.",
+  "@checkoutPaymentUnavailableBody": {
+    "description": "Body for an unavailable payment method."
+  },
+  "checkoutNotPermittedTitle": "This account cannot place orders yet",
+  "@checkoutNotPermittedTitle": {
+    "description": "Heading when checkout was refused with 403. The storefront ordering endpoints declare a capability no customer principal holds today."
+  },
+  "checkoutNotPermittedBody": "Nothing was ordered and nothing was charged.",
+  "@checkoutNotPermittedBody": {
+    "description": "Body for a refused principal at checkout. The reassurance matters more than the reason."
+  },
+  "checkoutOfflineTitle": "The order may not have gone through",
+  "@checkoutOfflineTitle": {
+    "description": "Heading when the checkout request never got an answer. The state on the server is genuinely unknown, and the wording says so rather than guessing."
+  },
+  "checkoutOfflineBody": "Try again. It is safe: if the order was already created, you will be shown that one rather than a second.",
+  "@checkoutOfflineBody": {
+    "description": "Body for a transport failure at checkout. Retrying carries the same idempotency key, so the platform replays the order rather than creating another."
+  },
+  "checkoutFailedTitle": "The order was not placed",
+  "@checkoutFailedTitle": {
+    "description": "Heading for a checkout refusal the customer cannot act on."
+  },
+  "checkoutFailedBody": "Try again in a moment.",
+  "@checkoutFailedBody": {
+    "description": "Body for an unexpected checkout refusal."
+  },
+  "orderPlacedTitle": "Order placed",
+  "@orderPlacedTitle": {
+    "description": "Heading of the confirmation screen."
+  },
+  "orderAlreadyPlaced": "This order was already placed. It has not been placed twice.",
+  "@orderAlreadyPlaced": {
+    "description": "Shown when the platform replayed a stored response for the idempotency key. A success, and worth saying plainly so nobody presses the button again."
+  },
+  "payNow": "Pay now",
+  "@payNow": {
+    "description": "Action that opens the provider's checkout page."
+  },
+  "paymentOpening": "Opening the payment page",
+  "@paymentOpening": {
+    "description": "Shown while the payment attempt is being opened."
+  },
+  "paymentHandedOff": "Finish the payment in the page that opened.",
+  "@paymentHandedOff": {
+    "description": "Shown after the customer has been sent to the provider. The application never decides that a payment succeeded; only the provider's callback does."
+  },
+  "paymentCashNote": "Pay when you get the order.",
+  "@paymentCashNote": {
+    "description": "Caption on a cash order, which has no online payment step."
+  },
+  "paymentCouldNotOpen": "The payment page could not be opened.",
+  "@paymentCouldNotOpen": {
+    "description": "Shown when the link came back but this device could not open it. The order already exists and is safe."
+  },
+  "paymentSurfaceUnavailable": "Payment cannot be started here.",
+  "@paymentSurfaceUnavailable": {
+    "description": "Shown when the platform has no checkout surface to give — no merchant account, no adapter, no intent. The order exists; contact the branch."
+  },
+  "paymentUncertainTitle": "Do not pay again",
+  "@paymentUncertainTitle": {
+    "description": "Heading when the payment provider did not answer and the outcome is unknown. The platform is resolving it, and a second attempt could charge twice."
+  },
+  "paymentUncertainBody": "The provider did not answer, so it is unclear whether you were charged. Qoida is resolving it.",
+  "@paymentUncertainBody": {
+    "description": "Body for an uncertain payment outcome. No retry is offered, deliberately."
+  },
+  "paymentAlreadyPaid": "This order is already paid.",
+  "@paymentAlreadyPaid": {
+    "description": "Shown when the payment attempt was refused because the money already arrived."
+  },
+  "checkoutDone": "Done",
+  "@checkoutDone": {
+    "description": "Action that leaves the confirmation screen."
+  },
+
+  "profileTitle": "Profile",
+  "@profileTitle": {
+    "description": "Title of the profile tab, which is the root of the account area."
+  },
+
+  "profileAccountSection": "Account",
+  "@profileAccountSection": {
+    "description": "Section heading above who the customer is."
+  },
+
+  "profileSettingsSection": "Settings",
+  "@profileSettingsSection": {
+    "description": "Section heading above addresses, language and notifications."
+  },
+
+  "profileAccountReference": "Account reference",
+  "@profileAccountReference": {
+    "description": "Label for the customer's account identifier. A pseudonymous row reference, not a name."
+  },
+
+  "profileAccountReferenceHint": "Quote this if you contact support.",
+  "@profileAccountReferenceHint": {
+    "description": "Caption explaining what the account reference is for."
+  },
+
+  "profileCancel": "Cancel",
+  "@profileCancel": {
+    "description": "Dismisses a confirmation dialog without doing anything."
+  },
+
+  "profileSignOutConfirmTitle": "Sign out on this device?",
+  "@profileSignOutConfirmTitle": {
+    "description": "Title of the sign-out confirmation. Signing out is not destructive but it is not free either, so it is confirmed."
+  },
+
+  "profileSignOutConfirmBody": "Your saved addresses stay on your account. You will need to sign in again to order.",
+  "@profileSignOutConfirmBody": {
+    "description": "Body of the sign-out confirmation, stating plainly what is and is not lost."
+  },
+
+  "profileAddresses": "Saved addresses",
+  "@profileAddresses": {
+    "description": "Row leading to the saved address list, and the title of that screen."
+  },
+
+  "profileLanguage": "Language",
+  "@profileLanguage": {
+    "description": "Row leading to the language picker, and the title of that screen."
+  },
+
+  "profileLanguageSystem": "Device language",
+  "@profileLanguageSystem": {
+    "description": "The option that follows the phone's own language setting rather than a chosen one. A real third choice, not the absence of one."
+  },
+
+  "profileLanguageSystemHelp": "Follow the phone's setting.",
+  "@profileLanguageSystemHelp": {
+    "description": "Explains what the device-language option does."
+  },
+
+  "profileNotifications": "Notifications",
+  "@profileNotifications": {
+    "description": "Row leading to the notification preference screen, and the title of that screen."
+  },
+
+  "profileUnavailableTitle": "Not available yet",
+  "@profileUnavailableTitle": {
+    "description": "Heading when the platform refused the request because the principal holds no capability for it. A recorded ADR 0025 open item, not a customer error."
+  },
+
+  "profileUnavailableBody": "This account area is not open to customer sign-ins yet. There is nothing wrong with your account.",
+  "@profileUnavailableBody": {
+    "description": "Body for a capability refusal. Says nothing about capabilities, which are a platform concept and not a customer one, and offers no retry because asking again does not grant one."
+  },
+
+  "profileOfflineTitle": "No connection",
+  "@profileOfflineTitle": {
+    "description": "Heading when the request never reached the platform."
+  },
+
+  "profileOfflineBody": "Check your connection and try again.",
+  "@profileOfflineBody": {
+    "description": "Body for a transport failure, where retrying is the customer's own next step."
+  },
+
+  "profileErrorTitle": "Something went wrong",
+  "@profileErrorTitle": {
+    "description": "Heading for a server-side failure the customer cannot act on."
+  },
+
+  "profileErrorBody": "Try again in a moment.",
+  "@profileErrorBody": {
+    "description": "Body for a server-side failure. Carries no technical detail; the correlation identifier goes to telemetry."
+  },
+
+  "profileAddressesEmptyTitle": "No saved addresses",
+  "@profileAddressesEmptyTitle": {
+    "description": "Heading when the customer has never saved an address."
+  },
+
+  "profileAddressesEmptyBody": "Add one so checkout knows where to deliver.",
+  "@profileAddressesEmptyBody": {
+    "description": "Body of the empty address list."
+  },
+
+  "profileAddressAdd": "Add address",
+  "@profileAddressAdd": {
+    "description": "Action that opens the new-address form."
+  },
+
+  "profileAddressEdit": "Edit",
+  "@profileAddressEdit": {
+    "description": "Action that opens an existing address in the form. Shown only where the platform has an endpoint behind it."
+  },
+
+  "profileAddressRemoveAction": "Remove",
+  "@profileAddressRemoveAction": {
+    "description": "Action that deletes a saved address, and the confirming button in its dialog."
+  },
+
+  "profileAddressRemoveTitle": "Remove this address?",
+  "@profileAddressRemoveTitle": {
+    "description": "Title of the address removal confirmation."
+  },
+
+  "profileAddressRemoveBody": "It is removed from your account. Orders already placed are not affected.",
+  "@profileAddressRemoveBody": {
+    "description": "Body of the removal confirmation, stating the blast radius."
+  },
+
+  "profileAddressRemoved": "Address removed",
+  "@profileAddressRemoved": {
+    "description": "Confirmation shown after an address is deleted."
+  },
+
+  "profileAddressUnlabelled": "Address",
+  "@profileAddressUnlabelled": {
+    "description": "Stands in for the customer's own name for an address when they did not give one."
+  },
+
+  "profileAddressNewTitle": "New address",
+  "@profileAddressNewTitle": {
+    "description": "Title of the address form when adding."
+  },
+
+  "profileAddressEditTitle": "Edit address",
+  "@profileAddressEditTitle": {
+    "description": "Title of the address form when correcting an existing address."
+  },
+
+  "profileAddressSave": "Save address",
+  "@profileAddressSave": {
+    "description": "Primary action on the address form."
+  },
+
+  "profileAddressSaveFailed": "The address was not saved. Try again.",
+  "@profileAddressSaveFailed": {
+    "description": "Shown when saving the address failed. The same idempotency key is reused on the retry, so a save that actually reached the platform is not duplicated."
+  },
+
+  "profileAddressFieldLabel": "Name for this address",
+  "@profileAddressFieldLabel": {
+    "description": "Field label for the customer's own word for an address."
+  },
+
+  "profileAddressFieldLabelHint": "Home, work",
+  "@profileAddressFieldLabelHint": {
+    "description": "Placeholder examples for the address label."
+  },
+
+  "profileAddressFieldStreet": "Street and house",
+  "@profileAddressFieldStreet": {
+    "description": "Field label for the first address line."
+  },
+
+  "profileAddressFieldLandmark": "Landmark",
+  "@profileAddressFieldLandmark": {
+    "description": "Field label for the ориентир. A first-class field: for a large share of addresses in this market it is the only thing that locates the building."
+  },
+
+  "profileAddressFieldLandmarkHint": "Opposite the pharmacy, blue gate",
+  "@profileAddressFieldLandmarkHint": {
+    "description": "Placeholder example for the landmark, showing the kind of description that works."
+  },
+
+  "profileAddressFieldLandmarkHelp": "How you would describe the place to a driver. For many addresses here this is what actually finds the door.",
+  "@profileAddressFieldLandmarkHelp": {
+    "description": "Helper text under the landmark field, explaining why it is being asked for rather than treating it as an optional extra."
+  },
+
+  "profileAddressInsideTitle": "Inside the building",
+  "@profileAddressInsideTitle": {
+    "description": "Heading above entrance, floor and flat, which locate a door rather than a building."
+  },
+
+  "profileAddressFieldEntrance": "Entrance",
+  "@profileAddressFieldEntrance": {
+    "description": "Field label for подъезд."
+  },
+
+  "profileAddressFieldFloor": "Floor",
+  "@profileAddressFieldFloor": {
+    "description": "Field label for этаж."
+  },
+
+  "profileAddressFieldApartment": "Flat",
+  "@profileAddressFieldApartment": {
+    "description": "Field label for квартира."
+  },
+
+  "profileAddressFieldDistrict": "District",
+  "@profileAddressFieldDistrict": {
+    "description": "Field label for the district."
+  },
+
+  "profileAddressFieldCity": "City",
+  "@profileAddressFieldCity": {
+    "description": "Field label for the city."
+  },
+
+  "profileAddressFieldInstructions": "Note for the courier",
+  "@profileAddressFieldInstructions": {
+    "description": "Field label for the delivery instruction, which the platform encrypts like the rest of the address."
+  },
+
+  "profileAddressNothingToFind": "Add a street and house, or a landmark. Without one of them there is nothing to find.",
+  "@profileAddressNothingToFind": {
+    "description": "Validation message when the address has neither a street line nor a landmark."
+  },
+
+  "profileAddressLandmarkNeeded": "Without a pin, the landmark is what finds this address. Add one, or choose to place a pin later.",
+  "@profileAddressLandmarkNeeded": {
+    "description": "Validation message when the customer said the place has no pin but gave no landmark, which would leave an address with neither a point nor a description."
+  },
+
+  "profileAddressPinTitle": "Map pin",
+  "@profileAddressPinTitle": {
+    "description": "Heading of the section where the customer says whether this address has a point."
+  },
+
+  "profileAddressPinSet": "Pin set",
+  "@profileAddressPinSet": {
+    "description": "Status of an address that carries a coordinate."
+  },
+
+  "profileAddressPinNone": "No pin yet",
+  "@profileAddressPinNone": {
+    "description": "Status of an address nobody has geocoded. Retryable, and different from an address that genuinely has no point."
+  },
+
+  "profileAddressPinByLandmark": "Found by its landmark",
+  "@profileAddressPinByLandmark": {
+    "description": "Status of an address that deliberately has no point. A complete address, not an unfinished one."
+  },
+
+  "profileAddressPinLater": "I will place a pin later",
+  "@profileAddressPinLater": {
+    "description": "The option meaning the address has not been geocoded yet, which is worth retrying."
+  },
+
+  "profileAddressPinLaterHelp": "Delivery may ask for a pin before this address can be used.",
+  "@profileAddressPinLaterHelp": {
+    "description": "Consequence of choosing to place a pin later."
+  },
+
+  "profileAddressPinNever": "This place has no pin — find it by the landmark",
+  "@profileAddressPinNever": {
+    "description": "The option meaning the address genuinely has no point, so nothing should ever try to geocode it again."
+  },
+
+  "profileAddressPinNeverHelp": "The courier calls and finds the place from your description. We will not keep asking for a pin.",
+  "@profileAddressPinNeverHelp": {
+    "description": "Consequence of saying the place has no pin."
+  },
+
+  "profileAddressPinKeptHelp": "Placed on a map. This application has no map yet, so it cannot be moved here.",
+  "@profileAddressPinKeptHelp": {
+    "description": "Shown for an address whose point somebody else placed. The application does not relabel that pin as the customer's own."
+  },
+
+  "profileNotificationsAlwaysTitle": "Always sent",
+  "@profileNotificationsAlwaysTitle": {
+    "description": "Section heading above the messages a customer cannot switch off. Listed rather than hidden, so the customer can see what will be sent."
+  },
+
+  "profileNotificationsAlwaysBody": "These are part of the order or of your account's security, so they cannot be switched off.",
+  "@profileNotificationsAlwaysBody": {
+    "description": "Explains why the messages above have no switch. An interface that offered one and then sent them anyway would be worse than one that says no."
+  },
+
+  "profileNotificationsChoiceTitle": "Your choice",
+  "@profileNotificationsChoiceTitle": {
+    "description": "Section heading above the messages the customer controls."
+  },
+
+  "profileNotificationsSmsOnly": "Sent by SMS. Other channels are not available yet.",
+  "@profileNotificationsSmsOnly": {
+    "description": "States the one channel with an adapter behind it. Email, push and messaging apps are declared on the platform but nothing sends on them, so no switch is offered for them."
+  },
+
+  "profileNotificationsOrderTitle": "Order messages",
+  "@profileNotificationsOrderTitle": {
+    "description": "Label for the required transactional class."
+  },
+
+  "profileNotificationsOrderBody": "Confirmation, refusal, a payment problem.",
+  "@profileNotificationsOrderBody": {
+    "description": "What a required transactional message actually is."
+  },
+
+  "profileNotificationsSecurityTitle": "Account security",
+  "@profileNotificationsSecurityTitle": {
+    "description": "Label for the security class, which is also not switchable."
+  },
+
+  "profileNotificationsSecurityBody": "Sign-ins and changes to how you get into your account.",
+  "@profileNotificationsSecurityBody": {
+    "description": "What a security message is. Suppressing one is itself a security risk."
+  },
+
+  "profileNotificationsExtraTitle": "Extra order updates",
+  "@profileNotificationsExtraTitle": {
+    "description": "Label for the optional transactional class."
+  },
+
+  "profileNotificationsExtraBody": "Useful but not required — a reminder that your order is waiting.",
+  "@profileNotificationsExtraBody": {
+    "description": "What an optional transactional message is."
+  },
+
+  "profileNotificationsOffersTitle": "Offers and news",
+  "@profileNotificationsOffersTitle": {
+    "description": "Label for the marketing class."
+  },
+
+  "profileNotificationsOffersBody": "Sent only where you have also given consent. This switch is a preference, not consent.",
+  "@profileNotificationsOffersBody": {
+    "description": "Keeps the preference and the ADR 0015 consent decision apart in the customer's own words. A legal basis created by a switch nobody can date is not a legal basis."
+  },
+
+  "profileNotificationsSaveFailed": "The setting was not saved. Try again.",
+  "@profileNotificationsSaveFailed": {
+    "description": "Shown when writing a preference failed. The switch is put back to where it was, because a switch showing a setting the platform does not hold is a lie."
+  }
+}

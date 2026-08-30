@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.qoida.uz/events/tenancy.events/TenantOnboardingFailed.v1.schema.json",
+  "title": "TenantOnboardingFailed v1 payload",
+  "description": "An ADR 0008 run stopped on a required step. Carries the error code only: the detail is whatever the failing system said and may name a person, so it stays behind an authorized read.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tenantId", "runId"],
+  "properties": {
+    "tenantId": { "type": "string", "format": "uuid" },
+    "runId": { "type": "string", "format": "uuid" },
+    "stepKey": { "type": ["string", "null"], "maxLength": 64 },
+    "errorCode": { "type": ["string", "null"], "maxLength": 64 }
+  }
+}

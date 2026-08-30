@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.qoida.uz/events/ordering.events/OrderCancelled.v1.schema.json",
+  "title": "OrderCancelled v1 payload",
+  "description": "The order was cancelled before confirmation. Cancelling after confirmation is ADR 0039's and is refused rather than half-performed, so this event never follows CONFIRMED in this release.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["orderId", "status", "orderVersion"],
+  "properties": {
+    "orderId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": ["string", "null"], "format": "uuid" },
+    "locationId": { "type": ["string", "null"], "format": "uuid" },
+    "cancelledByActorType": {
+      "type": ["string", "null"],
+      "enum": ["USER", "SERVICE", "SYSTEM_JOB", "PROVIDER", "CUSTOMER", null]
+    },
+    "reasonCode": { "type": ["string", "null"], "maxLength": 64 },
+    "previousStatus": {
+      "type": ["string", "null"],
+      "enum": [
+        "RECEIVED", "PAYMENT_AUTHORIZING", "AWAITING_APPROVAL", "PAYMENT_FAILED",
+        "CONFIRMED", "REJECTED", "EXPIRED", "PREPARING", "READY", "FULFILLING",
+        "COMPLETED", "CANCELLED", null
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "RECEIVED", "PAYMENT_AUTHORIZING", "AWAITING_APPROVAL", "PAYMENT_FAILED",
+        "CONFIRMED", "REJECTED", "EXPIRED", "PREPARING", "READY", "FULFILLING",
+        "COMPLETED", "CANCELLED"
+      ]
+    },
+    "orderVersion": { "type": "integer", "minimum": 1 }
+  }
+}

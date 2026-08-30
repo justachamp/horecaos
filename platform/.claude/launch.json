@@ -1,0 +1,26 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "operations",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5174"],
+      "port": 5174,
+      "cwd": "frontend/prototypes/operations"
+    },
+    {
+      "name": "control-plane",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5175"],
+      "port": 5175,
+      "cwd": "frontend/prototypes/control-plane"
+    },
+    {
+      "name": "storefront",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["ng", "serve", "--port", "4200"],
+      "port": 4200,
+      "cwd": "frontend/storefront"
+    }
+  ]
+}

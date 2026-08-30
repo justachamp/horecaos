@@ -1,0 +1,5 @@
+<div class="flex flex-col">
+  @for (item of items; track item.id) {
+    <app-food-card [item]="item"></app-food-card>
+  }
+</div>

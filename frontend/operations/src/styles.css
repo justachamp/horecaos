@@ -1,0 +1,65 @@
+/* Application-global stylesheet.
+ *
+ * Everything visual that this application is allowed to decide lives here.
+ * Everything it is not allowed to decide lives in tokens.css, which is
+ * generated. If a rule below hard-codes a colour, a radius or a font size, it is
+ * a bug — reach for a token or a type class instead.
+ */
+
+@import './tokens.css';
+
+/* IBM Plex Sans is bundled rather than fetched. A console used during service
+ * must render its first frame on a restaurant's connection, and a webfont that
+ * arrives over the network arrives after first paint — the operator reads a
+ * fallback face for the first second of every cold load. The npm package ships
+ * the Latin, Latin Extended and Cyrillic subsets, which is exactly what ru,
+ * uz-Latn and en need. */
+@import '@ibm/plex-sans/css/ibm-plex-sans-default.css';
+@import '@ibm/plex-mono/css/ibm-plex-mono-default.css';
+
+/* Angular's mount node. The generated sheet names React's. */
+q-root {
+  display: block;
+  height: 100%;
+}
+
+/* Focus is visible and it is platform blue, on every interactive element,
+ * because a console driven from the keyboard under time pressure is unusable
+ * when the caret is invisible. Never remove this without replacing it. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--q-primary);
+  outline-offset: 1px;
+}
+
+/* Skip link. Eleven rail entries stand between a keyboard user and the queue. */
+.q-skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 8px 16px;
+  background: var(--q-primary);
+  color: #fff;
+}
+
+.q-skip-link:focus {
+  left: 0;
+}
+
+/* Machine data is monospace throughout: order numbers, phones, amounts,
+ * external references, timestamps (operations-spec/orders.md §1.3). A proportional
+ * face makes two order numbers of equal length look different lengths. */
+.q-mono {
+  font-family: var(--q-font-mono);
+}
+
+.q-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

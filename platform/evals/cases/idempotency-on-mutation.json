@@ -1,0 +1,6 @@
+{
+  "why": "ADR 0031, and V0047 which had to rescope idempotency to the caller and the resource. Effectful mutations are retried by clients and by us.",
+  "prompt": "Add an endpoint that captures a payment for an order. What does the request contract need?",
+  "expect_any": ["Idempotency-Key", "idempoten"],
+  "expect_all": ["Problem Details|application/problem\\+json"]
+}

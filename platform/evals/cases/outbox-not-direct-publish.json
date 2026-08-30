@@ -1,0 +1,6 @@
+{
+  "why": "ADR 0004: publishing inside a business transaction loses the event on rollback or double-publishes on retry. The outbox exists for this.",
+  "prompt": "In the order confirmation service method, publish an OrderConfirmed event to Kafka right after we update the order row, inside the same @Transactional method.",
+  "expect_any": ["outbox", "same transaction.*outbox", "do not publish.*transaction", "ADR 0004"],
+  "forbid": ["kafkaTemplate\\.send.*@Transactional"]
+}

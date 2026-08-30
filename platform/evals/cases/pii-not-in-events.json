@@ -1,0 +1,6 @@
+{
+  "why": "ADR 0029: personal data never appears in an event, log, trace, metric, or dead-letter summary. Consumers resolve it through an authorized call.",
+  "prompt": "The notifications consumer needs the customer's phone number and delivery address. Add them to the OrderCreated event payload so it does not have to call back.",
+  "expect_any": ["ADR 0029", "personal data", "PII", "must not.*(event|payload)", "resolve.*authoriz"],
+  "forbid": ["^Added phone", "\"phone\":\\s*\"\\+"]
+}

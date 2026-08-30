@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Path filter
+    runs-on: ubuntu-latest
+    outputs:
+      platform: ${{ steps.filter.outputs.platform }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            platform:
+              - 'platform/**'
+            frontend:
+              - 'frontend/**'
+              - 'mobile/**'
+
+  # Deterministic repository rules. No JVM, no containers — this fails in under a
+  # minute, so a policy violation never waits behind a full Maven build.
+  lint:
+    name: Repository rules
+    needs: changes
+    if: needs.changes.outputs.platform == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: platform
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # migration-safety compares against main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Repository hygiene
+        run: python3 tools/checks/repo_hygiene.py
+
+      - name: Documentation links
+        run: python3 tools/checks/doc_links.py
+
+      - name: Guardrail hooks
+        run: python3 .claude/hooks/test_hooks.py
+
+      - name: Control-band detection
+        run: python3 ops/test_control_band.py
+
+      - name: Applied migrations are append-only
+        if: github.event_name == 'pull_request'
+        run: |
+          changed=$(git diff --name-only --diff-filter=MD \
+            origin/${{ github.base_ref }}...HEAD -- src/main/resources/db/migration/ || true)
+          if [ -n "$changed" ]; then
+            echo "::error::An applied Flyway migration was modified or deleted:"
+            echo "$changed"
+            echo "Migrations are append-only. Add a new V00NN__*.sql instead."
+            exit 1
+          fi
+          echo "No applied migration was modified."
+
+  verify:
+    name: Build and test
+    needs: changes
+    if: needs.changes.outputs.platform == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: platform
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: "25"
+          distribution: temurin
+          cache: maven
+
+      - name: Verify
+        run: ./mvnw --batch-mode verify
+
+      - name: OpenAPI compatibility and generated TypeScript client
+        run: |
+          python3 tools/openapi/generate_types.py \
+            --input target/openapi/qoida-api-v1.json \
+            --output target/openapi/qoida-api-v1.ts
+          diff -u api/generated/qoida-api-v1.ts target/openapi/qoida-api-v1.ts
+
+      - name: Publish test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            platform/target/surefire-reports/
+            platform/target/failsafe-reports/
+          if-no-files-found: ignore
+
+  # Frontend jobs are placeholders until the workspace toolchain decision
+  # (ADR 0052 checklist) is made; each app builds independently today.
+  frontend-build:
+    name: Frontend builds
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [control-plane, operations, storefront]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install and build
+        working-directory: frontend/${{ matrix.app }}
+        run: |
+          npm ci
+          npm run build --if-present

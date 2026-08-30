@@ -1,0 +1,105 @@
+<div
+  class="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3 border-b border-zinc-800/90 py-4 text-left text-jizbiz-text last:border-b-0"
+>
+  <a
+    [routerLink]="['/product', item().id]"
+    class="relative shrink-0 justify-self-start transition-opacity hover:opacity-95"
+  >
+    <div
+      class="flex size-[7.5rem] items-center justify-center overflow-hidden rounded-2xl bg-white ring-1 ring-zinc-700/80"
+    >
+      <img
+        [src]="image()"
+        [alt]="title()"
+        class="h-full w-full object-cover object-center"
+        loading="lazy"
+        decoding="async"
+      />
+    </div>
+    <button
+      type="button"
+      class="absolute right-0 top-0 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-jizbiz-accent shadow-md transition-colors"
+      [attr.aria-label]="'product.favorites' | t"
+      (click)="toggleFavourite($event)"
+      [disabled]="favouriting()"
+    >
+      @if (isFavourite()) {
+        <svg width="16" height="14" viewBox="0 0 18 16" aria-hidden="true">
+          <path
+            fill="white"
+            stroke="white"
+            stroke-width="1.2"
+            stroke-linejoin="round"
+            d="M8.999 14.122c-3.12-2.79-6.25-4.93-6.25-8.104C2.75 4.02 4.365 2.5 6.37 2.5c1.12 0 2.196.53 2.63 1.37.434-.84 1.51-1.37 2.63-1.37 2.005 0 3.62 1.52 3.62 3.518 0 3.174-3.13 5.314-6.25 8.104Z"
+          />
+        </svg>
+      } @else {
+        <svg width="16" height="14" viewBox="0 0 18 16" fill="none" aria-hidden="true">
+          <path
+            d="M8.999 14.122c-3.12-2.79-6.25-4.93-6.25-8.104C2.75 4.02 4.365 2.5 6.37 2.5c1.12 0 2.196.53 2.63 1.37.434-.84 1.51-1.37 2.63-1.37 2.005 0 3.62 1.52 3.62 3.518 0 3.174-3.13 5.314-6.25 8.104Z"
+            stroke="white"
+            stroke-width="1.4"
+            stroke-linejoin="round"
+          />
+        </svg>
+      }
+    </button>
+  </a>
+
+  <div class="relative z-10 flex min-h-0 min-w-0 flex-col gap-1.5 py-0.5">
+    <a
+      [routerLink]="['/product', item().id]"
+      class="flex flex-col gap-1.5 pr-1 transition-opacity hover:opacity-95"
+    >
+      <h3 class="text-[15px] font-bold leading-snug text-jizbiz-text">{{ title() }}</h3>
+      @if (description()) {
+        <p class="line-clamp-3 text-[13px] leading-relaxed text-zinc-400">{{ description() }}</p>
+      }
+    </a>
+    @if (qty() === 0) {
+      <button
+        type="button"
+        class="mt-auto flex w-full min-w-0 items-center justify-between gap-2 rounded-full bg-jizbiz-accent px-4 py-3 text-left text-xs font-semibold leading-tight text-white transition-opacity hover:opacity-90 disabled:opacity-50 sm:text-[13px]"
+        [disabled]="cart.updating()"
+        [attr.aria-label]="'cart.addToCart' | t"
+        (click)="increase($event)"
+      >
+        <span class="min-w-0 truncate">{{ priceLabel() }}</span>
+        <span class="shrink-0 text-lg font-light leading-none" aria-hidden="true">+</span>
+      </button>
+    } @else {
+      <div class="mt-auto flex items-center gap-1.5 pt-2">
+        <button
+          type="button"
+          class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-jizbiz-surface-2 text-lg font-light leading-none text-jizbiz-text transition-colors hover:bg-jizbiz-hover disabled:cursor-not-allowed disabled:opacity-40"
+          [disabled]="cart.updating() || qty() <= 0"
+          [attr.aria-label]="'common.decrease' | t"
+          (click)="decrease($event)"
+        >
+          −
+        </button>
+
+        <div
+          class="flex min-h-[2.75rem] min-w-0 flex-1 flex-col items-center justify-center rounded-full bg-jizbiz-surface-2 px-3 py-2 text-center"
+        >
+          <span class="text-xs font-bold leading-tight text-jizbiz-text">
+            {{ qty() }} {{ 'common.itemsUnit' | t }}
+          </span>
+          <span class="mt-0.5 text-[11px] font-medium leading-none text-[#d4af37] sm:text-xs">
+            {{ lineTotalFormatted() }}
+          </span>
+        </div>
+
+        <button
+          type="button"
+          class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-jizbiz-surface-2 text-lg font-light leading-none text-jizbiz-text transition-colors hover:bg-jizbiz-hover disabled:opacity-50"
+          [disabled]="cart.updating()"
+          [attr.aria-label]="'common.increase' | t"
+          (click)="increase($event)"
+        >
+          +
+        </button>
+      </div>
+    }
+  </div>
+</div>

@@ -1,0 +1,62 @@
+name: Agent evals
+
+# Stage 4. The agent's configuration is code that nothing else tests: a change to
+# CLAUDE.md, a skill, or a hook changes how every future session behaves, and the
+# Maven build will not notice. This gates those changes.
+
+on:
+  pull_request:
+    paths:
+      - "CLAUDE.md"
+      - "AGENTS.md"
+      - "REVIEW.md"
+      - ".claude/skills/**"
+      - ".claude/agents/**"
+      - ".claude/hooks/**"
+      - ".claude/settings.json"
+      - "evals/**"
+  schedule:
+    - cron: "0 6 * * 1" # Monday morning, to catch drift from model updates
+  workflow_dispatch:
+
+jobs:
+  # Fast, deterministic, and free. Runs first so an obviously broken guardrail
+  # fails in seconds rather than after a full eval sweep.
+  guardrails:
+    name: Guardrail hooks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 .claude/hooks/test_hooks.py
+      - run: python3 tools/checks/repo_hygiene.py
+
+  evals:
+    name: Behavioural regression suite
+    needs: guardrails
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python3 evals/run.py --min-pass 0.9 --jobs 4
+
+      - name: Explain a failure
+        if: failure()
+        run: |
+          echo "::warning::The agent-configuration suite regressed."
+          echo "A drop almost always means this PR removed guidance something depended on."
+          echo "Check the diff to CLAUDE.md, .claude/skills/, and .claude/hooks/."
+          echo "Run locally with:  python3 evals/run.py --verbose"

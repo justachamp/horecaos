@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.qoida.uz/events/realtime.signals/RealtimeSignal.v1.schema.json",
+  "title": "RealtimeSignal v1 payload",
+  "description": "ADR 0045. Something in a scope changed; the reader re-reads it through the ordinary authorized API. Identifiers, a scope key, and a time. additionalProperties is false so a field carrying state — an order total, a courier coordinate, a customer name — cannot be added without changing this file and being seen.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["signalId", "tenantId", "channel", "scope", "resourceType", "occurredAt"],
+  "properties": {
+    "signalId": { "type": "string", "format": "uuid" },
+    "tenantId": { "type": "string", "format": "uuid" },
+    "channel": {
+      "type": "string",
+      "description": "A registered ADR 0045 stream channel. An unknown name is dropped by the consumer rather than failing it, because adding a channel must not be a coordinated deploy.",
+      "enum": [
+        "ORDER_QUEUE",
+        "ORDER_DETAIL",
+        "DISPATCH_BOARD",
+        "STOP_LIST",
+        "INTEGRATION_ALERTS",
+        "COUNTERS",
+        "COURIER_POSITIONS"
+      ]
+    },
+    "scope": {
+      "type": "string",
+      "description": "The fan-out key and the Kafka record key: TENANT, BRAND, or LOCATION and a UUID. Never PLATFORM — a platform-wide stream would carry one tenant's changes to another tenant's screen.",
+      "pattern": "^(TENANT|BRAND|LOCATION):[0-9a-fA-F-]{36}$"
+    },
+    "resourceType": { "type": "string", "maxLength": 64 },
+    "resourceId": { "type": ["string", "null"], "format": "uuid" },
+    "version": {
+      "type": ["integer", "null"],
+      "description": "The resource's version after the change, so a client holding a newer copy can drop the frame instead of re-reading. Null where the source has no version.",
+      "minimum": 1
+    },
+    "occurredAt": { "type": "string", "format": "date-time" }
+  }
+}

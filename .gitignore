@@ -1,0 +1,13 @@
+# Root backstops; each project carries its own .gitignore too.
+.DS_Store
+node_modules/
+dist/
+build/
+target/
+.angular/
+.dart_tool/
+.vite/
+*.log
+.env
+.env.*
+!.env.example

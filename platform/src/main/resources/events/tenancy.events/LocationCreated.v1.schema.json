@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.qoida.uz/events/tenancy.events/LocationCreated.v1.schema.json",
+  "title": "LocationCreated v1 payload",
+  "description": "Emitted after a location is created under a brand. Carries no personal data; the address is deliberately absent.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["locationId", "brandId", "status"],
+  "properties": {
+    "locationId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": "string", "format": "uuid" },
+    "code": { "type": ["string", "null"], "pattern": "^[A-Z0-9][A-Z0-9_-]{0,31}$" },
+    "slug": { "type": ["string", "null"], "maxLength": 63 },
+    "displayName": { "type": ["string", "null"], "maxLength": 255 },
+    "timezone": { "type": ["string", "null"], "maxLength": 64 },
+    "status": {
+      "type": "string",
+      "enum": ["DRAFT", "ACTIVE", "SUSPENDED", "ARCHIVED"]
+    }
+  }
+}

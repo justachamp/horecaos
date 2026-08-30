@@ -1,0 +1,43 @@
+<div class="min-h-screen min-w-0 bg-jizbiz-bg pb-24 text-jizbiz-text">
+  <div class="flex flex-col gap-4 bg-jizbiz-bg px-4 py-4">
+    <div class="mx-auto flex w-full max-w-[420px] flex-col gap-4">
+      <header class="flex min-w-0 items-start justify-between gap-2 overflow-visible">
+        <div class="min-w-0 flex-1 space-y-2">
+          <h1 class="text-lg font-semibold">{{ 'orders.title' | t }}</h1>
+          <p class="text-sm text-zinc-500">{{ 'orders.list' | t }}</p>
+        </div>
+        <app-order-reload [statuses]="currentStatuses()" />
+      </header>
+
+      <nav class="flex items-end justify-between gap-2">
+        @for (tab of tabs; track tab.path) {
+          <a
+            [routerLink]="['/orders', tab.path]"
+            routerLinkActive="is-active"
+            #rla="routerLinkActive"
+            class="flex flex-1 flex-col items-center gap-2 text-sm font-semibold [&.is-active]:text-jizbiz-text"
+            [class.text-jizbiz-text]="rla.isActive"
+            [class.text-zinc-400]="!rla.isActive"
+          >
+            <span>{{ tab.labelKey | t }}</span>
+            <span
+              class="block w-full rounded-full transition-all"
+              [class.h-1]="rla.isActive"
+              [class.h-0.5]="!rla.isActive"
+              [class.bg-gradient-to-r]="rla.isActive"
+              [class.from-jizbiz-accent-deep]="rla.isActive"
+              [class.to-jizbiz-accent]="rla.isActive"
+              [class.bg-jizbiz-border]="!rla.isActive"
+            ></span>
+          </a>
+        }
+      </nav>
+    </div>
+  </div>
+
+  <div class="mx-auto flex max-w-[420px] flex-col px-4 pt-2 pb-6">
+    <div class="pt-2">
+      <router-outlet></router-outlet>
+    </div>
+  </div>
+</div>

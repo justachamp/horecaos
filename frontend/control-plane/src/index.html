@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>Qoida control plane</title>
+    <base href="/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/x-icon" href="favicon.ico" />
+
+    <!-- Deployment configuration, read before the application bootstraps so one
+         build artifact runs in every environment. Not deferred: the injector
+         reads it during bootstrap. -->
+    <script src="config.js"></script>
+  </head>
+
+  <!-- The surface class is set on the document, not chosen by a component, so
+       a CONSOLE rule can never match inside a FIELD surface by accident. -->
+  <body class="console">
+    <app-root></app-root>
+  </body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.qoida.uz/events/ordering.events/OrderExpired.v1.schema.json",
+  "title": "OrderExpired v1 payload",
+  "description": "Nobody decided before the approval deadline. Deliberately distinct from OrderRejected: 'the restaurant declined' and 'the restaurant never looked' have different customer wording and different branch metrics.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["orderId", "status", "orderVersion"],
+  "properties": {
+    "orderId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": ["string", "null"], "format": "uuid" },
+    "locationId": { "type": ["string", "null"], "format": "uuid" },
+    "approvalDeadlineAt": { "type": ["string", "null"], "format": "date-time" },
+    "status": {
+      "type": "string",
+      "enum": [
+        "RECEIVED", "PAYMENT_AUTHORIZING", "AWAITING_APPROVAL", "PAYMENT_FAILED",
+        "CONFIRMED", "REJECTED", "EXPIRED", "PREPARING", "READY", "FULFILLING",
+        "COMPLETED", "CANCELLED"
+      ]
+    },
+    "orderVersion": { "type": "integer", "minimum": 1 }
+  }
+}

@@ -1,0 +1,68 @@
+# Deliberately opt-in. `make run` activates this profile; test and production
+# profiles use only the production migration directory. The local fixture is a
+# repeatable migration so edits to the checked-in demo data are applied on the
+# next local start without becoming production schema history.
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/local-fixtures
+
+qoida:
+  secrets:
+    data_encryption:
+      platform:
+        # ADR 0029's key-encryption key, for the `environment` secrets provider.
+        #
+        # **Without this, nothing on a laptop that touches personal data works
+        # at all**, and the way it fails is worth writing down. Asking for a
+        # one-time code hashes the phone number with a key derived from this
+        # (`EnvelopeFieldProtection.lookupHash`), so the very first request of
+        # the sign-in journey threw `SecretNotFoundException: No secret is
+        # configured for qoida:local:data_encryption:platform:kek` — which
+        # reached the browser as a bare 401 with no body, indistinguishable
+        # from "you are not signed in". On the one endpoint whose entire
+        # purpose is to serve somebody who is not signed in.
+        #
+        # It was not missing from the tests: every test that needs it registers
+        # its own through `@DynamicPropertySource`. That is exactly why a green
+        # suite said nothing about it — the fixture did in setup what `make run`
+        # never does.
+        #
+        # A local-only placeholder, like the MinIO credentials and the handover
+        # pepper in application.yml, and it cannot travel. This document is
+        # activated by the `local` profile, and SecretsProfileGuard refuses to
+        # start a non-local profile on the `environment` provider at all. What
+        # a deployment supplies instead is the reference
+        # `qoida:{environment}:data_encryption:platform:kek`, resolved from
+        # OpenBao (ADR 0028, ADR 0034) — never a value in a file.
+        #
+        # Changing this value orphans every ciphertext and every lookup hash
+        # already written to the local database, because both are derived from
+        # it. That is a `make down && make up` on a laptop and an ADR 0028
+        # rotation procedure anywhere else.
+        kek: ${QOIDA_DATA_ENCRYPTION_KEK:qoida-local-data-encryption-kek-not-for-use}
+  customers:
+    verification:
+      # ADR 0051. The one number that signs in with a fixed code and sends no SMS,
+      # so the whole customer journey is exercisable on a laptop where no gateway
+      # is bound and no message can leave.
+      #
+      # It lives here and nowhere else, and this document is activated by the
+      # `local` profile — the same binding `db/local-fixtures` above has.
+      # PresetVerificationCodeSource additionally refuses to be created outside a
+      # local profile, and PresetVerificationCodeGuard refuses to *start* a
+      # non-local profile that has either of these set. Three locks, because a
+      # fixed one-time code that reached a deployment would not be a weakened
+      # control — it would be a complete authentication bypass for every customer
+      # of every tenant.
+      #
+      # +998 00 000 00 00 is not a number anybody has. Uzbek mobile operator codes
+      # are two digits in the 33 and 88–99 ranges; `00` is allocated to nobody, so
+      # this passes PhoneNumber's +998-and-nine-digits check while addressing no
+      # subscriber. Choosing a plausible-looking number instead would mean a real
+      # person's handset in a configuration file, which ADR 0029 is about.
+      #
+      # Every other number on this profile still draws a random code and still
+      # needs a transport, so the preset cannot hide a broken SMS path.
+      preset:
+        phone: ${QOIDA_VERIFICATION_PRESET_PHONE:+998000000000}
+        code: ${QOIDA_VERIFICATION_PRESET_CODE:000000}

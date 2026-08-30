@@ -1,0 +1,324 @@
+#!/usr/bin/env python3
+"""File every ADR into a directory named for its implementation status, and fix
+every link that move breaks.
+
+Status is a fact that changes, and a directory is a name that does not, so the
+two go out of step the moment somebody finishes a feature. This script is the
+reconciliation: it reads each record's own `Implementation status:` line, moves
+the file to the matching directory, and rewrites every reference — the links
+between ADRs, the index, and the paths named from source and documentation
+elsewhere in the repository.
+
+It is idempotent. Run it after changing any status line; run it twice and the
+second run reports nothing to do.
+
+    tools/file-adrs            # move files and rewrite links
+    tools/file-adrs --check    # report what would change, touch nothing
+
+--check exits non-zero when something is out of place, so CI can hold the line
+without this becoming a chore somebody remembers to do.
+"""
+from __future__ import annotations
+
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+ADR_ROOT = REPO / "docs" / "adr"
+
+# The leading token of an Implementation status line, and the directory it files
+# into. Order matters: "Not started" must be tested before "Not applicable"
+# would ever be reached by a prefix check, so these are matched whole.
+BUCKETS = {
+    "Built": "built",
+    "Partial": "partial",
+    "Not started": "not-started",
+    "Not applicable": "meta",
+}
+
+ADR_NAME = re.compile(r"^\d{4}-.*\.md$")
+STATUS_LINE = re.compile(r"^- Implementation status:\s*(.+?)\s*$", re.M)
+
+# Files that stay at docs/adr/ and are not themselves ADRs.
+KEEP_AT_ROOT = {"README.md", "TEMPLATE.md"}
+
+# Where to look for references. Everything text-ish, minus the places a rewrite
+# would be noise or actively wrong.
+SKIP_DIRS = {".git", "node_modules", "target", "build", ".dart_tool", "worktrees"}
+TEXT_SUFFIXES = {".md", ".java", ".py", ".sh", ".yaml", ".yml", ".sql", ".ts", ".dart", ".json"}
+
+
+def run(*args: str) -> str:
+    return subprocess.run(args, cwd=REPO, capture_output=True, text=True, check=False).stdout
+
+
+def bucket_of(path: Path) -> str | None:
+    """The directory this record belongs in, from its own status line."""
+    match = STATUS_LINE.search(path.read_text(encoding="utf-8"))
+    if not match:
+        return None
+    annotation = match.group(1)
+    for token, directory in BUCKETS.items():
+        # Whole-token match against the start, so "Not started — ..." cannot be
+        # read as "Not applicable" and a future token cannot silently land in
+        # whichever bucket happens to be a prefix of it.
+        if annotation == token or annotation.startswith(token + " ") or annotation.startswith(token + " —"):
+            return directory
+    return None
+
+
+def find_adrs() -> list[Path]:
+    found = []
+    for path in ADR_ROOT.rglob("*.md"):
+        if path.name in KEEP_AT_ROOT or not ADR_NAME.match(path.name):
+            continue
+        found.append(path)
+    return sorted(found)
+
+
+def rewrite_references(moves: dict[str, str]) -> list[Path]:
+    """Point every reference at where the file now is.
+
+    `moves` maps a filename to its new directory. Both the inter-ADR links --
+    which are relative and therefore depend on where the *linking* file sits --
+    and the repository-wide `docs/adr/...` paths are rewritten.
+    """
+    touched: list[Path] = []
+    for path in REPO.rglob("*"):
+        if not path.is_file() or path.suffix not in TEXT_SUFFIXES:
+            continue
+        if any(part in SKIP_DIRS for part in path.parts):
+            continue
+
+        original = text = path.read_text(encoding="utf-8", errors="ignore")
+
+        for name, directory in moves.items():
+            # A repository-wide path, wherever it currently claims the file is.
+            text = re.sub(
+                rf"docs/adr/(?:[a-z-]+/)?{re.escape(name)}",
+                f"docs/adr/{directory}/{name}",
+                text,
+            )
+
+            # Documents elsewhere under docs/ reach the records by a relative
+            # path -- `adr/NNNN-...` from docs/, `../adr/NNNN-...` from a
+            # subdirectory. Missing these was the difference between a move that
+            # looks clean and twenty-three dead links in files nobody opened.
+            text = re.sub(
+                rf"((?:\.\./)*)adr/(?:[a-z-]+/)?{re.escape(name)}",
+                rf"\1adr/{directory}/{name}",
+                text,
+            )
+
+            # A markdown link inside docs/adr itself is relative to the linking
+            # file, so the correct prefix depends on which directory that file
+            # is in -- ../partial/ from a sibling directory, partial/ from the
+            # index at the root.
+            if ADR_ROOT in path.parents or path.parent == ADR_ROOT:
+                depth = len(path.relative_to(ADR_ROOT).parts) - 1
+                prefix = "../" * depth
+                text = re.sub(
+                    rf"\]\((?:\.\./)*(?:[a-z-]+/)?{re.escape(name)}",
+                    f"]({prefix}{directory}/{name}",
+                    text,
+                )
+
+        if text != original:
+            path.write_text(text, encoding="utf-8")
+            touched.append(path)
+
+    touched.extend(repair_outbound_links())
+    return touched
+
+
+# A markdown link or image, split so the target can be replaced in place without
+# a prefix of one target corrupting another: `](../providers` is a prefix of
+# `](../providers/x.md`, so a plain string replace is not safe here.
+LINK = re.compile(r"(\]\()([^)\s]+)((?:\s+\"[^\"]*\")?\))")
+
+# Anything with a URL scheme -- http:, https:, mailto:, tel: -- addresses the
+# world, not this repository, and is never re-based. A relative path cannot
+# carry a colon before its first slash, so this does not catch one by accident.
+SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
+
+
+def corrected_target(base: Path, target: str, repo: Path, adr_root: Path) -> str | None:
+    """Where this link should point from `base`, or None to leave it alone.
+
+    Returns None for anything already resolving, for external URLs, bare
+    anchors and absolute paths, and for a target whose tail names nothing —
+    silence rather than a guess.
+    """
+    if not target or target.startswith(("#", "/")) or SCHEME.match(target):
+        return None
+
+    path_part, sep, anchor = target.partition("#")
+    if not path_part:
+        return None
+    if (base / path_part).exists():
+        return None
+
+    # Resolve the link's tail against the places a record legitimately points:
+    # the docs tree, the repository root, and docs/adr itself.
+    trailing = "/" if path_part.endswith("/") else ""
+    tail = re.sub(r"^(?:\.\./)+", "", path_part).rstrip("/")
+    if not tail:
+        return None
+    for root in (repo / "docs", repo, adr_root):
+        candidate = root / tail
+        if candidate.exists():
+            corrected = os.path.relpath(candidate.resolve(), base.resolve())
+            return corrected + trailing + sep + anchor
+    return None
+
+
+def outbound_repairs(
+    adr_root: Path | None = None, repo: Path | None = None
+) -> list[tuple[Path, str, list[tuple[str, str]]]]:
+    """Every record with a broken relative link, and the text that fixes it.
+
+    A move changes a record's depth, so every relative link it contains breaks —
+    not only the ones pointing at siblings. The first version of this script
+    rewrote the sibling links and nothing else, and the check that followed only
+    looked for ADR-shaped paths, so it reported success while seventeen links to
+    `../providers/`, `../domains/`, `TEMPLATE.md` and the index pointed at
+    nothing. A verification narrower than the change it verifies is worse than
+    none: it converts a regression into a confirmation.
+
+    That is why this looks at *every* relative target a record carries, whatever
+    its extension and whether or not it has one. Narrowing it to `.md` repeated
+    the same mistake inside the function written to prevent it: a link to a
+    migration `.sql` file, or to a directory like `../providers/`, was invisible
+    to the repair and to the check alike, and three of them sat broken.
+
+    Returns (path, new text, [(old target, new target)]) so a dry run can report
+    what a real run would write.
+    """
+    adr_root = adr_root if adr_root is not None else ADR_ROOT
+    repo = repo if repo is not None else REPO
+
+    repairs: list[tuple[Path, str, list[tuple[str, str]]]] = []
+    for path in sorted(adr_root.rglob("*.md")):
+        original = path.read_text(encoding="utf-8")
+        changes: list[tuple[str, str]] = []
+
+        def fix(match: re.Match[str]) -> str:
+            target = match.group(2)
+            corrected = corrected_target(path.parent, target, repo, adr_root)
+            if corrected is None or corrected == target:
+                return match.group(0)
+            changes.append((target, corrected))
+            return match.group(1) + corrected + match.group(3)
+
+        text = LINK.sub(fix, original)
+        if changes:
+            repairs.append((path, text, changes))
+    return repairs
+
+
+def repair_outbound_links(
+    adr_root: Path | None = None, repo: Path | None = None
+) -> list[Path]:
+    """Repoint every broken relative link a record carries. See outbound_repairs."""
+    touched: list[Path] = []
+    for path, text, _ in outbound_repairs(adr_root, repo):
+        path.write_text(text, encoding="utf-8")
+        touched.append(path)
+    return touched
+
+
+def main() -> int:
+    check_only = "--check" in sys.argv
+
+    adrs = find_adrs()
+    if not adrs:
+        print("No ADRs found under docs/adr/", file=sys.stderr)
+        return 1
+
+    moves: dict[str, str] = {}
+    unreadable: list[str] = []
+    for path in adrs:
+        directory = bucket_of(path)
+        if directory is None:
+            unreadable.append(path.name)
+            continue
+        current = path.parent.name if path.parent != ADR_ROOT else ""
+        if current != directory:
+            moves[path.name] = directory
+
+    if unreadable:
+        print("Records whose Implementation status could not be read:", file=sys.stderr)
+        for name in unreadable:
+            print(f"  {name}", file=sys.stderr)
+        print(
+            "\nA status line must begin with one of: "
+            + ", ".join(BUCKETS)
+            + "\nfollowed by an em dash and the detail.",
+            file=sys.stderr,
+        )
+        return 1
+
+    if check_only:
+        # A broken link outlives the move that broke it, so a dry run reports
+        # both. Reporting only the misfiled records is how three links stayed
+        # broken through a run that printed "already filed correctly".
+        pending = outbound_repairs()
+        if not moves and not pending:
+            print(f"All {len(adrs)} records are already filed correctly.")
+            return 0
+        if moves:
+            print(f"{len(moves)} record(s) are filed under the wrong status:")
+            for name, directory in sorted(moves.items()):
+                print(f"  {name} -> docs/adr/{directory}/")
+        if pending:
+            count = sum(len(changes) for _, _, changes in pending)
+            print(f"{count} relative link(s) do not resolve:")
+            for path, _, changes in pending:
+                for old, new in changes:
+                    print(f"  {path.relative_to(REPO)}: {old} -> {new}")
+        print("\nRun tools/file-adrs to move them and fix the links.")
+        return 1
+
+    for name, directory in sorted(moves.items()):
+        source = next(p for p in adrs if p.name == name)
+        target_dir = ADR_ROOT / directory
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target = target_dir / name
+        # git mv so the history follows the file rather than reading as a delete
+        # and an unrelated add.
+        result = subprocess.run(
+            ["git", "mv", str(source.relative_to(REPO)), str(target.relative_to(REPO))],
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            source.rename(target)
+        print(f"  {name} -> docs/adr/{directory}/")
+
+    # Every ADR's own name maps to wherever it now lives, so a link from a file
+    # that did not move is corrected too. This runs whether or not anything
+    # moved: link repair is reconciliation, not a side effect of a move, and a
+    # link left broken by an earlier run has to be reachable by a later one.
+    everywhere = {}
+    for path in find_adrs():
+        everywhere[path.name] = path.parent.name if path.parent != ADR_ROOT else ""
+    touched = rewrite_references(everywhere)
+
+    if moves:
+        print(f"\nMoved {len(moves)} record(s); rewrote references in {len(touched)} file(s).")
+    elif touched:
+        print(f"All {len(adrs)} records are already filed correctly; "
+              f"repaired links in {len(touched)} file(s):")
+        for path in touched:
+            print(f"  {path.relative_to(REPO)}")
+    else:
+        print(f"All {len(adrs)} records are already filed correctly.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,6 @@
+# Generated, not authored. Formatting a vendored copy makes it stop being a copy,
+# and the ADR 0035 drift check between the four repositories then reports noise.
+src/tokens.css
+
+dist
+.angular

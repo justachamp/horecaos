@@ -1,0 +1,14 @@
+:host {
+  display: block;
+}
+
+/* Map container needs explicit dimensions for Yandex Maps API */
+.map-container {
+  height: 400px;
+}
+:host ::ng-deep ya-map,
+:host ::ng-deep ya-map > div {
+  display: block;
+  height: 400px !important;
+  width: 100% !important;
+}

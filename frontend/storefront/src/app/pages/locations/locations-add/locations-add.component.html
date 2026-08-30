@@ -1,0 +1,190 @@
+<div class="flex min-h-screen flex-col bg-jizbiz-bg pb-40 text-jizbiz-text">
+  <header class="flex shrink-0 items-center gap-3 px-4 py-4">
+    <button
+      type="button"
+      appBack="/locations/list"
+      class="flex items-center gap-2 text-sm text-jizbiz-text transition-opacity hover:opacity-80"
+    >
+      <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      </svg>
+      {{ 'common.back' | t }}
+    </button>
+    <h1 class="flex-1 text-center text-lg font-bold">{{ 'locations.enterAddress' | t }}</h1>
+    <span class="w-20"></span>
+  </header>
+
+  @if (permissionState() === 'granted') {
+    <!-- Search bar -->
+    <div class="relative shrink-0 px-4 pb-3 mb-4">
+      <div class="flex items-center gap-3 rounded-xl border border-zinc-500 bg-jizbiz-surface px-4 py-3 focus-within:border-jizbiz-accent focus-within:ring-2 focus-within:ring-jizbiz-accent">
+        <span class="shrink-0 text-zinc-400" aria-hidden="true">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </span>
+        <input
+          type="text"
+          [ngModel]="searchQuery()"
+          (ngModelChange)="onSearchInput($event)"
+          (focus)="suggestions().length > 0 && showDropdown.set(true)"
+          [placeholder]="'locations.searchAddress' | t"
+          class="min-w-0 flex-1 bg-transparent text-sm text-jizbiz-text placeholder:text-zinc-500 focus:outline-none"
+        />
+        @if (searchLoading()) {
+          <span class="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"></span>
+        }
+      </div>
+      @if (showDropdown() && suggestions().length > 0) {
+        <div
+          class="absolute left-4 right-4 top-full z-50 mt-1 max-h-60 overflow-y-auto scrollbar-stable rounded-xl border border-zinc-700 bg-jizbiz-bg shadow-lg"
+          (click)="$event.stopPropagation()"
+        >
+          @for (s of suggestions(); track s.address + s.lat + s.lng) {
+            <button
+              type="button"
+              (click)="selectSuggestion(s)"
+              class="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-jizbiz-text transition-colors hover:bg-jizbiz-hover"
+            >
+              <span class="shrink-0 text-jizbiz-accent">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                </svg>
+              </span>
+              <span class="min-w-0 flex-1 truncate">{{ s.address }}</span>
+            </button>
+          }
+        </div>
+      }
+    </div>
+
+    <!-- Map container - explicit height required for Yandex Maps API -->
+    <div class="map-container relative w-full shrink-0" (click)="closeDropdown()">
+      <button
+        type="button"
+        (click)="goToMyLocation($event)"
+        [disabled]="gettingLocation()"
+        class="absolute right-3 bottom-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-lg transition-opacity hover:opacity-90 disabled:opacity-60"
+        [attr.aria-label]="'locations.showMyLocation' | t"
+      >
+        @if (gettingLocation()) {
+          <span class="h-5 w-5 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"></span>
+        } @else {
+          <svg class="h-5 w-5 text-jizbiz-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        }
+      </button>
+      <div class="h-full w-full">
+        <ya-map
+          [center]="mapCenter()"
+          [zoom]="15"
+          [state]="mapState"
+          (ready)="onMapReady($event)"
+          (yaclick)="onMapClick($event)"
+        >
+          @if (latitude() != null && longitude() != null) {
+            <ya-placemark
+              [geometry]="[latitude()!, longitude()!]"
+              [options]="placemarkOptions"
+              (yadragend)="onPlacemarkDragEnd($event)"
+            />
+          }
+        </ya-map>
+      </div>
+      @if (loading()) {
+        <div class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-jizbiz-bg/90">
+          <p class="text-sm text-zinc-400">{{ 'locations.resolving' | t }}</p>
+          <span class="h-8 w-8 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"></span>
+        </div>
+      }
+    </div>
+
+    <!-- Fixed bottom card: above bottom-nav (like cart-confirmation) -->
+    <div
+      class="fixed left-1/2 z-40 w-full max-w-[420px] -translate-x-1/2 border-t border-zinc-800 bg-jizbiz-bg px-4 pt-4 pb-safe"
+      style="bottom: 5.5rem"
+    >
+      @if (resolvingAddress()) {
+        <div class="flex items-center gap-3 py-5">
+          <span class="text-sm text-zinc-400">{{ 'locations.resolving' | t }}</span>
+          <span class="h-5 w-5 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"></span>
+        </div>
+      } @else {
+        <div class="flex items-start gap-4 py-5 px-1">
+          <span class="shrink-0 text-jizbiz-accent">
+            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </span>
+          <div class="min-w-0 flex-1 space-y-2">
+            <p class="text-base font-semibold leading-snug text-jizbiz-text">{{ address() || ('locations.selectAddress' | t) }}</p>
+            @if (coordsText()) {
+              <p class="text-sm text-zinc-400">
+                {{ 'locations.coordinates' | t }} {{ coordsText() }}
+              </p>
+            }
+          </div>
+        </div>
+      }
+      <button
+        type="button"
+        (click)="goToSave()"
+        class="mt-8 w-full rounded-xl bg-jizbiz-accent py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-95"
+      >
+        {{ 'common.continue' | t }}
+      </button>
+    </div>
+  } @else if (permissionState() === 'denied') {
+    <div class="flex flex-1 flex-col items-center justify-center px-6 py-16 text-center">
+      <span
+        class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-jizbiz-surface-2"
+        aria-hidden="true"
+      >
+        <svg class="h-10 w-10 text-jizbiz-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+          />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+          />
+        </svg>
+      </span>
+      <div class="max-w-[320px] space-y-2">
+        <h2 class="text-xl font-bold text-jizbiz-text">{{ 'locations.permissionTitle' | t }}</h2>
+        <p class="text-sm text-zinc-400">{{ 'locations.permissionText' | t }}</p>
+        <p class="text-xs text-zinc-500">{{ 'locations.permissionHint' | t }}</p>
+      </div>
+      <button
+        type="button"
+        (click)="requestLocationAccess($event)"
+        [disabled]="gettingLocation()"
+        class="mt-8 w-full max-w-[320px] rounded-xl bg-jizbiz-accent py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-95 disabled:opacity-60"
+      >
+        @if (gettingLocation()) {
+          <span class="inline-flex items-center justify-center gap-2">
+            <span
+              class="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"
+            ></span>
+            {{ 'locations.resolving' | t }}
+          </span>
+        } @else {
+          {{ 'locations.allowAccess' | t }}
+        }
+      </button>
+    </div>
+  } @else {
+    <div class="flex flex-1 flex-col items-center justify-center gap-4 py-24">
+      <p class="text-sm text-zinc-400">{{ 'locations.resolving' | t }}</p>
+      <span class="h-8 w-8 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"></span>
+    </div>
+  }
+</div>

@@ -1,0 +1,43 @@
+:host {
+  display: block;
+}
+
+/* Position above bottom-nav area; compact height to fit content */
+.cart-hint-badge {
+  bottom: 6.5rem;
+  animation: cart-hint-in 0.35s ease-out;
+}
+
+.cart-hint-icon {
+  animation: cart-hint-pulse 2.4s ease-out infinite;
+}
+
+@keyframes cart-hint-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes cart-hint-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(131 48 134 / 55%);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgb(131 48 134 / 0%);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(131 48 134 / 0%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cart-hint-badge,
+  .cart-hint-icon {
+    animation: none;
+  }
+}

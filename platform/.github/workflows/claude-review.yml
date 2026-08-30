@@ -1,0 +1,59 @@
+name: Claude review
+
+# Stage 5. Claude reviews every PR against REVIEW.md so the human reviewer arrives
+# at a diff whose mechanical problems are already found. Findings never block —
+# branch protection still requires a code owner's approval.
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: Review against REVIEW.md
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Review this pull request for the Qoida Platform.
+
+            Your instruction set is REVIEW.md at the repository root. Read it first
+            and follow it exactly — the four passes, the Important vs. Nit rule, the
+            nit cap, and the out-of-scope list.
+
+            Ground every finding in this repository's actual rules: AGENTS.md,
+            CLAUDE.md, the ADRs in docs/adr/, the approved domain model in
+            docs/domains/, and the policy skills in .claude/skills/.
+
+            If the PR body or branch names an intent/NNNN-*/ directory, read its
+            intent.md, spec.md, and plan.md and run the compliance pass against them.
+
+            Post one review comment. Separate the passes under headings. Cite
+            file:line for every finding and name the rule or ADR it comes from.
+
+            Two things matter more than volume:
+            - State a security finding as a concrete path — which caller, holding
+              which token, reaches which row. If you cannot state the path, post it
+              as a question instead of a finding.
+            - If CI is already red, say so once and do not repeat what CI reports.
+
+            If you find nothing important, say that plainly. Do not manufacture
+            findings to look useful.
+          claude_args: |
+            --allowedTools "Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(python3 tools/checks/repo_hygiene.py)"

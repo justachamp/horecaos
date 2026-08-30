@@ -1,0 +1,84 @@
+<div
+  class="relative flex h-full min-h-0 max-h-full flex-col overflow-hidden bg-jizbiz-bg px-4 pt-4 text-jizbiz-text"
+>
+  <div class="absolute right-4 top-4 flex justify-end">
+    <select
+      [value]="selectedLangId()"
+      (change)="selectLanguage($any($event.target).value)"
+      class="cursor-pointer rounded-lg border border-zinc-500 bg-jizbiz-surface p-1.5 text-xl text-jizbiz-text focus:border-jizbiz-accent focus:outline-none focus:ring-2 focus:ring-jizbiz-accent"
+      [attr.aria-label]="'Language'"
+    >
+      @for (lang of languages; track lang.id) {
+        <option [value]="lang.id" [selected]="selectedLangId() === lang.id">{{ lang.flag }}</option>
+      }
+    </select>
+  </div>
+
+  <div class="mx-auto flex w-full max-w-[420px] min-h-0 flex-1 flex-col items-center">
+    <!-- Logo: large gold M, centered -->
+    <div class="mb-2 mt-22 flex w-full shrink justify-center px-2">
+      <img
+        src="/jizbiz/logo/Logo-jizbiz.png"
+        alt="Jizbiz"
+        class="h-auto w-full max-w-full object-contain"
+      />
+    </div>
+
+    <!-- Slogan: two lines, bold white -->
+    <p class="mt-6 max-w-[280px] text-center text-lg font-bold leading-snug text-jizbiz-text sm:text-xl">
+      {{ 'auth.slogan' | t }}
+    </p>
+    <div class="mt-6 w-full bg-jizbiz-bg px-4 pb-2 pt-1">
+      <div
+        class="flex items-center gap-2 rounded-xl border border-zinc-500 bg-jizbiz-surface px-4 py-4 focus-within:border-jizbiz-accent focus-within:ring-2 focus-within:ring-jizbiz-accent"
+      >
+        <span class="shrink-0 text-base text-jizbiz-text">+998</span>
+        <input
+          type="tel"
+          inputmode="numeric"
+          [value]="formattedNational"
+          (input)="onPhoneInput($event)"
+          (focus)="onPhoneFocus()"
+          (blur)="onPhoneBlur()"
+          [placeholder]="'auth.phonePlaceholder' | t"
+          class="min-w-0 flex-1 bg-transparent text-base text-jizbiz-text placeholder-zinc-500 focus:outline-none"
+          maxlength="12"
+        />
+      </div>
+      @if (error()) {
+        <p class="mt-2 text-center text-sm text-red-400">{{ error() }}</p>
+      }
+      <button
+        type="button"
+        (click)="continue()"
+        [disabled]="!phoneValid || loading()"
+        class="mt-4 w-full rounded-xl py-3.5 text-base font-bold transition-opacity disabled:opacity-50"
+        [class.bg-jizbiz-accent]="phoneValid && !loading()"
+        [class.text-white]="phoneValid && !loading()"
+        [class.bg-jizbiz-surface-2]="!phoneValid || loading()"
+        [class.text-jizbiz-muted]="!phoneValid || loading()"
+      >
+        @if (loading()) {
+          <span class="inline-flex items-center gap-2">
+            <span
+              class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+            ></span>
+            {{ 'common.loading' | t }}
+          </span>
+        } @else {
+          {{ 'auth.continue' | t }}
+        }
+      </button>
+      <p class="mt-3 text-center text-xs text-zinc-500">
+        {{ 'common.agreeLegal' | t }}<br />
+        <a routerLink="/terms" class="text-jizbiz-accent underline">{{
+          'common.termsOfService' | t
+        }}</a>
+      </p>
+    </div>
+  </div>
+
+  <p class="mt-auto pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 text-center text-xs text-zinc-500">
+    {{ 'common.version' | t }} {{ appVersion() }}
+  </p>
+</div>

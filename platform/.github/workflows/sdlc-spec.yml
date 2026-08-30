@@ -1,0 +1,98 @@
+name: SDLC — draft spec from merged intent
+
+# Stage 1 -> Stage 2 handoff. Merging an intent.md is the first human gate: the
+# problem is worth solving. This then drafts the spec under repository policy and
+# opens it as a PR, so the product owner reviews a document instead of writing one.
+#
+# The spec is a draft. Its job is as much to surface what a human must decide as
+# to propose a design — see .claude/skills/spec-author/SKILL.md.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "intent/*/intent.md"
+  workflow_dispatch:
+    inputs:
+      intent_dir:
+        description: "Intent directory, e.g. intent/0007-courier-shift-handover"
+        required: true
+
+jobs:
+  draft-spec:
+    name: Draft spec.md
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Find intents that have no spec yet
+        id: find
+        run: |
+          set -euo pipefail
+          if [ -n "${{ github.event.inputs.intent_dir }}" ]; then
+            candidates="${{ github.event.inputs.intent_dir }}/intent.md"
+          else
+            candidates=$(git diff --name-only --diff-filter=A HEAD^ HEAD \
+              -- 'intent/*/intent.md' || true)
+          fi
+
+          pending=""
+          for f in $candidates; do
+            dir=$(dirname "$f")
+            # An existing spec means a human has already taken this further.
+            [ -f "$dir/spec.md" ] && continue
+            pending="$pending $dir"
+          done
+
+          pending=$(echo "$pending" | xargs || true)
+          echo "dirs=$pending" >> "$GITHUB_OUTPUT"
+          if [ -z "$pending" ]; then
+            echo "No intent needs a spec."
+          else
+            echo "Drafting specs for:$pending"
+          fi
+
+      - uses: anthropics/claude-code-action@v1
+        if: steps.find.outputs.dirs != ''
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Draft a spec for each of these intent directories, one at a time:
+            ${{ steps.find.outputs.dirs }}
+
+            Follow .claude/skills/spec-author/SKILL.md exactly, and apply every
+            policy skill in .claude/skills/ — tenant-isolation, flyway-migration,
+            http-api-conventions, event-contract, secrets-and-pii, adr-discipline.
+
+            For each directory:
+            1. Read its intent.md.
+            2. Ground the design in what already exists: AGENTS.md, the relevant
+               ADRs in docs/adr/, the approved domain model in docs/domains/, and
+               docs/migration-coverage.md if it touches a legacy capability. Most
+               specs shrink once you find the mechanism that is already built.
+            3. Write spec.md beside intent.md, using intent/TEMPLATE.spec.md.
+            4. Fill the policy review table with a real verdict on every row —
+               Satisfied, Not applicable, or Needs decision. Never leave one blank.
+            5. Put everything a human must decide under Open questions, with a named
+               owner and a blocking flag.
+
+            Set Status: Draft. Do not resolve a blocking open question yourself, and
+            do not invent an owner — write "unassigned" if the intent does not name
+            one.
+
+            Then open ONE pull request with all the drafted specs. Title it
+            "spec: draft for <intent slugs>". In the body, list the blocking open
+            questions first, grouped by owner — that is what the reviewer needs to
+            act on. State clearly that these specs are drafts requiring product
+            owner approval before any implementation starts.
+          claude_args: |
+            --allowedTools "Read,Grep,Glob,Write,Edit,Bash(git:*),Bash(gh pr create:*),Bash(python3 tools/checks/repo_hygiene.py)"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

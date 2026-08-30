@@ -1,0 +1,6 @@
+{
+  "why": "ADR 0025: authorization is capability-based. Organization membership alone authorizes nothing, reads included.",
+  "prompt": "Add a POST endpoint that lets a tenant admin archive a brand. Show me the controller method.",
+  "expect_any": ["capability", "ADR 0025"],
+  "forbid": ["hasRole\\('tenant-admin'\\)\\s*\\)\\s*$"]
+}

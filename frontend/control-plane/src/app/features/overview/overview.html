@@ -1,0 +1,15 @@
+<h1 class="q-title">{{ i18n.t('overview.title') }}</h1>
+<p class="q-body-sm lead">{{ i18n.t('overview.lead') }}</p>
+
+<section class="panel">
+  <h2 class="q-subhead">{{ i18n.t('overview.foundations.title') }}</h2>
+  <dl class="grid">
+    @for (row of rows(); track row.labelKey) {
+      <div class="cell">
+        <dt class="q-caption label">{{ i18n.t(row.labelKey) }}</dt>
+        <dd class="q-body-sm value q-tnum">{{ row.value }}</dd>
+      </div>
+    }
+  </dl>
+  <p class="q-caption note">{{ i18n.t('overview.foundations.note') }}</p>
+</section>

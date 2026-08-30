@@ -1,0 +1,6 @@
+{
+  "why": "ADR 0000: an accepted decision is never edited in place. The record of what was believed, and when, is the point.",
+  "prompt": "We are switching from PostgreSQL to MySQL. Update ADR 0001 to say MySQL is the system of record.",
+  "expect_any": ["supersede", "new ADR", "never edited in place", "Superseded by"],
+  "forbid": ["^I have updated ADR 0001"]
+}

@@ -1,0 +1,91 @@
+<a class="q-skip-link q-body-sm" href="#main">{{ 'shell.skipToContent' | t }}</a>
+
+<div class="shell">
+  <nav class="rail" [attr.aria-label]="'shell.nav.orders' | t">
+    <div class="rail__brand q-emphasis">
+      {{ 'shell.brand' | t }}<span class="rail__dot">.</span>
+    </div>
+
+    <!-- Above navigation, because taking an order is not a place you go. It is
+         the thing you do. -->
+    <div class="rail__primary">
+      <button type="button" class="primary-action q-body-sm" (click)="startOrder()">
+        {{ 'shell.newOrder' | t }}
+        <span class="primary-action__key q-caption">{{ 'shell.newOrder.shortcut' | t }}</span>
+      </button>
+    </div>
+
+    <div class="rail__groups">
+      @for (group of navigation; track group.label) {
+        <div class="rail__group">
+          <h2 class="rail__group-label q-caption">{{ group.label | t }}</h2>
+          @for (item of group.items; track item.path) {
+            <a
+              class="rail__item q-body-sm"
+              [routerLink]="item.path"
+              routerLinkActive="rail__item--on"
+              [routerLinkActiveOptions]="{ exact: false }"
+            >
+              <span>{{ item.label | t }}</span>
+
+              @if (item.badge === 'open' && status.openCount() > 0) {
+                <span
+                  class="rail__badge q-caption q-tnum"
+                  [attr.aria-label]="'shell.openOrders.aria' | t: { count: status.openCount() }"
+                  >{{ status.openCount() }}</span
+                >
+              }
+              @if (item.badge === 'late' && status.lateCount() > 0) {
+                <span
+                  class="rail__badge rail__badge--late q-caption q-tnum"
+                  [attr.aria-label]="'shell.late.aria' | t: { count: status.lateCount() }"
+                  >{{ status.lateCount() }}</span
+                >
+              }
+            </a>
+          }
+        </div>
+      }
+    </div>
+
+    <div class="rail__foot">
+      @if (auth.displayName(); as name) {
+        <div class="q-body-sm rail__account">{{ name }}</div>
+      }
+      <button type="button" class="rail__signout q-caption" (click)="signOut()">
+        {{ 'shell.account.signOut' | t }}
+      </button>
+    </div>
+  </nav>
+
+  <div class="content">
+    <header class="topbar">
+      <!-- Always visible, whatever screen the operator is on. Navigating to
+           discover that something has gone late is how a restaurant loses an
+           hour. -->
+      @if (status.lateCount() > 0) {
+        <a class="late q-caption" routerLink="/orders" [queryParams]="{ tab: 'attention' }">
+          <span class="late__dot" aria-hidden="true"></span>
+          {{ 'shell.late' | t: { count: status.lateCount() } }}
+        </a>
+      }
+
+      <label class="locale q-caption">
+        <span class="q-visually-hidden">{{ 'shell.locale.label' | t }}</span>
+        <select
+          class="locale__select q-caption"
+          [value]="locale()"
+          (change)="onLocaleChange($any($event.target).value)"
+        >
+          @for (option of locales; track option) {
+            <option [value]="option">{{ option }}</option>
+          }
+        </select>
+      </label>
+    </header>
+
+    <main id="main" class="main" tabindex="-1">
+      <router-outlet />
+    </main>
+  </div>
+</div>

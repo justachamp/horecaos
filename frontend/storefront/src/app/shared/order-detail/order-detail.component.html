@@ -1,0 +1,101 @@
+@if (loading()) {
+  <div class="flex flex-1 items-center justify-center gap-2 py-12">
+    <span class="h-6 w-6 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"></span>
+    <span class="text-sm text-zinc-400">{{ 'common.loading' | t }}</span>
+  </div>
+} @else if (error()) {
+  <div class="px-4 py-8 text-center">
+    <p class="text-sm text-red-400">{{ error() }}</p>
+    <a routerLink="/orders" class="mt-4 inline-block text-jizbiz-accent underline">{{ 'orders.backToList' | t }}</a>
+  </div>
+} @else if (order()) {
+  <!-- Top handle (e.g. for bottom sheet) -->
+  <!-- <div class="flex justify-center pt-2 pb-1">
+    <span class="block h-1 w-10 rounded-full bg-zinc-600" aria-hidden="true"></span>
+  </div> -->
+
+  <!-- Header -->
+  <header class="flex items-start justify-between gap-4 px-4 py-4">
+    <div class="space-y-0.5">
+      <h1 class="text-lg font-bold text-jizbiz-text">{{ 'orders.order' | t }}</h1>
+      <p class="text-sm text-zinc-400">Order N: {{ order()!.orderNumber }}</p>
+    </div>
+    <button
+      type="button"
+      (click)="close()"
+      class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-jizbiz-surface-2 text-jizbiz-text transition-colors hover:bg-jizbiz-hover"
+      [attr.aria-label]="'common.close' | t"
+    >
+      <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+      </svg>
+    </button>
+  </header>
+
+  <!-- Ordered items list -->
+  <div class="divide-y divide-zinc-700 px-4">
+    @for (item of order()!.lineItems; track item.variantId ?? item.name) {
+      <article class="flex items-center gap-3 py-4 first:pt-0">
+      <img
+        [src]="item.image"
+        [alt]="item.name"
+        class="h-14 w-14 shrink-0 rounded-lg object-cover"
+      />
+      <div class="min-w-0 flex-1">
+        <h2 class="text-sm font-semibold text-jizbiz-text">{{ item.name }}</h2>
+        <p class="mt-0.5 text-sm text-jizbiz-text">
+          {{ item.quantity }} {{ 'common.itemsUnit' | t }} {{ 'common.times' | t }}
+          <span class="font-semibold text-jizbiz-accent">{{ item.unitPrice }}</span>
+        </p>
+      </div>
+      </article>
+    }
+  </div>
+
+  <!-- Payment summary (golden box) -->
+  <div class="mx-4 mt-4 rounded-xl bg-gradient-to-r from-jizbiz-accent-deep to-jizbiz-accent p-4 text-white">
+    <div class="flex items-center justify-between font-bold text-white">
+      <span>{{ 'cart.paymentAmount' | t }}</span>
+      <span>{{ order()!.total }}</span>
+    </div>
+    <div class="mt-2 flex items-center justify-between text-sm text-white">
+      <span>{{ 'cart.order' | t }}</span>
+      <span>{{ order()!.subtotal }}</span>
+    </div>
+    <div class="mt-1 flex items-center justify-between text-sm text-white">
+      <span>{{ 'cart.delivery' | t }}</span>
+      <span>{{ order()!.deliveryFee }}</span>
+    </div>
+    @if (order()!.packaging) {
+      <div class="mt-1 flex items-center justify-between text-sm text-white">
+        <span>{{ 'cart.packaging' | t }}</span>
+        <span>{{ order()!.packaging }}</span>
+      </div>
+    }
+  </div>
+
+  @if (order()!.actions?.includes('cancel')) {
+    <div class="mt-6 px-4 pb-6">
+      <button
+        type="button"
+        (click)="cancelOrder()"
+        [disabled]="cancelling()"
+        class="w-full rounded-lg border border-zinc-600 bg-jizbiz-surface py-3 text-sm font-medium text-jizbiz-text transition-colors hover:bg-jizbiz-surface-2 disabled:opacity-50"
+      >
+        @if (cancelling()) {
+          {{ 'common.loading' | t }}
+        } @else {
+          {{ 'orders.cancel' | t }}
+        }
+      </button>
+      @if (cancelError()) {
+        <p class="mt-2 text-center text-sm text-red-400">{{ cancelError() }}</p>
+      }
+    </div>
+  }
+} @else {
+  <div class="px-4 py-8 text-center text-zinc-400">
+    <p>{{ 'orders.orderNotFound' | t }}</p>
+    <a routerLink="/orders" class="mt-4 inline-block text-jizbiz-accent underline">{{ 'orders.backToList' | t }}</a>
+  </div>
+}

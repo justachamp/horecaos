@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+#
+# Run the Flutter toolchain under an exclusive lock.
+#
+# Flutter keeps its build state in a single `.dart_tool/` per project, and
+# `flutter test` writes generated localizations, a package config and a kernel
+# cache into it. Two concurrent runs in this directory therefore rebuild the same
+# files while the other is reading them, and the failure does not look like a
+# race: it looks like a missing generated class, a stale localization, or a test
+# that fails once and passes when run alone.
+#
+# The same mistake cost the backend a day before `tools/mvn-serial` existed, for
+# exactly the same reason — one shared build directory and no locking. This is
+# that lesson applied before it costs anything here.
+#
+#     tool/flutter-serial test
+#     tool/flutter-serial analyze
+#
+# `mkdir` is the lock: atomic everywhere, unlike test-then-create on a file, and
+# unlike `flock`, which macOS does not ship.
+
+set -euo pipefail
+
+LOCK_DIR="${TMPDIR:-/tmp}/qoida-flutter.lock"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+STALE_AFTER_SECONDS=1200
+
+acquire() {
+    local waited=0
+    while ! mkdir "$LOCK_DIR" 2>/dev/null; do
+        if [ -f "$LOCK_DIR/pid" ]; then
+            local owner age
+            owner="$(cat "$LOCK_DIR/pid" 2>/dev/null || echo 0)"
+            age=$(( $(date +%s) - $(cat "$LOCK_DIR/since" 2>/dev/null || date +%s) ))
+            if ! kill -0 "$owner" 2>/dev/null; then
+                echo "flutter-serial: breaking a lock held by dead pid $owner" >&2
+                rm -rf "$LOCK_DIR"; continue
+            fi
+            if [ "$age" -gt "$STALE_AFTER_SECONDS" ]; then
+                echo "flutter-serial: breaking a lock held for ${age}s by pid $owner" >&2
+                rm -rf "$LOCK_DIR"; continue
+            fi
+        fi
+        [ $(( waited % 60 )) -eq 0 ] && echo "flutter-serial: waiting for the build lock (${waited}s)" >&2
+        sleep 3
+        waited=$(( waited + 3 ))
+    done
+    echo $$ > "$LOCK_DIR/pid"
+    date +%s > "$LOCK_DIR/since"
+}
+
+acquire
+trap 'rm -rf "$LOCK_DIR"' EXIT INT TERM
+cd "$PROJECT_ROOT"
+exec flutter "$@"

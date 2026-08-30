@@ -1,0 +1,39 @@
+# Everything the application image does not need.
+#
+# `frontend/` and `legacy-archive/` are together more than 1.5 GB. Without this
+# file every `docker build` uploads them to the daemon before reading a single
+# instruction, which turns a two-minute build into a ten-minute one and makes the
+# build cache useless because the context hash changes whenever anyone touches a
+# node_modules tree.
+#
+# `target/` is excluded deliberately rather than by accident: the image must be
+# built from source inside the builder stage, never from whatever jar happens to
+# be sitting on the machine that ran `docker build`. Several agents share this
+# working tree and `target/` is frequently mid-write.
+
+target/
+frontend/
+legacy-archive/
+.git/
+.github/
+.idea/
+.vscode/
+.claude/
+.vite/
+docs/
+tools/migration/
+node_modules/
+
+# Local configuration and anything that could carry a credential. Nothing here
+# should ever exist in a repository, but an image is the wrong place to discover
+# that it does.
+.env
+.env.*
+!.env.example
+application-local-secrets.yml
+**/*.pem
+**/*.key
+**/*.p12
+**/*.jks
+
+.DS_Store

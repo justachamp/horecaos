@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.qoida.uz/events/ordering.events/OrderCancelled.v1.schema.json",
+  "title": "OrderCancelled v1 payload",
+  "description": "The order was cancelled. ADR 0039 added systemCategory, stockDisposition and liabilityParty as optional properties: a reason code alone cannot answer what happened to the stock or who carried the cost, and a report built on a status string cannot separate a cancellation from a rejection. None of the three names a person, which is why they may travel here while the reason's internal text may not.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["orderId", "status", "orderVersion"],
+  "properties": {
+    "orderId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": ["string", "null"], "format": "uuid" },
+    "locationId": { "type": ["string", "null"], "format": "uuid" },
+    "cancelledByActorType": {
+      "type": ["string", "null"],
+      "enum": ["USER", "SERVICE", "SYSTEM_JOB", "PROVIDER", "CUSTOMER", null]
+    },
+    "reasonCode": { "type": ["string", "null"], "maxLength": 64 },
+    "previousStatus": {
+      "type": ["string", "null"],
+      "enum": [
+        "RECEIVED", "PAYMENT_AUTHORIZING", "AWAITING_APPROVAL", "PAYMENT_FAILED",
+        "CONFIRMED", "REJECTED", "EXPIRED", "PREPARING", "READY", "FULFILLING",
+        "COMPLETED", "CANCELLED", null
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "RECEIVED", "PAYMENT_AUTHORIZING", "AWAITING_APPROVAL", "PAYMENT_FAILED",
+        "CONFIRMED", "REJECTED", "EXPIRED", "PREPARING", "READY", "FULFILLING",
+        "COMPLETED", "CANCELLED"
+      ]
+    },
+    "orderVersion": { "type": "integer", "minimum": 1 },
+    "systemCategory": {
+      "type": ["string", "null"],
+      "enum": [
+        "CUSTOMER_CANCELLED", "CUSTOMER_UNREACHABLE", "CUSTOMER_NO_SHOW",
+        "RESTAURANT_REFUSED", "ITEM_UNAVAILABLE", "KITCHEN_CAPACITY",
+        "DELIVERY_FAILED", "COURIER_UNAVAILABLE", "ADDRESS_UNSERVICEABLE",
+        "PAYMENT_NOT_RECEIVED", "DUPLICATE_ORDER", "TEST_ORDER",
+        "SUSPECTED_FRAUD", "PRICING_ERROR", "OTHER", null
+      ]
+    },
+    "stockDisposition": {
+      "type": ["string", "null"],
+      "enum": ["RELEASE", "RETURN_TO_STOCK", "WRITE_OFF", "NO_EFFECT", null]
+    },
+    "liabilityParty": {
+      "type": ["string", "null"],
+      "enum": ["TENANT", "CUSTOMER", "COURIER_PARTNER", "PLATFORM", null]
+    }
+  }
+}

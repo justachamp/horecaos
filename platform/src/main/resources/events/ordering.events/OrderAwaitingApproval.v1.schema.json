@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.qoida.uz/events/ordering.events/OrderAwaitingApproval.v1.schema.json",
+  "title": "OrderAwaitingApproval v1 payload",
+  "description": "The order is waiting for a restaurant decision. Carries the deadline so every consumer counts down to the same instant as the durable timer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["orderId", "status", "orderVersion", "approvalDeadlineAt"],
+  "properties": {
+    "orderId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": ["string", "null"], "format": "uuid" },
+    "locationId": { "type": ["string", "null"], "format": "uuid" },
+    "approvalChannel": {
+      "type": ["string", "null"],
+      "enum": ["NONE", "QOIDA_OPERATIONS", "POS", "EITHER", null]
+    },
+    "approvalDeadlineAt": { "type": "string", "format": "date-time" },
+    "timeoutAction": {
+      "type": ["string", "null"],
+      "enum": ["AUTO_REJECT", "AUTO_CONFIRM", null]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "RECEIVED", "PAYMENT_AUTHORIZING", "AWAITING_APPROVAL", "PAYMENT_FAILED",
+        "CONFIRMED", "REJECTED", "EXPIRED", "PREPARING", "READY", "FULFILLING",
+        "COMPLETED", "CANCELLED"
+      ]
+    },
+    "orderVersion": { "type": "integer", "minimum": 1 }
+  }
+}

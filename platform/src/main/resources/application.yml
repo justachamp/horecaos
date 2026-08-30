@@ -1,0 +1,381 @@
+spring:
+  application:
+    name: qoida-platform
+  datasource:
+    url: ${QOIDA_DB_URL:jdbc:postgresql://localhost:5432/qoida}
+    # `qoida_app`, not `qoida`. The application pool is the least-privileged role
+    # from infra/production/postgres-init/10-application-role.sh: it owns nothing,
+    # can issue no DDL, and holds only the privileges a migration granted it by
+    # name. The default used to be the superuser that owns the database, so every
+    # GRANT and REVOKE in sixty-one migrations was bypassed on every laptop and in
+    # every test — the audit REVOKE of V0007, the column-level UPDATE of V0059,
+    # the table grants V0035 retrofitted, all of them. DatabasePrivilegeGuard now
+    # refuses to start a non-local profile on a superuser or on the database
+    # owner, so this cannot quietly revert.
+    username: ${QOIDA_DB_USERNAME:qoida_app}
+    password: ${QOIDA_DB_PASSWORD:qoida_app}
+    hikari:
+      maximum-pool-size: ${QOIDA_DB_MAX_POOL_SIZE:10}
+      minimum-idle: ${QOIDA_DB_MIN_IDLE:2}
+  flyway:
+    # On for local development and the test suite, where the schema has to exist
+    # before anything can run. Production sets SPRING_FLYWAY_ENABLED=false and
+    # runs the one-shot platform-migrate container instead (ADR 0023), so these
+    # credentials are unused there.
+    enabled: true
+    default-schema: public
+    # Flyway creates tables, grants and indexes. `qoida_application` must be able
+    # to do none of that, so migrations run as the owner and the application does
+    # not — the same separation compose.production.yaml already draws between
+    # FLYWAY_USER and QOIDA_DB_USERNAME, drawn here so a laptop and a test both
+    # have it too.
+    #
+    # No `url` on purpose. With only user and password set, Spring derives the
+    # migration DataSource from the application's own, so a Testcontainers port or
+    # an overridden QOIDA_DB_URL is followed automatically and there is exactly
+    # one place that says which database this is.
+    user: ${QOIDA_DB_MIGRATION_USERNAME:qoida_migrator}
+    password: ${QOIDA_DB_MIGRATION_PASSWORD:qoida_migrator}
+  kafka:
+    bootstrap-servers: ${QOIDA_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    admin:
+      # ADR 0032: the deployment cannot look healthy while a broker refused the
+      # deliberate topic catalogue. The container already waits for Kafka's own
+      # health check, so failing startup gives the operator the real cause.
+      fail-fast: true
+    consumer:
+      enable-auto-commit: false
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        isolation.level: read_committed
+    producer:
+      acks: all
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        enable.idempotence: true
+        max.block.ms: ${QOIDA_KAFKA_MAX_BLOCK_MS:10000}
+        request.timeout.ms: ${QOIDA_KAFKA_REQUEST_TIMEOUT_MS:5000}
+        delivery.timeout.ms: ${QOIDA_KAFKA_DELIVERY_TIMEOUT_MS:10000}
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${QOIDA_OIDC_ISSUER_URI:http://localhost:8081/realms/qoida}
+          audiences: ${QOIDA_OIDC_AUDIENCE:qoida-api}
+  modulith:
+    detection-strategy: explicitly-annotated
+
+springdoc:
+  api-docs:
+    enabled: ${QOIDA_API_DOCS_ENABLED:true}
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: ${QOIDA_SWAGGER_UI_ENABLED:true}
+    path: /swagger-ui.html
+    disable-swagger-default-url: true
+    display-request-duration: true
+    # 'list' expands each tag to show its operations while keeping the
+    # operations themselves collapsed. 'none' collapses the tags too, which
+    # renders as a tag header with nothing under it and reads as missing endpoints.
+    doc-expansion: ${QOIDA_SWAGGER_DOC_EXPANSION:list}
+    operations-sorter: alpha
+    persist-authorization: false
+    tags-sorter: alpha
+
+qoida:
+  authorization:
+    # ADR 0025. On means a @RequiresCapability declaration actually refuses:
+    # a principal without the grant gets INSUFFICIENT_CAPABILITY, and
+    # TenantAccessPolicy narrows ADR 0003's rule that organization membership
+    # alone authorises every read in the tenant.
+    #
+    # Off is shadow mode — compute, compare against the live rule, count it on
+    # qoida.authorization.shadow, deny nothing. That was the resting state while
+    # the model had no grants behind it; it is now the opt-out, for re-measuring
+    # divergence against an estate before a bundle change. Leaving it off is how
+    # a missing grant stays invisible until a restaurant's first trading day.
+    enforce: ${QOIDA_AUTHORIZATION_ENFORCE:true}
+  api:
+    version: ${QOIDA_API_VERSION:v1}
+    idempotency:
+      purge:
+        enabled: ${QOIDA_IDEMPOTENCY_PURGE_ENABLED:true}
+        initial-delay: ${QOIDA_IDEMPOTENCY_PURGE_INITIAL_DELAY:PT5M}
+        interval: ${QOIDA_IDEMPOTENCY_PURGE_INTERVAL:PT1H}
+  keycloak:
+    # ADR 0009 administration. The provisioning client secret is resolved from
+    # the ADR 0028 manager at call time, so rotation needs no restart.
+    base-url: ${QOIDA_KEYCLOAK_BASE_URL:http://localhost:8081}
+    realm: ${QOIDA_KEYCLOAK_REALM:qoida}
+    provisioning-client-id: ${QOIDA_KEYCLOAK_PROVISIONING_CLIENT_ID:qoida-provisioning}
+  environment: ${QOIDA_ENVIRONMENT:local}
+  migration:
+    # ADR 0024 extraction. Off unless a migration is actually running: a platform
+    # with no wave in flight has no reason to hold an open pool against somebody
+    # else's production database, and a connection that appeared by default is one
+    # more thing to remember to revoke at retirement — which ADR 0024 makes a
+    # signed step rather than a cleanup.
+    #
+    # Turning this on also brings up the import and reconciliation services, which
+    # have nothing to read without it.
+    legacy:
+      enabled: ${QOIDA_MIGRATION_LEGACY_ENABLED:false}
+      url: ${QOIDA_MIGRATION_LEGACY_URL:}
+      # SELECT and nothing else. ADR 0024 requires read-only source access, and
+      # the grant on the legacy side is what makes that true; the pool's read-only
+      # flag and the session's default_transaction_read_only are belt and braces
+      # over it.
+      username: ${QOIDA_MIGRATION_LEGACY_USERNAME:}
+      # A reference, not a value (ADR 0028). The credential lives in the secrets
+      # manager and never appears in configuration, an image, or a repository.
+      password-reference: ${QOIDA_MIGRATION_LEGACY_PASSWORD_REF:}
+      # Small on purpose. This runs against a database that is still serving
+      # customers, and ADR 0024 requires catch-up to be load-tested precisely so
+      # migration cannot exhaust production capacity.
+      maximum-pool-size: ${QOIDA_MIGRATION_LEGACY_MAX_POOL_SIZE:4}
+      # A page that scans more than its mapping expects is a mapping error. It
+      # should surface as a failed page rather than as a long-running query on
+      # somebody else's primary.
+      statement-timeout: ${QOIDA_MIGRATION_LEGACY_STATEMENT_TIMEOUT:PT30S}
+  media:
+    # ADR 0010 object storage. Local development points at the MinIO in
+    # compose.yaml; production points at the hosted S3 API from ADR 0034.
+    endpoint: ${QOIDA_MEDIA_ENDPOINT:http://localhost:9000}
+    region: ${QOIDA_MEDIA_REGION:us-east-1}
+    bucket: ${QOIDA_MEDIA_BUCKET:qoida-media}
+    # References, not values. The credentials themselves live in the ADR 0028
+    # manager and never appear in configuration, an image, or a repository.
+    access-key-reference: ${QOIDA_MEDIA_ACCESS_KEY_REF:qoida:local:object_storage:platform:media-access-key}
+    secret-key-reference: ${QOIDA_MEDIA_SECRET_KEY_REF:qoida:local:object_storage:platform:media-secret-key}
+  realtime:
+    # ADR 0045. The push half of the operations console. Every live surface has a
+    # polling path that must work, so turning this off degrades the refresh
+    # interval and never the correctness of a screen — which is the entire reason
+    # polling is built first and the rollback for the transport is a flag.
+    streams:
+      enabled: ${QOIDA_REALTIME_STREAMS_ENABLED:true}
+      # 50 ms because the tightest cadence cap in the channel catalogue is 250 ms
+      # and ADR 0045 budgets 100 ms from replica to browser frame. A one-second
+      # tick would spend the whole budget on granularity.
+      tick: ${QOIDA_REALTIME_STREAM_TICK:PT0.05S}
+    signals:
+      publish: ${QOIDA_REALTIME_SIGNALS_PUBLISH:true}
+      consume: ${QOIDA_REALTIME_SIGNALS_CONSUME:true}
+  telemetry:
+    # ADR 0045 courier field telemetry. Retention here is enforced rather than
+    # documented: the sweeper drops whole daily partitions, and the startup check
+    # refuses a production profile whose configured retention is below the ADR
+    # 0042 settlement period plus the statement dispute window.
+    retention:
+      enabled: ${QOIDA_TELEMETRY_RETENTION_ENABLED:true}
+      # Report-only says what it would delete and deletes nothing. ADR 0029 asks
+      # for this on a retention job's first run in a new environment; leaving it
+      # on is how a retention rule silently stops being one.
+      report-only: ${QOIDA_TELEMETRY_RETENTION_REPORT_ONLY:false}
+      days: ${QOIDA_TELEMETRY_TRACK_RETENTION_DAYS:30}
+      initial-delay: ${QOIDA_TELEMETRY_RETENTION_INITIAL_DELAY:PT2M}
+      interval: ${QOIDA_TELEMETRY_RETENTION_INTERVAL:PT1H}
+      # AUTO refuses on any non-local profile and reports on local, test, and
+      # default. ENFORCE and REPORT_ONLY override it, and REPORT_ONLY warns on
+      # every start so it cannot quietly become permanent.
+      floor-check: ${QOIDA_TELEMETRY_RETENTION_FLOOR_CHECK:AUTO}
+  observability:
+    # ADR 0023. The gauges the night and trading alerts are evaluated from. The
+    # switch exists so a one-shot job — the Flyway container, a rehearsal, a
+    # console run against a restored copy — does not poll tables it has no
+    # reason to, and so a test can turn the scheduler off without turning off
+    # the meter registry.
+    metrics:
+      enabled: ${QOIDA_OBSERVABILITY_METRICS_ENABLED:true}
+      initial-delay: ${QOIDA_OBSERVABILITY_METRICS_INITIAL_DELAY:PT10S}
+      # Fifteen seconds because the alert thresholds are measured in minutes and
+      # the queries are three aggregates over indexed columns. Polling faster
+      # would buy no detection speed and would put load on the order hot path.
+      interval: ${QOIDA_OBSERVABILITY_METRICS_INTERVAL:PT15S}
+    # Where the volume PostgreSQL, Kafka, and the audit partitions share is
+    # visible from inside this process. On the ADR 0034 machine the application
+    # container's own filesystem is read-only and says nothing about the host, so
+    # the figure the 85% alert uses is read from the host by the on-box probe.
+    data-volume-path: ${QOIDA_OBSERVABILITY_DATA_VOLUME_PATH:.}
+  secrets:
+    # ADR 0028. "environment" is the local and CI default; "openbao" is phase one
+    # per ADR 0034. SecretsProfileGuard refuses to start a non-local profile on
+    # the environment provider, so forgetting to switch this cannot look like
+    # working configuration.
+    provider: ${QOIDA_SECRETS_PROVIDER:environment}
+    # Local-only placeholder values for the environment provider. These match the
+    # MinIO root credentials in compose.yaml and are worthless outside a laptop;
+    # SecretsProfileGuard refuses to start a non-local profile on this provider.
+    object_storage:
+      platform:
+        media-access-key: ${QOIDA_MEDIA_ACCESS_KEY:qoida}
+        media-secret-key: ${QOIDA_MEDIA_SECRET_KEY:qoida-local-secret}
+    data_encryption:
+      platform:
+        # ADR 0040's handover pepper. A local-only placeholder, like the MinIO
+        # credentials above: SecretsProfileGuard refuses to start a non-local
+        # profile on the environment provider, so this value cannot reach a
+        # deployment. Rotating the real one invalidates every open challenge's
+        # hash, which is why it is an ADR 0028 procedure and not a restart.
+        handover-pepper: ${QOIDA_HANDOVER_PEPPER:qoida-local-handover-pepper-not-for-use}
+    openbao:
+      url: ${QOIDA_OPENBAO_URL:http://localhost:8200}
+      token: ${QOIDA_OPENBAO_TOKEN:}
+      mount: ${QOIDA_OPENBAO_MOUNT:qoida}
+  partner:
+    # ADR 0040. A reference, never a value, per ADR 0028.
+    #
+    # No default here on purpose. The reference carries the environment segment
+    # OpenBao's path is built from, so a default resolves against whichever
+    # environment it happens to name — and the one it named was `local`. On the
+    # production deployment that meant one of two outcomes, and neither is
+    # visible from the outside: the path does not exist and the application fails
+    # to start with a message about a missing secret rather than about a missing
+    # deployment variable, or somebody has seeded the local path and every
+    # handover code in production is keyed with a development pepper.
+    #
+    # An unset QOIDA_HANDOVER_PEPPER_REF now fails startup naming that variable,
+    # which is the fact the operator needs. The local value moves to the
+    # profile-scoped document at the end of this file, where it cannot follow a
+    # deployment out of a laptop.
+    handover-pepper-reference: ${QOIDA_HANDOVER_PEPPER_REF}
+  security:
+    oauth2:
+      client-id: ${QOIDA_OIDC_CLIENT_ID:qoida-api}
+  messaging:
+    topics:
+      tenancy-events: ${QOIDA_KAFKA_TENANCY_EVENTS_TOPIC:tenancy.events}
+      # ADR 0045's fourth topic class. Seconds of retention, no replay, and no
+      # consumer group on the other side: every replica assigns every partition
+      # and seeks to the end, because each holds different browser connections
+      # and a signal older than the restart is a stale hint pushed into a live
+      # screen.
+      realtime-signals: ${QOIDA_KAFKA_REALTIME_SIGNALS_TOPIC:realtime.signals}
+      # ADR 0007's production command entry point. A command topic, not a fact
+      # topic: PostgreSQL is the durable store of work still owed (ADR 0004), so
+      # Kafka retention here only needs to outlive a consumer restart.
+      fulfillment-commands: ${QOIDA_KAFKA_FULFILLMENT_COMMANDS_TOPIC:fulfillment.commands}
+      fulfillment-events: ${QOIDA_KAFKA_FULFILLMENT_EVENTS_TOPIC:fulfillment.events}
+    inbox:
+      # ADR 0005. The listener is a switch because enabling consumption is an
+      # operational decision, not a deployment side effect.
+      listener:
+        enabled: ${QOIDA_INBOX_LISTENER_ENABLED:true}
+      group-id: ${QOIDA_INBOX_GROUP_ID:qoida-platform}
+      concurrency: ${QOIDA_INBOX_CONCURRENCY:1}
+      max-attempts: ${QOIDA_INBOX_MAX_ATTEMPTS:10}
+      max-payload-bytes: ${QOIDA_INBOX_MAX_PAYLOAD_BYTES:262144}
+    outbox:
+      enabled: ${QOIDA_OUTBOX_RELAY_ENABLED:true}
+      poll-interval: ${QOIDA_OUTBOX_POLL_INTERVAL:1s}
+      batch-size: ${QOIDA_OUTBOX_BATCH_SIZE:20}
+      lease-duration: ${QOIDA_OUTBOX_LEASE_DURATION:5m}
+      publish-timeout: ${QOIDA_OUTBOX_PUBLISH_TIMEOUT:10s}
+      max-attempts: ${QOIDA_OUTBOX_MAX_ATTEMPTS:10}
+      initial-backoff: ${QOIDA_OUTBOX_INITIAL_BACKOFF:1s}
+      max-backoff: ${QOIDA_OUTBOX_MAX_BACKOFF:5m}
+
+server:
+  forward-headers-strategy: framework
+  shutdown: graceful
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when_authorized
+      # ADR 0023: three health surfaces, three audiences, and they must never be
+      # collapsed into one. The mistake this configuration exists to prevent is
+      # a single endpoint that answers "is the process alive", "should the proxy
+      # send you traffic", and "can a customer place an order" with one status —
+      # because the correct response to each is different, and on a single box
+      # answering the third with the first restarts the only container there is.
+      group:
+        # What the watchdog acts on. The process, and deliberately not one thing
+        # it depends on. A slow database that fails this probe would recreate the
+        # only application container on the machine, turning a degradation into
+        # an outage with nothing to fail over to. Listed explicitly rather than
+        # left to the default so that adding `db` here is a visible edit to a
+        # line that says not to.
+        liveness:
+          include: livenessState
+          show-details: never
+        # What the reverse proxy load-balances on, so that a request arriving
+        # during a restart is retried against the new container instead of being
+        # answered with a connection reset. Also what `depends_on:
+        # service_healthy` waits for. Neither of those questions is about the
+        # database either: a proxy that stops routing to its only upstream when
+        # the database is slow has converted slow into down.
+        readiness:
+          include: readinessState
+          show-details: never
+        # What the external uptime check asks, and the only group that consults a
+        # dependency. "Can a customer place an order" is false when PostgreSQL is
+        # unreachable, and that is worth a page.
+        #
+        # Kafka is deliberately absent. An order is written to PostgreSQL and its
+        # events to the outbox in the same transaction, so a broker that is down
+        # delays delivery to the POS and does not stop a customer ordering. The
+        # outbox age gauge is what notices that, and it has its own alert.
+        #
+        # Details are never shown: this group is reachable from the internet, and
+        # the aggregate response would tell a scanner exactly which back-end
+        # service is currently down.
+        customer:
+          include: db
+          show-details: never
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,applicationmodules
+  info:
+    env:
+      enabled: true
+
+info:
+  application:
+    name: Qoida Platform
+    architecture: modular-monolith
+    java: 25
+
+camel:
+  main:
+    name: qoida-integration
+
+logging:
+  pattern:
+    level: "%5p [correlationId:%X{correlationId:-}]"
+
+# -----------------------------------------------------------------------------
+# Local, test and CI only.
+#
+# Everything below is a value that must never reach a deployment, and the profile
+# activation is the enforcement rather than a comment asking nicely. `default` is
+# in the expression because Spring treats "no profile set" as the default
+# profile, which is how a laptop and the test suite run.
+#
+# SecretsProfileGuard already refuses to start a non-local profile on the
+# environment secret provider. This document is the other half of that: a
+# non-local profile does not merely fail to resolve these values, it never sees
+# them.
+# -----------------------------------------------------------------------------
+---
+spring:
+  config:
+    activate:
+      on-profile: "local | test | default"
+
+qoida:
+  partner:
+    # ADR 0040's pepper lives at the local path because the environment provider
+    # ignores the environment segment entirely and reads
+    # qoida.secrets.data_encryption.platform.handover-pepper above. Naming
+    # anything else here would be a reference that reads correctly and means
+    # nothing.
+    handover-pepper-reference: qoida:local:data_encryption:platform:handover-pepper

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.qoida.uz/events/ordering.events/OrderConfirmed.v1.schema.json",
+  "title": "OrderConfirmed v1 payload",
+  "description": "The commercial commitment. The fact the customer is told about and the fact the inventory process commits a reservation on. POS export never gates it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["orderId", "status", "orderVersion", "confirmedAt", "totalMinor"],
+  "properties": {
+    "orderId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": ["string", "null"], "format": "uuid" },
+    "locationId": { "type": ["string", "null"], "format": "uuid" },
+    "acceptanceMode": {
+      "type": ["string", "null"],
+      "enum": ["AUTO_CONFIRM", "RESTAURANT_APPROVAL", null]
+    },
+    "decisionChannel": {
+      "type": ["string", "null"],
+      "enum": ["QOIDA_OPERATIONS", "POS", "SYSTEM_TIMEOUT", null]
+    },
+    "confirmedAt": { "type": "string", "format": "date-time" },
+    "currency": { "type": ["string", "null"], "pattern": "^[A-Z]{3}$" },
+    "totalMinor": { "type": "integer", "minimum": 0 },
+    "status": {
+      "type": "string",
+      "enum": [
+        "RECEIVED", "PAYMENT_AUTHORIZING", "AWAITING_APPROVAL", "PAYMENT_FAILED",
+        "CONFIRMED", "REJECTED", "EXPIRED", "PREPARING", "READY", "FULFILLING",
+        "COMPLETED", "CANCELLED"
+      ]
+    },
+    "orderVersion": { "type": "integer", "minimum": 1 }
+  }
+}

@@ -1,0 +1,70 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+/* Grid, not flex, because the dock's width has to be *fixed* rather than
+ * content-derived. A detail pane that resizes as its content loads makes the
+ * queue beside it reflow mid-read, and the operator loses the row they were
+ * looking at. */
+.orders {
+  display: grid;
+  grid-template-columns: 1fr 0;
+  height: 100%;
+  min-width: 0;
+}
+
+.orders--docked {
+  /* 420px is the narrowest column that holds a Tashkent delivery address, an
+   * entrance and a floor without wrapping mid-word, which is the detail's
+   * densest line. Below that the pane starts lying about the address. */
+  grid-template-columns: minmax(0, 1fr) 420px;
+}
+
+.queue {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.queue__head {
+  flex-shrink: 0;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+}
+
+.queue__head h1 {
+  margin: 0;
+}
+
+.queue__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--q-canvas);
+}
+
+/* Hairline elevation, never a shadow. The dock is separated from the queue by a
+ * 1px rule and nothing else — CONSOLE has no drop shadows. */
+.dock {
+  border-left: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  overflow-y: auto;
+  min-width: 0;
+}
+
+.orders:not(.orders--docked) .dock {
+  display: none;
+}
+
+/* The queue must stay usable when the dock is open. Below this the two panes
+ * together are narrower than the queue alone needs, and the right answer is to
+ * stack rather than to squeeze — but stacking is the queue's decision to make
+ * when it exists, so for now the dock simply stops taking a fixed width. */
+@media (max-width: 1100px) {
+  .orders--docked {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 38%);
+  }
+}

@@ -1,0 +1,70 @@
+# Foreign keys from a tenant-scoped table into a tenant-scoped table that do not
+# name the tenant column, and are not failing the build today.
+#
+# Read by tools/checks/tenant_scoped_references.py and by
+# TenantScopedReferenceCatalogTests, which derives the same set from
+# `pg_constraint` on a migrated database. Both refuse an entry with no reason and
+# both refuse an entry for a reference that no longer exists, so this file cannot
+# drift from the schema in either direction.
+#
+# Format: reference <TAB> verdict <TAB> reason
+#
+#   reference  schema.table.constraint_name, exactly as PostgreSQL names it
+#   verdict    one of the three below
+#   reason     why this one is not simply fixed. A name with no reason is what
+#              let twenty-three of these become invisible; the loader rejects it.
+#
+# Verdicts:
+#
+#   TENANT_FREE_TARGET      the referenced table holds no tenant-owned rows at
+#                           all. This is not a tenant-blind reference, it is a
+#                           tenant-free one, and nothing is wrong with it.
+#
+#   MIXED_OWNERSHIP_TARGET  the referenced table's tenant_id is nullable by
+#                           design: it holds platform-owned rows (tenant_id NULL)
+#                           beside tenant-owned ones. A foreign key on the RAW
+#                           columns cannot express "this tenant's row or the
+#                           platform's" — under MATCH SIMPLE a NULL anywhere in
+#                           the key stops the check entirely, so the platform case
+#                           would become unchecked while the cross-tenant case
+#                           stayed possible.
+#
+#                           That is a fact about the raw columns and not about
+#                           databases. V0088 closes four of these with a key on
+#                           DERIVED ones: coalesce(tenant_id, nil) on the target
+#                           makes the platform's ownership a value rather than an
+#                           absence, and on the referencing side a declared
+#                           ownership boolean generates a key column that can hold
+#                           only the platform sentinel or the row's own tenant.
+#                           V0086 closes the fifth with a pair of triggers, for the
+#                           reason its entry gives.
+#
+#                           An entry here is therefore a SHAPE and not necessarily
+#                           an open hole: the constraint sweep asks whether a key
+#                           names a column spelled tenant_id, and neither a derived
+#                           owner column nor a trigger is spelled that way. Every
+#                           entry has to say which it is, and where the guarantee
+#                           lives if it is not in the key.
+#
+#   DEFERRED                fixable exactly as V0077 fixed fourteen others, and
+#                           deferred for a stated reason with the work named.
+#
+# The list may only shrink.
+
+# ---------------------------------------------------------------------------
+# MIXED_OWNERSHIP_TARGET — the five a key on the raw columns cannot fix
+# ---------------------------------------------------------------------------
+
+
+
+
+
+
+# ---------------------------------------------------------------------------
+# DEFERRED — fixable as V0077 fixed the others, deferred for a stated reason
+# ---------------------------------------------------------------------------
+
+
+
+
+

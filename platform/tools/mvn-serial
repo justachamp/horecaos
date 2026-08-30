@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+#
+# Run Maven under an exclusive lock.
+#
+# This is a single-module project, so every Maven invocation compiles into the
+# same `target/classes` and `target/test-classes`. Maven takes no lock on them.
+# Two concurrent runs therefore write the same files while the other is reading
+# them, and the symptom is not a clean failure — it is `NoClassDefFoundError` and
+# `ExceptionInInitializerError` from classes that were mid-rewrite when the JVM
+# loaded them, or a test that fails once and passes on its own afterwards.
+#
+# That matters here because parallel agents each verify their own work, and four
+# of them sharing one working tree is four concurrent builds. The failures look
+# like flakiness, or like a hung agent, and cost far more to diagnose than the
+# wait costs.
+#
+# Usage is exactly Maven's:
+#
+#     tools/mvn-serial -o test -Dtest=SomeTests
+#
+# `mkdir` is the lock because it is atomic on every filesystem this project will
+# see, unlike a test-then-create on a file, and unlike `flock`, which macOS does
+# not ship.
+
+set -euo pipefail
+
+LOCK_DIR="${TMPDIR:-/tmp}/qoida-maven.lock"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+STALE_AFTER_SECONDS=1800
+
+acquire() {
+    local waited=0
+    while ! mkdir "$LOCK_DIR" 2>/dev/null; do
+        # A lock whose owner is gone would otherwise block every later build
+        # until somebody noticed. Check the recorded pid rather than trusting an
+        # age alone: a long test run is not a dead one.
+        if [ -f "$LOCK_DIR/pid" ]; then
+            local owner age
+            owner="$(cat "$LOCK_DIR/pid" 2>/dev/null || echo 0)"
+            age=$(( $(date +%s) - $(cat "$LOCK_DIR/since" 2>/dev/null || date +%s) ))
+            if ! kill -0 "$owner" 2>/dev/null; then
+                echo "mvn-serial: breaking a lock held by dead pid $owner" >&2
+                rm -rf "$LOCK_DIR"
+                continue
+            fi
+            if [ "$age" -gt "$STALE_AFTER_SECONDS" ]; then
+                echo "mvn-serial: breaking a lock held for ${age}s by pid $owner" >&2
+                rm -rf "$LOCK_DIR"
+                continue
+            fi
+        fi
+        if [ $(( waited % 60 )) -eq 0 ]; then
+            echo "mvn-serial: waiting for the build lock (${waited}s)" >&2
+        fi
+        sleep 5
+        waited=$(( waited + 5 ))
+    done
+    echo $$ > "$LOCK_DIR/pid"
+    date +%s > "$LOCK_DIR/since"
+}
+
+release() { rm -rf "$LOCK_DIR"; }
+
+acquire
+trap release EXIT INT TERM
+cd "$REPO_ROOT"
+./mvnw "$@"

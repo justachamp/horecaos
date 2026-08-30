@@ -1,0 +1,13 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  width: 100%;
+}
+
+/* Sit just above bottom-nav (nav is fixed bottom-3, ~60px tall) */
+.cart-bottom-bar {
+  bottom: 5.5rem; /* above bottom nav */
+  padding-bottom: env(safe-area-inset-bottom, 0.75rem);
+}

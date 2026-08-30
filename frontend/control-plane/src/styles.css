@@ -1,0 +1,51 @@
+/* Application stylesheet.
+ *
+ * Three things happen here and nothing else: the fonts are self-hosted, the
+ * vendored token sheet is pulled in, and the handful of rules that belong to
+ * this application rather than to the design system are declared.
+ *
+ * Anything that is a design decision belongs in the design system and reaches
+ * this application through src/design-system/tokens.css. If a colour, a radius
+ * or a font size is written literally below, it is a bug.
+ */
+
+/* Self-hosted rather than fetched from a font CDN. A staff console should not
+   make a third-party request on every page load (ADR 0029), and a font that
+   arrives over the network arrives after first paint. Weights 300, 400 and 600
+   are the three the closed type scale uses; the packages carry latin,
+   latin-ext and cyrillic subsets behind unicode-range, so ru and uz-Latn each
+   download only what they need. */
+@import '@fontsource/ibm-plex-sans/300.css';
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+
+@import './design-system/tokens.css';
+
+/* The token sheet sizes #root, which is React's mount point. Angular's is the
+   application's own element, and the vendored copy is not edited to say so. */
+app-root {
+  display: block;
+  height: 100%;
+}
+
+/* Focus is one of the four places the design system spends platform blue.
+   Declared once, globally, so no component has to remember. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--q-primary);
+  outline-offset: -2px;
+}
+
+/* The console surface class. Both back-office applications set it on the
+   document so a component can never be styled for the wrong surface by
+   accident: a rule that needs .console cannot match inside .field. */
+.console a {
+  color: var(--q-primary);
+}
+
+.console h1,
+.console h2,
+.console h3,
+.console p {
+  margin: 0;
+}

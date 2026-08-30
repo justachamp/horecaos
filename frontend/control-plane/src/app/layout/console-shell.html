@@ -1,0 +1,61 @@
+<a class="skip q-body-sm" href="#content">{{ i18n.t('shell.skipToContent') }}</a>
+
+<nav class="rail" [attr.aria-label]="i18n.t('app.surface')">
+  <div class="rail-head">
+    <!-- No logo has been provided. The wordmark stands in, per the design system. -->
+    <span class="q-emphasis wordmark">{{ i18n.t('app.name') }}<span class="dot">.</span></span>
+    <span class="q-caption rail-muted">{{ i18n.t('app.surface') }}</span>
+  </div>
+
+  <ul class="rail-sections">
+    @for (section of sections(); track section.id) {
+      <li>
+        <a
+          class="q-body-sm rail-link"
+          [routerLink]="section.route"
+          routerLinkActive="active"
+          [routerLinkActiveOptions]="{ exact: section.route === '/' }"
+        >
+          {{ i18n.t(section.labelKey) }}
+        </a>
+      </li>
+    }
+  </ul>
+
+  <div class="rail-foot">
+    <div class="q-caption rail-muted">{{ i18n.t('shell.signedInAs') }}</div>
+    <div class="q-body-sm rail-name">{{ operatorName() }}</div>
+    <button class="q-caption rail-action" type="button" (click)="auth.signOut()">
+      {{ i18n.t('shell.signOut') }}
+    </button>
+  </div>
+</nav>
+
+<div class="frame">
+  <header class="topbar">
+    <span class="q-body-sm muted">{{ statusLabel() }}</span>
+
+    <div class="topbar-right">
+      <!-- A language switch is three words, not a dropdown. Three is few
+           enough that a select costs a click and gains nothing. -->
+      <div class="locales" role="group" [attr.aria-label]="i18n.t('shell.locale')">
+        @for (locale of locales; track locale) {
+          <button
+            class="q-caption locale"
+            type="button"
+            [class.on]="i18n.locale() === locale"
+            [attr.aria-pressed]="i18n.locale() === locale"
+            (click)="switchLocale(locale)"
+          >
+            {{ localeLabel(locale) }}
+          </button>
+        }
+      </div>
+      <span class="q-caption muted">{{ today() }}</span>
+    </div>
+  </header>
+
+  <main id="content" class="content">
+    <router-outlet />
+  </main>
+</div>

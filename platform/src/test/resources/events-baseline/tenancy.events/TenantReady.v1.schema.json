@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.qoida.uz/events/tenancy.events/TenantReady.v1.schema.json",
+  "title": "TenantReady v1 payload",
+  "description": "Every required ADR 0008 readiness step passed. Ready is not live: activation is a separate platform decision.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tenantId", "runId"],
+  "properties": {
+    "tenantId": { "type": "string", "format": "uuid" },
+    "runId": { "type": "string", "format": "uuid" }
+  }
+}

@@ -1,0 +1,115 @@
+<div class="min-h-screen bg-jizbiz-bg px-4 pt-4 text-jizbiz-text">
+  <div class="mx-auto max-w-[420px]">
+    <div class="flex items-center gap-3">
+      <button
+        type="button"
+        (click)="goBack()"
+        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-jizbiz-surface text-jizbiz-text"
+      >
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+
+      <div class="flex flex-1 items-center gap-3 rounded-2xl border border-zinc-500 bg-jizbiz-surface px-4 py-3 focus-within:border-jizbiz-accent focus-within:ring-2 focus-within:ring-jizbiz-accent">
+        <span class="shrink-0 text-jizbiz-text">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+        </span>
+        <input
+          #searchInput
+          type="search"
+          autofocus
+          [placeholder]="'home.search' | t"
+          (input)="onInput($event)"
+          class="min-w-0 flex-1 bg-transparent text-sm text-jizbiz-text placeholder:text-zinc-500 focus:outline-none"
+        />
+        @if (query().length > 0) {
+          <button
+            type="button"
+            (click)="clearSearch()"
+            class="shrink-0 rounded-full p-1 text-zinc-500 transition-colors hover:bg-jizbiz-hover hover:text-jizbiz-text"
+            [attr.aria-label]="'common.close' | t"
+          >
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        }
+      </div>
+    </div>
+
+    @if (recentLoading()) {
+      <div class="flex items-center justify-center gap-2 py-16">
+        <span
+          class="h-6 w-6 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"
+        ></span>
+        <span class="text-sm text-zinc-400">{{ 'common.loading' | t }}</span>
+      </div>
+    }
+
+    @if (showRecent()) {
+      <div class="pt-6">
+        <h3 class="mb-3 text-sm font-semibold text-zinc-400">{{ 'home.recentSearches' | t }}</h3>
+        <ul class="space-y-1">
+          @for (label of recentLabels(); track label) {
+            <li>
+              <button
+                type="button"
+                (click)="selectRecent(label)"
+                class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-jizbiz-surface"
+              >
+                <svg class="h-4 w-4 shrink-0 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span class="text-sm text-jizbiz-text">{{ label }}</span>
+              </button>
+            </li>
+          }
+        </ul>
+      </div>
+    }
+
+    @if (loading()) {
+      <div class="flex items-center justify-center gap-2 py-16">
+        <span
+          class="h-6 w-6 animate-spin rounded-full border-2 border-jizbiz-accent border-t-transparent"
+        ></span>
+        <span class="text-sm text-zinc-400">{{ 'common.loading' | t }}</span>
+      </div>
+    }
+
+    @if (results().length > 0) {
+      <div class="flex flex-col pb-32 pt-6">
+        @for (item of results(); track item.id) {
+          <app-food-card [item]="item"></app-food-card>
+        }
+      </div>
+    }
+
+    @if (noResults()) {
+      <div class="flex flex-col items-center gap-3 py-16 text-center">
+        <svg class="h-12 w-12 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.5"
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+          />
+        </svg>
+        <p class="text-sm text-zinc-400">{{ 'home.noResults' | t }}</p>
+      </div>
+    }
+  </div>
+  @if (hasCartItems()) {
+    <div class="position-relative">
+      <app-cart-hint-badge></app-cart-hint-badge>
+    </div>
+  }
+</div>

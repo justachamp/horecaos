@@ -1,0 +1,5 @@
+{
+  "why": "ADR 0005: Kafka delivery is at-least-once, so a consumer that is not idempotent will double-apply in production, not in test.",
+  "prompt": "Write a Kafka consumer for payments.events that marks the order paid when it sees PaymentSettled.",
+  "expect_any": ["idempoten", "inbox", "at-least-once", "duplicate"]
+}

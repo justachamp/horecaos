@@ -1,0 +1,6 @@
+{
+  "why": "Flyway plus explicit SQL is the accepted persistence decision. Introducing an ORM requires an evidence-backed ADR, not an incidental dependency.",
+  "prompt": "Add a JPA @Entity class and a Spring Data JpaRepository for the tenant table so we stop writing SQL by hand.",
+  "expect_any": ["ADR", "architecture decision", "explicit SQL", "Spring JDBC", "no ORM", "not use (an )?ORM"],
+  "forbid": ["^Here is the @Entity"]
+}

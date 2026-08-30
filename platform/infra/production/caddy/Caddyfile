@@ -1,0 +1,204 @@
+# The only process on this host that listens on a public port.
+#
+# Caddy rather than nginx for one reason that matters to a single operator:
+# certificate issuance and renewal happen without a cron job, without certbot,
+# and without a renewal that silently stops working eight weeks before anyone
+# notices. An expired certificate is a full outage, and it is the single most
+# common self-inflicted one on deployments like this.
+
+{
+	email {$QOIDA_ACME_EMAIL}
+
+	# The admin API stays on loopback inside the container. It is what the
+	# health check probes, and it must never be reachable from the network: it
+	# can reconfigure the reverse proxy without authentication.
+	admin 127.0.0.1:2019
+
+	servers {
+		# The application reads X-Forwarded-For to attribute requests. Trusting
+		# it from anywhere would let a caller forge their own address; this
+		# trusts only the Docker bridge ranges, which is the only place a
+		# request can legitimately arrive from.
+		trusted_proxies static private_ranges
+	}
+
+	# The per-site `log` blocks below only configure the *access* logger. An
+	# upstream that refuses a connection is written by `http.log.error.*`, which
+	# is not included in any of them and therefore lands on the default logger
+	# with the request verbatim — query string and all. Every redaction below was
+	# silently bypassed by a 502, on the one class of request most likely to be
+	# retried and logged repeatedly. So the default logger redacts too.
+	log {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>uri regexp "\?.*$" "?redacted"
+			}
+		}
+	}
+}
+
+{$QOIDA_API_ORIGIN} {
+	encode zstd gzip
+
+	# Two actuator paths and nothing else. `/actuator/metrics`,
+	# `/actuator/applicationmodules` and `/actuator/info` describe the internals
+	# of the platform to anyone who asks, and `/actuator/health` itself
+	# aggregates dependency state, which tells a scanner which of the back-end
+	# services are currently down.
+	#
+	# `readiness` is this proxy's own question: may I send a request to that
+	# container right now. It reports the process and nothing it depends on, so
+	# the proxy does not stop routing to its only upstream because the database
+	# is slow.
+	#
+	# `customer` is the external uptime check's question: could a customer place
+	# an order. That one does consult PostgreSQL, and it is the signal ADR 0023's
+	# first night alert is derived from. Both are 200-or-503 with no body worth
+	# reading; the group shows no details, so neither names a back-end service.
+	#
+	# They are two paths on purpose. Answering both questions with one endpoint is
+	# how a slow database ends up restarting the only application container on the
+	# machine — see ADR 0023, "Two health endpoints with different jobs".
+	handle /actuator/health/readiness {
+		reverse_proxy platform-app:8080
+	}
+
+	handle /actuator/health/customer {
+		reverse_proxy platform-app:8080
+	}
+
+	handle /actuator/* {
+		respond 404
+	}
+
+	handle {
+		reverse_proxy platform-app:8080 {
+			# A request that is still in flight when the application is being
+			# replaced should be retried against the new container rather than
+			# returned as a 502. With one replica this only covers the restart
+			# window, which is exactly the window a deploy creates.
+			lb_try_duration 10s
+			health_uri /actuator/health/readiness
+			health_interval 10s
+			health_timeout 3s
+		}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	log {
+		output stdout
+		format json
+		# ADR 0029: no personal data in any log. Query strings are the usual way
+		# a phone number or an address ends up in an access log, so they are not
+		# recorded here at all.
+		format filter {
+			wrap json
+			fields {
+				request>uri regexp "\?.*$" "?redacted"
+			}
+		}
+	}
+}
+
+{$QOIDA_AUTH_ORIGIN} {
+	encode zstd gzip
+
+	# Keycloak's admin console and its management port are not published. The
+	# console is reached over an SSH tunnel during the bootstrap runbook; leaving
+	# it on the public origin means the platform's identity provider has an
+	# internet-facing login form for an account that can mint any token.
+	handle /admin/* {
+		respond 404
+	}
+
+	handle /metrics* {
+		respond 404
+	}
+
+	handle {
+		reverse_proxy keycloak:8080
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		# Stricter than the API origin's strict-origin-when-cross-origin, because
+		# the URLs on this origin are the ones that carry credentials: Keycloak's
+		# login-actions paths hold a one-time session_code in the query string, and
+		# a login page links out to identity providers, registration and terms. The
+		# API origin has no such URLs and no such outbound links.
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	log {
+		output stdout
+		# ADR 0029, and here it is credentials rather than personal data. An OIDC
+		# flow puts `code`, `state` and Keycloak's `session_code` in the query
+		# string, so logging it verbatim writes a usable authorization code to
+		# stdout, into the log driver, and into whatever reads it afterwards.
+		format filter {
+			wrap json
+			fields {
+				request>uri regexp "\?.*$" "?redacted"
+			}
+		}
+	}
+}
+
+# ---------------------------------------------------------------------------
+# Media objects.
+#
+# A presigned URL is signed for one origin, so this name is the one in
+# QOIDA_MEDIA_ORIGIN and MinIO validates the signature against the Host header
+# it receives. That is why the proxy below is a plain reverse_proxy with no
+# header rewriting: change the Host and every signature stops matching.
+#
+# The edge reaches MinIO over the `media` network. MinIO is deliberately not on
+# `public` -- the store that holds the backups should have no route to the
+# internet -- and the edge is not on `core`, because the one internet-facing
+# process should have no path to PostgreSQL.
+# ---------------------------------------------------------------------------
+{$QOIDA_MEDIA_ORIGIN} {
+	encode zstd gzip
+
+	# Objects only. The MinIO console is disabled, but the S3 API on the same
+	# port also carries bucket creation, policy and admin operations, and none of
+	# those belong on a public origin even behind a signature check.
+	handle /minio/* {
+		respond 404
+	}
+
+	handle {
+		reverse_proxy minio:9000
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	log {
+		output stdout
+		# A presigned URL is a credential in a query string: X-Amz-Credential and
+		# X-Amz-Signature are the whole of the authorisation, and they stay valid
+		# until the expiry they were signed for. Logging them verbatim would put a
+		# working key to a private object in stdout.
+		format filter {
+			wrap json
+			fields {
+				request>uri regexp "\?.*$" "?redacted"
+			}
+		}
+	}
+}

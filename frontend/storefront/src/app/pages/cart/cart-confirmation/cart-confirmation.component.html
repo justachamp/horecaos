@@ -1,0 +1,212 @@
+<div class="flex min-h-full flex-col bg-jizbiz-bg pb-52 pt-2 text-jizbiz-text">
+  <div class="mx-auto w-full max-w-[420px] flex-1">
+    <h1 class="text-xl font-bold text-jizbiz-text">{{ 'cart.confirmTitle' | t }}</h1>
+
+    <!-- Yetkazib berish manzili -->
+    <a
+      class="flex w-full items-center gap-3 border-b border-zinc-700/80 py-4 text-left"
+      [attr.aria-label]="'cart.changeAddress' | t"
+    >
+      <span class="flex h-9 w-9 shrink-0 items-center justify-center text-jizbiz-accent">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+          />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+          />
+        </svg>
+      </span>
+      <div class="min-w-0 flex-1">
+        <p class="text-sm font-medium text-jizbiz-text">{{ 'cart.deliveryAddress' | t }}</p>
+        <p class="mt-0.5 text-xs text-zinc-400">{{ deliveryAddress }}</p>
+      </div>
+      <!-- <svg class="h-5 w-5 shrink-0 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+      </svg> -->
+    </a>
+
+    <!-- Promokod -->
+    <!-- <div class="border-b border-zinc-700/80">
+      <button
+        type="button"
+        class="flex w-full items-center gap-3 py-4 text-left"
+        aria-label="Promokod qo'shish"
+        (click)="togglePromoInput()"
+      >
+        <span class="flex h-9 w-9 shrink-0 items-center justify-center text-jizbiz-accent">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+            />
+          </svg>
+        </span>
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-medium text-jizbiz-text">Promokod bormi?</p>
+          <p class="mt-0.5 text-xs text-zinc-400">{{ promocodeLabel }}</p>
+        </div>
+        <svg class="h-5 w-5 shrink-0 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+      @if (showPromoInput) {
+        <div class="flex flex-col gap-3 pb-4">
+          <input
+            type="text"
+            [(ngModel)]="promoCode"
+            placeholder="Promokodni kiriting"
+            class="rounded-lg border border-zinc-600 bg-jizbiz-surface-2 px-4 py-2.5 text-sm text-jizbiz-text placeholder-zinc-500 focus:border-jizbiz-accent focus:outline-none"
+          />
+          @if (promoError) {
+            <p class="text-xs text-red-400">{{ promoError }}</p>
+          }
+        <button
+          type="button"
+          class="w-fit rounded-lg bg-jizbiz-accent px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-95"
+          (click)="applyPromo()"
+        >
+          Применить
+        </button>
+        </div>
+      }
+    </div> -->
+
+    <!-- To'lov usuli -->
+    <div class="border-b border-zinc-700/80">
+      <p class="py-2 text-sm font-bold text-jizbiz-text">{{ 'cart.pay' | t }}</p>
+      <button
+        type="button"
+        class="flex w-full items-center gap-3 pb-4 text-left"
+        [attr.aria-label]="'cart.changePayment' | t"
+        (click)="togglePaymentOptions()"
+      >
+        <span class="flex h-9 w-9 shrink-0 items-center justify-center text-jizbiz-accent">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+            />
+          </svg>
+        </span>
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-medium text-jizbiz-text">{{ 'cart.paymentMethod' | t }}</p>
+          <p class="mt-0.5 text-xs text-zinc-400">{{ paymentMethod }}</p>
+        </div>
+        <svg class="h-5 w-5 shrink-0 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+
+      <!-- Payment options panel (below button) -->
+      @if (showPaymentOptions) {
+        <div class="rounded-xl border border-zinc-600 bg-jizbiz-bg pb-4 pt-2">
+          <div class="divide-y divide-zinc-600">
+            @for (opt of paymentOptions(); track opt.id) {
+              <label
+                class="flex cursor-pointer items-center gap-2 px-3 py-2 transition-colors hover:bg-jizbiz-hover"
+              >
+                <span class="flex shrink-0 items-center justify-center text-jizbiz-text">
+                  @if (opt.icon === 'cash') {
+                    <svg class="h-11 w-11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v2m2 4h10m-10 4h10m-10-6h10" />
+                    </svg>
+                  }
+                  @if (opt.icon === 'card') {
+                    <svg class="h-11 w-11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                  }
+                  @if (opt.icon === 'click') {
+                    <img src="/jizbiz/logo/click.svg" alt="Click" class="h-11 w-11 object-contain" />
+                  }
+                  @if (opt.icon === 'payme') {
+                    <img src="/jizbiz/logo/payme.jpeg" alt="Payme" class="h-11 w-11 rounded object-contain" />
+                  }
+                </span>
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-medium text-jizbiz-text">{{ opt.labelKey | t }}</p>
+                  @if (opt.secondaryKey) {
+                    <p class="mt-0.5 text-xs text-zinc-400">{{ opt.secondaryKey | t }}</p>
+                  }
+                </div>
+                <span class="flex h-9 w-9 shrink-0 items-center justify-center">
+              <span
+                class="inline-block h-5 w-5 rounded-full border-2 transition-colors"
+                [class.border-jizbiz-accent]="selectedPaymentId === opt.id"
+                [class.bg-jizbiz-accent]="selectedPaymentId === opt.id"
+                [class.border-zinc-500]="selectedPaymentId !== opt.id"
+                [class.bg-transparent]="selectedPaymentId !== opt.id"
+              ></span>
+            </span>
+            <input
+              type="radio"
+              name="paymentMethod"
+              [value]="opt.id"
+              [ngModel]="selectedPaymentId"
+              (ngModelChange)="selectedPaymentId = $event"
+              [id]="'payment-' + opt.id"
+              class="sr-only"
+            />
+              </label>
+            }
+          </div>
+        </div>
+      }
+    </div>
+
+    <!-- To'lov summasi -->
+    <div class="mt-6 rounded-xl bg-jizbiz-accent px-4 py-4 text-white">
+      <div class="flex items-center justify-between border-b border-white/20 pb-3">
+        <span class="text-sm font-bold text-white">{{ 'cart.paymentAmount' | t }}</span>
+        <span class="text-sm font-bold text-white">{{ totalWithDelivery }}</span>
+      </div>
+      <div class="flex items-center justify-between pt-2 text-sm text-white">
+        <span>{{ 'cart.order' | t }}</span>
+        <span>{{ orderSubtotal }}</span>
+      </div>
+      <div class="flex items-center justify-between pt-1 text-sm text-white">
+        <span>{{ 'cart.delivery' | t }}</span>
+        <span>{{ deliveryFee }}</span>
+      </div>
+      @if (cart.cartData()?.packaging?.price) {
+        <div class="flex items-center justify-between pt-1 text-sm text-white">
+          <span>{{ 'cart.packaging' | t }}</span>
+          <span>{{ cart.packagingFormatted() }}</span>
+        </div>
+      }
+    </div>
+  </div>
+  @if (orderError()) {
+    <p class="mt-2 text-center text-sm text-red-400">{{ orderError() }}</p>
+  }
+  <!-- Davom etish (fixed above bottom nav) -->
+  <div
+    class="fixed left-1/2 z-40 w-full max-w-[420px] -translate-x-1/2 px-4 pt-2 pb-5"
+    style="bottom: 5.5rem"
+  >
+    <button
+      type="button"
+      (click)="submitOrder()"
+      [disabled]="submitting() || !cart.cartData()"
+      class="flex w-full items-center justify-center rounded-xl bg-jizbiz-accent py-3.5 text-base font-bold text-white transition-opacity hover:opacity-95 disabled:opacity-50"
+    >
+      @if (submitting()) {
+        {{ 'common.loading' | t }}
+      } @else {
+        {{ 'cart.placeOrder' | t }}
+      }
+    </button>
+   
+  </div>
+</div>
