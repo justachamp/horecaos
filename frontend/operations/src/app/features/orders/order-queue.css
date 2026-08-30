@@ -1,0 +1,279 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.order-queue {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* ---- toolbar: tabs + refresh stamp ------------------------------------ */
+
+.order-queue__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 24px;
+  border-bottom: 1px solid var(--q-hairline);
+  flex-shrink: 0;
+}
+
+.order-queue__tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--q-radius);
+  background: transparent;
+  color: var(--q-ink-muted);
+  font-family: var(--q-font-sans);
+  font-size: 14px;
+  line-height: 1.29;
+  letter-spacing: 0.16px;
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--q-ink);
+  background: var(--q-surface-1);
+}
+
+.tab--active {
+  color: var(--q-ink);
+  background: var(--q-surface-1);
+  border-color: var(--q-hairline);
+  font-weight: 600;
+}
+
+.tab__count {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: var(--q-radius);
+  background: var(--q-surface-2);
+  color: var(--q-ink-muted);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.tab__count--attention {
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.order-queue__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.order-queue__stamp {
+  color: var(--q-ink-subtle);
+}
+
+/* "Loading, refetch: rows stay, the refresh stamp pulses" — §2.11. */
+.order-queue__stamp--pulse {
+  animation: order-queue-pulse 1s var(--q-ease-productive) infinite alternate;
+}
+
+@keyframes order-queue-pulse {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.4;
+  }
+}
+
+.order-queue__refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+  cursor: pointer;
+}
+
+.order-queue__refresh:hover {
+  color: var(--q-ink);
+  border-color: var(--q-ink-subtle);
+}
+
+/* ---- error band: keeps rows, never blanks the queue (§2.11) ---------- */
+
+.order-queue__error-band {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 24px;
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+  border-bottom: 1px solid var(--q-hairline);
+  flex-shrink: 0;
+}
+
+.order-queue__error-ref {
+  color: var(--q-error-text);
+  opacity: 0.75;
+}
+
+.order-queue__error-retry {
+  margin-left: auto;
+  border: 1px solid currentcolor;
+  border-radius: var(--q-radius);
+  background: transparent;
+  color: inherit;
+  padding: 4px 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* ---- table -------------------------------------------------------------- */
+
+.order-queue__table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.order-queue__table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.order-queue__table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--q-surface-1);
+  color: var(--q-ink-subtle);
+  text-align: left;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.32px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+  z-index: 1;
+}
+
+.order-queue__rail-col {
+  width: 4px;
+  padding: 0 !important;
+}
+
+.order-queue__num-col {
+  text-align: right;
+}
+
+/* Row height 44px, no zebra striping — the severity tint needs the background (§2.2). */
+.order-row {
+  height: 44px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.order-row td {
+  padding: 4px 12px;
+  vertical-align: middle;
+  color: var(--q-ink);
+  font-size: 14px;
+}
+
+.order-row:hover {
+  background: var(--q-surface-1);
+}
+
+.order-row:focus-visible {
+  outline: 2px solid var(--q-primary);
+  outline-offset: -2px;
+}
+
+/* Transparent rail on normal rows keeps the number column aligned (§2.7). */
+.order-queue__rail--danger {
+  background: var(--q-error);
+}
+
+.order-queue__rail--warning {
+  background: var(--q-warning);
+}
+
+.order-row--danger {
+  background: var(--q-error-tint);
+}
+
+.order-row--warning {
+  background: var(--q-warning-tint);
+}
+
+.order-row__caption {
+  margin-top: 2px;
+  color: var(--q-ink-muted);
+}
+
+.order-row__caption--danger {
+  color: var(--q-error-text);
+}
+
+.order-row__caption--warning {
+  color: var(--q-warning-text);
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: 12px;
+  color: var(--q-ink-muted);
+  white-space: nowrap;
+}
+
+/* ---- skeleton / empty / denied states (§2.11) ------------------------- */
+
+.order-queue__skeleton {
+  padding: 8px 24px;
+}
+
+.order-queue__skeleton-row {
+  height: 44px;
+  border-bottom: 1px solid var(--q-hairline);
+  position: relative;
+  overflow: hidden;
+}
+
+.order-queue__skeleton-row::after {
+  content: '';
+  position: absolute;
+  inset: 10px 0;
+  background: var(--q-surface-1);
+}
+
+.order-queue__empty-row td {
+  padding: 32px 24px;
+  text-align: center;
+  color: var(--q-ink-muted);
+}
+
+.order-queue__denied {
+  padding: 32px 24px;
+  text-align: center;
+  color: var(--q-ink-muted);
+}

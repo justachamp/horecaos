@@ -1,0 +1,127 @@
+<div class="order-queue">
+  <div class="order-queue__toolbar">
+    <div class="order-queue__tabs" role="tablist">
+      @for (tab of tabs; track tab.id) {
+        <button
+          type="button"
+          role="tab"
+          class="tab"
+          [class.tab--active]="activeTab() === tab.id"
+          [attr.aria-selected]="activeTab() === tab.id"
+          (click)="selectTab(tab.id)"
+        >
+          {{ tab.labelKey | t }}
+          @if (tabCount(tab.id) > 0) {
+            <span class="tab__count" [class.tab__count--attention]="tab.id === 'attention'">{{
+              tabCount(tab.id)
+            }}</span>
+          }
+        </button>
+      }
+    </div>
+
+    <div class="order-queue__status">
+      @if (formatUpdatedAt(); as stamp) {
+        <span
+          class="order-queue__stamp q-caption q-tnum"
+          [class.order-queue__stamp--pulse]="refreshing()"
+        >
+          {{ stamp }}
+        </span>
+      }
+      <button
+        type="button"
+        class="order-queue__refresh"
+        (click)="manualRefresh()"
+        [attr.aria-label]="'orders.queue.refresh' | t"
+        [attr.title]="'orders.queue.refresh' | t"
+      >
+        <span aria-hidden="true">⟳</span>
+      </button>
+    </div>
+  </div>
+
+  @if (lastError(); as error) {
+    <div class="order-queue__error-band" role="alert">
+      <span class="q-body-sm">{{ errorMessage(error) }}</span>
+      <span class="order-queue__error-ref q-mono q-caption">{{ errorReference(error) }}</span>
+      <button type="button" class="order-queue__error-retry q-body-sm" (click)="manualRefresh()">
+        {{ 'orders.queue.error.retry' | t }}
+      </button>
+    </div>
+  }
+
+  <div class="order-queue__table-wrap" data-testid="order-queue-table-wrap">
+    @if (!firstLoadComplete()) {
+      <div
+        class="order-queue__skeleton"
+        [attr.aria-label]="'orders.queue.loading' | t"
+        data-testid="order-queue-skeleton"
+      >
+        @for (i of [1, 2, 3, 4, 5, 6, 7, 8]; track i) {
+          <div class="order-queue__skeleton-row"></div>
+        }
+      </div>
+    } @else if (denied()) {
+      <div class="order-queue__denied" data-testid="order-queue-denied">
+        <p class="q-body-sm">{{ 'orders.queue.denied' | t }}</p>
+      </div>
+    } @else {
+      <table class="order-queue__table">
+        <thead>
+          <tr>
+            <th class="order-queue__rail-col" aria-hidden="true"></th>
+            <th>{{ 'orders.column.number' | t }}</th>
+            <th>{{ 'orders.column.time' | t }}</th>
+            <th>{{ 'orders.column.type' | t }}</th>
+            <th class="order-queue__num-col">{{ 'orders.column.total' | t }}</th>
+            <th>{{ 'orders.column.status' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of visibleRows(); track row.order.orderId) {
+            <tr
+              class="order-row"
+              [class.order-row--danger]="row.severity.tone === 'danger'"
+              [class.order-row--warning]="row.severity.tone === 'warning'"
+              tabindex="0"
+              data-testid="order-row"
+              (click)="openOrder(row.order.orderId)"
+              (keydown.enter)="openOrder(row.order.orderId)"
+            >
+              <td
+                class="order-queue__rail-col"
+                [class.order-queue__rail--danger]="row.severity.tone === 'danger'"
+                [class.order-queue__rail--warning]="row.severity.tone === 'warning'"
+              ></td>
+              <td>
+                <div class="q-mono">{{ row.order.publicOrderNumber }}</div>
+                @if (severityCaption(row.severity); as caption) {
+                  <div
+                    class="order-row__caption q-caption"
+                    [class.order-row__caption--danger]="row.severity.tone === 'danger'"
+                    [class.order-row__caption--warning]="row.severity.tone === 'warning'"
+                  >
+                    {{ caption }}
+                  </div>
+                }
+              </td>
+              <td class="q-tnum">{{ formatCreated(row.createdAt) }}</td>
+              <td>{{ typeLabel(row.order) }}</td>
+              <td class="order-queue__num-col q-mono q-tnum">{{ formatTotal(row.order) }}</td>
+              <td>
+                <span class="status-badge">{{ statusLabel(row.order.status) }}</span>
+              </td>
+            </tr>
+          } @empty {
+            <tr class="order-queue__empty-row">
+              <td colspan="6">
+                <p class="q-body-sm" data-testid="order-queue-empty">{{ emptyMessage() }}</p>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+</div>

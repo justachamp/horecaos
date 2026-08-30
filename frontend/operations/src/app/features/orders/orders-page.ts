@@ -2,24 +2,26 @@ import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 
 import { TPipe } from '../../core/i18n/t.pipe';
+import { OrderQueue } from './order-queue';
 
 /**
  * The order board's frame: a live queue with a detail docked beside it.
  *
- * **There is no board here, and that is deliberate.** The queue table, its seven
- * tabs, its filters, its severity ranking and its actions are specified across
- * `docs/operations-spec/orders.md` §2 and §4, and building half of that would be
- * worse than an empty pane — a half-built board teaches operators habits the
- * finished one has to break.
- *
- * What this component *is* is the layout contract every one of those screens
- * hangs from, and it is the one piece of the board that cannot be added later
- * without rewriting everything: **opening an order docks a column beside the
- * list instead of covering it.** An operator reading 0138's address must still
- * see 0151's approval deadline run out. That rules out a modal, a full-page
- * navigation and an overlay drawer, and it is why the detail is a *child route*
- * — deep-linkable, back-button-correct, and rendered into a region that shares
+ * This component owns the layout contract every screen in
+ * `docs/operations-spec/orders.md` §2 and §4 hangs from, and it is the one
+ * piece of the board that could not be added later without rewriting
+ * everything: **opening an order docks a column beside the list instead of
+ * covering it.** An operator reading 0138's address must still see 0151's
+ * approval deadline run out. That rules out a modal, a full-page navigation
+ * and an overlay drawer, and it is why the detail is a *child route* —
+ * deep-linkable, back-button-correct, and rendered into a region that shares
  * the viewport with the queue rather than replacing it.
+ *
+ * The queue itself — tabs, the dense table, severity, the §1.6 polling
+ * fallback — is `OrderQueue` (`order-queue.ts`). Filters, the column picker,
+ * row actions and bulk actions are not built: they wait on the server adding
+ * `actions[]` to the order response (§4.2), and rendering them earlier is the
+ * mistake §4.2 warns against.
  *
  * The board is expected to shed its lower-value columns as the dock opens rather
  * than growing a horizontal scrollbar. That is the queue's job, not this
@@ -27,7 +29,7 @@ import { TPipe } from '../../core/i18n/t.pipe';
  */
 @Component({
   selector: 'q-orders-page',
-  imports: [RouterOutlet, TPipe],
+  imports: [RouterOutlet, TPipe, OrderQueue],
   templateUrl: './orders-page.html',
   styleUrl: './orders-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

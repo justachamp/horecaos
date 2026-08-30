@@ -4,9 +4,11 @@
       <h1 class="q-subhead">{{ 'orders.title' | t }}</h1>
     </header>
 
-    <!-- The queue table goes here. It scrolls its own body under this fixed
+    <!-- The queue table lives here. It scrolls its own body under this fixed
          header; the pane, not the page, is what scrolls. -->
-    <div class="queue__body" data-testid="queue-body"></div>
+    <div class="queue__body" data-testid="queue-body">
+      <q-order-queue />
+    </div>
   </section>
 
   <!-- The dock. Collapsed to zero width by CSS while no detail route is active,
