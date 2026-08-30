@@ -66,3 +66,14 @@ horecaos:
       preset:
         phone: ${HORECAOS_VERIFICATION_PRESET_PHONE:+998000000000}
         code: ${HORECAOS_VERIFICATION_PRESET_CODE:000000}
+  fake-providers:
+    click:
+      # FakeClickProviderConfiguration — a local stand-in for Click's MERCHANT
+      # API HTTP boundary (ADR 0007, ADR 0013), so a checkout can be paid,
+      # captured, and fiscalized without a real Click account. Exists only
+      # under this profile; tools/seed-payments points
+      # integration.provider_environments.base_url at this same port, and the
+      # secret below is the value it writes into local OpenBao.
+      enabled: ${HORECAOS_FAKE_PROVIDERS_CLICK_ENABLED:true}
+      port: ${HORECAOS_FAKE_PROVIDERS_CLICK_PORT:18089}
+      secret: ${HORECAOS_FAKE_PROVIDERS_CLICK_SECRET:local-fixture-click-secret-key-not-a-real-credential}

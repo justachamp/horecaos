@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+#
+# Pays, as a fake customer, whichever CLICK payment session is currently open
+# on an order — the last step of the local dev loop tools/seed-payments prints
+# (ADR 0007, ADR 0013, ADR 0038).
+#
+# This is a thin wrapper around one endpoint,
+# DevFakeClickPaymentController.pay, which is itself reachable only when the
+# application is running under the `local` Spring profile — the same profile
+# `make run` activates and the same one FakeClickHttpProvider is gated behind.
+# Against any other profile the endpoint simply does not exist (no bean, no
+# route), so this script has nothing to reach and fails with a plain
+# connection or 404 error rather than doing anything.
+#
+# What actually credits the order is real production code, not this script:
+# the endpoint calls FakeCustomerPaymentService, which builds a correctly
+# signed Click `prepare` and `complete` — using the seeded merchant binding's
+# real secret, resolved through the real ADR 0028 SecretResolver — and posts
+# them through ClickCallbackProcessor, the same signature-verifying processor
+# ClickShopApiController's real webhook calls. Attempt capture, intent
+# settlement, order confirmation and the payment projection all happen for
+# real, in the same commit a genuine Click customer's phone would produce.
+#
+# Usage:
+#   tools/pay-fake-click <orderId> [tenantId]
+#   ORDER_ID=<uuid> tools/pay-fake-click
+#
+# tenantId defaults to the docs/local-fixtures.md demo tenant, the same one
+# tools/seed-payments seeds a CLICK binding for.
+
+set -euo pipefail
+
+API_URL="http://localhost:8080"
+DEFAULT_TENANT="10000000-0000-0000-0000-000000000001"
+
+ORDER_ID="${1:-${ORDER_ID:-}}"
+TENANT_ID="${2:-${TENANT_ID:-$DEFAULT_TENANT}}"
+
+if [ -z "$ORDER_ID" ]; then
+  echo "Usage: tools/pay-fake-click <orderId> [tenantId]" >&2
+  echo "   or: ORDER_ID=<uuid> tools/pay-fake-click" >&2
+  exit 1
+fi
+
+echo "==> Paying order ${ORDER_ID} (tenant ${TENANT_ID}) as a fake CLICK customer"
+
+response="$(curl -sS -w '\n%{http_code}' -X POST \
+  "${API_URL}/dev/fake-providers/click/tenants/${TENANT_ID}/orders/${ORDER_ID}/pay")"
+status="${response##*$'\n'}"
+body="${response%$'\n'*}"
+
+if [ "$status" != "200" ]; then
+  echo "!! The fake payment was not accepted (HTTP ${status}):" >&2
+  echo "$body" >&2
+  echo "!! Common causes: the app is not running under the local profile (make run)," >&2
+  echo "   the order has no open CLICK payment session yet (open one first), or" >&2
+  echo "   tools/seed-payments has not been run against this tenant." >&2
+  exit 1
+fi
+
+if command -v python3 >/dev/null 2>&1; then
+  echo "$body" | python3 -m json.tool
+else
+  echo "$body"
+fi
+
+echo
+echo "==> Order ${ORDER_ID} should now be CONFIRMED. The paymentId above is the"
+echo "    synthetic Click payment_id fiscalization keys on once the order completes"
+echo "    and the fiscal obligation sweeper runs."

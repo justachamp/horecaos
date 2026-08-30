@@ -16,10 +16,18 @@
 #
 # What it does, honestly:
 #   1. Writes a fake CLICK provider secret into the local OpenBao at the
-#      ADR 0028 reference format payments actually resolves.
+#      ADR 0028 reference format payments actually resolves. The same value
+#      is FakeClickProviderConfiguration's own default
+#      horecaos.fake-providers.click.secret, so the fake and the resolver
+#      agree without either reading the other's configuration.
 #   2. Seeds the ADR 0026 platform-owned PAYMENT/CLICK provider environment —
 #      there is no endpoint for this by design (integration.provider_environments
-#      is "platform-owned reference data... never tenant-writable", V0013).
+#      is "platform-owned reference data... never tenant-writable", V0013) —
+#      with base_url pointed at FakeClickHttpProvider, which `make run` starts
+#      under the local profile on the port below. Nothing else in this
+#      application points it there; a laptop with no fake-provider process
+#      listening on that port simply gets a connection-refused outcome from
+#      the real Camel route, same as any other unreachable provider would.
 #   3. Prints the two real control-plane requests an operator would send —
 #      install the provider, then bind it — exactly as ProviderInstallationController
 #      accepts them. They are not run automatically: both need a capability-bearing
@@ -36,11 +44,26 @@
 #      suite already uses to build this fixture (e.g.
 #      PaymentCheckoutSurfaceTests), not a new production write path — there
 #      is no other path today, and pretending otherwise would be the
-#      dishonest version of this script.
+#      dishonest version of this script. The binding carries a
+#      merchant_user_reference and a merchant_id_reference so both of Click's
+#      outbound surfaces work against the fake: the Auth header
+#      ClickMerchantApi builds for every merchant-API call, and the
+#      merchant_id my.click.uz's payment link requires.
 #
-# Idempotent: safe to run again. Run it after `make up` and after `make run`
-# has applied the local-fixtures migration at least once (the fixture
-# tenant/brand/location must already exist).
+# Idempotent: safe to run again, including to repair a binding seeded before
+# this script carried a merchant_user_reference/merchant_id_reference, or a
+# provider_environments row seeded before it pointed at the fake. Run it
+# after `make up` and after `make run` has applied the local-fixtures
+# migration at least once (the fixture tenant/brand/location must already
+# exist).
+#
+# Once this has run and `make run` is up (the fake CLICK provider starts with
+# it), the dev loop is:
+#   1. checkout an order with CLICK (storefront, or POST .../orders)
+#   2. POST .../orders/{orderId}/payment-sessions to open the checkout
+#   3. tools/pay-fake-click <orderId>          # or: make pay-fake-click ORDER_ID=<orderId>
+#   4. the order is CONFIRMED — the fake customer just paid through the real
+#      ClickShopApiController webhook path, signed with the secret above
 
 set -euo pipefail
 
@@ -65,6 +88,8 @@ PROVIDER_TYPE="CLICK"
 ENVIRONMENT_CODE="click-local-sandbox"
 LEGAL_ENTITY_CODE="LOCALFIX"
 SECRET_REFERENCE="horecaos:local:provider_payment:tenant:click"
+# FakeClickProviderConfiguration's own default (horecaos.fake-providers.click.port).
+FAKE_CLICK_PORT="18089"
 
 echo "==> Seeding a local CLICK payment setup for the fixture tenant (${TENANT})"
 
@@ -94,13 +119,20 @@ docker compose exec -T -e PGPASSWORD="${DB_PASSWORD}" "${COMPOSE_DB_SERVICE}" \
 -- 2. Platform-owned reference data (ADR 0026). No tenant-facing endpoint
 --    writes this table on purpose; a sandbox environment for local testing
 --    is exactly what a real deployment's own migration would seed for a
---    provider it actually integrates.
+--    provider it actually integrates. base_url points at
+--    FakeClickHttpProvider, which make run starts under the local profile —
+--    ON CONFLICT DO UPDATE so re-running this script after an upgrade moves
+--    an existing row onto the fake rather than leaving it on the old,
+--    unroutable placeholder host.
 INSERT INTO integration.provider_environments
     (code, provider_category, provider_type, base_url, is_production, egress_allowlist, notes)
 VALUES ('${ENVIRONMENT_CODE}', 'PAYMENT', '${PROVIDER_TYPE}',
-        'https://api.click.uz/local-fixture-sandbox', false, 'api.click.uz',
-        'tools/seed-payments: local dev only, never a real Click endpoint')
-ON CONFLICT (code) DO NOTHING;
+        'http://localhost:${FAKE_CLICK_PORT}', false, 'localhost',
+        'tools/seed-payments: local dev only, points at FakeClickHttpProvider')
+ON CONFLICT (code) DO UPDATE SET
+    base_url = EXCLUDED.base_url,
+    egress_allowlist = EXCLUDED.egress_allowlist,
+    notes = EXCLUDED.notes;
 
 -- 3. The ADR 0026 installation and binding a signed-in operator would create
 --    through ProviderInstallationController (printed below). Seeded directly
@@ -158,18 +190,36 @@ BEGIN
         ON CONFLICT (id) DO NOTHING;
     END IF;
 
+    -- merchant_user_reference and merchant_id_reference are what let this
+    -- binding actually call out through ClickMerchantApi: without the
+    -- former no Auth header can be built at all (ClickMerchantApi.call
+    -- refuses the call outright), and without the latter the default
+    -- unsigned-link checkout surface refuses to build
+    -- (CLICK_MERCHANT_ID_MISSING).
     INSERT INTO payments.merchant_bindings
         (id, tenant_id, legal_entity_id, provider_type, installation_id, binding_id,
-         merchant_account_reference, secret_reference, callback_path_segment,
+         merchant_account_reference, merchant_user_reference, merchant_id_reference,
+         secret_reference, callback_path_segment,
          supports_reversal, supports_partner_fiscalization, status, effective_from)
     SELECT '20000000-0000-0000-0000-000000000005'::uuid, '${TENANT}'::uuid, seller_id, '${PROVIDER_TYPE}',
            '20000000-0000-0000-0000-000000000001'::uuid, '20000000-0000-0000-0000-000000000002'::uuid,
-           'local-fixture-service-1', '${SECRET_REFERENCE}', 'click-local-fixture-1', true, true,
+           'local-fixture-service-1', '4444', '9999',
+           '${SECRET_REFERENCE}', 'click-local-fixture-1', true, true,
            'ACTIVE', DATE '2020-01-01'
      WHERE NOT EXISTS (
          SELECT 1 FROM payments.merchant_bindings
           WHERE tenant_id = '${TENANT}'::uuid AND legal_entity_id = seller_id
             AND provider_type = '${PROVIDER_TYPE}' AND status = 'ACTIVE');
+
+    -- Repairs a binding this script seeded before it carried these two
+    -- columns. Scoped to the fixture's own service_id so a binding a
+    -- developer has since repointed by hand is left alone.
+    UPDATE payments.merchant_bindings
+       SET merchant_user_reference = '4444', merchant_id_reference = '9999'
+     WHERE tenant_id = '${TENANT}'::uuid
+       AND provider_type = '${PROVIDER_TYPE}'
+       AND merchant_account_reference = 'local-fixture-service-1'
+       AND (merchant_user_reference IS NULL OR merchant_id_reference IS NULL);
 END \$\$;
 SQL
 echo "    done"
@@ -178,6 +228,15 @@ echo
 echo "==> Local fixture is payment-ready: an active CLICK merchant binding now exists for whichever"
 echo "    legal entity is assigned to location ${LOCATION} (the fixture's own LOCAL_CAFE, if present;"
 echo "    otherwise a new ${LEGAL_ENTITY_CODE} entity created just now)."
+echo
+echo "==> The dev loop, once 'make run' is up (it starts FakeClickHttpProvider on"
+echo "    :${FAKE_CLICK_PORT} under the local profile — see FakeClickProviderConfiguration):"
+echo "      1. checkout an order with CLICK"
+echo "      2. POST .../orders/<orderId>/payment-sessions to open the checkout"
+echo "      3. tools/pay-fake-click <orderId>          (or: make pay-fake-click ORDER_ID=<orderId>)"
+echo "      4. the order is CONFIRMED — a real, signature-verified ClickShopApiController webhook"
+echo "         call just credited it, and the fake customer's synthetic Click payment_id is printed"
+echo "         for fiscalization to key on"
 echo
 echo "==> For reference, the real control-plane requests an operator would send instead of steps 2-3"
 echo "    above (need a bearer token with INTEGRATION_INSTALLATION_MANAGE — get one through Swagger UI's"
