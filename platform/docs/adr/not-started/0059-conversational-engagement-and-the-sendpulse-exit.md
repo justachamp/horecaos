@@ -2,19 +2,21 @@
 
 - Decision status: Accepted
 - Implementation status: Not started — this record only. It builds on ADR 0058's
-  Telegram plumbing (bot installations, chat bindings, the customer linking handshake),
-  which is itself Not started.
+  Telegram plumbing (bot installations, chat bindings, inbound authentication, the
+  customer linking handshake), which is itself Not started.
 - Date proposed: 2026-08-30
 - Date decided: 2026-08-30
-- Deciders: platform owner (directed the feature and the Telegram-first scope), Claude
-  (architecture and the scope discipline)
-- Depends on: 0020, 0025, 0026, 0028, 0029, 0044, 0051, 0058
+- Deciders: platform owner (directed the feature, the Telegram-first scope, YAML-only
+  authoring, and the owner-directive trigger for further channels), Claude
+  (architecture and scope discipline; deep-reviewed 2026-08-30 and amended)
+- Depends on: 0020, 0025, 0026, 0027, 0028, 0029, 0044, 0051, 0058
 - Supersedes / Superseded by: —
-- Open inputs: none. Both resolved by the owner on 2026-08-30: flows are YAML
-  configuration and no visual builder will ever be built (see the Decision), and the
-  Instagram/Meta adapter is triggered by the owner's own directive alone — no tenant
-  demand or market threshold gates it, and none excuses paying Meta's app-review
-  overhead before the owner asks.
+- Open inputs: whether the brand bot, flows, and inbox are entitlement-gated per plan
+  (ADR 0021 — the machinery exists and gates nothing yet; as this is pitched as a SaaS
+  differentiator, the plan question deserves an owner answer before rollout stage 2).
+  The Instagram/Meta adapter trigger is resolved: the owner's own directive alone —
+  no tenant demand or market threshold gates it. Flow authoring is resolved: YAML,
+  and no visual builder will ever be built.
 
 ## Context
 
@@ -44,27 +46,61 @@ core and channel-specific adapters:
   channel identity (Telegram chat) to a customer account via ADR 0058's handshake;
   captured inputs (the `{{feedback}}`-style fields) land as customer data or as the
   feedback/support facts the relevant module owns — never as an engagement-silo copy.
+  (One flag from review: `helpcenter`, an obvious destination for feedback facts, has
+  no owning ADR anywhere in the corpus — routing durable data into an ungoverned
+  module would undercut this record's own boundary discipline; give it a record or
+  route elsewhere.)
 - **Flows are declarative, versioned, per-brand YAML documents** — workflow, states,
   and a deliberately small block vocabulary (message, buttons, input-to-field, delay,
   condition, operator handoff), authored as configuration through the control-plane
   and executed by a flow engine in the platform. **No visual builder — decided, not
   deferred** (owner, 2026-08-30): YAML is the authoring surface, full stop; a future
   GUI would need a superseding record.
+- **The conversations concern is very likely a new module.** Review against the
+  documented module cycle (`catalog → tenancy → payments → integration →
+  notifications → ordering → pricing → catalog`, the one the onboarding handlers hit
+  in practice) disqualifies this record's earlier candidates by default: folding
+  conversations into `customers` or `notifications` puts inbound-dispatch edges from
+  `integration` into cycle-exposed territory. The default answer is a new leaf module
+  (`conversations`) that `integration` depends on one-way, itself importing only
+  `customers`/`notifications` api types and using the established
+  raw-SQL-by-schema escape hatch for anything deeper. Final confirmation at
+  implementation, against `ModularArchitectureTests`.
 - **The operator inbox lives in the operations app**: staff read and answer customer
   conversations for their location/brand there, with takeover from and return to the
-  flow engine. Capability-gated (ADR 0025); conversation history is customer PII and
-  follows ADR 0029 in storage and in reveal semantics.
+  flow engine. Capability-gated (ADR 0025); inbox actions are ADR 0027 audit facts
+  like any other staff action.
+- **Conversation history has a stated PII posture, not a gesture**: free-text message
+  bodies and captured inputs are envelope-encrypted (ADR 0029); channel ids, block
+  ids, and timing metadata are not. Default retention is 12 months, tenant-adjustable
+  downward. Two named dependencies, in the same spirit as ADR 0058's day-close
+  honesty: ADR 0029 has no retention/erasure machinery yet for this posture to run
+  on, and its envelope scheme reasons about order-scale write volumes — chat-scale
+  volume needs its own look before stage 1 ships.
 - **Broadcasts and segments are ADR 0044 marketing** running over this channel under
-  ADR 0020 consent — not a separate blast tool. Telegram rate limits shape batching,
-  as ADR 0058 already requires.
-- **The core is channel-neutral; only the Telegram adapter is built.** Instagram/Meta
-  and others become adapters behind the same conversation/contact/flow model when the
-  owner directs it — nothing in v1 may import a channel SDK type into the core (the
-  standing hexagonal rule).
-- **SendPulse is exited, not integrated.** No bridge phase: the bot is owned in
-  BotFather, so cutover is repointing its webhook to the platform — atomic per bot and
-  reversible by the same call — after contacts are exported through SendPulse's API
-  into `customers` with consent flags carried over.
+  ADR 0020 consent — not a separate blast tool. The Bot API has no bulk-send product:
+  the campaign scheduler paces within the per-bot ceiling (~30 msg/s shared by ALL of
+  that bot's traffic), reports an estimated delivery window instead of promising
+  instant delivery, and monitors user block/report rates — Telegram's own anti-spam
+  enforcement acts on those regardless of our consent records. This is also a bot
+  topology input (ADR 0058's open input): a shared bot means one tenant's campaign
+  can starve another tenant's order alerts.
+- **The core is channel-neutral; only the Telegram adapter is built** — shared with
+  ADR 0058's adapter, including its inbound `secret_token` authentication and its
+  `FakeTelegramBotApi` test harness. Instagram/Meta and others become adapters behind
+  the same conversation/contact/flow model when the owner directs it — nothing in v1
+  may import a channel SDK type into the core (the standing hexagonal rule).
+- **SendPulse is exited, not integrated — and the exit closes the door.** The bot is
+  owned in BotFather, so cutover is repointing its webhook to the platform — atomic
+  per bot and reversible by the same call — after contacts are exported through
+  SendPulse's API into `customers` with consent flags carried over. Two truths the
+  cutover plan states rather than hides: **flow state is not exportable** — a
+  customer mid-flow at cutover is treated as idle and simply starts fresh at their
+  next `/start` (blast radius is small for a three-message welcome series, and the
+  runbook says so instead of promising nobody notices anything); and **SendPulse has
+  held the bot token**, so cutover ends with a BotFather token rotation and an ADR
+  0026 secret-reference update — until that rotation, the vendor retains the standing
+  ability to re-point the webhook to itself.
 
 ## Alternatives considered
 
@@ -95,6 +131,8 @@ core and channel-specific adapters:
   experience; a broken flow answers `/start` with silence.
 - Flow authoring is a platform-staff task by design — a support load the vendor's GUI
   used to carry, accepted in exchange for ownership and reviewable, versionable flows.
+- The ADR 0029 retention/erasure gap and the chat-scale volume question are real
+  pre-work, not paperwork.
 
 ### Accepted trade-offs
 
@@ -104,41 +142,46 @@ parked.
 
 ## Specification
 
-Deferred to implementation, with these fixtures: a `conversations` concern (owning
-conversation state, channel identity links, and message history under ADR 0029 rules)
-whose module home is decided at implementation against the module map — `customers`,
-`notifications`, or a new module, with the cycle lessons of the onboarding handlers in
-mind; the flow document schema and engine (idempotent block execution, at-least-once
-inbound updates deduplicated per ADR 0032 discipline); the Telegram adapter shared with
-ADR 0058's; inbox endpoints under the operations surface with per-location capability
-scoping; the SendPulse contact-export mapping with consent provenance.
+Deferred to implementation, with these fixtures: a `conversations` module (default: new
+leaf module per the Decision) owning conversation state, channel identity links, and
+message history under the stated PII posture; the flow YAML schema and engine
+(idempotent block execution, at-least-once inbound updates deduplicated per ADR 0032
+discipline, inbound updates authenticated per ADR 0058's `secret_token` rule); the
+Telegram adapter shared with ADR 0058's, including the `FakeTelegramBotApi` harness;
+inbox endpoints under the operations surface with per-location capability scoping and
+ADR 0027 audit; the SendPulse contact-export mapping with consent provenance; the
+token-rotation cutover step.
 
 ## Rollout and rollback
 
 Stage 1: flow engine + welcome flow for one brand bot in dev, linked accounts landing
-in `customers`. Stage 2: operator inbox for the pilot tenant. Stage 3: contact export
-and webhook cutover per bot — rollback is repointing the webhook back to SendPulse,
-which keeps working until the account is closed. Stage 4: broadcasts under ADR 0044.
+in `customers`. Stage 2: operator inbox for the pilot tenant (entitlement question
+answered by then). Stage 3: contact export and webhook cutover per bot, closed by the
+BotFather token rotation — rollback before rotation is repointing the webhook back to
+SendPulse, which keeps working until the account is closed. Stage 4: broadcasts under
+ADR 0044 with paced delivery and block-rate monitoring.
 
 ## Implementation checklist
 
-- [ ] Conversation/contact-link model and history under ADR 0029
+- [ ] Conversation/contact-link model and history under the stated PII posture (fields, 12-month default retention) — with ADR 0029's retention/erasure gap and volume sizing named as pre-work
 - [ ] Flow YAML schema (workflow, states, six block types), versioning, and engine
 - [ ] The observed welcome series reproduced as the first flow document
-- [ ] Operator inbox in the operations app, capability-gated per location
-- [ ] SendPulse contact export → `customers` with consent flags
-- [ ] Webhook cutover runbook (per bot, reversible)
-- [ ] Broadcast path through ADR 0044 + ADR 0020 consent
+- [ ] Operator inbox in the operations app, capability-gated per location, ADR 0027-audited
+- [ ] SendPulse contact export → `customers` with consent flags; mid-flow-state caveat in the cutover runbook
+- [ ] Webhook cutover runbook (per bot, reversible) ending in BotFather token rotation + secret-reference update
+- [ ] Broadcast path through ADR 0044 + ADR 0020 consent, paced within per-bot throughput, block-rate monitored
 
 ## Exit criteria
 
 A customer who sends `/start` to a pilot brand bot receives the welcome series from the
 platform's flow engine, their tapped feedback lands against their customer record, an
 operator answers them from the operations inbox — and the SendPulse account for that
-bot is closed without any customer noticing the cutover.
+bot is closed after the token rotation, with no customer noticing the cutover except,
+at worst, a mid-flow customer who starts the three-message welcome again.
 
 ## References
 
-- ADR 0058 — the Telegram channel plumbing this builds on
+- ADR 0058 — the Telegram channel plumbing, inbound authentication, and test harness this shares
 - ADR 0044 / 0020 — campaigns and consent for the broadcast path
+- ADR 0029 — the PII regime, and its named retention/erasure gap
 - The observed SendPulse welcome series (JizBiz, 2026-08-30) — the sizing benchmark

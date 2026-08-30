@@ -8,10 +8,13 @@
 - Date proposed: 2026-08-30
 - Date decided: 2026-08-30
 - Deciders: platform owner (directed both surfaces and the no-POS tenant focus), Claude
-  (architecture)
-- Depends on: 0025, 0035, 0039, 0041, 0043, 0045, 0055, 0058, 0059
+  (architecture; deep-reviewed 2026-08-30 against Telegram mechanics and the
+  authorization/audit code, and amended)
+- Depends on: 0025, 0027, 0033, 0035, 0039, 0041, 0043, 0045, 0055, 0058, 0059
 - Supersedes / Superseded by: —
-- Open inputs: none
+- Open inputs: whether the staff bot and staff app are entitlement-gated per plan
+  (ADR 0021 — same question, same owner, as ADR 0059's; answer before per-tenant
+  enablement ships).
 
 ## Context
 
@@ -28,11 +31,16 @@ nothing installed at all can still keep service moving.
 The backend for this mostly exists already: server-supplied order `actions[]`,
 approve/reject with first-decision-wins, state advances, the counts endpoint, the
 86-list read model and toggle, capability-scoped grants. What is missing is the two
-pocket-sized fronts and the staff-identity link that lets Telegram act as one.
+pocket-sized fronts, the staff-identity link that lets Telegram act as one — and, per
+review, a real authorization mechanism at the callback boundary, because capability
+enforcement today lives only in the web layer's interceptor.
 
 ## Decision
 
-Two staff surfaces, one backend, aimed at tenants who run without POS integration:
+Two staff surfaces, one backend, aimed at tenants who run without POS integration.
+**The web operations board remains the authoritative surface; the bot and the app are
+consumers of the same application services and the same event stream, never parallel
+sources of truth.**
 
 1. **A staff Flutter application** — a second Flutter app in the monorepo, distinct
    from the on-hold customer app (ADR 0055) but sharing its extracted design
@@ -47,24 +55,58 @@ Two staff surfaces, one backend, aimed at tenants who run without POS integratio
    the `operations` OpenAPI group (ADR 0057) — generated client, once the known
    schema-collision bug is fixed — and authenticates like the web operations app.
 2. **An interactive staff Telegram bot** — ADR 0058's operations channel grows hands.
-   The order notification carries inline Approve/Reject buttons; a callback taps
-   through to the same operations endpoints; stop-list toggles and a stats query
-   command work the same way. Interaction model: notification-plus-action, not menu
-   navigation — the bot is the floor of the experience, deliberately thin, and
-   anything richer deep-links into the Flutter app (or the web app).
-3. **Staff identity linking** — a staff member links their Telegram account to their
-   platform principal through a handshake mirroring ADR 0058/0059's customer linking,
-   but with the opposite trust posture: every bot-initiated action is authorized
-   against the linked principal's own grants (ADR 0025) at the moment of the tap —
-   the bot holds no authority of its own, a revoked staff member's buttons go dead
-   with their grant, and an unlinked Telegram account can read nothing. Linked-staff
-   action callbacks are idempotent (the decision-id discipline the web board already
-   uses) because Telegram retries callbacks.
-4. **PII discipline unchanged** (ADR 0058's rule): group messages stay masked; even a
+   The order notification carries inline Approve/Reject buttons; a tap flows through
+   the same application services the web board calls; stop-list toggles and a stats
+   query command work as typed commands. Interaction model: notification-plus-action,
+   not menu navigation — the bot is the floor of the experience, deliberately thin,
+   and anything richer deep-links into the Flutter app (or the web app). Mechanics the
+   review pinned down: `callback_data` is capped at 64 bytes, so a button carries only
+   an **opaque short token** indexing a server-side action record (order, action,
+   decision-id, expiry) — nothing signed travels in the button; the callback is
+   **acknowledged immediately** (`answerCallbackQuery` has a tight deadline and must
+   not wait on the mutation) with the outcome delivered as a message edit or
+   follow-up; on the **first successful decision the inline keyboard is stripped**
+   (`editMessageReplyMarkup`), and a late tapper is answered with the settling
+   decision and its actor, mirroring the web board's lost-race rendering; the
+   operations bot ships with **privacy mode disabled** (ADR 0058's provisioning rule)
+   or typed group commands never arrive; and a typed command from an **anonymous
+   group admin** cannot resolve to a principal and is politely refused with a pointer
+   to the buttons or to un-hiding — button taps still resolve the real tapper and are
+   unaffected. Button labels and command replies are template content under ADR
+   0058's uz/ru/en localization model.
+3. **Staff identity linking — the mechanism, named**: from an authenticated staff
+   session in the app (or web board), the staff member generates a one-time short
+   code and sends `/link <code>` to the bot; the server resolves the pending link and
+   binds the Telegram account to the principal. (Telegram's Login Widget and Mini App
+   `initData` apply only inside WebViews and cannot carry a native app's session —
+   hence the code handshake; the code is short and opaque per the same 64-char
+   deep-link constraint ADR 0044 documents.) One Telegram account may hold **multiple
+   per-tenant links**: order callbacks self-scope through their action record, and an
+   ambiguous DM command (stats, stop list) is answered with a tenant picker unless
+   the principal holds exactly one active grant.
+4. **Authorization is a named mechanism, not an assumption.** Capability enforcement
+   today lives exclusively in the web layer's `@RequiresCapability` interceptor — the
+   application services enforce nothing themselves — so "calling the same service"
+   would silently be a bypass. The bot boundary therefore gets a
+   **`BotCallbackAuthorizer`**: it resolves the action token to the linked principal
+   and calls the same `AuthorizationService.require(subject, capability, scope)` the
+   interceptor uses, before invoking the shared application service; and it records
+   the ADR 0027 audit fact with the real staff actor (the ordering audit recorder
+   already takes explicit actor identity, so bot-actor parity is a call-site
+   discipline, not new machinery). The bot holds no authority of its own; a revoked
+   staff member's next tap is refused. **v1 revocation is check-at-tap** — stale
+   buttons remain visible on old messages but dead; proactively stripping keyboards
+   on `GrantChanged` (the pattern `RealtimeStreamMaintenance` already uses to close
+   SSE streams on revoke) is a stated enhancement, not an implicit promise.
+   One inherited gap named rather than absorbed: **the stop-list toggle is not an ADR
+   0027 audit fact today on ANY channel** — wiring the catalog authoring service into
+   the audit recorder is a checklist item here, because a bot must not launch on an
+   unaudited mutation.
+5. **PII discipline unchanged** (ADR 0058's rule): group messages stay masked; even a
    linked staff member's 1:1 bot chat carries the masked projection, with reveal
    remaining an audited in-app action — Telegram is a transport we do not own, and
    the phone number of a customer does not transit it.
-5. **The no-POS tenant is the design center**: the acceptance loop must be fully
+6. **The no-POS tenant is the design center**: the acceptance loop must be fully
    operable — accept, reject, advance, 86 — with only Telegram installed; the Flutter
    app adds depth, never gates the floor.
 
@@ -76,6 +118,7 @@ Two staff surfaces, one backend, aimed at tenants who run without POS integratio
 | Responsive-web-only (the existing Angular app on a phone browser) | No push without the app being open, and "open a browser tab" is exactly the step the no-POS tenant skips; it stays available but is not the answer | Never as the floor |
 | Extend the customer Flutter app with a staff mode | One binary with two trust postures and two audiences invites the exact capability confusion ADR 0025 exists to prevent; app-store review also treats them differently | Never |
 | Bot-only, no Flutter app | The floor without the ceiling: kitchen management, stats and user management are cramped in chat UI, and the owner directed both surfaces | — |
+| Signed authority embedded in callback payloads | The common bot pattern, and exactly backwards for revocation — authority must be re-checked against the live grant at tap time, and 64 bytes could not carry it anyway | Never |
 | Wait for POS integrations to cover these tenants | The tenants in question will never buy the POS; that is the premise | — |
 
 ## Consequences
@@ -84,8 +127,9 @@ Two staff surfaces, one backend, aimed at tenants who run without POS integratio
 
 - The smallest tenant can run service with nothing but Telegram — the acceptance loop
   survives having no hardware at all, which is the stated point.
-- Both surfaces consume endpoints that already exist and already enforce capabilities,
-  so the backend cost is concentrated in staff identity linking and bot callbacks.
+- Both surfaces consume endpoints that already exist and already enforce capabilities
+  at the web layer, so the new backend cost concentrates in the callback authorizer,
+  identity linking, and the audit-parity wiring.
 - The staff app finally gives the `operations` OpenAPI group a generated-client
   consumer, forcing the schema-collision fix that blocks adoption everywhere.
 
@@ -95,7 +139,7 @@ Two staff surfaces, one backend, aimed at tenants who run without POS integratio
   the monorepo's app count grows faster than its team.
 - Bot-actionable orders make Telegram availability part of service operations for
   bot-only tenants; an outage degrades them to the web app they were promised they
-  would not need.
+  would not need (ADR 0058's platform-wide breaker and non-Telegram alerting apply).
 - Stats views inherit ADR 0043's day-close blocker; shipping them early ships empty
   numbers (same honesty rule as ADR 0058's digests).
 
@@ -103,46 +147,57 @@ Two staff surfaces, one backend, aimed at tenants who run without POS integratio
 
 The bot's thin, notification-plus-action shape will disappoint anyone expecting a full
 chat-driven POS; accepted — depth belongs to the app, and the bot's job is that the
-process never stops.
+process never stops. Check-at-tap revocation leaves dead-but-visible buttons on old
+messages in v1; accepted, with proactive cleanup named as the enhancement.
 
 ## Specification
 
 Deferred to implementation, with these fixtures: the staff app lives beside the
 customer app in the monorepo sharing extracted design packages; it consumes the
-`operations` contract group via generated client; staff Telegram linking is a
-capability-gated handshake issued from inside an authenticated staff session (never
-self-service from Telegram alone); bot callbacks carry signed, expiring payloads that
-resolve to (principal, order, action, decision-id) server-side; every callback path is
-the same application service the web board calls, never a parallel one; kitchen and
-stats screens track ADRs 0041/0043 rather than leading them.
+`operations` contract group via generated client; staff linking is the authenticated
+one-time-code `/link` handshake above, stored per (telegram account, tenant) with
+revocation following the grant; bot callbacks are opaque tokens resolved server-side
+through `BotCallbackAuthorizer` → `AuthorizationService.require` → the same
+application service the web board calls, with decision-id idempotency and ADR 0027
+audit carrying the bot actor; callback acks are immediate and outcomes are edits;
+keyboards are stripped on first decision; kitchen and stats screens track ADRs
+0041/0043 rather than leading them; the shared `FakeTelegramBotApi` harness (ADR 0058)
+covers the callback taxonomy.
 
 ## Rollout and rollback
 
-Bot first (it is the floor and the smaller build), behind per-tenant enablement;
-Flutter app by feature slice in the order listed, pilot-tenant cohort first. Rollback
-per surface is disablement; the web operations app remains the constant.
+Bot first (it is the floor and the smaller build), behind per-tenant enablement and the
+resolved entitlement answer; Flutter app by feature slice in the order listed,
+pilot-tenant cohort first. Rollback per surface is disablement; the web operations app
+remains the constant.
 
 ## Implementation checklist
 
-- [ ] Staff Telegram identity link (handshake, storage, revocation follows the grant)
-- [ ] Inline-action callbacks: approve/reject/advance with decision-id idempotency
-- [ ] Stop-list toggle and stats query commands in the bot
+- [ ] Staff Telegram identity link (one-time-code handshake, per-tenant links, revocation follows the grant)
+- [ ] `BotCallbackAuthorizer`: token indirection (≤64-byte opaque callback data → server-side action record), live-grant `require`, ADR 0027 audit with bot actor
+- [ ] Inline-action flow: immediate ack, edit-on-outcome, keyboard stripped on first decision, lost-race answer with settling actor
+- [ ] Stop-list toggle and stats query commands in the bot (tenant disambiguation for multi-link principals)
+- [ ] Audit the stop-list toggle on every channel (wire catalog authoring into the audit recorder — pre-existing gap, closed here)
 - [ ] Staff Flutter app shell + auth + the acceptance/fulfilment loop
 - [ ] Kitchen ticket views (to ADR 0041's built depth)
 - [ ] Stop-list screen; stats screens (gated on ADR 0043's day-close caller)
 - [ ] User management: invites and grant assignment over existing surfaces
 - [ ] Generated `operations` client adopted (schema-collision fix is a prerequisite)
+- [ ] `GrantChanged`-driven stale-keyboard cleanup (stated enhancement, after v1)
 
 ## Exit criteria
 
 A pilot tenant with no POS and no computer accepts, advances, and completes a real
 order entirely from a phone — once through the Telegram bot alone, once through the
 staff Flutter app — with every action authorized against the acting staff member's own
-grant, and a revoked member's next tap refused.
+grant at tap time and recorded as an audit fact naming them; a revoked member's next
+tap refused; a second tap on a decided order answered with who decided it; and the
+86-toggle auditable on web and bot alike.
 
 ## References
 
-- ADR 0058 / 0059 — the Telegram plumbing and conversation model this stands on
+- ADR 0058 / 0059 — the Telegram plumbing, provisioning rules, and conversation model this stands on
 - ADR 0039 / 0041 / 0043 — the operator, kitchen, and stats capabilities it fronts
+- ADR 0025 / 0027 — the authorization and audit models the callback boundary re-enters
 - ADR 0035 / 0055 — the frontend platform and the on-hold customer app it lives beside
 - platform/docs/operations-spec/ — the UI truths the app inherits where applicable
