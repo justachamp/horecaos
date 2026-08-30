@@ -49,17 +49,42 @@ export class Session {
    * say so. A token this application knows to be expired is one it must not
    * spend: sending it produces a 401 on a screen the customer is looking at,
    * where showing them the sign-in they actually need is the honest answer.
+   *
+   * A plain method, deliberately not a `computed()`. A computed memoizes on
+   * its *signal* dependencies and only re-runs when one of them changes --
+   * there is no timer driving it, so it never notices merely that wall-clock
+   * time passed a deadline. A token already read once as live would keep
+   * reading as live, cached, until some unrelated call touched `token` or
+   * `expiresAtMillis`. Checking the clock here, on every call, is what makes
+   * the promise above true at *every* read rather than only the first one.
+   *
+   * When a call catches an expiry nothing has noticed yet, it also runs
+   * {@link expire}, so `status`/`isAuthenticated` -- which stay `computed()`,
+   * because they are the properties a guard or a template reads reactively
+   * and genuinely benefit from memoization -- pick up the change on their
+   * very next read instead of lagging behind what this method just answered.
+   *
+   * Because of that write, this must never be called from inside a
+   * `computed()` or an `effect()`: Angular forbids writing a signal while one
+   * of those is being evaluated. Nothing here does today -- every call site
+   * reads it once, imperatively (an interceptor per request, a test) -- and
+   * it should stay that way; reactive consumers belong on `isAuthenticated`
+   * or `status` instead.
    */
-  readonly accessToken = computed(() => {
+  accessToken(): string | null {
     const value = this.token();
     if (!value) {
       return null;
     }
-    return Date.now() < this.expiresAtMillis() ? value : null;
-  });
+    if (Date.now() < this.expiresAtMillis()) {
+      return value;
+    }
+    this.expire();
+    return null;
+  }
 
   readonly status = computed<SessionStatus>(() => {
-    if (this.accessToken()) {
+    if (this.hasLiveToken()) {
       return 'AUTHENTICATED';
     }
     return this.authenticating() ? 'AUTHENTICATING' : 'ANONYMOUS';
@@ -112,6 +137,22 @@ export class Session {
     this.authenticating.set(false);
     safely(() => localStorage.removeItem(TOKEN_KEY));
     safely(() => localStorage.removeItem(EXPIRES_AT_KEY));
+  }
+
+  /**
+   * True iff there is a token and its deadline has not passed yet.
+   *
+   * A pure read -- no signal writes -- so it is safe to call from inside
+   * `status`'s `computed()`, unlike {@link accessToken}. It shares that
+   * method's blind spot (a `computed()` reading this still only re-evaluates
+   * when `token`/`expiresAtMillis` change, not merely because time passed),
+   * which is why `accessToken` calls `expire()` when it notices a deadline
+   * has gone by: that write is what nudges `status` into agreeing on its next
+   * read, since self-correction from the clock alone is deliberately not
+   * this method's job.
+   */
+  private hasLiveToken(): boolean {
+    return this.token() !== null && Date.now() < this.expiresAtMillis();
   }
 
   private persist(token: string, deadline: number): void {

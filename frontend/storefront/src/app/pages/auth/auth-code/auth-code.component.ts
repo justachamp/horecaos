@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, computed, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import type { AuthCodeState } from '../../../auth/auth.state';
@@ -23,7 +23,10 @@ import { BackDirective } from '../../../shared/back/back.directive';
   templateUrl: './auth-code.component.html',
   styleUrl: './auth-code.component.scss',
 })
-export class AuthCodeComponent implements OnInit {
+export class AuthCodeComponent implements OnInit, OnDestroy {
+  /** The window a customer gets when the challenge did not say otherwise. */
+  private static readonly DEFAULT_COUNTDOWN_SECONDS = 44;
+
   private readonly telegramWebapp = inject(TelegramWebappService);
   /** Canonical E.164, e.g. +998901234567. */
   phone = '';
@@ -44,7 +47,7 @@ export class AuthCodeComponent implements OnInit {
   code = signal('');
 
   /** Countdown seconds remaining (0 = show resend) */
-  countdown = signal(44);
+  countdown = signal(AuthCodeComponent.DEFAULT_COUNTDOWN_SECONDS);
 
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
@@ -75,10 +78,40 @@ export class AuthCodeComponent implements OnInit {
       this.router.navigate(['/auth/login']).catch(() => {});
       return;
     }
+    // The login screen already carries the challenge's real deadline through
+    // router state (`AuthCodeState.expiresAt`); a countdown that ignores it
+    // in favour of a hardcoded 44s can promise more (or less) time than the
+    // platform is actually still honouring the code for.
+    this.countdown.set(this.countdownSecondsFor(authState?.expiresAt));
     this.startCountdown();
     if (this.isTelegramContext()) {
       setTimeout(() => this.requestTelegramClipboard(), 500);
     }
+  }
+
+  ngOnDestroy(): void {
+    // Otherwise a customer who navigates away before the countdown reaches
+    // zero -- back button, a deep link, the tab closing on Telegram's WebView
+    // -- leaves this ticking forever: only reaching zero ever cleared it.
+    this.clearCountdownInterval();
+  }
+
+  /**
+   * Seconds remaining until `expiresAt`, or the fallback when there is
+   * nothing usable to derive it from -- no deadline at all, or one that does
+   * not parse. A deadline that has already passed by the time this screen
+   * loads yields 0, not the fallback: that is the honest amount of time left,
+   * same as everywhere else in this application that would rather say "you
+   * need a new code" than pretend a window is still open.
+   */
+  private countdownSecondsFor(expiresAt: string | undefined): number {
+    if (expiresAt) {
+      const deadlineMillis = Date.parse(expiresAt);
+      if (Number.isFinite(deadlineMillis)) {
+        return Math.max(0, Math.floor((deadlineMillis - Date.now()) / 1000));
+      }
+    }
+    return AuthCodeComponent.DEFAULT_COUNTDOWN_SECONDS;
   }
 
   /** Request clipboard via Telegram API (SMS code from keyboard suggestion) */
@@ -108,14 +141,21 @@ export class AuthCodeComponent implements OnInit {
   }
 
   private startCountdown(): void {
+    this.clearCountdownInterval();
     this.countdownInterval = setInterval(() => {
       const next = this.countdown() - 1;
       this.countdown.set(next);
-      if (next <= 0 && this.countdownInterval) {
-        clearInterval(this.countdownInterval);
-        this.countdownInterval = null;
+      if (next <= 0) {
+        this.clearCountdownInterval();
       }
     }, 1000);
+  }
+
+  private clearCountdownInterval(): void {
+    if (this.countdownInterval) {
+      clearInterval(this.countdownInterval);
+      this.countdownInterval = null;
+    }
   }
 
   formatTime(seconds: number): string {
@@ -189,7 +229,7 @@ export class AuthCodeComponent implements OnInit {
       const challenge = await this.otp.requestCode(this.phone);
       this.challengeId = challenge.challengeId;
       this.code.set('');
-      this.countdown.set(44);
+      this.countdown.set(AuthCodeComponent.DEFAULT_COUNTDOWN_SECONDS);
       this.startCountdown();
     } catch (failure) {
       this.error.set(this.messageFor(failure));

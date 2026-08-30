@@ -76,14 +76,6 @@ describe('Session', () => {
     });
 
     it('reads null on first evaluation when the stored deadline has already passed', () => {
-      // `accessToken` is an Angular `computed()`, which memoizes on its signal
-      // dependencies (`token`, `expiresAtMillis`) and never re-invokes on its
-      // own just because wall-clock time moved -- there is no timer driving
-      // it. So the "self-expiring" property is a fact about what the very
-      // first read after `adopt()` sees, not a promise that a later read will
-      // notice a deadline that has since passed with nothing else touching
-      // the session. This is that first-read case: the deadline is already in
-      // the past before `accessToken()` is ever evaluated.
       const session = freshSession();
       const realNow = Date.now;
       try {
@@ -99,19 +91,16 @@ describe('Session', () => {
     });
 
     /**
-     * Documents a real consequence of `accessToken` being a `computed()`:
-     * once it has been read while valid, it keeps returning that same cached
-     * value across later reads -- even past the deadline -- because nothing
-     * re-touches the `token`/`expiresAtMillis` signals it depends on. Angular
-     * only re-runs a computed's function when one of its own tracked signal
-     * dependencies changes value; it does not poll `Date.now()`. A guard or
-     * interceptor that already saw a live token will therefore keep seeing it
-     * as live until the next `adopt`/`expire`/`signOut` call, however much
-     * time has actually passed. If this starts failing, the self-expiry
-     * comment on `Session.accessToken` has become true and this test (not the
-     * class) should be updated to match.
+     * `accessToken()` is a plain method, not an Angular `computed()`: it
+     * checks the clock on every call rather than memoizing on the `token`/
+     * `expiresAtMillis` signals, so a deadline that passes between two reads
+     * is caught on the second one even though nothing else touched the
+     * session in between. This is the caching artifact the class used to
+     * have (and `Session.accessToken`'s own doc comment still promises does
+     * not happen) -- this test now asserts the promise holds instead of
+     * documenting the gap.
      */
-    it('a token already read as live stays cached as live past its own deadline, absent a further adopt/expire/signOut', () => {
+    it('a token already read as live expires at the next read once its deadline has passed, with no adopt/expire/signOut in between', () => {
       const session = freshSession();
       const realNow = Date.now;
       try {
@@ -120,7 +109,32 @@ describe('Session', () => {
         expect(session.accessToken()).toBe('tok-7b');
 
         Date.now = () => 1_010_001;
-        expect(session.accessToken()).toBe('tok-7b');
+        expect(session.accessToken()).toBeNull();
+      } finally {
+        Date.now = realNow;
+      }
+    });
+
+    /**
+     * The write side of the self-expiry: a stale read through `accessToken()`
+     * also clears the underlying signals, so `status`/`isAuthenticated` --
+     * which stay `computed()` and do not themselves poll the clock -- agree
+     * on the very next read rather than continuing to report a session that
+     * `accessToken()` has already stopped honouring.
+     */
+    it('a read that catches the deadline also clears status/isAuthenticated for the next read', () => {
+      const session = freshSession();
+      const realNow = Date.now;
+      try {
+        Date.now = () => 1_000_000;
+        session.adopt({ accessToken: 'tok-7c', expiresAt: new Date(1_010_000).toISOString() });
+        expect(session.status()).toBe('AUTHENTICATED');
+
+        Date.now = () => 1_010_001;
+        expect(session.accessToken()).toBeNull();
+        expect(session.status()).toBe('ANONYMOUS');
+        expect(session.isAuthenticated()).toBe(false);
+        expect(localStorage.getItem(TOKEN_KEY)).toBeNull();
       } finally {
         Date.now = realNow;
       }
