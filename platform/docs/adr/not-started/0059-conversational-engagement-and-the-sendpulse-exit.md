@@ -10,10 +10,11 @@
   (architecture and the scope discipline)
 - Depends on: 0020, 0025, 0026, 0028, 0029, 0044, 0051, 0058
 - Supersedes / Superseded by: —
-- Open inputs: the trigger for an Instagram/Meta adapter (owner; revisit only on a
-  real tenant demand, because Meta's app-review overhead is paid up front). The
-  flow-authoring input was resolved by the owner on 2026-08-30: flows are YAML
-  configuration and no visual builder will be built — see the Decision.
+- Open inputs: none. Both resolved by the owner on 2026-08-30: flows are YAML
+  configuration and no visual builder will ever be built (see the Decision), and the
+  Instagram/Meta adapter is triggered by the owner's own directive alone — no tenant
+  demand or market threshold gates it, and none excuses paying Meta's app-review
+  overhead before the owner asks.
 
 ## Context
 
@@ -57,9 +58,9 @@ core and channel-specific adapters:
   ADR 0020 consent — not a separate blast tool. Telegram rate limits shape batching,
   as ADR 0058 already requires.
 - **The core is channel-neutral; only the Telegram adapter is built.** Instagram/Meta
-  and others become adapters behind the same conversation/contact/flow model when a
-  real demand triggers the open input — nothing in v1 may import a channel SDK type
-  into the core (the standing hexagonal rule).
+  and others become adapters behind the same conversation/contact/flow model when the
+  owner directs it — nothing in v1 may import a channel SDK type into the core (the
+  standing hexagonal rule).
 - **SendPulse is exited, not integrated.** No bridge phase: the bot is owned in
   BotFather, so cutover is repointing its webhook to the platform — atomic per bot and
   reversible by the same call — after contacts are exported through SendPulse's API
@@ -72,7 +73,7 @@ core and channel-specific adapters:
 | Stay on SendPulse | The bill scales with the contact base by design; tenants' customer PII lives outside ADR 0029; the capability cannot be resold to tenants | Never as the end state; it remains the fallback during cutover by webhook repoint |
 | A different vendor (Manychat, Chatfuel, …) | Same per-contact economics and the same data-outside-the-platform problem, plus a second migration later | — |
 | Build a visual flow builder | The builder is the vendor's product, not this platform's; the observed most-used flow is six blocks of configuration; the owner decided YAML is the authoring surface | Never absent a superseding record |
-| Multi-channel from day one | Meta app review and API surface are paid before any tenant asks; the channel-neutral core keeps the door open at near-zero cost | A tenant demand names a second channel |
+| Multi-channel from day one | Meta app review and API surface are paid before anyone needs them; the channel-neutral core keeps the door open at near-zero cost | The owner directs a second channel |
 | Bolt the inbox onto Telegram's own group tools | Group chats leak customer PII to all members and offer no capability gating, assignment, or history tied to the customer record | Never |
 
 ## Consequences
