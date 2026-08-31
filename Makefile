@@ -3,7 +3,8 @@
 
 .DEFAULT_GOAL := help
 
-.PHONY: help verify lint test run up down eval frontend-install frontend-build ci
+.PHONY: help verify lint test run up down eval frontend-install frontend-build ci \
+        run-storefront run-operations run-control-plane run-frontends
 
 help: ## List targets
 	@grep -hE '^[a-z][a-zA-Z0-9_-]*:.*?## ' $(MAKEFILE_LIST) \
@@ -39,5 +40,24 @@ frontend-build: ## Build every frontend app
 	cd frontend/control-plane && npm run build
 	cd frontend/operations && npm run build
 	cd frontend/storefront && npm run build
+
+# Each app serves in the foreground on its own port. The API (`make run`) must be
+# up for any of them to do real work; the ports match .claude/launch.json and the
+# Keycloak realm's registered redirect URIs, so keep the two files in step.
+# Storefront sits on 5001 because macOS ControlCenter (AirPlay) squats on 5000.
+
+run-storefront: ## Serve the customer storefront on :5001 (foreground)
+	npm --prefix frontend/storefront start -- --port 5001
+
+run-operations: ## Serve the operations app on :4200 (foreground)
+	npm --prefix frontend/operations start
+
+run-control-plane: ## Serve the control-plane app on :4300 (foreground)
+	npm --prefix frontend/control-plane start -- --port 4300
+
+run-frontends: ## Serve all three apps (background, logs in /tmp/horecaos-*.log; stop with pkill -f 'ng serve')
+	@npm --prefix frontend/storefront start -- --port 5001 > /tmp/horecaos-storefront.log 2>&1 & echo "storefront    :5001  (log: /tmp/horecaos-storefront.log)"
+	@npm --prefix frontend/operations start > /tmp/horecaos-operations.log 2>&1 & echo "operations    :4200  (log: /tmp/horecaos-operations.log)"
+	@npm --prefix frontend/control-plane start -- --port 4300 > /tmp/horecaos-control-plane.log 2>&1 & echo "control-plane :4300  (log: /tmp/horecaos-control-plane.log)"
 
 ci: lint verify ## What backend CI runs at the root
