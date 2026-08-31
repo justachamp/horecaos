@@ -57,6 +57,7 @@ public class OrderNotificationTrigger {
     private static final Logger log = LoggerFactory.getLogger(OrderNotificationTrigger.class);
 
     private final JdbcNotificationStore notifications;
+    private final OperationsAlertFanoutService operationsAlerts;
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final NotificationChannel channel;
@@ -64,6 +65,7 @@ public class OrderNotificationTrigger {
 
     public OrderNotificationTrigger(
             JdbcNotificationStore notifications,
+            OperationsAlertFanoutService operationsAlerts,
             ObjectMapper objectMapper,
             Clock clock,
             @Value("${horecaos.notifications.order-channel:SMS}") String channel,
@@ -72,6 +74,7 @@ public class OrderNotificationTrigger {
             // hours is a stated default, not a considered answer.
             @Value("${horecaos.notifications.order-expiry:PT6H}") Duration expiry) {
         this.notifications = notifications;
+        this.operationsAlerts = operationsAlerts;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.channel = NotificationChannel.valueOf(channel);
@@ -164,10 +167,35 @@ public class OrderNotificationTrigger {
             // so a replay storm does not look like an incident.
             log.debug("A {} notification already exists for order {}", templateKey, event.orderId());
         }
+
+        // ADR 0058 stage 1: the same fact, fanned out to every bound operations
+        // chat subscribed to it. Independent of the customer send above — a
+        // suspended customer contact must never hold back the branch's own
+        // group, and vice versa — and gated by the same import suppression
+        // check above it, so a backfill does not also flood every ops group.
+        operationsAlerts.fanOut(
+                tenantId,
+                brandId,
+                locationId,
+                templateKey,
+                templateKey,
+                SUBJECT_TYPE,
+                event.orderId(),
+                event.eventId(),
+                "%s:%s:%s".formatted(templateKey, SUBJECT_TYPE, event.orderId()),
+                triggerVariables,
+                expiry);
     }
 
-    /** The rejection reason, as the stable code the event carries. */
-    private static Map<String, String> reasonVariables(String reasonCode) {
+    /**
+     * The rejection reason, as the stable code the event carries.
+     *
+     * <p>Package-visible rather than private so
+     * {@code TelegramOperationsMessageClassificationTests} can assert directly
+     * that this is the entire variable set an ORDER_REJECTED message — customer
+     * or operations — ever renders with, and that none of it is protected data.
+     */
+    static Map<String, String> reasonVariables(String reasonCode) {
         Map<String, String> variables = new LinkedHashMap<>();
         variables.put("reasonCode", reasonCode == null ? "UNSPECIFIED" : reasonCode);
         return variables;

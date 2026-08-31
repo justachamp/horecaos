@@ -64,6 +64,11 @@ public class JdbcNotificationStore {
         parameters.put("subjectType", intent.subjectType());
         parameters.put("subjectId", intent.subjectId());
         parameters.put("accountId", intent.recipientAccountId());
+        // Pre-resolved only by a fan-out trigger that already knows exactly which
+        // operations chat this intent is for (see OperationsTelegramFanoutService).
+        // Every other caller leaves this null and eligibility resolves it, as
+        // ADR 0020 always has.
+        parameters.put("endpointId", intent.recipientEndpointId());
         parameters.put("triggerEventId", intent.triggerEventId());
         parameters.put("idempotencyKey", intent.idempotencyKey());
         parameters.put("variables", intent.triggerVariablesJson());
@@ -75,10 +80,10 @@ public class JdbcNotificationStore {
                 INSERT INTO notifications.notifications (
                     id, tenant_id, brand_id, location_id, notification_class, channel,
                     template_key, subject_type, subject_id, recipient_account_id,
-                    trigger_event_id, idempotency_key, status, variables, scheduled_at,
-                    expires_at, next_attempt_at, created_at, updated_at)
+                    recipient_endpoint_id, trigger_event_id, idempotency_key, status, variables,
+                    scheduled_at, expires_at, next_attempt_at, created_at, updated_at)
                 VALUES (:id, :tenantId, :brandId, :locationId, :class, :channel,
-                    :templateKey, :subjectType, :subjectId, :accountId,
+                    :templateKey, :subjectType, :subjectId, :accountId, :endpointId,
                     :triggerEventId, :idempotencyKey, 'CREATED', CAST(:variables AS jsonb),
                     :scheduledAt, :expiresAt, :scheduledAt, :now, :now)
                 ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
@@ -389,22 +394,74 @@ public class JdbcNotificationStore {
     public Optional<EndpointRow> endpoint(UUID tenantId, UUID endpointId) {
         return jdbc.sql("""
                 SELECT id, customer_account_id, endpoint_type, contact_point_id,
-                       operations_endpoint_reference, normalized_hash, verification_status, status
+                       operations_endpoint_reference, provider_binding_id, normalized_hash,
+                       verification_status, status
                 FROM notifications.recipient_endpoints
                 WHERE tenant_id = :tenantId AND id = :id
                 """)
                 .param("tenantId", tenantId)
                 .param("id", endpointId)
-                .query((row, number) -> new EndpointRow(
-                        row.getObject("id", UUID.class),
-                        row.getObject("customer_account_id", UUID.class),
-                        row.getString("endpoint_type"),
-                        row.getObject("contact_point_id", UUID.class),
-                        row.getString("operations_endpoint_reference"),
-                        row.getString("normalized_hash"),
-                        row.getString("verification_status"),
-                        row.getString("status")))
+                .query(JdbcNotificationStore::endpointRow)
                 .optional();
+    }
+
+    /**
+     * The endpoint standing for one ADR 0026 provider binding, created on first
+     * use (ADR 0058).
+     *
+     * <p>An upsert for the same reason {@link #ensureEndpoint} is: two events
+     * fanning out to the same bound chat at once must not both insert and have
+     * one fail the unique index doing the other half of the same work.
+     * {@code customer_account_id} is always null here — a chat-shaped endpoint is
+     * a customer's own only once ADR 0058's 1:1 linking stage exists, which this
+     * slice does not build (see V0100's note on {@code ck_endpoint_owner}).
+     */
+    public UUID ensureProviderBindingEndpoint(UUID tenantId, UUID providerBindingId, Instant now) {
+        return jdbc.sql("""
+                INSERT INTO notifications.recipient_endpoints (
+                    id, tenant_id, endpoint_type, provider_binding_id, status, created_at, updated_at)
+                VALUES (:id, :tenantId, 'PROVIDER_BINDING', :bindingId, 'ACTIVE', :now, :now)
+                ON CONFLICT (tenant_id, provider_binding_id) WHERE provider_binding_id IS NOT NULL
+                DO UPDATE SET updated_at = excluded.updated_at
+                RETURNING id
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("bindingId", providerBindingId)
+                .param("now", utc(now))
+                .query(UUID.class)
+                .single();
+    }
+
+    /**
+     * Whether an older, still-in-flight message is queued ahead of this one for
+     * the same recipient endpoint (ADR 0058's per-chat FIFO rule).
+     *
+     * <p>Only ever asked for a channel that
+     * {@link uz.horecaos.platform.notifications.domain.NotificationChannel#requiresPerEndpointOrdering()
+     * requires it} — today, Telegram alone. "In flight" excludes every terminal
+     * status: a message that will never send again cannot be ahead of anything,
+     * and counting it would let one suppressed or expired row wedge a chat's
+     * queue forever.
+     */
+    public boolean hasOlderPendingForEndpoint(
+            UUID tenantId, String channel, UUID endpointId, Instant createdAt, UUID excludeNotificationId) {
+        return jdbc.sql("""
+                SELECT EXISTS (
+                    SELECT 1 FROM notifications.notifications
+                    WHERE tenant_id = :tenantId AND channel = :channel
+                      AND recipient_endpoint_id = :endpointId AND id <> :excludeId
+                      AND status NOT IN ('DELIVERED', 'FAILED_TERMINAL', 'EXPIRED', 'SUPPRESSED', 'MANUAL_REVIEW')
+                      AND created_at < :createdAt
+                )
+                """)
+                .param("tenantId", tenantId)
+                .param("channel", channel)
+                .param("endpointId", endpointId)
+                .param("excludeId", excludeNotificationId)
+                .param("createdAt", utc(createdAt))
+                .query(Boolean.class)
+                .single();
     }
 
     // --------------------------------------------------------------- attempts
@@ -793,7 +850,47 @@ public class JdbcNotificationStore {
             String triggerVariablesJson,
             Instant scheduledAt,
             Instant expiresAt,
-            Instant createdAt) {}
+            Instant createdAt,
+            UUID recipientEndpointId) {
+
+        /** The shape every existing caller uses: no endpoint known yet at creation. */
+        public NewNotification(
+                UUID notificationId,
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                String notificationClass,
+                String channel,
+                String templateKey,
+                String subjectType,
+                UUID subjectId,
+                UUID recipientAccountId,
+                UUID triggerEventId,
+                String idempotencyKey,
+                String triggerVariablesJson,
+                Instant scheduledAt,
+                Instant expiresAt,
+                Instant createdAt) {
+            this(
+                    notificationId,
+                    tenantId,
+                    brandId,
+                    locationId,
+                    notificationClass,
+                    channel,
+                    templateKey,
+                    subjectType,
+                    subjectId,
+                    recipientAccountId,
+                    triggerEventId,
+                    idempotencyKey,
+                    triggerVariablesJson,
+                    scheduledAt,
+                    expiresAt,
+                    createdAt,
+                    null);
+        }
+    }
 
     /**
      * @param templateVersion null until eligibility freezes one, which is a
@@ -837,9 +934,23 @@ public class JdbcNotificationStore {
             String endpointType,
             UUID contactPointId,
             String operationsEndpointReference,
+            UUID providerBindingId,
             String normalizedHash,
             String verificationStatus,
             String status) {}
+
+    private static EndpointRow endpointRow(java.sql.ResultSet row, int number) throws java.sql.SQLException {
+        return new EndpointRow(
+                row.getObject("id", UUID.class),
+                row.getObject("customer_account_id", UUID.class),
+                row.getString("endpoint_type"),
+                row.getObject("contact_point_id", UUID.class),
+                row.getString("operations_endpoint_reference"),
+                row.getObject("provider_binding_id", UUID.class),
+                row.getString("normalized_hash"),
+                row.getString("verification_status"),
+                row.getString("status"));
+    }
 
     public record AttemptRow(
             UUID id,

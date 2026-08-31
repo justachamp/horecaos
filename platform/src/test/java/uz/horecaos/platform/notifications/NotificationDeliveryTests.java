@@ -47,6 +47,7 @@ import uz.horecaos.platform.integration.camel.notification.SmsGatewayAdapter;
 import uz.horecaos.platform.integration.provider.JdbcProviderInstallationLookup;
 import uz.horecaos.platform.notifications.application.NotificationDispatchService;
 import uz.horecaos.platform.notifications.application.NotificationEligibilityService;
+import uz.horecaos.platform.notifications.application.OperationsAlertFanoutService;
 import uz.horecaos.platform.notifications.application.NotificationPreferenceService;
 import uz.horecaos.platform.notifications.application.NotificationQueryService;
 import uz.horecaos.platform.notifications.application.NotificationTemplateService;
@@ -183,14 +184,21 @@ class NotificationDeliveryTests {
                 orderId, TENANT, BRAND, null, "A-17", accountId, null, "CONFIRMED", "UZS", 12_500_000L, 3));
 
         NotificationEligibilityService eligibility = new NotificationEligibilityService(
-                notifications, templates, consent, contacts, orders, transport, objectMapper, clock);
+                notifications, templates, consent, contacts, orders, transport, objectMapper, clock, "ru");
         NotificationDispatchService dispatch = new NotificationDispatchService(
                 notifications, templateStore, contacts, transport, objectMapper, clock, 8, Duration.ofSeconds(30));
 
         worker = new NotificationWorker(notifications, eligibility, dispatch, clock, 50, Duration.ofMinutes(2));
         queries = new NotificationQueryService(notifications, clock);
         preferences = new NotificationPreferenceService(notifications, clock);
-        trigger = new OrderNotificationTrigger(notifications, objectMapper, clock, "SMS", Duration.ofHours(6));
+        // No Telegram binding exists in this SMS-focused suite, so the ADR 0058
+        // fan-out this trigger also performs has nothing to fan out to; a
+        // directory that always answers empty makes that a true no-op rather
+        // than a null dependency.
+        OperationsAlertFanoutService operationsAlerts = new OperationsAlertFanoutService(
+                (tenantId, brandId, locationId, eventClass) -> java.util.List.of(), notifications, objectMapper, clock);
+        trigger = new OrderNotificationTrigger(
+                notifications, operationsAlerts, objectMapper, clock, "SMS", Duration.ofHours(6));
 
         activateConfirmationTemplate();
     }

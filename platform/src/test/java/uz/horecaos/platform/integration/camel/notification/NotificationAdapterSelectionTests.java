@@ -68,7 +68,10 @@ class NotificationAdapterSelectionTests {
                 null,
                 "your order is on its way",
                 "key-1",
-                "corr-1");
+                "corr-1",
+                "Order",
+                UUID.randomUUID(),
+                "ORDER_CONFIRMED");
     }
 
     private static ProviderInstallationLookup lookup(String providerType) {

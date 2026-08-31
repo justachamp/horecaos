@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;
@@ -69,6 +70,7 @@ public class NotificationEligibilityService {
     private final NotificationTransport transport;
     private final ObjectMapper objectMapper;
     private final Clock clock;
+    private final MessageLocale operationsGroupLocale;
 
     public NotificationEligibilityService(
             JdbcNotificationStore notifications,
@@ -78,7 +80,13 @@ public class NotificationEligibilityService {
             OrderDirectory orders,
             NotificationTransport transport,
             ObjectMapper objectMapper,
-            Clock clock) {
+            Clock clock,
+            // ADR 0058: "a group's language follows tenant configuration". No
+            // tenant-level language column exists yet (see AGENTS.md's own
+            // pattern for a product input this build states rather than
+            // resolves, e.g. quiet hours). One platform-wide default until a
+            // tenant configuration key exists to read instead.
+            @Value("${horecaos.notifications.telegram.group-locale:ru}") String operationsGroupLocale) {
         this.notifications = notifications;
         this.templates = templates;
         this.consent = consent;
@@ -87,6 +95,7 @@ public class NotificationEligibilityService {
         this.transport = transport;
         this.objectMapper = objectMapper;
         this.clock = clock;
+        this.operationsGroupLocale = MessageLocale.of(operationsGroupLocale);
     }
 
     /**
@@ -119,18 +128,30 @@ public class NotificationEligibilityService {
         }
         OrderSummary summary = order.get();
 
-        if (!summary.hasAccount()) {
-            // A guest order has no ADR 0015 account, so there is no contact to
-            // resolve and no consent record to read. The first slice takes
-            // phone-authenticated customers, so this is the honest answer rather
-            // than an error.
-            return suppress(row, SuppressionReason.NO_RECIPIENT_ACCOUNT, now);
-        }
-        UUID accountId = summary.customerAccountId();
+        // ADR 0020: "operations alerts target authorized groups... never a
+        // customer. It has no consent to check because there is no data subject
+        // in the ADR 0015 sense." The account/contact machinery below is entirely
+        // about a customer's own contact; an operations-audience message has
+        // neither and must not go near either directory.
+        boolean operationsAudience = notificationClass == NotificationClass.OPERATIONS_ALERT;
 
-        MessageLocale locale = contacts.preferredLocale(row.tenantId(), accountId)
-                .flatMap(MessageLocale::parse)
-                .orElse(MessageLocale.FALLBACK);
+        UUID accountId = null;
+        MessageLocale locale;
+        if (operationsAudience) {
+            locale = operationsGroupLocale;
+        } else {
+            if (!summary.hasAccount()) {
+                // A guest order has no ADR 0015 account, so there is no contact to
+                // resolve and no consent record to read. The first slice takes
+                // phone-authenticated customers, so this is the honest answer
+                // rather than an error.
+                return suppress(row, SuppressionReason.NO_RECIPIENT_ACCOUNT, now);
+            }
+            accountId = summary.customerAccountId();
+            locale = contacts.preferredLocale(row.tenantId(), accountId)
+                    .flatMap(MessageLocale::parse)
+                    .orElse(MessageLocale.FALLBACK);
+        }
 
         var resolution = templates.resolve(row.tenantId(), row.brandId(), row.templateKey(), channel, locale);
         if (!resolution.isFound()) {
@@ -169,19 +190,32 @@ public class NotificationEligibilityService {
             }
         }
 
-        Optional<ContactEndpoint> contact = contacts.primaryContact(row.tenantId(), accountId, channel.contactMethod());
-        if (contact.isEmpty()) {
-            return suppress(row, SuppressionReason.NO_RECIPIENT_ENDPOINT, now);
+        UUID endpointId;
+        if (operationsAudience) {
+            // Already resolved when this intent was created: the fan-out trigger
+            // (OperationsTelegramFanoutService) knows exactly which bound chat it
+            // is writing for and sets recipient_endpoint_id at insert time, unlike
+            // every customer-facing intent, whose endpoint is discovered here.
+            endpointId = row.recipientEndpointId();
+            if (endpointId == null) {
+                throw new IllegalStateException(
+                        "Operations alert %s was created without a resolved endpoint".formatted(row.id()));
+            }
+        } else {
+            Optional<ContactEndpoint> contact =
+                    contacts.primaryContact(row.tenantId(), accountId, channel.contactMethod());
+            if (contact.isEmpty()) {
+                return suppress(row, SuppressionReason.NO_RECIPIENT_ENDPOINT, now);
+            }
+            endpointId = notifications.ensureEndpoint(
+                    row.tenantId(),
+                    accountId,
+                    contact.get().method().name(),
+                    contact.get().contactPointId(),
+                    contact.get().normalizedHash(),
+                    contact.get().verificationStatus(),
+                    now);
         }
-
-        UUID endpointId = notifications.ensureEndpoint(
-                row.tenantId(),
-                accountId,
-                contact.get().method().name(),
-                contact.get().contactPointId(),
-                contact.get().normalizedHash(),
-                contact.get().verificationStatus(),
-                now);
 
         Map<String, String> variables = variablesFor(row, summary);
         boolean ready = notifications.markReady(

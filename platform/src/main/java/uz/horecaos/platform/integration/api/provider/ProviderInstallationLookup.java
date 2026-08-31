@@ -25,6 +25,21 @@ public interface ProviderInstallationLookup {
     Optional<InstallationSnapshot> installation(UUID tenantId, UUID installationId);
 
     /**
+     * A binding by its own id, with no capability or scope reasoning applied.
+     *
+     * <p>Every existing caller asks "which binding handles this capability at
+     * this scope" and gets back the primary one. ADR 0058's Telegram fan-out asks
+     * a different question: a notification already names the exact chat it is
+     * for (recorded on its endpoint at creation), so resolving it is a lookup by
+     * id, not a selection among candidates. Defaulted to empty so the several
+     * test doubles of this port that predate that need not all grow a mechanical
+     * implementation.
+     */
+    default Optional<BindingRef> binding(UUID tenantId, UUID bindingId) {
+        return Optional.empty();
+    }
+
+    /**
      * @param secretReference an ADR 0028 reference, resolved at call time by the
      *                        adapter that needs it and never logged
      */

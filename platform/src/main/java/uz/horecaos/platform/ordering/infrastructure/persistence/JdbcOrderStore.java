@@ -13,6 +13,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import uz.horecaos.platform.ordering.api.OrderDirectory.ApprovalDeadlineWarning;
 import uz.horecaos.platform.ordering.domain.OrderOutcome;
 import uz.horecaos.platform.ordering.domain.OrderPromise;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
@@ -1193,6 +1194,38 @@ public class JdbcOrderStore {
                         row.getObject("tenant_id", UUID.class),
                         row.getObject("order_id", UUID.class),
                         row.getString("timer_type")))
+                .list();
+    }
+
+    /**
+     * Orders in {@code AWAITING_APPROVAL} whose deadline falls in
+     * {@code (now, until]} — ADR 0058's approval-deadline-warning sweeper.
+     *
+     * <p>A plain SELECT against {@code ix_orders_awaiting_approval}, the same
+     * partial index the board's own severity query relies on. No claim: unlike
+     * {@link #claimDueTimers}, nothing here is fired exactly once by this table —
+     * the caller's own notification idempotency key is what makes a re-scan
+     * before the warning is sent safe to repeat.
+     */
+    public List<ApprovalDeadlineWarning> ordersNearingApprovalDeadline(Instant now, Instant until, int limit) {
+        return jdbc.sql("""
+                SELECT id, tenant_id, brand_id, location_id, public_order_number, approval_deadline_at
+                FROM ordering.orders
+                WHERE status = 'AWAITING_APPROVAL'
+                  AND approval_deadline_at > :now AND approval_deadline_at <= :until
+                ORDER BY approval_deadline_at
+                LIMIT :limit
+                """)
+                .param("now", utc(now))
+                .param("until", utc(until))
+                .param("limit", limit)
+                .query((row, number) -> new ApprovalDeadlineWarning(
+                        row.getObject("tenant_id", UUID.class),
+                        row.getObject("id", UUID.class),
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("location_id", UUID.class),
+                        row.getString("public_order_number"),
+                        row.getObject("approval_deadline_at", OffsetDateTime.class).toInstant()))
                 .list();
     }
 

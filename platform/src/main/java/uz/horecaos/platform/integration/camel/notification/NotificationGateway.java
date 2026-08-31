@@ -19,6 +19,7 @@ import uz.horecaos.platform.integration.api.provider.BindingRef;
 import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
 import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup.InstallationSnapshot;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
+import uz.horecaos.platform.integration.provider.telegram.TelegramBindingStore;
 import uz.horecaos.platform.migration.api.ExternalEffect;
 import uz.horecaos.platform.migration.api.ImportSuppression;
 import uz.horecaos.platform.notifications.api.NotificationDispatch;
@@ -76,6 +77,11 @@ public class NotificationGateway {
                 dispatch.locationId(),
                 dispatch.channel(),
                 dispatch.providerIdempotencyKey(),
+                // A Telegram dispatch already names the exact chat it is for
+                // (ADR 0058 fan-out: several bindings legitimately want the same
+                // event, so there is no single "primary" to select). Every other
+                // channel keeps resolving by scope, unchanged.
+                "TELEGRAM".equals(dispatch.channel()) ? tryParseUuid(dispatch.recipientValue()) : null,
                 (adapter, call) -> adapter.send(dispatch, call));
     }
 
@@ -95,7 +101,20 @@ public class NotificationGateway {
                 locationId,
                 channel,
                 providerIdempotencyKey,
+                // No binding travels with a bare idempotency key. Harmless for
+                // Telegram specifically, whose queryStatus never uses the call it
+                // is given — see TelegramChannelAdapter's own note on why the Bot
+                // API has no status query to make one meaningful.
+                null,
                 (adapter, call) -> adapter.queryStatus(providerIdempotencyKey, call));
+    }
+
+    private static UUID tryParseUuid(String value) {
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException | NullPointerException malformed) {
+            return null;
+        }
     }
 
     private ProviderOutcome invoke(
@@ -104,6 +123,7 @@ public class NotificationGateway {
             UUID locationId,
             String channel,
             String idempotencyKey,
+            UUID explicitBindingId,
             BiFunction<NotificationChannelAdapter, ProviderCall, ProviderOutcome> operation) {
 
         // ADR 0024. The real suppression is in OrderNotificationTrigger, which
@@ -118,8 +138,18 @@ public class NotificationGateway {
             return ProviderOutcome.rejected("NO_ADAPTER", "No notification adapter is registered for " + channel);
         }
 
-        Optional<BindingRef> binding =
-                installations.primaryBinding(tenantId, brandId, locationId, capabilityFor(channel));
+        Optional<BindingRef> binding = explicitBindingId != null
+                ? installations.binding(tenantId, explicitBindingId)
+                : installations.primaryBinding(tenantId, brandId, locationId, capabilityFor(channel));
+        if (binding.isEmpty() && explicitBindingId == null && "TELEGRAM".equals(channel)) {
+            // Telegram never marks a binding primary (fan-out: several chats
+            // legitimately want the same capability at one scope, and ADR 0026's
+            // one-primary-per-scope index exists to prevent exactly that for
+            // categories where it would be a bug). Reached only by queryStatus,
+            // whose adapter call ignores the binding entirely.
+            binding = installations.candidateBindings(tenantId, brandId, locationId, capabilityFor(channel)).stream()
+                    .findFirst();
+        }
         if (binding.isEmpty()) {
             // A rejection rather than a failure: nothing is wrong with the message,
             // the tenant simply has no gateway bound here. Retrying on a timer would
@@ -214,10 +244,11 @@ public class NotificationGateway {
     private static String capabilityFor(String channel) {
         return switch (channel) {
             case "SMS" -> SEND_SMS;
-            // ADR 0020 names SendPush, SendEmail, and SendMessagingAppMessage as
-            // well. They are absent rather than mapped to codes nothing declares,
-            // because a capability code with no adapter behind it resolves a
-            // binding that then cannot be used.
+            case "TELEGRAM" -> TelegramBindingStore.SEND_TELEGRAM_MESSAGE;
+            // ADR 0020 names SendPush and SendEmail as well. They are absent
+            // rather than mapped to codes nothing declares, because a capability
+            // code with no adapter behind it resolves a binding that then cannot
+            // be used.
             default -> throw new IllegalArgumentException("No provider capability is defined for channel " + channel);
         };
     }
