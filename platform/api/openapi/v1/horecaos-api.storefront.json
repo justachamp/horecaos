@@ -51,40 +51,6 @@
         },
         "type" : "object"
       },
-      "AddressResponse" : {
-        "properties" : {
-          "addressId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "coordinateSource" : {
-            "enum" : [ "NOT_GEOCODED", "LANDMARK_ONLY", "GEOCODER", "CUSTOMER_PIN", "OPERATOR_PIN", "LEGACY_UNSOURCED" ],
-            "type" : "string"
-          },
-          "deliveryInstructions" : {
-            "type" : "string"
-          },
-          "fields" : {
-            "$ref" : "#/components/schemas/AddressFields"
-          },
-          "label" : {
-            "type" : "string"
-          },
-          "latitude" : {
-            "format" : "double",
-            "type" : "number"
-          },
-          "longitude" : {
-            "format" : "double",
-            "type" : "number"
-          },
-          "version" : {
-            "format" : "int32",
-            "type" : "integer"
-          }
-        },
-        "type" : "object"
-      },
       "AdmissionResponse" : {
         "properties" : {
           "brandId" : {
@@ -158,17 +124,6 @@
             "$ref" : "#/components/schemas/ApiMoney"
           }
         },
-        "type" : "object"
-      },
-      "CancelRequest" : {
-        "properties" : {
-          "reasonCode" : {
-            "maxLength" : 64,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
-        "required" : [ "reasonCode" ],
         "type" : "object"
       },
       "CartLineResponse" : {
@@ -849,58 +804,11 @@
         },
         "type" : "object"
       },
-      "OrderSummaryResponse" : {
-        "properties" : {
-          "currency" : {
-            "type" : "string"
-          },
-          "fulfillmentMode" : {
-            "type" : "string"
-          },
-          "fulfillmentStatus" : {
-            "type" : "string"
-          },
-          "locationId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "orderId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "paymentStatus" : {
-            "type" : "string"
-          },
-          "placedAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "promisedAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "publicOrderNumber" : {
-            "type" : "string"
-          },
-          "status" : {
-            "type" : "string"
-          },
-          "totalMinor" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "version" : {
-            "format" : "int32",
-            "type" : "integer"
-          }
-        },
-        "type" : "object"
-      },
-      "PageOrderSummaryResponse" : {
+      "PageStorefrontOrderingControllerOrderSummaryResponse" : {
         "properties" : {
           "items" : {
             "items" : {
-              "$ref" : "#/components/schemas/OrderSummaryResponse"
+              "$ref" : "#/components/schemas/StorefrontOrderingControllerOrderSummaryResponse"
             },
             "type" : "array"
           },
@@ -1310,6 +1218,40 @@
         },
         "type" : "object"
       },
+      "StorefrontCustomerControllerAddressResponse" : {
+        "properties" : {
+          "addressId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "coordinateSource" : {
+            "enum" : [ "NOT_GEOCODED", "LANDMARK_ONLY", "GEOCODER", "CUSTOMER_PIN", "OPERATOR_PIN", "LEGACY_UNSOURCED" ],
+            "type" : "string"
+          },
+          "deliveryInstructions" : {
+            "type" : "string"
+          },
+          "fields" : {
+            "$ref" : "#/components/schemas/AddressFields"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "latitude" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "longitude" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "StorefrontMenu" : {
         "properties" : {
           "categories" : {
@@ -1339,6 +1281,64 @@
           "publicationId" : {
             "format" : "uuid",
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "StorefrontOrderingControllerCancelRequest" : {
+        "properties" : {
+          "reasonCode" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reasonCode" ],
+        "type" : "object"
+      },
+      "StorefrontOrderingControllerOrderSummaryResponse" : {
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "fulfillmentMode" : {
+            "type" : "string"
+          },
+          "fulfillmentStatus" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "paymentStatus" : {
+            "type" : "string"
+          },
+          "placedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "promisedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "publicOrderNumber" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "totalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -2657,7 +2657,7 @@
               "*/*" : {
                 "schema" : {
                   "items" : {
-                    "$ref" : "#/components/schemas/AddressResponse"
+                    "$ref" : "#/components/schemas/StorefrontCustomerControllerAddressResponse"
                   },
                   "type" : "array"
                 }
@@ -2704,7 +2704,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/AddressResponse"
+                  "$ref" : "#/components/schemas/StorefrontCustomerControllerAddressResponse"
                 }
               }
             },
@@ -2785,7 +2785,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/AddressResponse"
+                  "$ref" : "#/components/schemas/StorefrontCustomerControllerAddressResponse"
                 }
               }
             },
@@ -2838,7 +2838,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/AddressResponse"
+                  "$ref" : "#/components/schemas/StorefrontCustomerControllerAddressResponse"
                 }
               }
             },
@@ -3004,7 +3004,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/PageOrderSummaryResponse"
+                  "$ref" : "#/components/schemas/PageStorefrontOrderingControllerOrderSummaryResponse"
                 }
               }
             },
@@ -3093,7 +3093,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/CancelRequest"
+                "$ref" : "#/components/schemas/StorefrontOrderingControllerCancelRequest"
               }
             }
           },

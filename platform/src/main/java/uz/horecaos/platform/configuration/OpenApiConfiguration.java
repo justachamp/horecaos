@@ -1,11 +1,13 @@
 package uz.horecaos.platform.configuration;
 
+import io.swagger.v3.core.jackson.ModelResolver;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import org.springdoc.core.models.GroupedOpenApi;
+import org.springdoc.core.providers.ObjectMapperProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,6 +16,20 @@ import org.springframework.context.annotation.Configuration;
 public class OpenApiConfiguration {
 
     static final String BEARER_SECURITY_SCHEME = "bearerAuth";
+
+    /**
+     * Replaces springdoc's default {@link ModelResolver} so component schema names come from
+     * {@link HorecaosTypeNameResolver} instead of the plain-simple-name default. This bean is
+     * itself exactly {@code ModelResolver} — swagger-core's {@code ModelConverters} always
+     * registers a default instance of that same class, and springdoc's {@code
+     * ModelConverterRegistrar} keys replacement on the converter's class, so registering this
+     * bean swaps the default out rather than adding a second, competing converter.
+     */
+    @Bean
+    ModelResolver modelResolver(ObjectMapperProvider objectMapperProvider) {
+        return new ModelResolver(objectMapperProvider.jsonMapper(), new HorecaosTypeNameResolver())
+                .openapi31(objectMapperProvider.isOpenapi31());
+    }
 
     @Bean
     OpenAPI horecaosOpenApi(@Value("${horecaos.api.version}") String apiVersion) {

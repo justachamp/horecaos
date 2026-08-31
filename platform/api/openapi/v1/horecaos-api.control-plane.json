@@ -148,6 +148,43 @@
         },
         "type" : "object"
       },
+      "ApprovalRequestControllerDecisionRequest" : {
+        "properties" : {
+          "decision" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "decision", "reason" ],
+        "type" : "object"
+      },
+      "ApprovalRequestControllerDecisionResponse" : {
+        "properties" : {
+          "actionCode" : {
+            "type" : "string"
+          },
+          "decidedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "decidedBy" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "AssignLocationRequest" : {
         "properties" : {
           "approvalReference" : {
@@ -337,42 +374,6 @@
         "required" : [ "approvalChannel", "mode", "reason", "timeoutAction" ],
         "type" : "object"
       },
-      "BandRequest" : {
-        "properties" : {
-          "bandSet" : {
-            "maxLength" : 32,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "baseMinor" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "fromMeters" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "perKmMinor" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "toMeters" : {
-            "format" : "int32",
-            "type" : "integer"
-          }
-        },
-        "type" : "object"
-      },
-      "BindLocationRequest" : {
-        "properties" : {
-          "locationId" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        },
-        "required" : [ "locationId" ],
-        "type" : "object"
-      },
       "BindRequest" : {
         "properties" : {
           "brandId" : {
@@ -452,6 +453,15 @@
           "timeDeltaSeconds" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CatalogAuthoringControllerIdResponse" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -862,43 +872,6 @@
         "required" : [ "code", "displayNameEn", "displayNameRu", "displayNameUz", "role" ],
         "type" : "object"
       },
-      "DecisionRequest" : {
-        "properties" : {
-          "decision" : {
-            "minLength" : 1,
-            "type" : "string"
-          },
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
-        "required" : [ "decision", "reason" ],
-        "type" : "object"
-      },
-      "DecisionResponse" : {
-        "properties" : {
-          "actionCode" : {
-            "type" : "string"
-          },
-          "decidedAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "decidedBy" : {
-            "type" : "string"
-          },
-          "id" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "status" : {
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
       "DeliveryFeeView" : {
         "properties" : {
           "available" : {
@@ -931,6 +904,58 @@
           },
           "reasonCode" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "DeliveryTariffControllerBandRequest" : {
+        "properties" : {
+          "bandSet" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "baseMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "fromMeters" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "perKmMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "toMeters" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "DeliveryTariffControllerBindLocationRequest" : {
+        "properties" : {
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "locationId" ],
+        "type" : "object"
+      },
+      "DeliveryTariffControllerVersionView" : {
+        "properties" : {
+          "status" : {
+            "type" : "string"
+          },
+          "tariffId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -1063,7 +1088,7 @@
           },
           "bands" : {
             "items" : {
-              "$ref" : "#/components/schemas/BandRequest"
+              "$ref" : "#/components/schemas/DeliveryTariffControllerBandRequest"
             },
             "minItems" : 1,
             "type" : "array"
@@ -1128,47 +1153,6 @@
           }
         },
         "required" : [ "actorId", "bands", "currency", "distanceMode", "feeSource" ],
-        "type" : "object"
-      },
-      "DraftVersionRequest" : {
-        "properties" : {
-          "actorId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "circle" : {
-            "$ref" : "#/components/schemas/CircleRequest"
-          },
-          "currency" : {
-            "maxLength" : 3,
-            "minLength" : 3,
-            "type" : "string"
-          },
-          "deliveryTariffId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "freeDeliveryFromMinor" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "geoJson" : {
-            "type" : "string"
-          },
-          "minBasketMinor" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "priority" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "regionId" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        },
-        "required" : [ "actorId", "currency" ],
         "type" : "object"
       },
       "EndPolicyRequest" : {
@@ -1300,6 +1284,37 @@
         },
         "type" : "object"
       },
+      "FailureOperationsControllerReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "FailureOperationsControllerResolveRequest" : {
+        "properties" : {
+          "category" : {
+            "enum" : [ "TRANSIENT_INFRASTRUCTURE", "TRANSIENT_PROVIDER", "CONTRACT_UNSUPPORTED", "PAYLOAD_INVALID", "DOMAIN_REJECTED", "AUTHORIZATION_REJECTED", "UNCERTAIN_EXTERNAL_OUTCOME" ],
+            "type" : "string"
+          },
+          "evidenceReference" : {
+            "maxLength" : 512,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "category", "reason" ],
+        "type" : "object"
+      },
       "FailureSummary" : {
         "properties" : {
           "attemptCount" : {
@@ -1402,6 +1417,17 @@
         },
         "type" : "object"
       },
+      "GrantControllerReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
       "GrantRequest" : {
         "properties" : {
           "brandId" : {
@@ -1458,15 +1484,6 @@
             "type" : "string"
           },
           "status" : {
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
-      "IdResponse" : {
-        "properties" : {
-          "id" : {
-            "format" : "uuid",
             "type" : "string"
           }
         },
@@ -1813,6 +1830,123 @@
         },
         "type" : "object"
       },
+      "OnboardingControllerReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "OnboardingControllerRunView" : {
+        "properties" : {
+          "outstandingRequired" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "run" : {
+            "$ref" : "#/components/schemas/RunSummary"
+          },
+          "steps" : {
+            "items" : {
+              "$ref" : "#/components/schemas/StepView"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "OnboardingControllerStartRequest" : {
+        "properties" : {
+          "ownerEmail" : {
+            "maxLength" : 320,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "ownerSubjectId" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "templateId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "OrderOutcomeReasonControllerIdResponse" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "OrderOutcomeReasonControllerReasonRequest" : {
+        "properties" : {
+          "allowedFulfillmentModes" : {
+            "items" : {
+              "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "customerRefund" : {
+            "enum" : [ "FULL", "NONE", "DISCRETIONARY" ],
+            "type" : "string"
+          },
+          "customerTexts" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "minProperties" : 1,
+            "type" : "object"
+          },
+          "internalName" : {
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "kind" : {
+            "enum" : [ "CANCELLATION", "COMPLETION" ],
+            "type" : "string"
+          },
+          "liabilityParty" : {
+            "enum" : [ "TENANT", "CUSTOMER", "COURIER_PARTNER", "PLATFORM" ],
+            "type" : "string"
+          },
+          "stockDisposition" : {
+            "enum" : [ "RELEASE", "RETURN_TO_STOCK", "WRITE_OFF", "NO_EFFECT" ],
+            "type" : "string"
+          },
+          "systemCategory" : {
+            "enum" : [ "CUSTOMER_CANCELLED", "CUSTOMER_UNREACHABLE", "CUSTOMER_NO_SHOW", "RESTAURANT_REFUSED", "ITEM_UNAVAILABLE", "KITCHEN_CAPACITY", "DELIVERY_FAILED", "COURIER_UNAVAILABLE", "ADDRESS_UNSERVICEABLE", "PAYMENT_NOT_RECEIVED", "DUPLICATE_ORDER", "TEST_ORDER", "SUSPECTED_FRAUD", "PRICING_ERROR", "DELIVERED_OWN_COURIER", "DELIVERED_PARTNER_COURIER", "COLLECTED_BY_CUSTOMER", "SERVED_IN_HOUSE", "APPROVAL_DEADLINE_LAPSED", "OTHER" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "customerTexts", "internalName", "kind", "systemCategory" ],
+        "type" : "object"
+      },
+      "OrderOutcomeReasonControllerVersionResponse" : {
+        "properties" : {
+          "reasonId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "OutboxFailureDetail" : {
         "properties" : {
           "aggregateId" : {
@@ -2102,6 +2236,17 @@
         },
         "type" : "object"
       },
+      "PlatformGrantControllerReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
       "PlatformGrantRequest" : {
         "properties" : {
           "principalSubject" : {
@@ -2238,6 +2383,36 @@
         },
         "type" : "object"
       },
+      "PosOrderExportControllerResolutionRequest" : {
+        "properties" : {
+          "decision" : {
+            "enum" : [ "LANDED", "ABSENT", "ABANDON" ],
+            "type" : "string"
+          },
+          "externalOrderId" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "decision", "reason" ],
+        "type" : "object"
+      },
+      "PosSyncRunControllerStartRequest" : {
+        "properties" : {
+          "bindingId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "bindingId" ],
+        "type" : "object"
+      },
       "PriceBookResponse" : {
         "properties" : {
           "currency" : {
@@ -2294,6 +2469,17 @@
         },
         "type" : "object"
       },
+      "ProviderInstallationControllerReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
       "PublicationResponse" : {
         "properties" : {
           "contentHash" : {
@@ -2311,51 +2497,6 @@
             "$ref" : "#/components/schemas/ValidationResponse"
           }
         },
-        "type" : "object"
-      },
-      "ReasonRequest" : {
-        "properties" : {
-          "allowedFulfillmentModes" : {
-            "items" : {
-              "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
-              "type" : "string"
-            },
-            "type" : "array"
-          },
-          "customerRefund" : {
-            "enum" : [ "FULL", "NONE", "DISCRETIONARY" ],
-            "type" : "string"
-          },
-          "customerTexts" : {
-            "additionalProperties" : {
-              "type" : "string"
-            },
-            "minProperties" : 1,
-            "type" : "object"
-          },
-          "internalName" : {
-            "maxLength" : 120,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "kind" : {
-            "enum" : [ "CANCELLATION", "COMPLETION" ],
-            "type" : "string"
-          },
-          "liabilityParty" : {
-            "enum" : [ "TENANT", "CUSTOMER", "COURIER_PARTNER", "PLATFORM" ],
-            "type" : "string"
-          },
-          "stockDisposition" : {
-            "enum" : [ "RELEASE", "RETURN_TO_STOCK", "WRITE_OFF", "NO_EFFECT" ],
-            "type" : "string"
-          },
-          "systemCategory" : {
-            "enum" : [ "CUSTOMER_CANCELLED", "CUSTOMER_UNREACHABLE", "CUSTOMER_NO_SHOW", "RESTAURANT_REFUSED", "ITEM_UNAVAILABLE", "KITCHEN_CAPACITY", "DELIVERY_FAILED", "COURIER_UNAVAILABLE", "ADDRESS_UNSERVICEABLE", "PAYMENT_NOT_RECEIVED", "DUPLICATE_ORDER", "TEST_ORDER", "SUSPECTED_FRAUD", "PRICING_ERROR", "DELIVERED_OWN_COURIER", "DELIVERED_PARTNER_COURIER", "COLLECTED_BY_CUSTOMER", "SERVED_IN_HOUSE", "APPROVAL_DEADLINE_LAPSED", "OTHER" ],
-            "type" : "string"
-          }
-        },
-        "required" : [ "customerTexts", "internalName", "kind", "systemCategory" ],
         "type" : "object"
       },
       "ReasonResponse" : {
@@ -2491,46 +2632,6 @@
         "required" : [ "code", "legalName", "tin" ],
         "type" : "object"
       },
-      "ResolutionRequest" : {
-        "properties" : {
-          "decision" : {
-            "enum" : [ "LANDED", "ABSENT", "ABANDON" ],
-            "type" : "string"
-          },
-          "externalOrderId" : {
-            "maxLength" : 64,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
-        "required" : [ "decision", "reason" ],
-        "type" : "object"
-      },
-      "ResolveRequest" : {
-        "properties" : {
-          "category" : {
-            "enum" : [ "TRANSIENT_INFRASTRUCTURE", "TRANSIENT_PROVIDER", "CONTRACT_UNSUPPORTED", "PAYLOAD_INVALID", "DOMAIN_REJECTED", "AUTHORIZATION_REJECTED", "UNCERTAIN_EXTERNAL_OUTCOME" ],
-            "type" : "string"
-          },
-          "evidenceReference" : {
-            "maxLength" : 512,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
-        "required" : [ "category", "reason" ],
-        "type" : "object"
-      },
       "ResolvedEntitlement" : {
         "properties" : {
           "declaredMode" : {
@@ -2612,26 +2713,6 @@
         },
         "type" : "object"
       },
-      "RunView" : {
-        "properties" : {
-          "outstandingRequired" : {
-            "items" : {
-              "type" : "string"
-            },
-            "type" : "array"
-          },
-          "run" : {
-            "$ref" : "#/components/schemas/RunSummary"
-          },
-          "steps" : {
-            "items" : {
-              "$ref" : "#/components/schemas/StepView"
-            },
-            "type" : "array"
-          }
-        },
-        "type" : "object"
-      },
       "ScheduleView" : {
         "properties" : {
           "acceptsScheduledOrders" : {
@@ -2642,6 +2723,73 @@
             "type" : "string"
           },
           "name" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ServiceZoneControllerBindLocationRequest" : {
+        "properties" : {
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "locationId" ],
+        "type" : "object"
+      },
+      "ServiceZoneControllerDraftVersionRequest" : {
+        "properties" : {
+          "actorId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "circle" : {
+            "$ref" : "#/components/schemas/CircleRequest"
+          },
+          "currency" : {
+            "maxLength" : 3,
+            "minLength" : 3,
+            "type" : "string"
+          },
+          "deliveryTariffId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "freeDeliveryFromMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "geoJson" : {
+            "type" : "string"
+          },
+          "minBasketMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "priority" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "regionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "actorId", "currency" ],
+        "type" : "object"
+      },
+      "ServiceZoneControllerVersionView" : {
+        "properties" : {
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "zoneId" : {
+            "format" : "uuid",
             "type" : "string"
           }
         },
@@ -2682,16 +2830,6 @@
             "type" : "integer"
           }
         },
-        "type" : "object"
-      },
-      "StartRequest" : {
-        "properties" : {
-          "bindingId" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        },
-        "required" : [ "bindingId" ],
         "type" : "object"
       },
       "StepView" : {
@@ -2996,35 +3134,6 @@
         },
         "type" : "object"
       },
-      "VersionResponse" : {
-        "properties" : {
-          "reasonId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "version" : {
-            "format" : "int32",
-            "type" : "integer"
-          }
-        },
-        "type" : "object"
-      },
-      "VersionView" : {
-        "properties" : {
-          "status" : {
-            "type" : "string"
-          },
-          "version" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "zoneId" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
       "ZoneView" : {
         "properties" : {
           "code" : {
@@ -3124,7 +3233,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReasonRequest"
+                "$ref" : "#/components/schemas/PlatformGrantControllerReasonRequest"
               }
             }
           },
@@ -3264,7 +3373,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ResolveRequest"
+                "$ref" : "#/components/schemas/FailureOperationsControllerResolveRequest"
               }
             }
           },
@@ -3310,7 +3419,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReasonRequest"
+                "$ref" : "#/components/schemas/FailureOperationsControllerReasonRequest"
               }
             }
           },
@@ -3431,7 +3540,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ResolveRequest"
+                "$ref" : "#/components/schemas/FailureOperationsControllerResolveRequest"
               }
             }
           },
@@ -3471,7 +3580,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReasonRequest"
+                "$ref" : "#/components/schemas/FailureOperationsControllerReasonRequest"
               }
             }
           },
@@ -3883,7 +3992,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/DecisionRequest"
+                "$ref" : "#/components/schemas/ApprovalRequestControllerDecisionRequest"
               }
             }
           },
@@ -3894,7 +4003,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/DecisionResponse"
+                  "$ref" : "#/components/schemas/ApprovalRequestControllerDecisionResponse"
                 }
               }
             },
@@ -4089,7 +4198,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/IdResponse"
+                  "$ref" : "#/components/schemas/CatalogAuthoringControllerIdResponse"
                 }
               }
             },
@@ -4143,7 +4252,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/IdResponse"
+                  "$ref" : "#/components/schemas/CatalogAuthoringControllerIdResponse"
                 }
               }
             },
@@ -4405,7 +4514,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/IdResponse"
+                  "$ref" : "#/components/schemas/CatalogAuthoringControllerIdResponse"
                 }
               }
             },
@@ -4521,7 +4630,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/IdResponse"
+                  "$ref" : "#/components/schemas/CatalogAuthoringControllerIdResponse"
                 }
               }
             },
@@ -4575,7 +4684,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/IdResponse"
+                  "$ref" : "#/components/schemas/CatalogAuthoringControllerIdResponse"
                 }
               }
             },
@@ -4732,7 +4841,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/IdResponse"
+                  "$ref" : "#/components/schemas/CatalogAuthoringControllerIdResponse"
                 }
               }
             },
@@ -4972,7 +5081,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/BindLocationRequest"
+                "$ref" : "#/components/schemas/DeliveryTariffControllerBindLocationRequest"
               }
             }
           },
@@ -5031,7 +5140,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/VersionView"
+                  "$ref" : "#/components/schemas/DeliveryTariffControllerVersionView"
                 }
               }
             },
@@ -5094,7 +5203,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/VersionView"
+                  "$ref" : "#/components/schemas/DeliveryTariffControllerVersionView"
                 }
               }
             },
@@ -6047,7 +6156,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/BindLocationRequest"
+                "$ref" : "#/components/schemas/ServiceZoneControllerBindLocationRequest"
               }
             }
           },
@@ -6095,7 +6204,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/DraftVersionRequest"
+                "$ref" : "#/components/schemas/ServiceZoneControllerDraftVersionRequest"
               }
             }
           },
@@ -6106,7 +6215,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/VersionView"
+                  "$ref" : "#/components/schemas/ServiceZoneControllerVersionView"
                 }
               }
             },
@@ -6169,7 +6278,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/VersionView"
+                  "$ref" : "#/components/schemas/ServiceZoneControllerVersionView"
                 }
               }
             },
@@ -6303,7 +6412,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReasonRequest"
+                "$ref" : "#/components/schemas/GrantControllerReasonRequest"
               }
             }
           },
@@ -6512,7 +6621,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReasonRequest"
+                "$ref" : "#/components/schemas/ProviderInstallationControllerReasonRequest"
               }
             }
           },
@@ -6568,7 +6677,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReasonRequest"
+                "$ref" : "#/components/schemas/ProviderInstallationControllerReasonRequest"
               }
             }
           },
@@ -6888,7 +6997,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/StartRequest"
+                "$ref" : "#/components/schemas/OnboardingControllerStartRequest"
               }
             }
           },
@@ -6928,7 +7037,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/RunView"
+                  "$ref" : "#/components/schemas/OnboardingControllerRunView"
                 }
               }
             },
@@ -6965,7 +7074,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/RunView"
+                  "$ref" : "#/components/schemas/OnboardingControllerRunView"
                 }
               }
             },
@@ -7001,7 +7110,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReasonRequest"
+                "$ref" : "#/components/schemas/OnboardingControllerReasonRequest"
               }
             }
           },
@@ -7048,7 +7157,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReasonRequest"
+                "$ref" : "#/components/schemas/OnboardingControllerReasonRequest"
               }
             }
           },
@@ -7216,7 +7325,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReasonRequest"
+                "$ref" : "#/components/schemas/OrderOutcomeReasonControllerReasonRequest"
               }
             }
           },
@@ -7227,7 +7336,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/IdResponse"
+                  "$ref" : "#/components/schemas/OrderOutcomeReasonControllerIdResponse"
                 }
               }
             },
@@ -7331,7 +7440,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReasonRequest"
+                "$ref" : "#/components/schemas/OrderOutcomeReasonControllerReasonRequest"
               }
             }
           },
@@ -7342,7 +7451,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/VersionResponse"
+                  "$ref" : "#/components/schemas/OrderOutcomeReasonControllerVersionResponse"
                 }
               }
             },
@@ -7491,7 +7600,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ResolutionRequest"
+                "$ref" : "#/components/schemas/PosOrderExportControllerResolutionRequest"
               }
             }
           },
@@ -7539,7 +7648,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/StartRequest"
+                "$ref" : "#/components/schemas/PosSyncRunControllerStartRequest"
               }
             }
           },

@@ -283,94 +283,6 @@
         },
         "type" : "object"
       },
-      "AddressResponse" : {
-        "properties" : {
-          "addressId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "coordinateSource" : {
-            "enum" : [ "NOT_GEOCODED", "LANDMARK_ONLY", "GEOCODER", "CUSTOMER_PIN", "OPERATOR_PIN", "LEGACY_UNSOURCED" ],
-            "type" : "string"
-          },
-          "deliveryInstructions" : {
-            "type" : "string"
-          },
-          "fields" : {
-            "$ref" : "#/components/schemas/AddressFields"
-          },
-          "label" : {
-            "type" : "string"
-          },
-          "latitude" : {
-            "format" : "double",
-            "type" : "number"
-          },
-          "longitude" : {
-            "format" : "double",
-            "type" : "number"
-          },
-          "version" : {
-            "format" : "int32",
-            "type" : "integer"
-          }
-        },
-        "type" : "object"
-      },
-      "AdjustmentRequest" : {
-        "properties" : {
-          "approvedBy" : {
-            "minLength" : 1,
-            "type" : "string"
-          },
-          "entitlementKey" : {
-            "minLength" : 1,
-            "type" : "string"
-          },
-          "periodKey" : {
-            "minLength" : 1,
-            "type" : "string"
-          },
-          "quantityDelta" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "sourceReference" : {
-            "maxLength" : 200,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
-        "required" : [ "approvedBy", "entitlementKey", "periodKey", "reason" ],
-        "type" : "object"
-      },
-      "AdjustmentResponse" : {
-        "properties" : {
-          "amountMinor" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "descriptionCode" : {
-            "type" : "string"
-          },
-          "lineId" : {
-            "type" : "string"
-          },
-          "sequence" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "type" : {
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
       "AdmissionResponse" : {
         "properties" : {
           "brandId" : {
@@ -536,6 +448,43 @@
             "type" : "integer"
           },
           "currency" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ApprovalRequestControllerDecisionRequest" : {
+        "properties" : {
+          "decision" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "decision", "reason" ],
+        "type" : "object"
+      },
+      "ApprovalRequestControllerDecisionResponse" : {
+        "properties" : {
+          "actionCode" : {
+            "type" : "string"
+          },
+          "decidedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "decidedBy" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
             "type" : "string"
           }
         },
@@ -876,58 +825,16 @@
         },
         "type" : "object"
       },
-      "BandRequest" : {
-        "properties" : {
-          "dayOfWeek" : {
-            "format" : "int32",
-            "maximum" : 7,
-            "minimum" : 1,
-            "type" : "integer"
-          },
-          "durationMinutes" : {
-            "format" : "int32",
-            "maximum" : 1440,
-            "minimum" : 1,
-            "type" : "integer"
-          },
-          "endsAt" : {
-            "type" : "string"
-          },
-          "fulfillmentMode" : {
-            "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
-            "type" : "string"
-          },
-          "priority" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "startsAt" : {
-            "type" : "string"
-          }
-        },
-        "required" : [ "endsAt", "startsAt" ],
-        "type" : "object"
-      },
       "BandsRequest" : {
         "properties" : {
           "bands" : {
             "items" : {
-              "$ref" : "#/components/schemas/BandRequest"
+              "$ref" : "#/components/schemas/LocationServiceOperationsControllerBandRequest"
             },
             "type" : "array"
           }
         },
         "required" : [ "bands" ],
-        "type" : "object"
-      },
-      "BindLocationRequest" : {
-        "properties" : {
-          "locationId" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        },
-        "required" : [ "locationId" ],
         "type" : "object"
       },
       "BindRequest" : {
@@ -1133,26 +1040,6 @@
         "required" : [ "reasonCode", "supervisorName" ],
         "type" : "object"
       },
-      "CancelRequest" : {
-        "properties" : {
-          "note" : {
-            "maxLength" : 2000,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "reasonCode" : {
-            "maxLength" : 64,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "reasonId" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        },
-        "required" : [ "reasonCode" ],
-        "type" : "object"
-      },
       "CandidateView" : {
         "properties" : {
           "correlationEchoed" : {
@@ -1286,6 +1173,15 @@
           "declaredMinor" : {
             "format" : "int64",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CatalogAuthoringControllerIdResponse" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -1453,6 +1349,20 @@
         },
         "type" : "object"
       },
+      "CircleRequest" : {
+        "properties" : {
+          "originLocationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "radiusMeters" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "originLocationId" ],
+        "type" : "object"
+      },
       "CloseRequest" : {
         "properties" : {
           "endReason" : {
@@ -1532,6 +1442,84 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "CommercialAdminControllerAdjustmentRequest" : {
+        "properties" : {
+          "approvedBy" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "entitlementKey" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "periodKey" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "quantityDelta" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "sourceReference" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "approvedBy", "entitlementKey", "periodKey", "reason" ],
+        "type" : "object"
+      },
+      "CommercialAdminControllerDraftVersionRequest" : {
+        "properties" : {
+          "billingPeriod" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "currency" : {
+            "maxLength" : 3,
+            "minLength" : 3,
+            "type" : "string"
+          },
+          "entitlements" : {
+            "items" : {
+              "$ref" : "#/components/schemas/EntitlementLineRequest"
+            },
+            "type" : "array"
+          },
+          "priceMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "termsReference" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "billingPeriod", "currency", "reason" ],
+        "type" : "object"
+      },
+      "CommercialAdminControllerReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
         "type" : "object"
       },
       "CompleteRequest" : {
@@ -1665,6 +1653,31 @@
             "type" : "integer"
           }
         },
+        "type" : "object"
+      },
+      "CourierDutyControllerOpenRequest" : {
+        "properties" : {
+          "collectionGate" : {
+            "maxLength" : 16,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "courierId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "deviceId" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "courierId", "deviceId", "reason" ],
         "type" : "object"
       },
       "CourierPin" : {
@@ -2234,6 +2247,25 @@
         "required" : [ "code", "displayNameEn", "displayNameRu", "displayNameUz", "role" ],
         "type" : "object"
       },
+      "CustomerControllerIdResponse" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CustomerControllerResolveRequest" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "brandId" ],
+        "type" : "object"
+      },
       "CustomerResponse" : {
         "properties" : {
           "anonymized" : {
@@ -2369,55 +2401,6 @@
         },
         "type" : "object"
       },
-      "DecisionRequest" : {
-        "properties" : {
-          "action" : {
-            "enum" : [ "APPROVE", "REJECT" ],
-            "type" : "string"
-          },
-          "decisionId" : {
-            "maxLength" : 64,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "issuedAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "reasonCode" : {
-            "maxLength" : 64,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
-        "required" : [ "action", "decisionId" ],
-        "type" : "object"
-      },
-      "DecisionResponse" : {
-        "properties" : {
-          "applied" : {
-            "type" : "boolean"
-          },
-          "effectiveAction" : {
-            "type" : "string"
-          },
-          "effectiveDecisionId" : {
-            "type" : "string"
-          },
-          "orderId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "status" : {
-            "type" : "string"
-          },
-          "version" : {
-            "format" : "int32",
-            "type" : "integer"
-          }
-        },
-        "type" : "object"
-      },
       "DeliveryFeeView" : {
         "properties" : {
           "available" : {
@@ -2450,6 +2433,58 @@
           },
           "reasonCode" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "DeliveryTariffControllerBandRequest" : {
+        "properties" : {
+          "bandSet" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "baseMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "fromMeters" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "perKmMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "toMeters" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "DeliveryTariffControllerBindLocationRequest" : {
+        "properties" : {
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "locationId" ],
+        "type" : "object"
+      },
+      "DeliveryTariffControllerVersionView" : {
+        "properties" : {
+          "status" : {
+            "type" : "string"
+          },
+          "tariffId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -2648,7 +2683,7 @@
           },
           "bands" : {
             "items" : {
-              "$ref" : "#/components/schemas/BandRequest"
+              "$ref" : "#/components/schemas/DeliveryTariffControllerBandRequest"
             },
             "minItems" : 1,
             "type" : "array"
@@ -2713,41 +2748,6 @@
           }
         },
         "required" : [ "actorId", "bands", "currency", "distanceMode", "feeSource" ],
-        "type" : "object"
-      },
-      "DraftVersionRequest" : {
-        "properties" : {
-          "billingPeriod" : {
-            "minLength" : 1,
-            "type" : "string"
-          },
-          "currency" : {
-            "maxLength" : 3,
-            "minLength" : 3,
-            "type" : "string"
-          },
-          "entitlements" : {
-            "items" : {
-              "$ref" : "#/components/schemas/EntitlementLineRequest"
-            },
-            "type" : "array"
-          },
-          "priceMinor" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "termsReference" : {
-            "maxLength" : 500,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
-        "required" : [ "billingPeriod", "currency", "reason" ],
         "type" : "object"
       },
       "DutySessionResponse" : {
@@ -3131,6 +3131,37 @@
         },
         "type" : "object"
       },
+      "FailureOperationsControllerReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "FailureOperationsControllerResolveRequest" : {
+        "properties" : {
+          "category" : {
+            "enum" : [ "TRANSIENT_INFRASTRUCTURE", "TRANSIENT_PROVIDER", "CONTRACT_UNSUPPORTED", "PAYLOAD_INVALID", "DOMAIN_REJECTED", "AUTHORIZATION_REJECTED", "UNCERTAIN_EXTERNAL_OUTCOME" ],
+            "type" : "string"
+          },
+          "evidenceReference" : {
+            "maxLength" : 512,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "category", "reason" ],
+        "type" : "object"
+      },
       "FailureSummary" : {
         "properties" : {
           "attemptCount" : {
@@ -3308,6 +3339,17 @@
         },
         "type" : "object"
       },
+      "FiscalDocumentControllerResolutionRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
       "FleetResponse" : {
         "properties" : {
           "pins" : {
@@ -3395,6 +3437,17 @@
           }
         },
         "required" : [ "appliesTo", "benefit", "idempotencyKey", "reason", "reasonCode" ],
+        "type" : "object"
+      },
+      "GrantControllerReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
         "type" : "object"
       },
       "GrantRequest" : {
@@ -3496,15 +3549,6 @@
           "totalMinor" : {
             "format" : "int64",
             "type" : "integer"
-          }
-        },
-        "type" : "object"
-      },
-      "IdResponse" : {
-        "properties" : {
-          "id" : {
-            "format" : "uuid",
-            "type" : "string"
           }
         },
         "type" : "object"
@@ -3984,37 +4028,6 @@
         "required" : [ "lineId", "variantId" ],
         "type" : "object"
       },
-      "LineResponse" : {
-        "properties" : {
-          "description" : {
-            "type" : "string"
-          },
-          "finalAmountMinor" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "lineId" : {
-            "type" : "string"
-          },
-          "quantity" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "taxAmountMinor" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "unitAmountMinor" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "variantId" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
       "LinkKeycloakOrganizationRequest" : {
         "properties" : {
           "organizationId" : {
@@ -4128,6 +4141,38 @@
         },
         "type" : "object"
       },
+      "LocationServiceOperationsControllerBandRequest" : {
+        "properties" : {
+          "dayOfWeek" : {
+            "format" : "int32",
+            "maximum" : 7,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "durationMinutes" : {
+            "format" : "int32",
+            "maximum" : 1440,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "endsAt" : {
+            "type" : "string"
+          },
+          "fulfillmentMode" : {
+            "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
+            "type" : "string"
+          },
+          "priority" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "startsAt" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "endsAt", "startsAt" ],
+        "type" : "object"
+      },
       "LocationSetRequest" : {
         "properties" : {
           "locationIds" : {
@@ -4201,6 +4246,55 @@
         },
         "type" : "object"
       },
+      "LoyaltyOperationsControllerAdjustmentRequest" : {
+        "properties" : {
+          "actorSubject" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "correlationId" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "idempotencyKey" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "reason" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "reasonCode" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "actorSubject", "brandId", "currency", "idempotencyKey", "reason", "reasonCode" ],
+        "type" : "object"
+      },
+      "LoyaltyOperationsControllerAdjustmentResponse" : {
+        "properties" : {
+          "approvalRequestId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ManagerCloseRequest" : {
         "properties" : {
           "currency" : {
@@ -4219,6 +4313,32 @@
           }
         },
         "required" : [ "reason", "reasonCode" ],
+        "type" : "object"
+      },
+      "MarketplaceOperationsControllerVerificationRequest" : {
+        "properties" : {
+          "code" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "code" ],
+        "type" : "object"
+      },
+      "MarketplaceOperationsControllerVerificationResponse" : {
+        "properties" : {
+          "attemptsRemaining" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "verified" : {
+            "type" : "boolean"
+          }
+        },
         "type" : "object"
       },
       "MatchReport" : {
@@ -4553,6 +4673,58 @@
         },
         "type" : "object"
       },
+      "MigrationRunView" : {
+        "properties" : {
+          "checksum" : {
+            "type" : "string"
+          },
+          "counters" : {
+            "$ref" : "#/components/schemas/RunCountersView"
+          },
+          "finishedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "runType" : {
+            "enum" : [ "BACKFILL", "CATCH_UP", "REMEDIATION", "RECONCILIATION" ],
+            "type" : "string"
+          },
+          "scopeId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sourceWatermark" : {
+            "type" : "string"
+          },
+          "startedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "startedBy" : {
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "RUNNING", "COMPLETED", "FAILED", "CANCELLED" ],
+            "type" : "string"
+          },
+          "targetWatermark" : {
+            "type" : "string"
+          },
+          "transformationVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "MoveLocationRequest" : {
         "properties" : {
           "locationId" : {
@@ -4688,6 +4860,28 @@
         },
         "type" : "object"
       },
+      "NotificationTemplateControllerIdResponse" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "NotificationTemplateControllerVersionResponse" : {
+        "properties" : {
+          "templateId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "versionNumber" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "ObservationBatchRequest" : {
         "properties" : {
           "activeAssignmentCount" : {
@@ -4752,38 +4946,54 @@
         "required" : [ "accuracyMeters", "capturedAt", "latitude", "longitude" ],
         "type" : "object"
       },
-      "OpenRequest" : {
+      "OnboardingControllerReasonRequest" : {
         "properties" : {
-          "currency" : {
-            "maxLength" : 3,
-            "minLength" : 3,
-            "type" : "string"
-          },
-          "partySize" : {
-            "format" : "int32",
-            "maximum" : 200,
-            "minimum" : 1,
-            "type" : "integer"
-          },
           "reason" : {
-            "maxLength" : 500,
+            "maxLength" : 1000,
             "minLength" : 0,
             "type" : "string"
-          },
-          "reservationId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "tableIds" : {
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "OnboardingControllerRunView" : {
+        "properties" : {
+          "outstandingRequired" : {
             "items" : {
-              "format" : "uuid",
               "type" : "string"
             },
-            "minItems" : 1,
+            "type" : "array"
+          },
+          "run" : {
+            "$ref" : "#/components/schemas/RunSummary"
+          },
+          "steps" : {
+            "items" : {
+              "$ref" : "#/components/schemas/StepView"
+            },
             "type" : "array"
           }
         },
-        "required" : [ "currency", "reason", "tableIds" ],
+        "type" : "object"
+      },
+      "OnboardingControllerStartRequest" : {
+        "properties" : {
+          "ownerEmail" : {
+            "maxLength" : 320,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "ownerSubjectId" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "templateId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "OpenScopeRequest" : {
@@ -4836,6 +5046,313 @@
             "maxLength" : 64,
             "minLength" : 0,
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "OperationsCourierControllerAdjustmentRequest" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "currency" : {
+            "maxLength" : 3,
+            "minLength" : 3,
+            "type" : "string"
+          },
+          "idempotencyKey" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "origin" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "reason" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "reasonCode" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "idempotencyKey", "origin", "reason", "reasonCode" ],
+        "type" : "object"
+      },
+      "OperationsCourierControllerAdjustmentResponse" : {
+        "properties" : {
+          "approvalRequestId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "entryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "written" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "OperationsMarketingControllerReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 512,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "OperationsOrderControllerAddressResponse" : {
+        "properties" : {
+          "apartment" : {
+            "type" : "string"
+          },
+          "city" : {
+            "type" : "string"
+          },
+          "deliveryInstructions" : {
+            "type" : "string"
+          },
+          "district" : {
+            "type" : "string"
+          },
+          "entrance" : {
+            "type" : "string"
+          },
+          "floor" : {
+            "type" : "string"
+          },
+          "landmark" : {
+            "type" : "string"
+          },
+          "latitude" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "line1" : {
+            "type" : "string"
+          },
+          "line2" : {
+            "type" : "string"
+          },
+          "longitude" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "postalCode" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "OperationsOrderControllerCancelRequest" : {
+        "properties" : {
+          "note" : {
+            "maxLength" : 2000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reasonCode" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reasonId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "reasonCode" ],
+        "type" : "object"
+      },
+      "OperationsOrderControllerDecisionRequest" : {
+        "properties" : {
+          "action" : {
+            "enum" : [ "APPROVE", "REJECT" ],
+            "type" : "string"
+          },
+          "decisionId" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "issuedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "reasonCode" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "action", "decisionId" ],
+        "type" : "object"
+      },
+      "OperationsOrderControllerDecisionResponse" : {
+        "properties" : {
+          "applied" : {
+            "type" : "boolean"
+          },
+          "effectiveAction" : {
+            "type" : "string"
+          },
+          "effectiveDecisionId" : {
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "OperationsOrderControllerLineResponse" : {
+        "properties" : {
+          "finalAmountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "hasNote" : {
+            "type" : "boolean"
+          },
+          "lineId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lineNumber" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "modifiers" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "productName" : {
+            "type" : "string"
+          },
+          "quantity" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "sku" : {
+            "type" : "string"
+          },
+          "variantName" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "OperationsOrderControllerOrderSummaryResponse" : {
+        "properties" : {
+          "actions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OrderActionResponse"
+            },
+            "type" : "array"
+          },
+          "approvalDeadlineAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "channelCode" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "fulfillmentMode" : {
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "publicOrderNumber" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "totalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "OperationsOrderControllerStateActionRequest" : {
+        "properties" : {
+          "reasonCode" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "targetStatus" : {
+            "enum" : [ "RECEIVED", "PAYMENT_AUTHORIZING", "AWAITING_APPROVAL", "PAYMENT_FAILED", "CONFIRMED", "REJECTED", "EXPIRED", "PREPARING", "READY", "FULFILLING", "COMPLETED", "CANCELLED" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "reasonCode", "targetStatus" ],
+        "type" : "object"
+      },
+      "OperationsRemedyControllerVerificationRequest" : {
+        "properties" : {
+          "correlationId" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "source" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "state" : {
+            "enum" : [ "UNVERIFIED", "CONFIRMED", "DISPUTED" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason", "source", "state" ],
+        "type" : "object"
+      },
+      "OperationsRemedyControllerVerificationResponse" : {
+        "properties" : {
+          "recorded" : {
+            "type" : "boolean"
           }
         },
         "type" : "object"
@@ -4940,7 +5457,7 @@
           },
           "lines" : {
             "items" : {
-              "$ref" : "#/components/schemas/LineResponse"
+              "$ref" : "#/components/schemas/OperationsOrderControllerLineResponse"
             },
             "type" : "array"
           },
@@ -4952,7 +5469,7 @@
             "type" : "integer"
           },
           "summary" : {
-            "$ref" : "#/components/schemas/OrderSummaryResponse"
+            "$ref" : "#/components/schemas/OperationsOrderControllerOrderSummaryResponse"
           },
           "taxMinor" : {
             "format" : "int64",
@@ -4996,6 +5513,73 @@
           },
           "variantName" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "OrderOutcomeReasonControllerIdResponse" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "OrderOutcomeReasonControllerReasonRequest" : {
+        "properties" : {
+          "allowedFulfillmentModes" : {
+            "items" : {
+              "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "customerRefund" : {
+            "enum" : [ "FULL", "NONE", "DISCRETIONARY" ],
+            "type" : "string"
+          },
+          "customerTexts" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "minProperties" : 1,
+            "type" : "object"
+          },
+          "internalName" : {
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "kind" : {
+            "enum" : [ "CANCELLATION", "COMPLETION" ],
+            "type" : "string"
+          },
+          "liabilityParty" : {
+            "enum" : [ "TENANT", "CUSTOMER", "COURIER_PARTNER", "PLATFORM" ],
+            "type" : "string"
+          },
+          "stockDisposition" : {
+            "enum" : [ "RELEASE", "RETURN_TO_STOCK", "WRITE_OFF", "NO_EFFECT" ],
+            "type" : "string"
+          },
+          "systemCategory" : {
+            "enum" : [ "CUSTOMER_CANCELLED", "CUSTOMER_UNREACHABLE", "CUSTOMER_NO_SHOW", "RESTAURANT_REFUSED", "ITEM_UNAVAILABLE", "KITCHEN_CAPACITY", "DELIVERY_FAILED", "COURIER_UNAVAILABLE", "ADDRESS_UNSERVICEABLE", "PAYMENT_NOT_RECEIVED", "DUPLICATE_ORDER", "TEST_ORDER", "SUSPECTED_FRAUD", "PRICING_ERROR", "DELIVERED_OWN_COURIER", "DELIVERED_PARTNER_COURIER", "COLLECTED_BY_CUSTOMER", "SERVED_IN_HOUSE", "APPROVAL_DEADLINE_LAPSED", "OTHER" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "customerTexts", "internalName", "kind", "systemCategory" ],
+        "type" : "object"
+      },
+      "OrderOutcomeReasonControllerVersionResponse" : {
+        "properties" : {
+          "reasonId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -5065,52 +5649,6 @@
           },
           "status" : {
             "type" : "string"
-          },
-          "version" : {
-            "format" : "int32",
-            "type" : "integer"
-          }
-        },
-        "type" : "object"
-      },
-      "OrderSummaryResponse" : {
-        "properties" : {
-          "actions" : {
-            "items" : {
-              "$ref" : "#/components/schemas/OrderActionResponse"
-            },
-            "type" : "array"
-          },
-          "approvalDeadlineAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "channelCode" : {
-            "type" : "string"
-          },
-          "createdAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "currency" : {
-            "type" : "string"
-          },
-          "fulfillmentMode" : {
-            "type" : "string"
-          },
-          "orderId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "publicOrderNumber" : {
-            "type" : "string"
-          },
-          "status" : {
-            "type" : "string"
-          },
-          "totalMinor" : {
-            "format" : "int64",
-            "type" : "integer"
           },
           "version" : {
             "format" : "int32",
@@ -5388,20 +5926,6 @@
         },
         "type" : "object"
       },
-      "PageOrderSummaryResponse" : {
-        "properties" : {
-          "items" : {
-            "items" : {
-              "$ref" : "#/components/schemas/OrderSummaryResponse"
-            },
-            "type" : "array"
-          },
-          "nextCursor" : {
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
       "PagePendingApprovalResponse" : {
         "properties" : {
           "items" : {
@@ -5449,6 +5973,20 @@
           "items" : {
             "items" : {
               "$ref" : "#/components/schemas/ScopeView"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PageStorefrontOrderingControllerOrderSummaryResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/StorefrontOrderingControllerOrderSummaryResponse"
             },
             "type" : "array"
           },
@@ -5767,6 +6305,17 @@
         },
         "type" : "object"
       },
+      "PlatformGrantControllerReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
       "PlatformGrantRequest" : {
         "properties" : {
           "principalSubject" : {
@@ -5901,6 +6450,36 @@
             "type" : "integer"
           }
         },
+        "type" : "object"
+      },
+      "PosOrderExportControllerResolutionRequest" : {
+        "properties" : {
+          "decision" : {
+            "enum" : [ "LANDED", "ABSENT", "ABANDON" ],
+            "type" : "string"
+          },
+          "externalOrderId" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "decision", "reason" ],
+        "type" : "object"
+      },
+      "PosSyncRunControllerStartRequest" : {
+        "properties" : {
+          "bindingId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "bindingId" ],
         "type" : "object"
       },
       "PreferenceResponse" : {
@@ -6150,6 +6729,17 @@
         },
         "type" : "object"
       },
+      "ProviderInstallationControllerReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
       "PublicationResponse" : {
         "properties" : {
           "contentHash" : {
@@ -6336,6 +6926,59 @@
         },
         "type" : "object"
       },
+      "QuoteControllerAdjustmentResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "descriptionCode" : {
+            "type" : "string"
+          },
+          "lineId" : {
+            "type" : "string"
+          },
+          "sequence" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "QuoteControllerLineResponse" : {
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "finalAmountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "lineId" : {
+            "type" : "string"
+          },
+          "quantity" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "taxAmountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "unitAmountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "QuoteRequestBody" : {
         "properties" : {
           "channel" : {
@@ -6367,7 +7010,7 @@
         "properties" : {
           "adjustments" : {
             "items" : {
-              "$ref" : "#/components/schemas/AdjustmentResponse"
+              "$ref" : "#/components/schemas/QuoteControllerAdjustmentResponse"
             },
             "type" : "array"
           },
@@ -6383,7 +7026,7 @@
           },
           "lines" : {
             "items" : {
-              "$ref" : "#/components/schemas/LineResponse"
+              "$ref" : "#/components/schemas/QuoteControllerLineResponse"
             },
             "type" : "array"
           },
@@ -6404,51 +7047,6 @@
             "type" : "integer"
           }
         },
-        "type" : "object"
-      },
-      "ReasonRequest" : {
-        "properties" : {
-          "allowedFulfillmentModes" : {
-            "items" : {
-              "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
-              "type" : "string"
-            },
-            "type" : "array"
-          },
-          "customerRefund" : {
-            "enum" : [ "FULL", "NONE", "DISCRETIONARY" ],
-            "type" : "string"
-          },
-          "customerTexts" : {
-            "additionalProperties" : {
-              "type" : "string"
-            },
-            "minProperties" : 1,
-            "type" : "object"
-          },
-          "internalName" : {
-            "maxLength" : 120,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "kind" : {
-            "enum" : [ "CANCELLATION", "COMPLETION" ],
-            "type" : "string"
-          },
-          "liabilityParty" : {
-            "enum" : [ "TENANT", "CUSTOMER", "COURIER_PARTNER", "PLATFORM" ],
-            "type" : "string"
-          },
-          "stockDisposition" : {
-            "enum" : [ "RELEASE", "RETURN_TO_STOCK", "WRITE_OFF", "NO_EFFECT" ],
-            "type" : "string"
-          },
-          "systemCategory" : {
-            "enum" : [ "CUSTOMER_CANCELLED", "CUSTOMER_UNREACHABLE", "CUSTOMER_NO_SHOW", "RESTAURANT_REFUSED", "ITEM_UNAVAILABLE", "KITCHEN_CAPACITY", "DELIVERY_FAILED", "COURIER_UNAVAILABLE", "ADDRESS_UNSERVICEABLE", "PAYMENT_NOT_RECEIVED", "DUPLICATE_ORDER", "TEST_ORDER", "SUSPECTED_FRAUD", "PRICING_ERROR", "DELIVERED_OWN_COURIER", "DELIVERED_PARTNER_COURIER", "COLLECTED_BY_CUSTOMER", "SERVED_IN_HOUSE", "APPROVAL_DEADLINE_LAPSED", "OTHER" ],
-            "type" : "string"
-          }
-        },
-        "required" : [ "customerTexts", "internalName", "kind", "systemCategory" ],
         "type" : "object"
       },
       "ReasonResponse" : {
@@ -6958,6 +7556,22 @@
         "required" : [ "expectedVersion", "releaseMode" ],
         "type" : "object"
       },
+      "ReservationControllerStateActionRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "targetStatus" : {
+            "maxLength" : 16,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason", "targetStatus" ],
+        "type" : "object"
+      },
       "ReservationRequest" : {
         "properties" : {
           "customerAccountId" : {
@@ -7053,17 +7667,6 @@
         },
         "type" : "object"
       },
-      "ResolutionRequest" : {
-        "properties" : {
-          "reason" : {
-            "maxLength" : 255,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
-        "required" : [ "reason" ],
-        "type" : "object"
-      },
       "ResolutionResponse" : {
         "properties" : {
           "documentId" : {
@@ -7098,16 +7701,6 @@
           }
         },
         "required" : [ "reason", "resolutionCode" ],
-        "type" : "object"
-      },
-      "ResolveRequest" : {
-        "properties" : {
-          "brandId" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        },
-        "required" : [ "brandId" ],
         "type" : "object"
       },
       "ResolveResponse" : {
@@ -7589,54 +8182,23 @@
         },
         "type" : "object"
       },
-      "RunView" : {
+      "RunSummary" : {
         "properties" : {
-          "checksum" : {
-            "type" : "string"
-          },
-          "counters" : {
-            "$ref" : "#/components/schemas/RunCountersView"
-          },
-          "finishedAt" : {
-            "format" : "date-time",
+          "currentPhase" : {
             "type" : "string"
           },
           "id" : {
             "format" : "uuid",
             "type" : "string"
           },
-          "runType" : {
-            "enum" : [ "BACKFILL", "CATCH_UP", "REMEDIATION", "RECONCILIATION" ],
-            "type" : "string"
-          },
-          "scopeId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "sourceWatermark" : {
-            "type" : "string"
-          },
-          "startedAt" : {
-            "format" : "date-time",
+          "lastError" : {
             "type" : "string"
           },
           "startedBy" : {
             "type" : "string"
           },
           "status" : {
-            "enum" : [ "RUNNING", "COMPLETED", "FAILED", "CANCELLED" ],
             "type" : "string"
-          },
-          "targetWatermark" : {
-            "type" : "string"
-          },
-          "transformationVersion" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "version" : {
-            "format" : "int32",
-            "type" : "integer"
           }
         },
         "type" : "object"
@@ -7833,6 +8395,73 @@
           }
         },
         "required" : [ "mode" ],
+        "type" : "object"
+      },
+      "ServiceZoneControllerBindLocationRequest" : {
+        "properties" : {
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "locationId" ],
+        "type" : "object"
+      },
+      "ServiceZoneControllerDraftVersionRequest" : {
+        "properties" : {
+          "actorId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "circle" : {
+            "$ref" : "#/components/schemas/CircleRequest"
+          },
+          "currency" : {
+            "maxLength" : 3,
+            "minLength" : 3,
+            "type" : "string"
+          },
+          "deliveryTariffId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "freeDeliveryFromMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "geoJson" : {
+            "type" : "string"
+          },
+          "minBasketMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "priority" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "regionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "actorId", "currency" ],
+        "type" : "object"
+      },
+      "ServiceZoneControllerVersionView" : {
+        "properties" : {
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "zoneId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "ServiceabilityView" : {
@@ -8184,16 +8813,6 @@
         },
         "type" : "object"
       },
-      "StartRequest" : {
-        "properties" : {
-          "bindingId" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        },
-        "required" : [ "bindingId" ],
-        "type" : "object"
-      },
       "StartRunRequest" : {
         "properties" : {
           "reason" : {
@@ -8235,22 +8854,6 @@
           }
         },
         "required" : [ "planVersionId", "reason" ],
-        "type" : "object"
-      },
-      "StateActionRequest" : {
-        "properties" : {
-          "reason" : {
-            "maxLength" : 500,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "targetStatus" : {
-            "maxLength" : 16,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
-        "required" : [ "reason", "targetStatus" ],
         "type" : "object"
       },
       "StatementResponse" : {
@@ -8363,6 +8966,36 @@
         },
         "type" : "object"
       },
+      "StepView" : {
+        "properties" : {
+          "attemptCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "detail" : {
+            "type" : "string"
+          },
+          "errorCode" : {
+            "type" : "string"
+          },
+          "externalReference" : {
+            "type" : "string"
+          },
+          "phase" : {
+            "type" : "string"
+          },
+          "required" : {
+            "type" : "boolean"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "stepKey" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "StockItemResponse" : {
         "properties" : {
           "stockItemId" : {
@@ -8371,6 +9004,40 @@
           },
           "trackingMode" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "StorefrontCustomerControllerAddressResponse" : {
+        "properties" : {
+          "addressId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "coordinateSource" : {
+            "enum" : [ "NOT_GEOCODED", "LANDMARK_ONLY", "GEOCODER", "CUSTOMER_PIN", "OPERATOR_PIN", "LEGACY_UNSOURCED" ],
+            "type" : "string"
+          },
+          "deliveryInstructions" : {
+            "type" : "string"
+          },
+          "fields" : {
+            "$ref" : "#/components/schemas/AddressFields"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "latitude" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "longitude" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -8404,6 +9071,64 @@
           "publicationId" : {
             "format" : "uuid",
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "StorefrontOrderingControllerCancelRequest" : {
+        "properties" : {
+          "reasonCode" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reasonCode" ],
+        "type" : "object"
+      },
+      "StorefrontOrderingControllerOrderSummaryResponse" : {
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "fulfillmentMode" : {
+            "type" : "string"
+          },
+          "fulfillmentStatus" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "paymentStatus" : {
+            "type" : "string"
+          },
+          "placedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "promisedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "publicOrderNumber" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "totalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -8598,6 +9323,56 @@
             "type" : "integer"
           }
         },
+        "type" : "object"
+      },
+      "TableSessionControllerOpenRequest" : {
+        "properties" : {
+          "currency" : {
+            "maxLength" : 3,
+            "minLength" : 3,
+            "type" : "string"
+          },
+          "partySize" : {
+            "format" : "int32",
+            "maximum" : 200,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reservationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tableIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "minItems" : 1,
+            "type" : "array"
+          }
+        },
+        "required" : [ "currency", "reason", "tableIds" ],
+        "type" : "object"
+      },
+      "TableSessionControllerStateActionRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "targetStatus" : {
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason", "targetStatus" ],
         "type" : "object"
       },
       "TableStatusRequest" : {
@@ -9116,39 +9891,6 @@
         },
         "type" : "object"
       },
-      "VerificationRequest" : {
-        "properties" : {
-          "correlationId" : {
-            "maxLength" : 128,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "reason" : {
-            "maxLength" : 500,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "source" : {
-            "maxLength" : 128,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "state" : {
-            "enum" : [ "UNVERIFIED", "CONFIRMED", "DISPUTED" ],
-            "type" : "string"
-          }
-        },
-        "required" : [ "reason", "source", "state" ],
-        "type" : "object"
-      },
-      "VerificationResponse" : {
-        "properties" : {
-          "recorded" : {
-            "type" : "boolean"
-          }
-        },
-        "type" : "object"
-      },
       "VerifyRequest" : {
         "properties" : {
           "evidenceMediaId" : {
@@ -9173,35 +9915,6 @@
           }
         },
         "required" : [ "method", "reason", "registrationIdentifier", "validUntil" ],
-        "type" : "object"
-      },
-      "VersionResponse" : {
-        "properties" : {
-          "reasonId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "version" : {
-            "format" : "int32",
-            "type" : "integer"
-          }
-        },
-        "type" : "object"
-      },
-      "VersionView" : {
-        "properties" : {
-          "status" : {
-            "type" : "string"
-          },
-          "version" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "zoneId" : {
-            "format" : "uuid",
-            "type" : "string"
-          }
-        },
         "type" : "object"
       },
       "WordingRequest" : {
@@ -9342,7 +10055,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReasonRequest"
+                "$ref" : "#/components/schemas/PlatformGrantControllerReasonRequest"
               }
             }
           },
@@ -9482,7 +10195,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ResolveRequest"
+                "$ref" : "#/components/schemas/FailureOperationsControllerResolveRequest"
               }
             }
           },
@@ -9528,7 +10241,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReasonRequest"
+                "$ref" : "#/components/schemas/FailureOperationsControllerReasonRequest"
               }
             }
           },
@@ -9649,7 +10362,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ResolveRequest"
+                "$ref" : "#/components/schemas/FailureOperationsControllerResolveRequest"
               }
             }
           },
@@ -9689,7 +10402,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReasonRequest"
+                "$ref" : "#/components/schemas/FailureOperationsControllerReasonRequest"
               }
             }
           },
@@ -10101,7 +10814,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/DecisionRequest"
+                "$ref" : "#/components/schemas/ApprovalRequestControllerDecisionRequest"
               }
             }
           },
@@ -10112,7 +10825,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/DecisionResponse"
+                  "$ref" : "#/components/schemas/ApprovalRequestControllerDecisionResponse"
                 }
               }
             },
@@ -10307,7 +11020,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/IdResponse"
+                  "$ref" : "#/components/schemas/CatalogAuthoringControllerIdResponse"
                 }
               }
             },
@@ -10361,7 +11074,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/IdResponse"
+                  "$ref" : "#/components/schemas/CatalogAuthoringControllerIdResponse"
                 }
               }
             },
@@ -10623,7 +11336,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/IdResponse"
+                  "$ref" : "#/components/schemas/CatalogAuthoringControllerIdResponse"
                 }
               }
             },
@@ -10739,7 +11452,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/IdResponse"
+                  "$ref" : "#/components/schemas/CatalogAuthoringControllerIdResponse"
                 }
               }
             },
@@ -10793,7 +11506,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/IdResponse"
+                  "$ref" : "#/components/schemas/CatalogAuthoringControllerIdResponse"
                 }
               }
             },
@@ -10950,7 +11663,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/IdResponse"
+                  "$ref" : "#/components/schemas/CatalogAuthoringControllerIdResponse"
                 }
               }
             },
@@ -11190,7 +11903,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/BindLocationRequest"
+                "$ref" : "#/components/schemas/DeliveryTariffControllerBindLocationRequest"
               }
             }
           },
@@ -11249,7 +11962,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/VersionView"
+                  "$ref" : "#/components/schemas/DeliveryTariffControllerVersionView"
                 }
               }
             },
@@ -11312,7 +12025,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/VersionView"
+                  "$ref" : "#/components/schemas/DeliveryTariffControllerVersionView"
                 }
               }
             },
@@ -12265,7 +12978,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/BindLocationRequest"
+                "$ref" : "#/components/schemas/ServiceZoneControllerBindLocationRequest"
               }
             }
           },
@@ -12313,7 +13026,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/DraftVersionRequest"
+                "$ref" : "#/components/schemas/ServiceZoneControllerDraftVersionRequest"
               }
             }
           },
@@ -12324,7 +13037,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/VersionView"
+                  "$ref" : "#/components/schemas/ServiceZoneControllerVersionView"
                 }
               }
             },
@@ -12387,7 +13100,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/VersionView"
+                  "$ref" : "#/components/schemas/ServiceZoneControllerVersionView"
                 }
               }
             },
@@ -12521,7 +13234,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReasonRequest"
+                "$ref" : "#/components/schemas/GrantControllerReasonRequest"
               }
             }
           },
@@ -12730,7 +13443,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReasonRequest"
+                "$ref" : "#/components/schemas/ProviderInstallationControllerReasonRequest"
               }
             }
           },
@@ -12786,7 +13499,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReasonRequest"
+                "$ref" : "#/components/schemas/ProviderInstallationControllerReasonRequest"
               }
             }
           },
@@ -13106,7 +13819,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/StartRequest"
+                "$ref" : "#/components/schemas/OnboardingControllerStartRequest"
               }
             }
           },
@@ -13146,7 +13859,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/RunView"
+                  "$ref" : "#/components/schemas/OnboardingControllerRunView"
                 }
               }
             },
@@ -13183,7 +13896,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/RunView"
+                  "$ref" : "#/components/schemas/OnboardingControllerRunView"
                 }
               }
             },
@@ -13219,7 +13932,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReasonRequest"
+                "$ref" : "#/components/schemas/OnboardingControllerReasonRequest"
               }
             }
           },
@@ -13266,7 +13979,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReasonRequest"
+                "$ref" : "#/components/schemas/OnboardingControllerReasonRequest"
               }
             }
           },
@@ -13434,7 +14147,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReasonRequest"
+                "$ref" : "#/components/schemas/OrderOutcomeReasonControllerReasonRequest"
               }
             }
           },
@@ -13445,7 +14158,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/IdResponse"
+                  "$ref" : "#/components/schemas/OrderOutcomeReasonControllerIdResponse"
                 }
               }
             },
@@ -13549,7 +14262,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReasonRequest"
+                "$ref" : "#/components/schemas/OrderOutcomeReasonControllerReasonRequest"
               }
             }
           },
@@ -13560,7 +14273,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/VersionResponse"
+                  "$ref" : "#/components/schemas/OrderOutcomeReasonControllerVersionResponse"
                 }
               }
             },
@@ -13709,7 +14422,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ResolutionRequest"
+                "$ref" : "#/components/schemas/PosOrderExportControllerResolutionRequest"
               }
             }
           },
@@ -13757,7 +14470,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/StartRequest"
+                "$ref" : "#/components/schemas/PosSyncRunControllerStartRequest"
               }
             }
           },
@@ -15091,7 +15804,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/AdjustmentRequest"
+                "$ref" : "#/components/schemas/OperationsCourierControllerAdjustmentRequest"
               }
             }
           },
@@ -15102,7 +15815,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/AdjustmentResponse"
+                  "$ref" : "#/components/schemas/OperationsCourierControllerAdjustmentResponse"
                 }
               }
             },
@@ -15224,7 +15937,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/AdjustmentRequest"
+                "$ref" : "#/components/schemas/LoyaltyOperationsControllerAdjustmentRequest"
               }
             }
           },
@@ -15235,7 +15948,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/AdjustmentResponse"
+                  "$ref" : "#/components/schemas/LoyaltyOperationsControllerAdjustmentResponse"
                 }
               }
             },
@@ -15434,7 +16147,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/VerificationRequest"
+                "$ref" : "#/components/schemas/MarketplaceOperationsControllerVerificationRequest"
               }
             }
           },
@@ -15445,7 +16158,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/VerificationResponse"
+                  "$ref" : "#/components/schemas/MarketplaceOperationsControllerVerificationResponse"
                 }
               }
             },
@@ -16074,7 +16787,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/VerificationRequest"
+                "$ref" : "#/components/schemas/OperationsRemedyControllerVerificationRequest"
               }
             }
           },
@@ -16085,7 +16798,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/VerificationResponse"
+                  "$ref" : "#/components/schemas/OperationsRemedyControllerVerificationResponse"
                 }
               }
             },
@@ -16232,7 +16945,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReasonRequest"
+                "$ref" : "#/components/schemas/CommercialAdminControllerReasonRequest"
               }
             }
           },
@@ -16294,7 +17007,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/DraftVersionRequest"
+                "$ref" : "#/components/schemas/CommercialAdminControllerDraftVersionRequest"
               }
             }
           },
@@ -16446,7 +17159,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/AdjustmentRequest"
+                "$ref" : "#/components/schemas/CommercialAdminControllerAdjustmentRequest"
               }
             }
           },
@@ -16806,7 +17519,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/RunView"
+                  "$ref" : "#/components/schemas/MigrationRunView"
                 }
               }
             },
@@ -16852,7 +17565,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/RunView"
+                  "$ref" : "#/components/schemas/MigrationRunView"
                 }
               }
             },
@@ -17239,7 +17952,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/RunView"
+                  "$ref" : "#/components/schemas/MigrationRunView"
                 }
               }
             },
@@ -18690,7 +19403,7 @@
               "*/*" : {
                 "schema" : {
                   "items" : {
-                    "$ref" : "#/components/schemas/AddressResponse"
+                    "$ref" : "#/components/schemas/StorefrontCustomerControllerAddressResponse"
                   },
                   "type" : "array"
                 }
@@ -18737,7 +19450,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/AddressResponse"
+                  "$ref" : "#/components/schemas/StorefrontCustomerControllerAddressResponse"
                 }
               }
             },
@@ -18818,7 +19531,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/AddressResponse"
+                  "$ref" : "#/components/schemas/StorefrontCustomerControllerAddressResponse"
                 }
               }
             },
@@ -18871,7 +19584,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/AddressResponse"
+                  "$ref" : "#/components/schemas/StorefrontCustomerControllerAddressResponse"
                 }
               }
             },
@@ -19037,7 +19750,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/PageOrderSummaryResponse"
+                  "$ref" : "#/components/schemas/PageStorefrontOrderingControllerOrderSummaryResponse"
                 }
               }
             },
@@ -19126,7 +19839,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/CancelRequest"
+                "$ref" : "#/components/schemas/StorefrontOrderingControllerCancelRequest"
               }
             }
           },
@@ -19362,7 +20075,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/OpenRequest"
+                "$ref" : "#/components/schemas/CourierDutyControllerOpenRequest"
               }
             }
           },
@@ -19764,7 +20477,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/OpenRequest"
+                "$ref" : "#/components/schemas/TableSessionControllerOpenRequest"
               }
             }
           },
@@ -20006,7 +20719,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/StateActionRequest"
+                "$ref" : "#/components/schemas/TableSessionControllerStateActionRequest"
               }
             }
           },
@@ -21316,7 +22029,7 @@
               "*/*" : {
                 "schema" : {
                   "items" : {
-                    "$ref" : "#/components/schemas/OrderSummaryResponse"
+                    "$ref" : "#/components/schemas/OperationsOrderControllerOrderSummaryResponse"
                   },
                   "type" : "array"
                 }
@@ -21718,7 +22431,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/DecisionRequest"
+                "$ref" : "#/components/schemas/OperationsOrderControllerDecisionRequest"
               }
             }
           },
@@ -21729,7 +22442,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/DecisionResponse"
+                  "$ref" : "#/components/schemas/OperationsOrderControllerDecisionResponse"
                 }
               }
             },
@@ -21781,7 +22494,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/CancelRequest"
+                "$ref" : "#/components/schemas/OperationsOrderControllerCancelRequest"
               }
             }
           },
@@ -21792,7 +22505,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/DecisionResponse"
+                  "$ref" : "#/components/schemas/OperationsOrderControllerDecisionResponse"
                 }
               }
             },
@@ -21855,7 +22568,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/DecisionResponse"
+                  "$ref" : "#/components/schemas/OperationsOrderControllerDecisionResponse"
                 }
               }
             },
@@ -21916,7 +22629,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/AddressResponse"
+                  "$ref" : "#/components/schemas/OperationsOrderControllerAddressResponse"
                 }
               }
             },
@@ -22154,7 +22867,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/StateActionRequest"
+                "$ref" : "#/components/schemas/OperationsOrderControllerStateActionRequest"
               }
             }
           },
@@ -22165,7 +22878,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/DecisionResponse"
+                  "$ref" : "#/components/schemas/OperationsOrderControllerDecisionResponse"
                 }
               }
             },
@@ -22380,7 +23093,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/StateActionRequest"
+                "$ref" : "#/components/schemas/ReservationControllerStateActionRequest"
               }
             }
           },
@@ -22613,7 +23326,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReasonRequest"
+                "$ref" : "#/components/schemas/OperationsMarketingControllerReasonRequest"
               }
             }
           },
@@ -22706,7 +23419,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReasonRequest"
+                "$ref" : "#/components/schemas/OperationsMarketingControllerReasonRequest"
               }
             }
           },
@@ -22938,7 +23651,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/IdResponse"
+                  "$ref" : "#/components/schemas/NotificationTemplateControllerIdResponse"
                 }
               }
             },
@@ -22993,7 +23706,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/VersionResponse"
+                  "$ref" : "#/components/schemas/NotificationTemplateControllerVersionResponse"
                 }
               }
             },
@@ -23231,7 +23944,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ResolveRequest"
+                "$ref" : "#/components/schemas/CustomerControllerResolveRequest"
               }
             }
           },
@@ -23334,7 +24047,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/IdResponse"
+                  "$ref" : "#/components/schemas/CustomerControllerIdResponse"
                 }
               }
             },
@@ -23417,7 +24130,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/IdResponse"
+                  "$ref" : "#/components/schemas/CustomerControllerIdResponse"
                 }
               }
             },
@@ -23510,7 +24223,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/IdResponse"
+                  "$ref" : "#/components/schemas/CustomerControllerIdResponse"
                 }
               }
             },
@@ -23731,7 +24444,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ResolutionRequest"
+                "$ref" : "#/components/schemas/FiscalDocumentControllerResolutionRequest"
               }
             }
           },
@@ -23778,7 +24491,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ResolutionRequest"
+                "$ref" : "#/components/schemas/FiscalDocumentControllerResolutionRequest"
               }
             }
           },
