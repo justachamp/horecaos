@@ -1,10 +1,14 @@
 package uz.horecaos.platform.integration.camel.notification.telegram;
 
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,14 +16,19 @@ import org.springframework.stereotype.Component;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.ProviderCall;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.integration.camel.notification.NotificationChannelAdapter;
+import uz.horecaos.platform.integration.provider.telegram.BotActionTokenStore;
 import uz.horecaos.platform.integration.provider.telegram.TelegramBindingStore;
 import uz.horecaos.platform.integration.provider.telegram.TelegramBindingStore.ChatRef;
 import uz.horecaos.platform.integration.provider.telegram.TelegramBotApiClient;
+import uz.horecaos.platform.integration.provider.telegram.TelegramBotMessages;
 import uz.horecaos.platform.integration.provider.telegram.TelegramCallResult;
 import uz.horecaos.platform.integration.provider.telegram.TelegramChatLockService;
+import uz.horecaos.platform.integration.provider.telegram.TelegramInlineKeyboard;
+import uz.horecaos.platform.integration.provider.telegram.TelegramInlineKeyboard.Button;
 import uz.horecaos.platform.integration.provider.telegram.TelegramMessageTracker;
 import uz.horecaos.platform.integration.provider.telegram.TelegramMessageTracker.Tracked;
 import uz.horecaos.platform.notifications.api.NotificationDispatch;
+import uz.horecaos.platform.ordering.api.OrderDecisionPort;
 
 /**
  * The Telegram notification channel adapter (ADR 0058), on the ADR 0007 route
@@ -46,12 +55,29 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
 
     private static final Logger log = LoggerFactory.getLogger(TelegramChannelAdapter.class);
 
+    /**
+     * ADR 0060 §2: the one templateKey whose Telegram rendering carries
+     * Approve/Reject buttons. Matched as a plain string, like every other
+     * templateKey comparison on this dispatch — {@code notifications.api}
+     * carries no enum for it, and {@code OrderNotificationTrigger}
+     * ({@code notifications.application}, internal to that module) is where
+     * the same literal is declared as the semantic template key a tenant
+     * authors wording against.
+     */
+    static final String ORDER_AWAITING_APPROVAL_TEMPLATE_KEY = "ORDER_AWAITING_APPROVAL";
+
+    private static final String ORDER_SUBJECT_TYPE = "Order";
+
     private final TelegramBotApiClient bots;
     private final TelegramBindingStore bindings;
     private final TelegramChatLockService locks;
     private final TelegramMessageTracker tracker;
     private final TelegramCircuitBreakers breakers;
+    private final BotActionTokenStore actionTokens;
+    private final Clock clock;
     private final Duration chatLeaseDuration;
+    private final Duration decisionTokenTtl;
+    private final String buttonLocale;
 
     public TelegramChannelAdapter(
             TelegramBotApiClient bots,
@@ -59,13 +85,57 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
             TelegramChatLockService locks,
             TelegramMessageTracker tracker,
             TelegramCircuitBreakers breakers,
-            @Value("${horecaos.notifications.telegram.chat-lease:PT20S}") Duration chatLeaseDuration) {
+            BotActionTokenStore actionTokens,
+            Clock clock,
+            @Value("${horecaos.notifications.telegram.chat-lease:PT20S}") Duration chatLeaseDuration,
+            @Value("${horecaos.notifications.telegram.decision-token-ttl:PT6H}") Duration decisionTokenTtl,
+            @Value("${horecaos.notifications.telegram.group-locale:ru}") String buttonLocale) {
         this.bots = bots;
         this.bindings = bindings;
         this.locks = locks;
         this.tracker = tracker;
         this.breakers = breakers;
+        this.actionTokens = actionTokens;
+        this.clock = clock;
         this.chatLeaseDuration = chatLeaseDuration;
+        this.decisionTokenTtl = decisionTokenTtl;
+        this.buttonLocale = buttonLocale;
+    }
+
+    /**
+     * The Approve/Reject keyboard for an order-awaiting-approval notification
+     * (ADR 0060 §2), or null for every other templateKey — nothing else this
+     * channel sends is an actionable decision.
+     *
+     * <p>Mints (or reuses, on a resend of unchanged content) one opaque token
+     * per direction via {@link BotActionTokenStore}; see that class and
+     * {@link uz.horecaos.platform.integration.provider.telegram.BotCallbackAuthorizer}
+     * for what a tap on either does.
+     */
+    private @Nullable TelegramInlineKeyboard orderDecisionKeyboard(NotificationDispatch dispatch) {
+        if (!ORDER_AWAITING_APPROVAL_TEMPLATE_KEY.equals(dispatch.templateKey())
+                || !ORDER_SUBJECT_TYPE.equals(dispatch.subjectType())
+                || dispatch.locationId() == null) {
+            // locationId is defensive only: every order names one
+            // (ordering.orders.location_id is NOT NULL), so this never fires
+            // in practice, and a keyboard-less notification is strictly safer
+            // than one whose buttons could not be scoped to a location.
+            return null;
+        }
+
+        UUID orderId = dispatch.subjectId();
+        UUID brandId = dispatch.brandId();
+        UUID locationId = dispatch.locationId();
+        Instant expiresAt = clock.instant().plus(decisionTokenTtl);
+
+        String approveToken = actionTokens.mintOrReuseOrderDecisionToken(
+                dispatch.tenantId(), orderId, brandId, locationId, OrderDecisionPort.Action.APPROVE, expiresAt);
+        String rejectToken = actionTokens.mintOrReuseOrderDecisionToken(
+                dispatch.tenantId(), orderId, brandId, locationId, OrderDecisionPort.Action.REJECT, expiresAt);
+
+        return new TelegramInlineKeyboard(List.of(List.of(
+                new Button(TelegramBotMessages.approveButtonLabel(buttonLocale), approveToken),
+                new Button(TelegramBotMessages.rejectButtonLabel(buttonLocale), rejectToken))));
     }
 
     @Override
@@ -227,11 +297,12 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
     private ProviderOutcome sendNew(
             NotificationDispatch dispatch, ProviderCall call, UUID bindingId, ChatRef chat, String contentHash) {
 
-        TelegramCallResult result = bots.sendMessage(call, chat.chatId(), chat.topicId(), dispatch.body());
+        TelegramInlineKeyboard keyboard = orderDecisionKeyboard(dispatch);
+        TelegramCallResult result = bots.sendMessage(call, chat.chatId(), chat.topicId(), dispatch.body(), keyboard);
 
         if (result instanceof TelegramCallResult.ChatMigrated migrated) {
             ChatRef rewritten = rewriteAndFollow(dispatch.tenantId(), bindingId, chat, migrated.newChatId());
-            result = bots.sendMessage(call, rewritten.chatId(), rewritten.topicId(), dispatch.body());
+            result = bots.sendMessage(call, rewritten.chatId(), rewritten.topicId(), dispatch.body(), keyboard);
         }
 
         return switch (result) {

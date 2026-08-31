@@ -20,6 +20,7 @@ import uz.horecaos.platform.notifications.domain.NotificationChannel;
 import uz.horecaos.platform.notifications.domain.NotificationClass;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore.NewNotification;
+import uz.horecaos.platform.ordering.api.OrderAwaitingApproval;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.OrderRejected;
 import uz.horecaos.platform.ordering.api.OrderingEvent;
@@ -52,6 +53,16 @@ public class OrderNotificationTrigger {
     public static final String ORDER_CONFIRMED = "ORDER_CONFIRMED";
 
     public static final String ORDER_REJECTED = "ORDER_REJECTED";
+
+    /**
+     * ADR 0060 §2: an order needs a restaurant decision. Operations-only —
+     * unlike confirmation and rejection, nothing here is customer-facing, so
+     * this key is never handed to {@link JdbcNotificationStore#createIntent},
+     * only to {@link OperationsAlertFanoutService#fanOut}. On the Telegram
+     * channel this is the templateKey {@code TelegramChannelAdapter} matches
+     * to attach the Approve/Reject keyboard.
+     */
+    public static final String ORDER_AWAITING_APPROVAL = "ORDER_AWAITING_APPROVAL";
 
     static final String SUBJECT_TYPE = "Order";
 
@@ -97,6 +108,12 @@ public class OrderNotificationTrigger {
                         // reason code read from the order row later would be missing,
                         // because ordering stores the decision, not the message.
                         reasonVariables(rejected.reasonCode()));
+            // ADR 0060 §2: the order notification the bot's Approve/Reject
+            // buttons ride. Operations-only, unlike the two cases above — a
+            // customer already knows they placed an order and is waiting, so
+            // this never becomes a customer notification intent.
+            case OrderAwaitingApproval awaiting ->
+                createOperationsOnly(awaiting, ORDER_AWAITING_APPROVAL, awaiting.brandId(), awaiting.locationId());
             // Every other ordering fact is deliberately silent. Adding a case here
             // is adding a message a customer receives, which is a product decision
             // and should look like one in a diff.
@@ -185,6 +202,35 @@ public class OrderNotificationTrigger {
                 event.eventId(),
                 "%s:%s:%s".formatted(templateKey, SUBJECT_TYPE, event.orderId()),
                 triggerVariables,
+                expiry);
+    }
+
+    /**
+     * The operations-only counterpart of {@link #create}: the same import
+     * suppression and the same fan-out call, minus the customer notification
+     * intent — there is no customer-facing wording for "a restaurant is
+     * deciding on your order" in this rollout, and creating one is exactly
+     * the product decision {@link #onOrderingEvent}'s own {@code default}
+     * case comment warns against making silently.
+     */
+    private void createOperationsOnly(OrderingEvent event, String templateKey, UUID brandId, UUID locationId) {
+        if (ImportSuppression.suppress(ExternalEffect.CUSTOMER_NOTIFICATION, SUBJECT_TYPE, event.orderId())) {
+            return;
+        }
+
+        UUID tenantId = event.tenantId().value();
+
+        operationsAlerts.fanOut(
+                tenantId,
+                brandId,
+                locationId,
+                templateKey,
+                templateKey,
+                SUBJECT_TYPE,
+                event.orderId(),
+                event.eventId(),
+                "%s:%s:%s".formatted(templateKey, SUBJECT_TYPE, event.orderId()),
+                Map.of(),
                 expiry);
     }
 

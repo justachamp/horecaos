@@ -126,6 +126,43 @@ public final class EntitlementKeys {
             .describedAs("Whether Telegram supervisor digests (15-minute, half-day, day-close) may be delivered.")
             .build();
 
+    /**
+     * ADR 0058's operations alerts — order confirmations, payment failures,
+     * fiscal blocks, 86'd items, dead letters — as distinct from the digests
+     * above: a tenant that bound a chat did so to hear about its own orders,
+     * so this one defaults {@code TRUE} like the catalogue's other features
+     * (an unsubscribed tenant is an unfinished sale, never a tenant that
+     * stops working), where digests are the opt-in half of the family.
+     * Registered here at the wave-6 merge, replacing the provisional local
+     * key {@code TelegramOperationsEntitlementGate} declared while the two
+     * worktrees could not see each other.
+     */
+    public static final EntitlementKey<Boolean> TELEGRAM_OPERATIONS_ALERTS_ENABLED = EntitlementKey.feature(
+                    "telegram.operations_alerts.enabled")
+            .safeDefault(Boolean.TRUE)
+            .ownedBy("notifications")
+            .describedAs("Whether operations Telegram alerts may fan out to this tenant's bound chats (ADR 0058).")
+            .build();
+
+    /**
+     * ADR 0060: whether the Telegram staff bot answers a tap or a typed
+     * command with anything beyond its stage-1, read-only reach — the
+     * Approve/Reject buttons, the stop-list toggle, and the stats query.
+     *
+     * <p>{@code safeDefault(TRUE)} for the same reason every other feature key
+     * here defaults open: the pilot runs meter-only, and a no-POS tenant that
+     * onboarded before a plan exists must not lose the one floor ADR 0060
+     * promises it. Linking an account and receiving notifications are
+     * unaffected either way — this key gates interactivity specifically, not
+     * ADR 0058's stage-1 plumbing underneath it.
+     */
+    public static final EntitlementKey<Boolean> TELEGRAM_BOT_INTERACTIVE_ENABLED = EntitlementKey.feature(
+                    "integration.telegram_bot.interactive_enabled")
+            .safeDefault(Boolean.TRUE)
+            .ownedBy("integration")
+            .describedAs("Whether the Telegram staff bot accepts callback taps and typed commands for this tenant.")
+            .build();
+
     private static final Map<String, EntitlementKey<?>> BY_CODE = index(List.of(
             BRANDS_MAX_COUNT,
             LOCATIONS_MAX_COUNT,
@@ -139,7 +176,9 @@ public final class EntitlementKeys {
             DELIVERY_PARTNER_INTEGRATIONS_ENABLED,
             PAYMENTS_PROVIDER_INTEGRATIONS_ENABLED,
             ANALYTICS_ADVANCED_ENABLED,
-            TELEGRAM_DIGESTS_ENABLED));
+            TELEGRAM_DIGESTS_ENABLED,
+            TELEGRAM_OPERATIONS_ALERTS_ENABLED,
+            TELEGRAM_BOT_INTERACTIVE_ENABLED));
 
     private EntitlementKeys() {}
 

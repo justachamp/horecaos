@@ -67,6 +67,32 @@ public interface OrderDirectory {
             Instant approvalDeadlineAt) {}
 
     /**
+     * The board's own order counts for one location (ADR 0060 §3's bot
+     * {@code /stats} command: "reading the counts read model"). Mirrors
+     * {@code JdbcOrderStore.OrderCountsRow} field for field — an internal
+     * infrastructure type never crosses this boundary, so this is a plain
+     * projection of it, not a reuse.
+     *
+     * @return zeros for a location with no orders at all, never empty —
+     *         there is nothing optional about "how many orders", unlike
+     *         {@link #summary}
+     */
+    default Counts counts(UUID tenantId, UUID brandId, UUID locationId) {
+        return new Counts(0, 0, 0, 0, 0, 0, 0, 0, 0);
+    }
+
+    record Counts(
+            long newOrders,
+            long awaitingApproval,
+            long inKitchen,
+            long ready,
+            long fulfilling,
+            long completed,
+            long cancelled,
+            long totalNonTerminal,
+            long total) {}
+
+    /**
      * What a consumer may hold about an order.
      *
      * @param customerAccountId null on a guest order, which is not an error: a

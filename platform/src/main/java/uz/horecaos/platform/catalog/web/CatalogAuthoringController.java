@@ -270,7 +270,14 @@ public class CatalogAuthoringController {
             @PathVariable UUID variantId,
             @PathVariable UUID locationId,
             @Valid @RequestBody SetOfferingRequest request) {
-        authoring.setOffering(tenantId, brandId, locationId, variantId, request.status(), request.fulfillmentModes());
+        authoring.setOffering(
+                tenantId,
+                brandId,
+                locationId,
+                variantId,
+                request.status(),
+                request.fulfillmentModes(),
+                currentActor.get().subject());
         return ResponseEntity.noContent().build();
     }
 

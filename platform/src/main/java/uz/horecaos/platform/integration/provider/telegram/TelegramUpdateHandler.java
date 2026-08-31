@@ -2,7 +2,10 @@ package uz.horecaos.platform.integration.provider.telegram;
 
 import java.time.Clock;
 import java.time.Duration;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -14,35 +17,65 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.catalog.api.StopListPort;
+import uz.horecaos.platform.commercial.api.EntitlementKeys;
+import uz.horecaos.platform.commercial.api.EntitlementService;
+import uz.horecaos.platform.iam.api.AuthorizationService;
+import uz.horecaos.platform.iam.api.Capability;
+import uz.horecaos.platform.iam.api.CapabilityView;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.ProviderCall;
 import uz.horecaos.platform.integration.provider.telegram.TelegramLinkService.PendingLink;
+import uz.horecaos.platform.integration.provider.telegram.TelegramStaffLinkService.PendingStaffLink;
+import uz.horecaos.platform.integration.provider.telegram.TelegramStaffLinkService.TenantLink;
 import uz.horecaos.platform.integration.provider.telegram.TelegramWebhookInstallationLookup.WebhookInstallation;
+import uz.horecaos.platform.inventory.api.StockAvailabilityPort;
+import uz.horecaos.platform.ordering.api.OrderDirectory;
 
 /**
- * Everything an authenticated Telegram update may cause, this rollout stage:
- * exactly one command, {@code /link <code>} (ADR 0058). Every other update shape
- * — a plain message with no command, an edited message, a callback query, a
- * channel post — is read and ignored. There are no interactive elements in this
- * slice (ADR 0060 is a separate, later record) and no reply is owed to a message
- * that was not a command this bot understands.
+ * Everything an authenticated Telegram update may cause.
+ *
+ * <p>ADR 0058 stage 1 shipped exactly one command, group {@code /link
+ * <code>}, and ignored every other update shape. ADR 0060 grows hands: a
+ * staff {@code /link <code>} in a 1:1 chat (a different handshake — see
+ * {@link TelegramStaffLinkService}), a callback query from an inline
+ * Approve/Reject button (resolved through {@link BotCallbackAuthorizer}, the
+ * one place capability enforcement actually happens on this boundary), and
+ * two typed commands, {@code /86} and {@code /stats}, usable in a 1:1 chat or
+ * a bound group.
  */
 @Service
 public class TelegramUpdateHandler {
 
     private static final Logger log = LoggerFactory.getLogger(TelegramUpdateHandler.class);
 
-    private static final String LINK_PREFIX = "/link";
+    private static final String LINK_COMMAND = "link";
+    private static final String STOP_LIST_COMMAND = "86";
+    private static final String STATS_COMMAND = "stats";
+    private static final Set<String> TYPED_COMMANDS = Set.of(STOP_LIST_COMMAND, STATS_COMMAND);
 
-    /** Every event class an operations chat is subscribed to by default (ADR 0058 stage 1). */
+    /** Every event class an operations chat is subscribed to by default (ADR 0058/0060). */
     private static final Set<String> DEFAULT_SUBSCRIPTIONS =
-            Set.of("ORDER_CONFIRMED", "ORDER_REJECTED", "ORDER_APPROVAL_DEADLINE_WARNING");
+            Set.of("ORDER_CONFIRMED", "ORDER_REJECTED", "ORDER_APPROVAL_DEADLINE_WARNING", "ORDER_AWAITING_APPROVAL");
+
+    private static final Duration TENANT_SELECT_TTL = Duration.ofMinutes(15);
+
+    /** {@code InventoryService#setAvailabilityAudited} requires a reason; a typed command carries no free text. */
+    private static final String STOP_LIST_TOGGLE_REASON = "TELEGRAM_BOT_86";
 
     private final TelegramLinkService links;
+    private final TelegramStaffLinkService staffLinks;
     private final TelegramRightsVerifier rights;
     private final TelegramBindingStore bindings;
+    private final BotActionTokenStore actionTokens;
+    private final BotCallbackAuthorizer callbackAuthorizer;
+    private final AuthorizationService authorization;
+    private final EntitlementService entitlements;
+    private final OrderDirectory orderDirectory;
+    private final StopListPort stopList;
+    private final StockAvailabilityPort stockAvailability;
     private final TelegramBotApiClient bots;
     private final SecretResolver secrets;
     private final AuditRecorder audit;
@@ -51,16 +84,32 @@ public class TelegramUpdateHandler {
 
     public TelegramUpdateHandler(
             TelegramLinkService links,
+            TelegramStaffLinkService staffLinks,
             TelegramRightsVerifier rights,
             TelegramBindingStore bindings,
+            BotActionTokenStore actionTokens,
+            BotCallbackAuthorizer callbackAuthorizer,
+            AuthorizationService authorization,
+            EntitlementService entitlements,
+            OrderDirectory orderDirectory,
+            StopListPort stopList,
+            StockAvailabilityPort stockAvailability,
             TelegramBotApiClient bots,
             SecretResolver secrets,
             AuditRecorder audit,
             Clock clock,
             @Value("${horecaos.notifications.telegram.group-locale:ru}") String defaultLocale) {
         this.links = links;
+        this.staffLinks = staffLinks;
         this.rights = rights;
         this.bindings = bindings;
+        this.actionTokens = actionTokens;
+        this.callbackAuthorizer = callbackAuthorizer;
+        this.authorization = authorization;
+        this.entitlements = entitlements;
+        this.orderDirectory = orderDirectory;
+        this.stopList = stopList;
+        this.stockAvailability = stockAvailability;
         this.bots = bots;
         this.secrets = secrets;
         this.audit = audit;
@@ -74,52 +123,518 @@ public class TelegramUpdateHandler {
      * @param update the parsed Bot API {@code Update} object
      */
     public void handle(WebhookInstallation installation, Map<String, Object> update) {
+        if (update.get("callback_query") instanceof Map<?, ?> rawCallback) {
+            handleCallbackQuery(installation, asMap(rawCallback));
+            return;
+        }
+
         Object messageObject = update.get("message");
         if (!(messageObject instanceof Map<?, ?> rawMessage)) {
             return;
         }
-        @SuppressWarnings("unchecked")
-        Map<String, Object> message = (Map<String, Object>) rawMessage;
+        Map<String, Object> message = asMap(rawMessage);
 
         Object textObject = message.get("text");
         if (!(textObject instanceof String text)) {
             return;
         }
-        String code = linkCode(text);
-        if (code == null) {
+        ParsedCommand parsed = parseCommand(text);
+        if (parsed == null) {
             return;
         }
 
-        ProviderCall call = resolveCall(installation);
         Object chatObject = message.get("chat");
-        if (!(chatObject instanceof Map<?, ?> chat)) {
-            return;
-        }
-        if (!(chat.get("id") instanceof Number chatIdNumber)) {
+        if (!(chatObject instanceof Map<?, ?> chat) || !(chat.get("id") instanceof Number chatIdNumber)) {
             return;
         }
         long chatId = chatIdNumber.longValue();
         String chatType = String.valueOf(chat.get("type"));
-        if (!("group".equals(chatType) || "supergroup".equals(chatType))) {
-            bots.sendMessage(call, chatId, null, TelegramBotMessages.notAGroup(defaultLocale));
+        Integer topicId = message.get("message_thread_id") instanceof Number threadId ? threadId.intValue() : null;
+        long fromUserId = fromUserId(message);
+        boolean anonymousGroupAdmin = message.get("sender_chat") != null;
+
+        ProviderCall call = resolveCall(installation);
+
+        if ("private".equals(chatType)) {
+            handlePrivateMessage(installation, call, chatId, topicId, fromUserId, parsed);
             return;
         }
 
+        if (!("group".equals(chatType) || "supergroup".equals(chatType))) {
+            // A channel post or another shape this bot has no command for.
+            return;
+        }
+
+        if (LINK_COMMAND.equals(parsed.command())) {
+            handleGroupLink(installation, call, chatId, topicId, fromUserId, parsed.argument());
+            return;
+        }
+
+        if (!TYPED_COMMANDS.contains(parsed.command())) {
+            return;
+        }
+
+        if (anonymousGroupAdmin) {
+            // ADR 0060 §2: "a typed command from an anonymous group admin
+            // cannot resolve to a principal and is politely refused... button
+            // taps still resolve the real tapper and are unaffected" — this
+            // branch is exactly the one case that sentence describes.
+            bots.sendMessage(call, chatId, topicId, TelegramBotMessages.anonymousAdminRefused(defaultLocale));
+            return;
+        }
+
+        handleGroupTypedCommand(installation, call, chatId, topicId, fromUserId, parsed);
+    }
+
+    // ------------------------------------------------------------------ callbacks
+
+    private void handleCallbackQuery(WebhookInstallation installation, Map<String, Object> callback) {
+        Object idObject = callback.get("id");
+        if (!(idObject instanceof String callbackQueryId)) {
+            return;
+        }
+        ProviderCall call = resolveCall(installation);
+
+        // ADR 0060 §2/§4: acknowledged immediately, before token resolution,
+        // authorization, or any mutation — this call has a tight Telegram
+        // deadline and the outcome is reported separately, as a message edit
+        // or follow-up, never as a second answer to the same query.
+        bots.answerCallbackQuery(call, callbackQueryId, null);
+
+        Object dataObject = callback.get("data");
+        if (!(dataObject instanceof String token) || token.isBlank()) {
+            return;
+        }
+        Object messageObject = callback.get("message");
+        if (!(messageObject instanceof Map<?, ?> rawMessage)) {
+            return;
+        }
+        Map<String, Object> message = asMap(rawMessage);
+        Object chatObject = message.get("chat");
+        if (!(chatObject instanceof Map<?, ?> chat) || !(chat.get("id") instanceof Number chatIdNumber)) {
+            return;
+        }
+        long chatId = chatIdNumber.longValue();
         Integer topicId = message.get("message_thread_id") instanceof Number threadId ? threadId.intValue() : null;
-        long fromUserId = message.get("from") instanceof Map<?, ?> from && from.get("id") instanceof Number id
+        Long messageId =
+                message.get("message_id") instanceof Number messageIdNumber ? messageIdNumber.longValue() : null;
+
+        // The real tapper — callback_query.from.id is populated by Telegram
+        // even when the tap happens in a group with anonymous admins on,
+        // unlike message.from for a typed command (ADR 0060 §2's own point).
+        long fromUserId = callback.get("from") instanceof Map<?, ?> from && from.get("id") instanceof Number id
                 ? id.longValue()
                 : 0L;
+        if (fromUserId == 0L) {
+            return;
+        }
 
+        Optional<BotActionTokenStore.TenantSelectToken> picked = actionTokens.resolveTenantSelect(token, fromUserId);
+        if (picked.isPresent()) {
+            handleTenantSelected(call, chatId, topicId, fromUserId, picked.get());
+            return;
+        }
+
+        if (messageId == null) {
+            return;
+        }
+        handleOrderDecisionCallback(call, chatId, topicId, messageId, fromUserId, token);
+    }
+
+    private void handleOrderDecisionCallback(
+            ProviderCall call, long chatId, @Nullable Integer topicId, long messageId, long fromUserId, String token) {
+        BotCallbackAuthorizer.Outcome outcome = callbackAuthorizer.decide(token, fromUserId);
+
+        switch (outcome.result()) {
+            case APPLIED -> {
+                // ADR 0060 §2/§4: "on the first successful decision the
+                // inline keyboard is stripped."
+                bots.editMessageReplyMarkup(call, chatId, messageId, null);
+                var settled =
+                        outcome.decision() == null ? null : outcome.decision().settledBy();
+                boolean approved = settled != null && "APPROVE".equals(settled.action());
+                String actorLabel = settled != null ? settled.actorId() : String.valueOf(outcome.actorSubject());
+                bots.sendMessage(
+                        call,
+                        chatId,
+                        topicId,
+                        TelegramBotMessages.decisionApplied(defaultLocale, approved, actorLabel));
+            }
+            case ALREADY_SETTLED -> {
+                var settled =
+                        outcome.decision() == null ? null : outcome.decision().settledBy();
+                String text = settled == null
+                        ? TelegramBotMessages.decisionSettledElsewhere(defaultLocale)
+                        : TelegramBotMessages.decisionAlreadySettled(
+                                defaultLocale, settled.action(), settled.actorId());
+                bots.sendMessage(call, chatId, topicId, text);
+            }
+            case NOT_LINKED ->
+                bots.sendMessage(call, chatId, topicId, TelegramBotMessages.decisionNotLinked(defaultLocale));
+            case UNAUTHORIZED ->
+                bots.sendMessage(call, chatId, topicId, TelegramBotMessages.decisionUnauthorized(defaultLocale));
+            case TOKEN_EXPIRED ->
+                bots.sendMessage(call, chatId, topicId, TelegramBotMessages.decisionTokenExpired(defaultLocale));
+            case NOT_ENTITLED ->
+                bots.sendMessage(call, chatId, topicId, TelegramBotMessages.botNotEnabledForTenant(defaultLocale));
+        }
+    }
+
+    private void handleTenantSelected(
+            ProviderCall call,
+            long chatId,
+            @Nullable Integer topicId,
+            long fromUserId,
+            BotActionTokenStore.TenantSelectToken picked) {
+        Optional<String> principal = staffLinks.principalFor(picked.tenantId(), fromUserId);
+        if (principal.isEmpty()) {
+            bots.sendMessage(call, chatId, topicId, TelegramBotMessages.decisionNotLinked(defaultLocale));
+            return;
+        }
+        String argument = picked.pendingArgument() == null ? "" : picked.pendingArgument();
+        ParsedCommand resumed = new ParsedCommand(picked.pendingCommand(), argument);
+
+        Optional<LocationScope> scope =
+                resolveLocationForCommand(picked.tenantId(), principal.get(), resumed.command());
+        if (scope.isEmpty()) {
+            bots.sendMessage(call, chatId, topicId, TelegramBotMessages.ambiguousLocation(defaultLocale));
+            return;
+        }
+        executeTypedCommand(
+                call,
+                chatId,
+                topicId,
+                picked.tenantId(),
+                scope.get().brandId(),
+                scope.get().locationId(),
+                principal.get(),
+                resumed);
+    }
+
+    // ---------------------------------------------------------- typed commands
+
+    private void handlePrivateMessage(
+            WebhookInstallation installation,
+            ProviderCall call,
+            long chatId,
+            @Nullable Integer topicId,
+            long fromUserId,
+            ParsedCommand parsed) {
+        if (LINK_COMMAND.equals(parsed.command())) {
+            handleStaffLink(installation, call, chatId, fromUserId, parsed.argument());
+            return;
+        }
+        if (!TYPED_COMMANDS.contains(parsed.command())) {
+            return;
+        }
+
+        List<TenantLink> tenantLinks = staffLinks.tenantsFor(fromUserId);
+        if (tenantLinks.isEmpty()) {
+            bots.sendMessage(call, chatId, topicId, TelegramBotMessages.noTenantLinked(defaultLocale));
+            return;
+        }
+
+        record Candidate(UUID tenantId, String principalSubject, LocationScope scope) {}
+        List<Candidate> eligible = tenantLinks.stream()
+                .flatMap(link -> resolveLocationForCommand(link.tenantId(), link.principalSubject(), parsed.command())
+                        .map(scope -> new Candidate(link.tenantId(), link.principalSubject(), scope))
+                        .stream())
+                .toList();
+
+        if (eligible.isEmpty()) {
+            bots.sendMessage(call, chatId, topicId, TelegramBotMessages.noGrantInAnyLinkedTenant(defaultLocale));
+            return;
+        }
+        if (eligible.size() == 1) {
+            Candidate only = eligible.get(0);
+            executeTypedCommand(
+                    call,
+                    chatId,
+                    topicId,
+                    only.tenantId(),
+                    only.scope().brandId(),
+                    only.scope().locationId(),
+                    only.principalSubject(),
+                    parsed);
+            return;
+        }
+
+        // ADR 0060 §3: "an ambiguous DM command... is answered with a tenant
+        // picker unless the principal holds exactly one active grant."
+        List<TelegramInlineKeyboard.Button> buttons = eligible.stream()
+                .map(candidate -> {
+                    String pickToken = actionTokens.mintTenantSelectToken(
+                            candidate.tenantId(),
+                            fromUserId,
+                            parsed.command(),
+                            parsed.argument(),
+                            clock.instant().plus(TENANT_SELECT_TTL));
+                    return new TelegramInlineKeyboard.Button(
+                            candidate.tenantId().toString().substring(0, 8), pickToken);
+                })
+                .toList();
+        bots.sendMessage(
+                call,
+                chatId,
+                topicId,
+                TelegramBotMessages.tenantPickerPrompt(defaultLocale),
+                new TelegramInlineKeyboard(List.of(buttons)));
+    }
+
+    private void handleGroupTypedCommand(
+            WebhookInstallation installation,
+            ProviderCall call,
+            long chatId,
+            @Nullable Integer topicId,
+            long fromUserId,
+            ParsedCommand parsed) {
+        Optional<TelegramBindingStore.BindingScope> scope =
+                bindings.scopeForChat(installation.tenantId(), chatId, topicId);
+        if (scope.isEmpty() || scope.get().locationId() == null) {
+            bots.sendMessage(call, chatId, topicId, TelegramBotMessages.ambiguousLocation(defaultLocale));
+            return;
+        }
+        Optional<String> principal = staffLinks.principalFor(installation.tenantId(), fromUserId);
+        if (principal.isEmpty()) {
+            bots.sendMessage(call, chatId, topicId, TelegramBotMessages.decisionNotLinked(defaultLocale));
+            return;
+        }
+        executeTypedCommand(
+                call,
+                chatId,
+                topicId,
+                installation.tenantId(),
+                scope.get().brandId(),
+                scope.get().locationId(),
+                principal.get(),
+                parsed);
+    }
+
+    private void executeTypedCommand(
+            ProviderCall call,
+            long chatId,
+            @Nullable Integer topicId,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            String subject,
+            ParsedCommand parsed) {
+        if (!entitlements.featureEnabled(tenantId, EntitlementKeys.TELEGRAM_BOT_INTERACTIVE_ENABLED)) {
+            bots.sendMessage(call, chatId, topicId, TelegramBotMessages.botNotEnabledForTenant(defaultLocale));
+            return;
+        }
+        switch (parsed.command()) {
+            case STOP_LIST_COMMAND ->
+                executeStopListCommand(
+                        call, chatId, topicId, tenantId, brandId, locationId, subject, parsed.argument());
+            case STATS_COMMAND -> executeStatsCommand(call, chatId, topicId, tenantId, brandId, locationId, subject);
+            default -> {
+                /* unreachable: filtered by TYPED_COMMANDS upstream */
+            }
+        }
+    }
+
+    private void executeStopListCommand(
+            ProviderCall call,
+            long chatId,
+            @Nullable Integer topicId,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            String subject,
+            String argument) {
+        ResourceScope scope = ResourceScope.location(tenantId, brandId, locationId);
+        try {
+            authorization.require(subject, Capability.INVENTORY_ADJUST, scope);
+        } catch (AuthorizationService.AccessDeniedException denied) {
+            bots.sendMessage(call, chatId, topicId, TelegramBotMessages.decisionUnauthorized(defaultLocale));
+            return;
+        }
+
+        if (argument.isBlank()) {
+            List<StopListPort.Item> items = stopList.listAtLocation(tenantId, brandId, locationId);
+            if (items.isEmpty()) {
+                bots.sendMessage(call, chatId, topicId, TelegramBotMessages.stopListEmpty(defaultLocale));
+                return;
+            }
+            StringBuilder text = new StringBuilder();
+            for (StopListPort.Item item : items) {
+                text.append(TelegramBotMessages.stopListRow(
+                                item.available(), shortReference(item.variantId()), item.productName()))
+                        .append('\n');
+            }
+            text.append('\n').append(TelegramBotMessages.stopListUsage(defaultLocale));
+            bots.sendMessage(call, chatId, topicId, text.toString().strip());
+            return;
+        }
+
+        String reference = argument.split("\\s+", 2)[0];
+        StopListPort.Item item = resolveItemByReference(tenantId, brandId, locationId, reference);
+        if (item == null) {
+            bots.sendMessage(
+                    call, chatId, topicId, TelegramBotMessages.stopListUnknownReference(defaultLocale, reference));
+            return;
+        }
+
+        boolean nowAvailable = !item.available();
+        try {
+            stockAvailability.toggle(
+                    tenantId, locationId, item.variantId(), nowAvailable, STOP_LIST_TOGGLE_REASON, subject);
+        } catch (IllegalArgumentException | IllegalStateException notToggleable) {
+            // Not stocked at all, or QUANTITY-tracked (86 only ever applies to
+            // a BINARY item) — the same refusal a bad reference gets, since
+            // from the operator's chair both mean "there is nothing here to
+            // 86 by that reference."
+            bots.sendMessage(
+                    call, chatId, topicId, TelegramBotMessages.stopListUnknownReference(defaultLocale, reference));
+            return;
+        }
+
+        bots.sendMessage(
+                call,
+                chatId,
+                topicId,
+                TelegramBotMessages.stopListToggled(defaultLocale, item.productName(), nowAvailable));
+    }
+
+    private void executeStatsCommand(
+            ProviderCall call,
+            long chatId,
+            @Nullable Integer topicId,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            String subject) {
+        ResourceScope scope = ResourceScope.location(tenantId, brandId, locationId);
+        try {
+            authorization.require(subject, Capability.ORDER_READ, scope);
+        } catch (AuthorizationService.AccessDeniedException denied) {
+            bots.sendMessage(call, chatId, topicId, TelegramBotMessages.decisionUnauthorized(defaultLocale));
+            return;
+        }
+
+        OrderDirectory.Counts counts = orderDirectory.counts(tenantId, brandId, locationId);
+        String text = TelegramBotMessages.statsHeader(defaultLocale)
+                + "\n"
+                + TelegramBotMessages.statsRow(defaultLocale, "new", counts.newOrders())
+                + "\n"
+                + TelegramBotMessages.statsRow(defaultLocale, "awaiting", counts.awaitingApproval())
+                + "\n"
+                + TelegramBotMessages.statsRow(defaultLocale, "kitchen", counts.inKitchen())
+                + "\n"
+                + TelegramBotMessages.statsRow(defaultLocale, "ready", counts.ready())
+                + "\n"
+                + TelegramBotMessages.statsRow(defaultLocale, "fulfilling", counts.fulfilling())
+                + "\n"
+                + TelegramBotMessages.statsRow(defaultLocale, "completed", counts.completed())
+                + "\n"
+                + TelegramBotMessages.statsRow(defaultLocale, "cancelled", counts.cancelled());
+        bots.sendMessage(call, chatId, topicId, text);
+    }
+
+    /**
+     * The one location a principal's grant resolves to for one command's
+     * capability, in one tenant — or empty when it is zero or more than one.
+     *
+     * <p>ADR 0060 §3 names only the tenant picker explicitly; a principal
+     * whose grant spans several locations (a brand- or tenant-scoped grant,
+     * or more than one explicit location grant) is refused with
+     * {@link TelegramBotMessages#ambiguousLocation} rather than guessed at —
+     * deliberately narrower than the ADR strictly requires, and named as a
+     * scope decision rather than an oversight: the no-POS tenant ADR 0060 §6
+     * calls the design center is, in practice, a single location.
+     */
+    private Optional<LocationScope> resolveLocationForCommand(UUID tenantId, String subject, String command) {
+        Capability capability = STOP_LIST_COMMAND.equals(command) ? Capability.INVENTORY_ADJUST : Capability.ORDER_READ;
+        CapabilityView view = authorization.viewFor(subject, tenantId);
+        List<ResourceScope> locationScopes = view.scopes().stream()
+                .filter(grant -> grant.capabilities().contains(capability))
+                .map(CapabilityView.ScopeGrant::scope)
+                .filter(candidate -> candidate.type() == ResourceScope.ScopeType.LOCATION)
+                .distinct()
+                .toList();
+        if (locationScopes.size() != 1) {
+            return Optional.empty();
+        }
+        ResourceScope only = locationScopes.get(0);
+        // ResourceScope's own compact constructor guarantees brandId and
+        // locationId are non-null for ScopeType.LOCATION, just filtered for
+        // above; NullAway cannot see that guarantee across the stream.
+        return Optional.of(new LocationScope(
+                java.util.Objects.requireNonNull(only.brandId()), java.util.Objects.requireNonNull(only.locationId())));
+    }
+
+    private StopListPort.@Nullable Item resolveItemByReference(
+            UUID tenantId, UUID brandId, UUID locationId, String reference) {
+        String needle = reference.toLowerCase(Locale.ROOT);
+        return stopList.listAtLocation(tenantId, brandId, locationId).stream()
+                .filter(item -> shortReference(item.variantId()).equals(needle))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private static String shortReference(UUID id) {
+        return id.toString().replace("-", "").substring(0, 8);
+    }
+
+    // ------------------------------------------------------------ staff linking
+
+    private void handleStaffLink(
+            WebhookInstallation installation, ProviderCall call, long chatId, long fromUserId, String code) {
+        if (code.isEmpty()) {
+            return;
+        }
+        Optional<PendingStaffLink> pending = staffLinks.resolve(code);
+        if (pending.isEmpty()) {
+            bots.sendMessage(call, chatId, null, TelegramBotMessages.staffLinkInvalidOrExpiredCode());
+            return;
+        }
+        PendingStaffLink link = pending.get();
+        if (!link.tenantId().equals(installation.tenantId())) {
+            // Same refusal ADR 0058's group handshake gives for a cross-
+            // tenant code: this webhook's tenant, established by the secret-
+            // token check, is the only one it may ever write for.
+            log.warn(
+                    "Refusing a staff /link code issued for tenant {} against installation {} (tenant {})",
+                    link.tenantId(),
+                    installation.installationId(),
+                    installation.tenantId());
+            bots.sendMessage(call, chatId, null, TelegramBotMessages.staffLinkInvalidOrExpiredCode());
+            return;
+        }
+
+        staffLinks.link(link.tenantId(), link.id(), link.principalSubject(), fromUserId);
+
+        audit.record(AuditFact.of("integration.telegram_staff_link_created", AuditClass.SECURITY)
+                .by(ActorRef.user(link.principalSubject(), null))
+                .at(ResourceScope.tenant(link.tenantId()))
+                .because("Staff Telegram identity-link handshake completed")
+                .correlatedBy(link.id().toString())
+                .occurredAt(clock.instant())
+                .build());
+
+        bots.sendMessage(call, chatId, null, TelegramBotMessages.staffLinked(defaultLocale));
+        log.info("Linked Telegram account {} to principal in tenant {} via staff /link", fromUserId, link.tenantId());
+    }
+
+    // -------------------------------------------------------------- group link
+
+    private void handleGroupLink(
+            WebhookInstallation installation,
+            ProviderCall call,
+            long chatId,
+            @Nullable Integer topicId,
+            long fromUserId,
+            String code) {
+        if (code.isEmpty()) {
+            return;
+        }
         PendingLink pending = links.resolve(code).orElse(null);
         if (pending == null) {
             bots.sendMessage(call, chatId, topicId, TelegramBotMessages.invalidOrExpiredCode());
             return;
         }
         if (!pending.tenantId().equals(installation.tenantId())) {
-            // A code issued against one tenant's installation must never bind a
-            // chat into a different tenant's operations feed. The webhook's own
-            // tenant (established by the secret-token check, not by anything in
-            // the update) is the only tenant this call is allowed to write for.
             log.warn(
                     "Refusing a /link code issued for tenant {} against installation {} (tenant {})",
                     pending.tenantId(),
@@ -153,10 +668,10 @@ public class TelegramUpdateHandler {
         links.consume(pending.tenantId(), pending.id(), bindingId);
 
         // ADR 0026: binding activation is an ADR 0027 audit fact. The actor is
-        // the operator who requested the code, not the bot or the Telegram user
-        // who typed the command — a Telegram user id is not a Keycloak identity,
-        // and the accountable party is whoever the platform actually
-        // authenticated and authorized to create this access.
+        // the operator who requested the code, not the bot or the Telegram
+        // user who typed the command — a Telegram user id is not a Keycloak
+        // identity, and the accountable party is whoever the platform
+        // actually authenticated and authorized to create this access.
         audit.record(AuditFact.of("integration.telegram_binding_created", AuditClass.SECURITY)
                 .by(ActorRef.user(pending.requestedByPrincipalId(), null))
                 .at(ResourceScope.tenant(pending.tenantId()))
@@ -175,26 +690,45 @@ public class TelegramUpdateHandler {
                 pending.tenantId());
     }
 
+    // ----------------------------------------------------------------- parsing
+
     /**
-     * The code from a {@code /link <code>} command, or null if this message is
-     * not one.
+     * The command word and argument from a {@code /command[@botname] arg...}
+     * message, or null when {@code text} is not a command at all.
      *
-     * <p>Handles the {@code /link@botname <code>} shape Telegram sends group
-     * commands as when BotFather privacy mode is disabled and several bots are
-     * present, by comparing only the part of the first token before any
+     * <p>Handles the {@code /command@botname} shape Telegram sends group
+     * commands as when BotFather privacy mode is disabled and several bots
+     * are present, by comparing only the part of the first token before any
      * {@code @}.
      */
-    private static @Nullable String linkCode(String text) {
+    private static @Nullable ParsedCommand parseCommand(String text) {
         String trimmed = text.strip();
+        if (!trimmed.startsWith("/")) {
+            return null;
+        }
         int firstSpace = trimmed.indexOf(' ');
         String commandToken = firstSpace < 0 ? trimmed : trimmed.substring(0, firstSpace);
         int at = commandToken.indexOf('@');
-        String command = at < 0 ? commandToken : commandToken.substring(0, at);
-        if (!LINK_PREFIX.equalsIgnoreCase(command)) {
+        String command = (at < 0 ? commandToken : commandToken.substring(0, at))
+                .substring(1)
+                .toLowerCase(Locale.ROOT);
+        if (command.isEmpty()) {
             return null;
         }
-        String code = firstSpace < 0 ? "" : trimmed.substring(firstSpace + 1).strip();
-        return code.isEmpty() ? null : code;
+        String argument =
+                firstSpace < 0 ? "" : trimmed.substring(firstSpace + 1).strip();
+        return new ParsedCommand(command, argument);
+    }
+
+    private static long fromUserId(Map<String, Object> message) {
+        return message.get("from") instanceof Map<?, ?> from && from.get("id") instanceof Number id
+                ? id.longValue()
+                : 0L;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> asMap(Map<?, ?> raw) {
+        return (Map<String, Object>) raw;
     }
 
     private ProviderCall resolveCall(WebhookInstallation installation) {
@@ -202,4 +736,8 @@ public class TelegramUpdateHandler {
         return new ProviderCall(
                 installation.baseUrl(), secrets.resolve(reference).reveal(), null, Duration.ofSeconds(15));
     }
+
+    private record ParsedCommand(String command, String argument) {}
+
+    private record LocationScope(UUID brandId, UUID locationId) {}
 }

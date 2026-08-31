@@ -91,7 +91,11 @@ class CatalogTranslationTenantScopeTests {
         insertBrand(BRAND_B, TENANT_B, "B");
 
         store = new JdbcCatalogStore(jdbc, JsonMapper.builder().build());
-        authoring = new CatalogAuthoringService(store);
+        authoring = new CatalogAuthoringService(
+                store,
+                new uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder(
+                        jdbc, JsonMapper.builder().build()),
+                java.time.Clock.systemUTC());
     }
 
     /**

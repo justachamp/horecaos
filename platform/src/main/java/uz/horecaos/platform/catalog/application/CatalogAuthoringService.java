@@ -1,10 +1,16 @@
 package uz.horecaos.platform.catalog.application;
 
+import java.time.Clock;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierGroup;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierOption;
@@ -13,6 +19,8 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableNode;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
+import uz.horecaos.platform.iam.api.Capability;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.media.api.MediaAssetId;
 
 /**
@@ -27,9 +35,13 @@ import uz.horecaos.platform.media.api.MediaAssetId;
 public class CatalogAuthoringService {
 
     private final JdbcCatalogStore store;
+    private final AuditRecorder audit;
+    private final Clock clock;
 
-    public CatalogAuthoringService(JdbcCatalogStore store) {
+    public CatalogAuthoringService(JdbcCatalogStore store, AuditRecorder audit, Clock clock) {
         this.store = store;
+        this.audit = audit;
+        this.clock = clock;
     }
 
     @Transactional
@@ -283,6 +295,45 @@ public class CatalogAuthoringService {
             OfferingStatus status,
             List<String> fulfillmentModes) {
         store.upsertOffering(tenantId, brandId, locationId, variantId, status, String.join(",", fulfillmentModes));
+    }
+
+    /**
+     * The same offering toggle as {@link #setOffering}, plus the ADR 0027
+     * audit fact it never wrote: whether a location sells a variant at all
+     * is a menu-structure decision, distinct from the ADR 0060 stop-list
+     * toggle proper ({@code InventoryService#setAvailabilityAudited}, "a
+     * kitchen marking a dish sold out, or back on") but the same kind of
+     * unaudited availability mutation, closed here for the same reason.
+     * {@code CatalogAuthoringController} is this overload's only caller
+     * today.
+     *
+     * <p>The other overload keeps its own signature and its own thirty-odd
+     * fixture call sites unaudited on purpose: most are catalog authoring
+     * scaffolding that predates any actor at all, and widening every one of
+     * them to carry an actor for a mutation none of them means to audit would
+     * be noise, not coverage.
+     */
+    @Transactional
+    public void setOffering(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID variantId,
+            OfferingStatus status,
+            List<String> fulfillmentModes,
+            String actorSubject) {
+        store.upsertOffering(tenantId, brandId, locationId, variantId, status, String.join(",", fulfillmentModes));
+
+        audit.record(AuditFact.of("catalog.offering.set", AuditClass.BUSINESS)
+                .by(ActorRef.user(actorSubject, null))
+                .at(ResourceScope.location(tenantId, brandId, locationId))
+                .target("LocationOffering", variantId)
+                .because("Set variant availability to " + status)
+                .usingCapability(Capability.OFFERING_MANAGE.code())
+                .changed(Map.of("status", status.name(), "fulfillmentModes", fulfillmentModes))
+                .correlatedBy(variantId.toString())
+                .occurredAt(clock.instant())
+                .build());
     }
 
     /**

@@ -15,6 +15,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.iam.api.Capability;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.inventory.api.AvailabilityDecision;
 import uz.horecaos.platform.inventory.api.AvailabilityDecision.Unavailable;
 import uz.horecaos.platform.inventory.api.InventoryReservationPort;
@@ -48,14 +54,31 @@ public class InventoryService implements InventoryReservationPort {
 
     private static final String OWNER_QUOTE = "QUOTE";
 
+    /**
+     * Every existing caller that builds this service by hand (test fixtures
+     * that predate ADR 0060, none of which cares whether a sold-out toggle is
+     * audited) gets this rather than a constructor signature change that
+     * would touch all of them. Production wiring uses the three-argument,
+     * {@code @Autowired} constructor below and gets the real recorder.
+     */
+    private static final AuditRecorder NO_OP_AUDIT = fact -> {};
+
     private final JdbcInventoryStore store;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+    private final AuditRecorder audit;
 
     public InventoryService(JdbcInventoryStore store, ApplicationEventPublisher events, Clock clock) {
+        this(store, events, clock, NO_OP_AUDIT);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public InventoryService(
+            JdbcInventoryStore store, ApplicationEventPublisher events, Clock clock, AuditRecorder audit) {
         this.store = store;
         this.events = events;
         this.clock = clock;
+        this.audit = audit;
     }
 
     @Transactional
@@ -167,6 +190,73 @@ public class InventoryService implements InventoryReservationPort {
                 available,
                 reasonCode,
                 clock.instant()));
+    }
+
+    /**
+     * The same 86 toggle as {@link #setAvailability}, plus the ADR 0027 audit
+     * fact it never wrote on any channel: "a kitchen marking a dish sold out,
+     * or back on" changed {@code inventory.movements} and nothing else, so an
+     * operator asking "who 86'd the plov at 19:00" had no answer outside the
+     * ledger's own actor column — not an audit trail an investigator, a
+     * dispute, or a support ticket could search the way every other mutation
+     * in this platform can. One call site, both callers: {@code
+     * InventoryController.setAvailability} (web) and the bot's typed
+     * {@code /86} command, mirroring {@code CatalogAuthoringService}'s own
+     * audited {@code setOffering} overload for the parallel gap on that
+     * mutation.
+     *
+     * @return whether the item actually changed state — false when it was
+     *         already there, matching {@link #setAvailability}'s own no-op
+     *         rule, so a caller can render "already X" without a second query
+     */
+    @Transactional
+    public boolean setAvailabilityAudited(
+            UUID tenantId, UUID locationId, UUID variantId, boolean available, String reasonCode, String actorSubject) {
+        StockItemRow before = store.findStockItem(tenantId, locationId, variantId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("Variant " + variantId + " is not stocked at this location"));
+
+        setAvailability(tenantId, locationId, variantId, available, reasonCode, parseActorId(actorSubject));
+
+        if (Boolean.valueOf(available).equals(before.binaryAvailable())) {
+            return false;
+        }
+
+        audit.record(AuditFact.of("inventory.availability.set", AuditClass.BUSINESS)
+                .by(ActorRef.user(actorSubject, null))
+                .at(ResourceScope.location(tenantId, before.brandId(), locationId))
+                // The variant, not the internal stock_items row: "what changed"
+                // has to be the catalog item an operator or an auditor would
+                // actually search for.
+                .target("Variant", variantId)
+                .because(reasonCode)
+                .usingCapability(Capability.INVENTORY_ADJUST.code())
+                .changed(Map.of(
+                        "available",
+                        available,
+                        "stockItemId",
+                        before.stockItemId().toString()))
+                .correlatedBy(variantId.toString())
+                .occurredAt(clock.instant())
+                .build());
+        return true;
+    }
+
+    /**
+     * The Keycloak subject as the {@code UUID} {@link #setAvailability}'s own
+     * actor column expects — see {@code InventoryController.actorId()}'s
+     * identical parse and its doc comment on why this deployment's subjects
+     * are UUIDs. A subject that fails to parse is recorded as no actor at all
+     * rather than refused outright: the audit fact above still names the real
+     * subject string regardless, so nothing about "who" is lost even when the
+     * ledger's own UUID column cannot hold it.
+     */
+    private static @Nullable UUID parseActorId(String actorSubject) {
+        try {
+            return UUID.fromString(actorSubject);
+        } catch (IllegalArgumentException notAUuid) {
+            return null;
+        }
     }
 
     /**

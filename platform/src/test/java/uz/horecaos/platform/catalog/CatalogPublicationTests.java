@@ -121,7 +121,11 @@ class CatalogPublicationTests {
 
         store = new JdbcCatalogStore(jdbc, JsonMapper.builder().build());
         media = new MutableMediaAvailability();
-        authoring = new CatalogAuthoringService(store);
+        authoring = new CatalogAuthoringService(
+                store,
+                new uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder(
+                        jdbc, JsonMapper.builder().build()),
+                Clock.systemUTC());
 
         CatalogSnapshotLoader loader = new CatalogSnapshotLoader(store, media, allPriced(), LOCALE);
         publication = new CatalogPublicationService(
