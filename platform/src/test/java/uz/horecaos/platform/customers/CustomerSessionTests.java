@@ -55,7 +55,11 @@ class CustomerSessionTests {
     private static final UUID OTHER_TENANT = UUID.randomUUID();
     private static final UUID BRAND = UUID.randomUUID();
     private static final UUID SIBLING_BRAND = UUID.randomUUID();
-    private static final UUID ACCOUNT = UUID.randomUUID();
+    // Fixed, not random: theActorSubjectIsSafe asserts the subject carries no
+    // phone-shaped digit run ("998"), and a random UUID coincidentally contains
+    // that sequence roughly once in a few hundred runs — a flake with no bug.
+    // This literal is chosen to contain no "998"; keep it that way.
+    private static final UUID ACCOUNT = UUID.fromString("4ac0ff11-5e55-401c-8d0a-2b6c7e1f03d5");
     private static final Duration TTL = Duration.ofDays(30);
 
     private TickingClock clock;
