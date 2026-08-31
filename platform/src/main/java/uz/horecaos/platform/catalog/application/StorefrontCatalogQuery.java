@@ -7,6 +7,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.catalog.api.MenuPriceLookup;
@@ -78,7 +79,7 @@ public class StorefrontCatalogQuery {
             List<String> mediaIds = mediaIds(item.content());
             products.add(new MenuProduct(
                     item.entityId(),
-                    string(item.content(), "code"),
+                    code(item.content()),
                     name(item.content(), locale),
                     description(item.content(), locale),
                     mediaIds,
@@ -99,7 +100,7 @@ public class StorefrontCatalogQuery {
         List<MenuCategory> categories = categoryItems.stream()
                 .map(item -> new MenuCategory(
                         item.entityId(),
-                        string(item.content(), "code"),
+                        code(item.content()),
                         name(item.content(), locale),
                         parentOf(item.content()),
                         intOf(item.content(), "sortOrder"),
@@ -117,7 +118,7 @@ public class StorefrontCatalogQuery {
         List<MenuModifierGroup> modifierGroups = groupItems.stream()
                 .map(item -> new MenuModifierGroup(
                         item.entityId(),
-                        string(item.content(), "code"),
+                        code(item.content()),
                         name(item.content(), locale),
                         Boolean.TRUE.equals(item.content().get("required")),
                         intOf(item.content(), "minimumSelections"),
@@ -204,7 +205,7 @@ public class StorefrontCatalogQuery {
             Map<String, Object> option = (Map<String, Object>) element;
             options.add(new MenuModifierOption(
                     UUID.fromString(String.valueOf(option.get("optionId"))),
-                    string(option, "code"),
+                    code(option),
                     intOf(option, "maximumQuantity"),
                     null));
         }
@@ -225,16 +226,26 @@ public class StorefrontCatalogQuery {
         if (raw instanceof Map<?, ?> names && !names.isEmpty()) {
             Map<String, Map<String, String>> byLocale = (Map<String, Map<String, String>>) names;
             Map<String, String> requested = byLocale.get(locale);
-            if (requested != null && requested.get("name") != null) {
-                return requested.get("name");
+            if (requested != null) {
+                String requestedName = requested.get("name");
+                if (requestedName != null) {
+                    return requestedName;
+                }
             }
-            return byLocale.values().iterator().next().get("name");
+            String fallback = byLocale.values().iterator().next().get("name");
+            if (fallback != null) {
+                return fallback;
+            }
         }
-        return string(content, "code");
+        // The loader writes a code on every item, so this is reached with a real
+        // value; the empty string is the same "odd label over failed menu" choice
+        // for content hand-written around the loader.
+        String code = string(content, "code");
+        return code != null ? code : "";
     }
 
     @SuppressWarnings("unchecked")
-    private static String description(Map<String, Object> content, String locale) {
+    private static @Nullable String description(Map<String, Object> content, String locale) {
         Object raw = content.get("names");
         if (raw instanceof Map<?, ?> names) {
             Map<String, Map<String, String>> byLocale = (Map<String, Map<String, String>>) names;
@@ -274,7 +285,7 @@ public class StorefrontCatalogQuery {
         return categoryItems.stream().anyMatch(item -> categoryId.equals(parentOf(item.content())));
     }
 
-    private static UUID parentOf(Map<String, Object> content) {
+    private static @Nullable UUID parentOf(Map<String, Object> content) {
         // Absent means a root category. The "null" string check is kept for
         // publications written before absent values were omitted, which are
         // immutable and therefore still out there.
@@ -282,9 +293,21 @@ public class StorefrontCatalogQuery {
         return parent == null || "null".equals(parent) ? null : UUID.fromString(parent);
     }
 
-    private static String string(Map<String, Object> content, String key) {
+    private static @Nullable String string(Map<String, Object> content, String key) {
         Object value = content.get(key);
         return value == null ? null : String.valueOf(value);
+    }
+
+    /**
+     * The entity's code, which the loader writes on every published item.
+     *
+     * <p>The empty string covers only content written around the loader, on the
+     * same reasoning as {@link #name}: one odd label beats a menu that fails to
+     * load.
+     */
+    private static String code(Map<String, Object> content) {
+        String code = string(content, "code");
+        return code != null ? code : "";
     }
 
     /**
@@ -309,6 +332,8 @@ public class StorefrontCatalogQuery {
     }
 
     /**
+     * One location's live menu, exactly as a customer is shown it.
+     *
      * @param publicationId the exact snapshot served, so a cache can key on it
      * @param currency the price book's currency, or null when this brand has no
      *     active price book for this location and channel. Null means every
@@ -318,16 +343,27 @@ public class StorefrontCatalogQuery {
     public record StorefrontMenu(
             UUID publicationId,
             String locale,
-            String currency,
+            @Nullable String currency,
             List<MenuCategory> categories,
             List<MenuProduct> products,
             List<MenuModifierGroup> modifierGroups) {}
 
-    /** @param productIds in the category's own order, filtered to what this location serves */
+    /**
+     * One shelf of the menu, holding only what this location serves.
+     *
+     * @param productIds in the category's own order, filtered to what this location serves
+     */
     public record MenuCategory(
-            UUID categoryId, String code, String name, UUID parentCategoryId, int sortOrder, List<UUID> productIds) {}
+            UUID categoryId,
+            String code,
+            String name,
+            @Nullable UUID parentCategoryId,
+            int sortOrder,
+            List<UUID> productIds) {}
 
     /**
+     * One dish as the customer sees it, variants and pictures included.
+     *
      * @param imageUrls one platform URL per entry of {@code mediaAssetIds}, in the
      *     same order. Served rather than signed here: the URL is stable, cacheable
      *     with the menu, and resolves to a short-lived signed one at the moment a
@@ -339,7 +375,7 @@ public class StorefrontCatalogQuery {
             UUID productId,
             String code,
             String name,
-            String description,
+            @Nullable String description,
             List<String> mediaAssetIds,
             List<String> imageUrls,
             List<MenuVariant> variants,
@@ -361,23 +397,30 @@ public class StorefrontCatalogQuery {
     }
 
     /**
+     * One orderable size or form of a product.
+     *
      * @param sku null when the variant has none; never the string "null"
      * @param orderable false means shown as sold out rather than hidden
-     */
-    /**
      * @param amountMinor null when this variant has no active price. Not zero:
      *     an unpriced variant is a menu that is not finished, and showing it as
      *     free is how a brand sells a dish for nothing.
      */
     public record MenuVariant(
-            UUID variantId, String sku, String unitCode, boolean isDefault, boolean orderable, Long amountMinor) {
+            UUID variantId,
+            @Nullable String sku,
+            @Nullable String unitCode,
+            boolean isDefault,
+            boolean orderable,
+            @Nullable Long amountMinor) {
 
-        MenuVariant withPrice(Long price) {
+        MenuVariant withPrice(@Nullable Long price) {
             return new MenuVariant(variantId, sku, unitCode, isDefault, orderable, price);
         }
     }
 
     /**
+     * A choice offered on a product, published with its selection rules.
+     *
      * @param allowSameOptionMultipleTimes whether one option may be taken more
      *     than once, without which a client cannot honour maximumQuantity and
      *     has to pin it to one
@@ -407,10 +450,14 @@ public class StorefrontCatalogQuery {
         }
     }
 
-    /** @param amountMinor null when unpriced, and never zero for "no price". */
-    public record MenuModifierOption(UUID optionId, String code, int maximumQuantity, Long amountMinor) {
+    /**
+     * One selectable option within a modifier group.
+     *
+     * @param amountMinor null when unpriced, and never zero for "no price".
+     */
+    public record MenuModifierOption(UUID optionId, String code, int maximumQuantity, @Nullable Long amountMinor) {
 
-        MenuModifierOption withPrice(Long price) {
+        MenuModifierOption withPrice(@Nullable Long price) {
             return new MenuModifierOption(optionId, code, maximumQuantity, price);
         }
     }

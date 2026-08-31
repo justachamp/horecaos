@@ -34,6 +34,8 @@ public class JdbcDispatchBranchStore {
     }
 
     /**
+     * The branch a courier needs to arrive at, for dispatch.
+     *
      * @return empty when no such location belongs to this tenant and brand. An
      *         entity id alone is never proof of ownership, so all three are in the
      *         predicate rather than the id alone
@@ -67,6 +69,8 @@ public class JdbcDispatchBranchStore {
     }
 
     /**
+     * The branch end of a delivery, as a courier needs it to find the door.
+     *
      * @param coordinateSource carried as the string V0023 stores. Only one value
      *                         decides anything and {@link BranchOrigin} names it
      */

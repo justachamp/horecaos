@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.fulfillment.domain.VersionStatus;
 
 /**
@@ -49,13 +50,13 @@ public record DeliveryTariff(
         FeeSource feeSource,
         DistanceMode distanceMode,
         int roadFactorBasisPoints,
-        UUID routingProviderInstallationId,
+        @Nullable UUID routingProviderInstallationId,
         int maxDistanceMeters,
         long minFeeMinor,
-        Long maxFeeMinor,
+        @Nullable Long maxFeeMinor,
         DistanceAccrual distanceAccrual,
-        Long feeRoundingStepMinor,
-        RoundingRule feeRoundingRule,
+        @Nullable Long feeRoundingStepMinor,
+        @Nullable RoundingRule feeRoundingRule,
         List<TariffBand> bands,
         List<TariffTimeRule> timeRules,
         List<TariffDiscount> discounts) {
@@ -73,10 +74,10 @@ public record DeliveryTariff(
             FeeSource feeSource,
             DistanceMode distanceMode,
             int roadFactorBasisPoints,
-            UUID routingProviderInstallationId,
+            @Nullable UUID routingProviderInstallationId,
             int maxDistanceMeters,
             long minFeeMinor,
-            Long maxFeeMinor,
+            @Nullable Long maxFeeMinor,
             List<TariffBand> bands,
             List<TariffTimeRule> timeRules) {
         this(
@@ -163,11 +164,13 @@ public record DeliveryTariff(
         }
 
         for (TariffDiscount discount : discounts) {
+            Integer allowanceMeters = discount.allowanceMeters();
             if (discount.kind() == TariffDiscount.Kind.DISTANCE_ALLOWANCE
-                    && discount.allowanceMeters() > maxDistanceMeters) {
+                    && allowanceMeters != null
+                    && allowanceMeters > maxDistanceMeters) {
                 problems.add(("A distance allowance of %d m exceeds the tariff's %d m reach, so it "
                                 + "would waive a fee no address can be charged")
-                        .formatted(discount.allowanceMeters(), maxDistanceMeters));
+                        .formatted(allowanceMeters, maxDistanceMeters));
             }
         }
         return problems;

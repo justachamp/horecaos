@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The order facts a till needs, read once and never copied (ADR 0011).
@@ -23,12 +24,16 @@ import java.util.UUID;
 public interface PosOrderSource {
 
     /**
+     * The order facts a till needs, revealed for this call and never stored.
+     *
      * @return empty when no order of that id belongs to this tenant, which is the
      *         same answer as "it does not exist" and deliberately so
      */
     Optional<ExportableOrder> find(UUID tenantId, UUID orderId, String revealPurpose);
 
     /**
+     * One order's facts, as a till needs to receive them.
+     *
      * @param status               the ADR 0019 status at the moment of the read.
      *                             Carried so the export can refuse an order that
      *                             never reached {@code CONFIRMED}: a kitchen
@@ -54,11 +59,11 @@ public interface PosOrderSource {
             String fulfillmentMode,
             String currency,
             long totalMinor,
-            Instant placedAt,
-            UUID customerAccountId,
-            String customerName,
-            String customerPhone,
-            String customerAddress,
+            @Nullable Instant placedAt,
+            @Nullable UUID customerAccountId,
+            @Nullable String customerName,
+            @Nullable String customerPhone,
+            @Nullable String customerAddress,
             List<Line> lines) {
 
         public ExportableOrder {
@@ -72,6 +77,8 @@ public interface PosOrderSource {
         }
 
         /**
+         * One line of the order, as a till needs to receive it.
+         *
          * @param sourceVariantId what HorecaOS sold. The external identifier is
          *                        resolved from this through the ADR 0026 mapping
          *                        rather than from the name, because a provider's
@@ -82,7 +89,7 @@ public interface PosOrderSource {
                 UUID lineId,
                 UUID sourceVariantId,
                 String productNameSnapshot,
-                String variantNameSnapshot,
+                @Nullable String variantNameSnapshot,
                 int quantity,
                 long unitAmountMinor,
                 List<UUID> modifierOptionIds) {

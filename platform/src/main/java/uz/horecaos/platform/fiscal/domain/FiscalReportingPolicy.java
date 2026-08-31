@@ -2,6 +2,7 @@ package uz.horecaos.platform.fiscal.domain;
 
 import java.time.Duration;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 
 /**
  * How long a provider is given to report a receipt, before the document becomes
@@ -61,7 +62,7 @@ public record FiscalReportingPolicy(int deadlineMinutes, Map<String, Integer> de
      *                     default rather than throwing — a cash document is never
      *                     swept, and a caller should not have to know that here
      */
-    public Duration deadlineFor(String providerType) {
+    public Duration deadlineFor(@Nullable String providerType) {
         Integer override = providerType == null
                 ? null
                 : deadlineMinutesByProvider.get(providerType.toUpperCase(java.util.Locale.ROOT));

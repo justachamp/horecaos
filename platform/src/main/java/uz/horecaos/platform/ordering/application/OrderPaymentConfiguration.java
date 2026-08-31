@@ -2,6 +2,7 @@ package uz.horecaos.platform.ordering.application;
 
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -59,7 +60,7 @@ public class OrderPaymentConfiguration {
             }
 
             @Override
-            public UUID createIntent(
+            public @Nullable UUID createIntent(
                     UUID tenantId,
                     UUID orderId,
                     long amountMinor,

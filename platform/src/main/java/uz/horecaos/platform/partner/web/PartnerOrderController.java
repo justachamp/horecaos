@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,6 +28,7 @@ import uz.horecaos.platform.partner.application.MarketplaceIngestionService.Push
 import uz.horecaos.platform.partner.application.PartnerAuthenticationService;
 import uz.horecaos.platform.partner.domain.DiscountFunding;
 import uz.horecaos.platform.partner.domain.ExternalTotals;
+import uz.horecaos.platform.partner.domain.RejectionCode;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.cache.RateLimiter;
@@ -115,17 +117,28 @@ public class PartnerOrderController {
         MarketplaceIngestionService.Outcome outcome = ingestion.receive(principal, body.toPush());
 
         if (!outcome.accepted()) {
+            RejectionCode rejectionCode = outcome.rejectionCode();
+            if (rejectionCode == null) {
+                // Outcome's own factories guarantee this: rejected() always
+                // names a code and it is the only factory that leaves
+                // accepted() false. A checker that cannot see that invariant
+                // is right to ask, so the answer is made loud rather than
+                // suppressed.
+                throw new IllegalStateException("A rejected marketplace outcome must name a rejection code");
+            }
             // 422 rather than 400: the request was well formed and HorecaOS
             // understood it, and the partner's engineer needs the code to tell
             // "your JSON is wrong" from "your totals do not add up".
             return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
-                    .body(PushResponse.rejected(outcome.rejectionCode().name()));
+                    .body(PushResponse.rejected(rejectionCode.name()));
         }
         return ResponseEntity.status(outcome.duplicate() ? HttpStatus.OK : HttpStatus.CREATED)
                 .body(PushResponse.accepted(outcome));
     }
 
     /**
+     * One partner order push, as ADR 0031's contract accepts it.
+     *
      * @param handoverCode the code the courier will read out, if the partner
      *                     issues one. It is hashed on arrival and never stored,
      *                     returned, logged, or traced in the clear.
@@ -177,6 +190,8 @@ public class PartnerOrderController {
     }
 
     /**
+     * The partner's own totals for a push, taken as stated.
+     *
      * @param taxMinor omitted when the partner reports no tax. Omitted and zero
      *                 are different claims and are stored differently.
      */
@@ -197,13 +212,19 @@ public class PartnerOrderController {
             Long taxMinor) {}
 
     /**
+     * The result of one order push, as reported back to the partner.
+     *
      * @param unmappedItems non-empty means the order was accepted with items the
      *                      catalogue does not carry. Reported back so the
      *                      partner's own console can show the venue what to fix,
      *                      and raised as a branch-visible exception here.
      */
     public record PushResponse(
-            String status, UUID orderId, String publicOrderNumber, String rejectionCode, List<String> unmappedItems) {
+            String status,
+            @Nullable UUID orderId,
+            @Nullable String publicOrderNumber,
+            @Nullable String rejectionCode,
+            List<String> unmappedItems) {
 
         static PushResponse accepted(MarketplaceIngestionService.Outcome outcome) {
             return new PushResponse(

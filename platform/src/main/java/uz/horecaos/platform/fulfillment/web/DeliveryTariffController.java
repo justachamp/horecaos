@@ -209,6 +209,8 @@ public class DeliveryTariffController {
             boolean brandDefault) {}
 
     /**
+     * A new draft version of a tariff, with its bands, time rules and discounts.
+     *
      * @param roadFactorBasisPoints what a straight line is multiplied by when
      *                              routing does not answer. Never below 10000: a
      *                              factor under 1.0 claims the road is shorter than
@@ -232,6 +234,8 @@ public class DeliveryTariffController {
             @NotNull UUID actorId) {}
 
     /**
+     * One distance band of a rate table.
+     *
      * @param bandSet null for the base table. A named set is put in force by a time
      *                rule naming it, and is a complete rate table in its own right
      * @param baseMinor the flat charge for entering this band, not the cumulative
@@ -245,6 +249,8 @@ public class DeliveryTariffController {
             @PositiveOrZero long perKmMinor) {}
 
     /**
+     * A time-of-day surcharge or band-set switch rule.
+     *
      * @param dayMask bit 0 is Monday, so "weekdays" is 31 and "the whole week" is 127
      * @param bandSet the table this rule puts in force, replacing the base one
      *                outright, or null to leave the base standing and only surcharge

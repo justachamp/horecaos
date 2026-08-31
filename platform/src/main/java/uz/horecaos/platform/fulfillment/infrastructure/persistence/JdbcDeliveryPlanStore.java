@@ -7,8 +7,10 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryPlan;
@@ -180,14 +182,19 @@ public class JdbcDeliveryPlanStore {
 
     private static DeliveryPlan mapPlan(java.sql.ResultSet row, int number) throws java.sql.SQLException {
 
+        // Every column PickupPlan reads here is NOT NULL in V0054 — the whole time
+        // model is computed once, at plan creation, and never partially written.
+        // instant() is shared with genuinely nullable columns (below), so its
+        // return type is honestly nullable; these six are asserted rather than
+        // propagated as optional.
         PickupPlan pickup = new PickupPlan(
-                instant(row, "confirmed_at"),
+                Objects.requireNonNull(instant(row, "confirmed_at")),
                 Duration.ofSeconds(row.getInt("preparation_seconds")),
-                instant(row, "estimated_ready_at"),
-                instant(row, "pickup_window_start"),
-                instant(row, "pickup_window_end"),
-                instant(row, "source_at"),
-                instant(row, "latest_assignment_at"),
+                Objects.requireNonNull(instant(row, "estimated_ready_at")),
+                Objects.requireNonNull(instant(row, "pickup_window_start")),
+                Objects.requireNonNull(instant(row, "pickup_window_end")),
+                Objects.requireNonNull(instant(row, "source_at")),
+                Objects.requireNonNull(instant(row, "latest_assignment_at")),
                 ZoneId.of(row.getString("branch_zone")),
                 row.getInt("calculation_version"));
 
@@ -215,12 +222,12 @@ public class JdbcDeliveryPlanStore {
                 row.getInt("version"));
     }
 
-    static Instant instant(java.sql.ResultSet row, String column) throws java.sql.SQLException {
+    static @Nullable Instant instant(java.sql.ResultSet row, String column) throws java.sql.SQLException {
         OffsetDateTime value = row.getObject(column, OffsetDateTime.class);
         return value == null ? null : value.toInstant();
     }
 
-    static OffsetDateTime utc(Instant instant) {
+    static @Nullable OffsetDateTime utc(@Nullable Instant instant) {
         return instant == null ? null : instant.atOffset(ZoneOffset.UTC);
     }
 }

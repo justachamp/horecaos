@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.marketing.domain.EngagementPolicy;
@@ -117,13 +118,13 @@ public class JdbcEngagementStore {
             UUID tenantId,
             UUID brandId,
             UUID accountId,
-            String channel,
+            @Nullable String channel,
             String reason,
-            UUID appliedBy,
+            @Nullable UUID appliedBy,
             String appliedByType,
             String statedReason,
             Instant appliedAt,
-            Instant expiresAt) {
+            @Nullable Instant expiresAt) {
 
         UUID id = UUID.randomUUID();
         Map<String, Object> parameters = new HashMap<>();
@@ -242,7 +243,7 @@ public class JdbcEngagementStore {
             String channel,
             String sourceType,
             UUID sourceId,
-            UUID notificationId,
+            @Nullable UUID notificationId,
             Instant sentAt) {
 
         Map<String, Object> parameters = new HashMap<>();
@@ -281,17 +282,20 @@ public class JdbcEngagementStore {
                         row.getObject("customer_account_id", UUID.class),
                         row.getString("channel"),
                         row.getString("reason"),
-                        instant(row.getObject("applied_at", OffsetDateTime.class)),
+                        // applied_at is NOT NULL DEFAULT now() (V0043), unlike
+                        // expires_at and lifted_at below, so it is read directly
+                        // rather than through the null-forwarding instant() helper.
+                        row.getObject("applied_at", OffsetDateTime.class).toInstant(),
                         instant(row.getObject("expires_at", OffsetDateTime.class)),
                         instant(row.getObject("lifted_at", OffsetDateTime.class))))
                 .optional();
     }
 
-    private static Instant instant(OffsetDateTime value) {
+    private static @Nullable Instant instant(@Nullable OffsetDateTime value) {
         return value == null ? null : value.toInstant();
     }
 
-    private static OffsetDateTime utc(Instant instant) {
+    private static @Nullable OffsetDateTime utc(@Nullable Instant instant) {
         return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
@@ -302,6 +306,6 @@ public class JdbcEngagementStore {
             String channel,
             String reason,
             Instant appliedAt,
-            Instant expiresAt,
-            Instant liftedAt) {}
+            @Nullable Instant expiresAt,
+            @Nullable Instant liftedAt) {}
 }

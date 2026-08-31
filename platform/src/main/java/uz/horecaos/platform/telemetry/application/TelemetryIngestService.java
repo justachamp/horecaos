@@ -332,6 +332,8 @@ public class TelemetryIngestService {
     }
 
     /**
+     * What became of one ingested batch.
+     *
      * @param suspended true when a break was running, which is not a failure and
      *                  is reported to the app so its on-duty indicator can say
      *                  truthfully that collection has stopped

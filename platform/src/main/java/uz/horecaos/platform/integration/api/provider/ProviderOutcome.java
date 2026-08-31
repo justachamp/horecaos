@@ -3,6 +3,7 @@ package uz.horecaos.platform.integration.api.provider;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The canonical result of a provider call (ADR 0007).
@@ -15,10 +16,10 @@ import java.util.Optional;
 public record ProviderOutcome(
         Status status,
         Map<String, Object> normalized,
-        String externalReference,
-        String errorCode,
-        String detail,
-        Duration retryAfter) {
+        @Nullable String externalReference,
+        @Nullable String errorCode,
+        @Nullable String detail,
+        @Nullable Duration retryAfter) {
 
     public enum Status {
         /** The provider completed the operation. */
@@ -37,7 +38,7 @@ public record ProviderOutcome(
         UNCERTAIN
     }
 
-    public static ProviderOutcome success(Map<String, Object> normalized, String externalReference) {
+    public static ProviderOutcome success(Map<String, Object> normalized, @Nullable String externalReference) {
         return new ProviderOutcome(Status.SUCCESS, normalized, externalReference, null, null, null);
     }
 
@@ -45,11 +46,11 @@ public record ProviderOutcome(
         return new ProviderOutcome(Status.REJECTED, Map.of(), null, errorCode, detail, null);
     }
 
-    public static ProviderOutcome retryable(String errorCode, String detail, Duration retryAfter) {
+    public static ProviderOutcome retryable(String errorCode, String detail, @Nullable Duration retryAfter) {
         return new ProviderOutcome(Status.RETRYABLE, Map.of(), null, errorCode, detail, retryAfter);
     }
 
-    public static ProviderOutcome uncertain(String errorCode, String detail) {
+    public static ProviderOutcome uncertain(@Nullable String errorCode, String detail) {
         return new ProviderOutcome(Status.UNCERTAIN, Map.of(), null, errorCode, detail, null);
     }
 

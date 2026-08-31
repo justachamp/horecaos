@@ -61,6 +61,8 @@ public class InboxRetryWorker {
     }
 
     /**
+     * Drives one pass over the inbox items that are due for retry.
+     *
      * @return how many due items this pass drove, which includes an item it
      *         found blocked and re-parked; the number is a measure of work
      *         attempted, not of side effects produced

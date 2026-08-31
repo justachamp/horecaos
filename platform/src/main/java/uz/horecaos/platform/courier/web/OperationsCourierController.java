@@ -10,6 +10,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -220,8 +221,9 @@ public class OperationsCourierController {
                 body.reason(),
                 correlationId()));
 
+        JdbcCourierLedgerStore.LedgerEntryRow entry = outcome.entry();
         return ResponseEntity.ok(new AdjustmentResponse(
-                outcome.written() ? outcome.entry().id() : null, outcome.approvalRequestId(), outcome.written()));
+                entry == null ? null : entry.id(), outcome.approvalRequestId(), outcome.written()));
     }
 
     @GetMapping("/couriers/{courierId}/ledger")
@@ -349,7 +351,7 @@ public class OperationsCourierController {
                 partnerInvoices.match(tenantId, invoiceId, body.shipmentsByProviderRef(), actor(), body.reason()));
     }
 
-    private static CostBasis parseBasis(String basis) {
+    private static @Nullable CostBasis parseBasis(@Nullable String basis) {
         if (basis == null || basis.isBlank()) {
             // Handed to the service as null so the refusal, and its wording, live
             // in one place rather than being duplicated per transport.
@@ -445,17 +447,22 @@ public class OperationsCourierController {
             UUID engagementId,
             String status,
             String warningState,
-            LocalDate registrationValidUntil,
-            LocalDate reverificationDueOn) {}
+            @Nullable LocalDate registrationValidUntil,
+            @Nullable LocalDate reverificationDueOn) {}
 
-    record AdjustmentResponse(UUID entryId, UUID approvalRequestId, boolean written) {}
+    record AdjustmentResponse(@Nullable UUID entryId, @Nullable UUID approvalRequestId, boolean written) {}
 
     record LedgerResponse(long balanceMinor, List<LedgerLine> entries) {}
 
     record LedgerLine(
-            UUID entryId, String entryType, long amountMinor, String currency, String reasonCode, String occurredAt) {}
+            UUID entryId,
+            String entryType,
+            long amountMinor,
+            String currency,
+            @Nullable String reasonCode,
+            String occurredAt) {}
 
     record StatementResponse(UUID periodId, String statementHash, long amountPayableMinor, boolean complianceFlag) {}
 
-    record PayoutResponse(UUID payoutId, UUID approvalRequestId, boolean authorised) {}
+    record PayoutResponse(@Nullable UUID payoutId, @Nullable UUID approvalRequestId, boolean authorised) {}
 }

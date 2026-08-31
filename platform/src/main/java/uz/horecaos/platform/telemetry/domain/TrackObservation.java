@@ -2,6 +2,7 @@ package uz.horecaos.platform.telemetry.domain;
 
 import java.time.Instant;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One reading from a courier's handset (ADR 0045).
@@ -23,10 +24,10 @@ public record TrackObservation(
         double latitude,
         double longitude,
         double accuracyMeters,
-        Double headingDegrees,
-        Double speedMps,
-        Integer batteryPercent,
-        Boolean deviceCharging) {
+        @Nullable Double headingDegrees,
+        @Nullable Double speedMps,
+        @Nullable Integer batteryPercent,
+        @Nullable Boolean deviceCharging) {
 
     public TrackObservation {
         Objects.requireNonNull(capturedAt, "A capture time is required");

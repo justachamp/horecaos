@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
  * When the food was promised, and what produced that answer (ADR 0036).
@@ -34,7 +35,11 @@ import java.util.Optional;
  *                      was <em>not modelled</em> — ADR 0037's zone model was not
  *                      built when the order was taken — and not that it was zero
  */
-public record OrderPromise(Instant promisedAt, PromiseBasis basis, Integer prepMinutes, Integer travelMinutes) {
+public record OrderPromise(
+        @Nullable Instant promisedAt,
+        PromiseBasis basis,
+        @Nullable Integer prepMinutes,
+        @Nullable Integer travelMinutes) {
 
     /**
      * What a branch is quoted at when no band covers the instant.
@@ -73,7 +78,7 @@ public record OrderPromise(Instant promisedAt, PromiseBasis basis, Integer prepM
         requireInRange(travelMinutes, "Travel");
     }
 
-    private static void requireInRange(Integer minutes, String what) {
+    private static void requireInRange(@Nullable Integer minutes, String what) {
         if (minutes != null && (minutes < 0 || minutes > MAX_MINUTES)) {
             throw new IllegalArgumentException(
                     what + " minutes must be between 0 and " + MAX_MINUTES + ", was " + minutes);
@@ -91,7 +96,8 @@ public record OrderPromise(Instant promisedAt, PromiseBasis basis, Integer prepM
      *
      * @param travelMinutes null while ADR 0037 is unbuilt
      */
-    public static OrderPromise from(Instant placedAt, PromiseBasis basis, int prepMinutes, Integer travelMinutes) {
+    public static OrderPromise from(
+            Instant placedAt, PromiseBasis basis, int prepMinutes, @Nullable Integer travelMinutes) {
 
         if (!basis.isDerivedFromDuration()) {
             throw new IllegalArgumentException(basis + " is not derived from a duration");
@@ -132,7 +138,10 @@ public record OrderPromise(Instant promisedAt, PromiseBasis basis, Integer prepM
      *                      unbuilt, which every delivery order is today
      */
     public static OrderPromise assemble(
-            Instant placedAt, Integer bandMinutes, Duration itemOverride, Integer travelMinutes) {
+            Instant placedAt,
+            @Nullable Integer bandMinutes,
+            @Nullable Duration itemOverride,
+            @Nullable Integer travelMinutes) {
 
         int baseline = bandMinutes != null ? bandMinutes : DEFAULT_PREP_MINUTES;
         PromiseBasis basis = bandMinutes != null ? PromiseBasis.PREPARATION_BAND : PromiseBasis.PLATFORM_DEFAULT;

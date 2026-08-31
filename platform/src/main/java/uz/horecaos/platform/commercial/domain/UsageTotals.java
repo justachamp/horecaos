@@ -1,6 +1,7 @@
 package uz.horecaos.platform.commercial.domain;
 
 import java.time.Instant;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.commercial.api.UsagePeriod;
 
 /**
@@ -17,7 +18,7 @@ public record UsageTotals(
         long eventQuantity,
         long adjustmentQuantity,
         int eventCount,
-        Instant lastEventAt) {
+        @Nullable Instant lastEventAt) {
 
     public long consumed() {
         return eventQuantity + adjustmentQuantity;

@@ -8,6 +8,7 @@ import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -373,8 +374,14 @@ public class CourierShiftService {
     }
 
     private void creditShiftEarning(ShiftRow shift, long paidSeconds, Instant closedAt) {
+        Optional<UUID> courierType = courierTypeOf(shift);
+        if (courierType.isEmpty()) {
+            // No courier row, no type, no card to resolve — same silence as a
+            // branch without an active card, which is the case below.
+            return;
+        }
         Optional<RateCard> card = rateCards.resolve(
-                shift.tenantId(), shift.brandId(), shift.locationId(), courierTypeOf(shift), closedAt);
+                shift.tenantId(), shift.brandId(), shift.locationId(), courierType.orElseThrow(), closedAt);
         if (card.isEmpty()) {
             return;
         }
@@ -410,10 +417,11 @@ public class CourierShiftService {
                         .id());
     }
 
-    private UUID courierTypeOf(ShiftRow shift) {
+    private Optional<UUID> courierTypeOf(ShiftRow shift) {
         return couriers.findCourier(shift.tenantId(), shift.courierId())
-                .map(uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.CourierRow::courierTypeId)
-                .orElse(null);
+                .map(
+                        uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.CourierRow
+                                ::courierTypeId);
     }
 
     /**
@@ -421,7 +429,7 @@ public class CourierShiftService {
      * cash, no handover: an empty confirmation step at the end of every shift is
      * how the step stops being taken seriously on the shifts that matter.
      */
-    private UUID openCashHandover(ShiftRow shift, String currency) {
+    private @Nullable UUID openCashHandover(ShiftRow shift, String currency) {
         long expected = ledgerStore.cashCollectedDuringShift(shift.tenantId(), shift.id());
         if (expected <= 0) {
             return null;
@@ -459,7 +467,7 @@ public class CourierShiftService {
         return shift;
     }
 
-    private String protectPoint(UUID tenantId, UUID shiftId, String column, String point) {
+    private @Nullable String protectPoint(UUID tenantId, UUID shiftId, String column, @Nullable String point) {
         if (point == null) {
             return null;
         }
@@ -494,9 +502,11 @@ public class CourierShiftService {
     }
 
     /**
+     * The courier's declaration that they are starting work.
+     *
      * @param point    "latitude,longitude" of the device at open, envelope
      *                 encrypted; never disclosed to a customer, who sees status
-     *                 milestones only
+     *                 milestones only. Null when the handset sent none
      * @param currency the courier's settlement currency, so a period can be
      *                 opened for them
      */
@@ -508,20 +518,32 @@ public class CourierShiftService {
             ShiftActor actorKind,
             ActorRef actor,
             String reason,
-            String point,
+            @Nullable String point,
             String currency) {}
 
+    /**
+     * A close request, from whichever of the three actors is making it.
+     *
+     * @param reasonCode required for a manager close, null for the courier's own
+     * @param point      the device's position at close, when the handset sent one
+     */
     public record CloseShift(
             UUID tenantId,
             UUID shiftId,
             ShiftActor actorKind,
             ActorRef actor,
-            String reasonCode,
+            @Nullable String reasonCode,
             String reason,
-            String point,
+            @Nullable String point,
             String currency) {}
 
-    public record CloseOutcome(ShiftStatus status, long paidSeconds, long breakSeconds, UUID cashHandoverId) {}
+    /**
+     * What the close computed.
+     *
+     * @param cashHandoverId null when the shift took no cash, so no handover opened
+     */
+    public record CloseOutcome(
+            ShiftStatus status, long paidSeconds, long breakSeconds, @Nullable UUID cashHandoverId) {}
 
     /** Exposed for the dispatch gate's readers and the operations board. */
     public Optional<ShiftRow> liveShiftOf(UUID tenantId, UUID courierId) {

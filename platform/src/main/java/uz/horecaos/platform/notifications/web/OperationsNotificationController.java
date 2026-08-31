@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -140,7 +141,11 @@ public class OperationsNotificationController {
                         .toList());
     }
 
-    /** @param reason recorded on the message, because a manual action needs one */
+    /**
+     * A manual retry, with the reason recorded on the message.
+     *
+     * @param reason why an operator is retrying
+     */
     public record RetryRequest(@NotBlank @Size(max = 500) String reason) {}
 
     public record NotificationSummary(
@@ -148,11 +153,13 @@ public class OperationsNotificationController {
             String templateKey,
             String channel,
             String status,
-            String suppressionReason,
-            String locale,
+            @Nullable String suppressionReason,
+            @Nullable String locale,
             Instant createdAt) {}
 
     /**
+     * One message, with every attempt and provider status it has.
+     *
      * @param recipientEndpointId a reference. Resolving it to a contact value is a
      *                            separate, separately authorized act
      * @param renderedContentHash what was sent, as a hash. With the frozen template
@@ -162,37 +169,38 @@ public class OperationsNotificationController {
     public record NotificationResponse(
             UUID id,
             UUID brandId,
-            UUID locationId,
+            @Nullable UUID locationId,
             String notificationClass,
             String channel,
             String templateKey,
-            UUID templateId,
-            Integer templateVersion,
-            String locale,
+            @Nullable UUID templateId,
+            @Nullable Integer templateVersion,
+            @Nullable String locale,
             String subjectType,
             UUID subjectId,
-            UUID recipientEndpointId,
+            @Nullable UUID recipientEndpointId,
             String status,
-            String suppressionReason,
-            String variablesHash,
-            String renderedContentHash,
+            @Nullable String suppressionReason,
+            @Nullable String variablesHash,
+            @Nullable String renderedContentHash,
             int attemptCount,
-            Instant expiresAt,
-            Instant terminalAt,
-            String lastError,
+            @Nullable Instant expiresAt,
+            @Nullable Instant terminalAt,
+            @Nullable String lastError,
             int version,
             List<AttemptResponse> attempts) {}
 
     public record AttemptResponse(
             int attemptNumber,
             String status,
-            String providerType,
-            String externalMessageId,
-            String failureCode,
+            @Nullable String providerType,
+            @Nullable String externalMessageId,
+            @Nullable String failureCode,
             boolean uncertainOutcome,
             Instant requestedAt,
-            Instant acknowledgedAt,
+            @Nullable Instant acknowledgedAt,
             List<StatusEventResponse> statusEvents) {}
 
     public record StatusEventResponse(String normalizedStatus, String providerStatus, Instant occurredAt) {}
 }
+

@@ -67,6 +67,8 @@ public final class DecodeError {
     private DecodeError() {}
 
     /**
+     * Whether this error is a property of the input rather than of the process.
+     *
      * @return true when this error describes what the input asked for rather
      *         than what the process has left, and the caller may record it and
      *         carry on. False means rethrow — which delivers the error to the
@@ -103,6 +105,10 @@ public final class DecodeError {
      * that ran out of memory being recorded as a completed job — the original
      * defect. The cause chain is the only thing that tells the two apart.
      */
+    // Intentional identity check below: Throwable does not override equals(),
+    // and the walk asks whether getCause() returned the very same object (a
+    // self-referential cycle), not merely an equal-valued one.
+    @SuppressWarnings("ReferenceEquality")
     public static boolean ranOutOfMemory(Throwable failure) {
         for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
             if (cause instanceof OutOfMemoryError) {

@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -74,8 +76,11 @@ class ChangeDocumentsTests {
     }
 
     @SuppressWarnings("unchecked")
-    private static Map<String, Object> asMap(Object value) {
-        return (Map<String, Object>) value;
+    private static Map<String, Object> asMap(@Nullable Object value) {
+        // Every call site looks up a key this test just put there, so a null
+        // here would mean the fixture itself is broken, not that "before"/"after"
+        // is genuinely absent.
+        return (Map<String, Object>) Objects.requireNonNull(value);
     }
 
     @Test

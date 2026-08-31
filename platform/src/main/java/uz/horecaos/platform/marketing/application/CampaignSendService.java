@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -294,7 +295,7 @@ public class CampaignSendService {
             boolean finished,
             boolean haltedAtCeiling,
             boolean deferred,
-            CampaignStatus terminalStatus) {
+            @Nullable CampaignStatus terminalStatus) {
 
         static BatchOutcome replayed(int sequence) {
             return new BatchOutcome(sequence, 0, 0, 0, 0, false, false, false, null);

@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.catalog.api.VariantPricingLookup;
@@ -295,12 +296,6 @@ public class CatalogSnapshotLoader {
     }
 
     /**
-     * Writes a value only when it exists.
-     *
-     * <p>The alternative, {@code String.valueOf(x)}, turns a null into the string
-     * {@code "null"} — which reaches the storefront looking like a real value.
-     */
-    /**
      * Writes the classification a receipt line will be built from, omitting each
      * field that is absent (ADR 0038).
      *
@@ -332,7 +327,13 @@ public class CatalogSnapshotLoader {
         putIfPresent(target, "ageRestrictionYears", fiscal.ageRestrictionYears());
     }
 
-    private static void putIfPresent(Map<String, Object> target, String key, Object value) {
+    /**
+     * Writes a value only when it exists.
+     *
+     * <p>The alternative, {@code String.valueOf(x)}, turns a null into the string
+     * {@code "null"} — which reaches the storefront looking like a real value.
+     */
+    private static void putIfPresent(Map<String, Object> target, String key, @Nullable Object value) {
         if (value != null) {
             target.put(key, value instanceof java.util.UUID id ? id.toString() : value);
         }

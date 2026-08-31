@@ -3,6 +3,7 @@ package uz.horecaos.platform.pos.domain;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One provider catalog, normalized (ADR 0012).
@@ -54,16 +55,28 @@ public record CatalogSnapshot(
         return products.stream().filter(Product::comparable).toList();
     }
 
+    /**
+     * A staged provider category, unflattened from its nested-set representation.
+     *
+     * @param externalParentId null for a top-level category. Absent from the
+     *                         provider's own tree rather than modeled with a
+     *                         sentinel, matching {@code external_parent_id}
+     * @param depth            the nested-set depth, when the provider states one.
+     *                         Never recomputed from {@code _lft}/{@code _rgt},
+     *                         which renumber on every tree edit
+     */
     public record Category(
             String externalId,
-            String externalParentId,
+            @Nullable String externalParentId,
             String name,
             int sortOrder,
             boolean active,
-            Integer depth,
+            @Nullable Integer depth,
             Map<String, Object> raw) {}
 
     /**
+     * A staged provider product, its menu-comparability, and its optional price.
+     *
      * @param comparable  false for kinds that are inventory rather than menu —
      *                    ingredients, preparations, time-billed rentals. They are
      *                    staged and marked rather than dropped so the evidence of
@@ -85,18 +98,20 @@ public record CatalogSnapshot(
     public record Product(
             String externalId,
             String name,
-            String externalCategoryId,
+            @Nullable String externalCategoryId,
             SourceKind sourceKind,
             boolean comparable,
             boolean parentOnly,
-            Long priceMinor,
+            @Nullable Long priceMinor,
             String currency,
             boolean active,
             boolean hidden,
-            String governmentCode,
+            @Nullable String governmentCode,
             Map<String, Object> raw) {}
 
     /**
+     * A staged provider variant — a size, a colour — with its own price.
+     *
      * @param externalUnitReference the provider's unit identifier, unresolved.
      *                              The first real provider publishes no endpoint
      *                              that maps it to a name or a measure, so this is
@@ -107,10 +122,10 @@ public record CatalogSnapshot(
             String externalId,
             String externalProductId,
             String name,
-            Long priceMinor,
+            @Nullable Long priceMinor,
             String currency,
             boolean active,
-            String externalUnitReference,
+            @Nullable String externalUnitReference,
             Map<String, Object> raw) {}
 
     public record ModifierGroup(
@@ -126,16 +141,25 @@ public record CatalogSnapshot(
             String externalId,
             String externalGroupId,
             String name,
-            Long priceMinor,
+            @Nullable Long priceMinor,
             String currency,
             boolean active,
             Map<String, Object> raw) {}
 
     /**
+     * One entity's stop-list reading.
+     *
      * @param stockLimit null when the provider named no limit for this entity.
      *                   Absence from a stop list means unconstrained, not
      *                   unavailable, and inverting that reading empties a menu
+     * @param observedAt null when the provider's own stop-list timestamp did not
+     *                   parse as a number. Recorded rather than defaulted, so a
+     *                   reader can tell a genuinely unknown observation time from
+     *                   one that happened to be the epoch
      */
     public record Availability(
-            String externalId, java.math.BigDecimal stockLimit, Instant observedAt, Map<String, Object> raw) {}
+            String externalId,
+            java.math.@Nullable BigDecimal stockLimit,
+            @Nullable Instant observedAt,
+            Map<String, Object> raw) {}
 }

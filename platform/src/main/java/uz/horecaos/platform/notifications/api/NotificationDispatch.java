@@ -2,6 +2,7 @@ package uz.horecaos.platform.notifications.api;
 
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One rendered message, handed to the route that will send it (ADR 0020,
@@ -17,6 +18,8 @@ import java.util.UUID;
  * must carry this exact value: a fresh key would defeat the provider-side
  * deduplication the retry depends on, and the customer would be texted twice.
  *
+ * @param locationId null for a message not tied to one location (ADR 0026
+ *                   resolves the binding at brand scope in that case)
  * @param recipientValue the phone number or address, resolved for this call only
  * @param subject null on channels that have no subject, which SMS does not
  * @param subjectType what this message is about ({@code notifications.notifications.subject_type}),
@@ -33,10 +36,10 @@ public record NotificationDispatch(
         UUID attemptId,
         UUID tenantId,
         UUID brandId,
-        UUID locationId,
+        @Nullable UUID locationId,
         String channel,
         String recipientValue,
-        String subject,
+        @Nullable String subject,
         String body,
         String providerIdempotencyKey,
         String correlationId,

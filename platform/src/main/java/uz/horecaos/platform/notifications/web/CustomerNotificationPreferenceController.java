@@ -139,6 +139,8 @@ public class CustomerNotificationPreferenceController {
     }
 
     /**
+     * One class-and-channel toggle, at the tenant or one brand.
+     *
      * @param brandId null for the customer's tenant-wide answer
      * @param enabled boxed and {@code @NotNull}, so a body that omits it is a
      *                validation failure rather than a silent opt-out
@@ -149,3 +151,4 @@ public class CustomerNotificationPreferenceController {
     public record PreferenceResponse(
             UUID brandId, String notificationClass, String channel, boolean enabled, int version) {}
 }
+

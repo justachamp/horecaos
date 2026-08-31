@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
@@ -313,7 +314,7 @@ class ClickMerchantApiTests {
      * {@code reverse} reads it, because deciding what a provider's answer means to
      * an attempt is the attempt service's job and not the adapter's.
      */
-    private static PaymentAttempt attempt(String externalPaymentId) {
+    private static PaymentAttempt attempt(@Nullable String externalPaymentId) {
         return new PaymentAttempt(
                 UUID.randomUUID(),
                 TENANT,

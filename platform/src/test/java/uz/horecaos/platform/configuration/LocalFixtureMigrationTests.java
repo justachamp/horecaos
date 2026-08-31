@@ -2,6 +2,7 @@ package uz.horecaos.platform.configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Objects;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -48,6 +49,9 @@ class LocalFixtureMigrationTests {
     }
 
     private static long count(JdbcTemplate jdbc, String sql) {
-        return jdbc.queryForObject(sql, Long.class);
+        // COUNT(*) always yields exactly one row and is never SQL NULL; the
+        // fallback is unreachable in practice and only satisfies the checker's
+        // honest reading of JdbcTemplate's declared-nullable return.
+        return Objects.requireNonNullElse(jdbc.queryForObject(sql, Long.class), 0L);
     }
 }

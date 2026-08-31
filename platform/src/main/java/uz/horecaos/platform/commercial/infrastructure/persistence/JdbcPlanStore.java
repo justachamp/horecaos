@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.commercial.api.EnforcementMode;
@@ -65,7 +66,7 @@ public class JdbcPlanStore {
             String currency,
             long priceMinor,
             String billingPeriod,
-            String termsReference,
+            @Nullable String termsReference,
             String createdBy,
             Instant now) {
 
@@ -222,7 +223,7 @@ public class JdbcPlanStore {
                 activated == null ? null : activated.toInstant());
     }
 
-    private static OffsetDateTime utc(Instant instant) {
+    private static @Nullable OffsetDateTime utc(@Nullable Instant instant) {
         return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 }

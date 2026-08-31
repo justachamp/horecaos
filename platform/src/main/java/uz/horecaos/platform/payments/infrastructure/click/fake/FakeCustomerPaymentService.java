@@ -108,10 +108,20 @@ public class FakeCustomerPaymentService {
                 .orElseThrow(() -> new NoPayableClickAttemptException(
                         "No open payment attempt for order " + orderId + "; open a payment session first"));
 
+        UUID legalEntityId = intent.legalEntityId();
+        if (legalEntityId == null) {
+            // Mirrors PaymentCheckoutService.openOrRePresent's own SELLER_UNRESOLVED
+            // refusal: a real checkout could never have reached a payable attempt
+            // without ADR 0038's seller assignment, so the fake customer should not
+            // be able to pay one either.
+            throw new NoPayableClickAttemptException(
+                    "No legal entity is assigned to order " + orderId + "'s location");
+        }
+
         ProviderBinding binding = bindings.resolve(
-                        tenantId, intent.legalEntityId(), PaymentProviderType.CLICK, attempt.businessDate())
+                        tenantId, legalEntityId, PaymentProviderType.CLICK, attempt.businessDate())
                 .orElseThrow(() -> new NoPayableClickAttemptException(
-                        "No active CLICK merchant binding for legal entity " + intent.legalEntityId()));
+                        "No active CLICK merchant binding for legal entity " + legalEntityId));
 
         return pay(binding, attempt);
     }
@@ -177,6 +187,13 @@ public class FakeCustomerPaymentService {
         if (!completed.successful()) {
             throw new NoPayableClickAttemptException("The fake Click complete was refused: " + completed.error());
         }
+        UUID completedAttemptId = completed.attemptId();
+        if (completedAttemptId == null) {
+            // ClickCallbackDecision's own contract: attemptId is null only when the
+            // request never got as far as naming one, which is every signature
+            // failure — already ruled out by the successful() check above.
+            throw new NoPayableClickAttemptException("The fake Click complete succeeded but named no attempt");
+        }
 
         // The synthetic payment_id fiscalization keys on. A real Click callback
         // never carries one (ClickCallbackProcessor.complete records neither
@@ -191,7 +208,7 @@ public class FakeCustomerPaymentService {
                         serviceId, merchantTransId, attempt.amount().value()))
                 .orElseGet(() -> randomDigits(9));
 
-        return new FakePaymentResult(completed.attemptId(), clickTransId, clickPaydocId, merchantTransId, paymentId);
+        return new FakePaymentResult(completedAttemptId, clickTransId, clickPaydocId, merchantTransId, paymentId);
     }
 
     private static Map<String, String> baseForm(

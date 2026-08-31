@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
@@ -65,10 +66,10 @@ public class JdbcPosCapabilityStore {
             UUID installationId,
             PosCapability capability,
             String probeStatus,
-            Integer providerStatusCode,
-            String providerErrorCode,
-            String evidence,
-            String adapterVersion,
+            @Nullable Integer providerStatusCode,
+            @Nullable String providerErrorCode,
+            @Nullable String evidence,
+            @Nullable String adapterVersion,
             Instant probedAt) {
 
         Map<String, Object> parameters = new HashMap<>();
@@ -172,7 +173,12 @@ public class JdbcPosCapabilityStore {
                 .list();
     }
 
-    private CapabilitySnapshot toSnapshot(String json, String adapterVersion, OffsetDateTime checkedAt) {
+    // adapter_version and last_connection_check_at (V0013) carry no NOT NULL —
+    // both are unset until the installation's first connectivity check runs, which
+    // is exactly why the body below already treats checkedAt defensively; the
+    // parameter types had not caught up with that.
+    private CapabilitySnapshot toSnapshot(
+            String json, @Nullable String adapterVersion, @Nullable OffsetDateTime checkedAt) {
 
         if (json == null || json.isBlank()) {
             return CapabilitySnapshot.empty();
@@ -209,7 +215,7 @@ public class JdbcPosCapabilityStore {
         }
     }
 
-    private static CapabilitySupport supportOf(Object value) {
+    private static CapabilitySupport supportOf(@Nullable Object value) {
         try {
             return CapabilitySupport.valueOf(String.valueOf(value));
         } catch (IllegalArgumentException unknown) {
@@ -220,7 +226,7 @@ public class JdbcPosCapabilityStore {
         }
     }
 
-    private static IdempotencyBehaviour idempotencyOf(Object value) {
+    private static IdempotencyBehaviour idempotencyOf(@Nullable Object value) {
         try {
             return IdempotencyBehaviour.valueOf(String.valueOf(value));
         } catch (IllegalArgumentException unknown) {
@@ -231,7 +237,7 @@ public class JdbcPosCapabilityStore {
     }
 
     @SuppressWarnings("unchecked")
-    private static Map<String, String> limitsOf(Object value) {
+    private static Map<String, String> limitsOf(@Nullable Object value) {
         if (!(value instanceof Map<?, ?> map)) {
             return Map.of();
         }

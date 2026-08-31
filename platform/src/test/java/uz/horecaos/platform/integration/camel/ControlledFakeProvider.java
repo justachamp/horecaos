@@ -4,13 +4,16 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A provider that fails on demand (ADR 0007).
@@ -36,14 +39,15 @@ public final class ControlledFakeProvider implements AutoCloseable {
     private final List<RecordedRequest> requests = new CopyOnWriteArrayList<>();
     private final Map<String, String> idempotentResponses = new ConcurrentHashMap<>();
     private final AtomicInteger sideEffects = new AtomicInteger();
-    private volatile Scenario override;
+    private volatile @Nullable Scenario override;
 
     private ControlledFakeProvider(HttpServer server) {
         this.server = server;
     }
 
     public static ControlledFakeProvider start() throws IOException {
-        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        HttpServer server =
+                HttpServer.create(new InetSocketAddress(InetAddress.getAllByName("127.0.0.1")[0], 0), 0);
         ControlledFakeProvider provider = new ControlledFakeProvider(server);
         server.createContext("/provider/commands", provider::handle);
         server.createContext("/provider/status", provider::status);
@@ -64,7 +68,7 @@ public final class ControlledFakeProvider implements AutoCloseable {
      * second attempt at one command to behave differently from the first cannot
      * say so in the command. Pass {@code null} to hand control back to the header.
      */
-    public void forceScenario(Scenario scenario) {
+    public void forceScenario(@Nullable Scenario scenario) {
         this.override = scenario;
     }
 
@@ -104,8 +108,11 @@ public final class ControlledFakeProvider implements AutoCloseable {
     }
 
     private void handle(HttpExchange exchange) throws IOException {
-        String scenario =
-                override != null ? override.name() : header(exchange, SCENARIO_HEADER, Scenario.SUCCESS.name());
+        String scenario = override != null
+                ? override.name()
+                // The fallback is a non-null literal, so header() cannot return
+                // null here; requireNonNull only makes that visible to the checker.
+                : Objects.requireNonNull(header(exchange, SCENARIO_HEADER, Scenario.SUCCESS.name()));
         String idempotencyKey = header(exchange, IDEMPOTENCY_HEADER, null);
         requests.add(new RecordedRequest(scenario, idempotencyKey));
 
@@ -149,9 +156,11 @@ public final class ControlledFakeProvider implements AutoCloseable {
             case ACCEPTED_THEN_TIMEOUT -> {
                 // The dangerous one: the effect happens and the caller never
                 // learns it did.
-                String reference = idempotencyKey == null
-                        ? newReference()
-                        : idempotentResponses.computeIfAbsent(idempotencyKey, key -> newReference());
+                if (idempotencyKey == null) {
+                    newReference();
+                } else {
+                    idempotentResponses.computeIfAbsent(idempotencyKey, key -> newReference());
+                }
                 sleep(3_000);
                 exchange.close();
             }
@@ -172,7 +181,7 @@ public final class ControlledFakeProvider implements AutoCloseable {
         }
     }
 
-    private static String header(HttpExchange exchange, String name, String fallback) {
+    private static @Nullable String header(HttpExchange exchange, String name, @Nullable String fallback) {
         List<String> values = exchange.getRequestHeaders().get(name);
         return values == null || values.isEmpty() ? fallback : values.getFirst();
     }
@@ -196,5 +205,5 @@ public final class ControlledFakeProvider implements AutoCloseable {
         ACCEPTED_THEN_TIMEOUT
     }
 
-    public record RecordedRequest(String scenario, String idempotencyKey) {}
+    public record RecordedRequest(String scenario, @Nullable String idempotencyKey) {}
 }

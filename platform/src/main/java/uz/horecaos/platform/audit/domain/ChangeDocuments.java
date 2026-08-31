@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Builds classification-aware change documents (ADR 0027).
@@ -63,7 +64,7 @@ public final class ChangeDocuments {
      * <p>Uses maps that permit nulls, because "the field was previously unset"
      * is itself evidence and must stay distinguishable from a redacted value.
      */
-    public static Map<String, Object> change(String field, Object before, Object after) {
+    public static Map<String, Object> change(String field, @Nullable Object before, @Nullable Object after) {
         Map<String, Object> change = new LinkedHashMap<>();
         change.put("before", redact(field, before));
         change.put("after", redact(field, after));
@@ -86,7 +87,7 @@ public final class ChangeDocuments {
     }
 
     @SuppressWarnings("unchecked")
-    private static Object sanitizeValue(String field, Object value) {
+    private static @Nullable Object sanitizeValue(String field, @Nullable Object value) {
         if (value instanceof Map<?, ?> nested) {
             // A protected field name redacts its whole subtree: a nested "before"
             // and "after" under "customerPhone" are both the phone number.
@@ -103,7 +104,7 @@ public final class ChangeDocuments {
         return redact(field, value);
     }
 
-    private static Object redact(String field, Object value) {
+    private static @Nullable Object redact(String field, @Nullable Object value) {
         if (value == null) {
             return null;
         }

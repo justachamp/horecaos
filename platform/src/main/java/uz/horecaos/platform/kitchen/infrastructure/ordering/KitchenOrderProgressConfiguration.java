@@ -1,6 +1,7 @@
 package uz.horecaos.platform.kitchen.infrastructure.ordering;
 
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -48,7 +49,7 @@ public class KitchenOrderProgressConfiguration {
                     String reasonCode,
                     String actorType,
                     String actorId,
-                    String correlationId) {
+                    @Nullable String correlationId) {
 
                 log.warn(
                         "Kitchen would propose {} for order {} but no OrderProgressPort is "

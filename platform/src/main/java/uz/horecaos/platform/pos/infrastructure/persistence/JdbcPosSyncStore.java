@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
@@ -87,7 +88,8 @@ public class JdbcPosSyncStore {
         return runId;
     }
 
-    public void markStatus(UUID tenantId, UUID runId, String status, String timestampColumn, Instant now) {
+    public void markStatus(
+            UUID tenantId, UUID runId, String status, @Nullable String timestampColumn, Instant now) {
 
         // The timestamp column is chosen from a closed set in code rather than
         // taken from a caller's string, because a column name cannot be a bound
@@ -122,7 +124,7 @@ public class JdbcPosSyncStore {
         statement.update();
     }
 
-    public void markFailed(UUID tenantId, UUID runId, String errorCode, String error) {
+    public void markFailed(UUID tenantId, UUID runId, @Nullable String errorCode, @Nullable String error) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
         parameters.put("id", runId);

@@ -2,6 +2,7 @@ package uz.horecaos.platform.fulfillment.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.mockito.Mockito.mock;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.lang.annotation.Annotation;
@@ -13,6 +14,7 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcSourcingJobStore;
 
 /**
@@ -49,8 +51,8 @@ class DeliverySourcingSchedulerTests {
     @DisplayName("a lease that cannot outlast its batch is refused rather than deployed")
     void anInconsistentLeaseIsRefused() {
         Throwable refusal = catchThrowable(() -> new DeliverySourcingScheduler(
-                new JdbcSourcingJobStore(null),
-                null,
+                new JdbcSourcingJobStore(mock(JdbcClient.class)),
+                mock(DeliverySourcingRunner.class),
                 Clock.systemUTC(),
                 new SimpleMeterRegistry(),
                 20,

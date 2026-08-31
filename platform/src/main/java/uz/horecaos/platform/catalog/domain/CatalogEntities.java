@@ -3,6 +3,7 @@ package uz.horecaos.platform.catalog.domain;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The authoring model (ADR 0016).
@@ -109,13 +110,17 @@ public final class CatalogEntities {
      */
     public record Product(UUID id, UUID tenantId, UUID brandId, String code, Status status, int version) {}
 
-    /** @param unitCode the measurement unit a menu is authored in — not the numeric fiscal unit */
+    /**
+     * A sellable variation of a product.
+     *
+     * @param unitCode the measurement unit a menu is authored in — not the numeric fiscal unit
+     */
     public record Variant(
             UUID id,
             UUID tenantId,
             UUID brandId,
             UUID productId,
-            String sku,
+            @Nullable String sku,
             String unitCode,
             boolean isDefault,
             int sortOrder,
@@ -127,13 +132,15 @@ public final class CatalogEntities {
             UUID tenantId,
             UUID brandId,
             UUID catalogId,
-            UUID parentCategoryId,
+            @Nullable UUID parentCategoryId,
             String code,
             int sortOrder,
             Status status,
             int version) {}
 
     /**
+     * A set of modifier options offered together, such as a size or topping choice.
+     *
      * @param minimumSelections how many the customer must choose
      * @param maximumSelections how many they may choose
      */
@@ -151,6 +158,8 @@ public final class CatalogEntities {
             int version) {}
 
     /**
+     * One choice within a {@link ModifierGroup}.
+     *
      * @param linkedVariantId set when the modifier is itself something sellable,
      *                        in which case its classification falls back to that
      *                        variant's rather than being entered twice
@@ -161,13 +170,14 @@ public final class CatalogEntities {
             UUID brandId,
             UUID modifierGroupId,
             String code,
-            UUID linkedVariantId,
+            @Nullable UUID linkedVariantId,
             int maximumQuantity,
             int sortOrder,
             Status status,
             int version) {}
 
-    public record Translation(EntityType entityType, UUID entityId, String locale, String name, String description) {}
+    public record Translation(
+            EntityType entityType, UUID entityId, String locale, String name, @Nullable String description) {}
 
     public record LocationOffering(
             UUID id,

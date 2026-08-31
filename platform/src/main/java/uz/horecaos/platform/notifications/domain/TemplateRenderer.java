@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Substitution, and nothing else (ADR 0020).
@@ -51,7 +52,7 @@ public final class TemplateRenderer {
      * @throws TemplateContractException when the template names a variable the
      *         schema does not declare
      */
-    public static void validate(String template, Set<String> declaredVariables) {
+    public static void validate(@Nullable String template, Set<String> declaredVariables) {
         if (template == null) {
             return;
         }
@@ -70,7 +71,7 @@ public final class TemplateRenderer {
     }
 
     /** Every placeholder the template names, in first-appearance order. */
-    public static Set<String> variablesUsedIn(String template) {
+    public static Set<String> variablesUsedIn(@Nullable String template) {
         Set<String> used = new LinkedHashSet<>();
         if (template == null) {
             return used;
@@ -93,7 +94,7 @@ public final class TemplateRenderer {
      *         the literal {@code {{orderNumber}}} to a customer is worse than not
      *         sending, and silently emptying it produces a sentence with a hole
      */
-    public static String render(String template, Map<String, String> values) {
+    public static @Nullable String render(@Nullable String template, Map<String, String> values) {
         if (template == null) {
             return null;
         }

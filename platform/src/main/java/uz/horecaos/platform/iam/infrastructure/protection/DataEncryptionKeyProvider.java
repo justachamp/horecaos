@@ -207,8 +207,7 @@ public class DataEncryptionKeyProvider {
     private record KeyIdentity(UUID tenantId, String dataClass, String generation) {
 
         static KeyIdentity parse(String keyId, UUID tenantId) {
-            String[] parts =
-                    Objects.requireNonNull(keyId, "A key id is required").split(":");
+            String[] parts = Objects.requireNonNull(keyId, "A key id is required").split(":", -1);
             if (parts.length != 3) {
                 throw new IllegalArgumentException("A data key identifier has three parts");
             }

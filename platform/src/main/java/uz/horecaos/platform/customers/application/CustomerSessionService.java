@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -143,8 +144,11 @@ public class CustomerSessionService {
      * between an app that lost their place and an app that lost their order.
      */
     @Transactional(readOnly = true)
-    public Resolution resolve(String presentedToken) {
-        if (!CustomerSessionToken.looksLikeOne(presentedToken)) {
+    public Resolution resolve(@Nullable String presentedToken) {
+        // The explicit null check (rather than leaving it to looksLikeOne's own
+        // null-safety) is what lets the compiler know presentedToken is non-null
+        // for the rest of this method.
+        if (presentedToken == null || !CustomerSessionToken.looksLikeOne(presentedToken)) {
             return Resolution.unknown();
         }
 
@@ -187,8 +191,8 @@ public class CustomerSessionService {
      * client to retry until it saw something that looked like success.
      */
     @Transactional
-    public void endCurrent(String presentedToken) {
-        if (!CustomerSessionToken.looksLikeOne(presentedToken)) {
+    public void endCurrent(@Nullable String presentedToken) {
+        if (presentedToken == null || !CustomerSessionToken.looksLikeOne(presentedToken)) {
             throw new ApiException(ErrorCode.UNAUTHENTICATED, "No customer session was presented.");
         }
         Instant now = clock.instant();
@@ -210,7 +214,12 @@ public class CustomerSessionService {
     }
 
     private AuditFact fact(
-            String action, UUID tenantId, UUID brandId, UUID targetId, Map<String, Object> changes, Instant now) {
+            String action,
+            UUID tenantId,
+            @Nullable UUID brandId,
+            UUID targetId,
+            Map<String, Object> changes,
+            Instant now) {
 
         // A service actor, as on verification: there is no operator here, and
         // AuditFact demands a reason only of a USER actor.
@@ -228,6 +237,8 @@ public class CustomerSessionService {
     }
 
     /**
+     * A session freshly established.
+     *
      * @param token returned once, in the response that established it, and never
      *              again. There is no endpoint that reissues it: the customer
      *              proves their number again
@@ -249,7 +260,7 @@ public class CustomerSessionService {
      * the response would only tell somebody holding a stolen token whether it was
      * revoked deliberately.
      */
-    public record Resolution(State state, CustomerSession session) {
+    public record Resolution(State state, @Nullable CustomerSession session) {
 
         public enum State {
 

@@ -1,6 +1,7 @@
 package uz.horecaos.platform.web.api;
 
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -28,7 +29,8 @@ public class GlobalApiErrorHandler {
 
     @ExceptionHandler(ApiException.class)
     ProblemDetail apiException(ApiException exception) {
-        return ApiProblem.withProperties(exception.errorCode(), exception.getMessage(), exception.properties());
+        return ApiProblem.withProperties(
+                exception.errorCode(), detailOrTitle(exception), exception.properties());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -37,7 +39,7 @@ public class GlobalApiErrorHandler {
                 .map(error -> new ApiProblem.FieldError(
                         error.getField(),
                         error.getCode() == null ? "INVALID" : toStableCode(error.getCode()),
-                        error.getDefaultMessage()))
+                        error.getDefaultMessage() == null ? "Invalid value" : error.getDefaultMessage()))
                 .toList();
 
         return ApiProblem.withFieldErrors(
@@ -55,7 +57,7 @@ public class GlobalApiErrorHandler {
      */
     @ExceptionHandler(uz.horecaos.platform.web.authorization.ScopeNotFoundException.class)
     ProblemDetail scopeNotFound(uz.horecaos.platform.web.authorization.ScopeNotFoundException exception) {
-        return ApiProblem.of(ErrorCode.RESOURCE_NOT_FOUND, exception.getMessage());
+        return ApiProblem.of(ErrorCode.RESOURCE_NOT_FOUND, detailOrTitle(ErrorCode.RESOURCE_NOT_FOUND, exception));
     }
 
     @ExceptionHandler(OptimisticLockingFailureException.class)
@@ -112,7 +114,24 @@ public class GlobalApiErrorHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     ProblemDetail invalidArgument(IllegalArgumentException exception) {
-        return ApiProblem.of(ErrorCode.INVALID_REQUEST, exception.getMessage());
+        return ApiProblem.of(ErrorCode.INVALID_REQUEST, detailOrTitle(ErrorCode.INVALID_REQUEST, exception));
+    }
+
+    /**
+     * {@code ApiException}'s own message, or a generic fallback.
+     *
+     * <p>{@code Throwable#getMessage()} is nullable in the JDK and {@code
+     * ApiException} accepts a null one, but every Problem Details response must
+     * carry real detail text — never the literal word "null" serialized to a
+     * client.
+     */
+    private static String detailOrTitle(ApiException exception) {
+        return detailOrTitle(exception.errorCode(), exception);
+    }
+
+    private static String detailOrTitle(ErrorCode code, Throwable exception) {
+        @Nullable String message = exception.getMessage();
+        return message == null || message.isBlank() ? code.title() : message;
     }
 
     private static String toStableCode(String springValidationCode) {

@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 
 /**
@@ -49,14 +50,14 @@ public record ProviderBinding(
         UUID installationId,
         UUID integrationBindingId,
         String merchantAccountReference,
-        String merchantUserReference,
-        String merchantIdReference,
+        @Nullable String merchantUserReference,
+        @Nullable String merchantIdReference,
         SecretReference secretReference,
         String callbackPathSegment,
         boolean supportsReversal,
         boolean supportsPartnerFiscalization,
         LocalDate effectiveFrom,
-        LocalDate effectiveUntil) {
+        @Nullable LocalDate effectiveUntil) {
 
     public ProviderBinding {
         Objects.requireNonNull(bindingId, "A binding id is required");

@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -103,7 +104,7 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
 
     @Override
     public void afterCompletion(
-            HttpServletRequest request, HttpServletResponse response, Object handler, Exception failure) {
+            HttpServletRequest request, HttpServletResponse response, Object handler, @Nullable Exception failure) {
 
         UUID recordId = (UUID) request.getAttribute(RECORD_ATTRIBUTE);
         if (recordId == null) {
@@ -133,7 +134,8 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
      * comes from the response type, so an endpoint that starts answering with an
      * address is protected by the change that makes it do so.
      */
-    private void storeResponse(UUID recordId, int status, String body, HandlerMethod handler, UUID tenantId) {
+    private void storeResponse(
+            UUID recordId, int status, String body, HandlerMethod handler, @Nullable UUID tenantId) {
 
         Optional<DataClass> classification = responseProtection.classificationOf(handler);
         if (classification.isEmpty()) {
@@ -258,7 +260,7 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
     }
 
     @SuppressWarnings("unchecked")
-    private UUID tenantIdOf(HttpServletRequest request) {
+    private @Nullable UUID tenantIdOf(HttpServletRequest request) {
         Map<String, String> variables =
                 (Map<String, String>) request.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
         if (variables == null) {
@@ -290,11 +292,22 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
      * handed another's address.
      */
     private void writeReplay(
-            HttpServletResponse response, IdempotencyOutcome.Replay replay, HandlerMethod handler, UUID tenantId)
+            HttpServletResponse response,
+            IdempotencyOutcome.Replay replay,
+            HandlerMethod handler,
+            @Nullable UUID tenantId)
             throws IOException {
 
         String body = replay.responseBody() == null ? "" : replay.responseBody();
         if (replay.responseBodyProtected()) {
+            if (tenantId == null) {
+                // storeResponse only ever marks a record protected when it had a
+                // tenant to encrypt the body under, so a protected record with no
+                // tenant on replay means this endpoint answered with and without a
+                // tenant across two requests for the same scope key -- a routing
+                // bug, not an outcome to paper over with a guessed key.
+                throw new IllegalStateException("A protected idempotent response has no tenant to decrypt it with");
+            }
             try {
                 body = responseProtection.reveal(tenantId, replay.recordId(), replay.responseBody());
             } catch (RuntimeException failure) {

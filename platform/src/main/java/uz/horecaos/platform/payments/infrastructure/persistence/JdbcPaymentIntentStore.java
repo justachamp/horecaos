@@ -8,6 +8,7 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -176,7 +177,7 @@ public class JdbcPaymentIntentStore {
                 // row can never have. The column is NOT NULL, so this is belt and
                 // braces; the pattern matters more than the column.
                 row.getObject("version", Integer.class),
-                instant(row, "created_at"),
+                Objects.requireNonNull(instant(row, "created_at"), "payment_intents.created_at is NOT NULL"),
                 instant(row, "settled_at"));
     }
 }

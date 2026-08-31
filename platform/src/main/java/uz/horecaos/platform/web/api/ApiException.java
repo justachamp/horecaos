@@ -2,6 +2,7 @@ package uz.horecaos.platform.web.api;
 
 import java.util.Map;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
  * An application failure that maps to a specific {@link ErrorCode} (ADR 0031).
@@ -15,11 +16,11 @@ public class ApiException extends RuntimeException {
     private final ErrorCode errorCode;
     private final transient Map<String, Object> properties;
 
-    public ApiException(ErrorCode errorCode, String message) {
+    public ApiException(ErrorCode errorCode, @Nullable String message) {
         this(errorCode, message, Map.of());
     }
 
-    public ApiException(ErrorCode errorCode, String message, Map<String, Object> properties) {
+    public ApiException(ErrorCode errorCode, @Nullable String message, Map<String, Object> properties) {
         super(message);
         this.errorCode = Objects.requireNonNull(errorCode, "An error code is required");
         this.properties = Map.copyOf(properties);

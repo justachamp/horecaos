@@ -11,6 +11,7 @@ import com.networknt.schema.SpecVersion;
 import com.networknt.schema.ValidationMessage;
 import java.io.InputStream;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -109,7 +110,7 @@ class FulfillmentCommandSchemaTests {
         JsonSchemaFactory factory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012);
         try (InputStream source = getClass().getClassLoader().getResourceAsStream(contract.schemaPath())) {
             assertThat(source).as("schema %s must exist", contract.schemaPath()).isNotNull();
-            return factory.getSchema(source, SchemaValidatorsConfig.builder().build());
+            return factory.getSchema(Objects.requireNonNull(source), SchemaValidatorsConfig.builder().build());
         }
     }
 }

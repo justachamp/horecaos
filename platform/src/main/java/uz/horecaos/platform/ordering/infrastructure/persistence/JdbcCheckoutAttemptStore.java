@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -100,7 +101,12 @@ public class JdbcCheckoutAttemptStore {
      * unsettled, and that happens by the transaction rolling back rather than by
      * anything written here.
      */
-    public void complete(UUID attemptId, UUID orderId, String outcomeCode, String outcomeDetail, Instant now) {
+    public void complete(
+            UUID attemptId,
+            @Nullable UUID orderId,
+            String outcomeCode,
+            @Nullable String outcomeDetail,
+            Instant now) {
         jdbc.sql("""
                 UPDATE ordering.checkout_attempts
                 SET status = 'COMPLETED', order_id = :orderId, outcome_code = :code,

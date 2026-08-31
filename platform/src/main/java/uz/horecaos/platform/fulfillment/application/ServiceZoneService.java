@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -133,8 +134,9 @@ public class ServiceZoneService {
      */
     @Transactional
     public void activate(UUID tenantId, UUID brandId, UUID zoneId, int version, UUID actorId) {
-        store.zoneRole(tenantId, brandId, zoneId)
-                .orElseThrow(() -> new DeliveryResourceNotFoundException("No zone " + zoneId + " for this brand"));
+        if (store.zoneRole(tenantId, brandId, zoneId).isEmpty()) {
+            throw new DeliveryResourceNotFoundException("No zone " + zoneId + " for this brand");
+        }
 
         VersionStatus status = store.versionStatus(tenantId, zoneId, version)
                 .orElseThrow(() ->
@@ -196,7 +198,7 @@ public class ServiceZoneService {
     }
 
     private JdbcServiceZoneStore.DraftVersion draft(
-            NewVersion request, UUID id, int version, UUID originLocationId, Instant now) {
+            NewVersion request, UUID id, int version, @Nullable UUID originLocationId, Instant now) {
         return new JdbcServiceZoneStore.DraftVersion(
                 id,
                 request.tenantId(),
@@ -237,7 +239,7 @@ public class ServiceZoneService {
      * @return whether the named region is a platform region, or null when the
      *         version names none — a zone without a region is ordinary
      */
-    private Boolean resolveRegion(NewVersion request) {
+    private @Nullable Boolean resolveRegion(NewVersion request) {
         if (request.regionId() == null) {
             return null;
         }
@@ -248,6 +250,8 @@ public class ServiceZoneService {
     }
 
     /**
+     * A new zone version to draft.
+     *
      * @param priority the first key of the overlap ranking. Higher wins; ties fall
      *                 to the smaller area and then to the zone id, so a tie is
      *                 resolved rather than left to the planner
@@ -257,12 +261,12 @@ public class ServiceZoneService {
             UUID brandId,
             UUID zoneId,
             ZoneRole role,
-            UUID regionId,
+            @Nullable UUID regionId,
             int priority,
             String currency,
-            UUID deliveryTariffId,
-            Long freeDeliveryFromMinor,
-            Long minBasketMinor,
+            @Nullable UUID deliveryTariffId,
+            @Nullable Long freeDeliveryFromMinor,
+            @Nullable Long minBasketMinor,
             UUID createdBy) {}
 
     public record DraftedVersion(UUID id, UUID zoneId, int version) {}

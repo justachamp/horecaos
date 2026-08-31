@@ -15,6 +15,18 @@ import uz.horecaos.platform.migration.api.ExternalEffect;
 import uz.horecaos.platform.migration.api.ImportSuppression;
 import uz.horecaos.platform.tenancy.api.TenancyEvent;
 
+/**
+ * Appends tenancy facts — tenant, brand, and location lifecycle — to the outbox
+ * (ADR 0004, ADR 0032).
+ *
+ * <p>{@link TransactionPhase#BEFORE_COMMIT}, so the tenancy change and the fact
+ * that it happened commit together. An after-commit append would leave a window
+ * in which a tenant or brand exists and nothing downstream will ever hear about
+ * it, which is the failure the outbox pattern exists to remove.
+ *
+ * <p>The partition key is the aggregate id, so every event for one tenant, brand,
+ * or location stays in order on its topic.
+ */
 @Component
 public class TenancyOutboxEventListener {
 

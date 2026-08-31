@@ -11,6 +11,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -174,10 +175,10 @@ public class SalesChannelController {
             String systemType,
             String displayName,
             String status,
-            UUID pricePlaneChannelId,
+            @Nullable UUID pricePlaneChannelId,
             boolean externallyPriced,
             boolean guestOrdersAllowed,
-            UUID providerInstallationId,
+            @Nullable UUID providerInstallationId,
             int version) {
 
         static ChannelView of(SalesChannel channel) {

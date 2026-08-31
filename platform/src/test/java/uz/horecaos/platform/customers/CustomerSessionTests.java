@@ -16,8 +16,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -134,7 +136,8 @@ class CustomerSessionTests {
     void aLiveTokenResolves() {
         Established established = establish(BRAND);
 
-        CustomerSession session = service.resolve(established.token()).session();
+        CustomerSession session =
+                Objects.requireNonNull(service.resolve(established.token()).session());
 
         assertThat(session.accountId()).isEqualTo(ACCOUNT);
         assertThat(session.tenantId()).isEqualTo(TENANT);
@@ -202,7 +205,8 @@ class CustomerSessionTests {
         Established established = establish(null);
         when(identity.effective(TENANT, ACCOUNT)).thenReturn(new CustomerAccountRef(survivor, TENANT));
 
-        assertThat(service.resolve(established.token()).session().accountId())
+        assertThat(Objects.requireNonNull(service.resolve(established.token()).session())
+                        .accountId())
                 .as("two accounts can be joined while somebody is holding a session for "
                         + "one; addressing the merged-away row reads as their history "
                         + "vanishing")
@@ -312,11 +316,11 @@ class CustomerSessionTests {
 
     // ------------------------------------------------------------------ helpers
 
-    private Established establish(UUID partition) {
+    private Established establish(@Nullable UUID partition) {
         return establish(partition, ACCOUNT);
     }
 
-    private Established establish(UUID partition, UUID accountId) {
+    private Established establish(@Nullable UUID partition, UUID accountId) {
         when(verification.redeemAsProvenNumber(eq(TENANT), eq(BRAND), anyString()))
                 .thenReturn(new Redemption(new CustomerAccountRef(accountId, TENANT), true));
         when(customers.account(TENANT, accountId))
@@ -326,7 +330,7 @@ class CustomerSessionTests {
         return service.establish(TENANT, BRAND, "a-grant");
     }
 
-    private CustomerSession session(UUID partition) {
+    private CustomerSession session(@Nullable UUID partition) {
         return new CustomerSession(
                 UUID.randomUUID(),
                 TENANT,
@@ -413,22 +417,22 @@ class CustomerSessionTests {
             private final UUID tenantId;
             private final UUID brandId;
             private final UUID accountId;
-            private final UUID partition;
+            private final @Nullable UUID partition;
             private final String tokenHash;
             private final Instant issuedAt;
             private final Instant expiresAt;
-            private Instant revokedAt;
+            private @Nullable Instant revokedAt;
 
             private Row(
                     UUID id,
                     UUID tenantId,
                     UUID brandId,
                     UUID accountId,
-                    UUID partition,
+                    @Nullable UUID partition,
                     String tokenHash,
                     Instant issuedAt,
                     Instant expiresAt,
-                    Instant revokedAt) {
+                    @Nullable Instant revokedAt) {
                 this.id = id;
                 this.tenantId = tenantId;
                 this.brandId = brandId;
@@ -448,11 +452,11 @@ class CustomerSessionTests {
                 return tokenHash;
             }
 
-            private UUID identityPartitionBrandId() {
+            private @Nullable UUID identityPartitionBrandId() {
                 return partition;
             }
 
-            private Instant revokedAt() {
+            private @Nullable Instant revokedAt() {
                 return revokedAt;
             }
         }

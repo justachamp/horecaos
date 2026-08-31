@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.migration.domain.RunStatus;
 import uz.horecaos.platform.migration.domain.RunType;
 
@@ -73,8 +74,8 @@ public interface MigrationRunStore {
     boolean checkpoint(
             UUID tenantId,
             UUID runId,
-            String sourceWatermark,
-            String targetWatermark,
+            @Nullable String sourceWatermark,
+            @Nullable String targetWatermark,
             Map<String, Object> checkpoint,
             Counters totals);
 
@@ -103,7 +104,12 @@ public interface MigrationRunStore {
      * @return the new version, or empty when it had already finished
      */
     Optional<Integer> finish(
-            UUID tenantId, UUID runId, RunStatus terminal, String checksum, int expectedVersion, Instant finishedAt);
+            UUID tenantId,
+            UUID runId,
+            RunStatus terminal,
+            @Nullable String checksum,
+            int expectedVersion,
+            Instant finishedAt);
 
     /**
      * One restartable execution of one migrator over one scope.
@@ -120,17 +126,17 @@ public interface MigrationRunStore {
             UUID scopeId,
             RunType runType,
             RunStatus status,
-            String sourceWatermark,
-            String targetWatermark,
+            @Nullable String sourceWatermark,
+            @Nullable String targetWatermark,
             Map<String, Object> checkpoint,
             int transformationVersion,
             Counters counters,
-            String checksum,
+            @Nullable String checksum,
             String startedBy,
             String idempotencyKey,
             int version,
             Instant startedAt,
-            Instant finishedAt) {}
+            @Nullable Instant finishedAt) {}
 
     /**
      * The five dispositions a run counts, always as running totals.
@@ -154,5 +160,6 @@ public interface MigrationRunStore {
     }
 
     /** Where an interrupted run of this type left off. */
-    record Resumption(String sourceWatermark, String targetWatermark, Map<String, Object> checkpoint) {}
+    record Resumption(
+            @Nullable String sourceWatermark, @Nullable String targetWatermark, Map<String, Object> checkpoint) {}
 }

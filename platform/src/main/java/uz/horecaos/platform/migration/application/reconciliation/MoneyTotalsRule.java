@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.domain.ReconciliationSeverity;
 
@@ -205,7 +206,7 @@ public final class MoneyTotalsRule implements ReconciliationRule {
      * arrived with one is a mapping error and should say so rather than round a
      * customer's money away.
      */
-    private static BigInteger minorUnits(Object value) {
+    private static BigInteger minorUnits(@Nullable Object value) {
         return switch (value) {
             case null -> BigInteger.ZERO;
             case BigInteger exact -> exact;

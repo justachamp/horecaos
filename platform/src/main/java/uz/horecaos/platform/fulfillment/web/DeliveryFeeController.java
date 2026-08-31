@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -165,14 +166,14 @@ public class DeliveryFeeController {
      */
     public record DeliveryFeeView(
             String outcome,
-            String reasonCode,
+            @Nullable String reasonCode,
             boolean available,
-            Long feeMinor,
+            @Nullable Long feeMinor,
             String currency,
-            Long minBasketMinor,
-            Long freeDeliveryFromMinor,
-            Integer distanceMeters,
-            String distanceSource) {
+            @Nullable Long minBasketMinor,
+            @Nullable Long freeDeliveryFromMinor,
+            @Nullable Integer distanceMeters,
+            @Nullable String distanceSource) {
 
         static DeliveryFeeView of(DeliveryFeeResolution resolution) {
             return new DeliveryFeeView(

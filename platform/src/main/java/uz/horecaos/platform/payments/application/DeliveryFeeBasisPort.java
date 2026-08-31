@@ -30,9 +30,9 @@ import java.util.UUID;
 public interface DeliveryFeeBasisPort {
 
     /**
-     * @return the delivery fee charged on this order in whole som, or empty when
-     *         the platform cannot establish one. Empty is never zero: zero means
-     *         free delivery and would refuse every reimbursement
+     * Returns the delivery fee charged on this order in whole som, or empty when
+     * the platform cannot establish one. Empty is never zero: zero means
+     * free delivery and would refuse every reimbursement.
      */
     OptionalLong deliveryFeeMinor(UUID tenantId, UUID orderId);
 

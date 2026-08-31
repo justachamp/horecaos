@@ -8,8 +8,10 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -56,9 +58,6 @@ class PriceAuthoringTests {
     private static final Instant NOW = Instant.parse("2026-08-24T09:00:00Z");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private JdbcPricingStore pricingStore;
@@ -76,9 +75,6 @@ class PriceAuthoringTests {
         Assumptions.assumeTrue(
                 DockerClientFactory.instance().isDockerAvailable(), "Docker is required for price authoring tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -207,7 +203,8 @@ class PriceAuthoringTests {
         // quotes alone: a customer at the payment step pays what they were shown,
         // for the fifteen minutes the quote lasts.
         assertThat(acceptance.outcome()).isEqualTo(QuoteService.Acceptance.Outcome.ACCEPTED);
-        assertThat(acceptance.total().minor()).isEqualTo(50_000L);
+        var total = Objects.requireNonNull(acceptance.total(), "an ACCEPTED outcome always carries a total");
+        assertThat(total.minor()).isEqualTo(50_000L);
     }
 
     @Test
@@ -529,7 +526,7 @@ class PriceAuthoringTests {
                 .update();
     }
 
-    private UUID seedProduct(UUID brandId, UUID catalog, String code, String name) {
+    private UUID seedProduct(UUID brandId, @Nullable UUID catalog, String code, String name) {
         UUID productId = UUID.randomUUID();
         UUID variantId = UUID.randomUUID();
         jdbc.sql("""

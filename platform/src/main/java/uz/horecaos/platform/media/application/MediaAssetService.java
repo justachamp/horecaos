@@ -7,6 +7,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -97,8 +98,8 @@ public class MediaAssetService implements MediaAvailability {
             MediaVisibility visibility,
             String contentType,
             long sizeBytes,
-            String originalFilename,
-            UUID actorId) {
+            @Nullable String originalFilename,
+            @Nullable UUID actorId) {
 
         String normalizedType =
                 contentType == null ? "" : contentType.toLowerCase(Locale.ROOT).strip();
@@ -358,7 +359,7 @@ public class MediaAssetService implements MediaAvailability {
     }
 
     /** Kept only as a display label; it never reaches the object key. */
-    private static String safeLabel(String filename) {
+    private static @Nullable String safeLabel(@Nullable String filename) {
         if (filename == null || filename.isBlank()) {
             return null;
         }

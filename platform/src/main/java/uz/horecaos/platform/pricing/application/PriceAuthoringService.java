@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -106,12 +107,21 @@ public class PriceAuthoringService {
      */
     @Transactional
     public PriceBook assign(
-            UUID tenantId, UUID brandId, UUID priceBookId, AssignmentScope scope, UUID scopeId, Assignment command) {
+            UUID tenantId,
+            UUID brandId,
+            UUID priceBookId,
+            AssignmentScope scope,
+            @Nullable UUID scopeId,
+            Assignment command) {
 
         PriceBook book = require(tenantId, brandId, priceBookId);
         requireAuthorable(book);
 
-        if (scope == AssignmentScope.CHANNEL && channels.byId(tenantId, scopeId).isEmpty()) {
+        // scopeId == null short-circuits before byId ever sees a null id: only a
+        // CHANNEL assignment supplies one, and a channel assignment naming no
+        // channel is exactly as unknown as one naming a channel that does not
+        // exist for this tenant.
+        if (scope == AssignmentScope.CHANNEL && (scopeId == null || channels.byId(tenantId, scopeId).isEmpty())) {
             throw new UnknownAssignmentScopeException(scope, scopeId);
         }
 
@@ -281,12 +291,24 @@ public class PriceAuthoringService {
     }
 
     /**
+     * A draft book to create, before it has an id or a version.
+     *
+     * @param validFrom defaults to now when null
+     * @param validUntil null is open-ended: the book's own window never closes on
+     *                   its own
      * @param priority settles overlap deterministically, so row order and
      *                 wall-clock timing never decide a price
      */
-    public record NewPriceBook(String name, String currency, Instant validFrom, Instant validUntil, int priority) {}
+    public record NewPriceBook(
+            String name, String currency, @Nullable Instant validFrom, @Nullable Instant validUntil, int priority) {}
 
-    public record Assignment(int priority, Instant validFrom, Instant validUntil) {}
+    /**
+     * Where and when a price book applies.
+     *
+     * @param validFrom defaults to now when null
+     * @param validUntil null is open-ended: the assignment never closes on its own
+     */
+    public record Assignment(int priority, @Nullable Instant validFrom, @Nullable Instant validUntil) {}
 
     public record PriceBook(
             UUID id,
@@ -294,7 +316,7 @@ public class PriceAuthoringService {
             String currency,
             Status status,
             Instant validFrom,
-            Instant validUntil,
+            @Nullable Instant validUntil,
             int priority,
             int version) {
 
@@ -344,7 +366,7 @@ public class PriceAuthoringService {
     }
 
     public static class UnknownAssignmentScopeException extends RuntimeException {
-        public UnknownAssignmentScopeException(AssignmentScope scope, UUID scopeId) {
+        public UnknownAssignmentScopeException(AssignmentScope scope, @Nullable UUID scopeId) {
             super("No %s %s for this tenant".formatted(scope, scopeId));
         }
     }

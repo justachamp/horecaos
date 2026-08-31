@@ -3,6 +3,7 @@ package uz.horecaos.platform.kitchen.application;
 import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -129,6 +130,8 @@ public class KitchenStationService {
     }
 
     /**
+     * One station this location actually has.
+     *
      * @param fallback whether unroutable lines land here. Exactly one station per
      *                 location must carry it before that location can run a board
      */
@@ -145,17 +148,23 @@ public class KitchenStationService {
             boolean fallback) {}
 
     /**
+     * A brand-layer or a location-layer rule, addressing exactly one catalogue node.
+     *
      * @param locationId  null for a brand rule
+     * @param variantId   set together with exactly one of {@code productId} and
+     *                    {@code categoryId} left null, per the layer's addressed node
+     * @param productId   see {@code variantId}
+     * @param categoryId  see {@code variantId}
      * @param stationRole set for a brand rule, null for a location rule
      * @param stationId   set for a location rule, null for a brand rule
      */
     public record NewRoutingRule(
             UUID tenantId,
             UUID brandId,
-            UUID locationId,
-            UUID variantId,
-            UUID productId,
-            UUID categoryId,
-            StationRole stationRole,
-            UUID stationId) {}
+            @Nullable UUID locationId,
+            @Nullable UUID variantId,
+            @Nullable UUID productId,
+            @Nullable UUID categoryId,
+            @Nullable StationRole stationRole,
+            @Nullable UUID stationId) {}
 }

@@ -1,5 +1,7 @@
 package uz.horecaos.platform.integration.api;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * An inbox handler whose work includes calling something outside the platform
  * (ADR 0005, ADR 0007).
@@ -45,15 +47,20 @@ public interface ExternalWorkInboxHandler<T, W> extends InboxHandler<T> {
      * @param attempt which try this is, so a handler can settle differently on
      *                the last one instead of letting an unanswerable case
      *                disappear into a dead letter
+     * @return whatever the handler learned, or {@code null} when there is
+     *         nothing honest to record and the work is simply done
      */
-    W perform(ExternalEventEnvelope<T> event, Attempt attempt);
+    @Nullable W perform(ExternalEventEnvelope<T> event, Attempt attempt);
 
     /**
      * The part that writes. Runs inside the transaction that also marks the
      * inbox row {@code PROCESSED}, so the effect and the evidence commit
      * together or not at all. It must not call anything external.
+     *
+     * @param work whatever {@link #perform} returned, including {@code null}
+     *             when there was nothing honest to record
      */
-    void record(ExternalEventEnvelope<T> event, W work);
+    void record(ExternalEventEnvelope<T> event, @Nullable W work);
 
     /**
      * Kept so that a caller holding only an {@link InboxHandler} still behaves
@@ -65,6 +72,8 @@ public interface ExternalWorkInboxHandler<T, W> extends InboxHandler<T> {
     }
 
     /**
+     * Which try this is, out of how many the consumer allows.
+     *
      * @param number  this attempt, counting from one
      * @param maximum the configured attempt budget for the consumer
      */

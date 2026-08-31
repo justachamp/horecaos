@@ -3,6 +3,7 @@ package uz.horecaos.platform.ordering.api;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.tenancy.api.TenantId;
 
 /**
@@ -28,7 +29,7 @@ public record OrderReceived(
         String publicOrderNumber,
         String fulfillmentMode,
         String acceptanceMode,
-        UUID acceptancePolicyId,
+        @Nullable UUID acceptancePolicyId,
         int acceptancePolicyVersion,
         String status,
         int orderVersion,
@@ -82,7 +83,7 @@ public record OrderReceived(
             String publicOrderNumber,
             String fulfillmentMode,
             String acceptanceMode,
-            UUID acceptancePolicyId,
+            @Nullable UUID acceptancePolicyId,
             int acceptancePolicyVersion,
             String status,
             int orderVersion,

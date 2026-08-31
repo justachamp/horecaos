@@ -3,6 +3,7 @@ package uz.horecaos.platform.marketing.domain;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One typed condition from the closed catalogue (ADR 0044).
@@ -20,12 +21,12 @@ import java.util.UUID;
 public record AudiencePredicate(
         PredicateType type,
         PredicateOperator operator,
-        Long numericLow,
-        Long numericHigh,
-        LocalDate dateLow,
-        LocalDate dateHigh,
-        List<String> textValues,
-        UUID audienceId) {
+        @Nullable Long numericLow,
+        @Nullable Long numericHigh,
+        @Nullable LocalDate dateLow,
+        @Nullable LocalDate dateHigh,
+        @Nullable List<String> textValues,
+        @Nullable UUID audienceId) {
 
     private static final List<String> SUPPORTED_LOCALES = List.of("ru", "uz-Latn", "en");
     private static final int MAX_TEXT_VALUES = 64;
@@ -85,7 +86,8 @@ public record AudiencePredicate(
     }
 
     /** A one-sided or two-sided numeric band. */
-    public static AudiencePredicate numeric(PredicateType type, PredicateOperator operator, Long low, Long high) {
+    public static AudiencePredicate numeric(
+            PredicateType type, PredicateOperator operator, Long low, @Nullable Long high) {
         return new AudiencePredicate(type, operator, low, high, null, null, null, null);
     }
 

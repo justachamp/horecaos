@@ -94,6 +94,11 @@ public class CourierShiftAdapter implements CourierShiftPort {
 
         ShiftRow row = shift.get();
         return Optional.of(new OpenShift(
-                row.id(), row.locationId(), row.brandId(), engagement.get().registrationValidUntil()));
+                row.id(),
+                row.locationId(),
+                row.brandId(),
+                // The filter above already refused an engagement without a date;
+                // the guard keeps that checked rather than assumed.
+                java.util.Objects.requireNonNull(engagement.get().registrationValidUntil())));
     }
 }

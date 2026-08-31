@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -38,6 +39,8 @@ public class JdbcDeliveryExceptionStore {
     }
 
     /**
+     * Opens an operator-facing exception for a plan, deduplicated by the unique index.
+     *
      * @return true when this call opened the exception. False means one was
      *         already open for this plan and reason, which is the normal answer on
      *         every tick after the first
@@ -90,7 +93,8 @@ public class JdbcDeliveryExceptionStore {
                         row.getString("severity"),
                         row.getString("status"),
                         row.getString("detail"),
-                        instant(row, "raised_at"),
+                        // raised_at is NOT NULL: every exception is raised at an instant.
+                        Objects.requireNonNull(instant(row, "raised_at")),
                         row.getString("raised_by")))
                 .list();
     }

@@ -2,7 +2,9 @@ package uz.horecaos.platform.migration.application;
 
 import java.time.Clock;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -47,23 +49,27 @@ class MigrationAudit {
             ResourceScope scope,
             String targetType,
             UUID targetId,
-            Integer targetVersion,
+            @Nullable Integer targetVersion,
             String reason,
             Map<String, Object> changes,
-            UUID approvalRequestId) {
+            @Nullable UUID approvalRequestId) {
 
-        audit.record(AuditFact.of(actionCode, AuditClass.BUSINESS)
+        AuditFact.Builder fact = AuditFact.of(actionCode, AuditClass.BUSINESS)
                 .by(actor)
                 .at(scope)
                 .target(targetType, targetId)
-                .targetVersion(targetVersion == null ? null : targetVersion.longValue())
                 .outcome(AuditFact.Outcome.SUCCEEDED)
                 .because(reason)
                 .changed(changes)
-                .underApproval(approvalRequestId)
                 .correlatedBy(correlationId())
-                .occurredAt(clock.instant())
-                .build());
+                .occurredAt(clock.instant());
+        if (targetVersion != null) {
+            fact.targetVersion(targetVersion.longValue());
+        }
+        if (approvalRequestId != null) {
+            fact.underApproval(approvalRequestId);
+        }
+        audit.record(fact.build());
     }
 
     /**
@@ -89,21 +95,23 @@ class MigrationAudit {
             ResourceScope scope,
             String targetType,
             UUID targetId,
-            Integer targetVersion,
+            @Nullable Integer targetVersion,
             String reason,
             Map<String, Object> changes) {
 
-        audit.record(AuditFact.of(actionCode, AuditClass.SECURITY)
+        AuditFact.Builder fact = AuditFact.of(actionCode, AuditClass.SECURITY)
                 .by(actor)
                 .at(scope)
                 .target(targetType, targetId)
-                .targetVersion(targetVersion == null ? null : targetVersion.longValue())
                 .outcome(AuditFact.Outcome.REJECTED)
                 .because(reason)
                 .changed(changes)
                 .correlatedBy(correlationId())
-                .occurredAt(clock.instant())
-                .build());
+                .occurredAt(clock.instant());
+        if (targetVersion != null) {
+            fact.targetVersion(targetVersion.longValue());
+        }
+        audit.record(fact.build());
     }
 
     /**
@@ -113,9 +121,12 @@ class MigrationAudit {
      * that branch, and recording it at tenant level would hide which of a
      * network's forty locations cut over.
      */
-    static ResourceScope scopeOf(UUID tenantId, UUID brandId, UUID locationId) {
+    static ResourceScope scopeOf(UUID tenantId, @Nullable UUID brandId, @Nullable UUID locationId) {
         if (locationId != null) {
-            return ResourceScope.location(tenantId, brandId, locationId);
+            // ck_scope_narrowing: a scope narrowed to a location always names the
+            // location's brand too, so this is never actually null here.
+            return ResourceScope.location(
+                    tenantId, Objects.requireNonNull(brandId, "A location scope names its brand"), locationId);
         }
         if (brandId != null) {
             return ResourceScope.brand(tenantId, brandId);

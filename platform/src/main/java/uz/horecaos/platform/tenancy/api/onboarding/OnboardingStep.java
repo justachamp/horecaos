@@ -2,6 +2,7 @@ package uz.horecaos.platform.tenancy.api.onboarding;
 
 import java.util.Arrays;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The onboarding step catalogue (ADR 0008).
@@ -51,9 +52,9 @@ public enum OnboardingStep {
     private final int sequence;
     private final Phase phase;
     private final boolean requiredInV1;
-    private final String blockedUntil;
+    private final @Nullable String blockedUntil;
 
-    OnboardingStep(int sequence, Phase phase, boolean requiredInV1, String blockedUntil) {
+    OnboardingStep(int sequence, Phase phase, boolean requiredInV1, @Nullable String blockedUntil) {
         this.sequence = sequence;
         this.phase = phase;
         this.requiredInV1 = requiredInV1;

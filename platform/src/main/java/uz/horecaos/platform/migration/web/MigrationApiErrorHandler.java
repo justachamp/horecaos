@@ -4,6 +4,7 @@ import java.net.URI;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -34,7 +35,7 @@ public class MigrationApiErrorHandler {
 
     @ExceptionHandler(MigrationResourceNotFoundException.class)
     ProblemDetail notFound(MigrationResourceNotFoundException exception) {
-        return ApiProblem.of(ErrorCode.RESOURCE_NOT_FOUND, exception.getMessage());
+        return ApiProblem.of(ErrorCode.RESOURCE_NOT_FOUND, message(exception));
     }
 
     /**
@@ -50,12 +51,12 @@ public class MigrationApiErrorHandler {
     @ExceptionHandler(MigrationConflictException.class)
     ProblemDetail conflict(MigrationConflictException exception) {
         if (exception.expectedVersion() == null || exception.actualVersion() == null) {
-            return ApiProblem.of(ErrorCode.RESOURCE_CONFLICT, exception.getMessage());
+            return ApiProblem.of(ErrorCode.RESOURCE_CONFLICT, message(exception));
         }
         Map<String, Object> properties = new HashMap<>();
         properties.put("expectedVersion", exception.expectedVersion());
         properties.put("currentVersion", exception.actualVersion());
-        return ApiProblem.withProperties(ErrorCode.STALE_VERSION, exception.getMessage(), properties);
+        return ApiProblem.withProperties(ErrorCode.STALE_VERSION, message(exception), properties);
     }
 
     /**
@@ -77,7 +78,7 @@ public class MigrationApiErrorHandler {
     @ExceptionHandler(MigrationPreconditionException.class)
     ProblemDetail precondition(MigrationPreconditionException exception) {
         ProblemDetail problem = ApiProblem.withProperties(
-                ErrorCode.RESOURCE_CONFLICT, exception.getMessage(), Map.of("reason", exception.reasonCode()));
+                ErrorCode.RESOURCE_CONFLICT, message(exception), Map.of("reason", exception.reasonCode()));
         problem.setType(URI.create("https://docs.horecaos.uz/problems/migration/"
                 + exception.reasonCode().toLowerCase(Locale.ROOT).replace('_', '-')));
         return problem;
@@ -96,11 +97,21 @@ public class MigrationApiErrorHandler {
     ProblemDetail illegalTransition(IllegalTransitionException exception) {
         return ApiProblem.withProperties(
                 ErrorCode.RESOURCE_CONFLICT,
-                exception.getMessage(),
+                message(exception),
                 Map.of(
                         "fromState",
                         exception.from().name(),
                         "toState",
                         exception.to().name()));
+    }
+
+    /**
+     * Every exception this handler catches always constructs {@link
+     * Throwable#getMessage()} from a required message argument, so it is never
+     * actually null here — but the JDK declares the getter nullable regardless,
+     * and a Problem Details body has no good way to render an absent one.
+     */
+    private static String message(Throwable exception) {
+        return Objects.requireNonNullElse(exception.getMessage(), exception.getClass().getSimpleName());
     }
 }

@@ -2,6 +2,7 @@ package uz.horecaos.platform.web.api;
 
 import java.util.List;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A cursor-paginated response body (ADR 0031).
@@ -10,7 +11,7 @@ import java.util.Objects;
  * over a mutable collection costs a second scan and is stale the moment it is
  * returned. A null {@code nextCursor} means the end of the collection.
  */
-public record Page<T>(List<T> items, String nextCursor) {
+public record Page<T>(List<T> items, @Nullable String nextCursor) {
 
     public static final int DEFAULT_LIMIT = 50;
     public static final int MAXIMUM_LIMIT = 200;
@@ -24,7 +25,7 @@ public record Page<T>(List<T> items, String nextCursor) {
     }
 
     /** Clamps a client-supplied limit into the documented range. */
-    public static int limitOrDefault(Integer requested) {
+    public static int limitOrDefault(@Nullable Integer requested) {
         if (requested == null) {
             return DEFAULT_LIMIT;
         }

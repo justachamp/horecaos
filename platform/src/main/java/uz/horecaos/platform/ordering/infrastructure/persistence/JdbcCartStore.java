@@ -6,6 +6,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.ordering.domain.CartStatus;
@@ -139,7 +140,7 @@ public class JdbcCartStore {
             UUID variantId,
             int quantity,
             String modifiersJson,
-            String noteEncrypted,
+            @Nullable String noteEncrypted,
             Instant now) {
         jdbc.sql("""
                 INSERT INTO ordering.cart_lines (
@@ -254,7 +255,12 @@ public class JdbcCartStore {
      * {@code CHECKOUT_IN_PROGRESS} cannot be released twice.
      */
     public boolean transition(
-            UUID tenantId, UUID cartId, CartStatus from, CartStatus to, UUID convertedOrderId, Instant now) {
+            UUID tenantId,
+            UUID cartId,
+            CartStatus from,
+            CartStatus to,
+            @Nullable UUID convertedOrderId,
+            Instant now) {
         return jdbc.sql("""
                 UPDATE ordering.carts
                 SET status = :to,
@@ -297,7 +303,7 @@ public class JdbcCartStore {
             UUID cartId,
             UUID customerAddressId,
             String addressEncrypted,
-            String instructionsEncrypted,
+            @Nullable String instructionsEncrypted,
             String recipientNameEncrypted,
             String recipientPhoneEncrypted,
             double latitude,
@@ -395,32 +401,52 @@ public class JdbcCartStore {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
+    /**
+     * A cart as it stands right now.
+     *
+     * @param customerAccountId    null for a guest cart
+     * @param guestReferenceHash   null for an account cart — a cart carries
+     *                             exactly one of the two identities
+     * @param pricingQuoteId       null until the cart is priced, and cleared by
+     *                             every edit — a cart holding a quote for
+     *                             contents it no longer has is not this cart's
+     *                             price
+     * @param pricingContextHash   null exactly when {@code pricingQuoteId} is
+     * @param catalogPublicationId null exactly when {@code pricingQuoteId} is
+     * @param convertedOrderId     null until checkout converts this cart into an
+     *                             order
+     */
     public record CartRow(
             UUID cartId,
             UUID tenantId,
             UUID brandId,
             UUID locationId,
             UUID channelId,
-            UUID customerAccountId,
-            String guestReferenceHash,
+            @Nullable UUID customerAccountId,
+            @Nullable String guestReferenceHash,
             FulfillmentMode fulfillmentMode,
             String currency,
             CartStatus status,
-            UUID pricingQuoteId,
-            String pricingContextHash,
-            UUID catalogPublicationId,
+            @Nullable UUID pricingQuoteId,
+            @Nullable String pricingContextHash,
+            @Nullable UUID catalogPublicationId,
             int version,
             Instant expiresAt,
-            UUID convertedOrderId) {}
+            @Nullable UUID convertedOrderId) {}
 
-    /** @param selectedModifiersJson the chosen options, stored whole and read whole */
+    /**
+     * One line of a cart.
+     *
+     * @param selectedModifiersJson the chosen options, stored whole and read whole
+     * @param customerNoteEncrypted null when the customer left no note on this line
+     */
     public record CartLineRow(
             UUID lineId,
             String lineKey,
             UUID variantId,
             int quantity,
             String selectedModifiersJson,
-            String customerNoteEncrypted) {}
+            @Nullable String customerNoteEncrypted) {}
 
     /**
      * A cart's destination as it is stored: four ciphertexts and a point.
@@ -435,7 +461,7 @@ public class JdbcCartStore {
             UUID cartId,
             UUID customerAddressId,
             String addressEncrypted,
-            String instructionsEncrypted,
+            @Nullable String instructionsEncrypted,
             String recipientNameEncrypted,
             String recipientPhoneEncrypted,
             double latitude,

@@ -10,7 +10,9 @@ import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.integration.api.pos.PosApiCall;
 import uz.horecaos.platform.integration.api.pos.PosApiCall.Effect;
@@ -378,7 +380,7 @@ public class CloposAdapter implements PosAdapter {
             stopList = ProviderOutcome.success(Map.of("data", List.of()), null);
         }
 
-        CatalogSnapshot snapshot = new CloposCatalogNormalizer(context.config(CloposConfig.CURRENCY, "UZS"))
+        CatalogSnapshot snapshot = new CloposCatalogNormalizer(currencyOf(context))
                 .normalize(
                         products.rows(),
                         categories.rows(),
@@ -407,7 +409,7 @@ public class CloposAdapter implements PosAdapter {
         if (outcome.status() != ProviderOutcome.Status.SUCCESS) {
             return new AvailabilityRead(outcome, List.of());
         }
-        CatalogSnapshot snapshot = new CloposCatalogNormalizer(context.config(CloposConfig.CURRENCY, "UZS"))
+        CatalogSnapshot snapshot = new CloposCatalogNormalizer(currencyOf(context))
                 .normalize(
                         List.of(), List.of(), CloposEnvelope.dataList(outcome.normalized()), clock.instant(), true, 1);
         return new AvailabilityRead(outcome, snapshot.availability());
@@ -434,7 +436,8 @@ public class CloposAdapter implements PosAdapter {
     @Override
     public ExportResult exportOrder(PosContext context, OrderExport order) {
         CloposSession.Token token = session.token(context);
-        if (!token.usable()) {
+        String tokenValue = token.value();
+        if (tokenValue == null || !token.usable()) {
             return new ExportResult(token.outcome(), null, false);
         }
 
@@ -452,13 +455,16 @@ public class CloposAdapter implements PosAdapter {
         if (order.correlationReference() != null) {
             body.put("order_number", order.correlationReference());
         }
-        body.put(
-                "customer",
-                Map.of(
-                        "id", numericOrNull(order.customer().externalCustomerId()),
-                        "name", nullToEmpty(order.customer().name()),
-                        "phone", nullToEmpty(order.customer().phone()),
-                        "address", nullToEmpty(order.customer().address())));
+        // A LinkedHashMap rather than Map.of: the Clopos customer id is unset for
+        // every order today (CUSTOMER_UPSERT is not enabled — see
+        // declaredCapabilities), and Map.of throws NullPointerException on a null
+        // value rather than encoding "not present" as JSON null.
+        Map<String, Object> customer = new LinkedHashMap<>();
+        customer.put("id", numeric(order.customer().externalCustomerId()));
+        customer.put("name", nullToEmpty(order.customer().name()));
+        customer.put("phone", nullToEmpty(order.customer().phone()));
+        customer.put("address", nullToEmpty(order.customer().address()));
+        body.put("customer", customer);
 
         List<Map<String, Object>> lines = new ArrayList<>();
         for (OrderExport.Line line : order.lines()) {
@@ -498,7 +504,7 @@ public class CloposAdapter implements PosAdapter {
                 "/orders",
                 PosApiCall.fixedBody(body),
                 Effect.UNKEYED_CREATE,
-                PosApiCall.fixedHeaders(headers(token.value(), context)),
+                PosApiCall.fixedHeaders(headers(tokenValue, context)),
                 context.correlationId(),
                 // Comfortably beyond Clopos's own eight-second upstream budget, so
                 // that we observe their 504 rather than our own client timeout. A
@@ -571,6 +577,15 @@ public class CloposAdapter implements PosAdapter {
                 continue;
             }
 
+            // A candidate this platform cannot reference is not a candidate: the
+            // export row and every later operator action key on this id. Skipped
+            // rather than treated as a fatal failure of the whole read, because
+            // one malformed row from Clopos must not hide every real candidate.
+            String externalOrderId = CloposEnvelope.string(row, "id");
+            if (externalOrderId == null) {
+                continue;
+            }
+
             String echoed = firstNonNull(
                     CloposEnvelope.string(row, "integration_uuid"),
                     CloposEnvelope.string(row, "integration_id"),
@@ -579,7 +594,7 @@ public class CloposAdapter implements PosAdapter {
             Instant createdAt = CloposTime.parse(CloposEnvelope.string(row, "created_at"));
 
             candidates.add(new ExportCandidate(
-                    CloposEnvelope.string(row, "id"),
+                    externalOrderId,
                     CloposEnvelope.string(row, "status"),
                     createdAt,
                     probe.correlationReference() != null
@@ -610,7 +625,8 @@ public class CloposAdapter implements PosAdapter {
     @Override
     public ProviderOutcome cancelExportedOrder(PosContext context, String externalOrderId, String reason) {
         CloposSession.Token token = session.token(context);
-        if (!token.usable()) {
+        String tokenValue = token.value();
+        if (tokenValue == null || !token.usable()) {
             return token.outcome();
         }
         PosApiCall call = new PosApiCall(
@@ -624,7 +640,7 @@ public class CloposAdapter implements PosAdapter {
                 // Setting a terminal state. Repeating it converges, so a lost
                 // response here really is safe to send again.
                 Effect.IDEMPOTENT_WRITE,
-                PosApiCall.fixedHeaders(headers(token.value(), context)),
+                PosApiCall.fixedHeaders(headers(tokenValue, context)),
                 context.correlationId(),
                 null);
 
@@ -652,7 +668,8 @@ public class CloposAdapter implements PosAdapter {
     private ProviderOutcome patchReceipt(
             PosContext context, String operation, String externalReceiptId, Map<String, Object> body) {
         CloposSession.Token token = session.token(context);
-        if (!token.usable()) {
+        String tokenValue = token.value();
+        if (tokenValue == null || !token.usable()) {
             return token.outcome();
         }
         PosApiCall call = new PosApiCall(
@@ -666,7 +683,7 @@ public class CloposAdapter implements PosAdapter {
                 // Sets a named field to a named value. Idempotent by construction
                 // whatever Clopos guarantees, which is nothing.
                 Effect.IDEMPOTENT_WRITE,
-                PosApiCall.fixedHeaders(headers(token.value(), context)),
+                PosApiCall.fixedHeaders(headers(tokenValue, context)),
                 context.correlationId(),
                 null);
 
@@ -679,7 +696,8 @@ public class CloposAdapter implements PosAdapter {
 
     private ProviderOutcome read(PosContext context, String operation, String path) {
         CloposSession.Token token = session.token(context);
-        if (!token.usable()) {
+        String tokenValue = token.value();
+        if (tokenValue == null || !token.usable()) {
             return token.outcome();
         }
         PosApiCall call = new PosApiCall(
@@ -691,7 +709,7 @@ public class CloposAdapter implements PosAdapter {
                 path,
                 null,
                 Effect.READ,
-                PosApiCall.fixedHeaders(headers(token.value(), context)),
+                PosApiCall.fixedHeaders(headers(tokenValue, context)),
                 context.correlationId(),
                 null);
 
@@ -702,7 +720,8 @@ public class CloposAdapter implements PosAdapter {
             // clock problem somebody needs to know about rather than retry past.
             session.invalidate(context);
             CloposSession.Token fresh = session.token(context);
-            if (!fresh.usable()) {
+            String freshValue = fresh.value();
+            if (freshValue == null || !fresh.usable()) {
                 return fresh.outcome();
             }
             PosApiCall retry = new PosApiCall(
@@ -714,7 +733,7 @@ public class CloposAdapter implements PosAdapter {
                     path,
                     null,
                     Effect.READ,
-                    PosApiCall.fixedHeaders(headers(fresh.value(), context)),
+                    PosApiCall.fixedHeaders(headers(freshValue, context)),
                     context.correlationId(),
                     null);
             return CloposEnvelope.read(transport.exchange(retry), Effect.READ);
@@ -749,6 +768,16 @@ public class CloposAdapter implements PosAdapter {
     }
 
     /**
+     * The installation's currency, always non-null in practice: {@code config}
+     * only returns null when the fallback itself is null, and "UZS" never is. The
+     * helper exists so that fact is stated once rather than re-derived by
+     * {@code Objects.requireNonNullElse} at every call site.
+     */
+    private static String currencyOf(PosContext context) {
+        return Objects.requireNonNullElse(context.config(CloposConfig.CURRENCY, "UZS"), "UZS");
+    }
+
+    /**
      * The two headers every authenticated Clopos call carries.
      *
      * <p>{@code x-token} takes the bare token despite the auth response saying
@@ -778,7 +807,7 @@ public class CloposAdapter implements PosAdapter {
     }
 
     @SuppressWarnings("unchecked")
-    private static String fingerprintOf(Map<String, Object> payload) {
+    private static @Nullable String fingerprintOf(Map<String, Object> payload) {
         Object products = payload.get("products");
         if (!(products instanceof List<?> list)) {
             return null;
@@ -798,13 +827,15 @@ public class CloposAdapter implements PosAdapter {
                                 ? Long.toString(number.longValue())
                                 : String.valueOf(productId),
                         quantity.intValue(),
-                        price == null ? 0L : CloposCatalogNormalizer.minor(price)));
+                        // minor() only returns null for a null input, and price is
+                        // proven non-null in this branch.
+                        price == null ? 0L : Objects.requireNonNull(CloposCatalogNormalizer.minor(price))));
             }
         }
         return lines.isEmpty() ? null : LineFingerprint.of(lines);
     }
 
-    private static String firstNonNull(String... values) {
+    private static @Nullable String firstNonNull(@Nullable String... values) {
         for (String value : values) {
             if (value != null && !"null".equals(value) && !value.isBlank()) {
                 return value;
@@ -813,22 +844,24 @@ public class CloposAdapter implements PosAdapter {
         return null;
     }
 
-    private static Object numeric(String value) {
+    /**
+     * Clopos ids as the numeric JSON value they are, kept as the original string
+     * when it does not parse — a misconfigured value should reach Clopos and be
+     * refused with its own message rather than throw here and be reported as an
+     * adapter fault — and passed through as null when there was nothing to send.
+     */
+    private static @Nullable Object numeric(@Nullable String value) {
+        if (value == null) {
+            return null;
+        }
         try {
             return Long.parseLong(value);
         } catch (NumberFormatException notANumber) {
-            // Clopos ids are integers, but a misconfigured venue reference should
-            // reach Clopos and be refused with its own message rather than throw
-            // here and be reported as an adapter fault.
             return value;
         }
     }
 
-    private static Object numericOrNull(String value) {
-        return value == null ? null : numeric(value);
-    }
-
-    private static String nullToEmpty(String value) {
+    private static String nullToEmpty(@Nullable String value) {
         return value == null ? "" : value;
     }
 

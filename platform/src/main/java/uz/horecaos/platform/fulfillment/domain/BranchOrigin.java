@@ -1,6 +1,7 @@
 package uz.horecaos.platform.fulfillment.domain;
 
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 
 /**
@@ -42,17 +43,25 @@ public record BranchOrigin(UUID locationId, GeoPoint point, String source) {
     private static final String NOT_GEOCODED = "NOT_GEOCODED";
 
     /**
+     * Establishes a branch's origin point, refusing the two ways it can be unusable.
+     *
      * @throws UnlocatedBranchException when the branch cannot originate a zone or
      *                                  a measurement
      */
-    public static BranchOrigin of(UUID locationId, Double latitude, Double longitude, String coordinateSource) {
+    public static BranchOrigin of(
+            UUID locationId, @Nullable Double latitude, @Nullable Double longitude, String coordinateSource) {
 
         if (latitude == null || longitude == null || NOT_GEOCODED.equals(coordinateSource)) {
             throw new UnlocatedBranchException(
                     locationId,
-                    "This branch has no coordinate (%s), so no delivery zone can be drawn around "
-                            + "it and no distance can be measured from it. Place its pin before "
-                            + "configuring delivery.".formatted(coordinateSource));
+                    // Parenthesised so .formatted() applies to the whole message and
+                    // not just the last concatenated fragment: unparenthesised, the
+                    // %s above was never substituted and every refusal printed the
+                    // literal text "(%s)" instead of the branch's coordinate_source.
+                    ("This branch has no coordinate (%s), so no delivery zone can be drawn around "
+                                    + "it and no distance can be measured from it. Place its pin before "
+                                    + "configuring delivery.")
+                            .formatted(coordinateSource));
         }
         if (latitude == 0.0 && longitude == 0.0) {
             throw new UnlocatedBranchException(

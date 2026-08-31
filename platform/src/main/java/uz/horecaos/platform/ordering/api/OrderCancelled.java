@@ -3,6 +3,7 @@ package uz.horecaos.platform.ordering.api;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.tenancy.api.TenantId;
 
 /**
@@ -32,14 +33,14 @@ public record OrderCancelled(
         Instant occurredAt,
         UUID brandId,
         UUID locationId,
-        String cancelledByActorType,
-        String reasonCode,
+        @Nullable String cancelledByActorType,
+        @Nullable String reasonCode,
         String previousStatus,
         String status,
         int orderVersion,
-        String systemCategory,
-        String stockDisposition,
-        String liabilityParty)
+        @Nullable String systemCategory,
+        @Nullable String stockDisposition,
+        @Nullable String liabilityParty)
         implements OrderingEvent {
 
     public OrderCancelled {
@@ -64,8 +65,8 @@ public record OrderCancelled(
             Instant occurredAt,
             UUID brandId,
             UUID locationId,
-            String cancelledByActorType,
-            String reasonCode,
+            @Nullable String cancelledByActorType,
+            @Nullable String reasonCode,
             String previousStatus,
             String status,
             int orderVersion) {
@@ -116,12 +117,12 @@ public record OrderCancelled(
             UUID orderId,
             UUID brandId,
             UUID locationId,
-            String cancelledByActorType,
-            String reasonCode,
+            @Nullable String cancelledByActorType,
+            @Nullable String reasonCode,
             String previousStatus,
             String status,
             int orderVersion,
-            String systemCategory,
-            String stockDisposition,
-            String liabilityParty) {}
+            @Nullable String systemCategory,
+            @Nullable String stockDisposition,
+            @Nullable String liabilityParty) {}
 }

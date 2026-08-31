@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.MDC;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -325,6 +326,8 @@ public class OperationsMarketingController {
     }
 
     /**
+     * What channel and consent purpose to evaluate the audience against.
+     *
      * @param consentPurpose the ADR 0015 purpose this send needs a decision on. A
      *                       marketing purpose, never a transactional one: an order
      *                       confirmation needs no marketing consent and a promotion
@@ -335,6 +338,8 @@ public class OperationsMarketingController {
             @NotBlank @Size(max = 64) String consentPurpose) {}
 
     /**
+     * What a snapshot evaluation produced.
+     *
      * @param excluded how many candidates the five subtractions removed. Shown
      *                 beside the reach because a marketer who sees only the reach
      *                 concludes the audience is broken
@@ -346,14 +351,19 @@ public class OperationsMarketingController {
     public record ReasonRequest(@NotBlank @Size(max = 512) String reason) {}
 
     public record EstimateResponse(
-            UUID snapshotId, int members, int candidates, Long costLowMinor, Long costHighMinor, String currency) {}
+            UUID snapshotId,
+            int members,
+            int candidates,
+            @Nullable Long costLowMinor,
+            @Nullable Long costHighMinor,
+            String currency) {}
 
     public record RecipientResponse(
             UUID customerAccountId,
             String status,
             UUID notificationId,
             String refusalReason,
-            String deferredUntil,
+            @Nullable String deferredUntil,
             String terminalStatus) {}
 
     public record SuppressionRequest(

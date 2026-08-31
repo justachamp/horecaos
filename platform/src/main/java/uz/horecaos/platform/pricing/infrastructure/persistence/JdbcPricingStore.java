@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import tools.jackson.databind.ObjectMapper;
@@ -57,7 +58,7 @@ public class JdbcPricingStore {
      * which branch fulfilled the order.
      */
     public Optional<PriceBookRow> resolvePriceBook(
-            UUID tenantId, UUID brandId, UUID locationId, UUID pricingChannelId, Instant at) {
+            UUID tenantId, UUID brandId, UUID locationId, @Nullable UUID pricingChannelId, Instant at) {
         return jdbc.sql("""
                 SELECT pb.id, pb.currency, pb.version, pb.priority
                 FROM pricing.price_books pb
@@ -153,7 +154,7 @@ public class JdbcPricingStore {
                 .list());
     }
 
-    public void insertQuote(Quote quote, String idempotencyKey, Map<String, Object> calculationDocument) {
+    public void insertQuote(Quote quote, @Nullable String idempotencyKey, Map<String, Object> calculationDocument) {
         jdbc.sql("""
                 INSERT INTO pricing.quotes (
                     id, tenant_id, brand_id, location_id, customer_account_id, currency, status,
@@ -432,7 +433,7 @@ public class JdbcPricingStore {
             String name,
             String currency,
             Instant validFrom,
-            Instant validUntil,
+            @Nullable Instant validUntil,
             int priority,
             Instant now) {
         jdbc.sql("""
@@ -540,10 +541,10 @@ public class JdbcPricingStore {
             UUID brandId,
             UUID priceBookId,
             String scopeType,
-            UUID scopeId,
+            @Nullable UUID scopeId,
             int priority,
             Instant validFrom,
-            Instant validUntil) {
+            @Nullable Instant validUntil) {
         // IS NOT DISTINCT FROM, because a BRAND assignment's scope_id is null and
         // `scope_id = null` matches nothing — which would silently insert a second
         // brand assignment on every repeat.
@@ -829,7 +830,7 @@ public class JdbcPricingStore {
             String currency,
             String status,
             Instant validFrom,
-            Instant validUntil,
+            @Nullable Instant validUntil,
             int priority,
             int version) {}
 

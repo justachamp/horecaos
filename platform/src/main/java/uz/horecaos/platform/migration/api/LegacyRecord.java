@@ -6,6 +6,7 @@ import java.time.ZoneId;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One row as the legacy database spells it (ADR 0024).
@@ -38,7 +39,7 @@ import java.util.UUID;
  *                      entry rather than an absent key, so "the column does not
  *                      exist" stays distinguishable from "the column is empty"
  */
-public record LegacyRecord(String stableKey, String sourceVersion, Map<String, Object> values) {
+public record LegacyRecord(String stableKey, @Nullable String sourceVersion, Map<String, Object> values) {
 
     public LegacyRecord {
         Objects.requireNonNull(stableKey, "A legacy row needs its stable key");
@@ -61,12 +62,12 @@ public record LegacyRecord(String stableKey, String sourceVersion, Map<String, O
         return require(column) == null;
     }
 
-    public String text(String column) {
+    public @Nullable String text(String column) {
         Object value = require(column);
         return value == null ? null : value.toString();
     }
 
-    public UUID uuid(String column) {
+    public @Nullable UUID uuid(String column) {
         Object value = require(column);
         return switch (value) {
             case null -> null;
@@ -83,7 +84,7 @@ public record LegacyRecord(String stableKey, String sourceVersion, Map<String, O
      * rules give about {@code getInt}: a primitive would answer 0 for SQL NULL,
      * and 0 is a legal quantity, a legal price, and a legal foreign key nowhere.
      */
-    public Long number(String column) {
+    public @Nullable Long number(String column) {
         Object value = require(column);
         return switch (value) {
             case null -> null;
@@ -108,7 +109,7 @@ public record LegacyRecord(String stableKey, String sourceVersion, Map<String, O
      * <p>Use {@link #instantAt(String, ZoneId)} with the program's configured
      * source zone.
      */
-    public LocalDateTime naiveTimestamp(String column) {
+    public @Nullable LocalDateTime naiveTimestamp(String column) {
         Object value = require(column);
         return switch (value) {
             case null -> null;
@@ -125,7 +126,7 @@ public record LegacyRecord(String stableKey, String sourceVersion, Map<String, O
      * has not had its deployment read yet, and extraction refuses to start rather
      * than assume UTC.
      */
-    public Instant instantAt(String column, ZoneId sourceZone) {
+    public @Nullable Instant instantAt(String column, ZoneId sourceZone) {
         Objects.requireNonNull(
                 sourceZone, "The legacy server's zone is required; a naive timestamp read without one is a guess");
         LocalDateTime naive = naiveTimestamp(column);

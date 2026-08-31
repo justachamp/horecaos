@@ -20,6 +20,8 @@ import java.util.UUID;
 public interface SessionOrderSource {
 
     /**
+     * The few facts a session needs about one of its member orders.
+     *
      * @param status the order's own status, so a session can refuse to attach a
      *               round that was cancelled
      */

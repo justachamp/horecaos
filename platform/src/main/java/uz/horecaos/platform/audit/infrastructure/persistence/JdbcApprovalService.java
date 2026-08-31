@@ -7,10 +7,13 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.LinkedHashSet;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -152,10 +155,20 @@ public class JdbcApprovalService implements ApprovalService {
      * would have refused.
      */
     private ApprovalOutcome outcomeOf(RequestRow request, ApprovalRequestCommand command) {
+        // decided_by/decision_reason are @Nullable on RequestRow because a PENDING
+        // row (mapRequest's own SELECT fetches the column regardless of status)
+        // has neither; a row whose own status reads APPROVED or DECLINED always
+        // has the one decide() writes together with that status.
         return switch (request.status()) {
             case "APPROVED" ->
-                new ApprovalOutcome.Approved(request.id(), request.decidedBy(), grantFor(request, command));
-            case "DECLINED" -> new ApprovalOutcome.Declined(request.id(), request.decisionReason());
+                new ApprovalOutcome.Approved(
+                        request.id(),
+                        Objects.requireNonNull(request.decidedBy(), "An approved request has a decider"),
+                        grantFor(request, command));
+            case "DECLINED" ->
+                new ApprovalOutcome.Declined(
+                        request.id(),
+                        Objects.requireNonNull(request.decisionReason(), "A declined request has a reason"));
             default -> new ApprovalOutcome.Pending(request.id());
         };
     }
@@ -201,7 +214,7 @@ public class JdbcApprovalService implements ApprovalService {
             throw new IllegalStateException("Approval request %s was decided concurrently".formatted(requestId));
         }
 
-        audit.record(AuditFact.of("approval." + decision.name().toLowerCase(), AuditClass.SECURITY)
+        audit.record(AuditFact.of("approval." + decision.name().toLowerCase(Locale.ROOT), AuditClass.SECURITY)
                 .by(approver)
                 .at(scopeOf(request))
                 .target("ApprovalRequest", requestId)
@@ -384,7 +397,8 @@ public class JdbcApprovalService implements ApprovalService {
         countResolution(command, outcome, null);
     }
 
-    private void countResolution(ApprovalRequestCommand command, String outcome, MissingPolicyMode missingPolicyMode) {
+    private void countResolution(
+            ApprovalRequestCommand command, String outcome, @Nullable MissingPolicyMode missingPolicyMode) {
         Counter.Builder counter = Counter.builder(RESOLUTION_METRIC)
                 .description(
                         "ADR 0027 maker-checker policy resolution; unresolved means no policy " + "governs the action")
@@ -572,10 +586,9 @@ public class JdbcApprovalService implements ApprovalService {
     private static ResourceScope scopeOf(RequestRow request) {
         return switch (request.scopeType()) {
             case "PLATFORM" -> ResourceScope.platform();
-            case "TENANT" -> new ResourceScope(ResourceScope.ScopeType.TENANT, request.tenantId(), null, null);
-            case "BRAND" ->
-                new ResourceScope(ResourceScope.ScopeType.BRAND, request.tenantId(), request.scopeId(), null);
-            default -> new ResourceScope(ResourceScope.ScopeType.TENANT, request.tenantId(), null, null);
+            case "TENANT" -> ResourceScope.tenant(request.tenantId());
+            case "BRAND" -> ResourceScope.brand(request.tenantId(), request.scopeId());
+            default -> ResourceScope.tenant(request.tenantId());
         };
     }
 
@@ -595,6 +608,8 @@ public class JdbcApprovalService implements ApprovalService {
     }
 
     /**
+     * The policy row a request is raised against.
+     *
      * @param platformOwned whether this is the PLATFORM-scope policy the ADR 0030
      *                      chain ends at, rather than one of the caller's own.
      *                      Recorded onto the request because {@code
@@ -609,8 +624,8 @@ public class JdbcApprovalService implements ApprovalService {
             UUID id,
             String status,
             String requestedBy,
-            String decidedBy,
-            String decisionReason,
+            @Nullable String decidedBy,
+            @Nullable String decisionReason,
             UUID tenantId,
             String scopeType,
             UUID scopeId,

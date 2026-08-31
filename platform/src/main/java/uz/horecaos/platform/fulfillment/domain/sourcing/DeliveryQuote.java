@@ -3,6 +3,7 @@ package uz.horecaos.platform.fulfillment.domain.sourcing;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One partner's answer to "what would this journey cost" (ADR 0014).
@@ -29,15 +30,15 @@ public record DeliveryQuote(
         UUID bindingId,
         String providerType,
         UUID requestId,
-        Long priceMinor,
-        String currency,
-        Integer pickupEtaSeconds,
-        Integer deliveryEtaSeconds,
-        Integer distanceMeters,
-        Integer deadHeadMeters,
-        Instant expiresAt,
+        @Nullable Long priceMinor,
+        @Nullable String currency,
+        @Nullable Integer pickupEtaSeconds,
+        @Nullable Integer deliveryEtaSeconds,
+        @Nullable Integer distanceMeters,
+        @Nullable Integer deadHeadMeters,
+        @Nullable Instant expiresAt,
         boolean partnerSuppliedExpiry,
-        String failureCode,
+        @Nullable String failureCode,
         Instant receivedAt) {
 
     public DeliveryQuote {

@@ -1,6 +1,7 @@
 package uz.horecaos.platform.integration.provider;
 
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.integration.api.provider.BindingRef;
 
 /**
@@ -38,7 +39,7 @@ public interface SmsAccountLookup {
      *               is no registration API, so an unrecognised value comes back
      *               as {@code 16 wrong sender} at call time and nowhere earlier
      */
-    record SmsAccount(String login, String sender) {
+    record SmsAccount(@Nullable String login, @Nullable String sender) {
 
         public boolean isComplete() {
             return login != null && !login.isBlank() && sender != null && !sender.isBlank();

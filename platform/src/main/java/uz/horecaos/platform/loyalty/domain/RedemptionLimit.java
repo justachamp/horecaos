@@ -26,6 +26,9 @@ public final class RedemptionLimit {
     private RedemptionLimit() {}
 
     /**
+     * Caps a redemption at the policy share of the eligible value, and then at the
+     * hard money floor.
+     *
      * @param orderTotalMinor    the whole order, delivery fee included
      * @param deliveryFeeMinor   the fee, which the default policy excludes
      * @param maxShareBasisPoints the policy share of the eligible value

@@ -2,7 +2,9 @@ package uz.horecaos.platform.integration.camel.pos;
 
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.Objects;
 import org.apache.camel.Exchange;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -128,7 +130,7 @@ public class PosProcessor {
         PosRouteBuilder.clearContext();
     }
 
-    private void count(String event, PosApiCall call, ProviderOutcome outcome) {
+    private void count(String event, PosApiCall call, @Nullable ProviderOutcome outcome) {
         // Bounded tags only. A tenant id or an order id here would make the
         // cardinality unbounded and eventually take the registry down.
         meters.counter(
@@ -147,6 +149,9 @@ public class PosProcessor {
     }
 
     static PosApiCall call(Exchange exchange) {
-        return exchange.getIn().getBody(PosApiCall.class);
+        // Every step on this route runs after the route places a PosApiCall on
+        // the exchange body; a missing body is a route wiring defect, not a case
+        // any of these steps can recover from.
+        return Objects.requireNonNull(exchange.getIn().getBody(PosApiCall.class), "No POS call on the exchange body");
     }
 }

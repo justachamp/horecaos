@@ -1,6 +1,7 @@
 package uz.horecaos.platform.reporting.domain;
 
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The platform-fixed elapsed-time buckets (ADR 0043).
@@ -31,7 +32,7 @@ public final class SlaBucketSet {
      * @param fromMinutes      inclusive
      * @param toMinutesExclusive exclusive; null on the open-ended last bucket
      */
-    public record Bucket(String code, int fromMinutes, Integer toMinutesExclusive) {
+    public record Bucket(String code, int fromMinutes, @Nullable Integer toMinutesExclusive) {
 
         boolean contains(long seconds) {
             long minutes = seconds / 60;
@@ -71,3 +72,4 @@ public final class SlaBucketSet {
                         new IllegalStateException("The bucket set is no longer exhaustive at " + elapsedSeconds + "s"));
     }
 }
+

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -212,7 +213,7 @@ class StorefrontSupportTests {
         return id;
     }
 
-    private void translate(String type, UUID entityId, String locale, String title, String body) {
+    private void translate(String type, UUID entityId, String locale, String title, @Nullable String body) {
         jdbc.sql("""
                 INSERT INTO support.faq_translations (
                     tenant_id, brand_id, entity_type, entity_id, locale, title, body)
@@ -228,7 +229,7 @@ class StorefrontSupportTests {
                 .update();
     }
 
-    private void socialLink(String platform, String url, int sort, String status, UUID assetId) {
+    private void socialLink(String platform, String url, int sort, String status, @Nullable UUID assetId) {
         jdbc.sql("""
                 INSERT INTO support.social_links (
                     id, tenant_id, brand_id, platform, url, media_asset_id, sort_order, status)

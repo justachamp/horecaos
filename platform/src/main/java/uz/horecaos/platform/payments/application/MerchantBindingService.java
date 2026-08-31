@@ -3,8 +3,10 @@ package uz.horecaos.platform.payments.application;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -146,7 +148,9 @@ public class MerchantBindingService {
         try {
             parsed = SecretReference.parse(reference);
         } catch (IllegalArgumentException malformed) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, malformed.getMessage());
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    Objects.requireNonNullElse(malformed.getMessage(), "Malformed secret reference"));
         }
         if (parsed.category() != SecretCategory.PROVIDER_PAYMENT) {
             throw new ApiException(
@@ -158,6 +162,8 @@ public class MerchantBindingService {
     }
 
     /**
+     * What an operator submits to register a merchant binding.
+     *
      * @param secretReference an ADR 0028 reference. The value it points at is
      *                        written to the secrets manager directly and never
      *                        passes through this API
@@ -172,12 +178,12 @@ public class MerchantBindingService {
             UUID installationId,
             UUID integrationBindingId,
             String merchantAccountReference,
-            String merchantUserReference,
-            String merchantIdReference,
+            @Nullable String merchantUserReference,
+            @Nullable String merchantIdReference,
             String secretReference,
             String callbackPathSegment,
             boolean supportsReversal,
             boolean supportsPartnerFiscalization,
             LocalDate effectiveFrom,
-            LocalDate effectiveUntil) {}
+            @Nullable LocalDate effectiveUntil) {}
 }

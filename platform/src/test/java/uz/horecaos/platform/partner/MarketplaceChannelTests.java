@@ -11,6 +11,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -89,9 +90,6 @@ class MarketplaceChannelTests {
     private static final String CLIENT_ID = "partner-uzum-tezkor";
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private JdbcPartnerStore store;
@@ -141,7 +139,6 @@ class MarketplaceChannelTests {
             };
 
     private UUID branch;
-    private UUID siblingBranch;
     private UUID installation;
     private UUID binding;
     private UUID deliveryBinding;
@@ -153,9 +150,6 @@ class MarketplaceChannelTests {
         Assumptions.assumeTrue(
                 DockerClientFactory.instance().isDockerAvailable(), "Docker is required for marketplace channel tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -307,7 +301,7 @@ class MarketplaceChannelTests {
         assertThat(outcome.accepted()).isTrue();
 
         var settlement =
-                settlementStore.findSettlement(TENANT, outcome.orderId()).orElseThrow();
+                settlementStore.findSettlement(TENANT, orderIdOf(outcome)).orElseThrow();
         assertThat(settlement.totalDueMinor())
                 .as("the tenders sum to what the customer actually paid the aggregator")
                 .isEqualTo(42_000L);
@@ -359,7 +353,7 @@ class MarketplaceChannelTests {
                 .as("the customer paid the aggregator nothing, and the order says so")
                 .isZero();
 
-        assertThat(settlementStore.findSettlement(TENANT, outcome.orderId()))
+        assertThat(settlementStore.findSettlement(TENANT, orderIdOf(outcome)))
                 .as("a settlement is the record of money owed and money moved; this order has "
                         + "neither, and the honest number of tenders for it is none")
                 .isEmpty();
@@ -402,10 +396,10 @@ class MarketplaceChannelTests {
         // publishes it like any other. Called directly here because this suite
         // wires no application context. It is a no-op for an order with no
         // settlement, which is the point.
-        settlementPlanner.recordConfirmation(TENANT, outcome.orderId(), "test");
+        settlementPlanner.recordConfirmation(TENANT, orderIdOf(outcome), "test");
 
         Throwable refused = catchThrowable(
-                () -> settlementService.refund(TENANT, outcome.orderId(), 1L, "SERVICE_RECOVERY", "operator"));
+                () -> settlementService.refund(TENANT, orderIdOf(outcome), 1L, "SERVICE_RECOVERY", "operator"));
 
         assertThat(refused)
                 .as("one som of cash to a customer who paid none is the whole defect; the "
@@ -430,7 +424,7 @@ class MarketplaceChannelTests {
         assertThat(outcome.accepted()).isTrue();
 
         var settlement =
-                settlementStore.findSettlement(TENANT, outcome.orderId()).orElseThrow();
+                settlementStore.findSettlement(TENANT, orderIdOf(outcome)).orElseThrow();
         assertThat(settlement.totalDueMinor()).isEqualTo(30_000L);
 
         var tenders = settlementStore.tendersOf(TENANT, settlement.id());
@@ -442,13 +436,13 @@ class MarketplaceChannelTests {
                 .as("money the customer handed the aggregator, not a campaign")
                 .isEqualTo("MARKETPLACE");
 
-        settlementPlanner.recordConfirmation(TENANT, outcome.orderId(), "test");
+        settlementPlanner.recordConfirmation(TENANT, orderIdOf(outcome), "test");
 
-        assertThat(settlementService.refund(TENANT, outcome.orderId(), 30_000L, "COLD_FOOD", "operator"))
+        assertThat(settlementService.refund(TENANT, orderIdOf(outcome), 30_000L, "COLD_FOOD", "operator"))
                 .isEqualTo(30_000L);
 
         Throwable beyond =
-                catchThrowable(() -> settlementService.refund(TENANT, outcome.orderId(), 1L, "COLD_FOOD", "operator"));
+                catchThrowable(() -> settlementService.refund(TENANT, orderIdOf(outcome), 1L, "COLD_FOOD", "operator"));
         assertThat(beyond)
                 .as("folding the 20 000 discount into the settlement would let an operator "
                         + "return 50 000 to a customer who paid 30 000")
@@ -573,7 +567,7 @@ class MarketplaceChannelTests {
                         DiscountFunding.PARTNER,
                         List.of(line("ITEM-1", 50_000))));
 
-        assertThat(settlementStore.findSettlement(OTHER_TENANT, outcome.orderId()))
+        assertThat(settlementStore.findSettlement(OTHER_TENANT, orderIdOf(outcome)))
                 .as("an order id alone authorises nothing; the query constrains on the tenant "
                         + "the caller was authorised against")
                 .isEmpty();
@@ -581,10 +575,10 @@ class MarketplaceChannelTests {
                 .as("the ADR 0038 registry is tenant-scoped, and one tenant's marketplace " + "method is not another's")
                 .isEmpty();
 
-        settlementPlanner.recordConfirmation(TENANT, outcome.orderId(), "test");
+        settlementPlanner.recordConfirmation(TENANT, orderIdOf(outcome), "test");
 
         Throwable crossTenant = catchThrowable(() ->
-                settlementService.refund(OTHER_TENANT, outcome.orderId(), 10_000L, "SERVICE_RECOVERY", "operator"));
+                settlementService.refund(OTHER_TENANT, orderIdOf(outcome), 10_000L, "SERVICE_RECOVERY", "operator"));
         assertThat(crossTenant).isInstanceOf(ApiException.class);
         assertThat(crossTenant.getMessage()).contains("no settlement");
     }
@@ -953,7 +947,7 @@ class MarketplaceChannelTests {
 
         List<HandoverVerificationService.Verification> attempts = new ArrayList<>();
         for (int attempt = 0; attempt < 5; attempt++) {
-            attempts.add(handovers.verify(TENANT, outcome.orderId(), "0000", "expo-1"));
+            attempts.add(handovers.verify(TENANT, orderIdOf(outcome), "0000", "expo-1"));
         }
 
         assertThat(attempts).allMatch(result -> !result.verified());
@@ -1009,14 +1003,14 @@ class MarketplaceChannelTests {
                         "{}",
                         "{}"));
 
-        String firstHash = challengeHash(first.orderId());
-        String secondHash = challengeHash(second.orderId());
+        String firstHash = challengeHash(orderIdOf(first));
+        String secondHash = challengeHash(orderIdOf(second));
         assertThat(firstHash)
                 .as("two orders drawing the same code must not produce the same stored value, "
                         + "or one hash lifted from a dump works against the other order")
                 .isNotEqualTo(secondHash);
 
-        assertThat(handovers.verify(TENANT, first.orderId(), "44 17", "expo-1").verified())
+        assertThat(handovers.verify(TENANT, orderIdOf(first), "44 17", "expo-1").verified())
                 .as("couriers read codes back with spaces in them, and a branch forced to type "
                         + "separators exactly is a branch that bypasses the check")
                 .isTrue();
@@ -1041,11 +1035,11 @@ class MarketplaceChannelTests {
                         "{}"));
 
         assertThat(catchThrowable(() -> handovers.bypass(
-                        TENANT, ResourceScope.tenant(TENANT), outcome.orderId(), "  ", "sup-1", "Aziza", null)))
+                        TENANT, ResourceScope.tenant(TENANT), orderIdOf(outcome), "  ", "sup-1", "Aziza", null)))
                 .isInstanceOf(ApiException.class);
 
         handovers.bypass(
-                TENANT, ResourceScope.tenant(TENANT), outcome.orderId(), "COURIER_APP_OFFLINE", "sup-1", "Aziza", null);
+                TENANT, ResourceScope.tenant(TENANT), orderIdOf(outcome), "COURIER_APP_OFFLINE", "sup-1", "Aziza", null);
 
         assertThat(jdbc.sql("SELECT status, bypass_reason_code, verified_by "
                                 + "FROM ordering.order_handover_challenges WHERE order_id = :id")
@@ -1083,11 +1077,11 @@ class MarketplaceChannelTests {
                         "{}"));
 
         for (int attempt = 0; attempt < 5; attempt++) {
-            handovers.verify(TENANT, outcome.orderId(), "0000", "expo-1");
+            handovers.verify(TENANT, orderIdOf(outcome), "0000", "expo-1");
         }
 
         handovers.bypass(
-                TENANT, ResourceScope.tenant(TENANT), outcome.orderId(), "COURIER_APP_OFFLINE", "sup-1", "Aziza", null);
+                TENANT, ResourceScope.tenant(TENANT), orderIdOf(outcome), "COURIER_APP_OFFLINE", "sup-1", "Aziza", null);
 
         assertThat(jdbc.sql("SELECT status FROM ordering.order_handover_challenges " + "WHERE order_id = :id")
                         .param("id", outcome.orderId())
@@ -1232,6 +1226,15 @@ class MarketplaceChannelTests {
         return authentication.authenticate(CLIENT_ID, TENANT);
     }
 
+    /**
+     * {@code Outcome.orderId()} is null only for a rejected push (see
+     * {@code Outcome.rejected}); every call site here follows an accepted or
+     * duplicate outcome, where it is always present.
+     */
+    private static UUID orderIdOf(MarketplaceIngestionService.Outcome outcome) {
+        return Objects.requireNonNull(outcome.orderId(), "an accepted or duplicate outcome always has an order id");
+    }
+
     private ExternalTotals totals(long total) {
         return new ExternalTotals("UZS", total, total, 0, 0, null);
     }
@@ -1282,7 +1285,9 @@ class MarketplaceChannelTests {
                 """).param("id", BRAND).param("tenantId", TENANT).update();
 
         branch = insertLocation("CENTRE", "centre");
-        siblingBranch = insertLocation("NORTH", "north");
+        // A second location in the same tenant, so a query that forgets a
+        // location predicate has more than one row to leak across.
+        insertLocation("NORTH", "north");
 
         jdbc.sql("""
                 INSERT INTO integration.provider_environments (

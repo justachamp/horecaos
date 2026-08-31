@@ -5,6 +5,7 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.payments.domain.TiyinAmount;
 
 /**
@@ -136,9 +137,9 @@ public final class PaymeCheckoutLink {
             String cashboxId,
             String orderReference,
             TiyinAmount amount,
-            String language,
-            String callbackUrl,
-            String detailBase64) {
+            @Nullable String language,
+            @Nullable String callbackUrl,
+            @Nullable String detailBase64) {
         Map<String, String> fields = new LinkedHashMap<>();
         fields.put("merchant", cashboxId);
         fields.put("amount", Long.toString(amount.value()));

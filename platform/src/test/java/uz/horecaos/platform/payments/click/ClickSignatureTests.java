@@ -3,8 +3,10 @@ package uz.horecaos.platform.payments.click;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import uz.horecaos.platform.payments.domain.SomAmount;
@@ -118,7 +120,7 @@ class ClickSignatureTests {
     @Test
     @DisplayName("the comparison tolerates casing and refuses a missing signature")
     void comparisonIsCaseInsensitiveAndNullSafe() {
-        assertThat(ClickSignature.matches(PREPARE_DIGEST, PREPARE_DIGEST.toUpperCase()))
+        assertThat(ClickSignature.matches(PREPARE_DIGEST, PREPARE_DIGEST.toUpperCase(Locale.ROOT)))
                 .isTrue();
         assertThat(ClickSignature.matches(PREPARE_DIGEST, "  " + PREPARE_DIGEST + " "))
                 .isTrue();
@@ -201,7 +203,8 @@ class ClickSignatureTests {
                 .isTrue();
     }
 
-    private static Map<String, String> form(String action, String amount, String signTime, String merchantPrepareId) {
+    private static Map<String, String> form(
+            String action, String amount, String signTime, @Nullable String merchantPrepareId) {
         Map<String, String> form = new LinkedHashMap<>();
         form.put("click_trans_id", CLICK_TRANS_ID);
         form.put("service_id", SERVICE_ID);

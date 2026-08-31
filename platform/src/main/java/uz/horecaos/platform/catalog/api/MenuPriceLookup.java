@@ -42,6 +42,8 @@ public interface MenuPriceLookup {
             Set<UUID> modifierOptionIds);
 
     /**
+     * The published prices for one location on one channel.
+     *
      * @param currency the price book's own currency. Every amount below is in its
      *        minor units — whole som for UZS (ADR 0018), never divided by a
      *        hundred.

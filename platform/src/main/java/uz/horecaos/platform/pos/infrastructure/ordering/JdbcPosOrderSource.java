@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.iam.api.protection.DataClass;
@@ -156,7 +157,8 @@ public class JdbcPosOrderSource implements PosOrderSource {
      *         rather than a failure — a pickup order has no address, and an old
      *         order has had its snapshot blanked on purpose
      */
-    private String reveal(UUID tenantId, UUID orderId, String column, String stored, String purpose) {
+    private @Nullable String reveal(
+            UUID tenantId, UUID orderId, String column, @Nullable String stored, String purpose) {
         if (stored == null || stored.isBlank()) {
             return null;
         }
@@ -167,7 +169,7 @@ public class JdbcPosOrderSource implements PosOrderSource {
                 purpose);
     }
 
-    private static Instant instant(OffsetDateTime value) {
+    private static @Nullable Instant instant(@Nullable OffsetDateTime value) {
         return value == null ? null : value.toInstant();
     }
 
@@ -183,11 +185,11 @@ public class JdbcPosOrderSource implements PosOrderSource {
             String fulfillmentMode,
             String currency,
             long totalMinor,
-            Instant placedAt,
-            UUID customerAccountId,
-            String displayNameEncrypted,
-            String contactEncrypted,
-            String addressEncrypted,
+            @Nullable Instant placedAt,
+            @Nullable UUID customerAccountId,
+            @Nullable String displayNameEncrypted,
+            @Nullable String contactEncrypted,
+            @Nullable String addressEncrypted,
             boolean anonymized) {}
 
     /**

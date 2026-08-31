@@ -2,7 +2,9 @@ package uz.horecaos.platform.integration.camel.notification;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.Objects;
 import org.apache.camel.Exchange;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -39,7 +41,7 @@ public class NotificationProcessor {
      * The recipient and the body are deliberately not among them.
      */
     public void restoreContext(Exchange exchange) {
-        NotificationSendOperation operation = operation(exchange);
+        NotificationSendOperation operation = requireOperation(exchange);
         MDC.put("tenantId", operation.tenantId().toString());
         MDC.put("channel", operation.channel());
     }
@@ -51,7 +53,7 @@ public class NotificationProcessor {
 
     /** Contract validation before mapping, per ADR 0007 route rule 2. */
     public void validate(Exchange exchange) {
-        NotificationSendOperation operation = operation(exchange);
+        NotificationSendOperation operation = requireOperation(exchange);
         if (!gateway.supports(operation.channel())) {
             // Set as an outcome rather than thrown: an unsupported channel is an
             // answer for the notifications module, not a route failure for an
@@ -66,11 +68,15 @@ public class NotificationProcessor {
     }
 
     public void invoke(Exchange exchange) {
-        NotificationSendOperation operation = operation(exchange);
+        NotificationSendOperation operation = requireOperation(exchange);
 
         ProviderOutcome outcome =
                 switch (operation.kind()) {
-                    case SEND -> gateway.send(operation.dispatch());
+                    // The compact constructor requires a dispatch on every SEND
+                    // operation; this only makes that invariant visible here too.
+                    case SEND ->
+                        gateway.send(Objects.requireNonNull(
+                                operation.dispatch(), "A SEND operation requires a rendered dispatch"));
                     case QUERY_STATUS ->
                         gateway.queryStatus(
                                 operation.tenantId(),
@@ -119,7 +125,19 @@ public class NotificationProcessor {
                 .increment();
     }
 
-    private static NotificationSendOperation operation(Exchange exchange) {
+    private static @Nullable NotificationSendOperation operation(Exchange exchange) {
         return exchange.getIn().getHeader(OPERATION_HEADER, NotificationSendOperation.class);
+    }
+
+    /**
+     * {@link #operation(Exchange)}, except for the steps that run only after
+     * {@code NotificationRouteBuilder} has placed the operation on the header —
+     * a missing header at that point is a route wiring defect, not a case those
+     * steps can recover from. {@link #deadLetter(Exchange)} is the one step that
+     * may run before the header is set, which is why it alone tolerates null.
+     */
+    private static NotificationSendOperation requireOperation(Exchange exchange) {
+        return Objects.requireNonNull(
+                operation(exchange), "No notification operation on the " + OPERATION_HEADER + " header");
     }
 }

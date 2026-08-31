@@ -6,6 +6,7 @@ import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -87,7 +88,7 @@ public class ProviderCapabilityReconciliationService {
             String evidence = declared
                     ? preflight.evidence()
                     : "No wired %s adapter declares this capability"
-                            .formatted(installation.category().name().toLowerCase());
+                            .formatted(installation.category().name().toLowerCase(Locale.ROOT));
             snapshot.put(capability, new CapabilityStatus(support, evidence));
         }
 

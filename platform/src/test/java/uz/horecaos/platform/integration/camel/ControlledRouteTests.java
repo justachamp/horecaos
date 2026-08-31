@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.apache.camel.CamelContext;
@@ -64,9 +65,6 @@ class ControlledRouteTests {
     private static final Instant NOW = Instant.parse("2026-08-25T11:00:00Z");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private DataSource dataSource;
     private JdbcClient jdbc;
@@ -81,9 +79,6 @@ class ControlledRouteTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -279,8 +274,9 @@ class ControlledRouteTests {
                     event.tenantId(),
                     String.valueOf(event.payload().get("scenario")));
 
-            ProviderOutcome outcome =
-                    producer.requestBody(ControlledCommandRoute.COMMAND_ENDPOINT, command, ProviderOutcome.class);
+            ProviderOutcome outcome = Objects.requireNonNull(
+                    producer.requestBody(ControlledCommandRoute.COMMAND_ENDPOINT, command, ProviderOutcome.class),
+                    "The controlled route always sets an outcome body");
 
             if (outcome.mayRetryDirectly()) {
                 // Thrown rather than recorded, so the inbox schedules the retry

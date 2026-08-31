@@ -2,6 +2,7 @@ package uz.horecaos.platform.migration.web;
 
 import java.time.Instant;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.migration.application.MigrationProgramStore.ProgramRow;
 import uz.horecaos.platform.migration.application.ProgramStatus;
 
@@ -23,8 +24,8 @@ public record ProgramView(
         String sourceEnvironment,
         String targetEnvironment,
         int policyVersion,
-        Instant startedAt,
-        Instant completedAt,
+        @Nullable Instant startedAt,
+        @Nullable Instant completedAt,
         int version) {
 
     static ProgramView of(ProgramRow row) {

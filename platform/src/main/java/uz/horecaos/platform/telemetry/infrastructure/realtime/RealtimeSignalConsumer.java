@@ -17,6 +17,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
@@ -84,8 +85,12 @@ public class RealtimeSignalConsumer implements DisposableBean, Runnable {
     private final String topic;
     private final AtomicBoolean running = new AtomicBoolean();
 
-    private volatile Consumer<String, String> consumer;
-    private volatile Thread worker;
+    // Both null before start() and, for consumer, in the gap between one
+    // connection attempt's failure and the next: there is no real Kafka
+    // Consumer or worker Thread to hold before the background thread creates
+    // one, and closeConsumer() explicitly nulls this out on every teardown.
+    private volatile @Nullable Consumer<String, String> consumer;
+    private volatile @Nullable Thread worker;
 
     public RealtimeSignalConsumer(
             ConsumerFactory<String, String> consumers,
@@ -103,12 +108,13 @@ public class RealtimeSignalConsumer implements DisposableBean, Runnable {
         if (!running.compareAndSet(false, true)) {
             return;
         }
-        worker = new Thread(this, "realtime-signals");
+        Thread thread = new Thread(this, "realtime-signals");
         // A daemon thread, because this holds nothing durable. A shutdown that
         // waited for it would wait for a poll timeout to deliver hints to sockets
         // that are already closing.
-        worker.setDaemon(true);
-        worker.start();
+        thread.setDaemon(true);
+        worker = thread;
+        thread.start();
     }
 
     /**
@@ -132,12 +138,18 @@ public class RealtimeSignalConsumer implements DisposableBean, Runnable {
         try {
             while (running.get()) {
                 try {
-                    consumer = createConsumer();
-                    if (assignAndSeekToEnd()) {
+                    // Captured locally so the rest of this attempt reads a
+                    // definitely-non-null consumer: the field itself stays
+                    // @Nullable because closeConsumer() and the gap before the
+                    // first successful connection are both real null states,
+                    // observed from other threads via isRunning() and destroy().
+                    Consumer<String, String> activeConsumer = createConsumer();
+                    consumer = activeConsumer;
+                    if (assignAndSeekToEnd(activeConsumer)) {
                         backoff = RETRY_BACKOFF_INITIAL;
 
                         while (running.get()) {
-                            ConsumerRecords<String, String> records = consumer.poll(POLL_TIMEOUT);
+                            ConsumerRecords<String, String> records = activeConsumer.poll(POLL_TIMEOUT);
                             for (ConsumerRecord<String, String> record : records) {
                                 parse(record.value()).ifPresent(registry::onSignal);
                             }
@@ -211,8 +223,8 @@ public class RealtimeSignalConsumer implements DisposableBean, Runnable {
      *         evening and is the state a cold start lands in when the topic has
      *         not been created yet.
      */
-    private boolean assignAndSeekToEnd() {
-        List<PartitionInfo> partitions = consumer.partitionsFor(topic);
+    private boolean assignAndSeekToEnd(Consumer<String, String> activeConsumer) {
+        List<PartitionInfo> partitions = activeConsumer.partitionsFor(topic);
         if (partitions == null || partitions.isEmpty()) {
             log.warn("Topic {} has no partitions yet; retrying rather than polling an unassigned " + "consumer", topic);
             return false;
@@ -220,8 +232,8 @@ public class RealtimeSignalConsumer implements DisposableBean, Runnable {
         List<TopicPartition> assigned = new ArrayList<>(partitions.size());
         partitions.forEach(partition -> assigned.add(new TopicPartition(topic, partition.partition())));
 
-        consumer.assign(assigned);
-        consumer.seekToEnd(assigned);
+        activeConsumer.assign(assigned);
+        activeConsumer.seekToEnd(assigned);
         log.info(
                 "Assigned {} partitions of {} and sought to the end; this replica receives only "
                         + "signals produced from now on",

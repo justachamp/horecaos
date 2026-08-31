@@ -2,6 +2,7 @@ package uz.horecaos.platform.ordering.domain;
 
 import java.util.EnumSet;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 
 /**
@@ -65,9 +66,9 @@ public enum OutcomeSystemCategory {
     /** Neither registry offers this; it is what an unmapped tenant reason lands on. */
     OTHER(null);
 
-    private final OutcomeReasonKind reasonKind;
+    private final @Nullable OutcomeReasonKind reasonKind;
 
-    OutcomeSystemCategory(OutcomeReasonKind reasonKind) {
+    OutcomeSystemCategory(@Nullable OutcomeReasonKind reasonKind) {
         this.reasonKind = reasonKind;
     }
 

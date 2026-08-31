@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The parameters hash an ADR 0027 approval is bound to, derived from the command
@@ -117,11 +118,11 @@ public final class ApprovalParameters {
     /** Accumulates the material and hashes it. */
     public static final class Builder {
 
-        private final Record command;
+        private final @Nullable Record command;
         private final Map<String, Object> extra = new LinkedHashMap<>();
-        private Set<String> excluded;
+        private @Nullable Set<String> excluded;
 
-        private Builder(Record command) {
+        private Builder(@Nullable Record command) {
             this.command = command;
         }
 
@@ -145,7 +146,7 @@ public final class ApprovalParameters {
          * <p>For the part of the intended action the command does not carry — the
          * remedy type, which is the entry point rather than a field.
          */
-        public Builder and(String name, Object value) {
+        public Builder and(String name, @Nullable Object value) {
             Objects.requireNonNull(name, "A segment name is required");
             if (extra.put(name, value) != null) {
                 throw new IllegalArgumentException("Segment " + name + " was supplied twice");
@@ -175,7 +176,7 @@ public final class ApprovalParameters {
             return digest(material.toString());
         }
 
-        private static Object read(RecordComponent component, Record command) {
+        private static @Nullable Object read(RecordComponent component, Record command) {
             try {
                 java.lang.reflect.Method accessor = component.getAccessor();
                 accessor.setAccessible(true);
@@ -201,7 +202,7 @@ public final class ApprovalParameters {
      * than an empty string, so an absent provider reference and an empty one stay
      * distinguishable.
      */
-    private static void append(StringBuilder material, String name, Object value) {
+    private static void append(StringBuilder material, String name, @Nullable Object value) {
         String rendered = canonical(name, value);
         material.append('|').append(name.length()).append(':').append(name).append('=');
         if (rendered == null) {
@@ -211,7 +212,7 @@ public final class ApprovalParameters {
         }
     }
 
-    private static String canonical(String name, Object value) {
+    private static @Nullable String canonical(String name, @Nullable Object value) {
         return switch (value) {
             case null -> null;
             case String text -> text;

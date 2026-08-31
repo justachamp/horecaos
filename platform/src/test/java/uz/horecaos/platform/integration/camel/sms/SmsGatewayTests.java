@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
@@ -165,16 +167,16 @@ class SmsGatewayTests {
     }
 
     /** Answers one binding and one installation, with the shapes each test needs. */
-    private record StubLookup(String providerType, String status, String baseUrl)
+    private record StubLookup(@Nullable String providerType, String status, String baseUrl)
             implements ProviderInstallationLookup {
 
-        StubLookup(String providerType, String status) {
+        StubLookup(@Nullable String providerType, String status) {
             this(providerType, status, "http://127.0.0.1:1");
         }
 
         @Override
         public Optional<BindingRef> primaryBinding(
-                UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
+                UUID tenantId, UUID brandId, @Nullable UUID locationId, String capabilityCode) {
             if (providerType == null) {
                 return Optional.empty();
             }
@@ -183,7 +185,8 @@ class SmsGatewayTests {
         }
 
         @Override
-        public List<BindingRef> candidateBindings(UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
+        public List<BindingRef> candidateBindings(
+                UUID tenantId, UUID brandId, @Nullable UUID locationId, String capabilityCode) {
             return List.of();
         }
 
@@ -192,7 +195,10 @@ class SmsGatewayTests {
             return Optional.of(new InstallationSnapshot(
                     INSTALLATION,
                     ProviderCategory.NOTIFICATION,
-                    providerType,
+                    // Every test that reaches installation() first resolved a
+                    // binding through primaryBinding(), which already refused a
+                    // null providerType above.
+                    Objects.requireNonNull(providerType),
                     "local",
                     baseUrl,
                     status,

@@ -122,6 +122,8 @@ public class CartPaymentOptions {
     }
 
     /**
+     * What a cart may be paid with, and the gaps that apply to the answer.
+     *
      * @param methodCodes the offerable codes, sorted. Codes rather than labels:
      *                    ADR 0038's registry owns per-tenant naming and the
      *                    storefront maps a code to customer wording the way it maps

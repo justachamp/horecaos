@@ -191,6 +191,8 @@ public class FailureOperationsController {
     public record ReasonRequest(@NotBlank @Size(max = 1000) String reason) {}
 
     /**
+     * A request to close a failure without further processing.
+     *
      * @param evidenceReference reconciliation evidence, required when the
      *                          category means a provider may already have acted
      */

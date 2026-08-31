@@ -39,6 +39,9 @@ public interface CourierShiftPort {
     Optional<OpenShift> openShift(UUID tenantId, UUID courierId, UUID locationId);
 
     /**
+     * The shift a duty session may open from, and the registration fact checked
+     * to allow it.
+     *
      * @param registrationValidUntil the day ADR 0042's self-employment
      *                               registration lapses. Copied onto the session
      *                               so the check that was made is evidence rather

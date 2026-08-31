@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -112,7 +113,7 @@ public class CatalogPublicationController {
         }
     }
 
-    private UUID actorId() {
+    private @Nullable UUID actorId() {
         try {
             return UUID.fromString(currentActor.get().subject());
         } catch (IllegalArgumentException notAUuid) {
@@ -130,7 +131,12 @@ public class CatalogPublicationController {
     }
 
     public record FindingView(
-            String severity, String code, String entityType, UUID entityId, String entityCode, String detail) {
+            String severity,
+            String code,
+            @Nullable String entityType,
+            @Nullable UUID entityId,
+            @Nullable String entityCode,
+            String detail) {
 
         static FindingView of(ValidationFinding finding) {
             return new FindingView(

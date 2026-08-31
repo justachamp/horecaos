@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -646,7 +647,7 @@ public class PaymeMerchantApi {
                 && !evidence.externalReceiptId().isBlank();
     }
 
-    private static Instant registeredAt(String value) {
+    private static @Nullable Instant registeredAt(@Nullable String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
@@ -843,7 +844,7 @@ public class PaymeMerchantApi {
         return reason.isIntegralNumber() ? (int) reason.longValue() : PaymeCancellationReason.UNKNOWN;
     }
 
-    private static String truncate(String value, int limit) {
+    private static @Nullable String truncate(@Nullable String value, int limit) {
         if (value == null) {
             return null;
         }

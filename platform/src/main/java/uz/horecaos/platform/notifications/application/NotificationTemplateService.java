@@ -5,9 +5,11 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;
@@ -63,11 +65,11 @@ public class NotificationTemplateService {
     @Transactional
     public UUID createTemplate(
             UUID tenantId,
-            UUID brandId,
+            @Nullable UUID brandId,
             String templateKey,
             NotificationClass notificationClass,
             NotificationChannel channel,
-            String consentPurpose) {
+            @Nullable String consentPurpose) {
 
         if (notificationClass.requiresConsent() && (consentPurpose == null || consentPurpose.isBlank())) {
             throw new IllegalArgumentException(notificationClass + " needs a consent purpose to check against");
@@ -111,7 +113,7 @@ public class NotificationTemplateService {
         // Read for its side effect: a template id from another tenant must not be
         // given a version here, and the composite foreign key alone would let the
         // insert through on a matching id.
-        templates
+        var _ = templates
                 .template(tenantId, templateId)
                 .orElseThrow(
                         () -> new IllegalArgumentException("No template " + templateId + " belongs to this tenant"));
@@ -130,7 +132,9 @@ public class NotificationTemplateService {
         String schemaJson = objectMapper.writeValueAsString(variablesSchema);
 
         for (MessageLocale locale : MessageLocale.required()) {
-            Wording wording = wordings.get(locale);
+            // Never null: the completeness check above already refused to reach
+            // here unless every required locale is a key of this map.
+            Wording wording = Objects.requireNonNull(wordings.get(locale));
             // Both halves are checked, because a subject is as capable of naming
             // a variable that does not exist as a body is.
             TemplateRenderer.validate(wording.subject(), declared);
@@ -209,13 +213,17 @@ public class NotificationTemplateService {
             UUID tenantId, UUID brandId, String templateKey, NotificationChannel channel, MessageLocale locale) {
 
         Optional<TemplateRow> template = templates.activeTemplate(tenantId, brandId, templateKey, channel.name());
-        if (template.isEmpty() || template.get().activeVersion() == null) {
+        if (template.isEmpty()) {
+            return Resolution.noTemplate();
+        }
+        TemplateRow row = template.get();
+        Integer activeVersion = row.activeVersion();
+        if (activeVersion == null) {
             return Resolution.noTemplate();
         }
 
-        TemplateRow row = template.get();
         return templates
-                .version(tenantId, row.id(), row.activeVersion(), locale.tag())
+                .version(tenantId, row.id(), activeVersion, locale.tag())
                 .filter(version -> "ACTIVE".equals(version.status()))
                 .map(version -> Resolution.found(row, version))
                 .orElseGet(Resolution::noLocale);
@@ -253,7 +261,7 @@ public class NotificationTemplateService {
      *                Null rather than blank so "this channel has no subject" and
      *                "the author left it empty" stay distinguishable
      */
-    public record Wording(String subject, String body) {
+    public record Wording(@Nullable String subject, String body) {
 
         public Wording {
             if (body == null || body.isBlank()) {
@@ -263,7 +271,7 @@ public class NotificationTemplateService {
     }
 
     /** Either the wording, or which of the two ways it was missing. */
-    public record Resolution(TemplateRow template, VersionRow version, Outcome outcome) {
+    public record Resolution(@Nullable TemplateRow template, @Nullable VersionRow version, Outcome outcome) {
 
         public enum Outcome {
             FOUND,
@@ -296,3 +304,4 @@ public class NotificationTemplateService {
         }
     }
 }
+

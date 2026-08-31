@@ -113,7 +113,12 @@ public class TerminalOrderPaymentVoid {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onOrderCancelled(OrderCancelled event) {
-        voidAnyLivePayment(event.tenantId().value(), event.orderId(), event.reasonCode());
+        // A cancellation is not required to carry a reason code (unlike expiry,
+        // which always means the same thing); fall back to a generic one so the
+        // void still records something rather than requiring a non-null value
+        // the event genuinely may not have.
+        String reasonCode = event.reasonCode() == null ? "ORDER_CANCELLED" : event.reasonCode();
+        voidAnyLivePayment(event.tenantId().value(), event.orderId(), reasonCode);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -161,8 +166,10 @@ public class TerminalOrderPaymentVoid {
             return;
         }
 
-        Optional<ProviderBinding> binding = bindings.resolve(
-                tenantId, intent.legalEntity().orElse(null), attempt.providerType(), attempt.businessDate());
+        Optional<UUID> seller = intent.legalEntity();
+        Optional<ProviderBinding> binding = seller.isEmpty()
+                ? Optional.empty()
+                : bindings.resolve(tenantId, seller.get(), attempt.providerType(), attempt.businessDate());
         PaymentProviderPort provider = providers.get(attempt.providerType());
         if (binding.isEmpty() || provider == null || !binding.get().supportsReversal()) {
             unvoidable(orderId, attempt, "no void surface is configured for this binding");
@@ -182,7 +189,10 @@ public class TerminalOrderPaymentVoid {
                         attempt.id(),
                         orderId);
             }
-            case REJECTED, RETRYABLE -> unvoidable(orderId, attempt, outcome.failureCode());
+            case REJECTED, RETRYABLE -> unvoidable(
+                    orderId,
+                    attempt,
+                    outcome.failureCode() == null ? "provider gave no failure code" : outcome.failureCode());
         }
     }
 

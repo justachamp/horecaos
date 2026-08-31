@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -136,6 +138,12 @@ class RemedyApprovalHashTests {
     @Test
     @DisplayName("a ten-use capped percentage does not ride in on a one-use fixed amount's signature")
     void theFactorsBindNotJustTheirProduct() {
+        // FutureDiscountCommand.percentBasisPoints/amountMinor/maximumMinor are
+        // mutually exclusive by production design (see OrderRemedyService.validate,
+        // which every real entry point runs before this hash is ever computed) but
+        // are not yet annotated @Nullable in the record itself, so the unused member
+        // of each pair is a literal null here.
+        @SuppressWarnings("NullAway")
         FutureDiscountCommand signed = new FutureDiscountCommand(
                 TENANT,
                 ORDER,
@@ -151,6 +159,7 @@ class RemedyApprovalHashTests {
                 MAKER,
                 "key-1",
                 "trace-1");
+        @SuppressWarnings("NullAway")
         FutureDiscountCommand executed = new FutureDiscountCommand(
                 TENANT,
                 ORDER,
@@ -260,15 +269,19 @@ class RemedyApprovalHashTests {
     }
 
     private static long exposure(FutureDiscountCommand command) {
-        long perUse =
-                command.benefit() == EntitlementBenefit.FIXED_AMOUNT ? command.amountMinor() : command.maximumMinor();
+        // Same FIXED_AMOUNT/otherwise invariant as OrderRemedyService's own
+        // perUseMaximum: amountMinor is set exactly for FIXED_AMOUNT, maximumMinor
+        // for every other benefit.
+        long perUse = command.benefit() == EntitlementBenefit.FIXED_AMOUNT
+                ? Objects.requireNonNull(command.amountMinor())
+                : Objects.requireNonNull(command.maximumMinor());
         return perUse * command.uses();
     }
 
     private static FutureDiscountCommand discount(
             EntitlementBenefit benefit,
             Long amountMinor,
-            Long maximumMinor,
+            @Nullable Long maximumMinor,
             int uses,
             Duration validFor,
             EntitlementScope appliesTo) {
@@ -299,7 +312,7 @@ class RemedyApprovalHashTests {
         private UUID orderId = ORDER;
         private long amountMinor = 500_000L;
         private ExecutionChannel channel = ExecutionChannel.PROVIDER_CONSOLE;
-        private String providerReference = "CLICK-88213";
+        private @Nullable String providerReference = "CLICK-88213";
         private String executedBy = "gateway-account";
         private Instant executedAt = Instant.parse("2026-08-25T14:02:00Z");
         private String idempotencyKey = "attempt-1";
@@ -320,7 +333,7 @@ class RemedyApprovalHashTests {
             return this;
         }
 
-        Builder providerReference(String value) {
+        Builder providerReference(@Nullable String value) {
             this.providerReference = value;
             return this;
         }

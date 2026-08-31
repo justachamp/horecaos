@@ -2,6 +2,7 @@ package uz.horecaos.platform.reporting.web;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -35,7 +36,7 @@ public class ReportingApiErrorHandler {
     ProblemDetail unknownMetric(MetricRegistry.UnknownMetricException exception) {
         return ApiProblem.withProperties(
                 ErrorCode.VALIDATION_FAILED,
-                exception.getMessage(),
+                message(exception),
                 Map.of("reason", "UNKNOWN_METRIC", "metricCode", exception.code()));
     }
 
@@ -47,7 +48,7 @@ public class ReportingApiErrorHandler {
     ProblemDetail combinedEntityTotal(ReportingRefusals.CombinedEntityTotalException exception) {
         return ApiProblem.withProperties(
                 ErrorCode.VALIDATION_FAILED,
-                exception.getMessage(),
+                message(exception),
                 Map.of("reason", "LEGAL_ENTITY_GROUPING_REQUIRED", "metricCodes", exception.metricCodes()));
     }
 
@@ -56,7 +57,7 @@ public class ReportingApiErrorHandler {
         Map<String, Object> properties = new HashMap<>();
         properties.put("reason", "MIXED_BUSINESS_DAY_BOUNDARY");
         properties.put("recutCompletedThrough", String.valueOf(exception.recutCompletedThrough()));
-        return ApiProblem.withProperties(ErrorCode.RESOURCE_CONFLICT, exception.getMessage(), properties);
+        return ApiProblem.withProperties(ErrorCode.RESOURCE_CONFLICT, message(exception), properties);
     }
 
     /** Defined but unbuilt. Refused rather than answered with a zero somebody believes. */
@@ -64,7 +65,7 @@ public class ReportingApiErrorHandler {
     ProblemDetail notBuilt(ReportingRefusals.MetricNotBuiltException exception) {
         return ApiProblem.withProperties(
                 ErrorCode.VALIDATION_FAILED,
-                exception.getMessage(),
+                message(exception),
                 Map.of("reason", "METRIC_NOT_BUILT", "metricCode", exception.metricCode()));
     }
 
@@ -72,7 +73,7 @@ public class ReportingApiErrorHandler {
     ProblemDetail nonScalar(ReportingRefusals.NonScalarMetricException exception) {
         return ApiProblem.withProperties(
                 ErrorCode.VALIDATION_FAILED,
-                exception.getMessage(),
+                message(exception),
                 Map.of("reason", "NON_SCALAR_METRIC", "metricCode", exception.metricCode()));
     }
 
@@ -80,6 +81,17 @@ public class ReportingApiErrorHandler {
     @ExceptionHandler(MetricSigningService.AlreadySignedException.class)
     ProblemDetail alreadySigned(MetricSigningService.AlreadySignedException exception) {
         return ApiProblem.withProperties(
-                ErrorCode.RESOURCE_CONFLICT, exception.getMessage(), Map.of("reason", "METRIC_ALREADY_SIGNED"));
+                ErrorCode.RESOURCE_CONFLICT, message(exception), Map.of("reason", "METRIC_ALREADY_SIGNED"));
+    }
+
+    /**
+     * Every exception this handler catches always constructs {@link
+     * Throwable#getMessage()} from a required message argument, so it is never
+     * actually null here — but the JDK declares the getter nullable regardless,
+     * and a Problem Details body has no good way to render an absent one.
+     */
+    private static String message(Throwable exception) {
+        return Objects.requireNonNullElse(exception.getMessage(), exception.getClass().getSimpleName());
     }
 }
+

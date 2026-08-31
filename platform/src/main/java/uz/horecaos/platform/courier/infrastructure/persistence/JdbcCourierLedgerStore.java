@@ -8,8 +8,10 @@ import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -229,20 +231,33 @@ public class JdbcCourierLedgerStore {
                 .query()
                 .singleRow();
 
-        long gross = ((Number) sums.get("gross")).longValue();
-        long adjustments = ((Number) sums.get("adjustments")).longValue();
-        long cashHeld = ((Number) sums.get("cash_held")).longValue();
+        long gross = longOf(sums, "gross");
+        long adjustments = longOf(sums, "adjustments");
+        long cashHeld = longOf(sums, "cash_held");
 
         return new PeriodTotals(
                 gross,
                 adjustments,
                 cashHeld,
                 gross + adjustments - cashHeld,
-                ((Number) counts.get("delivered")).intValue(),
-                ((Number) counts.get("on_time")).intValue(),
-                ((Number) counts.get("distance")).longValue(),
-                ((Number) shifts.get("paid_seconds")).longValue(),
-                ((Number) shifts.get("shift_count")).intValue());
+                intOf(counts, "delivered"),
+                intOf(counts, "on_time"),
+                longOf(counts, "distance"),
+                longOf(shifts, "paid_seconds"),
+                intOf(shifts, "shift_count"));
+    }
+
+    /**
+     * One aggregate column out of a single-row result. Every aggregate above is
+     * wrapped in COALESCE, so an absent value is a query defect rather than an
+     * empty period — the guard keeps that checked instead of assumed.
+     */
+    private static long longOf(Map<String, Object> row, String column) {
+        return ((Number) Objects.requireNonNull(row.get(column), column)).longValue();
+    }
+
+    private static int intOf(Map<String, Object> row, String column) {
+        return ((Number) Objects.requireNonNull(row.get(column), column)).intValue();
     }
 
     // ------------------------------------------------------------ ledger entries
@@ -512,7 +527,9 @@ public class JdbcCourierLedgerStore {
                         rs.getObject("settlement_period_id", UUID.class),
                         rs.getString("statement_hash"),
                         rs.getString("document"),
-                        JdbcCourierStore.instant(rs.getObject("generated_at", OffsetDateTime.class)),
+                        // generated_at is NOT NULL: insertStatement writes now().
+                        Objects.requireNonNull(
+                                JdbcCourierStore.instant(rs.getObject("generated_at", OffsetDateTime.class))),
                         rs.getString("generated_by")))
                 .optional();
     }
@@ -528,7 +545,7 @@ public class JdbcCourierLedgerStore {
             String currency,
             PayoutMethod method,
             String authorisedBy,
-            UUID approvalRequestId) {
+            @Nullable UUID approvalRequestId) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("id", id);
@@ -588,6 +605,13 @@ public class JdbcCourierLedgerStore {
 
     // -------------------------------------------------------------------- rows
 
+    /**
+     * A settlement period and its stored totals.
+     *
+     * <p>The close columns are null while the period is open, and
+     * {@code settledAt} until the payout marks it settled — a period's history
+     * is written by the transitions, never ahead of them.
+     */
     public record PeriodRow(
             UUID id,
             UUID tenantId,
@@ -607,10 +631,10 @@ public class JdbcCourierLedgerStore {
             long paidSeconds,
             int shiftCount,
             boolean complianceFlag,
-            String statementHash,
-            String closedBy,
-            Instant closedAt,
-            Instant settledAt,
+            @Nullable String statementHash,
+            @Nullable String closedBy,
+            @Nullable Instant closedAt,
+            @Nullable Instant settledAt,
             int version) {}
 
     public record PeriodTotals(
@@ -624,34 +648,51 @@ public class JdbcCourierLedgerStore {
             long paidSeconds,
             int shiftCount) {}
 
+    /**
+     * One immutable ledger line.
+     *
+     * <p>{@code legalEntityId} is null where no ADR 0038 entity resolves;
+     * {@code sourceId} where the entry has no source aggregate; the reason
+     * code, approval and correction references only exist on the entries whose
+     * kind demands them.
+     */
     public record LedgerEntryRow(
             UUID id,
             UUID tenantId,
             UUID courierId,
             UUID settlementPeriodId,
-            UUID legalEntityId,
+            @Nullable UUID legalEntityId,
             LedgerEntryType entryType,
             long amountMinor,
             String currency,
             String sourceType,
-            UUID sourceId,
+            @Nullable UUID sourceId,
             AdjustmentOrigin origin,
-            String reasonCode,
+            @Nullable String reasonCode,
             Instant occurredAt,
             Instant recordedAt,
             String idempotencyKey,
-            UUID approvalRequestId,
-            UUID adjustsEntryId,
+            @Nullable UUID approvalRequestId,
+            @Nullable UUID adjustsEntryId,
             String createdBy) {}
 
+    /**
+     * What one delivered assignment earned, and everything it was computed from.
+     *
+     * <p>{@code shiftId} is null for a delivery outside any shift; the promise
+     * and kitchen instants where ADR 0014's plan recorded none; the two
+     * protected points where no confirmation coordinate was captured — and both
+     * become null again once {@code pointsPurgedAt} records the retention
+     * deletion.
+     */
     public record EarningRow(
             UUID id,
             UUID tenantId,
             UUID courierId,
-            UUID shiftId,
+            @Nullable UUID shiftId,
             UUID shipmentId,
             UUID assignmentAttemptId,
-            UUID legalEntityId,
+            @Nullable UUID legalEntityId,
             UUID locationId,
             LocalDate businessDate,
             UUID rateCardId,
@@ -660,12 +701,12 @@ public class JdbcCourierLedgerStore {
             int distanceMeters,
             DistanceSource distanceSource,
             OnTimeOutcome onTimeOutcome,
-            Instant promisedDeliveryEnd,
+            @Nullable Instant promisedDeliveryEnd,
             int graceSeconds,
             int onTimePolicyVersion,
             Instant deliveredAt,
-            Instant kitchenHandoverAt,
-            Instant pickupWindowEnd,
+            @Nullable Instant kitchenHandoverAt,
+            @Nullable Instant pickupWindowEnd,
             long fixedMinor,
             long perOrderMinor,
             long perKmMinor,
@@ -673,9 +714,9 @@ public class JdbcCourierLedgerStore {
             long totalMinor,
             String currency,
             boolean geoUnverified,
-            String protectedPickupPoint,
-            String protectedDeliveryPoint,
-            Instant pointsPurgedAt,
+            @Nullable String protectedPickupPoint,
+            @Nullable String protectedDeliveryPoint,
+            @Nullable Instant pointsPurgedAt,
             UUID settlementPeriodId) {}
 
     public record StatementRow(
@@ -686,6 +727,13 @@ public class JdbcCourierLedgerStore {
             Instant generatedAt,
             String generatedBy) {}
 
+    /**
+     * A recorded payout authorisation.
+     *
+     * <p>{@code approvalRequestId} exists only when the period's compliance
+     * flag demanded four eyes; {@code paidAt} only once somebody has moved the
+     * money on whatever rail the method names.
+     */
     public record PayoutRow(
             UUID id,
             UUID courierId,
@@ -695,8 +743,8 @@ public class JdbcCourierLedgerStore {
             PayoutMethod method,
             String status,
             String authorisedBy,
-            UUID approvalRequestId,
-            Instant paidAt) {}
+            @Nullable UUID approvalRequestId,
+            @Nullable Instant paidAt) {}
 
     // ----------------------------------------------------------------- mapping
 
@@ -770,8 +818,10 @@ public class JdbcCourierLedgerStore {
                 rs.getObject("source_id", UUID.class),
                 AdjustmentOrigin.valueOf(rs.getString("origin")),
                 rs.getString("reason_code"),
-                JdbcCourierStore.instant(rs.getObject("occurred_at", OffsetDateTime.class)),
-                JdbcCourierStore.instant(rs.getObject("recorded_at", OffsetDateTime.class)),
+                // Both instants are NOT NULL columns; the guards keep that
+                // checked rather than assumed now the helper is @Nullable.
+                Objects.requireNonNull(JdbcCourierStore.instant(rs.getObject("occurred_at", OffsetDateTime.class))),
+                Objects.requireNonNull(JdbcCourierStore.instant(rs.getObject("recorded_at", OffsetDateTime.class))),
                 rs.getString("idempotency_key"),
                 rs.getObject("approval_request_id", UUID.class),
                 rs.getObject("adjusts_entry_id", UUID.class),
@@ -798,7 +848,8 @@ public class JdbcCourierLedgerStore {
                 JdbcCourierStore.instant(rs.getObject("promised_delivery_end", OffsetDateTime.class)),
                 rs.getInt("grace_seconds"),
                 rs.getInt("on_time_policy_version"),
-                JdbcCourierStore.instant(rs.getObject("delivered_at", OffsetDateTime.class)),
+                // delivered_at is NOT NULL: an earning exists because a delivery happened.
+                Objects.requireNonNull(JdbcCourierStore.instant(rs.getObject("delivered_at", OffsetDateTime.class))),
                 JdbcCourierStore.instant(rs.getObject("kitchen_handover_at", OffsetDateTime.class)),
                 JdbcCourierStore.instant(rs.getObject("pickup_window_end", OffsetDateTime.class)),
                 rs.getLong("fixed_minor"),

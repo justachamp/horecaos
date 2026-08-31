@@ -1,6 +1,7 @@
 package uz.horecaos.platform.commercial.domain;
 
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.commercial.api.EnforcementMode;
 import uz.horecaos.platform.commercial.api.ResetPeriod;
 
@@ -14,12 +15,12 @@ import uz.horecaos.platform.commercial.api.ResetPeriod;
  */
 public record PlanEntitlement(
         String entitlementKey,
-        Long integerValue,
-        Boolean booleanValue,
+        @Nullable Long integerValue,
+        @Nullable Boolean booleanValue,
         EnforcementMode enforcementMode,
         ResetPeriod resetPeriod,
-        Integer warnThresholdBasisPoints,
-        Long overageUnitPriceMinor) {
+        @Nullable Integer warnThresholdBasisPoints,
+        @Nullable Long overageUnitPriceMinor) {
 
     public PlanEntitlement {
         Objects.requireNonNull(entitlementKey, "An entitlement key is required");
@@ -39,8 +40,8 @@ public record PlanEntitlement(
             long limit,
             EnforcementMode mode,
             ResetPeriod resetPeriod,
-            Integer warnThresholdBasisPoints,
-            Long overageUnitPriceMinor) {
+            @Nullable Integer warnThresholdBasisPoints,
+            @Nullable Long overageUnitPriceMinor) {
         return new PlanEntitlement(
                 key, limit, null, mode, resetPeriod, warnThresholdBasisPoints, overageUnitPriceMinor);
     }

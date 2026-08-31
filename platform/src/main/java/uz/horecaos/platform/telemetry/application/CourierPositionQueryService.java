@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.telemetry.domain.LivePositionRules;
 import uz.horecaos.platform.telemetry.infrastructure.persistence.JdbcTelemetryStore;
@@ -79,6 +80,8 @@ public class CourierPositionQueryService {
     }
 
     /**
+     * One courier's rendered position, for the dispatcher's map.
+     *
      * @param batteryPercent the one device value a dispatcher genuinely needs: a
      *                       phone that will die mid-delivery is an order that
      *                       arrives without anybody knowing where it is
@@ -88,10 +91,10 @@ public class CourierPositionQueryService {
             double latitude,
             double longitude,
             double accuracyMeters,
-            Double headingDegrees,
-            Double speedMps,
-            Integer batteryPercent,
-            Boolean deviceCharging,
+            @Nullable Double headingDegrees,
+            @Nullable Double speedMps,
+            @Nullable Integer batteryPercent,
+            @Nullable Boolean deviceCharging,
             int activeAssignmentCount,
             Instant capturedAt) {}
 

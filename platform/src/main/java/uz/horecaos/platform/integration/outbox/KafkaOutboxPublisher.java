@@ -7,6 +7,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -72,7 +73,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
             String aggregateType,
             UUID aggregateId,
             String correlationId,
-            String causationId,
+            @Nullable String causationId,
             Instant occurredAt,
             JsonNode trace,
             JsonNode payload) {}

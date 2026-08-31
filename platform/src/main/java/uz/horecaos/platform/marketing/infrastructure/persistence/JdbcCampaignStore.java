@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.marketing.domain.CampaignStatus;
@@ -135,8 +136,8 @@ public class JdbcCampaignStore {
             UUID campaignId,
             UUID snapshotId,
             int recipients,
-            Long costLowMinor,
-            Long costHighMinor,
+            @Nullable Long costLowMinor,
+            @Nullable Long costHighMinor,
             Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
@@ -294,10 +295,10 @@ public class JdbcCampaignStore {
             UUID accountId,
             int sequence,
             String status,
-            UUID notificationId,
-            RefusalReason refusal,
-            String refusalDetail,
-            Instant deferredUntil,
+            @Nullable UUID notificationId,
+            @Nullable RefusalReason refusal,
+            @Nullable String refusalDetail,
+            @Nullable Instant deferredUntil,
             Instant now) {
 
         Map<String, Object> parameters = new HashMap<>();
@@ -441,11 +442,11 @@ public class JdbcCampaignStore {
                 row.getInt("version"));
     }
 
-    private static Instant instant(OffsetDateTime value) {
+    private static @Nullable Instant instant(@Nullable OffsetDateTime value) {
         return value == null ? null : value.toInstant();
     }
 
-    private static OffsetDateTime utc(Instant instant) {
+    private static @Nullable OffsetDateTime utc(@Nullable Instant instant) {
         return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
@@ -462,8 +463,8 @@ public class JdbcCampaignStore {
             Long costCeilingMinor,
             String currency,
             String timezone,
-            UUID benefitOfferId,
-            UUID loyaltyAccrualRuleId,
+            @Nullable UUID benefitOfferId,
+            @Nullable UUID loyaltyAccrualRuleId,
             UUID createdBy,
             Instant createdAt) {}
 
@@ -501,6 +502,6 @@ public class JdbcCampaignStore {
             UUID notificationId,
             String refusalReason,
             String refusalDetail,
-            Instant deferredUntil,
+            @Nullable Instant deferredUntil,
             String terminalStatus) {}
 }

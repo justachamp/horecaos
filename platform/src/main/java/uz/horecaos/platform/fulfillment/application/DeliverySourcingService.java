@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -171,7 +172,7 @@ public class DeliverySourcingService {
             SourcingDecision.BookPartner decision,
             SourcingProgress progress,
             ResolvedPolicy<DeliverySourcingPolicy> policy,
-            DeliveryQuote quote,
+            @Nullable DeliveryQuote quote,
             Instant now) {
 
         UUID commandId = commandId(
@@ -412,7 +413,7 @@ public class DeliverySourcingService {
      * null — an unquoted partner is still bookable — and {@code findFirst} on a
      * null element throws rather than answering "none".
      */
-    private static DeliveryQuote quoteFor(List<ScoredPartner> scored, SourcingDecision.BookPartner decision) {
+    private static @Nullable DeliveryQuote quoteFor(List<ScoredPartner> scored, SourcingDecision.BookPartner decision) {
         for (ScoredPartner candidate : scored) {
             if (candidate.partner().bindingId().equals(decision.partner().bindingId())) {
                 return candidate.quote();
@@ -435,7 +436,8 @@ public class DeliverySourcingService {
      * written under, which is what makes the replay find its own attempt.
      */
     static UUID commandId(UUID planId, UUID bindingId, int attempt) {
-        return UUID.nameUUIDFromBytes(("horecaos.delivery-attempt:%s:%s:%d".formatted(planId, bindingId, attempt))
+        return UUID.nameUUIDFromBytes("horecaos.delivery-attempt:%s:%s:%d"
+                .formatted(planId, bindingId, attempt)
                 .getBytes(StandardCharsets.UTF_8));
     }
 
@@ -446,7 +448,8 @@ public class DeliverySourcingService {
      * crash.
      */
     static UUID quoteId(UUID planId, UUID bindingId, int round) {
-        return UUID.nameUUIDFromBytes(("horecaos.delivery-quote:%s:%s:%d".formatted(planId, bindingId, round))
+        return UUID.nameUUIDFromBytes("horecaos.delivery-quote:%s:%s:%d"
+                .formatted(planId, bindingId, round)
                 .getBytes(StandardCharsets.UTF_8));
     }
 
@@ -481,6 +484,8 @@ public class DeliverySourcingService {
     public static final UUID DEFAULTS_ID = UUID.fromString("00000000-0000-0000-0000-000000000014");
 
     /**
+     * What one sourcing tick decided and did.
+     *
      * @param progress what the next tick would see if it did not read the attempt
      *                 rows. It does read them — this is here so a caller holding
      *                 one tick in its hand can assert on what changed
@@ -493,10 +498,10 @@ public class DeliverySourcingService {
     public record Outcome(
             SourcingDecision decision,
             SourcingProgress progress,
-            BookingReceipt receipt,
+            @Nullable BookingReceipt receipt,
             UUID policyId,
             int policyVersion,
-            UUID attemptId,
+            @Nullable UUID attemptId,
             boolean won) {
 
         public boolean assigned() {

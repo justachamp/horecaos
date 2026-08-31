@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import uz.horecaos.platform.migration.api.ExtractionSpec;
 
 /**
@@ -57,12 +58,20 @@ class LegacyFilterTests {
      * the statement would fail trying to use one, and a filter that is refused
      * first fails as an argument.
      */
+    // Deliberately passes a null JdbcClient below: this test's whole point is that
+    // the filter check fails before the reader ever touches it, so a real one is
+    // unnecessary. JdbcClient's own type is genuinely non-null everywhere else. The
+    // suppression has to cover the whole method because NullAway's local-variable
+    // nullability tracks the value from its declaration through to where it is
+    // finally passed as an argument inside the lambda below.
+    @SuppressWarnings("NullAway")
     @Test
     @DisplayName("the reader refuses the spec before it opens a connection")
     void theReaderChecksTheFilterBeforeItReadsAnything() {
         var spec = new ExtractionSpec("ORDER", "orders", "id", null, List.of("id"), "1=1; DROP TABLE orders");
 
-        assertThat(catchThrowable(() -> new JdbcLegacySourceReader(null).readPage(spec, null, 100)))
+        JdbcClient neverUsed = null;
+        assertThat(catchThrowable(() -> new JdbcLegacySourceReader(neverUsed).readPage(spec, null, 100)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

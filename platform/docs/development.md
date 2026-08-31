@@ -145,11 +145,12 @@ Python-based repository rules `make lint` already runs:
   `src/main/java` and `src/test/java`; `spotless:check` fails `verify` on
   any unformatted file. Run `make format` (`spotless:apply`) before
   committing rather than hand-formatting.
-- **Static analysis.** Error Prone and NullAway run on every compile.
-  Every finding — including NullAway's own — is demoted to a warning
-  (`-XepAllErrorsAsWarnings`) and printed in the compile log; nothing fails
-  the build at this stage. Promoting a check family to build-failing is a
-  follow-up change made once that family's warning count is zero.
+- **Static analysis.** Error Prone and NullAway run on every compile and
+  fail the build directly — `-XepAllErrorsAsWarnings` was removed on
+  2026-08-31 once the full-tree inventory (ADR 0054) reached zero across
+  every check, including NullAway, which is pinned to `-Xep:NullAway:ERROR`
+  explicitly. A `@SuppressWarnings("NullAway")` is only ever added with a
+  one-line justification comment; it is never blanket.
 - **Dependency scanning.** Maven Enforcer bans duplicate managed dependency
   versions on every build. OWASP `dependency-check` is heavier — it pulls
   live NVD data — so it lives in the `security-audit` Maven profile and

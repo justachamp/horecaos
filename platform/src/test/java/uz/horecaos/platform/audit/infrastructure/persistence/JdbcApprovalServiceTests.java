@@ -11,6 +11,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Locale;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
@@ -47,9 +48,6 @@ class JdbcApprovalServiceTests {
     private static final String OTHER_PARAMETERS = "d".repeat(64);
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private TransactionTemplate transactions;
@@ -63,9 +61,6 @@ class JdbcApprovalServiceTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -114,7 +109,9 @@ class JdbcApprovalServiceTests {
                 .isInstanceOf(ApiException.class)
                 .extracting(failure -> ((ApiException) failure).errorCode())
                 .isEqualTo(ErrorCode.APPROVAL_POLICY_REQUIRED);
-        assertThat(meters.find(JdbcApprovalService.RESOLUTION_METRIC)
+        // .get(), not .find(): this counter must exist by now, and RequiredSearch says so
+        // with a clear MeterNotFoundException instead of an NPE if it somehow does not.
+        assertThat(meters.get(JdbcApprovalService.RESOLUTION_METRIC)
                         .tags(
                                 "action",
                                 ApprovalAction.COURIER_MANUAL_PENALTY.code(),
@@ -166,7 +163,9 @@ class JdbcApprovalServiceTests {
         assertThat(resolutions("unresolved"))
                 .as("an operator has to be able to alert on a control nothing reaches")
                 .isEqualTo(1.0);
-        assertThat(meters.find(JdbcApprovalService.RESOLUTION_METRIC)
+        // .get(), not .find(): this counter must exist by now, and RequiredSearch says so
+        // with a clear MeterNotFoundException instead of an NPE if it somehow does not.
+        assertThat(meters.get(JdbcApprovalService.RESOLUTION_METRIC)
                         .tag("outcome", "unresolved")
                         .counter()
                         .getId()
@@ -500,7 +499,7 @@ class JdbcApprovalServiceTests {
                 .param("id", id)
                 .param("tenantId", TENANT)
                 .param("code", code)
-                .param("slug", code.toLowerCase())
+                .param("slug", code.toLowerCase(Locale.ROOT))
                 .update();
     }
 

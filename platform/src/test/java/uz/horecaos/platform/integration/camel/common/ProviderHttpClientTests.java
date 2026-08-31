@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -40,7 +41,7 @@ class ProviderHttpClientTests {
     @BeforeEach
     void setUp() throws IOException {
         release = new CountDownLatch(1);
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server = HttpServer.create(new InetSocketAddress(InetAddress.getAllByName("127.0.0.1")[0], 0), 0);
         server.setExecutor(Executors.newFixedThreadPool(2));
         client = new ProviderHttpClient(JsonMapper.builder().build(), new ProviderExceptionClassifier());
     }

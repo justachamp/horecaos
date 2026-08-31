@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -312,7 +313,7 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
      * a fault somebody has to fix and the other is a commercial decision somebody
      * made.
      */
-    private TariffChoice chooseTariff(DeliveryFeeQuery query, ZoneCandidate winner) {
+    private @Nullable TariffChoice chooseTariff(DeliveryFeeQuery query, ZoneCandidate winner) {
         if (winner.deliveryTariffId() != null) {
             Optional<DeliveryTariff> zoneTariff = tariffs.loadActive(query.tenantId(), winner.deliveryTariffId());
             if (zoneTariff.isPresent()) {
@@ -381,7 +382,7 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
             DeliveryFeeOutcome outcome,
             String reasonCode,
             Map<String, Object> evidence,
-            ZoneCandidate winner,
+            @Nullable ZoneCandidate winner,
             List<UUID> losers) {
         return new DeliveryFeeResolution(
                 UUID.randomUUID(),
@@ -415,5 +416,5 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
     /** @param rung which precedence step answered, so the evidence explains itself */
     private record TariffChoice(String rung, DeliveryTariff tariff) {}
 
-    private record Distance(int meters, DistanceSource source, String provider) {}
+    private record Distance(int meters, DistanceSource source, @Nullable String provider) {}
 }

@@ -9,8 +9,10 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.payments.domain.FiscalDocument;
@@ -156,7 +158,7 @@ public class JdbcFiscalDocumentStore {
             UUID documentId,
             FiscalStatus status,
             String reasonCode,
-            String protectedRequestReference,
+            @Nullable String protectedRequestReference,
             Instant submittedAt) {
         jdbc.sql("""
                 UPDATE payments.fiscal_documents
@@ -192,8 +194,8 @@ public class JdbcFiscalDocumentStore {
             UUID documentId,
             FiscalStatus status,
             String reasonCode,
-            FiscalDocument.FiscalEvidence evidence,
-            String protectedResponseReference,
+            FiscalDocument.@Nullable FiscalEvidence evidence,
+            @Nullable String protectedResponseReference,
             Instant issuedAt) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
@@ -250,16 +252,44 @@ public class JdbcFiscalDocumentStore {
                 row.getString("reason_code"),
                 row.getString("reason_note"),
                 List.of(),
-                new FiscalDocument.FiscalEvidence(
-                        row.getString("external_receipt_id"),
-                        row.getString("fiscal_sign"),
-                        row.getString("terminal_id"),
-                        row.getString("receipt_reference"),
-                        instant(row, "registered_at"),
-                        row.getString("receipt_url"),
-                        row.getString("provider_status_code"),
-                        row.getString("provider_message")),
+                readEvidence(row),
                 row.getObject("version", Integer.class),
-                instant(row, "created_at"));
+                Objects.requireNonNull(instant(row, "created_at"), "fiscal_documents.created_at is NOT NULL"));
+    }
+
+    // Absence, not an evidence object whose eight fields all happen to be null.
+    // Every non-ISSUED status but NOT_APPLICABLE may still legitimately have all
+    // eight evidence columns unset (a document that has not been submitted yet
+    // has none of them), and fiscalEvidence() promising Optional.empty() in that
+    // case is the whole reason a caller can ask "has a receipt arrived" instead
+    // of unpacking a FiscalEvidence full of nulls to find out.
+    private static FiscalDocument.@Nullable FiscalEvidence readEvidence(ResultSet row) throws SQLException {
+        String externalReceiptId = row.getString("external_receipt_id");
+        String fiscalSign = row.getString("fiscal_sign");
+        String terminalId = row.getString("terminal_id");
+        String receiptReference = row.getString("receipt_reference");
+        Instant registeredAt = instant(row, "registered_at");
+        String receiptUrl = row.getString("receipt_url");
+        String providerStatusCode = row.getString("provider_status_code");
+        String providerMessage = row.getString("provider_message");
+        if (externalReceiptId == null
+                && fiscalSign == null
+                && terminalId == null
+                && receiptReference == null
+                && registeredAt == null
+                && receiptUrl == null
+                && providerStatusCode == null
+                && providerMessage == null) {
+            return null;
+        }
+        return new FiscalDocument.FiscalEvidence(
+                externalReceiptId,
+                fiscalSign,
+                terminalId,
+                receiptReference,
+                registeredAt,
+                receiptUrl,
+                providerStatusCode,
+                providerMessage);
     }
 }

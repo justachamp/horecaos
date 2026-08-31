@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,19 +54,26 @@ public class FloorPlanService {
     // -------------------------------------------------------------- settings
 
     /**
+     * A branch's dine-in settings, with every tunable optional so a caller can
+     * change only what it means to.
+     *
      * @param qrMode the branch-wide answer to "what does a scanned code do here".
      *               {@code SETTLE_OPEN_TICKET} is refused by {@link QrMode#require}
      *               and again by V0034, per ADR 0011's rule that an unsupported
      *               provider capability may never be the sole business path
+     * @param turnaroundMinutes null to leave the current value (or the default for
+     *                          a branch never configured) in place
+     * @param guestSessionTtlMinutes null to leave the current value in place
+     * @param serviceChargeRateBp null to leave the current value in place
      */
     public record BranchSettings(
             UUID tenantId,
             UUID brandId,
             UUID locationId,
             String qrMode,
-            Integer turnaroundMinutes,
-            Integer guestSessionTtlMinutes,
-            Integer serviceChargeRateBp) {}
+            @Nullable Integer turnaroundMinutes,
+            @Nullable Integer guestSessionTtlMinutes,
+            @Nullable Integer serviceChargeRateBp) {}
 
     @Transactional
     public SettingsRow configure(BranchSettings request, String actorSubject, String reason) {
@@ -157,8 +165,8 @@ public class FloorPlanService {
             String displayName,
             int seats,
             boolean joinable,
-            BigDecimal layoutX,
-            BigDecimal layoutY) {}
+            @Nullable BigDecimal layoutX,
+            @Nullable BigDecimal layoutY) {}
 
     @Transactional
     public TableRow createTable(NewTable request) {
@@ -307,7 +315,7 @@ public class FloorPlanService {
         return store.findTable(tenantId, tableId).orElseThrow();
     }
 
-    private static int orDefault(Integer supplied, int fallback) {
+    private static int orDefault(@Nullable Integer supplied, int fallback) {
         return supplied == null ? fallback : supplied;
     }
 }

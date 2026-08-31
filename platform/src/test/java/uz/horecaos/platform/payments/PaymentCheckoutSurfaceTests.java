@@ -11,10 +11,13 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -343,7 +346,9 @@ class PaymentCheckoutSurfaceTests {
 
         var session = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT, PresentationRequest.link());
 
-        Map<String, String> parameters = queryOf(session.checkoutUrl());
+        // A PresentationRequest.link() session always carries a checkout URL;
+        // only a push presentation can leave it null.
+        Map<String, String> parameters = queryOf(Objects.requireNonNull(session.checkoutUrl()));
         assertThat(session.checkoutUrl()).startsWith("https://my.click.uz/services/pay/?");
         assertThat(parameters.get("merchant_id")).isEqualTo(CLICK_MERCHANT_ID);
         assertThat(parameters.get("service_id")).isEqualTo(CLICK_SERVICE_ID);
@@ -444,7 +449,8 @@ class PaymentCheckoutSurfaceTests {
         var session = checkout.openOrRePresent(TENANT, PAYME_ORDER, ACCOUNT, PresentationRequest.link());
 
         assertThat(session.checkoutUrl()).startsWith(PAYME_CHECKOUT_HOST + "/");
-        String encoded = session.checkoutUrl()
+        // Same PresentationRequest.link() invariant as clickPaymentLink() above.
+        String encoded = Objects.requireNonNull(session.checkoutUrl())
                 .substring(PAYME_CHECKOUT_HOST.length() + 1)
                 .replace("%2F", "/");
         String payload = new String(Base64.getDecoder().decode(encoded), StandardCharsets.US_ASCII);
@@ -712,7 +718,7 @@ class PaymentCheckoutSurfaceTests {
         return attempts.find(TENANT, ids.getFirst()).orElseThrow();
     }
 
-    private String invoiceIdOf(UUID attemptId) {
+    private @Nullable String invoiceIdOf(UUID attemptId) {
         return jdbc.sql("SELECT external_invoice_id FROM payments.payment_attempts WHERE id = :id")
                 .param("id", attemptId)
                 .query(String.class)
@@ -815,7 +821,9 @@ class PaymentCheckoutSurfaceTests {
                 .param("providerType", providerType)
                 .param("environment", environment)
                 .param("displayName", displayName)
-                .param("secretReference", "horecaos:test:provider_payment:tenant:" + providerType.toLowerCase())
+                .param(
+                        "secretReference",
+                        "horecaos:test:provider_payment:tenant:" + providerType.toLowerCase(Locale.ROOT))
                 .update();
     }
 
@@ -849,8 +857,8 @@ class PaymentCheckoutSurfaceTests {
             String providerType,
             UUID installationId,
             String account,
-            String user,
-            String merchantId,
+            @Nullable String user,
+            @Nullable String merchantId,
             String segment) {
         Map<String, Object> parameters = new java.util.HashMap<>();
         parameters.put("id", id);
@@ -867,7 +875,8 @@ class PaymentCheckoutSurfaceTests {
         parameters.put("user", user);
         parameters.put("merchantId", merchantId);
         parameters.put("segment", segment);
-        parameters.put("secretReference", "horecaos:test:provider_payment:tenant:" + providerType.toLowerCase());
+        parameters.put(
+                "secretReference", "horecaos:test:provider_payment:tenant:" + providerType.toLowerCase(Locale.ROOT));
         parameters.put("effectiveFrom", LocalDate.of(2026, 1, 1));
 
         jdbc.sql("""
@@ -1016,12 +1025,13 @@ class PaymentCheckoutSurfaceTests {
 
         @Override
         public Optional<BindingRef> primaryBinding(
-                UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
+                UUID tenantId, UUID brandId, @Nullable UUID locationId, String capabilityCode) {
             return Optional.empty();
         }
 
         @Override
-        public List<BindingRef> candidateBindings(UUID tenantId, UUID brandId, UUID locationId, String capabilityCode) {
+        public List<BindingRef> candidateBindings(
+                UUID tenantId, UUID brandId, @Nullable UUID locationId, String capabilityCode) {
             return List.of();
         }
 

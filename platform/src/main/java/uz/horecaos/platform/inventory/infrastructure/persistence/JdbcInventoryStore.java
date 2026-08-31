@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.inventory.api.TrackingMode;
@@ -110,7 +111,7 @@ public class JdbcInventoryStore {
             String idempotencyKey,
             String reasonCode,
             String actorType,
-            UUID actorId,
+            @Nullable UUID actorId,
             Instant now) {
 
         jdbc.sql("""

@@ -71,6 +71,8 @@ public class JdbcMediaAssetStore {
     }
 
     /**
+     * Records a verified asset as available and stores what verification found.
+     *
      * @param contentType what the image's own header says, not what the client
      *                    declared and not what the store echoed back
      */

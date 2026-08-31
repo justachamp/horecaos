@@ -4,6 +4,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.integration.api.ExternalEventEnvelope;
@@ -182,8 +183,9 @@ public abstract class TenantSummaryProjection<T> implements InboxHandler<T> {
                 .update();
     }
 
-    private static String text(Map<String, Object> payload, String field) {
+    private static @Nullable String text(Map<String, Object> payload, String field) {
         Object value = payload.get(field);
         return value == null ? null : String.valueOf(value);
     }
 }
+

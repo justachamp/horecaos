@@ -1,5 +1,7 @@
 package uz.horecaos.platform.payments.infrastructure.click;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * What can honestly be said about a MERCHANT API {@code error_code} (ADR 0013).
  *
@@ -59,7 +61,7 @@ public final class ClickErrorCodes {
      * goes when it does. Nothing new should call it: the name does not say which
      * question it answers, and that is the whole defect.
      */
-    public static boolean successful(Object rawErrorCode) {
+    public static boolean successful(@Nullable Object rawErrorCode) {
         return successfulRead(rawErrorCode);
     }
 
@@ -74,7 +76,7 @@ public final class ClickErrorCodes {
      *
      * <p>Never for a mutating call. See {@link #successfulMutation}.
      */
-    public static boolean successfulRead(Object rawErrorCode) {
+    public static boolean successfulRead(@Nullable Object rawErrorCode) {
         return asLong(rawErrorCode) == SUCCESS;
     }
 
@@ -94,7 +96,7 @@ public final class ClickErrorCodes {
      * explicit zero is {@link #uncertainMutation} territory: resolve it by
      * querying {@code status_by_mti}, never by sending the call again.
      */
-    public static boolean successfulMutation(Object rawErrorCode) {
+    public static boolean successfulMutation(@Nullable Object rawErrorCode) {
         return present(rawErrorCode) && asLong(rawErrorCode) == SUCCESS;
     }
 
@@ -107,12 +109,12 @@ public final class ClickErrorCodes {
      * statement, and the two must not settle the same way: one is a failure to
      * report, the other is a payment nobody can account for.
      */
-    public static boolean uncertainMutation(Object rawErrorCode) {
+    public static boolean uncertainMutation(@Nullable Object rawErrorCode) {
         return !present(rawErrorCode);
     }
 
     /** Whether Click sent an {@code error_code} at all. */
-    public static boolean present(Object rawErrorCode) {
+    public static boolean present(@Nullable Object rawErrorCode) {
         return rawErrorCode != null;
     }
 
@@ -126,7 +128,7 @@ public final class ClickErrorCodes {
      * not safe for anything else, which is why the predicates above and not this
      * method are what a caller branches on.
      */
-    public static long asLong(Object rawErrorCode) {
+    public static long asLong(@Nullable Object rawErrorCode) {
         if (rawErrorCode == null) {
             return SUCCESS;
         }
@@ -151,7 +153,7 @@ public final class ClickErrorCodes {
      * to echo request content back, so this is what reaches a log line and the raw
      * body is not.
      */
-    public static String describe(Object rawErrorCode, Object rawErrorNote) {
+    public static String describe(@Nullable Object rawErrorCode, @Nullable Object rawErrorNote) {
         String note = rawErrorNote == null ? "" : rawErrorNote.toString();
         if (note.length() > 200) {
             note = note.substring(0, 200);

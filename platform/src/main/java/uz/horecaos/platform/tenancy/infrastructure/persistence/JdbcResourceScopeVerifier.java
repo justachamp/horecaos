@@ -1,5 +1,6 @@
 package uz.horecaos.platform.tenancy.infrastructure.persistence;
 
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -27,13 +28,19 @@ public class JdbcResourceScopeVerifier implements ResourceScopeVerifier {
 
     @Override
     public boolean exists(ResourceScope scope) {
+        // ResourceScope's own compact constructor guarantees tenantId/brandId/locationId
+        // are set for exactly the scope types that read them below; requireNonNull here
+        // documents that invariant for NullAway rather than distrusting it.
         return switch (scope.type()) {
             // No identifiers to verify. Whether anyone may act at this level is a
             // capability question, and it is asked immediately after this one.
             case PLATFORM -> true;
-            case TENANT -> tenantExists(scope.tenantId());
-            case BRAND -> brandExists(scope.tenantId(), scope.brandId());
-            case LOCATION -> locationExists(scope.tenantId(), scope.brandId(), scope.locationId());
+            case TENANT -> tenantExists(Objects.requireNonNull(scope.tenantId()));
+            case BRAND -> brandExists(Objects.requireNonNull(scope.tenantId()), Objects.requireNonNull(scope.brandId()));
+            case LOCATION -> locationExists(
+                    Objects.requireNonNull(scope.tenantId()),
+                    Objects.requireNonNull(scope.brandId()),
+                    Objects.requireNonNull(scope.locationId()));
         };
     }
 

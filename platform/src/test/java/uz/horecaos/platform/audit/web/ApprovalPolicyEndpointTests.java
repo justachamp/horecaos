@@ -78,6 +78,10 @@ class ApprovalPolicyEndpointTests {
      * the latest version it is a validate, not a migration, and it is the only
      * thing in this suite that would notice a clone that arrived at the wrong one.
      */
+    // NullAway does not recognise @DynamicPropertySource as a field initializer the way
+    // it does @BeforeAll/@BeforeEach; `db` is always set there before any @Test method
+    // runs (see the javadoc above for why it cannot move to @BeforeAll instead).
+    @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
 
     @BeforeAll

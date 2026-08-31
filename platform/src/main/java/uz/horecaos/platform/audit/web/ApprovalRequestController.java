@@ -129,6 +129,8 @@ public class ApprovalRequestController {
     }
 
     /**
+     * A checker's decision on a pending approval request.
+     *
      * @param decision APPROVE or DECLINE
      * @param reason   why. Recorded on the request and in the audit trail, and
      *                 returned to the maker when the decision is a decline, so it
@@ -142,6 +144,8 @@ public class ApprovalRequestController {
             String reason) {}
 
     /**
+     * One request waiting for a second signature, as returned to a console.
+     *
      * @param mayDecide whether the caller could decide this row. False for the
      *                  caller's own requests however senior they are, so a console
      *                  can grey the button rather than offer one that answers 403
@@ -177,7 +181,11 @@ public class ApprovalRequestController {
         }
     }
 
-    /** @param status APPROVED or DECLINED */
+    /**
+     * The outcome of a checker's decision.
+     *
+     * @param status APPROVED or DECLINED
+     */
     public record DecisionResponse(
             UUID id, String actionCode, String status, String decidedBy, java.time.Instant decidedAt) {}
 }

@@ -15,8 +15,10 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -62,6 +64,11 @@ class OpenApiContractTests {
     private static final Path BASELINE = Path.of("api/openapi/v1/horecaos-api.json");
     private static final Path GENERATED = Path.of("target/openapi/horecaos-api-v1.json");
     private static final boolean UPDATE_BASELINE = Boolean.getBoolean("horecaos.openapi.updateBaseline");
+    // Populated by @DynamicPropertySource, a static hook Spring's test runner
+    // guarantees runs before context startup and every test method -- earlier
+    // than any field initializer NullAway would otherwise accept, and a
+    // sequencing contract it has no visibility into.
+    @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
 
     @BeforeAll
@@ -218,7 +225,7 @@ class OpenApiContractTests {
                 JsonNode oldOperation = oldPath.path(method);
                 JsonNode newOperation = newPath.path(method);
                 assertThat(newOperation.isObject())
-                        .as("published %s %s must remain in v1", method.toUpperCase(), path)
+                        .as("published %s %s must remain in v1", method.toUpperCase(Locale.ROOT), path)
                         .isTrue();
                 assertParametersCompatible(path, method, oldOperation, newOperation);
                 assertRequestBodyCompatible(path, method, oldOperation, newOperation, released, generated);
@@ -235,13 +242,18 @@ class OpenApiContractTests {
                     parameter.path("in").asText() + ":" + parameter.path("name").asText();
             JsonNode replacement = current.get(key);
             assertThat(replacement)
-                    .as("published %s parameter %s on %s %s must remain", key, method.toUpperCase(), path, method)
+                    .as("published %s parameter %s on %s %s must remain", key, method.toUpperCase(Locale.ROOT), path, method)
                     .isNotNull();
+            if (replacement == null) {
+                // Unreachable: the assertion above already failed the test with a
+                // clearer message. This narrows the type for the checker.
+                throw new AssertionError("unreachable");
+            }
             if (!parameter.path("required").asBoolean(false)) {
                 assertThat(replacement.path("required").asBoolean(false))
                         .as(
                                 "published optional parameter %s on %s %s cannot become required",
-                                key, method.toUpperCase(), path)
+                                key, method.toUpperCase(Locale.ROOT), path)
                         .isFalse();
             }
         });
@@ -267,11 +279,11 @@ class OpenApiContractTests {
         }
         JsonNode newBody = newOperation.path("requestBody");
         assertThat(newBody.isObject())
-                .as("published request body on %s %s must remain", method.toUpperCase(), path)
+                .as("published request body on %s %s must remain", method.toUpperCase(Locale.ROOT), path)
                 .isTrue();
         if (!oldBody.path("required").asBoolean(false)) {
             assertThat(newBody.path("required").asBoolean(false))
-                    .as("published optional request body on %s %s cannot become required", method.toUpperCase(), path)
+                    .as("published optional request body on %s %s cannot become required", method.toUpperCase(Locale.ROOT), path)
                     .isFalse();
         }
         assertSchemasCompatible(
@@ -294,7 +306,7 @@ class OpenApiContractTests {
             JsonNode oldResponse = oldOperation.path("responses").path(status);
             JsonNode newResponse = newOperation.path("responses").path(status);
             assertThat(newResponse.isObject())
-                    .as("published response %s on %s %s must remain", status, method.toUpperCase(), path)
+                    .as("published response %s on %s %s must remain", status, method.toUpperCase(Locale.ROOT), path)
                     .isTrue();
             assertSchemasCompatible(
                     path + " " + method + " response " + status,
@@ -306,7 +318,7 @@ class OpenApiContractTests {
         });
     }
 
-    private static JsonNode mediaSchema(JsonNode node) {
+    private static @Nullable JsonNode mediaSchema(JsonNode node) {
         JsonNode content = node.path("content");
         Iterator<JsonNode> media = content.elements();
         return media.hasNext() ? media.next().path("schema") : null;
@@ -314,8 +326,8 @@ class OpenApiContractTests {
 
     private static void assertSchemasCompatible(
             String context,
-            JsonNode oldSchema,
-            JsonNode newSchema,
+            @Nullable JsonNode oldSchema,
+            @Nullable JsonNode newSchema,
             JsonNode released,
             JsonNode generated,
             Set<String> visitedReferences) {
@@ -323,6 +335,11 @@ class OpenApiContractTests {
             return;
         }
         assertThat(newSchema).as("schema for %s must remain", context).isNotNull();
+        if (newSchema == null) {
+            // Unreachable: the assertion above already failed the test with a
+            // clearer message. This narrows the type for the checker.
+            throw new AssertionError("unreachable");
+        }
         // The released and generated schemas commonly point at the same component
         // name. They are two independent reference chains, not a cycle; only a
         // repeated reference while resolving one document is recursive.

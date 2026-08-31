@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -91,7 +92,7 @@ class IdentityDriftReporterTests {
         keycloak.holds("org-a", "acme", true);
 
         assertThat(reporter.scan().findings()).isEmpty();
-        assertThat(meters.find("horecaos.iam.identity.drift").gauge().value()).isZero();
+        assertThat(meters.get("horecaos.iam.identity.drift").gauge().value()).isZero();
     }
 
     @Test
@@ -205,7 +206,7 @@ class IdentityDriftReporterTests {
                 .as("an unreachable realm would otherwise raise a finding for every tenant at once")
                 .isEmpty();
         assertThat(report.unreachable()).isEqualTo(2);
-        assertThat(meters.find("horecaos.iam.identity.drift.scans")
+        assertThat(meters.get("horecaos.iam.identity.drift.scans")
                         .tag("outcome", "partial")
                         .counter()
                         .count())
@@ -222,7 +223,7 @@ class IdentityDriftReporterTests {
                 SELECT count(*) FROM audit.audit_events
                  WHERE action_code = 'iam.identity_drift_detected' AND audit_class = 'SECURITY'
                 """).query(Long.class).single()).isEqualTo(1L);
-        assertThat(meters.find("horecaos.iam.identity.drift.detected")
+        assertThat(meters.get("horecaos.iam.identity.drift.detected")
                         .tag("code", DriftCode.ORGANIZATION_MISSING.name())
                         .counter()
                         .count())
@@ -235,7 +236,7 @@ class IdentityDriftReporterTests {
      */
     @Test
     void theReportPublishesItsOwnAgeSoASilentReportIsVisible() {
-        assertThat(meters.find("horecaos.iam.identity.drift.report.age.seconds")
+        assertThat(meters.get("horecaos.iam.identity.drift.report.age.seconds")
                         .gauge()
                         .value())
                 .as("negative until the first pass completes, so an absent report is not zero")
@@ -243,7 +244,7 @@ class IdentityDriftReporterTests {
 
         reporter.scan();
 
-        assertThat(meters.find("horecaos.iam.identity.drift.report.age.seconds")
+        assertThat(meters.get("horecaos.iam.identity.drift.report.age.seconds")
                         .gauge()
                         .value())
                 .isZero();
@@ -265,7 +266,7 @@ class IdentityDriftReporterTests {
                 """).query(UUID.class).list();
     }
 
-    private void insertTenant(UUID id, String slug, String status, String organizationId) {
+    private void insertTenant(UUID id, String slug, String status, @Nullable String organizationId) {
         jdbc.sql("""
                 INSERT INTO tenant.tenants
                     (id, slug, legal_name, display_name, default_currency, default_timezone,

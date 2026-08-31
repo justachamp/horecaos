@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import uz.horecaos.platform.pos.domain.DifferenceEngine.AbsenceHistory;
@@ -213,7 +214,7 @@ class DifferenceEngineTests {
         return new CatalogSnapshot(NOW, walkStable, 1, List.of(), products, variants, List.of(), List.of(), List.of());
     }
 
-    private static CatalogSnapshot.Product product(String id, String name, SourceKind kind, Long priceMinor) {
+    private static CatalogSnapshot.Product product(String id, String name, SourceKind kind, @Nullable Long priceMinor) {
         return new CatalogSnapshot.Product(
                 id,
                 name,
@@ -222,7 +223,10 @@ class DifferenceEngineTests {
                 kind.menuCandidate(),
                 false,
                 priceMinor,
-                priceMinor == null ? null : "UZS",
+                // Currency is asserted from installation configuration regardless
+                // of whether a price was stated (see CloposCatalogNormalizer), so
+                // it is never conditional on priceMinor here either.
+                "UZS",
                 true,
                 false,
                 null,

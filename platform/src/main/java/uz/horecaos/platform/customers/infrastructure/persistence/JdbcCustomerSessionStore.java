@@ -7,6 +7,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.customers.application.CustomerSessionStore;
@@ -126,12 +127,22 @@ public class JdbcCustomerSessionStore implements CustomerSessionStore {
                 rs.getObject("brand_id", UUID.class),
                 rs.getObject("customer_account_id", UUID.class),
                 rs.getObject("identity_partition_brand_id", UUID.class),
-                instant(rs, "issued_at"),
-                instant(rs, "expires_at"),
-                instant(rs, "revoked_at"));
+                requiredInstant(rs, "issued_at"),
+                requiredInstant(rs, "expires_at"),
+                nullableInstant(rs, "revoked_at"));
     }
 
-    private static Instant instant(ResultSet rs, String column) throws SQLException {
+    /** {@code issued_at} and {@code expires_at} are {@code NOT NULL}; a missing value is a defect. */
+    private static Instant requiredInstant(ResultSet rs, String column) throws SQLException {
+        OffsetDateTime value = rs.getObject(column, OffsetDateTime.class);
+        if (value == null) {
+            throw new IllegalStateException(column + " is NOT NULL in the schema but read as null");
+        }
+        return value.toInstant();
+    }
+
+    /** {@code revoked_at} is null for a session that has not ended. */
+    private static @Nullable Instant nullableInstant(ResultSet rs, String column) throws SQLException {
         OffsetDateTime value = rs.getObject(column, OffsetDateTime.class);
         return value == null ? null : value.toInstant();
     }

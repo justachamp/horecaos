@@ -12,6 +12,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -75,7 +76,7 @@ public class FiscalDocumentController {
                     + "indistinguishable from a receipt that does not exist.")
     public ResponseEntity<BlockedWorklistResponse> blocked(
             @PathVariable UUID tenantId,
-            @RequestParam(required = false) String reasonCode,
+            @RequestParam(required = false) @Nullable String reasonCode,
             @RequestParam(defaultValue = "100") @Max(500) int limit) {
 
         if (reasonCode != null && !FiscalReasonCode.BLOCKING.contains(reasonCode)) {
@@ -239,15 +240,19 @@ public class FiscalDocumentController {
     /** Every command here records why, because ADR 0027 refuses a user action without one. */
     record ResolutionRequest(@NotBlank @Size(max = 255) String reason) {}
 
-    record ResolutionResponse(UUID documentId, String outcome, int version, String warning) {}
+    record ResolutionResponse(UUID documentId, String outcome, int version, @Nullable String warning) {}
 
     /**
+     * The blocked worklist, as reported to an operator.
+     *
      * @param warning present when no provider adapter is wired, so the gap appears
      *                on every read rather than in a startup log nobody sees again
      */
-    record BlockedWorklistResponse(int count, List<BlockedDocumentResponse> documents, String warning) {}
+    record BlockedWorklistResponse(int count, List<BlockedDocumentResponse> documents, @Nullable String warning) {}
 
     /**
+     * One document on the worklist, or one document of an order.
+     *
      * @param hasEvidence whether the tax authority's identifiers are on the row.
      *                    Whether, not what: the identifiers themselves are ADR 0029
      *                    evidence and are not a worklist's business
@@ -265,9 +270,9 @@ public class FiscalDocumentController {
             boolean hasEvidence,
             int attemptCount,
             int version,
-            Instant submittedAt,
-            Instant reportingDeadlineAt,
-            Instant blockedAt) {
+            @Nullable Instant submittedAt,
+            @Nullable Instant reportingDeadlineAt,
+            @Nullable Instant blockedAt) {
 
         static BlockedDocumentResponse of(FiscalDocumentRow row) {
             return new BlockedDocumentResponse(
@@ -290,6 +295,8 @@ public class FiscalDocumentController {
     }
 
     /**
+     * A window's coverage, reported as counts and shares rather than one figure.
+     *
      * @param notApplicableShareBasisPoints the share no provider can receipt —
      *                                      overwhelmingly cash. Reported beside the
      *                                      issued share and never folded into it
@@ -312,7 +319,7 @@ public class FiscalDocumentController {
             int notApplicableShareBasisPoints,
             int unreceiptedShareBasisPoints,
             boolean providerPathIsMinority,
-            String warning) {
+            @Nullable String warning) {
 
         static CoverageResponse of(FiscalCoverage coverage) {
             return new CoverageResponse(

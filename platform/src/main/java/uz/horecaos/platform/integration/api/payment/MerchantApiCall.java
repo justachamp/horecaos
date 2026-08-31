@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One call from a payment adapter to a provider's merchant API (ADR 0007).
@@ -41,10 +42,10 @@ public record MerchantApiCall(
         String operation,
         String method,
         String path,
-        Map<String, Object> body,
+        @Nullable Map<String, Object> body,
         boolean mutating,
         Function<String, Map<String, String>> authorization,
-        String correlationId,
+        @Nullable String correlationId,
         Duration timeout) {
 
     public MerchantApiCall {

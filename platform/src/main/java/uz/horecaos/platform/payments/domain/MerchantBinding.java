@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 
 /**
@@ -36,14 +37,14 @@ public final class MerchantBinding {
     private final UUID installationId;
     private final UUID integrationBindingId;
     private final String merchantAccountReference;
-    private final String merchantUserReference;
-    private final String merchantIdReference;
+    private final @Nullable String merchantUserReference;
+    private final @Nullable String merchantIdReference;
     private final SecretReference secretReference;
     private final String callbackPathSegment;
     private final boolean supportsReversal;
     private final boolean supportsPartnerFiscalization;
     private final LocalDate effectiveFrom;
-    private final LocalDate effectiveUntil;
+    private final @Nullable LocalDate effectiveUntil;
     private MerchantBindingStatus status;
     private final int version;
 
@@ -55,14 +56,14 @@ public final class MerchantBinding {
             UUID installationId,
             UUID integrationBindingId,
             String merchantAccountReference,
-            String merchantUserReference,
-            String merchantIdReference,
+            @Nullable String merchantUserReference,
+            @Nullable String merchantIdReference,
             SecretReference secretReference,
             String callbackPathSegment,
             boolean supportsReversal,
             boolean supportsPartnerFiscalization,
             LocalDate effectiveFrom,
-            LocalDate effectiveUntil,
+            @Nullable LocalDate effectiveUntil,
             MerchantBindingStatus status,
             int version) {
         this.id = Objects.requireNonNull(id, "A merchant binding ID is required");
@@ -110,14 +111,14 @@ public final class MerchantBinding {
             UUID installationId,
             UUID integrationBindingId,
             String merchantAccountReference,
-            String merchantUserReference,
-            String merchantIdReference,
+            @Nullable String merchantUserReference,
+            @Nullable String merchantIdReference,
             SecretReference secretReference,
             String callbackPathSegment,
             boolean supportsReversal,
             boolean supportsPartnerFiscalization,
             LocalDate effectiveFrom,
-            LocalDate effectiveUntil) {
+            @Nullable LocalDate effectiveUntil) {
         return new MerchantBinding(
                 id,
                 tenantId,
@@ -146,14 +147,14 @@ public final class MerchantBinding {
             UUID installationId,
             UUID integrationBindingId,
             String merchantAccountReference,
-            String merchantUserReference,
-            String merchantIdReference,
+            @Nullable String merchantUserReference,
+            @Nullable String merchantIdReference,
             SecretReference secretReference,
             String callbackPathSegment,
             boolean supportsReversal,
             boolean supportsPartnerFiscalization,
             LocalDate effectiveFrom,
-            LocalDate effectiveUntil,
+            @Nullable LocalDate effectiveUntil,
             MerchantBindingStatus status,
             int version) {
         return new MerchantBinding(
@@ -262,7 +263,7 @@ public final class MerchantBinding {
         return effectiveFrom;
     }
 
-    public LocalDate effectiveUntil() {
+    public @Nullable LocalDate effectiveUntil() {
         return effectiveUntil;
     }
 

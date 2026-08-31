@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -213,7 +214,7 @@ public class KitchenTicketService {
      * road time here would produce a target the branch is measured against and
      * nobody chose.
      */
-    private static Instant targetReadyAt(OrderForKitchen order) {
+    private static @Nullable Instant targetReadyAt(OrderForKitchen order) {
         if (order.promisedAt() == null) {
             return null;
         }
@@ -230,7 +231,7 @@ public class KitchenTicketService {
      * working to a different estimate than the promise is how a branch is late
      * against a target it never saw.
      */
-    private static Integer prepEstimateSeconds(OrderForKitchen order) {
+    private static @Nullable Integer prepEstimateSeconds(OrderForKitchen order) {
         Integer minutes = order.promisePrepMinutes();
         return minutes == null || minutes <= 0 ? null : minutes * 60;
     }
@@ -246,7 +247,7 @@ public class KitchenTicketService {
      * early, and only one of those has a customer waiting at the end of it.
      */
     private static Release decideRelease(
-            ReleaseMode requested, Instant targetReadyAt, Integer prepSeconds, Instant now) {
+            ReleaseMode requested, @Nullable Instant targetReadyAt, @Nullable Integer prepSeconds, Instant now) {
 
         if (requested == ReleaseMode.MANUAL_HOLD) {
             return new Release(ReleaseMode.MANUAL_HOLD, null, false);
@@ -310,8 +311,8 @@ public class KitchenTicketService {
             String trigger,
             String actorType,
             String actorId,
-            String reasonCode,
-            String correlationId,
+            @Nullable String reasonCode,
+            @Nullable String correlationId,
             Instant now) {
 
         Optional<Integer> won =
@@ -342,7 +343,7 @@ public class KitchenTicketService {
             int expectedVersion,
             String reasonCode,
             String actorId,
-            String correlationId) {
+            @Nullable String correlationId) {
 
         Instant now = clock.instant();
         TicketRow ticket = require(tenantId, ticketId);
@@ -380,9 +381,9 @@ public class KitchenTicketService {
             ReleaseMode mode,
             Instant releaseAt,
             boolean overrideGranted,
-            String reasonCode,
+            @Nullable String reasonCode,
             String actorId,
-            String correlationId) {
+            @Nullable String correlationId) {
 
         Instant now = clock.instant();
         TicketRow ticket = require(tenantId, ticketId);
@@ -406,6 +407,11 @@ public class KitchenTicketService {
         // fire time past it — it pushes it to never — and is bounded identically.
         boolean heldPastThePromise = mode == ReleaseMode.MANUAL_HOLD && latestHonestRelease(ticket) != null;
 
+        // Captured once validation passes, rather than re-read off the parameter
+        // below: NullAway cannot see that a second, separate "pastThePromise ||
+        // heldPastThePromise" check implies the null-and-blank check above already
+        // ran, but it can see that this local is non-null exactly when it was.
+        String overrideReason = null;
         if (pastThePromise || heldPastThePromise) {
             if (!overrideGranted) {
                 throw ApiException.insufficientCapability("kitchen.ticket.release.override", "LOCATION");
@@ -415,6 +421,7 @@ public class KitchenTicketService {
                         ErrorCode.VALIDATION_FAILED,
                         "Firing later than the promise permits requires a reason (ADR 0041)");
             }
+            overrideReason = reasonCode;
         }
 
         Optional<Integer> won = kitchen.rescheduleRelease(tenantId, ticketId, mode, releaseAt, now);
@@ -436,7 +443,7 @@ public class KitchenTicketService {
                 correlationId,
                 now);
 
-        if (pastThePromise || heldPastThePromise) {
+        if (overrideReason != null) {
             // ADR 0027: the decision that matters here is not "the fire time
             // changed" but "somebody chose to be late", and it is audited in the
             // same transaction as the change it describes.
@@ -444,7 +451,7 @@ public class KitchenTicketService {
                     ticket,
                     "kitchen.ticket.release-override",
                     actorId,
-                    reasonCode,
+                    overrideReason,
                     Map.of(
                             "releaseMode",
                             mode.name(),
@@ -464,7 +471,7 @@ public class KitchenTicketService {
      * The last instant a ticket can be fired and still make its target, or null
      * when nothing was promised and there is therefore nothing to be late for.
      */
-    private static Instant latestHonestRelease(TicketRow ticket) {
+    private static @Nullable Instant latestHonestRelease(TicketRow ticket) {
         if (ticket.targetReadyAt() == null || ticket.prepEstimateSeconds() == null) {
             return null;
         }
@@ -503,7 +510,7 @@ public class KitchenTicketService {
 
     /** A cook starting one line at one station. */
     @Transactional
-    public ItemOutcome start(UUID tenantId, UUID itemId, String actorId, String correlationId) {
+    public ItemOutcome start(UUID tenantId, UUID itemId, String actorId, @Nullable String correlationId) {
         return advanceItem(tenantId, itemId, TicketItemStatus.STARTED, false, actorId, null, correlationId);
     }
 
@@ -517,7 +524,7 @@ public class KitchenTicketService {
      * are both written, so the timeline still says the line was started.
      */
     @Transactional
-    public ItemOutcome ready(UUID tenantId, UUID itemId, String actorId, String correlationId) {
+    public ItemOutcome ready(UUID tenantId, UUID itemId, String actorId, @Nullable String correlationId) {
         TicketItemRow item = kitchen.findItem(tenantId, itemId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such item"));
         if (item.status() == TicketItemStatus.QUEUED) {
@@ -537,7 +544,8 @@ public class KitchenTicketService {
      * exactly the fact an operational exception is about.
      */
     @Transactional
-    public ItemOutcome recall(UUID tenantId, UUID itemId, String reasonCode, String actorId, String correlationId) {
+    public ItemOutcome recall(
+            UUID tenantId, UUID itemId, String reasonCode, String actorId, @Nullable String correlationId) {
 
         if (reasonCode == null || reasonCode.isBlank()) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "A recall requires a reason");
@@ -593,8 +601,8 @@ public class KitchenTicketService {
             TicketItemStatus target,
             boolean recalling,
             String actorId,
-            String reasonCode,
-            String correlationId) {
+            @Nullable String reasonCode,
+            @Nullable String correlationId) {
 
         Instant now = clock.instant();
         TicketItemRow item = kitchen.findItem(tenantId, itemId)
@@ -655,7 +663,8 @@ public class KitchenTicketService {
     }
 
     /** Applies the ticket status the items now imply, and proposes what it means. */
-    private TicketRow rollUp(UUID tenantId, TicketRow ticket, String actorId, String correlationId, Instant now) {
+    private TicketRow rollUp(
+            UUID tenantId, TicketRow ticket, String actorId, @Nullable String correlationId, Instant now) {
 
         List<TicketItemStatus> statuses = kitchen.itemsOf(tenantId, ticket.id()).stream()
                 .map(TicketItemRow::status)
@@ -721,7 +730,7 @@ public class KitchenTicketService {
             TicketStatus from,
             TicketStatus implied,
             String actorId,
-            String correlationId,
+            @Nullable String correlationId,
             Instant now) {
 
         // A recall moves the ticket backwards, and ADR 0041 is explicit that a
@@ -812,7 +821,7 @@ public class KitchenTicketService {
             String reasonCode,
             Map<String, Object> changed,
             AuditFact.Outcome outcome,
-            String correlationId,
+            @Nullable String correlationId,
             Instant now) {
 
         audit.record(AuditFact.of(actionCode, AuditClass.BUSINESS)
@@ -829,10 +838,12 @@ public class KitchenTicketService {
     }
 
     /**
+     * The result of a state-transition command against one ticket item.
+     *
      * @param applied whether this caller's command is the one that moved the item.
      *                False is a settled outcome, not a failure
      */
     public record ItemOutcome(boolean applied, TicketItemRow item, TicketRow ticket) {}
 
-    private record Release(ReleaseMode mode, Instant releaseAt, boolean fireNow) {}
+    private record Release(ReleaseMode mode, @Nullable Instant releaseAt, boolean fireNow) {}
 }

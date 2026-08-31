@@ -2,6 +2,7 @@ package uz.horecaos.platform.ordering.application;
 
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -79,7 +80,7 @@ public class OrderAcceptancePolicyService {
      * Re-resolves the exact policy an order was accepted under, so a later
      * policy change cannot alter what that order was permitted to do.
      */
-    public OrderAcceptancePolicy pinned(UUID policyId, int policyVersion) {
+    public OrderAcceptancePolicy pinned(@Nullable UUID policyId, int policyVersion) {
         if (policyId == null) {
             return OrderAcceptancePolicy.platformDefault();
         }
@@ -95,7 +96,7 @@ public class OrderAcceptancePolicyService {
      * @param policyId null when the platform default applied, which is itself a
      *                 fact worth recording rather than inventing an identifier for
      */
-    public record Effective(OrderAcceptancePolicy policy, UUID policyId, int policyVersion) {
+    public record Effective(OrderAcceptancePolicy policy, @Nullable UUID policyId, int policyVersion) {
 
         public boolean isPlatformDefault() {
             return policyId == null;

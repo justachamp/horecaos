@@ -2,6 +2,7 @@ package uz.horecaos.platform.integration.camel.notification;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.ProviderCall;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
@@ -98,7 +99,7 @@ public class SmsGatewayAdapter implements NotificationChannelAdapter {
      * turning that into an exception would classify a successful send as a
      * transport failure and send it round again.
      */
-    private static String string(Map<String, Object> response, String key, String fallback) {
+    private static @Nullable String string(Map<String, Object> response, String key, @Nullable String fallback) {
         Object value = response.get(key);
         return value == null ? fallback : String.valueOf(value);
     }

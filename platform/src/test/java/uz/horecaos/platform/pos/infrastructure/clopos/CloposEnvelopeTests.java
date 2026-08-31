@@ -94,7 +94,12 @@ class CloposEnvelopeTests {
 
         ProviderOutcome outcome = CloposEnvelope.read(transport, Effect.READ);
 
-        assertThat(outcome.detail().length())
+        // A rejection built from a real error and message always carries a detail;
+        // asserted explicitly rather than left implicit, since detail() is
+        // @Nullable for outcomes that carry none.
+        String detail = outcome.detail();
+        assertThat(detail).isNotNull();
+        assertThat(java.util.Objects.requireNonNull(detail).length())
                 .as("a Clopos error has been observed to echo request content, and a request "
                         + "body here carries a customer's address")
                 .isLessThan(400);

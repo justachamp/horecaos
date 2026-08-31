@@ -3,6 +3,7 @@ package uz.horecaos.platform.telemetry.api;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * "Something in this scope changed" (ADR 0045).
@@ -35,8 +36,8 @@ public record RealtimeSignal(
         StreamChannel channel,
         ScopeKey scopeKey,
         String resourceType,
-        UUID resourceId,
-        Long version,
+        @Nullable UUID resourceId,
+        @Nullable Long version,
         Instant occurredAt) {
 
     public RealtimeSignal {
@@ -57,8 +58,8 @@ public record RealtimeSignal(
             StreamChannel channel,
             ScopeKey scopeKey,
             String resourceType,
-            UUID resourceId,
-            Long version,
+            @Nullable UUID resourceId,
+            @Nullable Long version,
             Instant occurredAt) {
         return new RealtimeSignal(
                 UUID.randomUUID(), tenantId, channel, scopeKey, resourceType, resourceId, version, occurredAt);

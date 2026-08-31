@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.integration.api.pos.PosApiCall;
 import uz.horecaos.platform.integration.api.pos.PosApiTransport;
@@ -65,6 +66,8 @@ public class CloposSession {
     }
 
     /**
+     * Resolves a usable token, minting or refreshing one only when needed.
+     *
      * @return the token to put in {@code x-token}, or a failure outcome. Never
      *         throws: an authentication failure is one of the four canonical
      *         outcomes like anything else, and the caller has to be able to tell
@@ -161,8 +164,12 @@ public class CloposSession {
         }
     }
 
-    /** @param value null unless the outcome succeeded */
-    public record Token(ProviderOutcome outcome, String value) {
+    /**
+     * The resolved session token, or the failure that prevented resolving one.
+     *
+     * @param value null unless the outcome succeeded
+     */
+    public record Token(ProviderOutcome outcome, @Nullable String value) {
 
         public boolean usable() {
             return value != null && outcome.status() == ProviderOutcome.Status.SUCCESS;

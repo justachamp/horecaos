@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -106,7 +107,7 @@ class CustomerVerificationTests {
         verification = service(transport);
     }
 
-    private CustomerVerificationService service(VerificationCodeTransport wired) {
+    private CustomerVerificationService service(@Nullable VerificationCodeTransport wired) {
         VerificationChallengeIssuer issuer = new VerificationChallengeIssuer(
                 challenges,
                 codes,
@@ -621,7 +622,7 @@ class CustomerVerificationTests {
                 "local"));
     }
 
-    private static ObjectProvider<VerificationCodeTransport> provider(VerificationCodeTransport transport) {
+    private static ObjectProvider<VerificationCodeTransport> provider(@Nullable VerificationCodeTransport transport) {
 
         return new ObjectProvider<>() {
             @Override
@@ -635,12 +636,12 @@ class CustomerVerificationTests {
             }
 
             @Override
-            public VerificationCodeTransport getIfAvailable() throws BeansException {
+            public @Nullable VerificationCodeTransport getIfAvailable() throws BeansException {
                 return transport;
             }
 
             @Override
-            public VerificationCodeTransport getIfUnique() throws BeansException {
+            public @Nullable VerificationCodeTransport getIfUnique() throws BeansException {
                 return transport;
             }
         };

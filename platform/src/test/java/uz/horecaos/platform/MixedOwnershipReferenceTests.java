@@ -6,10 +6,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Locale;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -393,11 +395,11 @@ class MixedOwnershipReferenceTests {
     }
 
     /** A policy owned by {@code tenantId}, or by the platform when it is null. */
-    private static UUID approvalPolicy(UUID tenantId) {
+    private static UUID approvalPolicy(@Nullable UUID tenantId) {
         return approvalPolicy(jdbc, tenantId);
     }
 
-    private static UUID approvalPolicy(JdbcClient client, UUID tenantId) {
+    private static UUID approvalPolicy(JdbcClient client, @Nullable UUID tenantId) {
         UUID id = UUID.randomUUID();
         client.sql("""
                 INSERT INTO audit.approval_policies (
@@ -416,12 +418,12 @@ class MixedOwnershipReferenceTests {
     }
 
     /** A request whose declared policy ownership matches the policy it names. */
-    private static UUID approvalRequest(UUID tenantId, UUID policyId) {
+    private static UUID approvalRequest(@Nullable UUID tenantId, UUID policyId) {
         return approvalRequest(jdbc, tenantId, policyId, null);
     }
 
     /** A request declaring the ownership it is told to, truthfully or otherwise. */
-    private static UUID approvalRequest(UUID tenantId, UUID policyId, boolean policyIsPlatform) {
+    private static UUID approvalRequest(@Nullable UUID tenantId, UUID policyId, boolean policyIsPlatform) {
         return approvalRequest(jdbc, tenantId, policyId, policyIsPlatform);
     }
 
@@ -432,7 +434,8 @@ class MixedOwnershipReferenceTests {
      *                         parameter is ignored, so the same helper serves the
      *                         pre-migration fixture.
      */
-    private static UUID approvalRequest(JdbcClient client, UUID tenantId, UUID policyId, Boolean policyIsPlatform) {
+    private static UUID approvalRequest(
+            JdbcClient client, @Nullable UUID tenantId, UUID policyId, @Nullable Boolean policyIsPlatform) {
 
         UUID id = UUID.randomUUID();
         if (!hasColumn(client, "audit", "approval_requests", "policy_is_platform")) {
@@ -509,7 +512,7 @@ class MixedOwnershipReferenceTests {
     }
 
     private static UUID cutoverDecision(
-            UUID tenantId, UUID scopeId, UUID approvalRequestId, Boolean approvalIsPlatform) {
+            UUID tenantId, UUID scopeId, UUID approvalRequestId, @Nullable Boolean approvalIsPlatform) {
         return cutoverDecision(jdbc, tenantId, scopeId, approvalRequestId, approvalIsPlatform);
     }
 
@@ -521,7 +524,11 @@ class MixedOwnershipReferenceTests {
      *                           refuses afterwards.
      */
     private static UUID cutoverDecision(
-            JdbcClient client, UUID tenantId, UUID scopeId, UUID approvalRequestId, Boolean approvalIsPlatform) {
+            JdbcClient client,
+            UUID tenantId,
+            UUID scopeId,
+            UUID approvalRequestId,
+            @Nullable Boolean approvalIsPlatform) {
 
         UUID id = UUID.randomUUID();
         boolean declares = hasColumn(client, "migration", "cutover_decisions", "approval_request_is_platform");
@@ -550,7 +557,7 @@ class MixedOwnershipReferenceTests {
     }
 
     /** A region owned by {@code tenantId}, or a platform region when it is null. */
-    private static UUID region(UUID tenantId) {
+    private static UUID region(@Nullable UUID tenantId) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO fulfillment.regions (
@@ -563,7 +570,7 @@ class MixedOwnershipReferenceTests {
                 .param("tenantId", tenantId)
                 .param(
                         "code",
-                        "R" + id.toString().replace("-", "").substring(0, 20).toUpperCase())
+                        "R" + id.toString().replace("-", "").substring(0, 20).toUpperCase(Locale.ROOT))
                 .update();
         return id;
     }
@@ -582,7 +589,7 @@ class MixedOwnershipReferenceTests {
                                 + brandId.toString()
                                         .replace("-", "")
                                         .substring(0, 8)
-                                        .toUpperCase())
+                                        .toUpperCase(Locale.ROOT))
                 .param("slug", "brand-" + brandId)
                 .update();
 
@@ -598,12 +605,13 @@ class MixedOwnershipReferenceTests {
                 .param("brandId", brandId)
                 .param(
                         "code",
-                        "Z" + zoneId.toString().replace("-", "").substring(0, 8).toUpperCase())
+                        "Z" + zoneId.toString().replace("-", "").substring(0, 8).toUpperCase(Locale.ROOT))
                 .update();
         return zoneId;
     }
 
-    private static UUID zoneVersion(UUID tenantId, UUID zoneId, int version, UUID regionId, Boolean regionIsPlatform) {
+    private static UUID zoneVersion(
+            UUID tenantId, UUID zoneId, int version, @Nullable UUID regionId, @Nullable Boolean regionIsPlatform) {
 
         UUID id = UUID.randomUUID();
         jdbc.sql("""
@@ -628,7 +636,7 @@ class MixedOwnershipReferenceTests {
     }
 
     /** A policy owned by {@code tenantId}, or the platform default when it is null. */
-    private static UUID policy(UUID tenantId, String keyCode) {
+    private static UUID policy(@Nullable UUID tenantId, String keyCode) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO tenant.policies (
@@ -647,7 +655,7 @@ class MixedOwnershipReferenceTests {
         return id;
     }
 
-    private static void policyCurrent(UUID tenantId, String keyCode, UUID policyId) {
+    private static void policyCurrent(@Nullable UUID tenantId, String keyCode, UUID policyId) {
         jdbc.sql("""
                 INSERT INTO tenant.policy_current (
                     key_code, scope_type, tenant_id, policy_id, policy_version, activated_by)
@@ -690,7 +698,7 @@ class MixedOwnershipReferenceTests {
     /** A 64-character lowercase hex string, which is all the CHECK asks of it. */
     private static String hash(UUID seed) {
         return (seed.toString().replace("-", "") + seed.toString().replace("-", ""))
-                .toLowerCase()
+                .toLowerCase(Locale.ROOT)
                 .substring(0, 64);
     }
 }

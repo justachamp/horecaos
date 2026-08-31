@@ -37,6 +37,9 @@ public class InboxRecordDispatch {
     }
 
     /**
+     * Validates one Kafka record and offers it to every consumer registered for
+     * its topic.
+     *
      * @return whether the Kafka offset may be acknowledged, which is true only
      *         when every consumer for this topic has taken durable
      *         responsibility for the record

@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -148,7 +149,7 @@ public class FiscalDocumentService {
     }
 
     /** The blocked worklist for a tenant, longest-waiting first. */
-    public List<FiscalDocumentRow> blocked(UUID tenantId, String reasonCode, int limit) {
+    public List<FiscalDocumentRow> blocked(UUID tenantId, @Nullable String reasonCode, int limit) {
         return documents.blocked(tenantId, reasonCode, limit);
     }
 
@@ -204,7 +205,7 @@ public class FiscalDocumentService {
             String idempotencyKey,
             ActorRef actor,
             String reason,
-            String correlationId) {
+            @Nullable String correlationId) {
 
         FiscalDocumentRow document =
                 documents.find(tenantId, documentId).orElseThrow(() -> new UnknownDocumentException(documentId));
@@ -273,7 +274,12 @@ public class FiscalDocumentService {
      */
     @Transactional
     public boolean reopen(
-            UUID tenantId, UUID documentId, int expectedVersion, ActorRef actor, String reason, String correlationId) {
+            UUID tenantId,
+            UUID documentId,
+            int expectedVersion,
+            ActorRef actor,
+            String reason,
+            @Nullable String correlationId) {
 
         FiscalDocumentRow document =
                 documents.find(tenantId, documentId).orElseThrow(() -> new UnknownDocumentException(documentId));

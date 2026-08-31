@@ -1,6 +1,7 @@
 package uz.horecaos.platform.partner.domain;
 
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The money a partner claims, and the only thing HorecaOS checks about it
@@ -36,7 +37,7 @@ public record ExternalTotals(
         long subtotalMinor,
         long discountMinor,
         long feeMinor,
-        Long taxMinor) {
+        @Nullable Long taxMinor) {
 
     public ExternalTotals {
         Objects.requireNonNull(currency, "A currency is required");

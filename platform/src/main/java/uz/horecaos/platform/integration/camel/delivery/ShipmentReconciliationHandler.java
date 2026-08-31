@@ -4,10 +4,12 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.apache.camel.Exchange;
 import org.apache.camel.ProducerTemplate;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -117,7 +119,7 @@ public class ShipmentReconciliationHandler implements ExternalWorkInboxHandler<C
      *         honest to say and the record is simply done
      */
     @Override
-    public Settlement perform(ExternalEventEnvelope<Command> event, Attempt attempt) {
+    public @Nullable Settlement perform(ExternalEventEnvelope<Command> event, Attempt attempt) {
         Command command = event.payload();
 
         if (!isWellFormed(command)) {
@@ -195,7 +197,7 @@ public class ShipmentReconciliationHandler implements ExternalWorkInboxHandler<C
      * transaction (ADR 0004).
      */
     @Override
-    public void record(ExternalEventEnvelope<Command> event, Settlement settlement) {
+    public void record(ExternalEventEnvelope<Command> event, @Nullable Settlement settlement) {
         if (settlement == null) {
             return;
         }
@@ -208,14 +210,6 @@ public class ShipmentReconciliationHandler implements ExternalWorkInboxHandler<C
                 settlement.resolution());
     }
 
-    /**
-     * Re-resolves the binding against the scope the envelope's tenant actually
-     * has, mirroring {@link CamelShipmentBookingPort}.
-     *
-     * <p>Constrained on tenant, brand and location rather than looked up by id,
-     * which is the difference between querying this tenant's partner account and
-     * querying whichever account the id happened to name.
-     */
     /**
      * What the command must look like before any of it is used.
      *
@@ -246,7 +240,7 @@ public class ShipmentReconciliationHandler implements ExternalWorkInboxHandler<C
      * decide what appears on another topic, and the failure would surface in a
      * consumer rather than here.
      */
-    private static DeliveryCapability capabilityOf(Command command) {
+    private static @Nullable DeliveryCapability capabilityOf(Command command) {
         try {
             return DeliveryCapability.valueOf(command.capability());
         } catch (IllegalArgumentException | NullPointerException unknown) {
@@ -254,6 +248,14 @@ public class ShipmentReconciliationHandler implements ExternalWorkInboxHandler<C
         }
     }
 
+    /**
+     * Re-resolves the binding against the scope the envelope's tenant actually
+     * has, mirroring {@link CamelShipmentBookingPort}.
+     *
+     * <p>Constrained on tenant, brand and location rather than looked up by id,
+     * which is the difference between querying this tenant's partner account and
+     * querying whichever account the id happened to name.
+     */
     private Optional<BindingRef> resolve(UUID tenantId, Command command) {
         List<BindingRef> candidates = new ArrayList<>();
         for (String code : CamelShipmentBookingPort.BOOKING_CAPABILITY_CODES) {
@@ -290,7 +292,10 @@ public class ShipmentReconciliationHandler implements ExternalWorkInboxHandler<C
                 command.operationCommandId(),
                 binding.bindingId(),
                 binding.providerType(),
-                capabilityOf(command).name(),
+                // Never null here: settlement() is reached only after
+                // isWellFormed(command) passed, and that check already rejects a
+                // command whose capability is not one this platform declares.
+                Objects.requireNonNull(capabilityOf(command)).name(),
                 command.externalReference(),
                 resolution,
                 outcome.status().name(),
@@ -323,7 +328,7 @@ public class ShipmentReconciliationHandler implements ExternalWorkInboxHandler<C
      */
     static final class UnsettledReconciliation extends RuntimeException {
 
-        UnsettledReconciliation(String errorCode) {
+        UnsettledReconciliation(@Nullable String errorCode) {
             super(errorCode == null ? "UNCLASSIFIED" : errorCode, null, false, false);
         }
     }

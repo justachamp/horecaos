@@ -1,6 +1,7 @@
 package uz.horecaos.platform.pos.domain;
 
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One thing the comparison had to say (ADR 0012).
@@ -10,21 +11,35 @@ import java.util.UUID;
  * snapshotted policy, and what the engine recommends — and the recommendation is
  * advice that a review decision may override, never an action already taken.
  *
- * @param fieldPath null for a whole-entity finding: an addition or a removal
- *                  signal is about the entity, not about one of its fields
+ * @param horecaosEntityId null for an {@code ADDITION}: the provider's entity has
+ *                         not been created on the HorecaOS side yet, so there is
+ *                         no id to carry
+ * @param fieldPath        null for a whole-entity finding: an addition or a
+ *                         removal signal is about the entity, not about one of
+ *                         its fields
+ * @param currentValue     what HorecaOS held at comparison time. Null when there
+ *                         was nothing to hold — a new addition, or a whole-entity
+ *                         finding
+ * @param importedValue    what the provider sent. Null when the field itself is
+ *                         absent at the provider, which {@link
+ *                         DifferenceCategory#REMOVAL_SIGNAL} distinguishes from a
+ *                         blank value
+ * @param note             free-text detail for an operator. Null when the
+ *                         category and the two values already say everything
+ *                         worth saying
  */
 public record SyncDifference(
         EntityType entityType,
         String externalEntityId,
-        UUID horecaosEntityId,
+        @Nullable UUID horecaosEntityId,
         DifferenceCategory category,
-        String fieldPath,
-        String currentValue,
-        String importedValue,
+        @Nullable String fieldPath,
+        @Nullable String currentValue,
+        @Nullable String importedValue,
         FieldAuthority authority,
         Severity severity,
         RecommendedAction recommendedAction,
-        String note) {
+        @Nullable String note) {
 
     public enum EntityType {
         PRODUCT,

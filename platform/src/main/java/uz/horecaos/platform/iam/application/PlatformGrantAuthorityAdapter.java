@@ -3,6 +3,7 @@ package uz.horecaos.platform.iam.application;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.grants.PlatformGrantAuthority;
@@ -20,7 +21,11 @@ public class PlatformGrantAuthorityAdapter implements PlatformGrantAuthority {
 
     @Override
     public UUID grant(
-            String principalSubject, String roleCode, String reason, Instant validUntil, String granterSubject) {
+            String principalSubject,
+            String roleCode,
+            String reason,
+            @Nullable Instant validUntil,
+            String granterSubject) {
         return grants.grant(
                 new GrantCommand(principalSubject, roleCode, ResourceScope.platform(), reason, validUntil),
                 granterSubject);

@@ -3,6 +3,7 @@ package uz.horecaos.platform.tenancy.api;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A run stopped on a required step and needs a human (ADR 0008).
@@ -12,9 +13,17 @@ import java.util.UUID;
  * response — and ADR 0008 forbids putting a stack trace or a raw error on a
  * topic. The code is enough for a consumer to route the failure, and the detail
  * is one authorized read away.
+ *
+ * <p>{@code stepKey} and {@code errorCode} are absent when the run failed
+ * without a required step to blame — the caller could not find one to name.
  */
 public record TenantOnboardingFailed(
-        UUID eventId, TenantId tenantId, UUID runId, String stepKey, String errorCode, Instant occurredAt)
+        UUID eventId,
+        TenantId tenantId,
+        UUID runId,
+        @Nullable String stepKey,
+        @Nullable String errorCode,
+        Instant occurredAt)
         implements TenancyEvent {
 
     public TenantOnboardingFailed {
@@ -49,5 +58,5 @@ public record TenantOnboardingFailed(
         return new Payload(tenantId.value(), runId, stepKey, errorCode);
     }
 
-    public record Payload(UUID tenantId, UUID runId, String stepKey, String errorCode) {}
+    public record Payload(UUID tenantId, UUID runId, @Nullable String stepKey, @Nullable String errorCode) {}
 }

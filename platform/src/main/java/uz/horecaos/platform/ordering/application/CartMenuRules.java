@@ -31,7 +31,11 @@ public interface CartMenuRules {
      */
     Optional<ProductRules> forVariant(UUID tenantId, UUID brandId, String channelCode, UUID variantId);
 
-    /** @param groups every group the product offers, in publication order */
+    /**
+     * A product's selection rules as published.
+     *
+     * @param groups every group the product offers, in publication order
+     */
     record ProductRules(UUID productId, List<GroupRules> groups) {
 
         public Optional<GroupRules> owning(UUID optionId) {

@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javax.sql.DataSource;
 import org.apache.camel.CamelContext;
 import org.apache.camel.impl.DefaultCamelContext;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
@@ -77,9 +78,6 @@ class ShipmentReconciliationPathTests {
     private static final Instant NOW = Instant.parse("2026-08-25T11:00:00Z");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private DataSource dataSource;
     private JdbcClient jdbc;
@@ -93,9 +91,6 @@ class ShipmentReconciliationPathTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -407,12 +402,12 @@ class ShipmentReconciliationPathTests {
 
         return new ProviderInstallationLookup() {
             @Override
-            public Optional<BindingRef> primaryBinding(UUID t, UUID b, UUID l, String code) {
+            public Optional<BindingRef> primaryBinding(UUID t, UUID b, @Nullable UUID l, String code) {
                 return Optional.empty();
             }
 
             @Override
-            public List<BindingRef> candidateBindings(UUID tenantId, UUID b, UUID l, String code) {
+            public List<BindingRef> candidateBindings(UUID tenantId, UUID b, @Nullable UUID l, String code) {
                 return TENANT.equals(tenantId) ? List.of(binding) : List.of();
             }
 

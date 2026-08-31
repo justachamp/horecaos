@@ -104,7 +104,11 @@ public class DeliverySourcingScheduler {
         sourceOnce();
     }
 
-    /** @return how many jobs this poll claimed, which is not how many succeeded */
+    /**
+     * Claims and sources one batch of due jobs.
+     *
+     * @return how many jobs this poll claimed, which is not how many succeeded
+     */
     public int sourceOnce() {
         if (!running.compareAndSet(false, true)) {
             return 0;

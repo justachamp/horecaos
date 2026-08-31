@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.domain.OwnershipModes;
 import uz.horecaos.platform.migration.domain.ScopeState;
@@ -23,6 +24,19 @@ public interface MigrationScopeStore {
     Optional<ScopeRow> findById(UUID tenantId, UUID scopeId);
 
     /**
+     * Re-reads one scope under a shared row lock, for the gate to answer from.
+     *
+     * <p>A plain read answers what was true a moment ago. Under PostgreSQL's
+     * default READ COMMITTED it takes no lock, so a cutover committing between the
+     * gate's read and the guarded write's commit is not blocked by anything — and
+     * the write lands in a capability the target no longer owns while the operator
+     * has already restored legacy routing. Shared rather than exclusive, so the
+     * many concurrent writes a capability is serving can hold it together while
+     * the one transition that would change the answer waits for them.
+     */
+    Optional<ScopeRow> lockClaim(UUID tenantId, UUID scopeId);
+
+    /**
      * The scope claiming this capability at exactly this specificity, if one
      * exists.
      *
@@ -37,20 +51,8 @@ public interface MigrationScopeStore {
      * against NULL with {@code IS NULL} rather than {@code =}, or the tenant-wide
      * probe silently returns nothing and every capability answers as unmanaged.
      */
-    /**
-     * Re-reads one scope under a shared row lock, for the gate to answer from.
-     *
-     * <p>A plain read answers what was true a moment ago. Under PostgreSQL's
-     * default READ COMMITTED it takes no lock, so a cutover committing between the
-     * gate's read and the guarded write's commit is not blocked by anything — and
-     * the write lands in a capability the target no longer owns while the operator
-     * has already restored legacy routing. Shared rather than exclusive, so the
-     * many concurrent writes a capability is serving can hold it together while
-     * the one transition that would change the answer waits for them.
-     */
-    Optional<ScopeRow> lockClaim(UUID tenantId, UUID scopeId);
-
-    Optional<ScopeRow> findClaim(UUID tenantId, MigrationCapability capability, UUID brandId, UUID locationId);
+    Optional<ScopeRow> findClaim(
+            UUID tenantId, MigrationCapability capability, @Nullable UUID brandId, @Nullable UUID locationId);
 
     void insert(ScopeRow scope, Instant now);
 
@@ -125,8 +127,8 @@ public interface MigrationScopeStore {
             UUID id,
             UUID programId,
             UUID tenantId,
-            UUID brandId,
-            UUID locationId,
+            @Nullable UUID brandId,
+            @Nullable UUID locationId,
             MigrationCapability capability,
             String sourceOwner,
             String targetOwner,

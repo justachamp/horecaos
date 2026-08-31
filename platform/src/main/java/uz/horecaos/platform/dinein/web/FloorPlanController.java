@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -275,7 +276,7 @@ public class FloorPlanController {
             boolean joinable,
             String status,
             boolean qrIssued,
-            Instant qrRotatedAt,
+            @Nullable Instant qrRotatedAt,
             int version) {
 
         static TableResponse of(TableRow row) {

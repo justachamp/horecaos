@@ -5,7 +5,9 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -58,7 +60,7 @@ public class JdbcLegacySourceReader implements LegacySourceReader {
     }
 
     @Override
-    public SourcePage readPage(ExtractionSpec spec, String afterKey, int limit) {
+    public SourcePage readPage(ExtractionSpec spec, @Nullable String afterKey, int limit) {
         // Checked before anything is read, so a bad predicate fails on the spec
         // rather than after a catalogue round trip against the legacy database.
         String filter = checkedFilter(spec);
@@ -90,10 +92,10 @@ public class JdbcLegacySourceReader implements LegacySourceReader {
     }
 
     @Override
-    public SourcePage readChanges(ExtractionSpec spec, String watermark, String afterKey, int limit) {
+    public SourcePage readChanges(ExtractionSpec spec, @Nullable String watermark, @Nullable String afterKey, int limit) {
         if (!spec.hasWatermark()) {
             throw new IllegalArgumentException(
-                    ("%s declares no watermark column, so it has no incremental feed").formatted(spec.entityType()));
+                    "%s declares no watermark column, so it has no incremental feed".formatted(spec.entityType()));
         }
 
         // Inclusive on the watermark and ordered by (watermark, key). The legacy
@@ -210,7 +212,10 @@ public class JdbcLegacySourceReader implements LegacySourceReader {
     }
 
     private String watermarkTypeOf(ExtractionSpec spec) {
-        return columnType(spec.table(), spec.watermarkColumn());
+        // Only ever called once readChanges has already confirmed hasWatermark(),
+        // but that characteristic-predicate link is invisible to NullAway across
+        // the two calls.
+        return columnType(spec.table(), Objects.requireNonNull(spec.watermarkColumn(), "hasWatermark() said so"));
     }
 
     private String columnType(String table, String column) {
@@ -236,7 +241,7 @@ public class JdbcLegacySourceReader implements LegacySourceReader {
                                 .formatted(table, column)));
     }
 
-    private SourcePage page(List<LegacyRecord> records, String afterKey, int limit) {
+    private SourcePage page(List<LegacyRecord> records, @Nullable String afterKey, int limit) {
         boolean exhausted = records.size() < limit;
         // The previous bound unchanged on an empty page, never null: null means
         // "start from the beginning", and returning it would restart the entity

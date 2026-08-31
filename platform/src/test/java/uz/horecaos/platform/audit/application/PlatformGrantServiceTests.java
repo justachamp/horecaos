@@ -6,8 +6,12 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -23,6 +27,7 @@ import uz.horecaos.platform.audit.api.ApprovalAction;
 import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
+import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.application.GrantManagementService;
@@ -76,9 +81,13 @@ class PlatformGrantServiceTests {
         new RoleRegistrySynchronizer(jdbc).synchronize();
         insertPlatformGrant(PLATFORM_GRANTER, PlatformRole.PLATFORM_ADMIN);
 
-        JdbcAuthorizationService authorization = new JdbcAuthorizationService(jdbc, CLOCK, () -> null) {
+        // No request is authenticated in this fixture; isPlatformAdmin only ever compares
+        // this actor's subject against the fixture's own, so a subject that never matches
+        // one under test keeps that check false, exactly as the old `() -> null` did.
+        JdbcAuthorizationService authorization = new JdbcAuthorizationService(
+                jdbc, CLOCK, () -> new AuthenticatedActor("no-request-actor-in-fixture", Set.of(), Map.of())) {
             @Override
-            public void evictGrants(String subject, UUID tenantId) {
+            public void evictGrants(String subject, @Nullable UUID tenantId) {
                 // no cache in this fixture
             }
         };
@@ -124,7 +133,9 @@ class PlatformGrantServiceTests {
                 .as("nothing is granted until the second signature")
                 .isNull();
 
-        decide(requested.approvalRequestId());
+        // AWAITING_APPROVAL guarantees an approvalRequestId (see Outcome.awaitingApproval);
+        // the isNotNull assertion above proved it, requireNonNull just says so to NullAway.
+        decide(Objects.requireNonNull(requested.approvalRequestId()));
 
         var granted = doGrant("new-support-2", "platform-support");
 
@@ -136,7 +147,7 @@ class PlatformGrantServiceTests {
     void revokingTakesEffectImmediatelyWithNoConfiguredApprovalPolicy() {
         var granted = doGrant("new-support-3", "platform-support");
 
-        var revoked = doRevoke(granted.grantId());
+        var revoked = doRevoke(requireGrantId(granted));
 
         assertThat(revoked.status()).isEqualTo(PlatformGrantService.Outcome.Status.REVOKED);
         assertThat(activeGrant("new-support-3")).isNull();
@@ -147,16 +158,16 @@ class PlatformGrantServiceTests {
         var granted = doGrant("new-support-4", "platform-support");
         authorApprovalPolicy();
 
-        var requested = doRevoke(granted.grantId());
+        var requested = doRevoke(requireGrantId(granted));
 
         assertThat(requested.status()).isEqualTo(PlatformGrantService.Outcome.Status.AWAITING_APPROVAL);
         assertThat(activeGrant("new-support-4"))
                 .as("the grant must still be in force until the revoke itself is approved")
                 .isEqualTo("platform-support");
 
-        decide(requested.approvalRequestId());
+        decide(Objects.requireNonNull(requested.approvalRequestId()));
 
-        var revoked = doRevoke(granted.grantId());
+        var revoked = doRevoke(requireGrantId(granted));
         assertThat(revoked.status()).isEqualTo(PlatformGrantService.Outcome.Status.REVOKED);
         assertThat(activeGrant("new-support-4")).isNull();
     }
@@ -164,7 +175,7 @@ class PlatformGrantServiceTests {
     @Test
     void listShowsOnlyActivePlatformGrants() {
         var granted = doGrant("new-support-5", "platform-support");
-        doRevoke(granted.grantId());
+        doRevoke(requireGrantId(granted));
         doGrant("new-support-6", "platform-support");
 
         assertThat(service.list())
@@ -192,6 +203,11 @@ class PlatformGrantServiceTests {
         return transactions.execute(status -> service.revoke(grantId, PLATFORM_GRANTER, "role no longer needed"));
     }
 
+    /** {@code Outcome.grantId()} is only absent for {@code AWAITING_APPROVAL}; every caller here passes a grant. */
+    private static UUID requireGrantId(PlatformGrantService.Outcome outcome) {
+        return Objects.requireNonNull(outcome.grantId());
+    }
+
     private void decide(UUID requestId) {
         var approvals = new JdbcApprovalService(
                 jdbc, new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()), CLOCK, new SimpleMeterRegistry());
@@ -216,7 +232,7 @@ class PlatformGrantServiceTests {
                 .update();
     }
 
-    private String activeGrant(String subject) {
+    private @Nullable String activeGrant(String subject) {
         return jdbc.sql("""
                 SELECT r.code FROM iam.grants g JOIN iam.roles r ON r.id = g.role_id
                  WHERE g.principal_subject = :subject AND g.scope_type = 'PLATFORM' AND g.status = 'ACTIVE'
@@ -247,7 +263,9 @@ class PlatformGrantServiceTests {
             action.run();
             throw new AssertionError("Expected an IllegalArgumentException");
         } catch (IllegalArgumentException expected) {
-            return expected.getMessage();
+            // Every throw site in this path passes a literal message, so getMessage() is
+            // never actually null here; requireNonNull just states that for NullAway.
+            return Objects.requireNonNull(expected.getMessage());
         }
     }
 }

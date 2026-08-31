@@ -227,6 +227,8 @@ public class StorefrontCustomerIdentityController {
     }
 
     /**
+     * A request for a sign-in code.
+     *
      * @param phone in any of the spellings people here write their own number in.
      *              Canonicalised before it is hashed, so one number cannot get two
      *              rate-limit budgets by being typed two ways
@@ -241,6 +243,8 @@ public class StorefrontCustomerIdentityController {
             @NotBlank @Size(max = 16) String code) {}
 
     /**
+     * A verified-phone grant.
+     *
      * @param grant proof of the number, single-use and short-lived. Not a session:
      *              it is what {@code POST /sessions} redeems on the way to one
      *              (ADR 0051)

@@ -1,5 +1,6 @@
 package uz.horecaos.platform.migration.application.importing;
 
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.migration.api.ExtractionSpec;
 
 /**
@@ -29,7 +30,7 @@ public interface LegacySourceReader {
      * @param afterKey exclusive lower bound, or null for the first page
      * @param limit    the page size; a short page means the source is exhausted
      */
-    SourcePage readPage(ExtractionSpec spec, String afterKey, int limit);
+    SourcePage readPage(ExtractionSpec spec, @Nullable String afterKey, int limit);
 
     /**
      * The next page of rows changed at or after {@code watermark}.
@@ -41,7 +42,11 @@ public interface LegacySourceReader {
      * cost is that the boundary rows are re-read on every catch-up, which is
      * exactly the case the crosswalk's upsert makes free.
      *
+     * @param watermark the change position to resume from, or null for a catch-up's
+     *                  first page, before any watermark has been recorded
+     * @param afterKey  exclusive lower bound within a tied watermark, or null for
+     *                  the first page
      * @throws IllegalArgumentException when the spec declares no watermark column
      */
-    SourcePage readChanges(ExtractionSpec spec, String watermark, String afterKey, int limit);
+    SourcePage readChanges(ExtractionSpec spec, @Nullable String watermark, @Nullable String afterKey, int limit);
 }

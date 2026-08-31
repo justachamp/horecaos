@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -126,8 +127,13 @@ public class ClickFiscalAdapter implements FiscalReceiptPort {
         // payment. Whether Click requires received_* to sum to the Price total is
         // not stated anywhere and is an open question with CLICK; sending the sum
         // is the reading its own worked example supports.
-        TiyinAmount zero = new TiyinAmount(0, total.currency());
-        ClickResponse submitted = click.submitItems(binding, paymentId.get(), items, TiyinAmount.of(total), zero, zero);
+        //
+        // total is never null here: document.lines() was already refused empty
+        // above, so the loop above ran at least once and assigned it.
+        SomAmount settled = Objects.requireNonNull(total, "total is assigned by the non-empty lines loop above");
+        TiyinAmount zero = new TiyinAmount(0, settled.currency());
+        ClickResponse submitted =
+                click.submitItems(binding, paymentId.get(), items, TiyinAmount.of(settled), zero, zero);
 
         if (submitted.uncertain()) {
             Optional<FiscalSubmission> issued = readBack(binding, paymentId.get(), now);
@@ -165,7 +171,9 @@ public class ClickFiscalAdapter implements FiscalReceiptPort {
         if (!ClickReceiptUrl.issued(qrCodeUrl)) {
             return Optional.empty();
         }
-        return Optional.of(FiscalSubmission.issued(ClickReceiptUrl.parse(qrCodeUrl, paymentId, at), at));
+        // ClickReceiptUrl.issued() just confirmed qrCodeUrl is present and non-blank.
+        String receiptUrl = Objects.requireNonNull(qrCodeUrl);
+        return Optional.of(FiscalSubmission.issued(ClickReceiptUrl.parse(receiptUrl, paymentId, at), at));
     }
 
     /**

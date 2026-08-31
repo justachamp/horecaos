@@ -2,6 +2,7 @@ package uz.horecaos.platform.ordering.infrastructure.customer;
 
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
@@ -48,7 +49,7 @@ public class JdbcCustomerAddressBook implements CustomerAddressBook {
 
     @Override
     public Optional<SavedDestination> destination(
-            UUID tenantId, UUID customerAccountId, UUID addressId, String purpose) {
+            UUID tenantId, @Nullable UUID customerAccountId, UUID addressId, String purpose) {
 
         if (customerAccountId == null || addressId == null) {
             // A guest cart has no account and therefore no saved addresses. Not an

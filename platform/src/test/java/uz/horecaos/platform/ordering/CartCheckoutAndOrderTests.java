@@ -12,6 +12,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -20,6 +21,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -141,9 +143,6 @@ class CartCheckoutAndOrderTests {
     private static final Instant NOW = Instant.parse("2026-08-21T07:00:00Z");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private DataSource dataSource;
     private JdbcClient jdbc;
@@ -205,9 +204,6 @@ class CartCheckoutAndOrderTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for cart, checkout and order tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -447,6 +443,8 @@ class CartCheckoutAndOrderTests {
                 new uz.horecaos.platform.ordering.infrastructure.JdbcDeliveryOrderPort(jdbc, protection, objectMapper);
 
         seedTenancyAndCatalog();
+        seedPublication("STOREFRONT");
+        seedPublishedModifierRules();
         seedPricingAndStock();
     }
 
@@ -652,7 +650,7 @@ class CartCheckoutAndOrderTests {
     void promisesThePlatformDefaultWhenNoBandApplies() {
         var result = placeOrder("promise-default");
 
-        var order = orderStore.find(TENANT, result.orderId()).orElseThrow();
+        var order = orderStore.find(TENANT, orderIdOf(result)).orElseThrow();
         assertThat(order.promise().basis()).isEqualTo(PromiseBasis.PLATFORM_DEFAULT);
         assertThat(order.promise().prepMinutes()).isEqualTo(OrderPromise.DEFAULT_PREP_MINUTES);
         assertThat(order.promise().promisedAt()).isEqualTo(NOW.plus(Duration.ofMinutes(45)));
@@ -668,7 +666,7 @@ class CartCheckoutAndOrderTests {
 
         var result = placeOrder("promise-band");
 
-        var order = orderStore.find(TENANT, result.orderId()).orElseThrow();
+        var order = orderStore.find(TENANT, orderIdOf(result)).orElseThrow();
         assertThat(order.promise().basis()).isEqualTo(PromiseBasis.PREPARATION_BAND);
         assertThat(order.promise().prepMinutes()).isEqualTo(30);
         assertThat(order.promise().promisedAt()).isEqualTo(NOW.plus(Duration.ofMinutes(30)));
@@ -682,7 +680,7 @@ class CartCheckoutAndOrderTests {
 
         var result = placeOrder("promise-override");
 
-        var order = orderStore.find(TENANT, result.orderId()).orElseThrow();
+        var order = orderStore.find(TENANT, orderIdOf(result)).orElseThrow();
         assertThat(order.promise().basis()).isEqualTo(PromiseBasis.ITEM_OVERRIDE);
         assertThat(order.promise().prepMinutes()).isEqualTo(50);
         assertThat(order.promise().promisedAt()).isEqualTo(NOW.plus(Duration.ofMinutes(50)));
@@ -699,7 +697,7 @@ class CartCheckoutAndOrderTests {
 
         var result = placeOrder("promise-fast-dish");
 
-        var order = orderStore.find(TENANT, result.orderId()).orElseThrow();
+        var order = orderStore.find(TENANT, orderIdOf(result)).orElseThrow();
         assertThat(order.promise().basis()).isEqualTo(PromiseBasis.PREPARATION_BAND);
         assertThat(order.promise().prepMinutes()).isEqualTo(30);
     }
@@ -714,18 +712,18 @@ class CartCheckoutAndOrderTests {
     void latenessIsDerivedFromTheStoredPromise() {
         insertPreparationBand(LocalTime.of(11, 0), LocalTime.of(14, 0), 30);
         var result = placeOrder("promise-lateness");
-        var order = orderStore.find(TENANT, result.orderId()).orElseThrow();
+        var order = orderStore.find(TENANT, orderIdOf(result)).orElseThrow();
 
         assertThat(order.promise().lateAt(NOW.plus(Duration.ofMinutes(29)), order.status()))
                 .isFalse();
         assertThat(order.promise().lateAt(NOW.plus(Duration.ofMinutes(31)), order.status()))
                 .isTrue();
 
-        advance(result.orderId(), OrderStatus.PREPARING);
-        advance(result.orderId(), OrderStatus.READY);
-        advance(result.orderId(), OrderStatus.COMPLETED);
+        advance(orderIdOf(result), OrderStatus.PREPARING);
+        advance(orderIdOf(result), OrderStatus.READY);
+        advance(orderIdOf(result), OrderStatus.COMPLETED);
 
-        var completed = orderStore.find(TENANT, result.orderId()).orElseThrow();
+        var completed = orderStore.find(TENANT, orderIdOf(result)).orElseThrow();
         assertThat(completed.promise().promisedAt())
                 .as("the promise is not rewritten as the order progresses")
                 .isEqualTo(order.promise().promisedAt());
@@ -747,12 +745,12 @@ class CartCheckoutAndOrderTests {
         assertThatThrownBy(() -> jdbc.sql("""
                 UPDATE ordering.orders SET promise_basis = 'PREPARATION_BAND', promised_at = NULL
                 WHERE id = :id
-                """).param("id", result.orderId()).update())
+                """).param("id", orderIdOf(result)).update())
                 .hasMessageContaining("ck_order_promise_pairing");
 
         assertThatThrownBy(() -> jdbc.sql("""
                 UPDATE ordering.orders SET promise_prep_minutes = NULL WHERE id = :id
-                """).param("id", result.orderId()).update())
+                """).param("id", orderIdOf(result)).update())
                 .hasMessageContaining("ck_order_promise_components");
     }
 
@@ -798,7 +796,7 @@ class CartCheckoutAndOrderTests {
         assertThat(result.created()).isTrue();
         assertThat(result.status()).isEqualTo(OrderStatus.CONFIRMED);
 
-        var order = orderStore.find(TENANT, result.orderId()).orElseThrow();
+        var order = orderStore.find(TENANT, orderIdOf(result)).orElseThrow();
         assertThat(order.totalMinor()).isEqualTo(100_000L);
         assertThat(order.subtotalMinor() + order.taxMinor()).isEqualTo(order.totalMinor());
         assertThat(order.publicOrderNumber()).isEqualTo("0821-001");
@@ -813,9 +811,9 @@ class CartCheckoutAndOrderTests {
         // The ADR 0013 gap has to appear where somebody looks, not only in a log
         // line emitted once at startup.
         assertThat(result.warnings()).contains(PaymentIntentPort.NOT_WIRED_WARNING);
-        assertThat(orderQuery.detail(TENANT, result.orderId()).orElseThrow().warnings())
+        assertThat(orderQuery.detail(TENANT, orderIdOf(result)).orElseThrow().warnings())
                 .contains(PaymentIntentPort.NOT_WIRED_WARNING);
-        assertThat(orderStore.find(TENANT, result.orderId()).orElseThrow().paymentStatusProjection())
+        assertThat(orderStore.find(TENANT, orderIdOf(result)).orElseThrow().paymentStatusProjection())
                 .as("no order waits on a provider that does not exist")
                 .isEqualTo("NOT_REQUIRED");
     }
@@ -835,19 +833,19 @@ class CartCheckoutAndOrderTests {
         assertThat(result.status()).isEqualTo(OrderStatus.CONFIRMED);
         assertThat(result.warnings()).isEmpty();
 
-        var order = orderStore.find(TENANT, result.orderId()).orElseThrow();
+        var order = orderStore.find(TENANT, orderIdOf(result)).orElseThrow();
         assertThat(order.paymentStatusProjection())
                 .as("nothing will ever capture a cash intent, so it must not read as pending")
                 .isEqualTo("NOT_REQUIRED");
 
-        var intent = intentStore.findLiveForOrder(TENANT, result.orderId()).orElseThrow();
+        var intent = intentStore.findLiveForOrder(TENANT, orderIdOf(result)).orElseThrow();
         assertThat(intent.tender()).isEqualTo(PaymentTender.CASH);
         assertThat(intent.providerType()).isNull();
         assertThat(intent.amount().value()).isEqualTo(order.totalMinor());
 
         // ADR 0038's 2026-08-22 decision, recorded as a row rather than as the
         // absence of one.
-        assertThat(fiscalStore.listForOrder(TENANT, result.orderId()))
+        assertThat(fiscalStore.listForOrder(TENANT, orderIdOf(result)))
                 .singleElement()
                 .satisfies(document -> {
                     assertThat(document.status()).isEqualTo(FiscalStatus.NOT_APPLICABLE);
@@ -899,18 +897,18 @@ class CartCheckoutAndOrderTests {
         assertThat(result.created()).isTrue();
         assertThat(result.status()).isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
 
-        var order = orderStore.find(TENANT, result.orderId()).orElseThrow();
+        var order = orderStore.find(TENANT, orderIdOf(result)).orElseThrow();
         assertThat(order.status()).isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
         assertThat(order.paymentStatusProjection()).isEqualTo("PENDING");
 
-        var intent = intentStore.findLiveForOrder(TENANT, result.orderId()).orElseThrow();
+        var intent = intentStore.findLiveForOrder(TENANT, orderIdOf(result)).orElseThrow();
         assertThat(intent.tender()).isEqualTo(PaymentTender.PROVIDER);
         assertThat(intent.providerType()).isEqualTo(provider);
         assertThat(intent.status()).isEqualTo(PaymentIntentStatus.PENDING);
 
         // No provider is called from inside the checkout transaction, so there is
         // nothing to fiscalize yet either.
-        assertThat(fiscalStore.listForOrder(TENANT, result.orderId())).isEmpty();
+        assertThat(fiscalStore.listForOrder(TENANT, orderIdOf(result))).isEmpty();
 
         assertThat(published.events)
                 .as("an order waiting on a card has neither been confirmed nor sent for approval")
@@ -926,10 +924,10 @@ class CartCheckoutAndOrderTests {
         var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-capture-auto", "CLICK")));
         assertThat(placed.status()).isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
 
-        UUID attempt = reservedAttempt(placed.orderId(), PaymentProviderType.CLICK, Duration.ofHours(12));
-        capturePayment(placed.orderId(), attempt);
+        UUID attempt = reservedAttempt(orderIdOf(placed), PaymentProviderType.CLICK, Duration.ofHours(12));
+        capturePayment(orderIdOf(placed), attempt);
 
-        var order = orderStore.find(TENANT, placed.orderId()).orElseThrow();
+        var order = orderStore.find(TENANT, orderIdOf(placed)).orElseThrow();
         assertThat(order.status())
                 .as("the location's policy is AUTO_CONFIRM, so the paid order lands exactly "
                         + "where an equivalent cash order would")
@@ -937,7 +935,7 @@ class CartCheckoutAndOrderTests {
         assertThat(published.events)
                 .as("the event a consumer expects on this path fires exactly as it would from " + "checkout")
                 .anyMatch(event -> event instanceof OrderConfirmed confirmed
-                        && confirmed.orderId().equals(placed.orderId()));
+                        && confirmed.orderId().equals(orderIdOf(placed)));
     }
 
     @Test
@@ -948,7 +946,7 @@ class CartCheckoutAndOrderTests {
         var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
         var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-capture-approval", "CLICK")));
         assertThat(placed.status()).isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
-        assertThat(pendingApprovalTimers(placed.orderId()))
+        assertThat(pendingApprovalTimers(orderIdOf(placed)))
                 .as("nobody has been asked to approve anything yet")
                 .isZero();
 
@@ -956,20 +954,20 @@ class CartCheckoutAndOrderTests {
         // measured from here, not from the checkout instant now ten minutes
         // stale.
         clock.advance(Duration.ofMinutes(10));
-        UUID attempt = reservedAttempt(placed.orderId(), PaymentProviderType.CLICK, Duration.ofHours(12));
+        UUID attempt = reservedAttempt(orderIdOf(placed), PaymentProviderType.CLICK, Duration.ofHours(12));
         Instant captureInstant = clock.instant();
-        capturePayment(placed.orderId(), attempt);
+        capturePayment(orderIdOf(placed), attempt);
 
-        var order = orderStore.find(TENANT, placed.orderId()).orElseThrow();
+        var order = orderStore.find(TENANT, orderIdOf(placed)).orElseThrow();
         assertThat(order.status()).isEqualTo(OrderStatus.AWAITING_APPROVAL);
         assertThat(order.approvalDeadlineAt())
                 .as("the deadline the order itself reports is corrected to the instant the real "
                         + "timer was actually armed at, not the stale one checkout guessed")
                 .isEqualTo(captureInstant.plus(Duration.ofMinutes(5)));
-        assertThat(pendingApprovalTimers(placed.orderId())).isEqualTo(1L);
+        assertThat(pendingApprovalTimers(orderIdOf(placed))).isEqualTo(1L);
         assertThat(published.events)
                 .anyMatch(event -> event instanceof OrderAwaitingApproval awaiting
-                        && awaiting.orderId().equals(placed.orderId())
+                        && awaiting.orderId().equals(orderIdOf(placed))
                         && awaiting.approvalDeadlineAt().equals(captureInstant.plus(Duration.ofMinutes(5))));
     }
 
@@ -979,10 +977,10 @@ class CartCheckoutAndOrderTests {
         var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
         var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-capture-dup", "CLICK")));
 
-        UUID attempt = reservedAttempt(placed.orderId(), PaymentProviderType.CLICK, Duration.ofHours(12));
-        capturePayment(placed.orderId(), attempt);
+        UUID attempt = reservedAttempt(orderIdOf(placed), PaymentProviderType.CLICK, Duration.ofHours(12));
+        capturePayment(orderIdOf(placed), attempt);
 
-        var confirmed = orderStore.find(TENANT, placed.orderId()).orElseThrow();
+        var confirmed = orderStore.find(TENANT, orderIdOf(placed)).orElseThrow();
         assertThat(confirmed.status()).isEqualTo(OrderStatus.CONFIRMED);
 
         // A redelivery of the same fact. In production the transaction append
@@ -993,17 +991,17 @@ class CartCheckoutAndOrderTests {
         tx(() -> published.publishEvent(new PaymentCaptured(
                 UUID.randomUUID(),
                 new uz.horecaos.platform.tenancy.api.TenantId(TENANT),
-                placed.orderId(),
+                orderIdOf(placed),
                 clock.instant())));
 
-        var after = orderStore.find(TENANT, placed.orderId()).orElseThrow();
+        var after = orderStore.find(TENANT, orderIdOf(placed)).orElseThrow();
         assertThat(after.status()).isEqualTo(OrderStatus.CONFIRMED);
         assertThat(after.version())
                 .as("a duplicate capture must not advance an order that already moved on")
                 .isEqualTo(confirmed.version());
         assertThat(published.events.stream()
                         .filter(event -> event instanceof OrderConfirmed orderConfirmed
-                                && orderConfirmed.orderId().equals(placed.orderId()))
+                                && orderConfirmed.orderId().equals(orderIdOf(placed)))
                         .count())
                 .as("one OrderConfirmed for this order, however many times the capture is delivered")
                 .isEqualTo(1L);
@@ -1015,22 +1013,22 @@ class CartCheckoutAndOrderTests {
         var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
         var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-capture-cancelled", "CLICK")));
 
-        UUID attempt = reservedAttempt(placed.orderId(), PaymentProviderType.CLICK, Duration.ofHours(12));
+        UUID attempt = reservedAttempt(orderIdOf(placed), PaymentProviderType.CLICK, Duration.ofHours(12));
 
         // The operator gives up on a customer who has wandered off. The order
         // has never confirmed, so the pre-confirmation cancellation path applies.
-        int version = orderStore.find(TENANT, placed.orderId()).orElseThrow().version();
+        int version = orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().version();
         tx(() ->
-                orderState.cancel(TENANT, placed.orderId(), version, "CUSTOMER_UNREACHABLE", "USER", "operator", null));
-        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().status())
+                orderState.cancel(TENANT, orderIdOf(placed), version, "CUSTOMER_UNREACHABLE", "USER", "operator", null));
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().status())
                 .isEqualTo(OrderStatus.CANCELLED);
 
         // And then Click's redirect completes anyway: the customer's page was
         // still live. This must not resurrect the order or throw.
-        Throwable late = catchThrowable(() -> capturePayment(placed.orderId(), attempt));
+        Throwable late = catchThrowable(() -> capturePayment(orderIdOf(placed), attempt));
 
         assertThat(late).as("late money is recorded, never a crash").isNull();
-        var afterCapture = orderStore.find(TENANT, placed.orderId()).orElseThrow();
+        var afterCapture = orderStore.find(TENANT, orderIdOf(placed)).orElseThrow();
         assertThat(afterCapture.status())
                 .as("a cancelled order stays cancelled; the state machine has no edge back out of "
                         + "it and this method must not invent one")
@@ -1039,14 +1037,14 @@ class CartCheckoutAndOrderTests {
                 .as("an order that is not PAYMENT_AUTHORIZING is never confirmed or sent for "
                         + "approval by a late capture")
                 .noneMatch(event -> (event instanceof OrderConfirmed confirmed
-                                && confirmed.orderId().equals(placed.orderId()))
+                                && confirmed.orderId().equals(orderIdOf(placed)))
                         || (event instanceof OrderAwaitingApproval awaiting
-                                && awaiting.orderId().equals(placed.orderId())));
+                                && awaiting.orderId().equals(orderIdOf(placed))));
         // The money itself is not lost: CapturedMoneyPort recorded it against the
         // settlement regardless of what the order did, which is the other half
         // of this design and is covered on its own in the settlement suite
         // (aLatePaymentAfterAReleasedHoldSettlesShortAndSaysSo and neighbours).
-        assertThat(settlementStore.findSettlement(TENANT, placed.orderId())).isPresent();
+        assertThat(settlementStore.findSettlement(TENANT, orderIdOf(placed))).isPresent();
     }
 
     // ------------------------------------------- V0022: payment_status_projection
@@ -1056,13 +1054,13 @@ class CartCheckoutAndOrderTests {
     void captureFlipsPaymentProjectionToCaptured() {
         var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
         var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-proj-captured", "CLICK")));
-        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().paymentStatusProjection())
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().paymentStatusProjection())
                 .isEqualTo("PENDING");
 
-        UUID attempt = reservedAttempt(placed.orderId(), PaymentProviderType.CLICK, Duration.ofHours(12));
-        capturePayment(placed.orderId(), attempt);
+        UUID attempt = reservedAttempt(orderIdOf(placed), PaymentProviderType.CLICK, Duration.ofHours(12));
+        capturePayment(orderIdOf(placed), attempt);
 
-        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().paymentStatusProjection())
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().paymentStatusProjection())
                 .as("the operations list must stop reading PENDING the instant the money is in")
                 .isEqualTo("CAPTURED");
     }
@@ -1072,9 +1070,9 @@ class CartCheckoutAndOrderTests {
     void duplicateCaptureProjectionIsANoOp() {
         var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
         var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-proj-captured-dup", "CLICK")));
-        UUID attempt = reservedAttempt(placed.orderId(), PaymentProviderType.CLICK, Duration.ofHours(12));
-        capturePayment(placed.orderId(), attempt);
-        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().paymentStatusProjection())
+        UUID attempt = reservedAttempt(orderIdOf(placed), PaymentProviderType.CLICK, Duration.ofHours(12));
+        capturePayment(orderIdOf(placed), attempt);
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().paymentStatusProjection())
                 .isEqualTo("CAPTURED");
 
         // A redelivery of the same fact, exactly as duplicateCaptureIsANoOp above
@@ -1084,10 +1082,10 @@ class CartCheckoutAndOrderTests {
         tx(() -> published.publishEvent(new PaymentCaptured(
                 UUID.randomUUID(),
                 new uz.horecaos.platform.tenancy.api.TenantId(TENANT),
-                placed.orderId(),
+                orderIdOf(placed),
                 clock.instant())));
 
-        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().paymentStatusProjection())
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().paymentStatusProjection())
                 .isEqualTo("CAPTURED");
     }
 
@@ -1096,11 +1094,11 @@ class CartCheckoutAndOrderTests {
     void failedAttemptFlipsPaymentProjectionToFailed() {
         var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
         var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-proj-failed", "CLICK")));
-        UUID attempt = presentedAttempt(placed.orderId(), PaymentProviderType.CLICK);
+        UUID attempt = presentedAttempt(orderIdOf(placed), PaymentProviderType.CLICK);
 
-        failPayment(placed.orderId(), attempt);
+        failPayment(orderIdOf(placed), attempt);
 
-        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().paymentStatusProjection())
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().paymentStatusProjection())
                 .isEqualTo("FAILED");
     }
 
@@ -1109,11 +1107,11 @@ class CartCheckoutAndOrderTests {
     void voidFlipsPaymentProjectionToVoided() {
         var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
         var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-proj-voided", "CLICK")));
-        UUID attempt = reservedAttempt(placed.orderId(), PaymentProviderType.CLICK, Duration.ofHours(12));
+        UUID attempt = reservedAttempt(orderIdOf(placed), PaymentProviderType.CLICK, Duration.ofHours(12));
 
-        voidPayment(placed.orderId(), attempt);
+        voidPayment(orderIdOf(placed), attempt);
 
-        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().paymentStatusProjection())
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().paymentStatusProjection())
                 .as("TerminalOrderPaymentVoid closed the provider's side with no money moved, so "
                         + "the operations list must say VOIDED and not leave the stale PENDING")
                 .isEqualTo("VOIDED");
@@ -1125,19 +1123,19 @@ class CartCheckoutAndOrderTests {
     void refundFlipsPaymentProjectionToRefunded() {
         var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
         var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-proj-refund", "CLICK")));
-        UUID attempt = reservedAttempt(placed.orderId(), PaymentProviderType.CLICK, Duration.ofHours(12));
-        capturePayment(placed.orderId(), attempt);
-        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().paymentStatusProjection())
+        UUID attempt = reservedAttempt(orderIdOf(placed), PaymentProviderType.CLICK, Duration.ofHours(12));
+        capturePayment(orderIdOf(placed), attempt);
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().paymentStatusProjection())
                 .isEqualTo("CAPTURED");
 
         // The real ADR 0048 path: the settlement CheckoutSettlementPlanner already
         // planned at checkout, refunded through the real OrderRemedyService rather
         // than a hand-planned settlement — see anOrderPlacedTheRealWayCanBeRefunded
         // for why that distinction is the whole test.
-        var outcome = tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 100_000L)));
+        var outcome = tx(() -> remedies.recordRefund(refundOf(orderIdOf(placed), 100_000L)));
         assertThat(outcome.recorded()).isTrue();
 
-        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().paymentStatusProjection())
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().paymentStatusProjection())
                 .isEqualTo("REFUNDED");
     }
 
@@ -1146,7 +1144,7 @@ class CartCheckoutAndOrderTests {
     void cashOrderPaymentProjectionIsNeverTouched() {
         var wired = checkoutWith.apply(realPayments(NO_SELLER));
         var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-proj-cash", "CASH")));
-        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().paymentStatusProjection())
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().paymentStatusProjection())
                 .isEqualTo("NOT_REQUIRED");
 
         // Every one of the four signals, fired directly against this cash order's
@@ -1159,26 +1157,26 @@ class CartCheckoutAndOrderTests {
             published.publishEvent(new PaymentCaptured(
                     UUID.randomUUID(),
                     new uz.horecaos.platform.tenancy.api.TenantId(TENANT),
-                    placed.orderId(),
+                    orderIdOf(placed),
                     clock.instant()));
             published.publishEvent(new PaymentFailed(
                     UUID.randomUUID(),
                     new uz.horecaos.platform.tenancy.api.TenantId(TENANT),
-                    placed.orderId(),
+                    orderIdOf(placed),
                     clock.instant()));
             published.publishEvent(new PaymentVoided(
                     UUID.randomUUID(),
                     new uz.horecaos.platform.tenancy.api.TenantId(TENANT),
-                    placed.orderId(),
+                    orderIdOf(placed),
                     clock.instant()));
             published.publishEvent(new PaymentRefunded(
                     UUID.randomUUID(),
                     new uz.horecaos.platform.tenancy.api.TenantId(TENANT),
-                    placed.orderId(),
+                    orderIdOf(placed),
                     clock.instant()));
         });
 
-        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().paymentStatusProjection())
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().paymentStatusProjection())
                 .as("NOT_REQUIRED means no online payment is tracked for this order at all; no "
                         + "payment lifecycle signal may move it, including one this order will "
                         + "never actually receive")
@@ -1186,10 +1184,10 @@ class CartCheckoutAndOrderTests {
 
         // And the real path a cash order does receive: a genuine refund, recorded
         // for real. It must not disturb NOT_REQUIRED either.
-        handOver(placed.orderId());
-        var refunded = tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 100_000L)));
+        handOver(orderIdOf(placed));
+        var refunded = tx(() -> remedies.recordRefund(refundOf(orderIdOf(placed), 100_000L)));
         assertThat(refunded.recorded()).isTrue();
-        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().paymentStatusProjection())
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().paymentStatusProjection())
                 .as("a cash order genuinely refunded through the ADR 0048 remedy path still "
                         + "reads NOT_REQUIRED: the remedy is real, this projection was never "
                         + "tracking this order's money, and does not start now")
@@ -1204,7 +1202,7 @@ class CartCheckoutAndOrderTests {
     }
 
     /** No ADR 0038 assignment, which is what a real build resolves today. */
-    private static final UUID NO_SELLER = null;
+    private static final @Nullable UUID NO_SELLER = null;
 
     /**
      * The real {@link uz.horecaos.platform.payments.application.PaymentIntentService}
@@ -1215,7 +1213,7 @@ class CartCheckoutAndOrderTests {
      * that decides what the checkout does — the capture timing, the intent row, the
      * cash fiscal document — is production code against production SQL.
      */
-    private PaymentIntentPort realPayments(UUID sellerId) {
+    private PaymentIntentPort realPayments(@Nullable UUID sellerId) {
         PaymentLegalEntityResolver sellers = (tenantId, locationId, businessDate) -> Optional.ofNullable(sellerId);
 
         PaymentBindingResolver bindings = new PaymentBindingResolver() {
@@ -1407,8 +1405,9 @@ class CartCheckoutAndOrderTests {
         var mine = readyCart();
         var theirs = readyCart();
 
-        var foreignQuote = readCart(theirs).pricingQuoteId();
-        var foreignHash = readCart(theirs).pricingContextHash();
+        // readyCart() always prices the cart before returning it.
+        var foreignQuote = java.util.Objects.requireNonNull(readCart(theirs).pricingQuoteId());
+        var foreignHash = java.util.Objects.requireNonNull(readCart(theirs).pricingContextHash());
 
         var refused = tx(() -> checkout.checkout(new CheckoutService.CheckoutCommand(
                 TENANT,
@@ -1455,7 +1454,7 @@ class CartCheckoutAndOrderTests {
     @DisplayName("an order's commercial snapshot survives a menu republish unchanged")
     void theOrderSnapshotSurvivesARepublish() {
         var result = placeOrder("idem-snapshot");
-        var before = orderQuery.detail(TENANT, result.orderId()).orElseThrow();
+        var before = orderQuery.detail(TENANT, orderIdOf(result)).orElseThrow();
 
         assertThat(before.lines())
                 .singleElement()
@@ -1469,7 +1468,7 @@ class CartCheckoutAndOrderTests {
         jdbc.sql("UPDATE catalog.publications SET status = 'RETIRED'").update();
         seedPublication("STOREFRONT");
 
-        var after = orderQuery.detail(TENANT, result.orderId()).orElseThrow();
+        var after = orderQuery.detail(TENANT, orderIdOf(result)).orElseThrow();
 
         assertThat(after.order().totalMinor()).isEqualTo(before.order().totalMinor());
         assertThat(after.lines().getFirst().line().productName())
@@ -1487,7 +1486,7 @@ class CartCheckoutAndOrderTests {
                 """).query(Boolean.class).single())
                 .as("a correction is a new order, never an edit to financial history")
                 .isFalse();
-        assertThat(result.orderId()).isNotNull();
+        assertThat(orderIdOf(result)).isNotNull();
     }
 
     @Test
@@ -1508,14 +1507,14 @@ class CartCheckoutAndOrderTests {
         tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
 
         var result = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-note")));
-        var detail = orderQuery.detail(TENANT, result.orderId()).orElseThrow();
+        var detail = orderQuery.detail(TENANT, orderIdOf(result)).orElseThrow();
         UUID lineId = detail.lines().getFirst().line().lineId();
 
         // The ciphertext is bound to its row by the ADR 0029 associated data, so a
         // note merely copied across would be unreadable here. Reading it back
         // proves it was re-encrypted for the order line rather than pasted.
         assertThat(detail.lines().getFirst().line().hasNote()).isTrue();
-        assertThat(orderQuery.revealLineNote(TENANT, result.orderId(), lineId, "KITCHEN_TICKET"))
+        assertThat(orderQuery.revealLineNote(TENANT, orderIdOf(result), lineId, "KITCHEN_TICKET"))
                 .contains("No onions, ring the top bell");
     }
 
@@ -1524,9 +1523,9 @@ class CartCheckoutAndOrderTests {
     void anOrderIsScopedToItsCustomer() {
         var result = placeOrder("idem-scoped");
 
-        assertThat(orderQuery.detailForCustomer(TENANT, result.orderId(), CUSTOMER, null))
+        assertThat(orderQuery.detailForCustomer(TENANT, orderIdOf(result), CUSTOMER, null))
                 .isPresent();
-        assertThat(orderQuery.detailForCustomer(TENANT, result.orderId(), OTHER_CUSTOMER, null))
+        assertThat(orderQuery.detailForCustomer(TENANT, orderIdOf(result), OTHER_CUSTOMER, null))
                 .as("knowing an order id must not be enough to read it")
                 .isEmpty();
     }
@@ -1540,7 +1539,7 @@ class CartCheckoutAndOrderTests {
         var result = placeOrder("idem-approval");
 
         assertThat(result.status()).isEqualTo(OrderStatus.AWAITING_APPROVAL);
-        assertThat(orderStore.find(TENANT, result.orderId()).orElseThrow().approvalDeadlineAt())
+        assertThat(orderStore.find(TENANT, orderIdOf(result)).orElseThrow().approvalDeadlineAt())
                 .isEqualTo(NOW.plus(Duration.ofMinutes(5)));
         assertThat(jdbc.sql("""
                 SELECT count(*) FROM ordering.order_timers
@@ -1554,7 +1553,7 @@ class CartCheckoutAndOrderTests {
     @DisplayName("two operators deciding at once settle at exactly one outcome")
     void twoSimultaneousDecisionsSettleAtOne() throws Exception {
         requireApproval();
-        var order = placeOrder("idem-race-approval").orderId();
+        var order = orderIdOf(placeOrder("idem-race-approval"));
 
         CountDownLatch bothReady = new CountDownLatch(2);
         ExecutorService pool = Executors.newFixedThreadPool(2);
@@ -1603,7 +1602,7 @@ class CartCheckoutAndOrderTests {
     @DisplayName("a repeated decision id does not re-run the decision")
     void aRepeatedDecisionIsIdempotent() {
         requireApproval();
-        var order = placeOrder("idem-repeat-decision").orderId();
+        var order = orderIdOf(placeOrder("idem-repeat-decision"));
 
         var first =
                 tx(() -> orderState.decide(TENANT, order, decision("d-1", OrderStateService.DecisionAction.APPROVE)));
@@ -1623,7 +1622,7 @@ class CartCheckoutAndOrderTests {
     @DisplayName("a lapsed approval deadline expires the order and releases the hold")
     void aLapsedDeadlineExpiresTheOrder() {
         requireApproval();
-        var order = placeOrder("idem-timeout").orderId();
+        var order = orderIdOf(placeOrder("idem-timeout"));
 
         clock.advance(Duration.ofMinutes(6));
         var due = tx(() -> orderStore.claimDueTimers(clock.instant(), 10));
@@ -1644,7 +1643,7 @@ class CartCheckoutAndOrderTests {
     @DisplayName("a decision that arrives after the deadline fired does not reopen the order")
     void aLateDecisionCannotReopenAnExpiredOrder() {
         requireApproval();
-        var order = placeOrder("idem-late").orderId();
+        var order = orderIdOf(placeOrder("idem-late"));
 
         clock.advance(Duration.ofMinutes(6));
         tx(() -> orderState.approvalDeadlineReached(TENANT, order));
@@ -1665,7 +1664,7 @@ class CartCheckoutAndOrderTests {
     @DisplayName("both the winning and the losing decision leave an audit fact")
     void everyDecisionIsAudited() {
         requireApproval();
-        var order = placeOrder("idem-audited").orderId();
+        var order = orderIdOf(placeOrder("idem-audited"));
 
         tx(() -> orderState.decide(TENANT, order, decision("d-win", OrderStateService.DecisionAction.APPROVE)));
         tx(() -> orderState.decide(TENANT, order, decision("d-lose", OrderStateService.DecisionAction.REJECT)));
@@ -1699,7 +1698,7 @@ class CartCheckoutAndOrderTests {
         assertThat(jdbc.sql("""
                 SELECT status FROM ordering.order_process_states WHERE order_id = :order
                 """)
-                        .param("order", result.orderId())
+                        .param("order", orderIdOf(result))
                         .query(String.class)
                         .single())
                 .isEqualTo("COMPLETED");
@@ -1723,7 +1722,7 @@ class CartCheckoutAndOrderTests {
     @DisplayName("a cancellation before confirmation releases the hold and the kitchen slot")
     void cancellationReleasesEverything() {
         requireApproval();
-        var order = placeOrder("idem-cancel").orderId();
+        var order = orderIdOf(placeOrder("idem-cancel"));
         int version = orderStore.find(TENANT, order).orElseThrow().version();
 
         tx(() -> orderState.cancel(
@@ -1741,12 +1740,12 @@ class CartCheckoutAndOrderTests {
     @DisplayName("a confirmed order cannot be cancelled in this release")
     void aConfirmedOrderCannotBeCancelled() {
         var result = placeOrder("idem-no-cancel");
-        int version = orderStore.find(TENANT, result.orderId()).orElseThrow().version();
+        int version = orderStore.find(TENANT, orderIdOf(result)).orElseThrow().version();
 
         // ADR 0039 owns amendment. Half-performing the payment, fiscal, POS and
         // fulfilment consequences here would leave state nobody could reconstruct.
         assertThat(catchThrowable(() -> tx(() -> orderState.cancel(
-                        TENANT, result.orderId(), version, "OPERATOR_ERROR", "USER", "someone", null))))
+                        TENANT, orderIdOf(result), version, "OPERATOR_ERROR", "USER", "someone", null))))
                 .isInstanceOf(OrderStateService.CancellationNotPermittedException.class);
     }
 
@@ -1755,7 +1754,7 @@ class CartCheckoutAndOrderTests {
     @Test
     @DisplayName("the kitchen path runs confirmed to completed for a pickup order")
     void theKitchenPathAdvances() {
-        var order = placeOrder("idem-kitchen").orderId();
+        var order = orderIdOf(placeOrder("idem-kitchen"));
 
         advance(order, OrderStatus.PREPARING);
         advance(order, OrderStatus.READY);
@@ -1770,7 +1769,7 @@ class CartCheckoutAndOrderTests {
     @Test
     @DisplayName("a pickup order cannot enter the courier state")
     void aPickupOrderCannotBecomeFulfilling() {
-        var order = placeOrder("idem-pickup").orderId();
+        var order = orderIdOf(placeOrder("idem-pickup"));
         advance(order, OrderStatus.PREPARING);
         advance(order, OrderStatus.READY);
 
@@ -1803,7 +1802,7 @@ class CartCheckoutAndOrderTests {
     @Test
     @DisplayName("the database refuses a status the code-owned machine does not know")
     void theDatabaseRefusesAnUnknownStatus() {
-        var order = placeOrder("idem-status").orderId();
+        var order = orderIdOf(placeOrder("idem-status"));
 
         // The CHECK constraint and OrderStatus have to agree. If a later change
         // adds a status in one place only, this is what fails.
@@ -1825,7 +1824,7 @@ class CartCheckoutAndOrderTests {
                 .containsExactly("OrderReceived", "OrderConfirmed");
 
         var received = (OrderReceived) published.events.getFirst();
-        assertThat(received.orderId()).isEqualTo(result.orderId());
+        assertThat(received.orderId()).isEqualTo(orderIdOf(result));
         assertThat(received.payload()).isInstanceOf(OrderReceived.Payload.class);
         assertThat(((OrderReceived.Payload) received.payload()).lineCount())
                 .as("a count, not the basket: a consumer that needs the lines calls the API")
@@ -1977,7 +1976,7 @@ class CartCheckoutAndOrderTests {
         var result = placeOrder("pickup-unaffected");
 
         assertThat(result.created()).isTrue();
-        assertThat(deliveryOrders.deliveryOrder(TENANT, result.orderId()))
+        assertThat(deliveryOrders.deliveryOrder(TENANT, orderIdOf(result)))
                 .as("and there is nothing for sourcing to plan")
                 .isEmpty();
     }
@@ -1985,7 +1984,7 @@ class CartCheckoutAndOrderTests {
     @Test
     @DisplayName("the port hands sourcing the order, the fee and the doorstep")
     void aConfirmedDeliveryOrderIsSourceable() {
-        UUID orderId = placeDeliveryOrder("sourceable").orderId();
+        UUID orderId = orderIdOf(placeDeliveryOrder("sourceable"));
 
         var delivery = deliveryOrders.deliveryOrder(TENANT, orderId).orElseThrow();
 
@@ -1993,8 +1992,11 @@ class CartCheckoutAndOrderTests {
                 .isEqualTo(orderStore.find(TENANT, orderId).orElseThrow().publicOrderNumber());
         assertThat(delivery.currency()).isEqualTo("UZS");
         assertThat(delivery.preparation())
-                .isEqualTo(Duration.ofMinutes(
-                        orderStore.find(TENANT, orderId).orElseThrow().promise().prepMinutes()));
+                .isEqualTo(Duration.ofMinutes(java.util.Objects.requireNonNull(orderStore
+                        .find(TENANT, orderId)
+                        .orElseThrow()
+                        .promise()
+                        .prepMinutes())));
         assertThat(delivery.prepaid())
                 .as("nothing has been captured, so the courier collects at the door")
                 .isFalse();
@@ -2022,7 +2024,7 @@ class CartCheckoutAndOrderTests {
     @Test
     @DisplayName("neither the waypoint nor the delivery order prints the doorstep")
     void nothingHandedToSourcingPrintsPersonalData() {
-        UUID orderId = placeDeliveryOrder("redacted").orderId();
+        UUID orderId = orderIdOf(placeDeliveryOrder("redacted"));
         var delivery = deliveryOrders.deliveryOrder(TENANT, orderId).orElseThrow();
 
         assertThat(delivery.dropoff().toString()).isEqualTo("Waypoint[REDACTED]");
@@ -2047,7 +2049,7 @@ class CartCheckoutAndOrderTests {
                 .param("tenantId", TENANT)
                 .update();
 
-        var delivery = deliveryOrders.deliveryOrder(TENANT, placed.orderId()).orElseThrow();
+        var delivery = deliveryOrders.deliveryOrder(TENANT, orderIdOf(placed)).orElseThrow();
         assertThat(delivery.dropoff().address()).contains("Amir Temur 12");
         assertThat(delivery.dropoff().contactPhone()).isEqualTo("+998901112233");
     }
@@ -2081,9 +2083,9 @@ class CartCheckoutAndOrderTests {
         requireApproval();
         var placed = placeDeliveryOrder("awaiting");
 
-        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().status())
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().status())
                 .isEqualTo(OrderStatus.AWAITING_APPROVAL);
-        assertThat(deliveryOrders.deliveryOrder(TENANT, placed.orderId()))
+        assertThat(deliveryOrders.deliveryOrder(TENANT, orderIdOf(placed)))
                 .as("sourcing a courier for food nobody has agreed to cook is how a courier "
                         + "waits unpaid outside a kitchen that never started")
                 .isEmpty();
@@ -2092,7 +2094,7 @@ class CartCheckoutAndOrderTests {
     @Test
     @DisplayName("an order id is not proof of ownership: another tenant sees nothing")
     void anotherTenantCannotReadTheDropoff() {
-        UUID orderId = placeDeliveryOrder("tenant-scoped").orderId();
+        UUID orderId = orderIdOf(placeDeliveryOrder("tenant-scoped"));
 
         assertThat(deliveryOrders.deliveryOrder(UUID.randomUUID(), orderId)).isEmpty();
     }
@@ -2113,7 +2115,7 @@ class CartCheckoutAndOrderTests {
                 WHERE tenant_id = :tenantId AND order_id = :orderId
                 """)
                 .param("tenantId", TENANT)
-                .param("orderId", placed.orderId())
+                .param("orderId", orderIdOf(placed))
                 .query(String.class)
                 .single();
 
@@ -2152,7 +2154,7 @@ class CartCheckoutAndOrderTests {
     @Test
     @DisplayName("the customer block carries the name in full, the phone decrypted, and address presence")
     void theCustomerBlockCarriesWhatAnOrdinaryReadMayShow() {
-        UUID orderId = placeDeliveryOrder("customer-block").orderId();
+        UUID orderId = orderIdOf(placeDeliveryOrder("customer-block"));
 
         var customer = orderQuery.detail(TENANT, orderId).orElseThrow().customer();
 
@@ -2170,7 +2172,7 @@ class CartCheckoutAndOrderTests {
     @Test
     @DisplayName("a pickup order has no address to reveal")
     void aPickupOrderCarriesNoAddress() {
-        UUID orderId = placeOrder("customer-block-pickup").orderId();
+        UUID orderId = orderIdOf(placeOrder("customer-block-pickup"));
 
         var customer = orderQuery.detail(TENANT, orderId).orElseThrow().customer();
         assertThat(customer.hasAddress()).isFalse();
@@ -2185,7 +2187,7 @@ class CartCheckoutAndOrderTests {
         allowGuestOrders();
         var placed = tx(() -> checkout.checkout(guestCheckoutCommand(readyGuestCart(), "customer-block-guest")));
 
-        var customer = orderQuery.detail(TENANT, placed.orderId()).orElseThrow().customer();
+        var customer = orderQuery.detail(TENANT, orderIdOf(placed)).orElseThrow().customer();
         assertThat(customer.customerType()).isEqualTo("GUEST");
     }
 
@@ -2200,7 +2202,7 @@ class CartCheckoutAndOrderTests {
     @Test
     @DisplayName("revealing the phone returns the whole number")
     void revealingThePhoneReturnsTheWholeNumber() {
-        UUID orderId = placeDeliveryOrder("reveal-phone").orderId();
+        UUID orderId = orderIdOf(placeDeliveryOrder("reveal-phone"));
 
         assertThat(orderQuery.revealCustomerPhone(TENANT, orderId, "CUSTOMER_CALLED_IN"))
                 .contains("+998901112233");
@@ -2209,7 +2211,7 @@ class CartCheckoutAndOrderTests {
     @Test
     @DisplayName("revealing the address returns дом/квартира/подъезд/этаж/ориентир and the coordinate")
     void revealingTheAddressReturnsTheStructuredFields() {
-        UUID orderId = placeDeliveryOrder("reveal-address").orderId();
+        UUID orderId = orderIdOf(placeDeliveryOrder("reveal-address"));
 
         var revealed = orderQuery
                 .revealCustomerAddress(TENANT, orderId, "COURIER_HANDOFF")
@@ -2239,29 +2241,29 @@ class CartCheckoutAndOrderTests {
     @Test
     @DisplayName("counts aggregates the location's orders into the board's tab buckets")
     void countsAggregatesIntoTheBoardsBuckets() {
-        UUID inKitchen1 = placeOrder("counts-confirmed").orderId(); // CONFIRMED
+        UUID inKitchen1 = orderIdOf(placeOrder("counts-confirmed")); // CONFIRMED
 
-        UUID inKitchen2 = placeOrder("counts-preparing").orderId();
+        UUID inKitchen2 = orderIdOf(placeOrder("counts-preparing"));
         advance(inKitchen2, OrderStatus.PREPARING);
 
-        UUID ready = placeOrder("counts-ready").orderId();
+        UUID ready = orderIdOf(placeOrder("counts-ready"));
         advance(ready, OrderStatus.PREPARING);
         advance(ready, OrderStatus.READY);
 
-        UUID completed = placeOrder("counts-completed").orderId();
+        UUID completed = orderIdOf(placeOrder("counts-completed"));
         advance(completed, OrderStatus.PREPARING);
         advance(completed, OrderStatus.READY);
         advance(completed, OrderStatus.COMPLETED);
 
         placeBranchOnTheMap();
-        UUID fulfilling = placeDeliveryOrder("counts-fulfilling").orderId();
+        UUID fulfilling = orderIdOf(placeDeliveryOrder("counts-fulfilling"));
         advance(fulfilling, OrderStatus.PREPARING);
         advance(fulfilling, OrderStatus.READY);
         advance(fulfilling, OrderStatus.FULFILLING);
 
         requireApproval();
-        UUID awaiting = placeOrder("counts-awaiting").orderId();
-        UUID rejected = placeOrder("counts-rejected").orderId();
+        UUID awaiting = orderIdOf(placeOrder("counts-awaiting"));
+        UUID rejected = orderIdOf(placeOrder("counts-rejected"));
         tx(() -> orderState.decide(
                 TENANT, rejected, decision("d-counts-reject", OrderStateService.DecisionAction.REJECT)));
 
@@ -2305,13 +2307,13 @@ class CartCheckoutAndOrderTests {
     @DisplayName("a confirmed order's refused cancellation matches actions[] omitting CANCEL")
     void confirmedCancellationRefusalMatchesTheActionsList() {
         var result = placeOrder("actions-confirmed-cancel");
-        int version = orderStore.find(TENANT, result.orderId()).orElseThrow().version();
+        int version = orderStore.find(TENANT, orderIdOf(result)).orElseThrow().version();
 
         assertThat(catchThrowable(() -> tx(() -> orderState.cancel(
-                        TENANT, result.orderId(), version, "OPERATOR_ERROR", "USER", "someone", null))))
+                        TENANT, orderIdOf(result), version, "OPERATOR_ERROR", "USER", "someone", null))))
                 .isInstanceOf(OrderStateService.CancellationNotPermittedException.class);
 
-        var order = orderStore.find(TENANT, result.orderId()).orElseThrow();
+        var order = orderStore.find(TENANT, orderIdOf(result)).orElseThrow();
         assertThat(order.status()).isEqualTo(OrderStatus.CONFIRMED);
         assertThat(OrderActionsPolicy.availableFor(order.status(), order.fulfillmentMode()))
                 .as("the read model must not offer what the mutating endpoint just refused")
@@ -2335,13 +2337,18 @@ class CartCheckoutAndOrderTests {
     void aDeliveryOrderBecomesAPlan() {
         placeBranchOnTheMap();
         var placed = placeDeliveryOrder("planned");
-        var order = orderStore.find(TENANT, placed.orderId()).orElseThrow();
+        var order = orderStore.find(TENANT, orderIdOf(placed)).orElseThrow();
 
         var plan = deliveryPlanning()
-                .open(TENANT, BRAND, LOCATION, placed.orderId(), order.confirmedAt())
+                .open(
+                        TENANT,
+                        BRAND,
+                        LOCATION,
+                        orderIdOf(placed),
+                        Objects.requireNonNull(order.confirmedAt(), "a placed order was just confirmed"))
                 .orElseThrow();
 
-        assertThat(plan.orderId()).isEqualTo(placed.orderId());
+        assertThat(plan.orderId()).isEqualTo(orderIdOf(placed));
         assertThat(plan.currency()).isEqualTo("UZS");
         assertThat(plan.customerDeliveryFeeMinor())
                 .as("what the customer paid for delivery, carried so nobody re-runs ADR 0037 "
@@ -2371,11 +2378,17 @@ class CartCheckoutAndOrderTests {
     @DisplayName("an unplaced branch produces no plan, and does not fail the order")
     void anUnplacedBranchPlansNothing() {
         var placed = placeDeliveryOrder("unplaced-branch");
-        var order = orderStore.find(TENANT, placed.orderId()).orElseThrow();
+        var order = orderStore.find(TENANT, orderIdOf(placed)).orElseThrow();
 
-        assertThat(deliveryPlanning().open(TENANT, BRAND, LOCATION, placed.orderId(), order.confirmedAt()))
+        assertThat(deliveryPlanning()
+                        .open(
+                                TENANT,
+                                BRAND,
+                                LOCATION,
+                                orderIdOf(placed),
+                                Objects.requireNonNull(order.confirmedAt(), "a placed order was just confirmed")))
                 .isEmpty();
-        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().status())
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().status())
                 .as("the order stands; a configuration gap is not a checkout outage")
                 .isEqualTo(OrderStatus.CONFIRMED);
     }
@@ -2403,17 +2416,19 @@ class CartCheckoutAndOrderTests {
     void anOrderPlacedTheRealWayCanBeRefunded() {
         var wired = checkoutWith.apply(realPayments(NO_SELLER));
         var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-refund", "CASH")));
-        handOver(placed.orderId());
+        handOver(orderIdOf(placed));
 
-        var outcome = tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 100_000L)));
+        var outcome = tx(() -> remedies.recordRefund(refundOf(orderIdOf(placed), 100_000L)));
 
         assertThat(outcome.recorded()).isTrue();
-        assertThat(outcome.remedy().amountMinor()).isEqualTo(100_000L);
-        assertThat(outcome.remedy().attestedMoneyMinor())
+        // A recorded outcome always carries the remedy it recorded.
+        var remedy = java.util.Objects.requireNonNull(outcome.remedy());
+        assertThat(remedy.amountMinor()).isEqualTo(100_000L);
+        assertThat(remedy.attestedMoneyMinor())
                 .as("cash out of the drawer is money this platform never held and cannot prove "
                         + "moved, so all of it is an attestation")
                 .isEqualTo(100_000L);
-        assertThat(tenderStatuses(placed.orderId())).containsExactly(TenderStatus.REVERSED);
+        assertThat(tenderStatuses(orderIdOf(placed))).containsExactly(TenderStatus.REVERSED);
     }
 
     @Test
@@ -2421,16 +2436,16 @@ class CartCheckoutAndOrderTests {
     void aPartialRefundLeavesTheRestRefundable() {
         var wired = checkoutWith.apply(realPayments(NO_SELLER));
         var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-partial", "CASH")));
-        handOver(placed.orderId());
+        handOver(orderIdOf(placed));
 
-        tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 40_000L)));
-        var second = tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 60_000L)));
+        tx(() -> remedies.recordRefund(refundOf(orderIdOf(placed), 40_000L)));
+        var second = tx(() -> remedies.recordRefund(refundOf(orderIdOf(placed), 60_000L)));
 
         assertThat(second.recorded()).isTrue();
-        assertThat(refundedMinor(placed.orderId())).isEqualTo(100_000L);
+        assertThat(refundedMinor(orderIdOf(placed))).isEqualTo(100_000L);
         // V0048's headroom, over a real order rather than a hand-planned one: a
         // third refund has nothing left to take.
-        assertThatThrownBy(() -> tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 1_000L))))
+        assertThatThrownBy(() -> tx(() -> remedies.recordRefund(refundOf(orderIdOf(placed), 1_000L))))
                 .hasMessageContaining("cannot exceed what the tenders settled");
     }
 
@@ -2439,14 +2454,16 @@ class CartCheckoutAndOrderTests {
     void aDeliveryFeeReimbursementIsRecordedAgainstARealOrder() {
         var wired = checkoutWith.apply(realPayments(NO_SELLER));
         var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-fee", "CASH")));
-        handOver(placed.orderId());
+        handOver(orderIdOf(placed));
         deliveryFeeBasis = java.util.OptionalLong.of(12_000L);
 
-        var outcome = tx(() -> remedies.recordDeliveryFeeReimbursement(refundOf(placed.orderId(), 12_000L)));
+        var outcome = tx(() -> remedies.recordDeliveryFeeReimbursement(refundOf(orderIdOf(placed), 12_000L)));
 
         assertThat(outcome.recorded()).isTrue();
-        assertThat(outcome.remedy().deliveryFeeBasisMinor()).isEqualTo(12_000L);
-        assertThat(refundedMinor(placed.orderId()))
+        // A recorded outcome always carries the remedy it recorded.
+        assertThat(java.util.Objects.requireNonNull(outcome.remedy()).deliveryFeeBasisMinor())
+                .isEqualTo(12_000L);
+        assertThat(refundedMinor(orderIdOf(placed)))
                 .as("the fee was part of the total and was settled by the same tenders, so it "
                         + "comes back through them")
                 .isEqualTo(12_000L);
@@ -2463,11 +2480,11 @@ class CartCheckoutAndOrderTests {
     void aFutureDiscountIsGrantedOnARealOrder() {
         var wired = checkoutWith.apply(realPayments(NO_SELLER));
         var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-grant", "CASH")));
-        handOver(placed.orderId());
+        handOver(orderIdOf(placed));
 
         var outcome = tx(() -> remedies.grantFutureDiscount(new OrderRemedyService.FutureDiscountCommand(
                 TENANT,
-                placed.orderId(),
+                orderIdOf(placed),
                 uz.horecaos.platform.payments.api.EntitlementScope.DELIVERY_FEE,
                 uz.horecaos.platform.payments.api.EntitlementBenefit.FIXED_AMOUNT,
                 null,
@@ -2482,7 +2499,7 @@ class CartCheckoutAndOrderTests {
                 null)));
 
         assertThat(outcome.recorded()).isTrue();
-        assertThat(refundedMinor(placed.orderId())).isZero();
+        assertThat(refundedMinor(orderIdOf(placed))).isZero();
     }
 
     @Test
@@ -2491,11 +2508,11 @@ class CartCheckoutAndOrderTests {
         allowGuestOrders();
         var wired = checkoutWith.apply(realPayments(NO_SELLER));
         var placed = tx(() -> wired.checkout(guestCheckoutCommand(readyGuestCart(), "idem-guest")));
-        handOver(placed.orderId());
+        handOver(orderIdOf(placed));
 
-        assertThat(settlementStore.findSettlement(TENANT, placed.orderId())).isPresent();
+        assertThat(settlementStore.findSettlement(TENANT, orderIdOf(placed))).isPresent();
 
-        var outcome = tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 100_000L)));
+        var outcome = tx(() -> remedies.recordRefund(refundOf(orderIdOf(placed), 100_000L)));
 
         assertThat(outcome.recorded())
                 .as("nobody to grant points to is not the same as nobody to give money back to")
@@ -2509,14 +2526,14 @@ class CartCheckoutAndOrderTests {
         var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-cash-hold", "CASH")));
 
         // Confirmed at checkout, with a courier yet to collect anything.
-        assertThat(settlementStatus(placed.orderId())).isEqualTo(SettlementStatus.PLANNED);
-        assertThatThrownBy(() -> tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 10_000L))))
+        assertThat(settlementStatus(orderIdOf(placed))).isEqualTo(SettlementStatus.PLANNED);
+        assertThatThrownBy(() -> tx(() -> remedies.recordRefund(refundOf(orderIdOf(placed), 10_000L))))
                 .as("refunding cash the tenant has never held is the failure this ordering " + "prevents")
                 .hasMessageContaining("cannot exceed what the tenders settled");
 
-        handOver(placed.orderId());
+        handOver(orderIdOf(placed));
 
-        assertThat(settlementStatus(placed.orderId())).isEqualTo(SettlementStatus.SETTLED);
+        assertThat(settlementStatus(orderIdOf(placed))).isEqualTo(SettlementStatus.SETTLED);
     }
 
     /**
@@ -2546,12 +2563,12 @@ class CartCheckoutAndOrderTests {
         // ADR 0013's BEFORE_CONFIRMATION timing: the order waits on the money, so
         // nothing has settled while it waits.
         assertThat(placed.status()).isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
-        assertThat(settlementStatus(placed.orderId())).isEqualTo(SettlementStatus.PLANNED);
+        assertThat(settlementStatus(orderIdOf(placed))).isEqualTo(SettlementStatus.PLANNED);
 
         // The customer is on Click's page: the provider has a reservation against
         // this order, which is what makes the wait a live payment rather than an
         // abandoned tab.
-        reservedAttempt(placed.orderId(), PaymentProviderType.CLICK, Duration.ofHours(12));
+        reservedAttempt(orderIdOf(placed), PaymentProviderType.CLICK, Duration.ofHours(12));
 
         // Thirty-one minutes of it, so the points hold is past its lifetime and
         // the sweep reaches it on its ordinary cadence.
@@ -2562,11 +2579,11 @@ class CartCheckoutAndOrderTests {
                 .as("a customer part-way through a provider redirect has not abandoned anything")
                 .isZero();
 
-        advance(placed.orderId(), OrderStatus.CONFIRMED);
+        advance(orderIdOf(placed), OrderStatus.CONFIRMED);
 
-        assertThat(settlementStatus(placed.orderId())).isEqualTo(SettlementStatus.SETTLED);
-        assertThat(tenderStatuses(placed.orderId())).containsExactly(TenderStatus.SETTLED, TenderStatus.SETTLED);
-        var outcome = tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 100_000L)));
+        assertThat(settlementStatus(orderIdOf(placed))).isEqualTo(SettlementStatus.SETTLED);
+        assertThat(tenderStatuses(orderIdOf(placed))).containsExactly(TenderStatus.SETTLED, TenderStatus.SETTLED);
+        var outcome = tx(() -> remedies.recordRefund(refundOf(orderIdOf(placed), 100_000L)));
         assertThat(outcome.recorded()).isTrue();
     }
 
@@ -2598,13 +2615,13 @@ class CartCheckoutAndOrderTests {
                 loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
 
         assertThat(placed.status()).isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
-        assertThat(tenderAmounts(placed.orderId())).containsExactly(20_000L, 80_000L);
+        assertThat(tenderAmounts(orderIdOf(placed))).containsExactly(20_000L, 80_000L);
         assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor())
                 .as("the hold is the debit: the points left the balance at checkout")
                 .isZero();
 
         UUID attempt = reservedAttempt(
-                placed.orderId(),
+                orderIdOf(placed),
                 PaymentProviderType.PAYME,
                 uz.horecaos.platform.payments.application.PaymentAttemptService.PAYME_TRANSACTION_TIMEOUT);
 
@@ -2618,22 +2635,22 @@ class CartCheckoutAndOrderTests {
                 .as("Payme is holding a transaction against this order; the customer has not "
                         + "abandoned anything and their points are not theirs to spend again")
                 .isZero();
-        assertThat(tenderStatuses(placed.orderId())).containsExactly(TenderStatus.RESERVED, TenderStatus.PLANNED);
+        assertThat(tenderStatuses(orderIdOf(placed))).containsExactly(TenderStatus.RESERVED, TenderStatus.PLANNED);
 
         // t=40min. Well inside Payme's twelve hours, the customer pays.
         clock.advance(Duration.ofMinutes(8));
         captureAttempt(attempt);
-        advance(placed.orderId(), OrderStatus.CONFIRMED);
+        advance(orderIdOf(placed), OrderStatus.CONFIRMED);
 
-        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().status())
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().status())
                 .as("the confirmation committed rather than rolling back for ever")
                 .isEqualTo(OrderStatus.CONFIRMED);
-        assertThat(settlementStatus(placed.orderId())).isEqualTo(SettlementStatus.SETTLED);
+        assertThat(settlementStatus(orderIdOf(placed))).isEqualTo(SettlementStatus.SETTLED);
         assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor())
                 .as("the tenant collected 80 000 through Payme and 20 000 in points, once")
                 .isZero();
 
-        var outcome = tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 100_000L)));
+        var outcome = tx(() -> remedies.recordRefund(refundOf(orderIdOf(placed), 100_000L)));
         assertThat(outcome.recorded()).isTrue();
     }
 
@@ -2656,14 +2673,14 @@ class CartCheckoutAndOrderTests {
         UUID account =
                 loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
 
-        presentedAttempt(placed.orderId(), PaymentProviderType.PAYME);
+        presentedAttempt(orderIdOf(placed), PaymentProviderType.PAYME);
 
         clock.advance(Duration.ofMinutes(31));
         int released = tx(() -> loyaltySweep.releaseStaleHolds());
 
         assertThat(released).isEqualTo(1);
         assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor()).isEqualTo(20_000L);
-        assertThat(tenderStatuses(placed.orderId()))
+        assertThat(tenderStatuses(orderIdOf(placed)))
                 .as("the sweep can write the tender now, through the port payments already "
                         + "implements; the two tables used to disagree about whether this leg "
                         + "still held anything, and nothing could see it")
@@ -2690,7 +2707,7 @@ class CartCheckoutAndOrderTests {
                 loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
 
         reservedAttempt(
-                placed.orderId(),
+                orderIdOf(placed),
                 PaymentProviderType.PAYME,
                 uz.horecaos.platform.payments.application.PaymentAttemptService.PAYME_TRANSACTION_TIMEOUT);
 
@@ -2731,24 +2748,24 @@ class CartCheckoutAndOrderTests {
                 loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
 
         // The tab looked closed, so the hold went back on the old cadence.
-        presentedAttempt(placed.orderId(), PaymentProviderType.PAYME);
+        presentedAttempt(orderIdOf(placed), PaymentProviderType.PAYME);
         clock.advance(Duration.ofMinutes(31));
         tx(() -> loyaltySweep.releaseStaleHolds());
         assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor()).isEqualTo(20_000L);
 
         // And then the customer paid from the link they still had.
         clock.advance(Duration.ofMinutes(9));
-        advance(placed.orderId(), OrderStatus.CONFIRMED);
+        advance(orderIdOf(placed), OrderStatus.CONFIRMED);
 
-        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().status())
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().status())
                 .as("an order whose money a provider captured must not be strandable by a " + "listener that throws")
                 .isEqualTo(OrderStatus.CONFIRMED);
-        assertThat(settlementStatus(placed.orderId()))
+        assertThat(settlementStatus(orderIdOf(placed)))
                 .as("half paid is not a healthy order and must not read as one")
                 .isEqualTo(SettlementStatus.PARTIALLY_SETTLED);
-        assertThat(tenderStatuses(placed.orderId())).containsExactly(TenderStatus.RELEASED, TenderStatus.SETTLED);
+        assertThat(tenderStatuses(orderIdOf(placed))).containsExactly(TenderStatus.RELEASED, TenderStatus.SETTLED);
         assertThat(settlementStore
-                        .findSettlement(TENANT, placed.orderId())
+                        .findSettlement(TENANT, orderIdOf(placed))
                         .orElseThrow()
                         .settledMinor())
                 .as("the money the platform actually has, to the som")
@@ -2763,13 +2780,13 @@ class CartCheckoutAndOrderTests {
         assertThat(settlementStore.settlementsRestingPartiallySettled(
                         TENANT, clock.instant().plus(Duration.ofMinutes(1)), 10))
                 .extracting(JdbcSettlementStore.SettlementRow::orderId)
-                .containsExactly(placed.orderId());
+                .containsExactly(orderIdOf(placed));
 
         // And the money stays accountable in both directions: 80 000 came in, so
         // 80 000 is all that can go back out.
-        var outcome = tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 80_000L)));
+        var outcome = tx(() -> remedies.recordRefund(refundOf(orderIdOf(placed), 80_000L)));
         assertThat(outcome.recorded()).isTrue();
-        assertThatThrownBy(() -> tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 1_000L))))
+        assertThatThrownBy(() -> tx(() -> remedies.recordRefund(refundOf(orderIdOf(placed), 1_000L))))
                 .hasMessageContaining("cannot exceed what the tenders settled");
     }
 
@@ -2789,20 +2806,20 @@ class CartCheckoutAndOrderTests {
         var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
         var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-payme-cancel", "PAYME", 20_000L)));
 
-        presentedAttempt(placed.orderId(), PaymentProviderType.PAYME);
+        presentedAttempt(orderIdOf(placed), PaymentProviderType.PAYME);
         clock.advance(Duration.ofMinutes(31));
         tx(() -> loyaltySweep.releaseStaleHolds());
-        advance(placed.orderId(), OrderStatus.CONFIRMED);
+        advance(orderIdOf(placed), OrderStatus.CONFIRMED);
 
-        tx(() -> settlementPlanner.recordTerminalOutcome(TENANT, placed.orderId(), "ORDER_CANCELLED", "operator"));
+        tx(() -> settlementPlanner.recordTerminalOutcome(TENANT, orderIdOf(placed), "ORDER_CANCELLED", "operator"));
 
-        assertThat(settlementStatus(placed.orderId())).isEqualTo(SettlementStatus.PARTIALLY_SETTLED);
+        assertThat(settlementStatus(orderIdOf(placed))).isEqualTo(SettlementStatus.PARTIALLY_SETTLED);
         assertThat(settlementStore
-                        .findSettlement(TENANT, placed.orderId())
+                        .findSettlement(TENANT, orderIdOf(placed))
                         .orElseThrow()
                         .settledMinor())
                 .isEqualTo(80_000L);
-        assertThat(tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 80_000L)))
+        assertThat(tx(() -> remedies.recordRefund(refundOf(orderIdOf(placed), 80_000L)))
                         .recorded())
                 .as("the customer's money is still refundable, which failing the settlement "
                         + "would have made impossible")
@@ -2817,20 +2834,20 @@ class CartCheckoutAndOrderTests {
         var wired = checkoutWith.apply(realPayments(NO_SELLER));
 
         var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-split", "CASH", 20_000L)));
-        handOver(placed.orderId());
+        handOver(orderIdOf(placed));
 
-        assertThat(tenderAmounts(placed.orderId()))
+        assertThat(tenderAmounts(orderIdOf(placed)))
                 .as("the balance tender reserves first, so it is sequence one")
                 .containsExactly(20_000L, 80_000L);
-        assertThat(settlementStatus(placed.orderId())).isEqualTo(SettlementStatus.SETTLED);
+        assertThat(settlementStatus(orderIdOf(placed))).isEqualTo(SettlementStatus.SETTLED);
 
-        var outcome = tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 80_000L)));
+        var outcome = tx(() -> remedies.recordRefund(refundOf(orderIdOf(placed), 80_000L)));
 
-        assertThat(outcome.remedy().attestedMoneyMinor())
+        assertThat(Objects.requireNonNull(outcome.remedy()).attestedMoneyMinor())
                 .as("the money unwinds first; a customer refunded 80 000 on this order gets "
                         + "80 000 som and no points back")
                 .isEqualTo(80_000L);
-        assertThat(outcome.remedy().platformSettledMinor()).isZero();
+        assertThat(Objects.requireNonNull(outcome.remedy()).platformSettledMinor()).isZero();
     }
 
     /**
@@ -2870,9 +2887,9 @@ class CartCheckoutAndOrderTests {
                 .as("a live confirmed order's hold is not an abandoned cart's")
                 .isZero();
 
-        handOver(placed.orderId());
+        handOver(orderIdOf(placed));
 
-        assertThat(settlementStatus(placed.orderId())).isEqualTo(SettlementStatus.SETTLED);
+        assertThat(settlementStatus(orderIdOf(placed))).isEqualTo(SettlementStatus.SETTLED);
         assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor())
                 .as("the tenant handed over 100 000 of food and collected 80 000 in cash; the "
                         + "20 000 in points is spent, not spendable again")
@@ -2880,7 +2897,7 @@ class CartCheckoutAndOrderTests {
 
         // And the order is still refundable, which the released hold made
         // impossible: reverse finds a RELEASED reservation and throws.
-        var outcome = tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 100_000L)));
+        var outcome = tx(() -> remedies.recordRefund(refundOf(orderIdOf(placed), 100_000L)));
         assertThat(outcome.recorded()).isTrue();
         assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor()).isEqualTo(20_000L);
     }
@@ -2908,7 +2925,7 @@ class CartCheckoutAndOrderTests {
         assertThat(placed.status()).isEqualTo(OrderStatus.CONFIRMED);
 
         for (OrderStatus status : List.of(OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.FULFILLING)) {
-            advance(placed.orderId(), status);
+            advance(orderIdOf(placed), status);
             clock.advance(Duration.ofMinutes(31));
 
             assertThat(tx(() -> loyaltySweep.releaseStaleHolds()))
@@ -2921,8 +2938,8 @@ class CartCheckoutAndOrderTests {
 
         // Two hours and thirty-three minutes after checkout, the courier arrives
         // and the tenders settle for what they held.
-        advance(placed.orderId(), OrderStatus.COMPLETED);
-        assertThat(settlementStatus(placed.orderId())).isEqualTo(SettlementStatus.SETTLED);
+        advance(orderIdOf(placed), OrderStatus.COMPLETED);
+        assertThat(settlementStatus(orderIdOf(placed))).isEqualTo(SettlementStatus.SETTLED);
         assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor()).isZero();
     }
 
@@ -2948,13 +2965,13 @@ class CartCheckoutAndOrderTests {
         assertThat(placed.status()).isEqualTo(OrderStatus.AWAITING_APPROVAL);
 
         clock.advance(Duration.ofMinutes(31));
-        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().status())
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().status())
                 .as("nothing here drives the approval timer, so the branch is still deciding")
                 .isEqualTo(OrderStatus.AWAITING_APPROVAL);
 
         assertThat(tx(() -> loyaltySweep.releaseStaleHolds())).isZero();
         assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor()).isZero();
-        assertThat(tenderStatuses(placed.orderId())).containsExactly(TenderStatus.RESERVED, TenderStatus.PLANNED);
+        assertThat(tenderStatuses(orderIdOf(placed))).containsExactly(TenderStatus.RESERVED, TenderStatus.PLANNED);
     }
 
     @Test
@@ -3047,11 +3064,11 @@ class CartCheckoutAndOrderTests {
         var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-split-intent", "PAYME", 20_000L)));
 
         assertThat(placed.status()).isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
-        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().totalMinor())
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().totalMinor())
                 .as("the order is still worth what the menu said")
                 .isEqualTo(100_000L);
-        assertThat(tenderAmounts(placed.orderId())).containsExactly(20_000L, 80_000L);
-        assertThat(intentAmount(placed.orderId()))
+        assertThat(tenderAmounts(orderIdOf(placed))).containsExactly(20_000L, 80_000L);
+        assertThat(intentAmount(orderIdOf(placed)))
                 .as("the provider collects what is left after the points, not the order total; "
                         + "asking for 100 000 charges the customer for the 20 000 they spent")
                 .isEqualTo(80_000L);
@@ -3076,9 +3093,9 @@ class CartCheckoutAndOrderTests {
             var placed =
                     tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-leg-" + redeemed, "PAYME", redeemed)));
 
-            assertThat(intentAmount(placed.orderId()))
+            assertThat(intentAmount(orderIdOf(placed)))
                     .as("redeeming %d: the intent and the money tenders are one figure", redeemed)
-                    .isEqualTo(moneyTenderMinor(placed.orderId()));
+                    .isEqualTo(moneyTenderMinor(orderIdOf(placed)));
         }
     }
 
@@ -3109,10 +3126,10 @@ class CartCheckoutAndOrderTests {
 
         var placed = tx(() -> wired.checkout(checkoutCommand(cart, "idem-one-som", "PAYME", 9L)));
 
-        assertThat(orderStore.find(TENANT, placed.orderId()).orElseThrow().totalMinor())
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().totalMinor())
                 .isEqualTo(10L);
-        assertThat(tenderAmounts(placed.orderId())).containsExactly(9L, 1L);
-        assertThat(intentAmount(placed.orderId()))
+        assertThat(tenderAmounts(orderIdOf(placed))).containsExactly(9L, 1L);
+        assertThat(intentAmount(orderIdOf(placed)))
                 .as("a som is a whole minor unit in this market and a real amount due")
                 .isEqualTo(1L);
     }
@@ -3136,16 +3153,16 @@ class CartCheckoutAndOrderTests {
         var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-split-cash-intent", "CASH", 20_000L)));
 
         assertThat(placed.status()).isEqualTo(OrderStatus.CONFIRMED);
-        assertThat(tenderAmounts(placed.orderId())).containsExactly(20_000L, 80_000L);
-        assertThat(intentAmount(placed.orderId()))
+        assertThat(tenderAmounts(orderIdOf(placed))).containsExactly(20_000L, 80_000L);
+        assertThat(intentAmount(orderIdOf(placed)))
                 .as("the cash intent is the figure the courier collects, not the menu price")
                 .isEqualTo(80_000L);
-        assertThat(tx(() -> settlements.cashDueMinor(TENANT, placed.orderId(), "CASH")))
+        assertThat(tx(() -> settlements.cashDueMinor(TENANT, orderIdOf(placed), "CASH")))
                 .as("and it agrees with the figure ADR 0014 snapshots onto the assignment")
                 .isEqualTo(80_000L);
 
-        handOver(placed.orderId());
-        assertThat(settlementStatus(placed.orderId())).isEqualTo(SettlementStatus.SETTLED);
+        handOver(orderIdOf(placed));
+        assertThat(settlementStatus(orderIdOf(placed))).isEqualTo(SettlementStatus.SETTLED);
     }
 
     /**
@@ -3163,11 +3180,11 @@ class CartCheckoutAndOrderTests {
         var placed = tx(() -> wired.checkout(guestCheckoutCommand(readyGuestCart(), "idem-guest-intent")));
 
         assertThat(placed.created()).isTrue();
-        assertThat(tenderAmounts(placed.orderId())).containsExactly(100_000L);
-        assertThat(intentAmount(placed.orderId()))
+        assertThat(tenderAmounts(orderIdOf(placed))).containsExactly(100_000L);
+        assertThat(intentAmount(orderIdOf(placed)))
                 .isEqualTo(
-                        orderStore.find(TENANT, placed.orderId()).orElseThrow().totalMinor());
-        assertThat(intentAmount(placed.orderId())).isEqualTo(100_000L);
+                        orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().totalMinor());
+        assertThat(intentAmount(orderIdOf(placed))).isEqualTo(100_000L);
     }
 
     @Test
@@ -3195,17 +3212,17 @@ class CartCheckoutAndOrderTests {
     void aSettlementIsScopedToItsTenant() {
         var wired = checkoutWith.apply(realPayments(NO_SELLER));
         var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-tenant", "CASH")));
-        handOver(placed.orderId());
+        handOver(orderIdOf(placed));
         UUID otherTenant = UUID.randomUUID();
 
-        assertThat(settlementStore.findSettlement(otherTenant, placed.orderId()))
+        assertThat(settlementStore.findSettlement(otherTenant, orderIdOf(placed)))
                 .as("an order id is a UUID somebody else can hold; the tenant predicate is what "
                         + "stands between it and another tenant's money")
                 .isEmpty();
         assertThatThrownBy(() ->
-                        tx(() -> settlements.refund(otherTenant, placed.orderId(), 10_000L, "GOODWILL", "attacker")))
+                        tx(() -> settlements.refund(otherTenant, orderIdOf(placed), 10_000L, "GOODWILL", "attacker")))
                 .hasMessageContaining("The order has no settlement");
-        assertThat(refundedMinor(placed.orderId())).isZero();
+        assertThat(refundedMinor(orderIdOf(placed))).isZero();
     }
 
     // ----------------------------------------------------------- fixtures
@@ -3217,7 +3234,7 @@ class CartCheckoutAndOrderTests {
         }
 
         @Override
-        public UUID createIntent(
+        public @Nullable UUID createIntent(
                 UUID tenantId,
                 UUID orderId,
                 long amountMinor,
@@ -3280,7 +3297,8 @@ class CartCheckoutAndOrderTests {
      * an equivalence and a fixture that violated it would fail on the insert rather
      * than in the assertion.
      */
-    private UUID insertAddress(UUID accountId, String label, Double latitude, Double longitude) {
+    private UUID insertAddress(
+            UUID accountId, String label, @Nullable Double latitude, @Nullable Double longitude) {
         UUID addressId = UUID.randomUUID();
         String document = objectMapper.writeValueAsString(Map.of(
                 "line1", "Amir Temur 12",
@@ -3348,6 +3366,15 @@ class CartCheckoutAndOrderTests {
                 .single();
     }
 
+    /**
+     * The order id of a checkout that succeeded. {@code CheckoutResult.orderId}
+     * is null for a rejected or unavailable outcome (ADR 0019); every call site
+     * here is on the CREATED/REPLAYED path, where the order always exists.
+     */
+    private static UUID orderIdOf(CheckoutService.CheckoutResult result) {
+        return Objects.requireNonNull(result.orderId(), "a created checkout always has an order id");
+    }
+
     private UUID openCart() {
         return tx(() -> carts.create(TENANT, BRAND, LOCATION, "STOREFRONT", FulfillmentMode.PICKUP, CUSTOMER, null))
                 .cartId();
@@ -3384,20 +3411,20 @@ class CartCheckoutAndOrderTests {
     }
 
     private CheckoutService.CheckoutCommand checkoutCommand(
-            UUID cartId, String idempotencyKey, String paymentMethodCode) {
+            UUID cartId, String idempotencyKey, @Nullable String paymentMethodCode) {
         return checkoutCommand(cartId, idempotencyKey, paymentMethodCode, 0L);
     }
 
     private CheckoutService.CheckoutCommand checkoutCommand(
-            UUID cartId, String idempotencyKey, String paymentMethodCode, long redeemFromBalanceMinor) {
+            UUID cartId, String idempotencyKey, @Nullable String paymentMethodCode, long redeemFromBalanceMinor) {
         var cart = readCart(cartId);
         return new CheckoutService.CheckoutCommand(
                 TENANT,
                 BRAND,
                 cartId,
                 cart.version(),
-                cart.pricingQuoteId(),
-                cart.pricingContextHash(),
+                Objects.requireNonNull(cart.pricingQuoteId(), "the fixture cart is always priced first"),
+                Objects.requireNonNull(cart.pricingContextHash(), "the fixture cart is always priced first"),
                 idempotencyKey,
                 paymentMethodCode,
                 redeemFromBalanceMinor,
@@ -3949,8 +3976,8 @@ class CartCheckoutAndOrderTests {
                 BRAND,
                 cartId,
                 cart.version(),
-                cart.pricingQuoteId(),
-                cart.pricingContextHash(),
+                Objects.requireNonNull(cart.pricingQuoteId(), "the fixture cart is always priced first"),
+                Objects.requireNonNull(cart.pricingContextHash(), "the fixture cart is always priced first"),
                 idempotencyKey,
                 "CASH",
                 0L,
@@ -4073,8 +4100,6 @@ class CartCheckoutAndOrderTests {
 
         burgerVariant = seedProduct("BURGER", "Qo'y burger");
         pizzaVariant = seedProduct("PIZZA", "Pizza");
-        seedPublication("STOREFRONT");
-        seedPublishedModifierRules();
     }
 
     private void insertLocation(UUID id, String code, String slug) {
@@ -4100,6 +4125,7 @@ class CartCheckoutAndOrderTests {
                 """).param("id", id).param("tenantId", TENANT).update();
     }
 
+    /** Every call in this suite publishes to STOREFRONT, so the id is always the current one. */
     private void seedPublication(String channel) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
@@ -4113,9 +4139,7 @@ class CartCheckoutAndOrderTests {
                 .param("catalogId", catalogId)
                 .param("channel", channel)
                 .update();
-        if ("STOREFRONT".equals(channel)) {
-            publicationId = id;
-        }
+        publicationId = id;
     }
 
     /**
@@ -4135,7 +4159,8 @@ class CartCheckoutAndOrderTests {
         UUID extrasGroup = UUID.randomUUID();
         extrasBacon = UUID.randomUUID();
 
-        insertPublicationItem("PRODUCT", productIdByCode.get("PIZZA"), """
+        // seedTenancyAndCatalog() seeds PIZZA before setUp() calls this method.
+        insertPublicationItem("PRODUCT", java.util.Objects.requireNonNull(productIdByCode.get("PIZZA")), """
                 {"code": "PIZZA", "status": "ACTIVE",
                  "variants": [{"variantId": "%s", "status": "ACTIVE"}],
                  "modifierGroupIds": ["%s"]}

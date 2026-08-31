@@ -1,6 +1,8 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -130,10 +132,10 @@ public class OrderOutcomeService {
             UUID tenantId,
             UUID orderId,
             int expectedVersion,
-            UUID reasonId,
+            @Nullable UUID reasonId,
             String actorType,
             String actorId,
-            String correlationId) {
+            @Nullable String correlationId) {
 
         OrderRow order =
                 orders.find(tenantId, orderId).orElseThrow(() -> new OrderStateService.OrderNotFoundException(orderId));
@@ -153,7 +155,11 @@ public class OrderOutcomeService {
                 throw new IllegalArgumentException(
                         "%s has been archived and cannot be used".formatted(reason.internalName()));
             }
-            if (!reason.allowedFulfillmentModes()
+            // A completion reason always names its modes (enforced at authoring
+            // time by OrderOutcomeReasonService#validate); NullAway cannot see
+            // that cross-field invariant, so it is restated here.
+            if (!Objects.requireNonNull(
+                            reason.allowedFulfillmentModes(), "a completion reason names its fulfilment modes")
                     .contains(order.fulfillmentMode().name())) {
                 throw new IllegalArgumentException(("%s is not valid for a %s order. Recording it "
                                 + "would drop the order out of the courier SLA report and the "
@@ -195,7 +201,7 @@ public class OrderOutcomeService {
      * to another order fails to decrypt rather than revealing the wrong person's
      * words.
      */
-    private String encryptNote(UUID tenantId, UUID orderId, String note) {
+    private @Nullable String encryptNote(UUID tenantId, UUID orderId, @Nullable String note) {
         if (note == null || note.isBlank()) {
             return null;
         }
@@ -208,5 +214,10 @@ public class OrderOutcomeService {
                 .serialize();
     }
 
-    public record CancelCommand(UUID reasonId, String note, String actorType, String actorId, String correlationId) {}
+    public record CancelCommand(
+            UUID reasonId,
+            @Nullable String note,
+            String actorType,
+            String actorId,
+            @Nullable String correlationId) {}
 }

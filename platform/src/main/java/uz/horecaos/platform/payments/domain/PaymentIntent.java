@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * What an order needs paid (ADR 0013).
@@ -27,18 +28,18 @@ public record PaymentIntent(
         UUID orderId,
         UUID brandId,
         UUID locationId,
-        UUID tenderId,
-        UUID legalEntityId,
+        @Nullable UUID tenderId,
+        @Nullable UUID legalEntityId,
         PaymentTender tender,
         PaymentMethod method,
-        PaymentProviderType providerType,
+        @Nullable PaymentProviderType providerType,
         SomAmount amount,
         PaymentIntentStatus status,
         CaptureTiming captureTiming,
         String idempotencyKey,
         int version,
         Instant createdAt,
-        Instant settledAt) {
+        @Nullable Instant settledAt) {
 
     public PaymentIntent {
         Objects.requireNonNull(id, "An intent id is required");

@@ -41,9 +41,6 @@ class AuditPartitionRaceTests {
     private static final int REPLICAS = 8;
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
 
@@ -53,9 +50,6 @@ class AuditPartitionRaceTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll

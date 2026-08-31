@@ -2,6 +2,7 @@ package uz.horecaos.platform.payments.web.click;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.payments.infrastructure.click.ClickShopApiError;
 
 /**
@@ -25,14 +26,15 @@ import uz.horecaos.platform.payments.infrastructure.click.ClickShopApiError;
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ClickShopApiResponse(
-        @JsonProperty("click_trans_id") String clickTransId,
-        @JsonProperty("merchant_trans_id") String merchantTransId,
-        @JsonProperty("merchant_prepare_id") Integer merchantPrepareId,
-        @JsonProperty("merchant_confirm_id") Integer merchantConfirmId,
+        @JsonProperty("click_trans_id") @Nullable String clickTransId,
+        @JsonProperty("merchant_trans_id") @Nullable String merchantTransId,
+        @JsonProperty("merchant_prepare_id") @Nullable Integer merchantPrepareId,
+        @JsonProperty("merchant_confirm_id") @Nullable Integer merchantConfirmId,
         @JsonProperty("error") int error,
         @JsonProperty("error_note") String errorNote) {
 
-    public static ClickShopApiResponse prepared(String clickTransId, String merchantTransId, int merchantPrepareId) {
+    public static ClickShopApiResponse prepared(
+            @Nullable String clickTransId, @Nullable String merchantTransId, int merchantPrepareId) {
         return new ClickShopApiResponse(
                 clickTransId,
                 merchantTransId,
@@ -42,7 +44,8 @@ public record ClickShopApiResponse(
                 ClickShopApiError.SUCCESS.note());
     }
 
-    public static ClickShopApiResponse confirmed(String clickTransId, String merchantTransId, int merchantConfirmId) {
+    public static ClickShopApiResponse confirmed(
+            @Nullable String clickTransId, @Nullable String merchantTransId, int merchantConfirmId) {
         return new ClickShopApiResponse(
                 clickTransId,
                 merchantTransId,
@@ -61,12 +64,16 @@ public record ClickShopApiResponse(
      * original as far as Click's records are concerned.
      */
     public static ClickShopApiResponse settled(
-            String clickTransId, String merchantTransId, int merchantConfirmId, ClickShopApiError error) {
+            @Nullable String clickTransId,
+            @Nullable String merchantTransId,
+            int merchantConfirmId,
+            ClickShopApiError error) {
         return new ClickShopApiResponse(
                 clickTransId, merchantTransId, null, merchantConfirmId, error.code(), error.note());
     }
 
-    public static ClickShopApiResponse failed(String clickTransId, String merchantTransId, ClickShopApiError error) {
+    public static ClickShopApiResponse failed(
+            @Nullable String clickTransId, @Nullable String merchantTransId, ClickShopApiError error) {
         return new ClickShopApiResponse(clickTransId, merchantTransId, null, null, error.code(), error.note());
     }
 }

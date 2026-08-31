@@ -151,7 +151,7 @@ public class InProcessRateLimiter implements RateLimiter {
         double elapsedSeconds = Duration.between(bucket.lastRefill(), now).toNanos() / 1_000_000_000.0;
         double windowSeconds = Math.max(0.001, policy.window().toMillis() / 1000.0);
         double perSecond = policy.permits() / windowSeconds;
-        return Math.min(policy.permits(), bucket.tokens() + elapsedSeconds * perSecond);
+        return Math.min((double) policy.permits(), bucket.tokens() + elapsedSeconds * perSecond);
     }
 
     private static Duration retryAfter(Policy policy) {

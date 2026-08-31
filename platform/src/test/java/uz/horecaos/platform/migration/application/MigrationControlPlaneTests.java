@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import uz.horecaos.platform.migration.api.CapabilityOwnership;
 import uz.horecaos.platform.migration.api.ImportContext;
@@ -954,8 +955,8 @@ class MigrationControlPlaneTests extends MigrationControlPlaneFixture {
 
     private void insertScopeRow(
             UUID id,
-            UUID brandId,
-            UUID locationId,
+            @Nullable UUID brandId,
+            @Nullable UUID locationId,
             MigrationCapability capability,
             ScopeState state,
             WriteMode writeMode,
@@ -967,8 +968,8 @@ class MigrationControlPlaneTests extends MigrationControlPlaneFixture {
     private void insertScopeRow(
             UUID program,
             UUID id,
-            UUID brandId,
-            UUID locationId,
+            @Nullable UUID brandId,
+            @Nullable UUID locationId,
             MigrationCapability capability,
             ScopeState state,
             WriteMode writeMode,

@@ -9,6 +9,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -67,7 +68,8 @@ public class CatalogPublicationService {
      * rejection that leaves no row is a support conversation with no evidence.
      */
     @Transactional
-    public PublicationResult publish(UUID tenantId, UUID brandId, UUID catalogId, String channel, UUID actorId) {
+    public PublicationResult publish(
+            UUID tenantId, UUID brandId, UUID catalogId, String channel, @Nullable UUID actorId) {
 
         requireOwnership(tenantId, brandId, catalogId);
         requireRegisteredChannel(tenantId, channel);
@@ -203,7 +205,11 @@ public class CatalogPublicationService {
     }
 
     /**
-     * A fingerprint of the snapshot's content, reproducible across processes.
+     * The content fingerprint for a set of items, reproducible across processes.
+     *
+     * <p>Exposed so a test can prove the hash depends only on content and not on
+     * how the maps were built — the defect that made it unreproducible across
+     * processes in the first place.
      *
      * <p>Every source of ordering is pinned, because the schema comment promises
      * that two publications with the same hash are the same menu — and a rollback
@@ -215,13 +221,6 @@ public class CatalogPublicationService {
      * randomised per JVM by an internal salt. The same unchanged menu therefore
      * hashed differently after a restart, and the test that was supposed to catch
      * it compared two hashes computed in one process, where the salt is constant.
-     */
-    /**
-     * The content fingerprint for a set of items.
-     *
-     * <p>Exposed so a test can prove the hash depends only on content and not on
-     * how the maps were built — the defect that made it unreproducible across
-     * processes in the first place.
      */
     public static String contentHashOf(List<PublicationItem> items) {
         return hash(items);

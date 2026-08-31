@@ -84,9 +84,6 @@ class DineInTests {
     private static final Instant DINNER = Instant.parse("2026-08-28T14:30:00Z");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private DataSource dataSource;
     private JdbcClient jdbc;
@@ -112,9 +109,6 @@ class DineInTests {
         Assumptions.assumeTrue(
                 DockerClientFactory.instance().isDockerAvailable(), "Docker is required for dine-in tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll

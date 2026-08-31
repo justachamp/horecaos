@@ -10,6 +10,7 @@ import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -59,9 +60,6 @@ class LegalEntityAssignmentTests {
     private static final Instant NOW = Instant.parse("2026-08-24T09:00:00Z");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private JdbcLegalEntityStore store;
@@ -73,9 +71,6 @@ class LegalEntityAssignmentTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -315,7 +310,7 @@ class LegalEntityAssignmentTests {
     }
 
     /** Straight to SQL, because what is being asserted is the constraint and not the service. */
-    private void insertAssignment(UUID locationId, UUID entityId, LocalDate from, LocalDate until) {
+    private void insertAssignment(UUID locationId, UUID entityId, LocalDate from, @Nullable LocalDate until) {
         jdbc.sql("""
                 INSERT INTO tenant.location_fiscal_assignments (id, tenant_id, brand_id,
                     location_id, legal_entity_id, effective_from, effective_until, approved_by)

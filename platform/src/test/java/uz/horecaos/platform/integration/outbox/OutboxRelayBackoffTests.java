@@ -70,7 +70,7 @@ class OutboxRelayBackoffTests {
                 .isEqualTo(NOW);
     }
 
-    private static OutboxRelay relay(JdbcOutboxStore store) {
+    private static OutboxRelay relay(RelayStore store) {
         return new OutboxRelay(
                 store,
                 event -> {
@@ -100,7 +100,9 @@ class OutboxRelayBackoffTests {
                 null,
                 NOW.minusSeconds(60),
                 "{}",
-                null,
+                // trace_context is NOT NULL with a '{}' default in the schema; a
+                // real claimed row is never missing it.
+                "{}",
                 attemptCount,
                 UUID.randomUUID()));
     }
@@ -109,21 +111,32 @@ class OutboxRelayBackoffTests {
      * A store that records what the relay decided instead of persisting it.
      * Hand-rolled because this repository has no mocking framework, and because
      * the two recorded values are the entire subject of the test.
+     *
+     * <p>Implements {@link RelayStore} directly rather than
+     * extending {@code JdbcOutboxStore}: the concrete class also carries a JDBC
+     * client this recorder has no database to back, and every test here fails the
+     * publish, so a claimed batch is always failed and never published.
      */
-    private static final class RecordingStore extends JdbcOutboxStore {
+    private static final class RecordingStore implements RelayStore {
 
         private final List<ClaimedOutboxEvent> batch;
         private final List<Instant> nextAttempts = new CopyOnWriteArrayList<>();
         private final List<Boolean> deadLettered = new CopyOnWriteArrayList<>();
 
         private RecordingStore(List<ClaimedOutboxEvent> batch) {
-            super(null);
             this.batch = batch;
         }
 
         @Override
         public List<ClaimedOutboxEvent> claimBatch(Instant now, Duration leaseDuration, int batchSize) {
             return batch;
+        }
+
+        @Override
+        public boolean markPublished(UUID eventId, UUID claimToken, Instant publishedAt) {
+            // Every scenario in this file scripts a publisher that always throws,
+            // so the relay never reaches a successful publish to record here.
+            throw new UnsupportedOperationException("This backoff suite never publishes successfully");
         }
 
         @Override

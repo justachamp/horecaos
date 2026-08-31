@@ -9,8 +9,10 @@ import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.commercial.api.EnforcementMode;
@@ -90,10 +92,10 @@ public class JdbcSubscriptionStore {
             SubscriptionStatus from,
             SubscriptionStatus to,
             long expectedVersion,
-            Instant suspendedAt,
-            String suspensionReason,
-            Instant cancelAt,
-            Instant endedAt,
+            @Nullable Instant suspendedAt,
+            @Nullable String suspensionReason,
+            @Nullable Instant cancelAt,
+            @Nullable Instant endedAt,
             Instant now) {
 
         return jdbc.sql("""
@@ -153,9 +155,9 @@ public class JdbcSubscriptionStore {
             UUID id,
             UUID tenantId,
             String key,
-            Long integerValue,
-            Boolean booleanValue,
-            EnforcementMode mode,
+            @Nullable Long integerValue,
+            @Nullable Boolean booleanValue,
+            @Nullable EnforcementMode mode,
             String reason,
             Instant validFrom,
             Instant validUntil,
@@ -265,10 +267,13 @@ public class JdbcSubscriptionStore {
                 row.getObject("tenant_id", UUID.class),
                 row.getObject("plan_version_id", UUID.class),
                 SubscriptionStatus.valueOf(row.getString("status")),
-                instant(row, "start_at"),
+                // start_at, current_period_start and current_period_end are all
+                // NOT NULL columns; the assertion documents that constraint at the
+                // boundary instead of leaving it implicit.
+                Objects.requireNonNull(instant(row, "start_at"), "start_at is NOT NULL"),
                 instant(row, "trial_end_at"),
-                instant(row, "current_period_start"),
-                instant(row, "current_period_end"),
+                Objects.requireNonNull(instant(row, "current_period_start"), "current_period_start is NOT NULL"),
+                Objects.requireNonNull(instant(row, "current_period_end"), "current_period_end is NOT NULL"),
                 instant(row, "cancel_at"),
                 instant(row, "suspended_at"),
                 row.getString("suspension_reason"),
@@ -277,12 +282,12 @@ public class JdbcSubscriptionStore {
                 row.getLong("version"));
     }
 
-    private static Instant instant(ResultSet row, String column) throws SQLException {
+    private static @Nullable Instant instant(ResultSet row, String column) throws SQLException {
         OffsetDateTime value = row.getObject(column, OffsetDateTime.class);
         return value == null ? null : value.toInstant();
     }
 
-    private static OffsetDateTime utc(Instant instant) {
+    private static @Nullable OffsetDateTime utc(@Nullable Instant instant) {
         return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 }

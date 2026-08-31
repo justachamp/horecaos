@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -102,7 +103,12 @@ public class InventoryService implements InventoryReservationPort {
     /** A kitchen marking a dish sold out, or back on. */
     @Transactional
     public void setAvailability(
-            UUID tenantId, UUID locationId, UUID variantId, boolean available, String reasonCode, UUID actorId) {
+            UUID tenantId,
+            UUID locationId,
+            UUID variantId,
+            boolean available,
+            String reasonCode,
+            @Nullable UUID actorId) {
 
         StockItemRow item = store.findStockItem(tenantId, locationId, variantId)
                 .orElseThrow(() ->
@@ -208,8 +214,17 @@ public class InventoryService implements InventoryReservationPort {
         }
 
         Map<UUID, StockItemRow> items = store.findStockItems(tenantId, locationId, quantitiesByVariant.keySet());
-        quantitiesByVariant.forEach((variantId, quantity) -> store.insertReservationLine(
-                reservationId, tenantId, items.get(variantId).stockItemId(), BigDecimal.valueOf(quantity)));
+        quantitiesByVariant.forEach((variantId, quantity) -> {
+            StockItemRow item = items.get(variantId);
+            if (item == null) {
+                // checkAvailability just confirmed every one of these variants has
+                // a stock item at this location, inside the same transaction; a
+                // null here means the two reads disagreed, which is a bug in the
+                // store or a genuine race, not an ordinary refusal to swallow.
+                throw new IllegalStateException("Stock item vanished mid-transaction for variant " + variantId);
+            }
+            store.insertReservationLine(reservationId, tenantId, item.stockItemId(), BigDecimal.valueOf(quantity));
+        });
 
         return ReservationResult.held(reservationId, now.plus(RESERVATION_TTL));
     }

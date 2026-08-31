@@ -2,6 +2,7 @@ package uz.horecaos.platform.courier.domain;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * What a courier is owed, computed from the snapshotted rate card alone
@@ -43,7 +44,10 @@ public final class AccrualCalculator {
                 .sorted(Comparator.comparingInt(RateComponent::bandFromMeters))
                 .toList();
         for (RateComponent band : bands) {
-            int from = band.bandFromMeters();
+            // bandFromMeters is required for every PER_KM_BAND component (the
+            // compact constructor enforces it); this loop only ever sees
+            // PER_KM_BAND components, filtered above.
+            int from = Objects.requireNonNull(band.bandFromMeters());
             int to = band.bandToMeters() == null ? Integer.MAX_VALUE : band.bandToMeters();
             int metresInBand = Math.max(0, Math.min(distanceMeters, to) - from);
             thousandths = Math.addExact(thousandths, Math.multiplyExact((long) metresInBand, band.amountMinor()));

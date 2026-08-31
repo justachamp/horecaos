@@ -1,6 +1,7 @@
 package uz.horecaos.platform.marketing.domain;
 
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The closed catalogue an audience may ask questions from (ADR 0044).
@@ -75,10 +76,10 @@ public enum PredicateType {
             Set.of(PredicateOperator.AT_LEAST, PredicateOperator.AT_MOST, PredicateOperator.BETWEEN);
     private static final Set<PredicateOperator> SET_OPERATORS = Set.of(PredicateOperator.IN, PredicateOperator.NOT_IN);
 
-    private final String projectionColumn;
+    private final @Nullable String projectionColumn;
     private final ValueKind valueKind;
 
-    PredicateType(String projectionColumn, ValueKind valueKind) {
+    PredicateType(@Nullable String projectionColumn, ValueKind valueKind) {
         this.projectionColumn = projectionColumn;
         this.valueKind = valueKind;
     }
@@ -87,7 +88,7 @@ public enum PredicateType {
      * The {@code marketing.customer_metrics} column this predicate reads, or null
      * for {@link #AUDIENCE_MEMBERSHIP}, which reads a snapshot instead.
      */
-    public String projectionColumn() {
+    public @Nullable String projectionColumn() {
         return projectionColumn;
     }
 

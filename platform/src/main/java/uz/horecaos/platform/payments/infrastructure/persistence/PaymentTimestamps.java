@@ -5,6 +5,7 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The two timestamp conversions every store here needs.
@@ -19,12 +20,12 @@ final class PaymentTimestamps {
 
     private PaymentTimestamps() {}
 
-    static OffsetDateTime utc(Instant instant) {
+    static @Nullable OffsetDateTime utc(@Nullable Instant instant) {
         return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
     /** Null-safe, because a nullable timestamptz read through getTimestamp would not be. */
-    static Instant instant(ResultSet row, String column) throws SQLException {
+    static @Nullable Instant instant(ResultSet row, String column) throws SQLException {
         OffsetDateTime value = row.getObject(column, OffsetDateTime.class);
         return value == null ? null : value.toInstant();
     }

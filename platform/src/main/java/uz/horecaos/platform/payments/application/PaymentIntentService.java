@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -123,7 +124,7 @@ public class PaymentIntentService implements PaymentIntentPort {
      */
     @Override
     @Transactional
-    public UUID createIntent(
+    public @Nullable UUID createIntent(
             UUID tenantId,
             UUID orderId,
             long amountMinor,

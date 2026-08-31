@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -152,9 +153,9 @@ public class CustomerProfileService {
             UUID accountId,
             String label,
             AddressFields fields,
-            String deliveryInstructions,
-            Double latitude,
-            Double longitude,
+            @Nullable String deliveryInstructions,
+            @Nullable Double latitude,
+            @Nullable Double longitude,
             CoordinateSource coordinateSource) {
 
         requireAccount(tenantId, accountId);
@@ -198,7 +199,8 @@ public class CustomerProfileService {
      * tells an operator nothing, while a claimed GEOCODER result with no point
      * is a specific mistake with a specific fix.
      */
-    private static void requireCoordinatesMatchSource(CoordinateSource source, Double latitude, Double longitude) {
+    private static void requireCoordinatesMatchSource(
+            CoordinateSource source, @Nullable Double latitude, @Nullable Double longitude) {
 
         if (source == null) {
             throw new IllegalArgumentException("A coordinate source is required");
@@ -269,9 +271,9 @@ public class CustomerProfileService {
             int expectedVersion,
             String label,
             AddressFields fields,
-            String deliveryInstructions,
-            Double latitude,
-            Double longitude,
+            @Nullable String deliveryInstructions,
+            @Nullable Double latitude,
+            @Nullable Double longitude,
             CoordinateSource coordinateSource) {
 
         requireCoordinatesMatchSource(coordinateSource, latitude, longitude);
@@ -363,9 +365,9 @@ public class CustomerProfileService {
             UUID tenantId,
             UUID accountId,
             int expectedVersion,
-            String displayName,
-            String preferredLocale,
-            String preferredTimezone) {
+            @Nullable String displayName,
+            @Nullable String preferredLocale,
+            @Nullable String preferredTimezone) {
 
         var current = store.account(tenantId, accountId).orElseThrow(AccountNotFoundException::new);
         if (store.updateAccountProfile(
@@ -382,7 +384,7 @@ public class CustomerProfileService {
         return expectedVersion + 1;
     }
 
-    private static String blankToNull(String value) {
+    private static @Nullable String blankToNull(@Nullable String value) {
         return value == null || value.isBlank() ? null : value.strip();
     }
 
@@ -458,9 +460,11 @@ public class CustomerProfileService {
      * differently and a support agent searching for a customer finds nobody.
      */
     private static String normalize(ContactType type, String rawValue) {
-        Optional.ofNullable(rawValue)
-                .filter(value -> !value.isBlank())
-                .orElseThrow(() -> new IllegalArgumentException("A contact value is required"));
+        // rawValue is declared non-null, but this guarded null check preserves what the
+        // Optional-based version it replaces did for a value that got here anyway.
+        if (rawValue == null || rawValue.isBlank()) {
+            throw new IllegalArgumentException("A contact value is required");
+        }
 
         return switch (type) {
             // Delegated rather than inlined, because the ADR 0015 verification path
@@ -554,14 +558,14 @@ public class CustomerProfileService {
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record AddressFields(
             @jakarta.validation.constraints.Size(max = 200) String line1,
-            @jakarta.validation.constraints.Size(max = 200) String line2,
+            @jakarta.validation.constraints.Size(max = 200) @Nullable String line2,
             @jakarta.validation.constraints.Size(max = 120) String city,
             @jakarta.validation.constraints.Size(max = 120) String district,
-            @jakarta.validation.constraints.Size(max = 32) String postalCode,
-            @jakarta.validation.constraints.Size(max = 32) String entrance,
-            @jakarta.validation.constraints.Size(max = 32) String floor,
-            @jakarta.validation.constraints.Size(max = 32) String apartment,
-            @jakarta.validation.constraints.Size(max = 300) String landmark) {}
+            @jakarta.validation.constraints.Size(max = 32) @Nullable String postalCode,
+            @jakarta.validation.constraints.Size(max = 32) @Nullable String entrance,
+            @jakarta.validation.constraints.Size(max = 32) @Nullable String floor,
+            @jakarta.validation.constraints.Size(max = 32) @Nullable String apartment,
+            @jakarta.validation.constraints.Size(max = 300) @Nullable String landmark) {}
 
     public record RevealedContact(
             UUID id, ContactType type, String value, String verificationStatus, boolean isPrimary) {}
@@ -570,6 +574,8 @@ public class CustomerProfileService {
     public record ContactPointSummary(UUID id, ContactType type, String verificationStatus, boolean isPrimary) {}
 
     /**
+     * An address as revealed to its owner.
+     *
      * @param version the row's optimistic-concurrency version, so a customer
      *                editing their own address can present it as an
      *                {@code If-Match} precondition and lose loudly to a second tab
@@ -578,9 +584,9 @@ public class CustomerProfileService {
             UUID id,
             String label,
             AddressFields fields,
-            String deliveryInstructions,
-            Double latitude,
-            Double longitude,
+            @Nullable String deliveryInstructions,
+            @Nullable Double latitude,
+            @Nullable Double longitude,
             CoordinateSource coordinateSource,
             int version) {}
 }

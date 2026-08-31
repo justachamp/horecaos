@@ -7,6 +7,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Objects;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,7 +28,10 @@ class DerivativeRenderingTests {
     @DisplayName("a JPEG is scaled to the variant's width, keeping its aspect ratio")
     void scalesToTheVariantWidth() throws IOException {
         var rendered = rendered(encode("jpg", 1200, 900), DerivativeVariant.CARD);
-        var card = rendered.renditions().get(DerivativeVariant.CARD);
+        // The render just asked for exactly this variant and rendered() already
+        // asserted a Rendered outcome, so the map holds it; requireNonNull states
+        // that rather than leaving the checker to guess.
+        var card = Objects.requireNonNull(rendered.renditions().get(DerivativeVariant.CARD));
 
         assertThat(card.widthPx()).isEqualTo(400);
         assertThat(card.heightPx()).isEqualTo(300);
@@ -44,16 +48,14 @@ class DerivativeRenderingTests {
         var rendered = renderer.render(encode("jpg", 1600, 1200), List.of(DerivativeVariant.values()));
 
         assertThat(rendered).isInstanceOf(Rendered.class);
-        assertThat(((Rendered) rendered).renditions())
+        var renditions = ((Rendered) rendered).renditions();
+        assertThat(renditions)
                 .containsOnlyKeys(DerivativeVariant.THUMBNAIL, DerivativeVariant.CARD, DerivativeVariant.DETAIL);
-        assertThat(((Rendered) rendered)
-                        .renditions()
-                        .get(DerivativeVariant.THUMBNAIL)
+        // containsOnlyKeys above already proved these two are present.
+        assertThat(Objects.requireNonNull(renditions.get(DerivativeVariant.THUMBNAIL))
                         .widthPx())
                 .isEqualTo(200);
-        assertThat(((Rendered) rendered)
-                        .renditions()
-                        .get(DerivativeVariant.DETAIL)
+        assertThat(Objects.requireNonNull(renditions.get(DerivativeVariant.DETAIL))
                         .widthPx())
                 .isEqualTo(800);
     }
@@ -82,8 +84,10 @@ class DerivativeRenderingTests {
         // JPEG has no alpha channel, so a transparent logo composites onto
         // whatever is behind it. Left to the default that is black, and a menu of
         // black boxes is what "the derivative worked" would have looked like.
-        BufferedImage output = ImageIO.read(new java.io.ByteArrayInputStream(
-                rendered.renditions().get(DerivativeVariant.THUMBNAIL).content()));
+        // The render just asked for exactly this variant and rendered() already
+        // asserted a Rendered outcome, so the map holds it.
+        var thumbnail = Objects.requireNonNull(rendered.renditions().get(DerivativeVariant.THUMBNAIL));
+        BufferedImage output = ImageIO.read(new java.io.ByteArrayInputStream(thumbnail.content()));
         assertThat(output.getRGB(50, 50) & 0xFFFFFF).isEqualTo(0xFFFFFF);
     }
 

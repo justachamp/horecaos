@@ -4,6 +4,7 @@ import java.math.BigInteger;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.migration.domain.ReconciliationSeverity;
 
 /**
@@ -63,7 +64,7 @@ public interface ReconciliationRuleStore {
             String rationale) {
 
         /** Whether a difference of this size is inside what was approved in advance. */
-        public boolean tolerates(BigInteger difference) {
+        public boolean tolerates(@Nullable BigInteger difference) {
             if (difference == null) {
                 // A checksum. Two digests are equal or they are not, and the schema
                 // refuses a tolerance against one for that reason.

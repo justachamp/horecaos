@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -379,6 +380,8 @@ public class MigrationScopeService {
     }
 
     /**
+     * What reversing a cutover names: the version being rolled back and why.
+     *
      * @param reason not optional. A capability being taken back from the target is
      *               an incident, and the reason is the first thing the review asks
      *               for.
@@ -802,7 +805,7 @@ public class MigrationScopeService {
             String actor,
             String actionCode,
             Map<String, Object> extraChanges,
-            UUID approvalRequestId) {
+            @Nullable UUID approvalRequestId) {
 
         Instant now = clock.instant();
         int version = scopes.transition(
@@ -877,14 +880,6 @@ public class MigrationScopeService {
     }
 
     /**
-     * Records the refused attempt, then produces the failure.
-     *
-     * <p>The audit is written in its own transaction, because this one is about to
-     * roll back. An operator reaching for {@code CUTOVER_READY} past an open
-     * critical difference is exactly what ADR 0024 exists to make visible, and it
-     * would be visible nowhere if the record died with the attempt.
-     */
-    /**
      * Resolves the approval request a cutover command cites, in the scope's own
      * tenant, and refuses anything else.
      *
@@ -909,7 +904,7 @@ public class MigrationScopeService {
      * @return whether the cited request is the platform's, or null when none is
      *         cited — a transition policy does not gate discharges no request
      */
-    private Boolean resolveCitedApproval(ScopeRow scope, CutoverCommand command, String actor) {
+    private @Nullable Boolean resolveCitedApproval(ScopeRow scope, CutoverCommand command, String actor) {
         UUID approvalRequestId = command.approvalRequestId();
         if (approvalRequestId == null) {
             return null;
@@ -926,6 +921,14 @@ public class MigrationScopeService {
                                 + "own tenant's, and nothing else (ADR 0027)"));
     }
 
+    /**
+     * Records the refused attempt, then produces the failure.
+     *
+     * <p>The audit is written in its own transaction, because this one is about to
+     * roll back. An operator reaching for {@code CUTOVER_READY} past an open
+     * critical difference is exactly what ADR 0024 exists to make visible, and it
+     * would be visible nowhere if the record died with the attempt.
+     */
     private MigrationPreconditionException refuse(ScopeRow scope, String reasonCode, String actor, String message) {
 
         audit.recordRefusal(
@@ -1009,16 +1012,28 @@ public class MigrationScopeService {
         return value.strip();
     }
 
-    /** @param expectedVersion the scope version the operator was looking at (ADR 0031) */
+    /**
+     * What an ordinary move names: the destination state and the version it was
+     * decided against.
+     *
+     * @param expectedVersion the scope version the operator was looking at (ADR 0031)
+     */
     public record AdvanceCommand(ScopeState targetState, int expectedVersion, String reason, String idempotencyKey) {}
 
-    /** @param holdingState {@code PAUSED} for a decision, {@code BLOCKED_RECONCILIATION} for evidence */
+    /**
+     * What suspending a scope names: which holding state to enter.
+     *
+     * @param holdingState {@code PAUSED} for a decision, {@code BLOCKED_RECONCILIATION} for evidence
+     */
     public record SuspendCommand(ScopeState holdingState, int expectedVersion, String reason, String idempotencyKey) {}
 
     /** Carries no destination: the destination is the state the suspension recorded. */
     public record ResumeCommand(int expectedVersion, String reason, String idempotencyKey) {}
 
     /**
+     * What a cutover names: the destination state, who requested and decided it,
+     * and the evidence the decision rests on.
+     *
      * @param evidenceSnapshot the aggregate figures the decision rests on:
      *                         watermarks, counts, checksums, the reconciliation
      *                         runs that cleared, the observed soak window
@@ -1036,7 +1051,7 @@ public class MigrationScopeService {
             Map<String, Object> evidenceSnapshot,
             String requestedBy,
             String decidedBy,
-            UUID approvalRequestId,
-            Instant requestedAt,
+            @Nullable UUID approvalRequestId,
+            @Nullable Instant requestedAt,
             String idempotencyKey) {}
 }

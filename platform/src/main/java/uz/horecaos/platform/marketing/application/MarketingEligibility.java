@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.customers.api.ConsentDirectory;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory;
@@ -123,7 +124,7 @@ public class MarketingEligibility {
      * {@code ContactMethod} for them means this module never learns that such a
      * thing exists, which is the point: it holds no push token and no chat id.
      */
-    private static ContactMethod contactMethodFor(MarketingChannel channel) {
+    private static @Nullable ContactMethod contactMethodFor(MarketingChannel channel) {
         return switch (channel) {
             case SMS -> ContactMethod.PHONE;
             case EMAIL -> ContactMethod.EMAIL;

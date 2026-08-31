@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The rows the close job writes (ADR 0043).
@@ -36,16 +37,16 @@ public final class ReportingFacts {
             LocalDate businessDate,
             int boundaryVersion,
             Instant occurredAt,
-            Instant closedAt,
+            @Nullable Instant closedAt,
             UUID brandId,
             UUID locationId,
-            UUID legalEntityId,
+            @Nullable UUID legalEntityId,
             String channelCode,
             String fulfilmentType,
             String terminalStatus,
-            String cancellationReasonCode,
-            String customerSubjectHash,
-            Boolean isFirstOrder,
+            @Nullable String cancellationReasonCode,
+            @Nullable String customerSubjectHash,
+            @Nullable Boolean isFirstOrder,
             long grossRevenueSom,
             long discountSom,
             long deliveryFeeSom,
@@ -53,12 +54,12 @@ public final class ReportingFacts {
             long netRevenueSom,
             int lineCount,
             int itemCount,
-            Integer secondsToConfirm,
-            Integer secondsToReady,
-            Integer secondsTotal,
-            Instant promisedAt,
-            Integer promiseTravelMinutes,
-            Integer secondsLate,
+            @Nullable Integer secondsToConfirm,
+            @Nullable Integer secondsToReady,
+            @Nullable Integer secondsTotal,
+            @Nullable Instant promisedAt,
+            @Nullable Integer promiseTravelMinutes,
+            @Nullable Integer secondsLate,
             int metricCalculationVersion,
             int sourceOrderVersion) {
 
@@ -133,7 +134,7 @@ public final class ReportingFacts {
             UUID lineId,
             UUID locationId,
             UUID variantId,
-            UUID categoryId,
+            @Nullable UUID categoryId,
             String productNameSnapshot,
             int quantity,
             long grossSom,
@@ -151,7 +152,7 @@ public final class ReportingFacts {
             UUID tenantId,
             LocalDate businessDate,
             UUID locationId,
-            UUID legalEntityId,
+            @Nullable UUID legalEntityId,
             String channelCode,
             String fulfilmentType) {}
 
@@ -174,7 +175,7 @@ public final class ReportingFacts {
             long discountSom,
             long netSom,
             long refundedSom,
-            Integer avgSecondsTotal,
+            @Nullable Integer avgSecondsTotal,
             int promisedCount,
             int lateCount,
             int distinctCustomers,

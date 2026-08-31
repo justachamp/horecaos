@@ -3,6 +3,7 @@ package uz.horecaos.platform.tenancy.api;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One typed answer to "what may be sold here, right now, through this route"
@@ -25,10 +26,10 @@ import java.util.Optional;
  */
 public record Serviceability(
         boolean available,
-        ServiceabilityReason reason,
-        Instant nextAvailableAt,
+        @Nullable ServiceabilityReason reason,
+        @Nullable Instant nextAvailableAt,
         boolean acceptsScheduledOrders,
-        Integer preparationMinutes) {
+        @Nullable Integer preparationMinutes) {
 
     public Serviceability {
         if (available && reason != null) {
@@ -39,12 +40,12 @@ public record Serviceability(
         }
     }
 
-    public static Serviceability available(boolean acceptsScheduledOrders, Integer preparationMinutes) {
+    public static Serviceability available(boolean acceptsScheduledOrders, @Nullable Integer preparationMinutes) {
         return new Serviceability(true, null, null, acceptsScheduledOrders, preparationMinutes);
     }
 
     public static Serviceability refused(
-            ServiceabilityReason reason, Instant nextAvailableAt, boolean acceptsScheduledOrders) {
+            ServiceabilityReason reason, @Nullable Instant nextAvailableAt, boolean acceptsScheduledOrders) {
         return new Serviceability(false, reason, nextAvailableAt, acceptsScheduledOrders, null);
     }
 

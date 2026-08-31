@@ -2,6 +2,7 @@ package uz.horecaos.platform.payments.domain;
 
 import java.util.List;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One line of a fiscal receipt, in HorecaOS's terms (ADR 0038).
@@ -31,16 +32,16 @@ public record FiscalReceiptLine(
         String fiscalName,
         String mxikCode,
         String packageCode,
-        Long unitCode,
+        @Nullable Long unitCode,
         int quantity,
         SomAmount unitPrice,
         SomAmount taxAmount,
         int vatPercent,
-        SomAmount discount,
-        String barcode,
+        @Nullable SomAmount discount,
+        @Nullable String barcode,
         List<String> markingCodes,
         String commissionTin,
-        String commissionPinfl) {
+        @Nullable String commissionPinfl) {
 
     public FiscalReceiptLine {
         Objects.requireNonNull(fiscalName, "A fiscal name is required");

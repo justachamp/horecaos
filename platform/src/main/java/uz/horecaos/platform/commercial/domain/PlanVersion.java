@@ -3,6 +3,7 @@ package uz.horecaos.platform.commercial.domain;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A priced set of terms (ADR 0021).
@@ -23,7 +24,7 @@ public record PlanVersion(
         String termsReference,
         String createdBy,
         String approvedBy,
-        Instant activatedAt) {
+        @Nullable Instant activatedAt) {
 
     public PlanVersion {
         Objects.requireNonNull(id, "A plan version id is required");

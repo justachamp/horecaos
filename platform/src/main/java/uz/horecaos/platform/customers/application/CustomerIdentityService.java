@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
@@ -101,7 +102,7 @@ public class CustomerIdentityService implements CustomerDirectory {
             String issuer,
             String subject,
             ResolvedIdentityPolicy resolved,
-            UUID partition,
+            @Nullable UUID partition,
             Instant now) {
 
         UUID accountId = UUID.randomUUID();
@@ -205,6 +206,8 @@ public class CustomerIdentityService implements CustomerDirectory {
     }
 
     /**
+     * The account a sign-in resolved to.
+     *
      * @param created true on first sign-in, which is when a storefront should ask
      *                for consent rather than assume it
      */

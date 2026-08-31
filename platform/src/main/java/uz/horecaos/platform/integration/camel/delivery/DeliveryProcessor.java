@@ -2,13 +2,17 @@ package uz.horecaos.platform.integration.camel.delivery;
 
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.Objects;
 import org.apache.camel.Exchange;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.integration.api.delivery.DeliveryCapability;
+import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.DeliveryRequest;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
+import uz.horecaos.platform.integration.outbox.ReconciliationRequester;
 import uz.horecaos.platform.integration.outbox.ShipmentReconciliationOutbox;
 
 /**
@@ -28,13 +32,19 @@ public class DeliveryProcessor {
     private final DeliveryGateway gateway;
     private final DeliveryCircuitBreakers breakers;
     private final MeterRegistry meters;
-    private final ShipmentReconciliationOutbox reconciliations;
+    private final ReconciliationRequester reconciliations;
 
+    /**
+     * Depends on {@link ReconciliationRequester} rather than
+     * {@link ShipmentReconciliationOutbox} itself: this class only ever asks for a
+     * reconciliation, never appends a settlement, and the narrower type is what
+     * lets a route test substitute a recording double with no database behind it.
+     */
     public DeliveryProcessor(
             DeliveryGateway gateway,
             DeliveryCircuitBreakers breakers,
             MeterRegistry meters,
-            ShipmentReconciliationOutbox reconciliations) {
+            ReconciliationRequester reconciliations) {
         this.gateway = gateway;
         this.breakers = breakers;
         this.meters = meters;
@@ -115,23 +125,41 @@ public class DeliveryProcessor {
 
     private ProviderOutcome dispatch(DeliveryOperation operation) {
         String key = operation.idempotencyKey();
+        // DeliveryOperation's compact constructor already enforces request/
+        // externalReference presence per capability (requiresRequest,
+        // requiresReference); the requireNonNull calls below only make that
+        // existing invariant visible to the checker one switch arm at a time.
         return switch (operation.capability()) {
-            case QUOTE_DELIVERY -> gateway.quote(operation.binding(), operation.request(), key);
+            case QUOTE_DELIVERY -> gateway.quote(operation.binding(), requireRequest(operation), key);
             case RESERVE_SHIPMENT, CREATE_ON_DEMAND_SHIPMENT, SCHEDULE_SHIPMENT ->
-                gateway.createShipment(operation.binding(), operation.request(), key);
-            case CONFIRM_SHIPMENT -> gateway.confirmShipment(operation.binding(), operation.externalReference(), key);
+                gateway.createShipment(operation.binding(), requireRequest(operation), key);
+            case CONFIRM_SHIPMENT -> gateway.confirmShipment(operation.binding(), requireReference(operation), key);
             case QUERY_CANCELLATION_COST ->
-                gateway.cancellationCost(operation.binding(), operation.externalReference(), key);
+                gateway.cancellationCost(operation.binding(), requireReference(operation), key);
             case CANCEL_SHIPMENT ->
-                gateway.cancelShipment(operation.binding(), operation.externalReference(), operation.reason(), key);
+                gateway.cancelShipment(
+                        operation.binding(),
+                        requireReference(operation),
+                        Objects.requireNonNull(operation.reason(), "CANCEL_SHIPMENT requires a reason"),
+                        key);
             case QUERY_SHIPMENT, TRACK_SHIPMENT ->
-                gateway.queryShipment(operation.binding(), operation.externalReference(), key);
+                gateway.queryShipment(operation.binding(), requireReference(operation), key);
             // Neither partner reschedules, and a webhook is inbound rather than
             // a call we make. Both are rejections rather than gaps in the switch.
             case RESCHEDULE_SHIPMENT, VERIFY_DELIVERY_WEBHOOK ->
                 ProviderOutcome.rejected(
                         "CAPABILITY_UNSUPPORTED", operation.capability() + " is not an outbound route operation");
         };
+    }
+
+    private static DeliveryRequest requireRequest(DeliveryOperation operation) {
+        return Objects.requireNonNull(
+                operation.request(), () -> operation.capability() + " requires a delivery request");
+    }
+
+    private static String requireReference(DeliveryOperation operation) {
+        return Objects.requireNonNull(
+                operation.externalReference(), () -> operation.capability() + " requires an external reference");
     }
 
     /**
@@ -202,6 +230,12 @@ public class DeliveryProcessor {
             return;
         }
 
+        // reconcile() is defer()'s only caller and it has already returned early
+        // on a blank or missing reference; this makes that invariant visible here
+        // too, since NullAway does not carry a check across method boundaries.
+        String externalReference = Objects.requireNonNull(
+                operation.externalReference(), "reconcile() only defers after confirming an external reference");
+
         reconciliations.requestReconciliation(
                 operation.tenantId(),
                 new ShipmentReconciliationOutbox.Command(
@@ -211,7 +245,7 @@ public class DeliveryProcessor {
                         operation.binding().locationId(),
                         operation.binding().providerType(),
                         operation.capability().name(),
-                        operation.externalReference(),
+                        externalReference,
                         unsettled.errorCode()),
                 operation.correlationId());
 
@@ -268,7 +302,7 @@ public class DeliveryProcessor {
         DeliveryRouteBuilder.clearContext();
     }
 
-    private void count(String event, DeliveryOperation operation, ProviderOutcome outcome) {
+    private void count(String event, DeliveryOperation operation, @Nullable ProviderOutcome outcome) {
         // Tags are bounded on purpose: provider type, capability, and status are
         // all small closed sets. A tenant or command id here would make the
         // metric cardinality unbounded and eventually take the registry down.
@@ -290,7 +324,12 @@ public class DeliveryProcessor {
         if (body instanceof DeliveryOperation operation) {
             return operation;
         }
-        return exchange.getIn().getHeader(OPERATION_HEADER, DeliveryOperation.class);
+        // Every step on this route runs after DeliveryRouteBuilder has placed the
+        // operation on the exchange as either the body or this header; neither
+        // missing is a route wiring defect, not a case a caller can recover from.
+        return Objects.requireNonNull(
+                exchange.getIn().getHeader(OPERATION_HEADER, DeliveryOperation.class),
+                "No delivery operation on the exchange body or " + OPERATION_HEADER + " header");
     }
 
     /** Carries a classified outcome to the circuit breaker without losing it. */

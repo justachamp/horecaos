@@ -2,6 +2,7 @@ package uz.horecaos.platform.migration.api;
 
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.migration.domain.ScopeState;
 import uz.horecaos.platform.migration.domain.WriteMode;
 
@@ -23,12 +24,12 @@ import uz.horecaos.platform.migration.domain.WriteMode;
 public class TargetWritesFencedException extends RuntimeException {
 
     private final MigrationCapability capability;
-    private final UUID scopeId;
+    private final @Nullable UUID scopeId;
     private final ScopeState state;
     private final WriteMode writeMode;
 
     public TargetWritesFencedException(
-            MigrationCapability capability, UUID scopeId, ScopeState state, WriteMode writeMode) {
+            MigrationCapability capability, @Nullable UUID scopeId, ScopeState state, WriteMode writeMode) {
         super(describe(capability, scopeId, state, writeMode));
         this.capability = Objects.requireNonNull(capability, "A capability is required");
         this.scopeId = scopeId;
@@ -43,7 +44,7 @@ public class TargetWritesFencedException extends RuntimeException {
     }
 
     private static String describe(
-            MigrationCapability capability, UUID scopeId, ScopeState state, WriteMode writeMode) {
+            MigrationCapability capability, @Nullable UUID scopeId, ScopeState state, WriteMode writeMode) {
         String scope = scopeId == null ? "no migration scope" : "scope " + scopeId;
         return "The target may not write %s: %s is in %s with write mode %s (ADR 0024)"
                 .formatted(capability, scope, state, writeMode);
@@ -54,7 +55,7 @@ public class TargetWritesFencedException extends RuntimeException {
     }
 
     /** The scope that fenced the write, or null when none covered the request. */
-    public UUID scopeId() {
+    public @Nullable UUID scopeId() {
         return scopeId;
     }
 

@@ -12,6 +12,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
@@ -85,9 +87,6 @@ class DeliveryFeeResolutionTests {
     private static final int WEEKDAYS = 0b0011111;
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private JdbcServiceZoneStore zoneStore;
@@ -101,8 +100,9 @@ class DeliveryFeeResolutionTests {
     private UUID locatedBranch;
     private UUID unlocatedBranch;
     private UUID cityTariff;
-    private UUID burgerVariant;
-    private UUID catalogId;
+
+    /** Set only by {@link #seedCatalogAndPrices()}, which not every test calls. */
+    private @Nullable UUID burgerVariant;
 
     @BeforeAll
     static void startDatabase() {
@@ -110,9 +110,6 @@ class DeliveryFeeResolutionTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for delivery zone and fee tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -185,7 +182,7 @@ class DeliveryFeeResolutionTests {
         assertThat(resolution.tariffVersion()).isEqualTo(1);
         assertThat(resolution.bandSequence()).isZero();
         assertThat(resolution.distanceMeters()).isBetween(1_700, 1_800);
-        assertThat(resolution.distanceSource().name()).isEqualTo("RADIUS");
+        assertThat(Objects.requireNonNull(resolution.distanceSource()).name()).isEqualTo("RADIUS");
     }
 
     @Test
@@ -272,7 +269,8 @@ class DeliveryFeeResolutionTests {
         // OUT_OF_ZONE would be the easy answer and the wrong one: it sends an
         // operator to redraw a polygon when the fault is a branch nobody has placed
         // on a map.
-        assertThat(resolution.evidence().get("refusalDetail").toString())
+        assertThat(Objects.requireNonNull(resolution.evidence().get("refusalDetail"))
+                        .toString())
                 .contains("no coordinate")
                 .contains("Place its pin");
     }
@@ -683,7 +681,11 @@ class DeliveryFeeResolutionTests {
                 locatedBranch,
                 null,
                 "STOREFRONT",
-                List.of(new QuoteRequest.Line("a", burgerVariant, 1, List.of())),
+                List.of(new QuoteRequest.Line(
+                        "a",
+                        Objects.requireNonNull(burgerVariant, "seedCatalogAndPrices() must run before this cart is built"),
+                        1,
+                        List.of())),
                 null));
 
         // Same basket, same branch, same prices, different delivery: if the charge
@@ -787,7 +789,11 @@ class DeliveryFeeResolutionTests {
                 locatedBranch,
                 null,
                 "STOREFRONT",
-                List.of(new QuoteRequest.Line("a", burgerVariant, 1, List.of())),
+                List.of(new QuoteRequest.Line(
+                        "a",
+                        Objects.requireNonNull(burgerVariant, "seedCatalogAndPrices() must run before this cart is built"),
+                        1,
+                        List.of())),
                 null));
 
         assertThat(jdbc.sql("SELECT count(*) FROM fulfillment.delivery_fee_resolutions")
@@ -816,7 +822,7 @@ class DeliveryFeeResolutionTests {
         // provider is slow is a worse outcome than a fee that is a little wrong and
         // says so on its own evidence row.
         assertThat(resolution.outcome()).isEqualTo(DeliveryFeeOutcome.RESOLVED);
-        assertThat(resolution.distanceSource().name()).isEqualTo("RADIUS_FALLBACK");
+        assertThat(Objects.requireNonNull(resolution.distanceSource()).name()).isEqualTo("RADIUS_FALLBACK");
         assertThat(resolution.distanceMode()).isEqualTo(DistanceMode.ROAD);
         // 1,797 m straight line inflated by the 1.3 detour factor is 2,336 m, which
         // is three started kilometres at 2,000 each.
@@ -844,8 +850,9 @@ class DeliveryFeeResolutionTests {
 
             assertThat(resolution.outcome()).isEqualTo(DeliveryFeeOutcome.RESOLVED);
             LocalDateTime local = LocalDateTime.ofInstant(at, ZoneId.of("Asia/Tashkent"));
-            long expectedFee = LegacyDeliveryOracle.price(legacy, resolution.distanceMeters(), local);
-            long expectedDiscount = LegacyDeliveryOracle.discount(legacy, resolution.distanceMeters(), local);
+            int distanceMeters = Objects.requireNonNull(resolution.distanceMeters(), "a RESOLVED outcome always records a distance");
+            long expectedFee = LegacyDeliveryOracle.price(legacy, distanceMeters, local);
+            long expectedDiscount = LegacyDeliveryOracle.discount(legacy, distanceMeters, local);
 
             assertThat(resolution.finalFeeMinor()).isEqualTo(expectedFee);
             assertThat(resolution.tariffDiscountMinor()).isEqualTo(expectedDiscount);
@@ -884,7 +891,7 @@ class DeliveryFeeResolutionTests {
 
         assertThat(reloaded.distanceAccrual().name()).isEqualTo("PRORATED_METRE");
         assertThat(reloaded.feeRoundingStepMinor()).isEqualTo(500L);
-        assertThat(reloaded.feeRoundingRule().name()).isEqualTo("HALF_EVEN");
+        assertThat(Objects.requireNonNull(reloaded.feeRoundingRule()).name()).isEqualTo("HALF_EVEN");
         assertThat(reloaded.discounts()).hasSize(1);
         assertThat(reloaded.bandsOf("PEAK_0")).isNotEmpty();
         assertThat(reloaded.timeRules())
@@ -993,7 +1000,11 @@ class DeliveryFeeResolutionTests {
                 locatedBranch,
                 null,
                 "STOREFRONT",
-                List.of(new QuoteRequest.Line("a", burgerVariant, quantity, List.of())),
+                List.of(new QuoteRequest.Line(
+                        "a",
+                        Objects.requireNonNull(burgerVariant, "seedCatalogAndPrices() must run before this cart is built"),
+                        quantity,
+                        List.of())),
                 null,
                 new QuoteRequest.Delivery(NEARBY, PricingAuthority.HORECAOS));
     }
@@ -1006,12 +1017,23 @@ class DeliveryFeeResolutionTests {
     }
 
     private UUID activeCircleZone(
-            String code, int radiusMeters, int priority, UUID tariffId, Long freeFrom, Long minBasket) {
+            String code,
+            int radiusMeters,
+            int priority,
+            @Nullable UUID tariffId,
+            @Nullable Long freeFrom,
+            @Nullable Long minBasket) {
         return activeZone(code, ZoneRole.DELIVERY, radiusMeters, priority, tariffId, freeFrom, minBasket);
     }
 
     private UUID activeZone(
-            String code, ZoneRole role, int radiusMeters, int priority, UUID tariffId, Long freeFrom, Long minBasket) {
+            String code,
+            ZoneRole role,
+            int radiusMeters,
+            int priority,
+            @Nullable UUID tariffId,
+            @Nullable Long freeFrom,
+            @Nullable Long minBasket) {
         UUID zoneId = zones.createZone(TENANT, BRAND, role, code, code, code, code);
         var drafted = zones.draftCircleVersion(
                 new ServiceZoneService.NewVersion(
@@ -1046,7 +1068,7 @@ class DeliveryFeeResolutionTests {
             int maxDistanceMeters,
             List<TariffBand> bands,
             List<TariffTimeRule> rules,
-            UUID routingInstallationId) {
+            @Nullable UUID routingInstallationId) {
         UUID tariffId = tariffs.createTariff(TENANT, BRAND, code, code, false);
         var drafted = tariffs.draftVersion(
                 TENANT, BRAND, draft(tariffId, maxDistanceMeters, bands, rules, routingInstallationId), ACTOR);
@@ -1059,7 +1081,7 @@ class DeliveryFeeResolutionTests {
             int maxDistanceMeters,
             List<TariffBand> bands,
             List<TariffTimeRule> rules,
-            UUID routingInstallationId) {
+            @Nullable UUID routingInstallationId) {
         return new DeliveryTariff(
                 tariffId,
                 0,
@@ -1118,7 +1140,7 @@ class DeliveryFeeResolutionTests {
     }
 
     /** A region owned by {@code tenantId}, or a platform region when it is null. */
-    private UUID seedRegion(UUID tenantId, String code) {
+    private UUID seedRegion(@Nullable UUID tenantId, String code) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO fulfillment.regions (
@@ -1189,7 +1211,7 @@ class DeliveryFeeResolutionTests {
     }
 
     private void seedCatalogAndPrices() {
-        catalogId = UUID.randomUUID();
+        UUID catalogId = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
                 VALUES (:id, :tenantId, :brandId, 'MAIN', 'Main menu', 'ACTIVE')
@@ -1200,7 +1222,8 @@ class DeliveryFeeResolutionTests {
                 .update();
 
         UUID productId = UUID.randomUUID();
-        burgerVariant = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        burgerVariant = variantId;
         jdbc.sql("""
                 INSERT INTO catalog.products (id, tenant_id, brand_id, code, status)
                 VALUES (:id, :tenantId, :brandId, 'BURGER', 'ACTIVE')
@@ -1213,7 +1236,7 @@ class DeliveryFeeResolutionTests {
                 INSERT INTO catalog.variants (id, tenant_id, brand_id, product_id, sku, status)
                 VALUES (:id, :tenantId, :brandId, :productId, 'SKU-BURGER', 'ACTIVE')
                 """)
-                .param("id", burgerVariant)
+                .param("id", variantId)
                 .param("tenantId", TENANT)
                 .param("brandId", BRAND)
                 .param("productId", productId)
@@ -1279,7 +1302,7 @@ class DeliveryFeeResolutionTests {
                 .param("tenantId", TENANT)
                 .param("brandId", BRAND)
                 .param("priceBookId", priceBook)
-                .param("variantId", burgerVariant)
+                .param("variantId", variantId)
                 .param("from", java.time.OffsetDateTime.ofInstant(NOON.minusSeconds(86_400), ZoneOffset.UTC))
                 .update();
         jdbc.sql("""

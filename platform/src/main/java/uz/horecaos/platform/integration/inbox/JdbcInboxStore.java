@@ -8,6 +8,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.integration.api.ExternalEventEnvelope;
@@ -323,7 +324,7 @@ public class JdbcInboxStore {
                 .single();
     }
 
-    private static String truncate(String error) {
+    private static @Nullable String truncate(@Nullable String error) {
         if (error == null) {
             return null;
         }
@@ -363,7 +364,11 @@ public class JdbcInboxStore {
 
     /** The subset of an inbox row the executor needs to decide what to do. */
     public record InboxRow(
-            UUID id, String status, String payloadSha256, int attemptCount, Instant processingStartedAt) {
+            UUID id,
+            String status,
+            String payloadSha256,
+            int attemptCount,
+            @Nullable Instant processingStartedAt) {
 
         public boolean isProcessed() {
             return "PROCESSED".equals(status);

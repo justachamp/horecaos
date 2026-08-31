@@ -48,6 +48,8 @@ public class LoyaltyAccrualService {
     }
 
     /**
+     * An order whose completion may earn its customer points.
+     *
      * @param moneySettledMinor the sum of the order's tenders whose method has
      *                          {@code settles_from_balance} false. Keying on the
      *                          flag rather than on the method code is what makes a
@@ -68,7 +70,11 @@ public class LoyaltyAccrualService {
             long deliveryFeeMinor,
             Instant completedAt) {}
 
-    /** @return the lot that was granted, or empty when the order earns nothing */
+    /**
+     * Grants the lot a completed order has earned, deferred past the earn delay.
+     *
+     * @return the lot that was granted, or empty when the order earns nothing
+     */
     @Transactional
     public Optional<UUID> accrue(CompletedOrder order) {
         if (order.customerAccountId() == null) {

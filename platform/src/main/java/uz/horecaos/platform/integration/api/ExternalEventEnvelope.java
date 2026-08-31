@@ -3,6 +3,7 @@ package uz.horecaos.platform.integration.api;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A validated inbound event (ADR 0005).
@@ -23,7 +24,7 @@ public record ExternalEventEnvelope<T>(
         String aggregateType,
         UUID aggregateId,
         String correlationId,
-        String causationId,
+        @Nullable String causationId,
         Instant occurredAt,
         T payload,
         String payloadSha256,

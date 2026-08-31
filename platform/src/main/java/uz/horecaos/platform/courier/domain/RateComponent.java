@@ -2,6 +2,7 @@ package uz.horecaos.platform.courier.domain;
 
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One typed line of a rate card (ADR 0042).
@@ -20,9 +21,9 @@ public record RateComponent(
         RateComponentType type,
         int priority,
         long amountMinor,
-        Integer bandFromMeters,
-        Integer bandToMeters,
-        Integer minimumPaidSeconds) {
+        @Nullable Integer bandFromMeters,
+        @Nullable Integer bandToMeters,
+        @Nullable Integer minimumPaidSeconds) {
 
     public RateComponent {
         Objects.requireNonNull(type, "A component type is required");

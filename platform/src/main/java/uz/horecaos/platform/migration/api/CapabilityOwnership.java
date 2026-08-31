@@ -4,6 +4,7 @@ import java.util.EnumSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.migration.domain.ReadMode;
 import uz.horecaos.platform.migration.domain.ScopeState;
 import uz.horecaos.platform.migration.domain.WriteMode;
@@ -28,7 +29,11 @@ import uz.horecaos.platform.migration.domain.WriteMode;
  *                   compared or trusted
  */
 public record CapabilityOwnership(
-        UUID scopeId, MigrationCapability capability, ScopeState state, WriteMode writeMode, ReadMode readMode) {
+        @Nullable UUID scopeId,
+        MigrationCapability capability,
+        ScopeState state,
+        WriteMode writeMode,
+        ReadMode readMode) {
 
     /**
      * The states that suspend a scope without rewriting the modes stored on it.

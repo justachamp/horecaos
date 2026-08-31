@@ -4,6 +4,7 @@ import java.io.Serial;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import uz.horecaos.platform.customers.application.CustomerSession;
@@ -57,7 +58,7 @@ public final class CustomerSessionAuthentication implements Authentication, NonS
 
     /** Never the token. See the class comment. */
     @Override
-    public Object getCredentials() {
+    public @Nullable Object getCredentials() {
         return null;
     }
 

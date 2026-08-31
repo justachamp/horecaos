@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.ordering.api.OrderDirectory.ApprovalDeadlineWarning;
@@ -284,7 +285,12 @@ public class JdbcOrderStore {
      * producing an order with two contradictory endings.
      */
     public void insertOutcome(
-            UUID tenantId, UUID orderId, OrderOutcome outcome, String actorType, String actorId, Instant occurredAt) {
+            UUID tenantId,
+            UUID orderId,
+            OrderOutcome outcome,
+            String actorType,
+            @Nullable String actorId,
+            Instant occurredAt) {
         jdbc.sql("""
                 INSERT INTO ordering.order_outcomes (
                     order_id, tenant_id, kind, system_category, reason_id, reason_version,
@@ -364,17 +370,17 @@ public class JdbcOrderStore {
             UUID tenantId,
             UUID orderId,
             int lineNumber,
-            UUID sourceProductId,
+            @Nullable UUID sourceProductId,
             UUID sourceVariantId,
             String productName,
-            String variantName,
-            String sku,
+            @Nullable String variantName,
+            @Nullable String sku,
             int quantity,
             long unitMinor,
             long baseMinor,
             long finalMinor,
             long taxMinor,
-            String noteEncrypted) {
+            @Nullable String noteEncrypted) {
         jdbc.sql("""
                 INSERT INTO ordering.order_lines (
                     id, tenant_id, order_id, line_number, source_product_id, source_variant_id,
@@ -406,9 +412,9 @@ public class JdbcOrderStore {
     public void insertLineModifier(
             UUID tenantId,
             UUID orderLineId,
-            UUID sourceGroupId,
+            @Nullable UUID sourceGroupId,
             UUID sourceOptionId,
-            String groupName,
+            @Nullable String groupName,
             String optionName,
             int quantity,
             long unitMinor,
@@ -438,11 +444,11 @@ public class JdbcOrderStore {
             UUID tenantId,
             UUID orderId,
             int sequence,
-            UUID orderLineId,
+            @Nullable UUID orderLineId,
             String adjustmentType,
             String sourceType,
             UUID sourceId,
-            Integer sourceVersion,
+            @Nullable Integer sourceVersion,
             String descriptionCode,
             long amountMinor) {
         jdbc.sql("""
@@ -468,10 +474,10 @@ public class JdbcOrderStore {
     public void insertCustomerSnapshot(
             UUID tenantId,
             UUID orderId,
-            String displayName,
-            String contact,
-            String address,
-            String instructions,
+            @Nullable String displayName,
+            @Nullable String contact,
+            @Nullable String address,
+            @Nullable String instructions,
             boolean transactionalAllowed) {
         jdbc.sql("""
                 INSERT INTO ordering.order_customer_snapshots (
@@ -672,7 +678,12 @@ public class JdbcOrderStore {
      *                        start at the newest
      */
     public List<CustomerOrderRow> listForCustomer(
-            UUID tenantId, UUID brandId, UUID accountId, Instant beforeCreatedAt, UUID beforeId, int limit) {
+            UUID tenantId,
+            UUID brandId,
+            UUID accountId,
+            @Nullable Instant beforeCreatedAt,
+            @Nullable UUID beforeId,
+            int limit) {
         return jdbc.sql("""
                 SELECT id, public_order_number, location_id, fulfillment_mode, status,
                        payment_status_projection, fulfillment_status_projection, currency,
@@ -771,8 +782,8 @@ public class JdbcOrderStore {
             OrderStatus from,
             OrderStatus to,
             Instant now,
-            String acceptedByActorType,
-            String acceptedByActorId) {
+            @Nullable String acceptedByActorType,
+            @Nullable String acceptedByActorId) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
@@ -810,13 +821,13 @@ public class JdbcOrderStore {
             UUID tenantId,
             UUID orderId,
             int sequenceNumber,
-            OrderStatus from,
+            @Nullable OrderStatus from,
             OrderStatus to,
             TransitionTrigger trigger,
-            String reasonCode,
+            @Nullable String reasonCode,
             String actorType,
-            String actorId,
-            String correlationId,
+            @Nullable String actorId,
+            @Nullable String correlationId,
             Instant occurredAt) {
         jdbc.sql("""
                 INSERT INTO ordering.order_state_history (
@@ -878,7 +889,7 @@ public class JdbcOrderStore {
      *
      * @param revision the revision to read at, or null for the live set
      */
-    public List<OrderLineRow> lines(UUID tenantId, UUID orderId, Integer revision) {
+    public List<OrderLineRow> lines(UUID tenantId, UUID orderId, @Nullable Integer revision) {
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
         params.put("orderId", orderId);
@@ -1060,7 +1071,7 @@ public class JdbcOrderStore {
             String reasonCode,
             String actorType,
             String actorId,
-            String correlationId,
+            @Nullable String correlationId,
             Instant now) {
 
         return jdbc.sql("""
@@ -1346,7 +1357,7 @@ public class JdbcOrderStore {
                 row.getObject("issued_at", OffsetDateTime.class).toInstant());
     }
 
-    private static Instant instantOrNull(ResultSet row, String column) throws SQLException {
+    private static @Nullable Instant instantOrNull(ResultSet row, String column) throws SQLException {
         OffsetDateTime value = row.getObject(column, OffsetDateTime.class);
         return value == null ? null : value.toInstant();
     }
@@ -1372,15 +1383,15 @@ public class JdbcOrderStore {
             UUID locationId,
             UUID channelId,
             String channelCode,
-            UUID customerAccountId,
-            String guestReferenceHash,
+            @Nullable UUID customerAccountId,
+            @Nullable String guestReferenceHash,
             FulfillmentMode fulfillmentMode,
             String acceptanceMode,
-            UUID acceptancePolicyId,
+            @Nullable UUID acceptancePolicyId,
             int acceptancePolicyVersion,
             String approvalChannel,
-            String approvalTimeoutAction,
-            Instant approvalDeadlineAt,
+            @Nullable String approvalTimeoutAction,
+            @Nullable Instant approvalDeadlineAt,
             OrderStatus status,
             String paymentStatusProjection,
             String fulfillmentStatusProjection,
@@ -1397,7 +1408,7 @@ public class JdbcOrderStore {
             String idempotencyKey,
             OrderPromise promise,
             String createdByActorType,
-            String createdByActorId,
+            @Nullable String createdByActorId,
             Instant createdAt) {}
 
     /**
@@ -1405,6 +1416,8 @@ public class JdbcOrderStore {
      *
      * @param source        {@code CHECKOUT} for revision 1 and only revision 1;
      *                      {@code AMENDMENT} for every later one
+     * @param amendmentId   the amendment this revision records, or null for the
+     *                      {@code CHECKOUT} revision, which no amendment produced
      * @param deltaTotalMinor signed, against the predecessor. This is the figure
      *                      the operator reads to the customer, which is why it is
      *                      stored rather than recomputed by subtracting two rows
@@ -1415,7 +1428,7 @@ public class JdbcOrderStore {
             int revision,
             UUID tenantId,
             String source,
-            UUID amendmentId,
+            @Nullable UUID amendmentId,
             UUID pricingQuoteId,
             String pricingContextHash,
             String currency,
@@ -1426,14 +1439,14 @@ public class JdbcOrderStore {
             long totalMinor,
             long deltaTotalMinor,
             String createdByActorType,
-            String createdByActorId,
+            @Nullable String createdByActorId,
             Instant createdAt) {}
 
     public record RevisionRow(
             UUID orderId,
             int revision,
             String source,
-            UUID amendmentId,
+            @Nullable UUID amendmentId,
             UUID pricingQuoteId,
             String pricingContextHash,
             String currency,
@@ -1444,7 +1457,7 @@ public class JdbcOrderStore {
             long totalMinor,
             long deltaTotalMinor,
             String createdByActorType,
-            String createdByActorId,
+            @Nullable String createdByActorId,
             Instant createdAt) {}
 
     /**
@@ -1455,7 +1468,10 @@ public class JdbcOrderStore {
      * an earlier one recorded, and a patch record with three optional fields is
      * how that stays true without three separate conditional statements.
      */
-    public record OrderFieldPatch(String kitchenNote, Boolean callbackRequested, Long cashTenderedExpectedMinor) {
+    public record OrderFieldPatch(
+            @Nullable String kitchenNote,
+            @Nullable Boolean callbackRequested,
+            @Nullable Long cashTenderedExpectedMinor) {
 
         public static OrderFieldPatch none() {
             return new OrderFieldPatch(null, null, null);
@@ -1465,17 +1481,17 @@ public class JdbcOrderStore {
     public record OutcomeRow(
             String kind,
             String systemCategory,
-            UUID reasonId,
-            Integer reasonVersion,
-            String reasonSnapshot,
+            @Nullable UUID reasonId,
+            @Nullable Integer reasonVersion,
+            @Nullable String reasonSnapshot,
             String actorType,
             String actorId,
             String stockDisposition,
-            String liabilityParty,
-            String customerRefund,
+            @Nullable String liabilityParty,
+            @Nullable String customerRefund,
             boolean reservationCommitted,
-            UUID inventoryMovementId,
-            UUID refundId,
+            @Nullable UUID inventoryMovementId,
+            @Nullable UUID refundId,
             Instant occurredAt) {}
 
     public record OrderRow(
@@ -1490,11 +1506,11 @@ public class JdbcOrderStore {
             String guestReferenceHash,
             FulfillmentMode fulfillmentMode,
             String acceptanceMode,
-            UUID acceptancePolicyId,
+            @Nullable UUID acceptancePolicyId,
             int acceptancePolicyVersion,
             String approvalChannel,
-            String approvalTimeoutAction,
-            Instant approvalDeadlineAt,
+            @Nullable String approvalTimeoutAction,
+            @Nullable Instant approvalDeadlineAt,
             OrderStatus status,
             String paymentStatusProjection,
             String fulfillmentStatusProjection,
@@ -1512,17 +1528,17 @@ public class JdbcOrderStore {
             OrderPromise promise,
             int version,
             Instant createdAt,
-            Instant confirmedAt,
-            Instant closedAt,
+            @Nullable Instant confirmedAt,
+            @Nullable Instant closedAt,
             int currentRevision,
             String createdByActorType,
-            String createdByActorId,
-            String acceptedByActorType,
-            String acceptedByActorId,
-            Instant acceptedAt,
+            @Nullable String createdByActorId,
+            @Nullable String acceptedByActorType,
+            @Nullable String acceptedByActorId,
+            @Nullable Instant acceptedAt,
             boolean callbackRequested,
-            Instant callbackResolvedAt,
-            String callbackResolvedBy,
+            @Nullable Instant callbackResolvedAt,
+            @Nullable String callbackResolvedBy,
             Long cashTenderedExpectedMinor,
             String kitchenNote) {}
 
@@ -1543,12 +1559,12 @@ public class JdbcOrderStore {
      */
     public record CustomerSnapshotRow(
             UUID orderId,
-            String displayNameEncrypted,
-            String contactEncrypted,
-            String addressEncrypted,
-            String deliveryInstructionsEncrypted,
+            @Nullable String displayNameEncrypted,
+            @Nullable String contactEncrypted,
+            @Nullable String addressEncrypted,
+            @Nullable String deliveryInstructionsEncrypted,
             boolean transactionalContactAllowed,
-            Instant anonymizedAt) {
+            @Nullable Instant anonymizedAt) {
 
         public boolean hasAddress() {
             return addressEncrypted != null;
@@ -1594,11 +1610,13 @@ public class JdbcOrderStore {
             String fulfillmentStatusProjection,
             String currency,
             long totalMinor,
-            Instant promisedAt,
+            @Nullable Instant promisedAt,
             int version,
             Instant createdAt) {}
 
     /**
+     * One order line as it stands at the revision it was read for.
+     *
      * @param noteEncrypted the stored ciphertext, never rendered. Callers ask
      *                      {@link #hasNote()} to decide whether a kitchen ticket
      *                      should show a note marker, and reveal it separately
@@ -1659,9 +1677,12 @@ public class JdbcOrderStore {
     public record DueTimerRow(UUID timerId, UUID tenantId, UUID orderId, String timerType) {}
 
     /**
+     * A status transition proposed inside one transaction, and its outcome.
+     *
      * @param outcome null only for a proposal whose transaction has not finished,
      *                which is never visible to another one — a committed row
      *                always carries an outcome, and V0087 constrains it
      */
-    public record ProgressProposalRow(UUID id, UUID orderId, String proposedStatus, String outcome) {}
+    public record ProgressProposalRow(
+            UUID id, UUID orderId, String proposedStatus, @Nullable String outcome) {}
 }

@@ -3,6 +3,7 @@ package uz.horecaos.platform.tenancy.api;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A registered route to market (ADR 0036).
@@ -22,10 +23,10 @@ public record SalesChannel(
         SalesChannelSystemType systemType,
         String displayName,
         Status status,
-        UUID pricePlaneChannelId,
+        @Nullable UUID pricePlaneChannelId,
         boolean externallyPriced,
         boolean guestOrdersAllowed,
-        UUID providerInstallationId,
+        @Nullable UUID providerInstallationId,
         int version) {
 
     /** Channels archive, never delete: every order carries its channel forever. */

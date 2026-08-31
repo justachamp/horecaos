@@ -18,6 +18,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -139,7 +140,9 @@ class CourierDispatchPortTests {
     private UUID scooterTypeId;
     private UUID alisher;
     private UUID alisherEngagement;
-    private UUID otherTenantCourier;
+
+    /** Set only by the tests that call {@link #seedOtherTenant()}. */
+    private @Nullable UUID otherTenantCourier;
 
     private int chainSequence;
 
@@ -503,15 +506,15 @@ class CourierDispatchPortTests {
     void anotherTenantsIdDoesNotReachThisShift() {
         shifts.open(openCommand(alisher, branch));
         UUID theirBranch = seedOtherTenant();
+        UUID theirCourier = java.util.Objects.requireNonNull(otherTenantCourier);
 
         // Both couriers really are on shift, so an empty answer below is the
         // tenant predicate refusing and not a fixture that seeded nothing.
         assertThat(shiftPort.openShift(TENANT, alisher, branch)).isPresent();
-        assertThat(shiftPort.openShift(OTHER_TENANT, otherTenantCourier, theirBranch))
-                .isPresent();
+        assertThat(shiftPort.openShift(OTHER_TENANT, theirCourier, theirBranch)).isPresent();
 
         assertThat(shiftPort.openShift(OTHER_TENANT, alisher, branch)).isEmpty();
-        assertThat(shiftPort.openShift(TENANT, otherTenantCourier, theirBranch)).isEmpty();
+        assertThat(shiftPort.openShift(TENANT, theirCourier, theirBranch)).isEmpty();
     }
 
     @Test

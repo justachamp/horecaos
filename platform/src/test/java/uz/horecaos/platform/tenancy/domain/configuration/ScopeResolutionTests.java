@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -96,7 +97,10 @@ class ScopeResolutionTests {
 
     @Test
     void aBrandScopedRequestNeverSeesALocationValue() {
-        ResourceScope brandScope = ResourceScope.brand(LOCATION.tenantId(), LOCATION.brandId());
+        // LOCATION is a ScopeType.LOCATION scope, so its own constructor invariant
+        // guarantees both identifiers are set.
+        ResourceScope brandScope =
+                ResourceScope.brand(Objects.requireNonNull(LOCATION.tenantId()), Objects.requireNonNull(LOCATION.brandId()));
 
         Resolved<Integer> resolved = ScopeResolution.resolve(
                 KEY,
@@ -112,9 +116,9 @@ class ScopeResolutionTests {
 
     @Test
     void explicitNullContinuesResolutionByDefault() {
-        Map<ScopeType, ScopedValue> stored = new EnumMap<>(ScopeType.class);
-        stored.put(ScopeType.LOCATION, ScopedValue.explicitNull(ScopeType.LOCATION));
-        stored.put(ScopeType.TENANT, ScopedValue.of(ScopeType.TENANT, 200));
+        Map<ScopeType, ScopedConfigurationRow> stored = new EnumMap<>(ScopeType.class);
+        stored.put(ScopeType.LOCATION, ScopedConfigurationRow.explicitNull(ScopeType.LOCATION));
+        stored.put(ScopeType.TENANT, ScopedConfigurationRow.of(ScopeType.TENANT, 200));
 
         Resolved<Integer> resolved = ScopeResolution.resolve(KEY, LOCATION, stored);
 
@@ -129,9 +133,9 @@ class ScopeResolutionTests {
 
     @Test
     void explicitNullTerminatesForAKeyThatDeclaresIt() {
-        Map<ScopeType, ScopedValue> stored = new EnumMap<>(ScopeType.class);
-        stored.put(ScopeType.BRAND, ScopedValue.explicitNull(ScopeType.BRAND));
-        stored.put(ScopeType.TENANT, ScopedValue.of(ScopeType.TENANT, 21));
+        Map<ScopeType, ScopedConfigurationRow> stored = new EnumMap<>(ScopeType.class);
+        stored.put(ScopeType.BRAND, ScopedConfigurationRow.explicitNull(ScopeType.BRAND));
+        stored.put(ScopeType.TENANT, ScopedConfigurationRow.of(ScopeType.TENANT, 21));
 
         Resolved<Integer> resolved = ScopeResolution.resolve(TERMINATING_KEY, LOCATION, stored);
 
@@ -165,11 +169,11 @@ class ScopeResolutionTests {
         assertThat(resolved.trace().inspectedLevels()).hasSize(1);
     }
 
-    private static Map<ScopeType, ScopedValue> values(Object... pairs) {
-        Map<ScopeType, ScopedValue> stored = new EnumMap<>(ScopeType.class);
+    private static Map<ScopeType, ScopedConfigurationRow> values(Object... pairs) {
+        Map<ScopeType, ScopedConfigurationRow> stored = new EnumMap<>(ScopeType.class);
         for (int index = 0; index < pairs.length; index += 2) {
             ScopeType scopeType = (ScopeType) pairs[index];
-            stored.put(scopeType, ScopedValue.of(scopeType, pairs[index + 1]));
+            stored.put(scopeType, ScopedConfigurationRow.of(scopeType, pairs[index + 1]));
         }
         return stored;
     }

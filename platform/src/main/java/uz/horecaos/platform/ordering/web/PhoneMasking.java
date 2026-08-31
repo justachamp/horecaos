@@ -1,5 +1,7 @@
 package uz.horecaos.platform.ordering.web;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * The board and detail phone mask (orders.md §1.5): {@code +998 90 ••• •• 42}.
  *
@@ -16,11 +18,13 @@ final class PhoneMasking {
     private PhoneMasking() {}
 
     /**
+     * Masks a phone number for display, keeping only enough to recognise it.
+     *
      * @return the masked form, or null when there was nothing to mask — a
      *         customer with no phone on file renders {@code —}, not an empty
      *         mask that looks like a data-entry error
      */
-    static String mask(String phone) {
+    static @Nullable String mask(@Nullable String phone) {
         if (phone == null || phone.isBlank()) {
             return null;
         }

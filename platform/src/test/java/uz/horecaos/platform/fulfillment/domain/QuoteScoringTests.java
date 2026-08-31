@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -137,7 +138,9 @@ class QuoteScoringTests {
 
         assertThat(QuoteScoring.order(scored)).containsExactly(YANDEX);
         assertThat(scored.getLast().reason()).isEqualTo(QuoteScoring.PARTNER_REFUSED);
-        assertThat(scored.getLast().quote().status()).isEqualTo("REFUSED");
+        DeliveryQuote lastQuote = Objects.requireNonNull(
+                scored.getLast().quote(), "the refused quote is the one carried into the selection");
+        assertThat(lastQuote.status()).isEqualTo("REFUSED");
     }
 
     private static DeliveryQuote quote(PartnerOption partner, long priceMinor, int pickupEta) {

@@ -7,9 +7,11 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import tools.jackson.databind.ObjectMapper;
@@ -226,8 +228,12 @@ public class JdbcUsageStore {
                 .param("tenantId", tenantId)
                 .param("key", entitlementKey)
                 .param("periodKey", periodKey)
-                .query((row, number) ->
-                        new UsagePeriod(periodKey, instant(row, "period_start"), instant(row, "period_end")))
+                // period_start and period_end are NOT NULL columns; the assertion
+                // documents that constraint rather than leaving it implicit.
+                .query((row, number) -> new UsagePeriod(
+                        periodKey,
+                        Objects.requireNonNull(instant(row, "period_start"), "period_start is NOT NULL"),
+                        Objects.requireNonNull(instant(row, "period_end"), "period_end is NOT NULL")))
                 .optional();
     }
 
@@ -236,16 +242,20 @@ public class JdbcUsageStore {
      * inside it and therefore a safe reference for recomputing its bounds.
      */
     public Optional<Instant> earliestOccurrence(UUID tenantId, String entitlementKey, String periodKey) {
-        return jdbc.sql("""
+        // A bare aggregate with no GROUP BY always returns exactly one row, with
+        // NULL when nothing matched — mapping straight to OffsetDateTime.class
+        // rather than through a custom RowMapper sidesteps the checker settling
+        // the mapper's type parameter on a non-nullable type.
+        OffsetDateTime earliest = jdbc.sql("""
                 SELECT MIN(occurred_at) AS earliest FROM commercial.usage_events
                  WHERE tenant_id = :tenantId AND entitlement_key = :key AND period_key = :periodKey
                 """)
                 .param("tenantId", tenantId)
                 .param("key", entitlementKey)
                 .param("periodKey", periodKey)
-                .query((row, number) -> instant(row, "earliest"))
-                .optional()
-                .filter(java.util.Objects::nonNull);
+                .query(OffsetDateTime.class)
+                .single();
+        return Optional.ofNullable(earliest).map(OffsetDateTime::toInstant);
     }
 
     /** Every cached total for a tenant, for the usage screen. */
@@ -259,11 +269,13 @@ public class JdbcUsageStore {
                  ORDER BY entitlement_key, period_key DESC
                 """)
                 .param("tenantId", tenantId)
+                // period_start and period_end are NOT NULL columns; the assertion
+                // documents that constraint rather than leaving it implicit.
                 .query((row, number) -> new StoredPeriodTotal(
                         row.getString("entitlement_key"),
                         row.getString("period_key"),
-                        instant(row, "period_start"),
-                        instant(row, "period_end"),
+                        Objects.requireNonNull(instant(row, "period_start"), "period_start is NOT NULL"),
+                        Objects.requireNonNull(instant(row, "period_end"), "period_end is NOT NULL"),
                         row.getLong("event_quantity"),
                         row.getLong("adjustment_quantity"),
                         row.getLong("consumed_quantity"),
@@ -296,17 +308,17 @@ public class JdbcUsageStore {
             long adjustmentQuantity,
             long consumedQuantity,
             int eventCount,
-            Instant lastEventAt) {}
+            @Nullable Instant lastEventAt) {}
 
     /** A key and the period partition it was recorded in. */
     public record PeriodRef(String entitlementKey, String periodKey) {}
 
-    private static Instant instant(ResultSet row, String column) throws SQLException {
+    private static @Nullable Instant instant(ResultSet row, String column) throws SQLException {
         OffsetDateTime value = row.getObject(column, OffsetDateTime.class);
         return value == null ? null : value.toInstant();
     }
 
-    private static OffsetDateTime utc(Instant instant) {
+    private static @Nullable OffsetDateTime utc(@Nullable Instant instant) {
         return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 }

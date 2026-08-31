@@ -1,6 +1,7 @@
 package uz.horecaos.platform.pos.domain;
 
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.pos.api.CapabilitySnapshot.IdempotencyBehaviour;
 
 /**
@@ -44,6 +45,8 @@ public final class UncertainExportResolver {
     private UncertainExportResolver() {}
 
     /**
+     * Decides what a recovery read established about one uncertain export.
+     *
      * @param idempotency what the provider guarantees about a repeated export.
      *                    A provider that deduplicates on a key we supply does not
      *                    need any of this: the safe move there is to re-send under
@@ -112,11 +115,13 @@ public final class UncertainExportResolver {
     }
 
     /**
+     * What the recovery read established, and the operator-facing reason why.
+     *
      * @param externalOrderId set only on {@link Outcome#LANDED}, because that is
      *                        the only outcome that identified an order
      * @param reason          shown to the operator and stored on the export. It
      *                        explains what could not be established, not merely
      *                        that something could not be
      */
-    public record Decision(Outcome outcome, String externalOrderId, String reason) {}
+    public record Decision(Outcome outcome, @Nullable String externalOrderId, String reason) {}
 }

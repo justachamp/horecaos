@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * What the provider said happened, recorded once (ADR 0013).
@@ -34,11 +35,11 @@ public record PaymentTransaction(
         PaymentTransactionType type,
         SomAmount amount,
         String providerReference,
-        ProviderEvidence evidence,
+        @Nullable ProviderEvidence evidence,
         Instant occurredAt,
         Instant recordedAt,
-        String protectedRequestReference,
-        String protectedResponseReference) {
+        @Nullable String protectedRequestReference,
+        @Nullable String protectedResponseReference) {
 
     private static final String LOCAL_PREFIX = "LOCAL:";
 

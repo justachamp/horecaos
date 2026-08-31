@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -35,9 +36,6 @@ class AuditImmutabilityTests {
     private static final UUID TENANT = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120901");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private DataSource dataSource;
     private JdbcClient jdbc;
@@ -49,9 +47,6 @@ class AuditImmutabilityTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -223,7 +218,7 @@ class AuditImmutabilityTests {
                 .isEqualTo("MIGRATION");
     }
 
-    private AuditFact fact(String actionCode, String reason) {
+    private AuditFact fact(String actionCode, @Nullable String reason) {
         return AuditFact.of(actionCode, AuditClass.BUSINESS)
                 .by(ActorRef.user("operator-1", "Operator One"))
                 .at(ResourceScope.tenant(TENANT))

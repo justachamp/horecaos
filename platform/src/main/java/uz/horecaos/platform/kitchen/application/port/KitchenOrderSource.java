@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The order facts the kitchen needs to build a ticket (ADR 0041).
@@ -19,15 +20,21 @@ import java.util.UUID;
 public interface KitchenOrderSource {
 
     /**
+     * Finds the order facts a ticket is built from.
+     *
      * @return empty when no order of that id belongs to this tenant, which is the
      *         same answer as "it does not exist" and deliberately so
      */
     Optional<OrderForKitchen> find(UUID tenantId, UUID orderId);
 
     /**
+     * The order facts one ticket is built from.
+     *
      * @param promisedAt          when the customer was promised the food, or null
      *                            when V0023 recorded the promise as NOT_PROMISED —
      *                            which is honest and must not be read as "now"
+     * @param promisePrepMinutes  the preparation component. Null when V0023 did
+     *                            not model it, not zero
      * @param promiseTravelMinutes the road component. Null on a delivery order
      *                            means travel was not modelled at all, not that it
      *                            was zero, so the kitchen must not subtract it
@@ -44,9 +51,9 @@ public interface KitchenOrderSource {
             String fulfillmentMode,
             String channelCode,
             String status,
-            Instant promisedAt,
-            Integer promisePrepMinutes,
-            Integer promiseTravelMinutes,
+            @Nullable Instant promisedAt,
+            @Nullable Integer promisePrepMinutes,
+            @Nullable Integer promiseTravelMinutes,
             int version,
             List<OrderLineForKitchen> lines) {
 
@@ -56,9 +63,12 @@ public interface KitchenOrderSource {
     }
 
     /**
+     * One line of one order, as the kitchen needs to route and count it.
+     *
      * @param productId nullable in {@code ordering.order_lines}, so routing must
      *                  cope with a line that names only a variant rather than
      *                  assuming a product level exists to fall back to
      */
-    record OrderLineForKitchen(UUID orderLineId, int lineNumber, UUID productId, UUID variantId, int quantity) {}
+    record OrderLineForKitchen(
+            UUID orderLineId, int lineNumber, @Nullable UUID productId, UUID variantId, int quantity) {}
 }

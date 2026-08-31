@@ -44,7 +44,11 @@ public interface MenuMembershipLookup {
      */
     Map<UUID, Membership> membershipOf(UUID tenantId, UUID brandId, Set<UUID> variantIds);
 
-    /** @param categoryIds every category the product sits in, direct only. */
+    /**
+     * The product a variant belongs to, and its direct categories.
+     *
+     * @param categoryIds every category the product sits in, direct only.
+     */
     record Membership(UUID productId, Set<UUID> categoryIds) {
 
         public Membership {

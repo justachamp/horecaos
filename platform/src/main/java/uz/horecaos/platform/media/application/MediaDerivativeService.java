@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -95,8 +96,16 @@ public class MediaDerivativeService {
             return new DerivativeReport(List.of(), List.copyOf(existing), null);
         }
 
-        byte[] source =
-                storage.readPrefix(asset.bucket(), asset.objectKey(), Math.toIntExact(asset.verifiedSizeBytes()));
+        Long verifiedSizeBytes = asset.verifiedSizeBytes();
+        if (verifiedSizeBytes == null) {
+            // MediaAssetService.publishAvailable always records verified_size_bytes
+            // in the same transaction as the AVAILABLE transition, and this method
+            // already refused above unless asset.status().isDisplayable(). A
+            // displayable asset with no verified size means that invariant broke,
+            // not that verification has not run yet.
+            throw new IllegalStateException("Displayable asset %s has no verified size".formatted(assetId));
+        }
+        byte[] source = storage.readPrefix(asset.bucket(), asset.objectKey(), Math.toIntExact(verifiedSizeBytes));
         if (source.length == 0) {
             throw new IllegalStateException("The original object for asset %s could not be read".formatted(assetId));
         }
@@ -199,7 +208,9 @@ public class MediaDerivativeService {
      *                          fall back to the original
      */
     public record DerivativeReport(
-            List<DerivativeVariant> created, List<DerivativeVariant> alreadyPresent, String unsupportedReason) {
+            List<DerivativeVariant> created,
+            List<DerivativeVariant> alreadyPresent,
+            @Nullable String unsupportedReason) {
 
         public boolean sourceUnsupported() {
             return unsupportedReason != null;

@@ -5,7 +5,9 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The fee arithmetic, and nothing else (ADR 0037).
@@ -58,6 +60,8 @@ public final class DeliveryFeeCalculator {
     private DeliveryFeeCalculator() {}
 
     /**
+     * Computes the fee a tariff charges for one distance at one local moment.
+     *
      * @throws UnpriceableDistanceException when the band set in force has no band
      *                                      containing the distance, which activation
      *                                      validation is supposed to have made
@@ -73,7 +77,8 @@ public final class DeliveryFeeCalculator {
         List<TariffBand> bands = tariff.bandsOf(set);
 
         Accrued accrued = accrue(bands, distanceMeters, tariff.distanceAccrual(), true);
-        if (accrued.band() == null) {
+        TariffBand enteredBand = accrued.band();
+        if (enteredBand == null) {
             throw new UnpriceableDistanceException(tariff, set, distanceMeters);
         }
 
@@ -95,8 +100,7 @@ public final class DeliveryFeeCalculator {
         long discountMinor = discount.map(matched -> discountFor(tariff, matched, bands, feeMinor))
                 .orElse(0L);
 
-        return new Computation(
-                accrued.band(), rule.orElse(null), discount.orElse(null), stepped, feeMinor, discountMinor);
+        return new Computation(enteredBand, rule.orElse(null), discount.orElse(null), stepped, feeMinor, discountMinor);
     }
 
     /**
@@ -179,12 +183,22 @@ public final class DeliveryFeeCalculator {
 
         long rawMilli =
                 switch (discount.kind()) {
-                    case AMOUNT -> Math.multiplyExact(discount.amountMinor(), MILLI);
+                        // TariffDiscount's own compact constructor refuses an AMOUNT
+                        // discount without an amount, so this is never actually absent.
+                    case AMOUNT ->
+                        Math.multiplyExact(
+                                Objects.requireNonNull(discount.amountMinor(), "AMOUNT discount has no amount"),
+                                MILLI);
                     // The band charge for the allowance under the table currently in force,
                     // which is what "the first N metres are free" has to mean if it is to
-                    // stay true during a peak window.
+                    // stay true during a peak window. Never absent for the same reason.
                     case DISTANCE_ALLOWANCE ->
-                        accrue(bands, discount.allowanceMeters(), tariff.distanceAccrual(), false)
+                        accrue(
+                                        bands,
+                                        Objects.requireNonNull(
+                                                discount.allowanceMeters(), "DISTANCE_ALLOWANCE discount has no allowance"),
+                                        tariff.distanceAccrual(),
+                                        false)
                                 .milliMinor();
                 };
         return Math.min(settle(tariff, rawMilli), feeMinor);
@@ -271,9 +285,11 @@ public final class DeliveryFeeCalculator {
         return quotient;
     }
 
-    private record Accrued(long milliMinor, TariffBand band) {}
+    private record Accrued(long milliMinor, @Nullable TariffBand band) {}
 
     /**
+     * What one tariff computation produced, band and discount included.
+     *
      * @param band             the band the journey ended in, which is what the
      *                         evidence row names
      * @param computedFeeMinor the fee before the tariff's clamp, kept so evidence
@@ -287,8 +303,8 @@ public final class DeliveryFeeCalculator {
      */
     public record Computation(
             TariffBand band,
-            TariffTimeRule rule,
-            TariffDiscount discount,
+            @Nullable TariffTimeRule rule,
+            @Nullable TariffDiscount discount,
             long computedFeeMinor,
             long finalFeeMinor,
             long discountMinor) {

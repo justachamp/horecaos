@@ -3,6 +3,7 @@ package uz.horecaos.platform.fulfillment.domain;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeOutcome;
 import uz.horecaos.platform.fulfillment.api.ResolvedDeliveryCharge;
 import uz.horecaos.platform.fulfillment.domain.tariff.DistanceMode;
@@ -27,28 +28,28 @@ import uz.horecaos.platform.fulfillment.domain.tariff.DistanceSource;
 public record DeliveryFeeResolution(
         UUID id,
         UUID tenantId,
-        UUID quoteId,
+        @Nullable UUID quoteId,
         UUID locationId,
         DeliveryFeeOutcome outcome,
-        String reasonCode,
+        @Nullable String reasonCode,
         String currency,
-        UUID zoneId,
-        Integer zoneVersion,
-        UUID tariffId,
-        Integer tariffVersion,
-        Integer bandSequence,
-        Integer timeRuleSequence,
-        Integer distanceMeters,
-        DistanceMode distanceMode,
-        DistanceSource distanceSource,
-        String routingProvider,
-        Long providerQuoteMinor,
-        Long computedFeeMinor,
-        Long finalFeeMinor,
-        Long tariffDiscountMinor,
-        Integer discountSequence,
-        Long minBasketMinor,
-        Long freeDeliveryFromMinor,
+        @Nullable UUID zoneId,
+        @Nullable Integer zoneVersion,
+        @Nullable UUID tariffId,
+        @Nullable Integer tariffVersion,
+        @Nullable Integer bandSequence,
+        @Nullable Integer timeRuleSequence,
+        @Nullable Integer distanceMeters,
+        @Nullable DistanceMode distanceMode,
+        @Nullable DistanceSource distanceSource,
+        @Nullable String routingProvider,
+        @Nullable Long providerQuoteMinor,
+        @Nullable Long computedFeeMinor,
+        @Nullable Long finalFeeMinor,
+        @Nullable Long tariffDiscountMinor,
+        @Nullable Integer discountSequence,
+        @Nullable Long minBasketMinor,
+        @Nullable Long freeDeliveryFromMinor,
         List<UUID> losingZoneIds,
         Map<String, Object> evidence) {
 

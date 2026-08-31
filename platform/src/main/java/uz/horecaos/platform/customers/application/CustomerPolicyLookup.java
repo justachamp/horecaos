@@ -2,6 +2,7 @@ package uz.horecaos.platform.customers.application;
 
 import java.time.Instant;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.customers.api.CustomerIdentityPolicy;
 
 /**
@@ -40,7 +41,7 @@ public interface CustomerPolicyLookup {
      *                no governed decision was ever made, which is what a later
      *                migration needs to know
      */
-    record ResolvedIdentityPolicy(CustomerIdentityPolicy mode, Integer version) {
+    record ResolvedIdentityPolicy(CustomerIdentityPolicy mode, @Nullable Integer version) {
 
         /**
          * What governs a tenant that has never chosen.

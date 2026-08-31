@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -66,6 +67,8 @@ public class LoyaltyStorefrontController {
     }
 
     /**
+     * One customer's points balance at one brand.
+     *
      * @param brandId the brand that will honour these points. Named on every
      *                balance because a multi-brand customer holds several and
      *                cannot spend one at another
@@ -76,7 +79,7 @@ public class LoyaltyStorefrontController {
             ApiMoney balance,
             ApiMoney spendable,
             ApiMoney held,
-            Instant nextExpiryAt,
+            @Nullable Instant nextExpiryAt,
             ApiMoney nextExpiryAmount) {
 
         static BalanceResponse of(BalanceView view) {

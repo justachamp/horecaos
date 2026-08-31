@@ -10,6 +10,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.payments.domain.FiscalDocument;
 
 /**
@@ -48,8 +49,12 @@ public final class ClickReceiptUrl {
     private ClickReceiptUrl() {}
 
     /**
-     * @param registeredAt when the receipt says it was issued, which is not when
-     *                     HorecaOS read it
+     * Parses Click's {@code qrCodeUrl} into the evidence a fiscal document stores.
+     *
+     * <p>The returned evidence's {@code registeredAt} is when the receipt says it
+     * was issued, parsed from the URL's {@code c} parameter, or {@code observedAt}
+     * when that parameter is missing or does not parse — which is not when HorecaOS
+     * actually read it.
      */
     public static FiscalDocument.FiscalEvidence parse(String qrCodeUrl, String paymentId, Instant observedAt) {
         Map<String, String> query = query(qrCodeUrl);
@@ -67,7 +72,7 @@ public final class ClickReceiptUrl {
     }
 
     /** Whether Click has a receipt for this payment yet. */
-    public static boolean issued(String qrCodeUrl) {
+    public static boolean issued(@Nullable String qrCodeUrl) {
         return qrCodeUrl != null && !qrCodeUrl.isBlank() && !"null".equalsIgnoreCase(qrCodeUrl);
     }
 
@@ -85,7 +90,7 @@ public final class ClickReceiptUrl {
         if (raw == null) {
             return values;
         }
-        for (String pair : raw.split("&")) {
+        for (String pair : raw.split("&", -1)) {
             int split = pair.indexOf('=');
             if (split > 0) {
                 values.put(
@@ -96,7 +101,7 @@ public final class ClickReceiptUrl {
         return values;
     }
 
-    private static Optional<Instant> receiptTime(String raw) {
+    private static Optional<Instant> receiptTime(@Nullable String raw) {
         if (raw == null || raw.length() != 14) {
             return Optional.empty();
         }

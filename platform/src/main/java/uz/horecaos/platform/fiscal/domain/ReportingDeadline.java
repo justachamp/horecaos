@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
  * When a provider's silence stops being late and starts being a missing receipt
@@ -43,7 +44,8 @@ public record ReportingDeadline(Instant intervalDeadline, Instant businessDateBa
      * @param businessZone the branch's timezone, so a service that runs past
      *                     midnight is not cut in half by a UTC date boundary
      */
-    public static ReportingDeadline of(Instant submittedAt, Instant recorded, Duration interval, ZoneId businessZone) {
+    public static ReportingDeadline of(
+            Instant submittedAt, @Nullable Instant recorded, Duration interval, ZoneId businessZone) {
         Objects.requireNonNull(submittedAt, "A submission instant is required");
         Objects.requireNonNull(interval, "A reporting interval is required");
         Objects.requireNonNull(businessZone, "A business timezone is required");

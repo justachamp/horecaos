@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The one thing sourcing asks of ADR 0042 before it offers anybody an order
@@ -73,7 +74,7 @@ public interface InternalFleetPort {
             int offerTtlSeconds,
             int activeAssignments,
             int concurrencyCeiling,
-            Integer metresFromBranch,
+            @Nullable Integer metresFromBranch,
             int deliveriesThisShift) {
 
         public boolean hasCapacity() {

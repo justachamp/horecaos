@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -182,13 +183,18 @@ public class CourierShiftController {
         return ActorRef.user(currentActor.get().subject(), null);
     }
 
-    /** @param point "latitude,longitude" from the handset, stored encrypted */
+    /**
+     * The open-shift payload.
+     *
+     * @param point "latitude,longitude" from the handset, stored encrypted;
+     *              absent when the handset sent none
+     */
     record OpenShiftRequest(
-            @Size(max = 64) String point,
+            @Size(max = 64) @Nullable String point,
             @Size(min = 3, max = 3) String currency) {}
 
     record CloseShiftRequest(
-            @Size(max = 64) String point,
+            @Size(max = 64) @Nullable String point,
             @Size(min = 3, max = 3) String currency) {}
 
     record CashDeclarationRequest(long declaredMinor) {}
@@ -205,7 +211,7 @@ public class CourierShiftController {
         }
     }
 
-    record CloseResponse(String status, long paidSeconds, long breakSeconds, UUID cashHandoverId) {}
+    record CloseResponse(String status, long paidSeconds, long breakSeconds, @Nullable UUID cashHandoverId) {}
 
     /** Never a list of other couriers. Kept here so the shape is obvious. */
     record MyShifts(List<ShiftResponse> shifts) {}

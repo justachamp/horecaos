@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -134,7 +135,7 @@ public class OrderAcceptancePolicyController {
             boolean rejectionReasonRequired,
             boolean notifyCustomerWhilePending,
             boolean isPlatformDefault,
-            UUID policyId,
+            @Nullable UUID policyId,
             int policyVersion) {
 
         static AcceptancePolicyResponse of(Effective effective) {

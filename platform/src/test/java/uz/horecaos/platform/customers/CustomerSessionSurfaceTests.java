@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Locale;
@@ -97,6 +98,9 @@ class CustomerSessionSurfaceTests {
 
     private static final String STAFF_SUBJECT = "staff-subject";
 
+    // NullAway does not recognise @DynamicPropertySource as a field initializer the way
+    // it does @BeforeAll/@BeforeEach; `db` is always set there before any @Test method runs.
+    @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
 
     @BeforeAll
@@ -581,7 +585,7 @@ class CustomerSessionSurfaceTests {
                 VALUES (:id, :tenantId, 1, :mode, TIMESTAMPTZ '2020-01-01T00:00:00Z')
                 ON CONFLICT DO NOTHING
                 """)
-                .param("id", UUID.nameUUIDFromBytes(id.toString().getBytes()))
+                .param("id", UUID.nameUUIDFromBytes(id.toString().getBytes(StandardCharsets.UTF_8)))
                 .param("tenantId", id)
                 .param("mode", identityMode)
                 .update();

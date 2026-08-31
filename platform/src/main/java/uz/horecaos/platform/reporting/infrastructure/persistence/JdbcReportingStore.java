@@ -12,8 +12,10 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayAggregate;
@@ -115,6 +117,8 @@ public class JdbcReportingStore {
     }
 
     /**
+     * A tenant's stored business-day boundary, and how far a recut of it has got.
+     *
      * @param recutCompletedThrough how far a recut after a boundary change has
      *                              got. Null when no change is outstanding
      */
@@ -193,7 +197,8 @@ public class JdbcReportingStore {
                 .update();
     }
 
-    public record StoredMetric(String digest, String signedBy, Instant signedAt) {}
+    /** A metric's stored digest, and its finance signature once one exists. */
+    public record StoredMetric(String digest, @Nullable String signedBy, @Nullable Instant signedAt) {}
 
     // -------------------------------------------------------- source reads
 
@@ -350,24 +355,24 @@ public class JdbcReportingStore {
             UUID orderId,
             UUID brandId,
             UUID locationId,
-            UUID legalEntityId,
+            @Nullable UUID legalEntityId,
             String channelCode,
             String fulfilmentMode,
             String status,
             Instant createdAt,
-            Instant confirmedAt,
-            Instant closedAt,
-            Instant readyAt,
-            UUID customerAccountId,
+            @Nullable Instant confirmedAt,
+            @Nullable Instant closedAt,
+            @Nullable Instant readyAt,
+            @Nullable UUID customerAccountId,
             boolean firstOrder,
             long subtotalMinor,
             long taxMinor,
             long discountMinor,
             long feeMinor,
             long totalMinor,
-            Instant promisedAt,
-            Integer promiseTravelMinutes,
-            String cancellationReasonCode,
+            @Nullable Instant promisedAt,
+            @Nullable Integer promiseTravelMinutes,
+            @Nullable String cancellationReasonCode,
             int version) {}
 
     public record SourceLine(
@@ -654,7 +659,7 @@ public class JdbcReportingStore {
      *
      * @return null when no order in the range reached READY, which is not zero
      */
-    public Integer medianSecondsToReady(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+    public @Nullable Integer medianSecondsToReady(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
         params.put("from", from);
@@ -768,7 +773,9 @@ public class JdbcReportingStore {
                 .query((ResultSet row, int number) -> new CompletedRun(
                         row.getObject("business_date", LocalDate.class),
                         row.getString("run_kind"),
-                        instantOrNull(row, "completed_at")))
+                        // Guaranteed by ck_close_run_completion together with the
+                        // WHERE status = 'COMPLETED' above.
+                        requireInstant(row, "completed_at")))
                 .optional();
     }
 
@@ -819,7 +826,8 @@ public class JdbcReportingStore {
                         row.getLong("stored_value"),
                         row.getLong("recut_value"),
                         row.getLong("difference"),
-                        instantOrNull(row, "detected_at")))
+                        // detected_at is NOT NULL DEFAULT now().
+                        requireInstant(row, "detected_at")))
                 .list();
     }
 
@@ -845,7 +853,8 @@ public class JdbcReportingStore {
                 row.getString("channel_code_snapshot"),
                 row.getString("fulfillment_mode"),
                 row.getString("status"),
-                instantOrNull(row, "created_at"),
+                // created_at is NOT NULL: every order has a creation instant.
+                requireInstant(row, "created_at"),
                 instantOrNull(row, "confirmed_at"),
                 instantOrNull(row, "closed_at"),
                 instantOrNull(row, "ready_at"),
@@ -892,12 +901,22 @@ public class JdbcReportingStore {
                 row.getInt("new_customers"));
     }
 
-    private static Instant instantOrNull(ResultSet row, String column) throws SQLException {
+    private static @Nullable Instant instantOrNull(ResultSet row, String column) throws SQLException {
         OffsetDateTime value = row.getObject(column, OffsetDateTime.class);
         return value == null ? null : value.toInstant();
     }
 
-    private static OffsetDateTime utc(Instant instant) {
+    /**
+     * Converts a column the schema declares {@code NOT NULL} (or, for {@code
+     * close_runs.completed_at}, one a CHECK constraint guarantees is set for the
+     * status this read filters on). Asserts the invariant rather than silently
+     * widening every caller's return type to {@code @Nullable}.
+     */
+    private static Instant requireInstant(ResultSet row, String column) throws SQLException {
+        return Objects.requireNonNull(instantOrNull(row, column), () -> column + " is NOT NULL but was null");
+    }
+
+    private static @Nullable OffsetDateTime utc(@Nullable Instant instant) {
         return instant == null ? null : instant.atOffset(ZoneOffset.UTC);
     }
 
@@ -905,3 +924,4 @@ public class JdbcReportingStore {
         return value.length() <= limit ? value : value.substring(0, limit);
     }
 }
+

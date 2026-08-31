@@ -1,6 +1,7 @@
 package uz.horecaos.platform.loyalty.api;
 
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The only way value leaves a points account (ADR 0046).
@@ -74,6 +75,8 @@ public interface PointsRedemptionPort {
     void reverse(UUID tenantId, UUID tenderId, long amountMinor, String reasonCode, String actor);
 
     /**
+     * What a redemption would be checked against, for one order.
+     *
      * @param channelCode the order's snapshotted channel code, checked against
      *                    the policy's allowed channels
      */
@@ -87,13 +90,21 @@ public interface PointsRedemptionPort {
             String channelCode) {}
 
     /**
+     * What this account could redeem against one order, and why not when it cannot.
+     *
+     * @param accountId       null when the customer holds no account at all
      * @param availableMinor  what the account holds, in whole som
      * @param maximumMinor    the largest redemption this order permits, after the
      *                        policy share, the minimum order, and the invariant
      *                        that some money must change hands
      * @param refusal         why the maximum is zero, or null when it is not
      */
-    record RedemptionOffer(UUID accountId, long availableMinor, long maximumMinor, String currency, String refusal) {
+    record RedemptionOffer(
+            @Nullable UUID accountId,
+            long availableMinor,
+            long maximumMinor,
+            String currency,
+            @Nullable String refusal) {
 
         public boolean redeemable() {
             return maximumMinor > 0;
@@ -101,6 +112,8 @@ public interface PointsRedemptionPort {
     }
 
     /**
+     * A debit against one account, for one tender.
+     *
      * @param orderId  the order the tender settles. Its {@code customer_account_id}
      *                 and {@code brand_id} must equal the account's, which is
      *                 checked inside the reserving transaction. A guest checkout
@@ -119,6 +132,10 @@ public interface PointsRedemptionPort {
             String idempotencyKey,
             String actor) {}
 
-    /** @param consumedLots how many lots the hold took, for the receipt of the hold itself */
+    /**
+     * The debit this reservation took.
+     *
+     * @param consumedLots how many lots the hold took, for the receipt of the hold itself
+     */
     record PointsHold(UUID reservationId, UUID accountId, long amountMinor, long balanceAfterMinor, int consumedLots) {}
 }

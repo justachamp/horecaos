@@ -75,5 +75,39 @@ public interface ImageDerivativeRenderer {
      */
     record Failed(String errorCode) implements RenderOutcome {}
 
-    record Rendition(byte[] content, String contentType, int widthPx, int heightPx) {}
+    /**
+     * A plain class rather than a record: {@code content} is a byte array, whose
+     * reference-based {@code equals}/{@code hashCode} would silently break the
+     * value semantics a record promises, and nothing here ever compares two
+     * renditions or needs a defensive copy of image bytes on every access.
+     */
+    final class Rendition {
+        private final byte[] content;
+        private final String contentType;
+        private final int widthPx;
+        private final int heightPx;
+
+        public Rendition(byte[] content, String contentType, int widthPx, int heightPx) {
+            this.content = content;
+            this.contentType = contentType;
+            this.widthPx = widthPx;
+            this.heightPx = heightPx;
+        }
+
+        public byte[] content() {
+            return content;
+        }
+
+        public String contentType() {
+            return contentType;
+        }
+
+        public int widthPx() {
+            return widthPx;
+        }
+
+        public int heightPx() {
+            return heightPx;
+        }
+    }
 }

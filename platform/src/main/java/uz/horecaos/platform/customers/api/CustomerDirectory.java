@@ -18,6 +18,8 @@ import java.util.UUID;
 public interface CustomerDirectory {
 
     /**
+     * The account this principal owns in this tenant and brand, if any.
+     *
      * @param issuer  the token issuer, part of the identity along with the subject
      *                — two realms can mint the same subject string
      * @return empty when this principal has no account for this tenant and brand,

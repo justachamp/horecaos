@@ -35,6 +35,8 @@ public class ConfirmationPointRetentionJob {
     }
 
     /**
+     * One pass: deletes every coordinate pair whose retention window has passed.
+     *
      * @param policy the resolved retention window. Passed in rather than resolved
      *               per row: this sweeps every tenant, and a per-row policy read
      *               would make the deletion depend on the order rows came back in

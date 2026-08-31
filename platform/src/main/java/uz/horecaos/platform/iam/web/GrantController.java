@@ -106,6 +106,9 @@ public class GrantController {
     }
 
     /**
+     * A request to grant one role to one principal, at the tenant, brand, or
+     * location scope the path and body together name.
+     *
      * @param validUntil set it for support access, which should lapse on its own
      *                   rather than waiting for someone to remember
      */

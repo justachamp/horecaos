@@ -11,6 +11,7 @@ import java.time.ZoneOffset;
 import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -101,7 +102,7 @@ public class IdempotencyService {
      * where that is read.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void complete(UUID recordId, int responseStatus, String responseBody, boolean protectedBody) {
+    public void complete(UUID recordId, int responseStatus, @Nullable String responseBody, boolean protectedBody) {
         jdbc.sql("""
                 UPDATE platform.idempotency_records
                    SET status = 'COMPLETED',

@@ -3,6 +3,7 @@ package uz.horecaos.platform.tenancy.domain;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 
 /**
@@ -27,12 +28,12 @@ import uz.horecaos.platform.tenancy.api.GeoPoint;
  *                 of somebody's promise looking for it
  */
 public record LocationPlace(
-        String addressLine,
-        String district,
-        String city,
-        String landmark,
-        String contactPhone,
-        GeoPoint coordinates,
+        @Nullable String addressLine,
+        @Nullable String district,
+        @Nullable String city,
+        @Nullable String landmark,
+        @Nullable String contactPhone,
+        @Nullable GeoPoint coordinates,
         CoordinateSource coordinateSource) {
 
     /**
@@ -71,7 +72,7 @@ public record LocationPlace(
      * without this a branch would report as fully configured and still put a blank
      * line on its receipts — a silent gap rather than a visible one.
      */
-    private static String blankToNull(String value) {
+    private static @Nullable String blankToNull(@Nullable String value) {
         return value == null || value.isBlank() ? null : value.strip();
     }
 

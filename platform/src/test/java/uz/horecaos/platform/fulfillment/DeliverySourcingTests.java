@@ -9,6 +9,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -22,6 +23,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -89,9 +91,6 @@ class DeliverySourcingTests {
     private static final UUID COURIER_TWO = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private MutableClock clock;
@@ -118,9 +117,6 @@ class DeliverySourcingTests {
         Assumptions.assumeTrue(
                 DockerClientFactory.instance().isDockerAvailable(), "Docker is required for delivery sourcing tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -257,7 +253,8 @@ class DeliverySourcingTests {
     @Test
     @DisplayName("a job is claimed by exactly one worker, and a worker that dies loses its lease")
     void oneWorkerClaimsAJobAndADeadWorkerLosesIt() {
-        planning.open(TENANT, BRAND, branch, seedDeliveryOrder(), CONFIRMED).orElseThrow();
+        assertThat(planning.open(TENANT, BRAND, branch, seedDeliveryOrder(), CONFIRMED))
+                .isPresent();
 
         List<ClaimedJob> first = jobStore.claim(CONFIRMED, Duration.ofMinutes(2), 10, "worker-a");
         List<ClaimedJob> second = jobStore.claim(CONFIRMED, Duration.ofMinutes(2), 10, "worker-b");
@@ -285,7 +282,8 @@ class DeliverySourcingTests {
     @DisplayName("a job that is not due yet is not claimed, however often the scheduler polls")
     void aJobBeforeItsDueTimeIsNotClaimed() {
         orders.preparation = Duration.ofHours(2);
-        planning.open(TENANT, BRAND, branch, seedDeliveryOrder(), CONFIRMED).orElseThrow();
+        assertThat(planning.open(TENANT, BRAND, branch, seedDeliveryOrder(), CONFIRMED))
+                .isPresent();
 
         // The whole point of ADR 0014: a two-hour order is sourced near readiness,
         // not at confirmation, or the courier waits unpaid at the counter.
@@ -299,7 +297,8 @@ class DeliverySourcingTests {
     @Test
     @DisplayName("a worker whose lease expired cannot complete the job the next worker holds")
     void aLostLeaseCannotFinishSomebodyElsesJob() {
-        planning.open(TENANT, BRAND, branch, seedDeliveryOrder(), CONFIRMED).orElseThrow();
+        assertThat(planning.open(TENANT, BRAND, branch, seedDeliveryOrder(), CONFIRMED))
+                .isPresent();
         ClaimedJob stale =
                 jobStore.claim(CONFIRMED, Duration.ofMinutes(2), 10, "worker-a").getFirst();
         Instant later = CONFIRMED.plus(Duration.ofMinutes(3));
@@ -530,9 +529,9 @@ class DeliverySourcingTests {
         // partner saw, left in the state a partner answer leaves it in. The key is
         // spelled out rather than borrowed from the service, so a change to the
         // derivation fails here rather than silently letting a replay call again.
-        String commandKey = UUID.nameUUIDFromBytes(
-                        ("horecaos.delivery-attempt:%s:%s:0".formatted(plan.id(), noorBinding))
-                                .getBytes(java.nio.charset.StandardCharsets.UTF_8))
+        String commandKey = UUID.nameUUIDFromBytes("horecaos.delivery-attempt:%s:%s:0"
+                        .formatted(plan.id(), noorBinding)
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8))
                 .toString();
         UUID attempt = openPartnerAttempt(plan, noorBinding, commandKey);
         assignmentStore.close(TENANT, attempt, AttemptStatus.UNCERTAIN, "TIMEOUT", "noor-ref-1", true, CONFIRMED);
@@ -557,8 +556,8 @@ class DeliverySourcingTests {
     @Test
     @DisplayName("several partners answer, the cheapest is booked, and every answer is kept")
     void thecheapestQuotedPartnerWins() {
-        DeliveryPlan plan = planning.open(TENANT, BRAND, branch, seedDeliveryOrder(), CONFIRMED)
-                .orElseThrow();
+        assertThat(planning.open(TENANT, BRAND, branch, seedDeliveryOrder(), CONFIRMED))
+                .isPresent();
         bookings.quotes.put(noorBinding, QuoteOutcome.priced(28_000L, "UZS", 480, 1_500, 3_400, 900));
         bookings.quotes.put(yandexBinding, QuoteOutcome.priced(19_000L, "UZS", 600, 1_800, 3_400, 1_200));
 
@@ -783,15 +782,10 @@ class DeliverySourcingTests {
                 .param("catalogId", catalogId)
                 .update();
 
-        seedDeliveryBindings();
-    }
-
-    /**
-     * Two delivery partners on this branch, narrowest first. Noor is the location
-     * binding and Yandex the brand one, which is the order ADR 0026 resolves them
-     * in and therefore the order scoring has to beat to prove it did anything.
-     */
-    private void seedDeliveryBindings() {
+        // Two delivery partners on this branch, narrowest first. Noor is the
+        // location binding and Yandex the brand one, which is the order ADR 0026
+        // resolves them in and therefore the order scoring has to beat to prove it
+        // did anything.
         jdbc.sql("""
                 INSERT INTO integration.provider_environments (code, provider_category,
                     provider_type, base_url, is_production, egress_allowlist)
@@ -806,7 +800,7 @@ class DeliverySourcingTests {
         yandexBinding = seedBinding("yandex-delivery", "yandex-test", null);
     }
 
-    private UUID seedBinding(String providerType, String environment, UUID locationId) {
+    private UUID seedBinding(String providerType, String environment, @Nullable UUID locationId) {
         UUID installationId = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO integration.installations (id, tenant_id, provider_category,
@@ -949,8 +943,10 @@ class DeliverySourcingTests {
     /** What ordering will supply once it implements the port. */
     private static final class ConfigurableOrders implements DeliveryOrderPort {
 
-        private UUID orderId;
-        private String reference;
+        /** Set by {@code seedDeliveryOrder()} before any test calls {@link #deliveryOrder}. */
+        private @Nullable UUID orderId;
+
+        private @Nullable String reference;
         private Duration preparation = Duration.ofMinutes(15);
 
         @Override
@@ -960,7 +956,7 @@ class DeliverySourcingTests {
             }
             return Optional.of(new DeliveryOrder(
                     orderId,
-                    reference,
+                    Objects.requireNonNull(reference, "seedDeliveryOrder() must run before deliveryOrder() is called"),
                     preparation,
                     12_000L,
                     null,
@@ -1011,7 +1007,7 @@ class DeliverySourcingTests {
                     status,
                     command,
                     providerType,
-                    status == BookingStatus.BOOKED ? prefix + (++references) : null,
+                    status == BookingStatus.BOOKED ? prefix + ++references : null,
                     null,
                     null);
         }

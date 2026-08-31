@@ -245,7 +245,11 @@ public class JdbcDerivativeJobStore {
                 == 1;
     }
 
-    /** @param attemptCount including this one, because the claim incremented it */
+    /**
+     * One derivative job, claimed and leased to this worker.
+     *
+     * @param attemptCount including this one, because the claim incremented it
+     */
     public record ClaimedJob(UUID jobId, UUID tenantId, MediaAssetId assetId, int attemptCount, UUID leaseToken) {}
 
     private static OffsetDateTime utc(Instant instant) {

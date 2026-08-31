@@ -66,8 +66,13 @@ public class LegacyBrandImportPort implements ImportPort<LegacyBrandImportPort.B
         // `background_image` are deliberately not selected — media moves under ADR
         // 0010 with its own scan and verification, and a column nothing maps is a
         // column somebody maps by accident.
-        return new ExtractionSpec(
+        // ExtractionSpec.filter (migration.api) is documented optional — "an
+        // optional SQL predicate" — but that module is outside this change's
+        // scope and the field is not yet annotated @Nullable there.
+        @SuppressWarnings("NullAway")
+        ExtractionSpec spec = new ExtractionSpec(
                 "BRAND", "companies", "id", "updated", List.of("id", "slug", "name", "updated"), null);
+        return spec;
     }
 
     @Override
@@ -84,7 +89,13 @@ public class LegacyBrandImportPort implements ImportPort<LegacyBrandImportPort.B
         // and calling createBrand again would fail on the code-or-slug conflict —
         // turning a safe retry into a failed run.
         if (!target.isFirstImport()) {
-            return ImportResult.unchanged(target.existingTargetId(), null);
+            // ImportResult.targetVersion (migration.api) is documented optional —
+            // "or null where the target does not version this family" — but that
+            // module is outside this change's scope and is not yet annotated
+            // @Nullable there.
+            @SuppressWarnings("NullAway")
+            ImportResult unchanged = ImportResult.unchanged(target.existingTargetId(), null);
+            return unchanged;
         }
 
         // The second line of defence, for the case the crosswalk cannot cover: a
@@ -96,12 +107,18 @@ public class LegacyBrandImportPort implements ImportPort<LegacyBrandImportPort.B
                 .filter(brand -> brand.code().equals(command.code()))
                 .findFirst();
         if (existing.isPresent()) {
-            return ImportResult.unchanged(existing.get().id(), null);
+            // See the justification on the ImportResult.unchanged call above.
+            @SuppressWarnings("NullAway")
+            ImportResult unchanged = ImportResult.unchanged(existing.get().id(), null);
+            return unchanged;
         }
 
         BrandView created = tenancy.createBrand(
                 tenantId, new CreateBrandCommand(command.code(), command.slug(), command.displayName()));
-        return ImportResult.created(created.id(), null);
+        // See the justification on the ImportResult.unchanged call above.
+        @SuppressWarnings("NullAway")
+        ImportResult createdResult = ImportResult.created(created.id(), null);
+        return createdResult;
     }
 
     /** What one legacy company says about the brand it becomes. */
@@ -150,12 +167,22 @@ public class LegacyBrandImportPort implements ImportPort<LegacyBrandImportPort.B
                 // legacy schema, and `customers.company` is matched against it by
                 // string equality. A blank slug is therefore a company nothing can
                 // be crosswalked to, which is a quarantine and not a default.
-                return TransformationOutcome.quarantine("MISSING_BRAND_SLUG", null);
+                // TransformationOutcome.quarantine's evidenceReference (migration.api)
+                // is documented optional, but that module is outside this change's
+                // scope and is not yet annotated @Nullable there.
+                @SuppressWarnings("NullAway")
+                TransformationOutcome<BrandCommand> missingSlug =
+                        TransformationOutcome.quarantine("MISSING_BRAND_SLUG", null);
+                return missingSlug;
             }
 
             String normalized = slug.strip().toLowerCase(Locale.ROOT);
             if (!normalized.matches("^[a-z0-9][a-z0-9-]{0,62}$")) {
-                return TransformationOutcome.quarantine("UNMAPPABLE_BRAND_SLUG", null);
+                // See the justification on the MISSING_BRAND_SLUG quarantine above.
+                @SuppressWarnings("NullAway")
+                TransformationOutcome<BrandCommand> unmappableSlug =
+                        TransformationOutcome.quarantine("UNMAPPABLE_BRAND_SLUG", null);
+                return unmappableSlug;
             }
 
             // The display name is the slug, and that is a stated gap rather than an

@@ -5,6 +5,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Objects;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.security.core.context.SecurityContext;
@@ -63,7 +64,7 @@ public class CustomerSessionAuthenticationFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
 
         String presented = CustomerSessionBearerTokenResolver.presentedBearer(request);
-        if (!CustomerSessionToken.looksLikeOne(presented)) {
+        if (presented == null || !CustomerSessionToken.looksLikeOne(presented)) {
             chain.doFilter(request, response);
             return;
         }
@@ -76,7 +77,10 @@ public class CustomerSessionAuthenticationFilter extends OncePerRequestFilter {
                 // through it is how an authentication ends up somewhere it was
                 // never set.
                 SecurityContext context = SecurityContextHolder.createEmptyContext();
-                context.setAuthentication(new CustomerSessionAuthentication(resolution.session()));
+                // Resolution.session() is only absent for ENDED/UNKNOWN, and this
+                // branch is reached exclusively for ACTIVE.
+                context.setAuthentication(new CustomerSessionAuthentication(
+                        Objects.requireNonNull(resolution.session(), "an ACTIVE resolution always carries a session")));
                 SecurityContextHolder.setContext(context);
                 try {
                     chain.doFilter(request, response);

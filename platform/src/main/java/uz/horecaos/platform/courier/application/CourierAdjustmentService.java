@@ -3,6 +3,7 @@ package uz.horecaos.platform.courier.application;
 import java.time.Clock;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -214,7 +215,11 @@ public class CourierAdjustmentService {
                 .hash();
     }
 
-    /** @param amountMinor positive for a bonus, negative for a penalty */
+    /**
+     * One requested bonus or penalty.
+     *
+     * @param amountMinor positive for a bonus, negative for a penalty
+     */
     public record AdjustmentCommand(
             UUID tenantId,
             UUID courierId,
@@ -228,7 +233,11 @@ public class CourierAdjustmentService {
             String reason,
             String correlationId) {}
 
-    public record Outcome(LedgerEntryRow entry, UUID approvalRequestId) {
+    /**
+     * What the request produced: a written entry, or the approval it now waits
+     * on. Exactly one of the two is present, and {@link #written()} says which.
+     */
+    public record Outcome(@Nullable LedgerEntryRow entry, @Nullable UUID approvalRequestId) {
 
         public static Outcome recorded(LedgerEntryRow entry) {
             return new Outcome(entry, entry.approvalRequestId());

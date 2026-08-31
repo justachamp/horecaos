@@ -2,6 +2,7 @@ package uz.horecaos.platform.fulfillment.application.port;
 
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 
 /**
@@ -21,8 +22,12 @@ import uz.horecaos.platform.tenancy.api.GeoPoint;
  */
 public interface RoadDistancePort {
 
-    Optional<RoadDistance> distance(GeoPoint origin, GeoPoint destination, UUID installationId);
+    Optional<RoadDistance> distance(GeoPoint origin, GeoPoint destination, @Nullable UUID installationId);
 
-    /** @param provider the adapter's own name, stored so a bad calibration can be traced to it */
+    /**
+     * A measured road distance in metres, attributed to the provider that answered.
+     *
+     * @param provider the adapter's own name, stored so a bad calibration can be traced to it
+     */
     record RoadDistance(int meters, String provider) {}
 }

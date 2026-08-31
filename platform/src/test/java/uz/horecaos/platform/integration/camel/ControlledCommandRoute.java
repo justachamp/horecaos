@@ -6,9 +6,11 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.integration.camel.common.ProviderExceptionClassifier;
 
@@ -79,7 +81,7 @@ public final class ControlledCommandRoute extends RouteBuilder {
     }
 
     private void invoke(Exchange exchange) {
-        ControlledCommand command = exchange.getIn().getBody(ControlledCommand.class);
+        ControlledCommand command = requireCommand(exchange);
         String idempotencyKey = command.commandId().toString();
 
         HttpRequest request = HttpRequest.newBuilder()
@@ -112,7 +114,7 @@ public final class ControlledCommandRoute extends RouteBuilder {
      * the entire difference between reconciliation and a retry.
      */
     private void reconcile(Exchange exchange) {
-        ControlledCommand command = exchange.getIn().getBody(ControlledCommand.class);
+        ControlledCommand command = requireCommand(exchange);
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl + "/provider/status?key=" + command.commandId()))
@@ -155,7 +157,7 @@ public final class ControlledCommandRoute extends RouteBuilder {
         exchange.getIn().setBody(outcome(exchange));
     }
 
-    private static String reference(String body) {
+    private static @Nullable String reference(String body) {
         int start = body.indexOf("\"externalReference\":\"");
         if (start < 0) {
             return null;
@@ -165,7 +167,14 @@ public final class ControlledCommandRoute extends RouteBuilder {
     }
 
     private static ProviderOutcome outcome(Exchange exchange) {
-        return exchange.getIn().getHeader(OUTCOME_HEADER, ProviderOutcome.class);
+        return Objects.requireNonNull(
+                exchange.getIn().getHeader(OUTCOME_HEADER, ProviderOutcome.class),
+                "invoke() or deadLetter() always sets the outcome header before this is read");
+    }
+
+    private static ControlledCommand requireCommand(Exchange exchange) {
+        return Objects.requireNonNull(
+                exchange.getIn().getBody(ControlledCommand.class), "No ControlledCommand on the exchange body");
     }
 
     /** One provider-neutral command, as a domain port would send it. */

@@ -3,6 +3,7 @@ package uz.horecaos.platform.pricing.api;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Pricing a cart, for the module that owns the cart (ADR 0018, ADR 0019).
@@ -28,6 +29,10 @@ public interface CartPricingPort {
     QuoteSnapshot priceCart(PricingCommand command);
 
     /**
+     * Everything a cart's total depends on, handed from ordering to pricing.
+     *
+     * @param customerAccountId null for a guest cart, which has no account to
+     *                          price loyalty or account-scoped terms against
      * @param channelCode the ADR 0036 channel, which decides both the menu that is
      *                    priced and the price plane that prices it
      */
@@ -35,7 +40,7 @@ public interface CartPricingPort {
             UUID tenantId,
             UUID brandId,
             UUID locationId,
-            UUID customerAccountId,
+            @Nullable UUID customerAccountId,
             String channelCode,
             List<Item> items,
             String idempotencyKey) {
@@ -51,6 +56,8 @@ public interface CartPricingPort {
         }
 
         /**
+         * One line of the cart being priced.
+         *
          * @param lineKey stable within the cart, so a re-quote can be compared line
          *                by line rather than by position
          */

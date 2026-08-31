@@ -3,6 +3,7 @@ package uz.horecaos.platform.web.idempotency;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One attempt at an effectful mutation (ADR 0031).
@@ -17,7 +18,7 @@ import java.util.UUID;
 public record IdempotencyRequest(
         String scopeKey,
         String idempotencyKey,
-        UUID tenantId,
+        @Nullable UUID tenantId,
         String principalSubject,
         String requestBody,
         Duration retention) {
@@ -36,7 +37,11 @@ public record IdempotencyRequest(
     }
 
     public static IdempotencyRequest of(
-            String scopeKey, String idempotencyKey, UUID tenantId, String principalSubject, String requestBody) {
+            String scopeKey,
+            String idempotencyKey,
+            @Nullable UUID tenantId,
+            String principalSubject,
+            String requestBody) {
         return new IdempotencyRequest(
                 scopeKey,
                 idempotencyKey,

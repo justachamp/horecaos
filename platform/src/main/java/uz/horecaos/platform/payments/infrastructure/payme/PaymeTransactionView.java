@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.payments.domain.PaymentAttemptStatus;
 import uz.horecaos.platform.payments.domain.SomAmount;
 import uz.horecaos.platform.payments.domain.TiyinAmount;
@@ -37,10 +38,10 @@ public record PaymeTransactionView(
         Instant paymeCreatedAt,
         SomAmount amount,
         PaymentAttemptStatus status,
-        String reason,
+        @Nullable String reason,
         Instant createTime,
-        Instant performTime,
-        Instant cancelTime) {
+        @Nullable Instant performTime,
+        @Nullable Instant cancelTime) {
 
     /**
      * The merchant-side transaction number.
@@ -107,7 +108,7 @@ public record PaymeTransactionView(
      * and both templates get the timestamp one wrong by emitting null. Open
      * question U13: this follows the docs, and a sandbox can settle it.
      */
-    private static long millis(Instant at) {
+    private static long millis(@Nullable Instant at) {
         return at == null ? 0L : at.toEpochMilli();
     }
 }

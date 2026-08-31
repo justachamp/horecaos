@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.pos.domain.SyncDifference.DifferenceCategory;
 import uz.horecaos.platform.pos.domain.SyncDifference.EntityType;
 import uz.horecaos.platform.pos.domain.SyncDifference.FieldAuthority;
@@ -54,6 +55,8 @@ public final class DifferenceEngine {
     }
 
     /**
+     * Compares a staged snapshot against what HorecaOS holds and reports the result.
+     *
      * @param target      what HorecaOS currently holds for the entities this binding
      *                    has mapped
      * @param absences    how many consecutive runs, including this one, have
@@ -335,8 +338,8 @@ public final class DifferenceEngine {
             String externalId,
             TargetCatalog.Entity mapped,
             String fieldPath,
-            String current,
-            String imported) {
+            @Nullable String current,
+            @Nullable String imported) {
 
         if (Objects.equals(normalise(current), normalise(imported))) {
             return;
@@ -355,10 +358,13 @@ public final class DifferenceEngine {
                 current,
                 imported,
                 authority,
-                // A protected field disagreeing is worth noticing and is not a
-                // problem: it is usually a restaurant editing their own till,
-                // which is exactly what they are entitled to do.
-                category == DifferenceCategory.PROTECTED_FIELD_CHANGE ? Severity.INFO : Severity.INFO,
+                // Both a protected-field disagreement and an authorized change are
+                // informational by design (see the DifferenceCategory constants):
+                // neither is urgent enough to warrant WARNING or BLOCKING on its
+                // own. A protected field disagreeing is usually a restaurant
+                // editing their own till, which is exactly what they are entitled
+                // to do; an authorized change is, by definition, safe to apply.
+                Severity.INFO,
                 policy.recommendationFor(fieldPath),
                 category == DifferenceCategory.PROTECTED_FIELD_CHANGE
                         ? "HorecaOS owns this field. The provider's value is recorded and not applied."
@@ -394,7 +400,7 @@ public final class DifferenceEngine {
     }
 
     /** Null and blank are the same absence, and trailing space is not a change. */
-    private static String normalise(String value) {
+    private static @Nullable String normalise(@Nullable String value) {
         if (value == null) {
             return null;
         }
@@ -402,7 +408,7 @@ public final class DifferenceEngine {
         return stripped.isEmpty() ? null : stripped;
     }
 
-    private static String money(Long minor) {
+    private static @Nullable String money(@Nullable Long minor) {
         return minor == null ? null : Long.toString(minor);
     }
 
@@ -435,11 +441,13 @@ public final class DifferenceEngine {
             return byType.getOrDefault(type, Map.of());
         }
 
-        public Entity find(EntityType type, String externalId) {
+        public @Nullable Entity find(EntityType type, String externalId) {
             return entities(type).get(externalId);
         }
 
         /**
+         * What HorecaOS holds for one mapped entity, and the version it was read at.
+         *
          * @param version the optimistic version the comparison read. An apply
          *                carries it forward so a target somebody edited between
          *                comparison and apply returns to review instead of being
@@ -465,6 +473,8 @@ public final class DifferenceEngine {
         }
 
         /**
+         * How many consecutive runs, including this one, have failed to see the entity.
+         *
          * @return the streak <em>including</em> the run being compared, so a first
          *         absence answers 1 rather than 0
          */

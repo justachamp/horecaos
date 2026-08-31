@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.integration.api.pos.PosApiCall;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 
@@ -55,7 +56,7 @@ public final class CloposEnvelope {
      */
     public static ProviderOutcome read(ProviderOutcome transportOutcome, PosApiCall.Effect effect) {
         if (transportOutcome.status() != ProviderOutcome.Status.SUCCESS) {
-            return reclassify(transportOutcome, effect);
+            return reclassify(transportOutcome);
         }
 
         Map<String, Object> body = transportOutcome.normalized();
@@ -72,7 +73,7 @@ public final class CloposEnvelope {
         return transportOutcome;
     }
 
-    private static ProviderOutcome reclassify(ProviderOutcome outcome, PosApiCall.Effect effect) {
+    private static ProviderOutcome reclassify(ProviderOutcome outcome) {
         if (outcome.status() != ProviderOutcome.Status.REJECTED) {
             // Retryable and uncertain outcomes were decided by the transport from
             // evidence this class does not have — whether the request left the
@@ -100,7 +101,7 @@ public final class CloposEnvelope {
         return outcome;
     }
 
-    private static boolean isPlatformWide(String value) {
+    private static boolean isPlatformWide(@Nullable String value) {
         if (value == null) {
             return false;
         }
@@ -131,7 +132,7 @@ public final class CloposEnvelope {
         return total instanceof Number number ? Optional.of(number.intValue()) : Optional.empty();
     }
 
-    public static String string(Map<String, Object> body, String key) {
+    public static @Nullable String string(Map<String, Object> body, String key) {
         Object value = body.get(key);
         return value == null ? null : String.valueOf(value);
     }
@@ -148,7 +149,7 @@ public final class CloposEnvelope {
      * round-trip. Parsing the token's own text keeps the value exact whatever it
      * turns out to be.
      */
-    public static BigDecimal decimal(Map<String, Object> body, String key) {
+    public static @Nullable BigDecimal decimal(Map<String, Object> body, String key) {
         Object value = body.get(key);
         if (value == null) {
             return null;
@@ -183,14 +184,14 @@ public final class CloposEnvelope {
         return fallback;
     }
 
-    private static String describe(String error, String message) {
+    private static String describe(@Nullable String error, @Nullable String message) {
         if (error != null && message != null) {
             return error + ": " + trim(message);
         }
         return trim(error != null ? error : message);
     }
 
-    private static String trim(String value) {
+    private static String trim(@Nullable String value) {
         if (value == null) {
             return "";
         }

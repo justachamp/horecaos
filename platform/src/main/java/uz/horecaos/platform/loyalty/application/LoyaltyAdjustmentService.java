@@ -10,6 +10,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -121,6 +122,8 @@ public class LoyaltyAdjustmentService {
     }
 
     /**
+     * One operator-authored movement against one account.
+     *
      * @param amountMinor signed. Positive credits the customer; negative debits
      *                    them. There is no second account on this command and
      *                    there is no overload that takes one
@@ -186,7 +189,7 @@ public class LoyaltyAdjustmentService {
         return new ApprovalOutcome.NotRequired();
     }
 
-    private void apply(AdjustmentCommand command, ResourceScope scope, UUID approvalId, Instant now) {
+    private void apply(AdjustmentCommand command, ResourceScope scope, @Nullable UUID approvalId, Instant now) {
 
         AccountRow account = store.openAccount(
                 UUID.randomUUID(),
@@ -687,7 +690,7 @@ public class LoyaltyAdjustmentService {
                 .orElse(0L);
     }
 
-    private static UUID approvalIdOf(ApprovalOutcome outcome) {
+    private static @Nullable UUID approvalIdOf(ApprovalOutcome outcome) {
         return outcome instanceof ApprovalOutcome.Approved approved ? approved.requestId() : null;
     }
 

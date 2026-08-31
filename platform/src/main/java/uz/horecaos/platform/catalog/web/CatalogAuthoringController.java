@@ -11,6 +11,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -287,8 +288,8 @@ public class CatalogAuthoringController {
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @RequestParam(defaultValue = "uz") String locale,
-            @RequestParam(required = false) UUID cursor,
-            @RequestParam(required = false) Integer limit) {
+            @RequestParam(required = false) @Nullable UUID cursor,
+            @RequestParam(required = false) @Nullable Integer limit) {
 
         int pageSize = Page.limitOrDefault(limit);
         List<JdbcCatalogStore.VariantAvailabilityRow> rows =
@@ -313,7 +314,7 @@ public class CatalogAuthoringController {
      * The column records who chose a code on a legal document, and a fabricated
      * identifier there is worse than an honest absence.
      */
-    private UUID actorId() {
+    private @Nullable UUID actorId() {
         try {
             return UUID.fromString(currentActor.get().subject());
         } catch (IllegalArgumentException notAUuid) {
@@ -327,6 +328,8 @@ public class CatalogAuthoringController {
             @NotBlank String locale) {}
 
     /**
+     * A product and its default variant, created together.
+     *
      * @param fiscal the default variant's classification (ADR 0038). Optional
      *               today: publication reports a gap as a warning rather than
      *               refusing the menu, while ADR 0038's stage 2 coverage tooling
@@ -335,11 +338,11 @@ public class CatalogAuthoringController {
     public record CreateProductRequest(
             @NotBlank String code,
             @NotBlank String name,
-            String description,
+            @Nullable String description,
             @NotBlank String locale,
-            String sku,
-            String unitCode,
-            @Valid FiscalClassificationRequest fiscal) {
+            @Nullable String sku,
+            @Nullable String unitCode,
+            @Valid @Nullable FiscalClassificationRequest fiscal) {
 
         FiscalClassification classification() {
             return fiscal == null ? FiscalClassification.unclassified() : fiscal.toClassification();
@@ -347,17 +350,19 @@ public class CatalogAuthoringController {
     }
 
     /**
+     * A further variant of an existing product.
+     *
      * @param fiscal this variant's own classification. Nothing is inherited from
      *               a sibling variant: every size of a dish is its own receipt
      *               line with its own unit and its own 63-character fiscal name
      */
     public record AddVariantRequest(
-            String sku,
-            String unitCode,
-            String name,
+            @Nullable String sku,
+            @Nullable String unitCode,
+            @Nullable String name,
             @NotBlank String locale,
             @PositiveOrZero int sortOrder,
-            @Valid FiscalClassificationRequest fiscal) {
+            @Valid @Nullable FiscalClassificationRequest fiscal) {
 
         FiscalClassification classification() {
             return fiscal == null ? FiscalClassification.unclassified() : fiscal.toClassification();
@@ -387,16 +392,16 @@ public class CatalogAuthoringController {
      *                        containing this node
      */
     public record FiscalClassificationRequest(
-            @Size(max = 32) String mxikCode,
-            @Size(max = 32) String packageCode,
-            @Positive Integer fiscalUnitCode,
-            @Size(max = 63) String fiscalName,
-            @Size(max = 13) String barcode,
+            @Size(max = 32) @Nullable String mxikCode,
+            @Size(max = 32) @Nullable String packageCode,
+            @Positive @Nullable Integer fiscalUnitCode,
+            @Size(max = 63) @Nullable String fiscalName,
+            @Size(max = 13) @Nullable String barcode,
             boolean markingRequired,
-            FiscalClassification.MarkingScheme markingScheme,
+            FiscalClassification.@Nullable MarkingScheme markingScheme,
             boolean excisable,
-            @PositiveOrZero @Max(10_000) Integer alcoholByVolumeBp,
-            @Positive @Max(120) Integer ageRestrictionYears) {
+            @PositiveOrZero @Max(10_000) @Nullable Integer alcoholByVolumeBp,
+            @Positive @Max(120) @Nullable Integer ageRestrictionYears) {
 
         FiscalClassification toClassification() {
             // A marking scheme is implied by the requirement rather than demanded
@@ -422,7 +427,7 @@ public class CatalogAuthoringController {
     }
 
     public record CreateCategoryRequest(
-            UUID parentCategoryId,
+            @Nullable UUID parentCategoryId,
             @NotBlank String code,
             @NotBlank String name,
             @NotBlank String locale,
@@ -438,6 +443,8 @@ public class CatalogAuthoringController {
             boolean allowSameOptionMultipleTimes) {}
 
     /**
+     * One choice added to an existing modifier group.
+     *
      * @param fiscal a modifier reaches a receipt as its own line and so needs its
      *               own classification; absent, it falls back to the linked
      *               variant's when there is one
@@ -446,10 +453,10 @@ public class CatalogAuthoringController {
             @NotBlank String code,
             @NotBlank String name,
             @NotBlank String locale,
-            UUID linkedVariantId,
+            @Nullable UUID linkedVariantId,
             @Positive int maximumQuantity,
             @PositiveOrZero int sortOrder,
-            @Valid FiscalClassificationRequest fiscal) {
+            @Valid @Nullable FiscalClassificationRequest fiscal) {
 
         FiscalClassification classification() {
             return fiscal == null ? FiscalClassification.unclassified() : fiscal.toClassification();
@@ -478,7 +485,11 @@ public class CatalogAuthoringController {
      *                     rather than a control that would 409
      */
     public record VariantAvailabilityResponse(
-            UUID variantId, String productName, String category, boolean available, String trackingMode) {
+            UUID variantId,
+            String productName,
+            @Nullable String category,
+            boolean available,
+            @Nullable String trackingMode) {
 
         static VariantAvailabilityResponse of(JdbcCatalogStore.VariantAvailabilityRow row) {
             return new VariantAvailabilityResponse(

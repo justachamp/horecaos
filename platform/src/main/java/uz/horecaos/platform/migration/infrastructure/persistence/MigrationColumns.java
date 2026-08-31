@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -26,11 +27,11 @@ final class MigrationColumns {
 
     private MigrationColumns() {}
 
-    static OffsetDateTime utc(Instant instant) {
+    static @Nullable OffsetDateTime utc(@Nullable Instant instant) {
         return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
-    static Instant instantOrNull(ResultSet row, String column) throws SQLException {
+    static @Nullable Instant instantOrNull(ResultSet row, String column) throws SQLException {
         OffsetDateTime value = row.getObject(column, OffsetDateTime.class);
         return value == null ? null : value.toInstant();
     }
@@ -45,7 +46,7 @@ final class MigrationColumns {
      * of the same care: the column has no scale, so a value that arrived with one
      * is a mapping error and should say so rather than round.
      */
-    static BigInteger exactIntegerOrNull(ResultSet row, String column) throws SQLException {
+    static @Nullable BigInteger exactIntegerOrNull(ResultSet row, String column) throws SQLException {
         BigDecimal value = row.getObject(column, BigDecimal.class);
         return value == null ? null : value.toBigIntegerExact();
     }

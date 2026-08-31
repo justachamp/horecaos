@@ -2,6 +2,7 @@ package uz.horecaos.platform.iam.infrastructure.secrets;
 
 import java.util.List;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.env.Environment;
@@ -31,7 +32,7 @@ public class SecretsProfileGuard implements ApplicationRunner {
     }
 
     @Override
-    public void run(ApplicationArguments args) {
+    public void run(@Nullable ApplicationArguments args) {
         if (!(resolver instanceof EnvironmentSecretResolver)) {
             return;
         }

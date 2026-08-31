@@ -2,6 +2,7 @@ package uz.horecaos.platform.telemetry.domain;
 
 import java.util.Locale;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
  * When telemetry is collected inside an open duty session (ADR 0045).
@@ -30,7 +31,7 @@ public enum CollectionGate {
         return this == ON_DUTY || activeAssignmentCount > 0;
     }
 
-    public static Optional<CollectionGate> find(String value) {
+    public static Optional<CollectionGate> find(@Nullable String value) {
         if (value == null) {
             return Optional.empty();
         }

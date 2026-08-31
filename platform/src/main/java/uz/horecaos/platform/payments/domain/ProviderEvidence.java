@@ -3,6 +3,7 @@ package uz.horecaos.platform.payments.domain;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The provider's own vocabulary, kept verbatim beside HorecaOS's state (ADR 0013).
@@ -25,7 +26,7 @@ import java.util.Optional;
  *                   cancelled, and left null rather than zeroed
  * @param recordedAt when HorecaOS observed this, which is not when it happened
  */
-public record ProviderEvidence(String state, String reason, Instant recordedAt) {
+public record ProviderEvidence(String state, @Nullable String reason, Instant recordedAt) {
 
     public ProviderEvidence {
         Objects.requireNonNull(state, "A provider state is required");

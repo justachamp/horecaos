@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
@@ -26,7 +27,7 @@ import uz.horecaos.platform.integration.events.EventContract;
  * gap. The relay publishes what committed.
  */
 @Component
-public class ShipmentReconciliationOutbox {
+public class ShipmentReconciliationOutbox implements ReconciliationRequester {
 
     /** ADR 0032 catalogue keys. Resolved through the catalogue, never hard-coded twice. */
     public static final String COMMAND_EVENT_TYPE = "ShipmentReconciliationRequested";
@@ -55,6 +56,7 @@ public class ShipmentReconciliationOutbox {
      * just failed to answer, so the next query wants minutes rather than seconds,
      * and the caller is a sourcing tick with an order waiting behind it.
      */
+    @Override
     public void requestReconciliation(UUID tenantId, Command command, String correlationId) {
         EventContract contract = EventCatalog.require(COMMAND_EVENT_TYPE, 1);
         append(contract, command.operationCommandId(), tenantId, command, correlationId);
@@ -131,11 +133,11 @@ public class ShipmentReconciliationOutbox {
             UUID operationCommandId,
             UUID bindingId,
             UUID brandId,
-            UUID locationId,
+            @Nullable UUID locationId,
             String providerType,
             String capability,
             String externalReference,
-            String uncertainErrorCode) {}
+            @Nullable String uncertainErrorCode) {}
 
     /**
      * The settled answer.
@@ -154,7 +156,7 @@ public class ShipmentReconciliationOutbox {
             String externalReference,
             String resolution,
             String providerStatus,
-            String errorCode,
+            @Nullable String errorCode,
             int attempts,
             String reconciledAt) {
 
@@ -167,7 +169,7 @@ public class ShipmentReconciliationOutbox {
                 String externalReference,
                 String resolution,
                 String providerStatus,
-                String errorCode,
+                @Nullable String errorCode,
                 int attempts) {
 
             // ISO-8601 text rather than an Instant field, so the wire format is

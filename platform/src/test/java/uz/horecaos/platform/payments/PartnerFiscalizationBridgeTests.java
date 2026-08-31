@@ -6,6 +6,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
@@ -171,7 +172,7 @@ class PartnerFiscalizationBridgeTests {
                         "https://ofd.soliq.uz/epi?t=1&r=1&c=1&s=1",
                         null,
                         null),
-                null,
+                "protected-response-1",
                 CLOCK.instant());
 
         // A resolver that fails the test the moment it is asked anything: the
@@ -473,7 +474,9 @@ class PartnerFiscalizationBridgeTests {
                 .param("providerType", providerType)
                 .param("environmentCode", environmentCode)
                 .param("name", providerType + " (bridge tests)")
-                .param("secretReference", "horecaos:test:provider_payment:tenant:" + providerType.toLowerCase())
+                .param(
+                        "secretReference",
+                        "horecaos:test:provider_payment:tenant:" + providerType.toLowerCase(Locale.ROOT))
                 .update();
     }
 

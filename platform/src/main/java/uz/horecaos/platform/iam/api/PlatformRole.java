@@ -564,6 +564,14 @@ public enum PlatformRole {
 
     private final String code;
     private final ScopeType scopeType;
+
+    // Guava's ImmutableSet isn't a project dependency and adding it only to
+    // satisfy this checker's declared-type allowlist would be a heavier change
+    // than the field warrants; the constructor below copies into an
+    // unmodifiable Set (Set.copyOf), so every enum constant's capabilities is
+    // genuinely immutable at runtime even though java.util.Set's declared type
+    // does not prove it statically.
+    @SuppressWarnings("ImmutableEnumChecker")
     private final Set<Capability> capabilities;
 
     PlatformRole(String code, ScopeType scopeType, Set<Capability> capabilities) {

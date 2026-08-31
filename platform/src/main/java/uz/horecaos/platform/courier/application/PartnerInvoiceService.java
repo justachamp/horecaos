@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -122,7 +123,7 @@ public class PartnerInvoiceService {
             long amountMinor,
             String currency,
             LocalDate businessDate,
-            UUID legalEntityId,
+            @Nullable UUID legalEntityId,
             PartnerChargeType chargeType,
             String recordedBy) {
 
@@ -250,11 +251,16 @@ public class PartnerInvoiceService {
                 .reduce(Long::sum);
     }
 
+    /**
+     * A partner invoice as imported.
+     *
+     * @param legalEntityId null until ADR 0038's registry can resolve one
+     */
     public record ImportInvoice(
             UUID tenantId,
             String providerCode,
             String providerInvoiceRef,
-            UUID legalEntityId,
+            @Nullable UUID legalEntityId,
             LocalDate periodStart,
             LocalDate periodEnd,
             long totalMinor,

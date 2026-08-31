@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.pos.domain.DifferenceEngine.TargetCatalog;
@@ -38,6 +39,8 @@ public class JdbcPosTargetCatalog {
     }
 
     /**
+     * What HorecaOS currently holds for this binding's mapped entities.
+     *
      * @param defaultLocale the brand's own locale. A name compared at the wrong
      *                      locale would report every product as changed on the
      *                      first run and then never again, which is worse than
@@ -126,7 +129,11 @@ public class JdbcPosTargetCatalog {
      * Absent and blank are one thing in a comparison, so an absent value is left
      * out entirely rather than stored as an empty string a diff would report.
      */
-    private static void putIfPresent(Map<String, String> fields, String key, String value) {
+    // translated_name (both call sites) comes from a LEFT JOIN against
+    // catalog.translations and is genuinely absent whenever no row matches the
+    // requested locale — the null check below was already handling that; the
+    // parameter type had not.
+    private static void putIfPresent(Map<String, String> fields, String key, @Nullable String value) {
         if (value != null && !value.isBlank()) {
             fields.put(key, value);
         }

@@ -55,18 +55,41 @@ public class KafkaRealtimeSignalPublisher implements RealtimeSignalPublisher {
     }
 
     @Override
+    // send()'s returned future is deliberately observed (below) rather than
+    // awaited: whenComplete attaches the failure logging that makes fire-and-
+    // forget publishing honest about broker-down failures, and the second
+    // CompletableFuture whenComplete itself returns — completion of that
+    // logging callback, which cannot itself fail — has nothing further to
+    // check. This is the narrow case the check does not distinguish from a
+    // future silently dropped with no handler at all.
+    @SuppressWarnings("FutureReturnValueIgnored")
     public void publish(RealtimeSignal signal) {
         try {
-            kafka.send(topic, signal.scopeKey().canonical(), json.writeValueAsString(wireForm(signal)));
+            // send() itself only throws for a failure it can detect before the
+            // record leaves this process (serialization, an unset topic); a
+            // broker that is unreachable fails the *returned* future instead,
+            // asynchronously, and that completion was previously never observed
+            // — silently dropping the exact "broker down" case the comment below
+            // already claims is handled. whenComplete logs that path too, without
+            // making publish() block on it.
+            kafka.send(topic, signal.scopeKey().canonical(), json.writeValueAsString(wireForm(signal)))
+                    .whenComplete((result, failure) -> {
+                        if (failure != null) {
+                            logPublishFailure(signal, failure);
+                        }
+                    });
         } catch (RuntimeException failure) {
-            // Debug rather than warn. A broker that is down is already alarmed on
-            // by ADR 0023's outbox age gauge, and one log line per signal would
-            // bury it under thousands of copies of the same fact.
-            log.debug(
-                    "Could not publish a realtime signal for {}; clients fall back to polling",
-                    signal.channel(),
-                    failure);
+            logPublishFailure(signal, failure);
         }
+    }
+
+    private static void logPublishFailure(RealtimeSignal signal, Throwable failure) {
+        // Debug rather than warn. A broker that is down is already alarmed on
+        // by ADR 0023's outbox age gauge, and one log line per signal would
+        // bury it under thousands of copies of the same fact.
+        log.debug(
+                "Could not publish a realtime signal for {}; clients fall back to polling", signal.channel(),
+                failure);
     }
 
     /**

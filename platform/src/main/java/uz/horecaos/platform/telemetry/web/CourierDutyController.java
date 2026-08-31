@@ -279,6 +279,8 @@ public class CourierDutyController {
     }
 
     /**
+     * What became of one ingested batch, rendered for the courier app.
+     *
      * @param suspended true when a break was running, so the courier app's visible
      *                  on-duty indicator can say truthfully that collection has
      *                  stopped. Collection never runs invisibly, and a courier who

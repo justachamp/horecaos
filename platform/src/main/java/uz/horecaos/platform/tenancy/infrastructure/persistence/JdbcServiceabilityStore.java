@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
@@ -269,11 +270,11 @@ public class JdbcServiceabilityStore {
             UUID scheduleId,
             LocalDate date,
             boolean closedAllDay,
-            LocalTime opensAt,
-            LocalTime closesAt,
+            @Nullable LocalTime opensAt,
+            @Nullable LocalTime closesAt,
             String label,
             String reason,
-            UUID actorId) {
+            @Nullable UUID actorId) {
         jdbc.sql("""
                 INSERT INTO tenant.service_schedule_exceptions (
                     id, schedule_id, exception_date, closed_all_day, opens_at, closes_at,
@@ -334,10 +335,10 @@ public class JdbcServiceabilityStore {
             UUID brandId,
             UUID locationId,
             ServiceMode mode,
-            String reasonCode,
-            String note,
-            Instant effectiveUntil,
-            UUID actorId,
+            @Nullable String reasonCode,
+            @Nullable String note,
+            @Nullable Instant effectiveUntil,
+            @Nullable UUID actorId,
             Instant now) {
         jdbc.sql("""
                 INSERT INTO tenant.location_service_state (
@@ -489,10 +490,15 @@ public class JdbcServiceabilityStore {
 
     // --------------------------------------------------------------- row types
 
-    public record ChannelAtLocation(boolean exists, boolean active, boolean enabledAtLocation, String channelCode) {}
+    public record ChannelAtLocation(
+            boolean exists, boolean active, boolean enabledAtLocation, @Nullable String channelCode) {}
 
     public record ServiceState(
-            ServiceMode mode, String reasonCode, Instant effectiveUntil, Integer maxConcurrentOrders, int version) {
+            ServiceMode mode,
+            @Nullable String reasonCode,
+            @Nullable Instant effectiveUntil,
+            @Nullable Integer maxConcurrentOrders,
+            int version) {
 
         static ServiceState followingSchedule() {
             return new ServiceState(ServiceMode.FOLLOW_SCHEDULE, null, null, null, 1);
@@ -517,8 +523,8 @@ public class JdbcServiceabilityStore {
     public record BoundSchedule(UUID scheduleId, WeeklySchedule schedule) {}
 
     public record Band(
-            FulfillmentMode mode,
-            Integer dayOfWeek,
+            @Nullable FulfillmentMode mode,
+            @Nullable Integer dayOfWeek,
             LocalTime startsAt,
             LocalTime endsAt,
             int durationMinutes,
@@ -539,8 +545,8 @@ public class JdbcServiceabilityStore {
                 .list();
     }
 
-    private Map<LocalDate, WeeklySchedule.Exception> exceptionsOf(UUID scheduleId) {
-        Map<LocalDate, WeeklySchedule.Exception> exceptions = new HashMap<>();
+    private Map<LocalDate, WeeklySchedule.DatedException> exceptionsOf(UUID scheduleId) {
+        Map<LocalDate, WeeklySchedule.DatedException> exceptions = new HashMap<>();
         jdbc.sql("""
                 SELECT exception_date, closed_all_day, opens_at, closes_at
                 FROM tenant.service_schedule_exceptions
@@ -550,8 +556,8 @@ public class JdbcServiceabilityStore {
                 .query((row, number) -> Map.entry(
                         row.getObject("exception_date", LocalDate.class),
                         row.getBoolean("closed_all_day")
-                                ? WeeklySchedule.Exception.closed()
-                                : WeeklySchedule.Exception.open(
+                                ? WeeklySchedule.DatedException.closed()
+                                : WeeklySchedule.DatedException.open(
                                         row.getObject("opens_at", LocalTime.class),
                                         row.getObject("closes_at", LocalTime.class))))
                 .list()
@@ -559,7 +565,7 @@ public class JdbcServiceabilityStore {
         return exceptions;
     }
 
-    private static Instant instant(OffsetDateTime value) {
+    private static @Nullable Instant instant(@Nullable OffsetDateTime value) {
         return value == null ? null : value.toInstant();
     }
 

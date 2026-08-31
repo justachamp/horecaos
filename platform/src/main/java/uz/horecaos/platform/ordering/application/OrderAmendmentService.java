@@ -7,8 +7,10 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -23,7 +25,6 @@ import uz.horecaos.platform.ordering.domain.AmendmentCommandType;
 import uz.horecaos.platform.ordering.domain.AmendmentStatus;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderAmendmentStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderAmendmentStore.AmendmentRow;
-import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderProcessStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderFieldPatch;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderRow;
@@ -58,19 +59,10 @@ public class OrderAmendmentService {
      */
     public static final Duration TTL = Duration.ofMinutes(15);
 
-    /**
-     * The POS export process, watched rather than driven.
-     *
-     * <p>ADR 0011 owns it and nothing writes these rows today. The gate is here
-     * anyway: the failure it prevents is a kitchen holding two tickets for one
-     * order and cooking the first, and a guard added after the exporter ships is a
-     * guard added after the first double ticket.
-     */
     private static final Logger log = LoggerFactory.getLogger(OrderAmendmentService.class);
 
     private final JdbcOrderStore orders;
     private final JdbcOrderAmendmentStore amendments;
-    private final JdbcOrderProcessStore processes;
     private final AuditRecorder audit;
     private final ObjectMapper objectMapper;
     private final Clock clock;
@@ -79,14 +71,12 @@ public class OrderAmendmentService {
     public OrderAmendmentService(
             JdbcOrderStore orders,
             JdbcOrderAmendmentStore amendments,
-            JdbcOrderProcessStore processes,
             AuditRecorder audit,
             ObjectMapper objectMapper,
             Clock clock,
             PosExportStatus posExports) {
         this.orders = orders;
         this.amendments = amendments;
-        this.processes = processes;
         this.audit = audit;
         this.objectMapper = objectMapper;
         this.clock = clock;
@@ -99,11 +89,8 @@ public class OrderAmendmentService {
      * <p>The three built commands raise no total, so ADR 0039's
      * {@code PRICED -> APPLIED} edge is the one they take: there is no increase to
      * confirm and no incremental payment to wait for. The states in between exist
-     * for the financial commands and are not skipped for them.
-     *
-     * @param applyOnPrice apply in the same transaction once priced. Refused when
-     *                     the amendment raises the total or needs approval, so it
-     *                     can never become a way past the customer's agreement
+     * for the financial commands and are not skipped for them. See {@link
+     * ProposeCommand#applyOnPrice} for what governs whether this call also applies.
      */
     @Transactional
     public AmendmentResult propose(UUID tenantId, UUID orderId, ProposeCommand command) {
@@ -220,7 +207,7 @@ public class OrderAmendmentService {
             String actorType,
             String actorId,
             String reason,
-            String correlationId) {
+            @Nullable String correlationId) {
 
         Instant now = clock.instant();
         AmendmentRow amendment =
@@ -302,7 +289,7 @@ public class OrderAmendmentService {
                         expectedOrderVersion,
                         orders.find(tenantId, orderId).map(OrderRow::version).orElse(0)));
 
-        amendments
+        int amendmentVersion = amendments
                 .markApplied(tenantId, amendmentId, amendment.version(), newRevision, now)
                 .orElseThrow(
                         () -> new AmendmentNotPermittedException("The amendment settled while it was being applied"));
@@ -319,6 +306,8 @@ public class OrderAmendmentService {
                 Map.of(
                         "amendmentId",
                         amendmentId.toString(),
+                        "amendmentVersion",
+                        amendmentVersion,
                         "revision",
                         newRevision,
                         "commands",
@@ -390,23 +379,16 @@ public class OrderAmendmentService {
     }
 
     /**
-     * Refuses to amend underneath an export the POS has not acknowledged.
-     *
-     * <p>The failure being prevented is a kitchen holding two tickets for one
-     * order and cooking the first. Nothing writes these process rows yet, so the
-     * gate passes for every order today — which is the honest state and is why the
-     * check reads the table rather than assuming it is empty.
-     */
-    /**
      * Refuses an amendment while the till may already be cooking the order.
      *
-     * <p>This read the ordering process table until the POS export became
-     * automatic. Nothing ever wrote a {@code POS_ORDER_EXPORT} row there — the
-     * export has always tracked its own state in {@code integration.pos_order_exports}
-     * — so {@code ifPresent} never fired and the guard passed for every order in
-     * the platform's history. It looked like protection and was not, which is
-     * worse than an absent guard, because the amendment path was written by
-     * somebody who believed this stopped them.
+     * <p>The failure being prevented is a kitchen holding two tickets for one
+     * order and cooking the first. This read the ordering process table until
+     * the POS export became automatic. Nothing ever wrote a {@code
+     * POS_ORDER_EXPORT} row there — the export has always tracked its own state
+     * in {@code integration.pos_order_exports} — so {@code ifPresent} never fired
+     * and the guard passed for every order in the platform's history. It looked
+     * like protection and was not, which is worse than an absent guard, because
+     * the amendment path was written by somebody who believed this stopped them.
      *
      * <p>It now asks the export's own table through {@link PosExportStatus}. No
      * export at all still means yes: a location with no till exports nothing, and
@@ -438,7 +420,9 @@ public class OrderAmendmentService {
             switch (command.commandType()) {
                 case SET_KITCHEN_NOTE -> kitchenNote = String.valueOf(payload.getOrDefault("note", ""));
                 case SET_CALLBACK_REQUESTED -> callbackRequested = Boolean.TRUE.equals(payload.get("requested"));
-                case SET_CASH_TENDERED -> cashTendered = ((Number) payload.get("amountMinor")).longValue();
+                case SET_CASH_TENDERED -> cashTendered = ((Number)
+                                Objects.requireNonNull(payload.get("amountMinor"), "cashTendered command has no amount"))
+                        .longValue();
                 default -> throw new IllegalStateException("No built handler for " + command.commandType());
             }
         }
@@ -464,17 +448,17 @@ public class OrderAmendmentService {
     private void recordAudit(
             OrderRow order,
             String actionCode,
-            String actorType,
-            String actorId,
-            String reason,
+            @Nullable String actorType,
+            @Nullable String actorId,
+            @Nullable String reason,
             int version,
             Map<String, Object> changed,
-            String correlationId,
+            @Nullable String correlationId,
             Instant now) {
 
         ActorRef actor =
                 switch (actorType == null ? "SERVICE" : actorType) {
-                    case "USER" -> ActorRef.user(actorId, null);
+                    case "USER" -> ActorRef.user(actorId == null ? "unknown-user" : actorId, null);
                     case "SYSTEM_JOB" -> ActorRef.systemJob(actorId == null ? "ordering" : actorId);
                     default -> ActorRef.service(actorId == null ? "ordering" : actorId);
                 };
@@ -510,6 +494,8 @@ public class OrderAmendmentService {
         }
 
         /**
+         * Records the change-due the customer is expected to hand over.
+         *
          * @param amountMinor whole som per ADR 0018. Never a decimal figure: a
          *                    formatter that divides change-due by a hundred shows
          *                    a customer the wrong money
@@ -524,6 +510,13 @@ public class OrderAmendmentService {
         }
     }
 
+    /**
+     * A proposal to amend an order, and whether to apply it in the same call.
+     *
+     * @param applyOnPrice apply in the same transaction once priced. Refused when
+     *                     the amendment raises the total or needs approval, so it
+     *                     can never become a way past the customer's agreement
+     */
     public record ProposeCommand(
             int expectedOrderVersion,
             List<AmendmentCommand> commands,
@@ -532,9 +525,11 @@ public class OrderAmendmentService {
             String reason,
             String actorType,
             String actorId,
-            String correlationId) {}
+            @Nullable String correlationId) {}
 
     /**
+     * The outcome of a propose or apply call.
+     *
      * @param replayed whether this call found an already-settled amendment rather
      *                 than doing the work, so a retried request gives the same
      *                 answer as the first

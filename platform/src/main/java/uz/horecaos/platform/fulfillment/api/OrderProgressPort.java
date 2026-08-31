@@ -1,6 +1,7 @@
 package uz.horecaos.platform.fulfillment.api;
 
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * How the kitchen proposes an order transition without being able to make one
@@ -87,7 +88,7 @@ public interface OrderProgressPort {
             String reasonCode,
             String actorType,
             String actorId,
-            String correlationId);
+            @Nullable String correlationId);
 
     /**
      * Whether a real implementation is present.

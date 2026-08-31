@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore;
@@ -40,6 +41,8 @@ public class LoyaltyQueryService {
     }
 
     /**
+     * A customer-facing view of one points balance.
+     *
      * @param heldMinor      already debited by an unsettled tender
      * @param nextExpiryAt   null when nothing is due to expire
      */
@@ -50,7 +53,7 @@ public class LoyaltyQueryService {
             long balanceMinor,
             long spendableMinor,
             long heldMinor,
-            Instant nextExpiryAt,
+            @Nullable Instant nextExpiryAt,
             long nextExpiryMinor) {}
 
     @Transactional(readOnly = true)

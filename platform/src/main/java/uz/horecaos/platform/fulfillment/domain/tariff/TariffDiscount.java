@@ -2,6 +2,7 @@ package uz.horecaos.platform.fulfillment.domain.tariff;
 
 import java.time.DayOfWeek;
 import java.time.LocalTime;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A standing reduction of the delivery fee, carried by the rate table (ADR 0037,
@@ -31,8 +32,8 @@ public record TariffDiscount(
         int sequence,
         int priority,
         Kind kind,
-        Long amountMinor,
-        Integer allowanceMeters,
+        @Nullable Long amountMinor,
+        @Nullable Integer allowanceMeters,
         int dayMask,
         LocalTime fromTime,
         LocalTime toTime) {

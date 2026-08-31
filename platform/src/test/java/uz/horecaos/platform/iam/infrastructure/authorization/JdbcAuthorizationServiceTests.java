@@ -40,9 +40,6 @@ class JdbcAuthorizationServiceTests {
     private static final UUID SIBLING_LOCATION = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120b06");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private static JdbcClient jdbc;
     private MutableClock clock;
@@ -54,9 +51,6 @@ class JdbcAuthorizationServiceTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
 
         // The role registry and the tenant hierarchy are built once, here, rather
         // than per test. They were in @BeforeEach, and RoleRegistrySynchronizer
@@ -92,7 +86,14 @@ class JdbcAuthorizationServiceTests {
 
     /** A current actor the test can move, so the platform-admin path is reachable. */
     private static final class SettableActor implements uz.horecaos.platform.iam.api.CurrentActor {
-        private uz.horecaos.platform.iam.api.AuthenticatedActor value;
+        // A real, inert actor rather than left uninitialized: CurrentActor#get()
+        // promises @NonNull (its one production implementation, JwtCurrentActor,
+        // never returns null — it throws instead), and every test here that
+        // reaches a path depending on the value calls set() first. This default
+        // is never observed; it exists so the field has an honest initial value
+        // rather than a null the interface does not allow.
+        private uz.horecaos.platform.iam.api.AuthenticatedActor value = new uz.horecaos.platform.iam.api.AuthenticatedActor(
+                "no-actor-set-in-fixture", java.util.Set.of(), java.util.Map.of());
 
         void set(String subject, java.util.Set<String> globalRoles) {
             value = new uz.horecaos.platform.iam.api.AuthenticatedActor(subject, globalRoles, java.util.Map.of());

@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.migration.application.MigrationProgramStore;
@@ -110,8 +111,8 @@ public class JdbcMigrationProgramStore implements MigrationProgramStore {
             ProgramStatus from,
             ProgramStatus to,
             int expectedVersion,
-            Instant startedAt,
-            Instant completedAt,
+            @Nullable Instant startedAt,
+            @Nullable Instant completedAt,
             Instant now) {
 
         Map<String, Object> timestamps = new HashMap<>();

@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.application.MigrationCutoverDecisionStore.Decision;
@@ -694,7 +695,7 @@ class MigrationCutoverGateTests extends MigrationControlPlaneFixture {
     // ------------------------------------------------------------- shorthands
 
     /** An ADR 0027 request owned by {@code tenantId}, or by the platform when null. */
-    private UUID approvalRequestFor(UUID tenantId) {
+    private UUID approvalRequestFor(@Nullable UUID tenantId) {
         UUID policyId = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO audit.approval_policies (

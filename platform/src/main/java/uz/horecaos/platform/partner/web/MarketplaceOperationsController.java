@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -172,14 +173,14 @@ public class MarketplaceOperationsController {
             UUID locationId,
             String providerName,
             String direction,
-            Instant lastSuccessAt,
-            String lastSuccessReference,
-            Instant lastFailureAt,
-            String lastFailureCode,
+            @Nullable Instant lastSuccessAt,
+            @Nullable String lastSuccessReference,
+            @Nullable Instant lastFailureAt,
+            @Nullable String lastFailureCode,
             int staleAfterSeconds,
-            Integer observedMedianIntervalSeconds,
+            @Nullable Integer observedMedianIntervalSeconds,
             String alertState,
-            Long silenceSeconds) {
+            @Nullable Long silenceSeconds) {
 
         static LivenessResponse of(JdbcPartnerStore.LivenessRow row) {
             return new LivenessResponse(

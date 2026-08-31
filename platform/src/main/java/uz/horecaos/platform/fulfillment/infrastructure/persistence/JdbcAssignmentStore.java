@@ -7,9 +7,11 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -255,8 +257,8 @@ public class JdbcAssignmentStore {
             UUID tenantId,
             UUID attemptId,
             AttemptStatus to,
-            String failureCode,
-            String externalReference,
+            @Nullable String failureCode,
+            @Nullable String externalReference,
             boolean uncertain,
             Instant now) {
 
@@ -348,13 +350,18 @@ public class JdbcAssignmentStore {
         for (AttemptRow row : rows) {
             uncertain |= row.uncertain();
             if (row.sourceType() == SourceType.INTERNAL) {
-                offeredCouriers.add(row.courierId());
+                // An INTERNAL row always names the courier it was offered to;
+                // courier_id is null only on the PARTNER rows this branch excludes.
+                UUID courierId = Objects.requireNonNull(row.courierId(), "an INTERNAL attempt has no courier");
+                offeredCouriers.add(courierId);
                 if (row.status() == AttemptStatus.OFFERED) {
-                    outstandingOffer = row.courierId();
+                    outstandingOffer = courierId;
                     offerExpiresAt = row.expiresAt();
                 }
             } else if (row.status() != AttemptStatus.REQUESTED) {
-                attemptedPartners.add(row.bindingId());
+                // Symmetrically, a PARTNER row always names its binding.
+                attemptedPartners.add(
+                        Objects.requireNonNull(row.bindingId(), "a PARTNER attempt has no provider binding"));
             }
         }
 
@@ -386,6 +393,8 @@ public class JdbcAssignmentStore {
     // --------------------------------------------------------------- row types
 
     /**
+     * A new sourcing attempt to insert, internal offer or partner booking alike.
+     *
      * @param expiresAt required for an internal offer and null for a partner
      *                  attempt, which is {@code ck_attempt_offer_expires} stated
      *                  in Java's type system as far as it goes
@@ -395,17 +404,19 @@ public class JdbcAssignmentStore {
             UUID planId,
             SourceType sourceType,
             AttemptStatus status,
-            UUID courierId,
-            UUID bindingId,
-            UUID quoteId,
+            @Nullable UUID courierId,
+            @Nullable UUID bindingId,
+            @Nullable UUID quoteId,
             String idempotencyKey,
             String decisionReason,
-            UUID policyId,
-            Integer policyVersion,
-            Instant expiresAt,
+            @Nullable UUID policyId,
+            @Nullable Integer policyVersion,
+            @Nullable Instant expiresAt,
             Instant now) {}
 
     /**
+     * The attempt being promoted to the plan's winner, and the status it must still hold.
+     *
      * @param fromStatus the status the attempt must still be in. REQUESTED for a
      *                   partner booking, OFFERED for a courier taking an offer
      */
@@ -414,8 +425,8 @@ public class JdbcAssignmentStore {
             UUID attemptId,
             SourceType sourceType,
             AttemptStatus fromStatus,
-            String providerType,
-            String externalReference,
+            @Nullable String providerType,
+            @Nullable String externalReference,
             Instant now) {}
 
     public record Opened(UUID attemptId, int sequenceNumber, AttemptStatus status, boolean fresh) {}
@@ -433,8 +444,8 @@ public class JdbcAssignmentStore {
     private record AttemptRow(
             SourceType sourceType,
             AttemptStatus status,
-            UUID courierId,
-            UUID bindingId,
-            Instant expiresAt,
+            @Nullable UUID courierId,
+            @Nullable UUID bindingId,
+            @Nullable Instant expiresAt,
             boolean uncertain) {}
 }

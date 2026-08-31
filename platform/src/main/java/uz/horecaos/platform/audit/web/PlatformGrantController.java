@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -105,6 +106,8 @@ public class PlatformGrantController {
     }
 
     /**
+     * Request to grant a {@code PLATFORM}-scope role to a principal.
+     *
      * @param validUntil set it for support access, which should lapse on its own
      *                   rather than waiting for someone to remember
      */
@@ -116,7 +119,8 @@ public class PlatformGrantController {
 
     public record ReasonRequest(@NotBlank @Size(max = 1000) String reason) {}
 
-    public record PlatformGrantResponse(String outcome, UUID grantId, UUID approvalRequestId) {
+    public record PlatformGrantResponse(
+            String outcome, @Nullable UUID grantId, @Nullable UUID approvalRequestId) {
 
         static PlatformGrantResponse of(Outcome outcome) {
             return new PlatformGrantResponse(outcome.status().name(), outcome.grantId(), outcome.approvalRequestId());

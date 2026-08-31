@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -463,7 +464,7 @@ public class CourierSettlementService {
      * discovers them from an inspector.
      */
     private static List<UUID> entriesAfterLapse(
-            List<LedgerEntryRow> entries, EngagementRow engagement, java.time.Instant lapsedAt) {
+            List<LedgerEntryRow> entries, EngagementRow engagement, java.time.@Nullable Instant lapsedAt) {
 
         LocalDate dueOn = engagement.reverificationDueOn();
         java.time.Instant reverifiedAt = engagement.registrationVerifiedAt();
@@ -568,6 +569,10 @@ public class CourierSettlementService {
             PeriodTotals totals,
             boolean complianceFlag) {}
 
-    /** @param authorised false when the payout is waiting on a second pair of eyes */
-    public record PayoutOutcome(UUID payoutId, UUID approvalRequestId, boolean authorised) {}
+    /**
+     * The payout, or the approval it now waits on.
+     *
+     * @param authorised false when the payout is waiting on a second pair of eyes
+     */
+    public record PayoutOutcome(@Nullable UUID payoutId, @Nullable UUID approvalRequestId, boolean authorised) {}
 }

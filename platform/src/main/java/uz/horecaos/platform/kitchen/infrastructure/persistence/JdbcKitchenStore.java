@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.kitchen.domain.ReleaseMode;
@@ -97,6 +98,13 @@ public class JdbcKitchenStore {
     // ------------------------------------------------------------ routing rules
 
     /**
+     * Writes one brand-layer or location-layer routing rule.
+     *
+     * @param locationId  null for a brand rule
+     * @param variantId   set together with exactly one of {@code productId} and
+     *                    {@code categoryId} left null, per the rule's addressed node
+     * @param productId   see {@code variantId}
+     * @param categoryId  see {@code variantId}
      * @param stationRole null for a location rule, which names a station directly
      * @param stationId   null for a brand rule, which names a role the location
      *                    resolves for itself
@@ -105,12 +113,12 @@ public class JdbcKitchenStore {
             UUID id,
             UUID tenantId,
             UUID brandId,
-            UUID locationId,
-            UUID variantId,
-            UUID productId,
-            UUID categoryId,
-            StationRole stationRole,
-            UUID stationId,
+            @Nullable UUID locationId,
+            @Nullable UUID variantId,
+            @Nullable UUID productId,
+            @Nullable UUID categoryId,
+            @Nullable StationRole stationRole,
+            @Nullable UUID stationId,
             Instant now) {
 
         Map<String, Object> params = new HashMap<>();
@@ -169,7 +177,7 @@ public class JdbcKitchenStore {
      *         fallback station and {@code KitchenRoutingUnresolved}
      */
     public Optional<ResolvedStation> resolveStation(
-            UUID tenantId, UUID brandId, UUID locationId, UUID variantId, UUID productId) {
+            UUID tenantId, UUID brandId, UUID locationId, UUID variantId, @Nullable UUID productId) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
@@ -509,14 +517,14 @@ public class JdbcKitchenStore {
     public void recordEvent(
             UUID tenantId,
             UUID ticketId,
-            UUID ticketItemId,
-            String fromStatus,
+            @Nullable UUID ticketItemId,
+            @Nullable String fromStatus,
             String toStatus,
             String trigger,
             String actorType,
             String actorId,
-            String reasonCode,
-            String correlationId,
+            @Nullable String reasonCode,
+            @Nullable String correlationId,
             Instant occurredAt) {
 
         Map<String, Object> params = new HashMap<>();
@@ -652,7 +660,7 @@ public class JdbcKitchenStore {
                 row.getObject("created_at", OffsetDateTime.class).toInstant());
     }
 
-    private static Instant instant(ResultSet row, String column) throws SQLException {
+    private static @Nullable Instant instant(ResultSet row, String column) throws SQLException {
         OffsetDateTime value = row.getObject(column, OffsetDateTime.class);
         return value == null ? null : value.toInstant();
     }
@@ -661,7 +669,7 @@ public class JdbcKitchenStore {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
-    private static OffsetDateTime nullableUtc(Instant instant) {
+    private static @Nullable OffsetDateTime nullableUtc(@Nullable Instant instant) {
         return instant == null ? null : utc(instant);
     }
 
@@ -694,13 +702,13 @@ public class JdbcKitchenStore {
             String channelCode,
             TicketStatus status,
             ReleaseMode releaseMode,
-            Instant releaseAt,
-            Instant releasedAt,
-            Integer prepEstimateSeconds,
-            Instant targetReadyAt,
-            Instant startedAt,
-            Instant readyAt,
-            Instant handedOverAt,
+            @Nullable Instant releaseAt,
+            @Nullable Instant releasedAt,
+            @Nullable Integer prepEstimateSeconds,
+            @Nullable Instant targetReadyAt,
+            @Nullable Instant startedAt,
+            @Nullable Instant readyAt,
+            @Nullable Instant handedOverAt,
             int routingVersion,
             int version,
             Instant createdAt) {}
@@ -715,22 +723,22 @@ public class JdbcKitchenStore {
             int quantity,
             RoutingLevel routedBy,
             TicketItemStatus status,
-            Instant startedAt,
-            Instant readyAt,
-            Instant cancelledAt,
+            @Nullable Instant startedAt,
+            @Nullable Instant readyAt,
+            @Nullable Instant cancelledAt,
             int version,
             Instant createdAt) {}
 
     public record TicketEventRow(
             UUID id,
             UUID ticketId,
-            UUID ticketItemId,
-            String fromStatus,
+            @Nullable UUID ticketItemId,
+            @Nullable String fromStatus,
             String toStatus,
             String trigger,
             String actorType,
             String actorId,
-            String reasonCode,
+            @Nullable String reasonCode,
             Instant occurredAt) {}
 
     /** Which station a line routes to, and which of the five levels decided it. */

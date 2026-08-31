@@ -2,6 +2,7 @@ package uz.horecaos.platform.fiscal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
@@ -56,9 +58,6 @@ class FiscalObligationTests {
     private static final Instant NOW = Instant.parse("2026-08-24T09:00:00Z");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private JdbcFiscalLifecycleStore store;
@@ -77,9 +76,6 @@ class FiscalObligationTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -441,7 +437,7 @@ class FiscalObligationTests {
         return rows.getFirst();
     }
 
-    private NewFiscalDocument newDocument(UUID orderId, FiscalDocumentState state, UUID entityId) {
+    private NewFiscalDocument newDocument(UUID orderId, FiscalDocumentState state, @Nullable UUID entityId) {
         return new NewFiscalDocument(
                 UUID.randomUUID(),
                 TENANT,
@@ -479,15 +475,21 @@ class FiscalObligationTests {
                 .update();
     }
 
-    private UUID completedOrder(String seed, String providerType, String intentStatus, Instant closedAt) {
+    private UUID completedOrder(
+            String seed, @Nullable String providerType, @Nullable String intentStatus, Instant closedAt) {
         UUID orderId = order(seed, providerType, "COMPLETED", intentStatus, closedAt);
         return orderId;
     }
 
-    private UUID order(String seed, String providerType, String status, String intentStatus, Instant closedAt) {
-        UUID orderId = UUID.nameUUIDFromBytes(("order:" + seed).getBytes());
-        UUID cartId = UUID.nameUUIDFromBytes(("cart:" + seed).getBytes());
-        UUID quoteId = UUID.nameUUIDFromBytes(("quote:" + seed).getBytes());
+    private UUID order(
+            String seed,
+            @Nullable String providerType,
+            String status,
+            @Nullable String intentStatus,
+            Instant closedAt) {
+        UUID orderId = UUID.nameUUIDFromBytes(("order:" + seed).getBytes(StandardCharsets.UTF_8));
+        UUID cartId = UUID.nameUUIDFromBytes(("cart:" + seed).getBytes(StandardCharsets.UTF_8));
+        UUID quoteId = UUID.nameUUIDFromBytes(("quote:" + seed).getBytes(StandardCharsets.UTF_8));
 
         jdbc.sql("""
                 INSERT INTO ordering.carts (id, tenant_id, brand_id, location_id, channel_id,
@@ -566,8 +568,8 @@ class FiscalObligationTests {
             UUID orderId,
             String tender,
             String methodCode,
-            String providerType,
-            String status,
+            @Nullable String providerType,
+            @Nullable String status,
             Instant at) {
         boolean settled = !("PENDING".equals(status) || "AUTHORIZING".equals(status));
         jdbc.sql("""
@@ -578,7 +580,7 @@ class FiscalObligationTests {
                 VALUES (:id, :t, :o, :b, :loc, NULL, :tender, :code, :provider, 50000, 'UZS',
                     :status, :timing, :key, :settledAt, 1, :at, :at)
                 """)
-                .param("id", UUID.nameUUIDFromBytes(("intent:" + seed).getBytes()))
+                .param("id", UUID.nameUUIDFromBytes(("intent:" + seed).getBytes(StandardCharsets.UTF_8)))
                 .param("t", TENANT)
                 .param("o", orderId)
                 .param("b", BRAND)
@@ -619,7 +621,7 @@ class FiscalObligationTests {
                 .param("o", orderId)
                 .query(UUID.class)
                 .optional()
-                .orElse(null);
+                .orElseThrow(() -> new IllegalStateException("no payment intent seeded for order " + orderId));
     }
 
     private void seedTenancy() {
@@ -644,14 +646,14 @@ class FiscalObligationTests {
                 VALUES (:id, :t, 'ACTIVE', 'Customer', 1, 1)
                 """).param("id", CUSTOMER).param("t", TENANT).update();
 
-        channelId = UUID.nameUUIDFromBytes("obligation-channel".getBytes());
+        channelId = UUID.nameUUIDFromBytes("obligation-channel".getBytes(StandardCharsets.UTF_8));
         jdbc.sql("""
                 INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name,
                     status, guest_orders_allowed)
                 VALUES (:id, :t, 'TELEGRAM', 'TELEGRAM', 'Telegram bot', 'ACTIVE', false)
                 """).param("id", channelId).param("t", TENANT).update();
 
-        UUID catalogId = UUID.nameUUIDFromBytes("obligation-catalog".getBytes());
+        UUID catalogId = UUID.nameUUIDFromBytes("obligation-catalog".getBytes(StandardCharsets.UTF_8));
         jdbc.sql("""
                 INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
                 VALUES (:id, :t, :b, 'MAIN', 'Main menu', 'ACTIVE')
@@ -661,7 +663,7 @@ class FiscalObligationTests {
                 .param("b", BRAND)
                 .update();
 
-        publicationId = UUID.nameUUIDFromBytes("obligation-publication".getBytes());
+        publicationId = UUID.nameUUIDFromBytes("obligation-publication".getBytes(StandardCharsets.UTF_8));
         jdbc.sql("""
                 INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel,
                     status, content_hash, activated_at)
@@ -673,8 +675,8 @@ class FiscalObligationTests {
                 .param("cat", catalogId)
                 .update();
 
-        firstCompany = UUID.nameUUIDFromBytes("company:first".getBytes());
-        secondCompany = UUID.nameUUIDFromBytes("company:second".getBytes());
+        firstCompany = UUID.nameUUIDFromBytes("company:first".getBytes(StandardCharsets.UTF_8));
+        secondCompany = UUID.nameUUIDFromBytes("company:second".getBytes(StandardCharsets.UTF_8));
         jdbc.sql("""
                 INSERT INTO tenant.legal_entities (id, tenant_id, code, legal_name, tin, status)
                 VALUES (:id, :t, 'FIRST', 'Birinchi MCHJ', '123456789', 'ACTIVE')

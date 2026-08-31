@@ -8,8 +8,10 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -46,9 +48,6 @@ class QuoteAndReservationTests {
     private static final Instant NOW = Instant.parse("2026-08-21T12:00:00Z");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private JdbcPricingStore pricingStore;
@@ -69,9 +68,6 @@ class QuoteAndReservationTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for quote and reservation tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -263,7 +259,8 @@ class QuoteAndReservationTests {
         var acceptance = quotes.accept(TENANT, quote.quoteId(), quote.contextHash());
 
         assertThat(acceptance.outcome()).isEqualTo(QuoteService.Acceptance.Outcome.ACCEPTED);
-        assertThat(acceptance.total().minor()).isEqualTo(50_000L);
+        var total = Objects.requireNonNull(acceptance.total(), "an ACCEPTED outcome always carries a total");
+        assertThat(total.minor()).isEqualTo(50_000L);
     }
 
     @Test
@@ -497,7 +494,7 @@ class QuoteAndReservationTests {
                 .update();
     }
 
-    private UUID seedChannel(String code, String systemType, UUID pricePlaneChannelId) {
+    private UUID seedChannel(String code, String systemType, @Nullable UUID pricePlaneChannelId) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type,
@@ -591,7 +588,7 @@ class QuoteAndReservationTests {
         return id;
     }
 
-    private void seedAssignment(UUID priceBookId, String scopeType, UUID scopeId, int priority) {
+    private void seedAssignment(UUID priceBookId, String scopeType, @Nullable UUID scopeId, int priority) {
         jdbc.sql("""
                 INSERT INTO pricing.price_book_assignments (id, tenant_id, brand_id, price_book_id,
                     scope_type, scope_id, valid_from, priority)

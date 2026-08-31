@@ -5,10 +5,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -191,7 +193,7 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
      * storefront renders, and the quote still returns — with no fee line — so the
      * customer sees their basket and the reason together instead of an error page.
      */
-    private ResolvedDeliveryCharge resolveDeliveryCharge(
+    private @Nullable ResolvedDeliveryCharge resolveDeliveryCharge(
             QuoteRequest request, UUID quoteId, String currency, long goodsSubtotal, Instant now) {
 
         if (request.delivery() == null) {
@@ -311,15 +313,33 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
             return store.findQuoteSnapshot(command.tenantId(), quote.quoteId())
                     .orElseThrow(() -> new IllegalStateException("Quote vanished mid-transaction"));
         } catch (PricingEngine.UnpricedItemException unpriced) {
-            throw new PricingRefusedException("ITEM_NOT_PRICED", unpriced.priceableId(), unpriced.getMessage());
+            // Every one of these five exception types always constructs its
+            // message from a non-null string concatenation or formatted string
+            // (see their constructors), so getMessage() is never actually null;
+            // the fallback only guards the checker's more conservative view of
+            // Throwable#getMessage() rather than a real possibility here.
+            throw new PricingRefusedException(
+                    "ITEM_NOT_PRICED",
+                    unpriced.priceableId(),
+                    Objects.requireNonNullElse(unpriced.getMessage(), "ITEM_NOT_PRICED"));
         } catch (NoPublishedMenuException noMenu) {
-            throw new PricingRefusedException("NO_PUBLISHED_MENU", command.brandId(), noMenu.getMessage());
+            throw new PricingRefusedException(
+                    "NO_PUBLISHED_MENU",
+                    command.brandId(),
+                    Objects.requireNonNullElse(noMenu.getMessage(), "NO_PUBLISHED_MENU"));
         } catch (NoPriceBookException noBook) {
-            throw new PricingRefusedException("NO_PRICE_BOOK", command.locationId(), noBook.getMessage());
+            throw new PricingRefusedException(
+                    "NO_PRICE_BOOK",
+                    command.locationId(),
+                    Objects.requireNonNullElse(noBook.getMessage(), "NO_PRICE_BOOK"));
         } catch (NoTaxProfileException noTax) {
-            throw new PricingRefusedException("NO_TAX_PROFILE", command.brandId(), noTax.getMessage());
+            throw new PricingRefusedException(
+                    "NO_TAX_PROFILE", command.brandId(), Objects.requireNonNullElse(noTax.getMessage(), "NO_TAX_PROFILE"));
         } catch (PricingEngine.UnsupportedTaxModeException unsupported) {
-            throw new PricingRefusedException("UNSUPPORTED_TAX_MODE", command.brandId(), unsupported.getMessage());
+            throw new PricingRefusedException(
+                    "UNSUPPORTED_TAX_MODE",
+                    command.brandId(),
+                    Objects.requireNonNullElse(unsupported.getMessage(), "UNSUPPORTED_TAX_MODE"));
         }
     }
 
@@ -335,11 +355,13 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
     public QuoteAcceptance acceptQuote(UUID tenantId, UUID quoteId, String expectedContextHash) {
         Acceptance acceptance = accept(tenantId, quoteId, expectedContextHash);
         return switch (acceptance.outcome()) {
-            case ACCEPTED ->
-                new QuoteAcceptance(
-                        QuoteAcceptance.Outcome.ACCEPTED,
-                        acceptance.total().minor(),
-                        acceptance.total().currency());
+            case ACCEPTED -> {
+                // Only the ACCEPTED outcome carries a total (see Acceptance.accepted());
+                // requireNonNull documents that invariant for a checker that cannot see
+                // across the switch on its own.
+                Money total = Objects.requireNonNull(acceptance.total(), "an ACCEPTED acceptance always carries a total");
+                yield new QuoteAcceptance(QuoteAcceptance.Outcome.ACCEPTED, total.minor(), total.currency());
+            }
             case PRICE_CHANGED -> new QuoteAcceptance(QuoteAcceptance.Outcome.PRICE_CHANGED, 0L, null);
             case EXPIRED -> new QuoteAcceptance(QuoteAcceptance.Outcome.EXPIRED, 0L, null);
         };
@@ -420,7 +442,12 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         return document;
     }
 
-    public record Acceptance(Outcome outcome, Money total) {
+    /**
+     * The result of trying to accept a quote at checkout.
+     *
+     * @param total null unless outcome is {@link Outcome#ACCEPTED}.
+     */
+    public record Acceptance(Outcome outcome, @Nullable Money total) {
 
         public enum Outcome {
             ACCEPTED,

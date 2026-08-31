@@ -1,6 +1,7 @@
 package uz.horecaos.platform.audit.api;
 
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Who caused an audited action (ADR 0027).
@@ -9,7 +10,8 @@ import java.util.Objects;
  * a person during an investigation, which is the most common way an audit trail
  * misleads.
  */
-public record ActorRef(Type type, String subject, String displayName, String onBehalfOfSubject) {
+public record ActorRef(
+        Type type, String subject, @Nullable String displayName, @Nullable String onBehalfOfSubject) {
 
     public enum Type {
         USER,
@@ -25,7 +27,7 @@ public record ActorRef(Type type, String subject, String displayName, String onB
         }
     }
 
-    public static ActorRef user(String subject, String displayName) {
+    public static ActorRef user(String subject, @Nullable String displayName) {
         return new ActorRef(Type.USER, subject, displayName, null);
     }
 

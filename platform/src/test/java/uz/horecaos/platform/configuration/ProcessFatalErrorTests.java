@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
@@ -60,7 +61,7 @@ class ProcessFatalErrorTests {
         CountDownLatch ticked = new CountDownLatch(5);
 
         try {
-            scheduler.scheduleWithFixedDelay(
+            ScheduledFuture<?> scheduled = scheduler.scheduleWithFixedDelay(
                     () -> {
                         ticks.incrementAndGet();
                         ticked.countDown();
@@ -76,6 +77,10 @@ class ProcessFatalErrorTests {
                             + "runtime fact, and any code that assumed otherwise is wrong")
                     .isTrue();
             assertThat(ticks.get()).isGreaterThanOrEqualTo(5);
+            // The task keeps throwing forever, so the future never completes on its
+            // own; cancelling it is this test's own cleanup, on top of the pool
+            // shutdown below, rather than a value there was ever anything to read.
+            assertThat(scheduled.cancel(false)).isTrue();
         } finally {
             scheduler.shutdown();
         }
@@ -91,7 +96,7 @@ class ProcessFatalErrorTests {
         CountDownLatch ticked = new CountDownLatch(3);
 
         try {
-            scheduler.scheduleWithFixedDelay(
+            ScheduledFuture<?> scheduled = scheduler.scheduleWithFixedDelay(
                     () -> {
                         ticked.countDown();
                         throw new OutOfMemoryError("Metaspace");
@@ -116,6 +121,10 @@ class ProcessFatalErrorTests {
                     .filteredOn(ReadinessState.REFUSING_TRAFFIC::equals)
                     .as("three or more ticks fired; the availability change is published once")
                     .hasSize(1);
+            // The task keeps throwing forever, so the future never completes on its
+            // own; cancelling it is this test's own cleanup, on top of the pool
+            // shutdown below, rather than a value there was ever anything to read.
+            assertThat(scheduled.cancel(false)).isTrue();
         } finally {
             scheduler.shutdown();
         }
@@ -131,7 +140,7 @@ class ProcessFatalErrorTests {
         CountDownLatch ticked = new CountDownLatch(3);
 
         try {
-            scheduler.scheduleWithFixedDelay(
+            ScheduledFuture<?> scheduled = scheduler.scheduleWithFixedDelay(
                     () -> {
                         ticked.countDown();
                         // One tenant's malformed row, a query that timed out, a provider
@@ -146,6 +155,10 @@ class ProcessFatalErrorTests {
                     .as("a sweeper failing must never take the only container out of rotation")
                     .isEmpty();
             assertThat(health.isBroken()).isFalse();
+            // The task keeps throwing forever, so the future never completes on its
+            // own; cancelling it is this test's own cleanup, on top of the pool
+            // shutdown below, rather than a value there was ever anything to read.
+            assertThat(scheduled.cancel(false)).isTrue();
         } finally {
             scheduler.shutdown();
         }

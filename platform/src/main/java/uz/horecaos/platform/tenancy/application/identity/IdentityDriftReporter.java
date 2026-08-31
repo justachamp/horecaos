@@ -88,12 +88,16 @@ public class IdentityDriftReporter {
     }
 
     /**
+     * One tenant's disagreement between HorecaOS and Keycloak.
+     *
      * @param detail safe to log and to put in an audit fact: identifiers and
      *               states only, never a Keycloak message about a person
      */
     public record DriftFinding(UUID tenantId, DriftCode code, String detail) {}
 
     /**
+     * One pass's results.
+     *
      * @param unreachable tenants Keycloak could not be asked about, kept separate
      *                    from findings on purpose — "cannot ask" is not "wrong",
      *                    and reporting an unreachable realm as drift would raise

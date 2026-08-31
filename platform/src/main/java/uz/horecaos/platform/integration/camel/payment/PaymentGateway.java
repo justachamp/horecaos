@@ -109,7 +109,13 @@ public class PaymentGateway {
         ProviderCall providerCall = new ProviderCall(
                 installation.baseUrl(),
                 credential.reveal(),
-                call.correlationId(),
+                // Neither Click nor Payme's merchant API exchanges an idempotency
+                // key (the class javadoc explains why), so nothing downstream
+                // reads this back; it exists only for ProviderCall's own redacted
+                // toString. The operation label stands in when no correlation id
+                // was supplied, rather than passing a null through a field this
+                // module treats as always present.
+                call.correlationId() == null ? call.operation() : call.correlationId(),
                 call.timeout() == null ? DEFAULT_TIMEOUT : call.timeout());
 
         return switch (call.method()) {

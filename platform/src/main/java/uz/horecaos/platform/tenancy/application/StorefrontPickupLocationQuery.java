@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
@@ -92,7 +93,7 @@ public class StorefrontPickupLocationQuery {
             String city,
             long distanceMeters,
             boolean available,
-            String reason,
+            @Nullable String reason,
             boolean acceptsScheduledOrders,
-            Integer preparationMinutes) {}
+            @Nullable Integer preparationMinutes) {}
 }

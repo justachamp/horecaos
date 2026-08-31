@@ -7,6 +7,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -160,6 +161,8 @@ public class ReportingController {
     }
 
     /**
+     * One metric's definition, plus its signature state.
+     *
      * @param sourceAvailable false when the metric is defined but its source fact
      *                        is not built. Surfaces render it unbuilt, never zero
      * @param provisional     finance has not signed this definition
@@ -179,11 +182,11 @@ public class ReportingController {
             String includes,
             String excludes,
             String refundTreatment,
-            String openQuestion,
-            LocalDate effectiveFrom,
+            @Nullable String openQuestion,
+            @Nullable LocalDate effectiveFrom,
             boolean provisional,
-            String signedBy,
-            Instant signedAt) {
+            @Nullable String signedBy,
+            @Nullable Instant signedAt) {
 
         static MetricResponse of(ReportQueryService.MetricView view) {
             MetricDefinition definition = view.definition();
@@ -210,13 +213,17 @@ public class ReportingController {
         }
     }
 
-    /** @param values metric code to figure. Null means the slice had nothing to compute it from */
+    /**
+     * One report row: a slice's dimension values, plus the figures computed for it.
+     *
+     * @param values metric code to figure. Null means the slice had nothing to compute it from
+     */
     public record RowResponse(
             LocalDate businessDate,
-            UUID locationId,
-            String channelCode,
-            String fulfilmentType,
-            UUID legalEntityId,
+            @Nullable UUID locationId,
+            @Nullable String channelCode,
+            @Nullable String fulfilmentType,
+            @Nullable UUID legalEntityId,
             Map<String, Long> values) {
 
         static RowResponse of(ReportQueryService.ReportRow row) {
@@ -238,7 +245,7 @@ public class ReportingController {
 
     public record SlaResponse(List<BucketResponse> buckets, ProvenanceResponse provenance) {}
 
-    public record MedianResponse(Integer medianSeconds, ProvenanceResponse provenance) {}
+    public record MedianResponse(@Nullable Integer medianSeconds, ProvenanceResponse provenance) {}
 
     /**
      * What ADR 0023 requires a report to declare about itself.
@@ -250,8 +257,8 @@ public class ReportingController {
      */
     public record ProvenanceResponse(
             Instant asOf,
-            LocalDate closedThrough,
-            Instant lastCloseCompletedAt,
+            @Nullable LocalDate closedThrough,
+            @Nullable Instant lastCloseCompletedAt,
             String businessDayStart,
             String timezone,
             int boundaryVersion,
@@ -273,3 +280,4 @@ public class ReportingController {
         }
     }
 }
+

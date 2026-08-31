@@ -4,6 +4,7 @@ import java.time.ZoneId;
 import java.util.Currency;
 import java.util.Objects;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.tenancy.api.TenantId;
 
 public final class Tenant {
@@ -12,7 +13,7 @@ public final class Tenant {
     private final Slug slug;
     private final Currency defaultCurrency;
     private final ZoneId defaultTimezone;
-    private String keycloakOrganizationId;
+    private @Nullable String keycloakOrganizationId;
     private String legalName;
     private String displayName;
     private TenantStatus status;
@@ -24,7 +25,7 @@ public final class Tenant {
             String displayName,
             Currency defaultCurrency,
             ZoneId defaultTimezone,
-            String keycloakOrganizationId,
+            @Nullable String keycloakOrganizationId,
             TenantStatus status) {
         this.id = Objects.requireNonNull(id, "Tenant ID is required");
         this.slug = Objects.requireNonNull(slug, "Tenant slug is required");
@@ -54,7 +55,7 @@ public final class Tenant {
             String displayName,
             Currency defaultCurrency,
             ZoneId defaultTimezone,
-            String keycloakOrganizationId,
+            @Nullable String keycloakOrganizationId,
             TenantStatus status) {
         return new Tenant(
                 id, slug, legalName, displayName, defaultCurrency, defaultTimezone, keycloakOrganizationId, status);
@@ -142,7 +143,7 @@ public final class Tenant {
         return normalized;
     }
 
-    private static String normalizedOrganizationId(String value) {
+    private static @Nullable String normalizedOrganizationId(@Nullable String value) {
         if (value == null) {
             return null;
         }

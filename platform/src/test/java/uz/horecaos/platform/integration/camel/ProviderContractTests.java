@@ -1,6 +1,7 @@
 package uz.horecaos.platform.integration.camel;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.io.IOException;
 import java.net.SocketTimeoutException;
@@ -145,12 +146,8 @@ class ProviderContractTests {
     void anAcceptedThenTimedOutCommandLeavesARealSideEffect() {
         // The scenario the whole classification exists for: the provider did the
         // work and the caller never found out.
-        Throwable timeout = null;
-        try {
-            call(ControlledFakeProvider.Scenario.ACCEPTED_THEN_TIMEOUT, "key-1", Duration.ofMillis(400));
-        } catch (Exception expected) {
-            timeout = expected;
-        }
+        Throwable timeout = catchThrowable(
+                () -> call(ControlledFakeProvider.Scenario.ACCEPTED_THEN_TIMEOUT, "key-1", Duration.ofMillis(400)));
 
         assertThat(timeout).isNotNull();
         assertThat(classifier.classify(timeout, true).requiresReconciliation())

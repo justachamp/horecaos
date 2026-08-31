@@ -10,7 +10,9 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -173,10 +175,7 @@ public class OperationsOrderController {
             @PathVariable UUID locationId,
             @PathVariable UUID orderId) {
 
-        orderQuery
-                .detail(tenantId, orderId)
-                .filter(found -> found.order().locationId().equals(locationId))
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order"));
+        requireOrderAtLocation(tenantId, orderId, locationId);
 
         return ResponseEntity.ok(orderQuery.timeline(tenantId, orderId).stream()
                 .map(TimelineEntryResponse::of)
@@ -514,10 +513,7 @@ public class OperationsOrderController {
             @PathVariable UUID lineId,
             @RequestParam @NotBlank String purpose) {
 
-        orderQuery
-                .detail(tenantId, orderId)
-                .filter(found -> found.order().locationId().equals(locationId))
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order"));
+        requireOrderAtLocation(tenantId, orderId, locationId);
 
         return ResponseEntity.ok(new NoteResponse(
                 lineId,
@@ -581,10 +577,13 @@ public class OperationsOrderController {
      * an operator amend — an order belonging to a branch they hold no grant over.
      */
     private void requireOrderAtLocation(UUID tenantId, UUID orderId, UUID locationId) {
-        orderQuery
+        boolean atLocation = orderQuery
                 .detail(tenantId, orderId)
                 .filter(found -> found.order().locationId().equals(locationId))
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order"));
+                .isPresent();
+        if (!atLocation) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order");
+        }
     }
 
     private static void requireKnownStatus(String status) {
@@ -608,6 +607,8 @@ public class OperationsOrderController {
             @NotBlank @Size(max = 64) String reasonCode) {}
 
     /**
+     * A cancellation request, with an optional registry reason and note.
+     *
      * @param reasonId the tenant's cancellation reason. Supplying it is what makes
      *                 cancellation after confirmation possible, because the reason
      *                 is what decides the stock disposition and the liable party
@@ -615,13 +616,19 @@ public class OperationsOrderController {
      */
     public record CancelRequest(
             @NotBlank @Size(max = 64) String reasonCode,
-            UUID reasonId,
-            @Size(max = 2000) String note) {}
-
-    /** @param reasonId omitted records the completion the fulfilment mode implies */
-    public record CompleteRequest(UUID reasonId) {}
+            @Nullable UUID reasonId,
+            @Size(max = 2000) @Nullable String note) {}
 
     /**
+     * A completion request, naming how the order finished.
+     *
+     * @param reasonId omitted records the completion the fulfilment mode implies
+     */
+    public record CompleteRequest(@Nullable UUID reasonId) {}
+
+    /**
+     * A request to amend a live order.
+     *
      * @param applyImmediately apply in the same request once priced. Refused for
      *                         anything that raises the total or needs approval, so
      *                         it can never become a way past the customer's
@@ -671,6 +678,8 @@ public class OperationsOrderController {
             @NotBlank @Size(max = 24) String channel) {}
 
     /**
+     * One amendment, as the operator's screen renders it.
+     *
      * @param warnings things the operator is told and not blocked by, such as
      *                 change-due now short of the total — the customer can hand
      *                 over more, and refusing the order over a hint would be worse
@@ -735,6 +744,8 @@ public class OperationsOrderController {
     }
 
     /**
+     * One revision, as the operator's timeline renders it.
+     *
      * @param deltaTotalMinor signed, against the predecessor. This is the figure an
      *                        operator reads to a customer — «было 146 000 → 164
      *                        000» — and never only the new total
@@ -742,7 +753,7 @@ public class OperationsOrderController {
     public record RevisionResponse(
             int revision,
             String source,
-            UUID amendmentId,
+            @Nullable UUID amendmentId,
             String currency,
             long subtotalMinor,
             long taxMinor,
@@ -751,7 +762,7 @@ public class OperationsOrderController {
             long totalMinor,
             long deltaTotalMinor,
             String createdByActorType,
-            String createdByActorId,
+            @Nullable String createdByActorId,
             Instant createdAt) {
 
         static RevisionResponse of(JdbcOrderStore.RevisionRow row) {
@@ -783,11 +794,11 @@ public class OperationsOrderController {
     public record OutcomeResponse(
             String kind,
             String systemCategory,
-            UUID reasonId,
-            Integer reasonVersion,
+            @Nullable UUID reasonId,
+            @Nullable Integer reasonVersion,
             String stockDisposition,
-            String liabilityParty,
-            String customerRefund,
+            @Nullable String liabilityParty,
+            @Nullable String customerRefund,
             boolean reservationCommitted,
             Instant occurredAt) {
 
@@ -806,6 +817,8 @@ public class OperationsOrderController {
     }
 
     /**
+     * The result of an approve/reject or state-action command.
+     *
      * @param applied whether this caller's command moved the order
      * @param effectiveDecisionId the decision that actually settled it, which may
      *                            be another operator's
@@ -815,10 +828,12 @@ public class OperationsOrderController {
             String status,
             int version,
             boolean applied,
-            String effectiveDecisionId,
-            String effectiveAction) {}
+            @Nullable String effectiveDecisionId,
+            @Nullable String effectiveAction) {}
 
     /**
+     * One order, as the branch's queue renders it.
+     *
      * @param actions the IA 1.2 server-supplied {@code actions[]} array
      *                (orders.md §4.2): exactly what {@link OrderActionsPolicy}
      *                — the same rules {@code OrderStateService} enforces —
@@ -836,7 +851,7 @@ public class OperationsOrderController {
             long totalMinor,
             int version,
             Instant createdAt,
-            Instant approvalDeadlineAt,
+            @Nullable Instant approvalDeadlineAt,
             List<OrderActionResponse> actions) {
 
         static OrderSummaryResponse of(JdbcOrderStore.OrderRow order) {
@@ -863,7 +878,7 @@ public class OperationsOrderController {
      * @param targetStatus the status {@code ADVANCE} would move the order to.
      *                     Null for every other action
      */
-    public record OrderActionResponse(String action, String targetStatus) {
+    public record OrderActionResponse(String action, @Nullable String targetStatus) {
 
         static List<OrderActionResponse> allFor(
                 OrderStatus status, uz.horecaos.platform.tenancy.api.FulfillmentMode mode) {
@@ -880,6 +895,8 @@ public class OperationsOrderController {
     }
 
     /**
+     * One order in full, as the branch's detail screen renders it.
+     *
      * @param changeDueMinor {@code tendered − total}, recomputed on every read and
      *                       never stored. It is an operational hint: no money has
      *                       moved, and storing it would make a figure that is only
@@ -901,19 +918,20 @@ public class OperationsOrderController {
             List<String> warnings,
             int currentRevision,
             String createdByActorType,
-            String createdByActorId,
-            String acceptedByActorType,
-            String acceptedByActorId,
-            Instant acceptedAt,
+            @Nullable String createdByActorId,
+            @Nullable String acceptedByActorType,
+            @Nullable String acceptedByActorId,
+            @Nullable Instant acceptedAt,
             boolean callbackRequested,
-            Instant callbackResolvedAt,
-            String kitchenNote,
-            Long cashTenderedExpectedMinor,
-            Long changeDueMinor,
-            OutcomeResponse outcome,
+            @Nullable Instant callbackResolvedAt,
+            @Nullable String kitchenNote,
+            @Nullable Long cashTenderedExpectedMinor,
+            @Nullable Long changeDueMinor,
+            @Nullable OutcomeResponse outcome,
             CustomerResponse customer) {
 
-        static OrderDetailResponse of(OrderQueryService.OrderDetail detail, JdbcOrderStore.OutcomeRow outcomeRow) {
+        static OrderDetailResponse of(
+                OrderQueryService.OrderDetail detail, JdbcOrderStore.@Nullable OutcomeRow outcomeRow) {
             var order = detail.order();
             return new OrderDetailResponse(
                     OrderSummaryResponse.of(order),
@@ -974,9 +992,9 @@ public class OperationsOrderController {
      *                                control at all
      */
     public record CustomerResponse(
-            String displayName,
-            String phoneMasked,
-            String customerType,
+            @Nullable String displayName,
+            @Nullable String phoneMasked,
+            @Nullable String customerType,
             boolean hasAddress,
             boolean hasDeliveryInstructions,
             boolean transactionalContactAllowed,
@@ -1007,7 +1025,7 @@ public class OperationsOrderController {
             String landmark,
             double latitude,
             double longitude,
-            String deliveryInstructions) {
+            @Nullable String deliveryInstructions) {
 
         static AddressResponse of(OrderQueryService.CustomerAddressReveal reveal) {
             var address = reveal.address();
@@ -1027,7 +1045,7 @@ public class OperationsOrderController {
         }
     }
 
-    public record PhoneRevealResponse(String phone) {}
+    public record PhoneRevealResponse(@Nullable String phone) {}
 
     /** {@code GET .../orders/counts}: the board's tab badges (orders.md §2.3). */
     public record OrderCountsResponse(
@@ -1056,6 +1074,8 @@ public class OperationsOrderController {
     }
 
     /**
+     * One snapshotted order line.
+     *
      * @param hasNote whether the customer left a note. The text itself is
      *                personal data and is not rendered in a list; revealing it
      *                records a purpose
@@ -1071,7 +1091,7 @@ public class OperationsOrderController {
             UUID lineId,
             boolean hasNote) {}
 
-    public record NoteResponse(UUID lineId, String note) {}
+    public record NoteResponse(UUID lineId, @Nullable String note) {}
 
     public record TimelineEntryResponse(
             int sequence,

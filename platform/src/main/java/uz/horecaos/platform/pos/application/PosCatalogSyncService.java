@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -120,7 +121,8 @@ public class PosCatalogSyncService {
                 tenantId, binding.installationId(), bindingId, config.get("clopos.venueId"), config, runId.toString());
 
         CatalogRead read = adapter.get().readCatalog(context);
-        if (read.outcome().status() != ProviderOutcome.Status.SUCCESS || read.snapshot() == null) {
+        CatalogSnapshot snapshot = read.snapshot();
+        if (read.outcome().status() != ProviderOutcome.Status.SUCCESS || snapshot == null) {
             // Nothing is staged. A run that stages what it managed to read and
             // compares it would report every unread product as removed, which is
             // the exact failure the whole quorum design exists to prevent — and it
@@ -130,7 +132,6 @@ public class PosCatalogSyncService {
             return new RunResult(runId, "FAILED", read.outcome(), 0, 0);
         }
 
-        CatalogSnapshot snapshot = read.snapshot();
         runs.markStatus(tenantId, runId, "STAGED", "fetched_at", clock.instant());
         runs.stage(tenantId, runId, snapshot);
         runs.markStatus(tenantId, runId, "COMPARING", "normalized_at", clock.instant());
@@ -226,11 +227,15 @@ public class PosCatalogSyncService {
     }
 
     /**
+     * The outcome of one catalog sync attempt, run or refused.
+     *
+     * @param runId   null when the run was refused before a row was opened —
+     *                {@link #started()} is exactly this check
      * @param outcome the provider's answer, kept so a failed run can say what the
      *                till said rather than only that it failed
      */
     public record RunResult(
-            UUID runId, String status, ProviderOutcome outcome, int differenceCount, int conflictCount) {
+            @Nullable UUID runId, String status, ProviderOutcome outcome, int differenceCount, int conflictCount) {
 
         static RunResult refused(String code, String detail) {
             return new RunResult(null, "REFUSED", ProviderOutcome.rejected(code, detail), 0, 0);

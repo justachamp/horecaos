@@ -2,6 +2,7 @@ package uz.horecaos.platform.migration.web;
 
 import java.time.Instant;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.migration.application.MigrationQuarantineStore.QuarantineItemRow;
 
 /**
@@ -28,11 +29,11 @@ public record QuarantineItemView(
         String entityType,
         String legacyId,
         String reasonCode,
-        String sanitizedEvidenceReference,
+        @Nullable String sanitizedEvidenceReference,
         String status,
-        String resolutionCode,
-        String resolvedBy,
-        Instant resolvedAt) {
+        @Nullable String resolutionCode,
+        @Nullable String resolvedBy,
+        @Nullable Instant resolvedAt) {
 
     static QuarantineItemView of(QuarantineItemRow row) {
         return new QuarantineItemView(

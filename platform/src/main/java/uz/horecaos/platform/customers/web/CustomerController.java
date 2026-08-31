@@ -11,6 +11,7 @@ import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -189,6 +190,8 @@ public class CustomerController {
             boolean primary) {}
 
     /**
+     * A new address to add to the customer's book.
+     *
      * @param coordinateSource required rather than inferred from whether
      *                         coordinates arrived, because inferring it would
      *                         make "not geocoded yet" and "this address has no
@@ -197,20 +200,20 @@ public class CustomerController {
     public record AddAddressRequest(
             @Size(max = 64) String label,
             @NotNull AddressFields fields,
-            @Size(max = 500) String deliveryInstructions,
-            @DecimalMin("-90") @DecimalMax("90") Double latitude,
-            @DecimalMin("-180") @DecimalMax("180") Double longitude,
+            @Size(max = 500) @Nullable String deliveryInstructions,
+            @DecimalMin("-90") @DecimalMax("90") @Nullable Double latitude,
+            @DecimalMin("-180") @DecimalMax("180") @Nullable Double longitude,
             @NotNull CoordinateSource coordinateSource) {}
 
     public record ConsentRequest(
-            UUID brandId,
+            @Nullable UUID brandId,
             @NotBlank String purpose,
-            String channel,
+            @Nullable String channel,
             @NotNull ConsentService.Decision decision,
             @NotBlank String policyVersion,
             @NotNull ConsentService.Source source,
-            String evidenceReference,
-            Instant decidedAt) {}
+            @Nullable String evidenceReference,
+            @Nullable Instant decidedAt) {}
 
     public record IdResponse(UUID id) {}
 }

@@ -126,6 +126,8 @@ public interface VerificationChallengeStore {
     int purgeSettledBefore(Instant cutoff, int limit);
 
     /**
+     * A verification challenge row to insert.
+     *
      * @param destinationHash  the ADR 0029 keyed lookup hash of the normalized
      *                         destination. The rate-limit key, the supersede key,
      *                         and the only form of the number that is safe to put
@@ -147,12 +149,16 @@ public interface VerificationChallengeStore {
             Instant expiresAt) {}
 
     /**
+     * How recently and how often a destination has been sent a code.
+     *
      * @param lastIssuedAt when this destination was last sent a code, empty if
      *                     never
      */
     record IssuanceWindow(Optional<Instant> lastIssuedAt, int issuedInWindow) {}
 
     /**
+     * The result of spending one verification attempt.
+     *
      * @param attemptsRemaining after this attempt was spent. Zero means the wrong
      *                          answer settles the challenge
      */

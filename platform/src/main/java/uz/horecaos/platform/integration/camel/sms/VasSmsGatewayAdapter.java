@@ -2,6 +2,8 @@ package uz.horecaos.platform.integration.camel.sms;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.ProviderCall;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
@@ -83,7 +85,11 @@ public class VasSmsGatewayAdapter {
     public ProviderOutcome send(SmsVerificationOperation operation, SmsAccount account, ProviderCall call) {
 
         SmsGateBody.Send body = new SmsGateBody.Send(
-                account.login(), call.credential(), account.sender(), operation.destination(), operation.text());
+                requireConfigured(account.login(), "login"),
+                call.credential(),
+                requireConfigured(account.sender(), "sender"),
+                operation.destination(),
+                operation.text());
 
         return http.post(call, SEND_PATH, NO_HEADERS, body, response -> {
             SmsGateCode code = SmsGateCode.of(
@@ -133,7 +139,7 @@ public class VasSmsGatewayAdapter {
     public ProviderOutcome resolve(SmsVerificationOperation operation, SmsAccount account, ProviderCall call) {
 
         SmsGateBody.Search body = new SmsGateBody.Search(
-                account.login(),
+                requireConfigured(account.login(), "login"),
                 call.credential(),
                 operation.destination(),
                 operation.issuedAt().getEpochSecond());
@@ -190,6 +196,16 @@ public class VasSmsGatewayAdapter {
                 messageId);
     }
 
+    /**
+     * {@code SmsGateway.invoke} refuses to reach this adapter at all unless
+     * {@code account.isComplete()}, so login and sender are always present by
+     * the time either method above runs; this only makes that invariant visible
+     * to the checker.
+     */
+    private static String requireConfigured(@Nullable String value, String field) {
+        return Objects.requireNonNull(value, () -> "SmsGateway called this adapter with no " + field + " configured");
+    }
+
     private static ProviderOutcome classify(SmsGateCode code) {
         return switch (code.effect()) {
             case REFUSED -> ProviderOutcome.rejected(code.reasonCode(), describe(code));
@@ -234,7 +250,7 @@ public class VasSmsGatewayAdapter {
      * string while {@code /send_msgs} returns it as a number — so a cast would
      * work in testing and throw in production.
      */
-    private static Integer integer(Object value) {
+    private static @Nullable Integer integer(@Nullable Object value) {
         return switch (value) {
             case Number number -> number.intValue();
             case String string -> parse(string);
@@ -242,12 +258,12 @@ public class VasSmsGatewayAdapter {
         };
     }
 
-    private static int integerOr(Object value, int fallback) {
+    private static int integerOr(@Nullable Object value, int fallback) {
         Integer parsed = integer(value);
         return parsed == null ? fallback : parsed;
     }
 
-    private static Integer parse(String value) {
+    private static @Nullable Integer parse(String value) {
         try {
             return Integer.valueOf(value.trim());
         } catch (NumberFormatException notANumber) {
@@ -255,7 +271,7 @@ public class VasSmsGatewayAdapter {
         }
     }
 
-    private static String text(Object value) {
+    private static @Nullable String text(@Nullable Object value) {
         return value == null ? null : String.valueOf(value);
     }
 }

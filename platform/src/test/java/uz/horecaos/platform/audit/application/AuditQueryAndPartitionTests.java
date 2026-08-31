@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Locale;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
@@ -30,9 +31,6 @@ class AuditQueryAndPartitionTests {
     private static final UUID OTHER_TENANT = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac121302");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private AuditQueryService queries;
@@ -45,9 +43,6 @@ class AuditQueryAndPartitionTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -124,7 +119,7 @@ class AuditQueryAndPartitionTests {
 
         assertThat(view.getClass().getRecordComponents())
                 .as("redacted structure is still revealing in bulk, so it is a separate audited read")
-                .noneMatch(component -> component.getName().toLowerCase().contains("change"));
+                .noneMatch(component -> component.getName().toLowerCase(Locale.ROOT).contains("change"));
     }
 
     @Test

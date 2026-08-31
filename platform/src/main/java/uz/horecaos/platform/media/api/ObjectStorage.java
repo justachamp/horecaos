@@ -78,10 +78,16 @@ public interface ObjectStorage {
 
     void delete(String bucket, String key);
 
-    /** @param requiredHeaders headers the client must send for the signature to hold */
+    /**
+     * A presigned upload URL and what the client must send along with it.
+     *
+     * @param requiredHeaders headers the client must send for the signature to hold
+     */
     record PresignedUpload(URI url, java.util.Map<String, String> requiredHeaders, java.time.Instant expiresAt) {}
 
     /**
+     * The store's own view of an object, as returned by {@link #head}.
+     *
      * @param checksumSha256 base64 SHA-256 if the store recorded one; empty when
      *                       the object was written without checksum support
      */

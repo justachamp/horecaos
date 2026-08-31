@@ -4,10 +4,12 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.ordering.domain.CustomerRefund;
@@ -55,6 +57,9 @@ public class OrderOutcomeReasonService {
         UUID reasonId = UUID.randomUUID();
         Instant now = clock.instant();
 
+        // validate() below already refused a CANCELLATION reason with any of the
+        // three null, or a COMPLETION reason with modes absent; NullAway cannot
+        // see that cross-field invariant.
         reasons.insert(new JdbcOutcomeReasonStore.NewReason(
                 reasonId,
                 tenantId,
@@ -62,16 +67,16 @@ public class OrderOutcomeReasonService {
                 command.systemCategory().name(),
                 command.internalName().strip(),
                 command.kind() == OutcomeReasonKind.CANCELLATION
-                        ? command.stockDisposition().name()
+                        ? requireCancellationField(command.stockDisposition()).name()
                         : null,
                 command.kind() == OutcomeReasonKind.CANCELLATION
-                        ? command.liabilityParty().name()
+                        ? requireCancellationField(command.liabilityParty()).name()
                         : null,
                 command.kind() == OutcomeReasonKind.CANCELLATION
-                        ? command.customerRefund().name()
+                        ? requireCancellationField(command.customerRefund()).name()
                         : null,
                 command.kind() == OutcomeReasonKind.COMPLETION
-                        ? command.allowedFulfillmentModes().stream()
+                        ? requireCompletionModes(command.allowedFulfillmentModes()).stream()
                                 .map(Enum::name)
                                 .toList()
                         : null,
@@ -92,22 +97,25 @@ public class OrderOutcomeReasonService {
         }
         validate(command);
 
+        // validate() above already refused a CANCELLATION reason with any of the
+        // three null, or a COMPLETION reason with modes absent; NullAway cannot
+        // see that cross-field invariant.
         int version = reasons.update(
                         tenantId,
                         reasonId,
                         expectedVersion,
                         command.internalName().strip(),
                         command.kind() == OutcomeReasonKind.CANCELLATION
-                                ? command.stockDisposition().name()
+                                ? requireCancellationField(command.stockDisposition()).name()
                                 : null,
                         command.kind() == OutcomeReasonKind.CANCELLATION
-                                ? command.liabilityParty().name()
+                                ? requireCancellationField(command.liabilityParty()).name()
                                 : null,
                         command.kind() == OutcomeReasonKind.CANCELLATION
-                                ? command.customerRefund().name()
+                                ? requireCancellationField(command.customerRefund()).name()
                                 : null,
                         command.kind() == OutcomeReasonKind.COMPLETION
-                                ? command.allowedFulfillmentModes().stream()
+                                ? requireCompletionModes(command.allowedFulfillmentModes()).stream()
                                         .map(Enum::name)
                                         .toList()
                                 : null,
@@ -208,6 +216,22 @@ public class OrderOutcomeReasonService {
     }
 
     /**
+     * Restates, for the type system, what {@link #validate} already enforced: a
+     * cancellation reason never reaches {@code create}/{@code update} with this
+     * field null.
+     */
+    private static <T> T requireCancellationField(@Nullable T value) {
+        return Objects.requireNonNull(value, "validate() already required this field for a cancellation reason");
+    }
+
+    /** The completion counterpart of {@link #requireCancellationField}. */
+    private static List<FulfillmentMode> requireCompletionModes(@Nullable List<FulfillmentMode> modes) {
+        return Objects.requireNonNull(modes, "validate() already required modes for a completion reason");
+    }
+
+    /**
+     * A reason to author or update, in every required locale at once.
+     *
      * @param customerTexts what the customer is told, per locale. A different
      *                      statement from {@code internalName}: «Не дозвонились»
      *                      is what the operator needs in the list, and the
@@ -217,10 +241,10 @@ public class OrderOutcomeReasonService {
             OutcomeReasonKind kind,
             OutcomeSystemCategory systemCategory,
             String internalName,
-            StockDisposition stockDisposition,
-            LiabilityParty liabilityParty,
-            CustomerRefund customerRefund,
-            List<FulfillmentMode> allowedFulfillmentModes,
+            @Nullable StockDisposition stockDisposition,
+            @Nullable LiabilityParty liabilityParty,
+            @Nullable CustomerRefund customerRefund,
+            @Nullable List<FulfillmentMode> allowedFulfillmentModes,
             Map<String, String> customerTexts) {}
 
     public static class ReasonNotFoundException extends RuntimeException {

@@ -1,6 +1,7 @@
 package uz.horecaos.platform.commercial.api;
 
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One resolved entitlement: a value, the behaviour at its boundary, and where
@@ -25,14 +26,14 @@ import java.util.Objects;
  */
 public record EntitlementValue(
         EntitlementKey<?> key,
-        Long limit,
-        Boolean featureEnabled,
+        @Nullable Long limit,
+        @Nullable Boolean featureEnabled,
         EnforcementMode declaredMode,
         EnforcementMode effectiveMode,
         ResetPeriod resetPeriod,
-        Integer warnThresholdBasisPoints,
-        Long overageUnitPriceMinor,
-        String currency,
+        @Nullable Integer warnThresholdBasisPoints,
+        @Nullable Long overageUnitPriceMinor,
+        @Nullable String currency,
         EntitlementSource source) {
 
     public EntitlementValue {

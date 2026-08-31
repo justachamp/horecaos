@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -241,7 +242,7 @@ class NoorDeliveryAdapterTests {
         return new ProviderCall(partner.baseUrl(), "secret-token", "cmd-1", Duration.ofSeconds(5));
     }
 
-    private static DeliveryRequest request(boolean prepaid, Instant pickupAt) {
+    private static DeliveryRequest request(boolean prepaid, @Nullable Instant pickupAt) {
         return new DeliveryRequest(
                 "QO-1001",
                 new Pickup(41.3111, 69.2797, "Amir Temur 1", "Kitchen", "+998901112233", null),

@@ -15,6 +15,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -357,7 +358,7 @@ class CourierEvidenceMediaTenantScopeTests {
 
     // ------------------------------------------------------------------ helpers
 
-    private CourierEngagementService.VerifyRegistration verifyWith(UUID evidenceMediaId) {
+    private CourierEngagementService.VerifyRegistration verifyWith(@Nullable UUID evidenceMediaId) {
         return new CourierEngagementService.VerifyRegistration(
                 TENANT_B,
                 engagementOfB,
@@ -413,7 +414,8 @@ class CourierEvidenceMediaTenantScopeTests {
     }
 
     /** Written with SQL rather than the service, because the point is the row. */
-    private static UUID seedEngagement(JdbcClient client, UUID tenantId, String reference, UUID evidenceMediaId) {
+    private static UUID seedEngagement(
+            JdbcClient client, UUID tenantId, String reference, @Nullable UUID evidenceMediaId) {
 
         UUID typeId = UUID.randomUUID();
         UUID courierId = UUID.randomUUID();
@@ -452,7 +454,7 @@ class CourierEvidenceMediaTenantScopeTests {
         return engagementId;
     }
 
-    private static UUID evidenceOf(JdbcClient client, UUID engagementId) {
+    private static @Nullable UUID evidenceOf(JdbcClient client, UUID engagementId) {
         return client.sql("""
                 SELECT evidence_media_id FROM fulfillment.courier_engagements WHERE id = :id
                 """)

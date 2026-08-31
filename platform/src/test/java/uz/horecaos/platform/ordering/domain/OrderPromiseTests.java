@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -139,7 +140,9 @@ class OrderPromiseTests {
     @Test
     void latenessIsThePromiseAgainstTheClock() {
         OrderPromise promise = OrderPromise.assemble(PLACED, 25, null, null);
-        Instant promisedAt = promise.promisedAt();
+        // assemble() only ever leaves promisedAt null for PromiseBasis.NOT_PROMISED,
+        // which this call never produces (a preparation band always applies here).
+        Instant promisedAt = Objects.requireNonNull(promise.promisedAt());
 
         assertThat(promise.lateAt(promisedAt.minusSeconds(1), OrderStatus.PREPARING))
                 .isFalse();
@@ -157,7 +160,8 @@ class OrderPromiseTests {
     @Test
     void aTerminalOrderIsNeverLateHoweverLongAgoItWasPromised() {
         OrderPromise promise = OrderPromise.assemble(PLACED, 25, null, null);
-        Instant wellPast = promise.promisedAt().plus(Duration.ofDays(2));
+        // Same non-null guarantee as latenessIsThePromiseAgainstTheClock above.
+        Instant wellPast = Objects.requireNonNull(promise.promisedAt()).plus(Duration.ofDays(2));
 
         for (OrderStatus status : OrderStatus.values()) {
             assertThat(promise.lateAt(wellPast, status))

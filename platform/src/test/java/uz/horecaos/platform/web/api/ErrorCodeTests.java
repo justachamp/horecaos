@@ -2,6 +2,7 @@ package uz.horecaos.platform.web.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -24,7 +25,10 @@ class ErrorCodeTests {
 
         assertThat(problem.getProperties()).containsEntry("code", "STALE_VERSION");
         assertThat(problem.getStatus()).isEqualTo(409);
-        assertThat(problem.getType().toString()).endsWith("stale-version");
+        // ApiProblem.of always sets a type; a Problem Details response with none
+        // would mean that call was skipped, which the assertions above already rule
+        // out.
+        assertThat(Objects.requireNonNull(problem.getType()).toString()).endsWith("stale-version");
     }
 
     @Test

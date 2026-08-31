@@ -109,6 +109,8 @@ public class CourierDispatchGate {
     }
 
     /**
+     * The gate's answer, with every refusal named.
+     *
      * @param enforcementMode   snapshotted onto the assignment attempt by the
      *                          caller, together with the policy version, so a
      *                          later policy change cannot restate a past decision

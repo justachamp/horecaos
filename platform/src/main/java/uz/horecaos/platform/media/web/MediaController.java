@@ -11,6 +11,7 @@ import java.net.URI;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -121,7 +122,7 @@ public class MediaController {
      * non-UUID subject. Recorded for attribution only, so an unparseable one is
      * not worth failing an upload over.
      */
-    private UUID actorId() {
+    private @Nullable UUID actorId() {
         try {
             return UUID.fromString(currentActor.get().subject());
         } catch (IllegalArgumentException notAUuid) {
@@ -130,6 +131,8 @@ public class MediaController {
     }
 
     /**
+     * What a client asks to upload.
+     *
      * @param sizeBytes the exact byte count. The presigned URL is signed for it,
      *                  so an upload of a different size will not be accepted
      */

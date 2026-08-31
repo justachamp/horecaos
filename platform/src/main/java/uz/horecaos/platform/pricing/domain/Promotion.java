@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A promotion, as a value the engine can evaluate without touching a database
@@ -21,6 +22,9 @@ import java.util.UUID;
  * <p>Every field is carried by value so {@code PricingEngine} stays a pure
  * function. Nothing here reads a clock, and {@code validFrom}/{@code validUntil}
  * are compared against the instant the engine is handed.
+ *
+ * @param maximumDiscountMinor null is uncapped. Always positive when present
+ * @param validUntil           null is open-ended: the promotion never lapses on its own
  */
 public record Promotion(
         UUID promotionId,
@@ -32,11 +36,10 @@ public record Promotion(
         boolean exclusive,
         int priority,
         boolean requiresCoupon,
-        /** Null is uncapped. Always positive when present. */
-        Long maximumDiscountMinor,
+        @Nullable Long maximumDiscountMinor,
         String currency,
         Instant validFrom,
-        Instant validUntil,
+        @Nullable Instant validUntil,
         int definitionVersion,
         List<Condition> conditions,
         List<Action> actions) {
@@ -77,7 +80,7 @@ public record Promotion(
      * which is the only combinator there is — deliberately, because an
      * operator-authored boolean tree is the beginning of a scripting language.
      */
-    public record Condition(int sequence, Type type, Operands operands) {
+    public record Condition(int sequence, Condition.Type type, Operands operands) {
 
         public Condition {
             Objects.requireNonNull(type, "A condition type is required");
@@ -119,7 +122,7 @@ public record Promotion(
      * ADR 0018 forbids a rate stored as a float: two machines would round it
      * differently and the same cart would price twice.
      */
-    public record Action(int sequence, Type type, Operands operands) {
+    public record Action(int sequence, Action.Type type, Operands operands) {
 
         public Action {
             Objects.requireNonNull(type, "An action type is required");

@@ -2,6 +2,7 @@ package uz.horecaos.platform.migration.application.reconciliation;
 
 import java.math.BigInteger;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One rule, evaluated over one dimension, with both sides (ADR 0024).
@@ -22,12 +23,12 @@ import java.util.Objects;
 public record Measurement(
         String dimensionKey,
         MeasureKind measureKind,
-        BigInteger expected,
-        BigInteger actual,
-        String currency,
-        String expectedChecksum,
-        String actualChecksum,
-        String sampleReference) {
+        @Nullable BigInteger expected,
+        @Nullable BigInteger actual,
+        @Nullable String currency,
+        @Nullable String expectedChecksum,
+        @Nullable String actualChecksum,
+        @Nullable String sampleReference) {
 
     public Measurement {
         Objects.requireNonNull(dimensionKey, "A dimension key is the empty string, never null");
@@ -61,9 +62,18 @@ public record Measurement(
         }
     }
 
-    /** Exact, and for a checksum that means the two digests are equal. */
+    /**
+     * Exact, and for a checksum that means the two digests are equal.
+     *
+     * <p>The dereferences below are safe without a null check at the call site:
+     * the compact constructor requires both checksum sides for {@code CHECKSUM}
+     * and both numeric sides for every other kind, so exactly one pair is always
+     * present by the time an instance exists.
+     */
     public boolean agrees() {
-        return measureKind == MeasureKind.CHECKSUM ? expectedChecksum.equals(actualChecksum) : expected.equals(actual);
+        return measureKind == MeasureKind.CHECKSUM
+                ? Objects.requireNonNull(expectedChecksum).equals(actualChecksum)
+                : Objects.requireNonNull(expected).equals(actual);
     }
 
     /**
@@ -72,10 +82,13 @@ public record Measurement(
      * <p>{@code actual - expected}, in that order, because the results table's
      * CHECK states the same subtraction and a stored difference that disagreed
      * with its two sides would abort the whole suite on the row it was computed
-     * for.
+     * for. As in {@link #agrees()}, the non-checksum branch is guaranteed both
+     * numeric sides by the compact constructor.
      */
-    public BigInteger difference() {
-        return measureKind == MeasureKind.CHECKSUM ? null : actual.subtract(expected);
+    public @Nullable BigInteger difference() {
+        return measureKind == MeasureKind.CHECKSUM
+                ? null
+                : Objects.requireNonNull(actual).subtract(Objects.requireNonNull(expected));
     }
 
     public static Measurement count(String dimensionKey, long expected, long actual) {
@@ -100,7 +113,7 @@ public record Measurement(
         return new Measurement(dimensionKey, MeasureKind.CHECKSUM, null, null, null, expected, actual, null);
     }
 
-    private static void requireNumbers(BigInteger expected, BigInteger actual) {
+    private static void requireNumbers(@Nullable BigInteger expected, @Nullable BigInteger actual) {
         if (expected == null || actual == null) {
             // Both sides or neither. One side absent would store as a difference
             // against nothing, and a reconciliation that passes because half of it
@@ -109,13 +122,13 @@ public record Measurement(
         }
     }
 
-    private static void requireAbsent(String value, String why) {
+    private static void requireAbsent(@Nullable String value, String why) {
         if (value != null) {
             throw new IllegalArgumentException(why);
         }
     }
 
-    private static void requireDigest(String digest) {
+    private static void requireDigest(@Nullable String digest) {
         if (digest == null || !digest.matches("^[0-9a-f]{64}$")) {
             throw new IllegalArgumentException(
                     "A checksum side is a lowercase hex sha-256, so both sides compare like with like");

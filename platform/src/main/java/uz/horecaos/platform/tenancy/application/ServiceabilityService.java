@@ -5,8 +5,10 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Collection;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -123,8 +125,11 @@ public class ServiceabilityService implements ServiceabilityResolver, LocationCa
         }
 
         // Rule 7. Read by channel code, which the ADR 0016 correction in V0020 makes
-        // a reference to a registered channel rather than free text.
-        if (!store.hasLivePublication(tenantId, brandId, channel.channelCode())) {
+        // a reference to a registered channel rather than free text. channelCode is
+        // only ever absent on the "no such channel" fallback row, and rules 1-2
+        // above already returned for that case, so it is present here.
+        if (!store.hasLivePublication(
+                tenantId, brandId, Objects.requireNonNull(channel.channelCode(), "Channel code missing for an existing channel"))) {
             return Serviceability.refused(ServiceabilityReason.NO_LIVE_MENU, null, acceptsScheduledOrders);
         }
 
@@ -152,7 +157,7 @@ public class ServiceabilityService implements ServiceabilityResolver, LocationCa
      * rather than read here, so tenancy does not reach into the catalog.
      */
     @Transactional(readOnly = true)
-    public Integer preparationMinutes(
+    public @Nullable Integer preparationMinutes(
             UUID tenantId, UUID locationId, FulfillmentMode mode, Instant at, Collection<Integer> lineOverrideMinutes) {
         ZoneId zone = store.timezoneOf(tenantId, locationId)
                 .orElseThrow(() ->
@@ -204,8 +209,8 @@ public class ServiceabilityService implements ServiceabilityResolver, LocationCa
      * schedule shuts at 19:00 does not reopen at 20:00. The later of the two is the
      * first moment both the override and the timetable agree.
      */
-    private Instant reopeningInstant(
-            Instant effectiveUntil, Optional<JdbcServiceabilityStore.BoundSchedule> bound, ZoneId zone) {
+    private @Nullable Instant reopeningInstant(
+            @Nullable Instant effectiveUntil, Optional<JdbcServiceabilityStore.BoundSchedule> bound, ZoneId zone) {
 
         if (effectiveUntil == null) {
             // "Until I reopen it" has no computable next-available instant, and

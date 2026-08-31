@@ -29,6 +29,8 @@ import java.util.UUID;
 public interface LegalEntityDirectory {
 
     /**
+     * Resolves who sold at this location on the given business date.
+     *
      * @param businessDate the branch's own calendar day, not a UTC one. Uzbekistan
      *                     is UTC+5 and branches trade past midnight, so a UTC date
      *                     rolls over at 05:00 Tashkent in the middle of a night

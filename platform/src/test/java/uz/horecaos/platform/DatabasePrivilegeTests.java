@@ -22,7 +22,9 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
@@ -37,6 +39,8 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.mock.env.MockEnvironment;
@@ -74,6 +78,9 @@ class DatabasePrivilegeTests {
     private static final String APP_PROBE_PASSWORD = "privilege-probe-app";
     private static final String REPORTING_PROBE = "privilege_probe_reporting";
     private static final String REPORTING_PROBE_PASSWORD = "privilege-probe-reporting";
+
+    /** {@link DatabasePrivilegeGuard#run} never reads its argument; a real empty one avoids a null. */
+    private static final ApplicationArguments NO_ARGUMENTS = new DefaultApplicationArguments();
 
     private static TestDatabase.Handle db;
     private static DataSource asOwner;
@@ -652,7 +659,9 @@ class DatabasePrivilegeTests {
                             dropped a live day of ADR 0029 courier tracks. Writing pg_temp \
                             last is the documented remedy (V0080).""", signature).isNotEmpty().last().isEqualTo("pg_temp");
 
-            assertThat(unqualifiedCatalogReads((String) function.get("body")))
+            // pg_proc.prosrc is NOT NULL for every real function row; requireNonNull just
+            // says so, since Map.get()'s declared signature cannot promise it.
+            assertThat(unqualifiedCatalogReads(Objects.requireNonNull((String) function.get("body"))))
                     .as("""
                             %s reads a catalogue relation through an unqualified name. The \
                             search_path pin above is supposed to make that safe and it is the \
@@ -1187,12 +1196,12 @@ class DatabasePrivilegeTests {
         MockEnvironment production = new MockEnvironment();
         production.setActiveProfiles("production");
 
-        assertThatThrownBy(() -> new DatabasePrivilegeGuard(production, asOwner).run(null))
+        assertThatThrownBy(() -> new DatabasePrivilegeGuard(production, asOwner).run(NO_ARGUMENTS))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining(db.username())
                 .hasMessageContaining("horecaos_app");
 
-        assertThatCode(() -> new DatabasePrivilegeGuard(production, asApplication).run(null))
+        assertThatCode(() -> new DatabasePrivilegeGuard(production, asApplication).run(NO_ARGUMENTS))
                 .as("and accepts the role the deployment is supposed to use")
                 .doesNotThrowAnyException();
     }
@@ -1202,11 +1211,11 @@ class DatabasePrivilegeTests {
     void theGuardDoesNotBreakLocalDevelopment() {
         MockEnvironment local = new MockEnvironment();
         local.setActiveProfiles("local");
-        assertThatCode(() -> new DatabasePrivilegeGuard(local, asOwner).run(null))
+        assertThatCode(() -> new DatabasePrivilegeGuard(local, asOwner).run(NO_ARGUMENTS))
                 .doesNotThrowAnyException();
 
         MockEnvironment noProfile = new MockEnvironment();
-        assertThatCode(() -> new DatabasePrivilegeGuard(noProfile, asOwner).run(null))
+        assertThatCode(() -> new DatabasePrivilegeGuard(noProfile, asOwner).run(NO_ARGUMENTS))
                 .as("the test suite runs with no profile at all and must keep starting")
                 .doesNotThrowAnyException();
     }
@@ -1363,7 +1372,7 @@ class DatabasePrivilegeTests {
      * A scan that silently stops matching is worse than no scan, because the suite
      * stays green while the coverage leaves.
      */
-    static Set<Requirement> statementPrivileges(String source) {
+    private static Set<Requirement> statementPrivileges(String source) {
         Set<Requirement> found = new LinkedHashSet<>();
         for (Map.Entry<Pattern, String> statement : STATEMENTS) {
             Matcher matcher = statement.getKey().matcher(source);
@@ -1402,8 +1411,10 @@ class DatabasePrivilegeTests {
 
     /** The table, if the schema is one a migration of ours creates. */
     private static Optional<String> owned(String schema, String table) {
-        String lowered = schema.toLowerCase();
-        return OWNED_SCHEMAS.contains(lowered) ? Optional.of(lowered + "." + table.toLowerCase()) : Optional.empty();
+        String lowered = schema.toLowerCase(Locale.ROOT);
+        return OWNED_SCHEMAS.contains(lowered)
+                ? Optional.of(lowered + "." + table.toLowerCase(Locale.ROOT))
+                : Optional.empty();
     }
 
     private static boolean insideAComment(String source, int at) {
@@ -1423,7 +1434,7 @@ class DatabasePrivilegeTests {
      */
     private static List<String> lockedTables(String source, int at) {
         String query = source.substring(Math.max(0, at - 3_000), at);
-        int head = query.toUpperCase().lastIndexOf("SELECT ");
+        int head = query.toUpperCase(Locale.ROOT).lastIndexOf("SELECT ");
         if (head >= 0) {
             query = query.substring(head);
         }
@@ -1435,7 +1446,7 @@ class DatabasePrivilegeTests {
             owned(candidate.group(1), candidate.group(2)).ifPresent(table -> {
                 all.add(table);
                 if (candidate.group(3) != null) {
-                    byAlias.put(candidate.group(3).toLowerCase(), table);
+                    byAlias.put(candidate.group(3).toLowerCase(Locale.ROOT), table);
                 }
             });
         }
@@ -1443,7 +1454,7 @@ class DatabasePrivilegeTests {
         Matcher named = LOCK_NAMES.matcher(source.substring(at, Math.min(source.length(), at + 200)));
         if (named.find()) {
             List<String> targets = Stream.of(named.group(1).split(","))
-                    .map(alias -> byAlias.get(alias.trim().toLowerCase()))
+                    .map(alias -> byAlias.get(alias.trim().toLowerCase(Locale.ROOT)))
                     .filter(java.util.Objects::nonNull)
                     .toList();
             if (!targets.isEmpty()) {

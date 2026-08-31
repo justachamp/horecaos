@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -257,7 +258,7 @@ public class GrantManagementService {
      * existing tenant-scoped caller changes behaviour.
      */
     @Transactional
-    public boolean revoke(UUID tenantId, UUID grantId, String revokerSubject, String reason) {
+    public boolean revoke(@Nullable UUID tenantId, UUID grantId, String revokerSubject, String reason) {
         var existing = jdbc.sql("""
                 SELECT principal_subject, tenant_id, scope_type, scope_id
                   FROM iam.grants
@@ -398,7 +399,7 @@ public class GrantManagementService {
      *                 platform-scope grant — and a platform-scope grant can
      *                 therefore only ever name a platform role
      */
-    private ResolvedRole resolveRole(String roleCode, UUID tenantId) {
+    private ResolvedRole resolveRole(String roleCode, @Nullable UUID tenantId) {
         Optional<PlatformRole> platformRole = PlatformRole.find(roleCode);
         if (platformRole.isPresent()) {
             PlatformRole role = platformRole.get();
@@ -475,12 +476,10 @@ public class GrantManagementService {
     /**
      * A role that may be granted, resolved from wherever it is defined.
      *
-     * @param id           the {@code iam.roles} row this grant will reference
-     * @param code         the role code, for the audit entry
-     * @param capabilities from {@link PlatformRole} for a platform role, from
-     *                     {@code iam.role_capabilities} for a tenant-defined one
-     */
-    /**
+     * @param id              the {@code iam.roles} row this grant will reference
+     * @param code            the role code, for the audit entry
+     * @param capabilities    from {@link PlatformRole} for a platform role, from
+     *                        {@code iam.role_capabilities} for a tenant-defined one
      * @param platformDefined whether this is a platform role rather than one the
      *                        tenant defined. Written onto the grant as
      *                        {@code role_is_platform}, which V0089's foreign key
@@ -491,9 +490,17 @@ public class GrantManagementService {
      */
     private record ResolvedRole(UUID id, String code, Set<Capability> capabilities, boolean platformDefined) {}
 
-    /** @param validUntil null for an open-ended grant; set it for support access */
+    /**
+     * A request to grant one role to one principal at one scope.
+     *
+     * @param validUntil null for an open-ended grant; set it for support access
+     */
     public record GrantCommand(
-            String principalSubject, String roleCode, ResourceScope scope, String reason, Instant validUntil) {}
+            String principalSubject,
+            String roleCode,
+            ResourceScope scope,
+            String reason,
+            @Nullable Instant validUntil) {}
 
     public record GrantView(
             UUID id,

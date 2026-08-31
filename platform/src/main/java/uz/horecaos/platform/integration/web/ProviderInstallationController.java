@@ -369,6 +369,8 @@ public class ProviderInstallationController {
     }
 
     /**
+     * A request to register a new ADR 0026 provider installation.
+     *
      * @param secretReference an ADR 0028 reference. The value itself is written
      *                        straight to the secrets manager and never passes
      *                        through this API.

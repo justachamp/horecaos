@@ -3,6 +3,7 @@ package uz.horecaos.platform.fulfillment.domain.sourcing;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The durable sourcing effort for one order (ADR 0014).
@@ -11,6 +12,9 @@ import java.util.UUID;
  * planning, quoting and sourcing all happen before anything physical exists, and
  * one plan may produce several assignment attempts.
  *
+ * @param deliveryFeeResolutionId the ADR 0037 evidence row the fee was priced
+ *                              against, or null for an order whose snapshot
+ *                              predates one — see {@code DeliveryOrderPort.DeliveryOrder}
  * @param promisedDeliveryStart null until a promise is made. Nullable in pairs —
  *                              a promise with one end is a window nobody can be
  *                              held to, and {@code ck_plan_promise_pair} refuses it
@@ -29,10 +33,10 @@ public record DeliveryPlan(
         String serviceLevel,
         long customerDeliveryFeeMinor,
         String currency,
-        UUID deliveryFeeResolutionId,
+        @Nullable UUID deliveryFeeResolutionId,
         PickupPlan pickup,
-        Instant promisedDeliveryStart,
-        Instant promisedDeliveryEnd,
+        @Nullable Instant promisedDeliveryStart,
+        @Nullable Instant promisedDeliveryEnd,
         Integer distanceMeters,
         String distanceSource,
         UUID policyId,

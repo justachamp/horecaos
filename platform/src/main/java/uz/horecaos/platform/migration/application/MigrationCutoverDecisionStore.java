@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.migration.domain.ScopeState;
 
 /**
@@ -106,8 +107,8 @@ public interface MigrationCutoverDecisionStore {
             Map<String, Object> evidenceSnapshot,
             String requestedBy,
             String decidedBy,
-            UUID approvalRequestId,
-            Boolean approvalRequestIsPlatform,
+            @Nullable UUID approvalRequestId,
+            @Nullable Boolean approvalRequestIsPlatform,
             String idempotencyKey,
             Instant requestedAt,
             Instant decidedAt) {

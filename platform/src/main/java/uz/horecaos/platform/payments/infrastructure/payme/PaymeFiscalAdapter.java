@@ -2,6 +2,7 @@ package uz.horecaos.platform.payments.infrastructure.payme;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -111,7 +112,10 @@ public class PaymeFiscalAdapter implements FiscalReceiptPort {
                     "Fiscal document {} cannot be expressed in Payme's detail object: {}",
                     document.id(),
                     refused.code());
-            return FiscalSubmission.rejected(refused.code(), refused.getMessage(), now);
+            return FiscalSubmission.rejected(
+                    refused.code(),
+                    Objects.requireNonNullElse(refused.getMessage(), "Payme receipt lines could not be built"),
+                    now);
         }
 
         return FiscalSubmission.accepted(now);

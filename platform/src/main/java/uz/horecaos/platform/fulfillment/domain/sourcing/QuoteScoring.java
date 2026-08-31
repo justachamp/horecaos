@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.PartnerOption;
 
 /**
@@ -77,6 +78,8 @@ public final class QuoteScoring {
     private QuoteScoring() {}
 
     /**
+     * Ranks every configured partner for one plan, from its quotes and the pickup plan.
+     *
      * @param partners the branch's bindings in the order ADR 0026 resolved them,
      *                 narrowest first. That order is the tie-break of last resort
      *                 and the whole answer when nothing could be quoted
@@ -121,7 +124,7 @@ public final class QuoteScoring {
     }
 
     private static ScoredPartner score(
-            PartnerOption partner, DeliveryQuote quote, PickupPlan plan, Instant now, int configuredPosition) {
+            PartnerOption partner, @Nullable DeliveryQuote quote, PickupPlan plan, Instant now, int configuredPosition) {
 
         if (quote == null) {
             return new ScoredPartner(partner, null, true, NOT_QUOTED, configuredPosition);
@@ -151,8 +154,8 @@ public final class QuoteScoring {
     private static final Comparator<ScoredPartner> RANKING = Comparator.comparing(
                     (ScoredPartner scored) -> !scored.eligible())
             .thenComparing(scored -> scored.quote() == null || !scored.quote().priced())
-            .thenComparing(ScoredPartner::priceOrMax)
-            .thenComparing(ScoredPartner::pickupEtaOrMax)
+            .thenComparingLong(ScoredPartner::priceOrMax)
+            .thenComparingLong(ScoredPartner::pickupEtaOrMax)
             .thenComparingInt(ScoredPartner::configuredPosition)
             .thenComparing(scored -> scored.partner().bindingId());
 
@@ -166,7 +169,11 @@ public final class QuoteScoring {
      *                 question asked from two ends
      */
     public record ScoredPartner(
-            PartnerOption partner, DeliveryQuote quote, boolean eligible, String reason, int configuredPosition) {
+            PartnerOption partner,
+            @Nullable DeliveryQuote quote,
+            boolean eligible,
+            String reason,
+            int configuredPosition) {
 
         public ScoredPartner {
             Objects.requireNonNull(partner, "A partner option is required");

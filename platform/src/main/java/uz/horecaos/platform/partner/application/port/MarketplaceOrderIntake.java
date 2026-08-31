@@ -3,6 +3,7 @@ package uz.horecaos.platform.partner.application.port;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.partner.domain.DiscountFunding;
 import uz.horecaos.platform.partner.domain.ExternalReference;
 import uz.horecaos.platform.partner.domain.ExternalTotals;
@@ -31,6 +32,8 @@ import uz.horecaos.platform.partner.domain.HandoverChallengeType;
 public interface MarketplaceOrderIntake {
 
     /**
+     * Writes the {@code ordering.orders} row for an accepted partner push.
+     *
      * @return the identifiers of the created order, so the caller can write the
      *         staging row that points at it in the same transaction
      */
@@ -39,6 +42,8 @@ public interface MarketplaceOrderIntake {
     record Created(UUID orderId, String publicOrderNumber, UUID handoverChallengeId) {}
 
     /**
+     * What creates one order from one accepted partner push.
+     *
      * @param guestReferenceHash a keyed hash of {@code (binding, external order
      *                           id)}, and deliberately not a hash of the
      *                           customer's contact. Aggregators proxy phone
@@ -74,7 +79,7 @@ public interface MarketplaceOrderIntake {
             List<IntakeLine> lines,
             List<ExternalReference> references,
             HandoverChallengeType challengeType,
-            String handoverCodeHash,
+            @Nullable String handoverCodeHash,
             String challengeIssuedBy,
             Instant createdAt) {
 
@@ -85,6 +90,10 @@ public interface MarketplaceOrderIntake {
     }
 
     /**
+     * One line of a partner push, mapped to a catalogue variant where one exists.
+     *
+     * @param productId null: a marketplace order carries no HorecaOS product
+     *                  identifier, only the resolved variant
      * @param variantId null exactly when the partner sent an item the catalogue
      *                  does not carry. The line keeps the partner's own name and
      *                  amount and is flagged {@code UNMAPPED} rather than
@@ -93,8 +102,8 @@ public interface MarketplaceOrderIntake {
      *                  menu-sync lag on one item.
      */
     record IntakeLine(
-            UUID productId,
-            UUID variantId,
+            @Nullable UUID productId,
+            @Nullable UUID variantId,
             String externalItemReference,
             String nameSnapshot,
             int quantity,

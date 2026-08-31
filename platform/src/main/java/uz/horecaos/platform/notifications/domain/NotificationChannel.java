@@ -1,5 +1,6 @@
 package uz.horecaos.platform.notifications.domain;
 
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory.ContactMethod;
 
 /**
@@ -25,10 +26,10 @@ public enum NotificationChannel {
     TELEGRAM(true, null, true);
 
     private final boolean wired;
-    private final ContactMethod contactMethod;
+    private final @Nullable ContactMethod contactMethod;
     private final boolean perEndpointOrdered;
 
-    NotificationChannel(boolean wired, ContactMethod contactMethod, boolean perEndpointOrdered) {
+    NotificationChannel(boolean wired, @Nullable ContactMethod contactMethod, boolean perEndpointOrdered) {
         this.wired = wired;
         this.contactMethod = contactMethod;
         this.perEndpointOrdered = perEndpointOrdered;
@@ -40,7 +41,7 @@ public enum NotificationChannel {
     }
 
     /** The ADR 0015 contact kind this channel addresses, or null where none applies. */
-    public ContactMethod contactMethod() {
+    public @Nullable ContactMethod contactMethod() {
         return contactMethod;
     }
 
@@ -58,3 +59,4 @@ public enum NotificationChannel {
         return perEndpointOrdered;
     }
 }
+

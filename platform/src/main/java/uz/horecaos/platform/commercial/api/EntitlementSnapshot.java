@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Every entitlement a tenant holds at one instant, with a hash over the whole
@@ -25,7 +26,7 @@ import java.util.UUID;
  * @param resolvedAt     when the resolution was performed
  */
 public record EntitlementSnapshot(
-        UUID tenantId, UUID subscriptionId, Map<String, EntitlementValue> values, Instant resolvedAt) {
+        UUID tenantId, @Nullable UUID subscriptionId, Map<String, EntitlementValue> values, Instant resolvedAt) {
 
     public EntitlementSnapshot {
         Objects.requireNonNull(tenantId, "A tenant is required");

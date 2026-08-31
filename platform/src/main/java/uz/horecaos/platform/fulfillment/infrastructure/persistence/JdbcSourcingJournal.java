@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -211,11 +212,11 @@ public class JdbcSourcingJournal implements SourcingJournal {
      * version standing alone would claim a decision was pinned to something the
      * row cannot name.
      */
-    private static Integer version(UUID policyId, int policyVersion) {
+    private static @Nullable Integer version(@Nullable UUID policyId, int policyVersion) {
         return policyId == null ? null : policyVersion;
     }
 
-    private static String code(String provided, String fallback) {
+    private static String code(@Nullable String provided, String fallback) {
         String value = provided == null || provided.isBlank() ? fallback : provided;
         return value.substring(0, Math.min(value.length(), MAX_FAILURE_CODE));
     }

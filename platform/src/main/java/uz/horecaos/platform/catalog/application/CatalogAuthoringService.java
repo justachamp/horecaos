@@ -2,6 +2,7 @@ package uz.horecaos.platform.catalog.application;
 
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
@@ -53,12 +54,12 @@ public class CatalogAuthoringService {
             UUID catalogId,
             String code,
             String name,
-            String description,
+            @Nullable String description,
             String locale,
-            String sku,
-            String unitCode,
+            @Nullable String sku,
+            @Nullable String unitCode,
             FiscalClassification fiscal,
-            UUID actorId) {
+            @Nullable UUID actorId) {
 
         UUID productId = UUID.randomUUID();
         UUID variantId = UUID.randomUUID();
@@ -86,6 +87,8 @@ public class CatalogAuthoringService {
     }
 
     /**
+     * Adds a variant to an existing product.
+     *
      * @param fiscal this variant's own classification. Every size of a dish is
      *               its own receipt line with its own unit and its own
      *               63-character fiscal name, so there is nothing sensible to
@@ -96,13 +99,13 @@ public class CatalogAuthoringService {
             UUID tenantId,
             UUID brandId,
             UUID productId,
-            String sku,
-            String unitCode,
-            String name,
+            @Nullable String sku,
+            @Nullable String unitCode,
+            @Nullable String name,
             String locale,
             int sortOrder,
             FiscalClassification fiscal,
-            UUID actorId) {
+            @Nullable UUID actorId) {
         UUID variantId = UUID.randomUUID();
         store.insertVariant(
                 variantId,
@@ -126,7 +129,7 @@ public class CatalogAuthoringService {
             UUID tenantId,
             UUID brandId,
             UUID catalogId,
-            UUID parentCategoryId,
+            @Nullable UUID parentCategoryId,
             String code,
             String name,
             String locale,
@@ -162,6 +165,8 @@ public class CatalogAuthoringService {
     }
 
     /**
+     * Adds an option to an existing modifier group.
+     *
      * @param fiscal a modifier reaches a receipt as its own line, so it carries
      *               its own ИКПУ/MXIK. Left unclassified it falls back to the
      *               linked variant's, when the modifier is itself something
@@ -175,11 +180,11 @@ public class CatalogAuthoringService {
             String code,
             String name,
             String locale,
-            UUID linkedVariantId,
+            @Nullable UUID linkedVariantId,
             int maximumQuantity,
             int sortOrder,
             FiscalClassification fiscal,
-            UUID actorId) {
+            @Nullable UUID actorId) {
         UUID optionId = UUID.randomUUID();
         store.insertModifierOption(new ModifierOption(
                 optionId,
@@ -211,7 +216,12 @@ public class CatalogAuthoringService {
      * human chose from one a machine carried in.
      */
     @Transactional
-    public void classify(UUID tenantId, UUID brandId, PriceableNode node, FiscalClassification fiscal, UUID actorId) {
+    public void classify(
+            UUID tenantId,
+            UUID brandId,
+            PriceableNode node,
+            @Nullable FiscalClassification fiscal,
+            @Nullable UUID actorId) {
         if (fiscal == null || fiscal.isEmpty()) {
             return;
         }
@@ -233,7 +243,8 @@ public class CatalogAuthoringService {
      * this classification exists to prevent.
      */
     @Transactional
-    public UUID classifyFee(UUID tenantId, UUID brandId, String feeCode, FiscalClassification fiscal, UUID actorId) {
+    public UUID classifyFee(
+            UUID tenantId, UUID brandId, String feeCode, FiscalClassification fiscal, @Nullable UUID actorId) {
         UUID feeId = store.ensureFee(tenantId, brandId, feeCode);
         classify(tenantId, brandId, PriceableNode.fee(feeId), fiscal, actorId);
         return feeId;
@@ -285,7 +296,7 @@ public class CatalogAuthoringService {
      */
     @Transactional(readOnly = true)
     public List<JdbcCatalogStore.VariantAvailabilityRow> variantsAtLocation(
-            UUID tenantId, UUID brandId, UUID locationId, String locale, UUID cursor, int limit) {
+            UUID tenantId, UUID brandId, UUID locationId, String locale, @Nullable UUID cursor, int limit) {
         return store.variantsAtLocation(tenantId, brandId, locationId, locale, cursor, limit);
     }
 
@@ -318,7 +329,7 @@ public class CatalogAuthoringService {
             UUID entityId,
             String locale,
             String name,
-            String description) {
+            @Nullable String description) {
         if (!store.entityExistsInBrand(tenantId, brandId, entityType, entityId)) {
             throw new UnknownCatalogEntityException(entityType, entityId);
         }

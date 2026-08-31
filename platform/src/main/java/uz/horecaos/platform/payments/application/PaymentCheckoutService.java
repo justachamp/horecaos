@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -251,9 +252,9 @@ public class PaymentCheckoutService {
             String merchantTransId,
             PaymentProviderType providerType,
             PresentationKind presentationKind,
-            String checkoutUrl,
-            String qrPayload,
-            Instant expiresAt,
+            @Nullable String checkoutUrl,
+            @Nullable String qrPayload,
+            @Nullable Instant expiresAt,
             long amountMinor,
             String currency,
             boolean rePresented,

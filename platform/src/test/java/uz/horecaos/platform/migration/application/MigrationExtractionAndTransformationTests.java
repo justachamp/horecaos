@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.migration.api.ExtractionSpec;
 import uz.horecaos.platform.migration.api.LegacyRecord;
 import uz.horecaos.platform.migration.api.Transformation;
@@ -55,6 +56,13 @@ class MigrationExtractionAndTransformationTests {
                 .isEqualTo(java.time.Duration.ofHours(5));
     }
 
+    // Deliberately passes a null zone below: instantAt's own Objects.requireNonNull
+    // is exactly what this test asserts, so the literal has to get past the
+    // compiler to reach the runtime check it is proving. The suppression has to
+    // cover the whole method because NullAway's local-variable nullability tracks
+    // the value from its declaration through to where it is finally passed as an
+    // argument, several statements later.
+    @SuppressWarnings("NullAway")
     @Test
     @DisplayName("reading a naive timestamp without a zone is not possible")
     void aZoneIsAlwaysRequired() {
@@ -63,7 +71,9 @@ class MigrationExtractionAndTransformationTests {
         assertThat(order.naiveTimestamp("created"))
                 .as("handed back with no zone attached, so nothing can silently assume one")
                 .isEqualTo(LocalDateTime.of(2026, 2, 21, 13, 5));
-        assertThat(catchThrowable(() -> order.instantAt("created", null))).isInstanceOf(NullPointerException.class);
+        ZoneId missingZone = null;
+        assertThat(catchThrowable(() -> order.instantAt("created", missingZone)))
+                .isInstanceOf(NullPointerException.class);
     }
 
     @Test
@@ -177,7 +187,7 @@ class MigrationExtractionAndTransformationTests {
     }
 
     /** {@code Map.of} rejects nulls, and every nullable legacy column needs one. */
-    private static Map<String, Object> mapWithNulls(Object... pairs) {
+    private static Map<String, Object> mapWithNulls(@Nullable Object... pairs) {
         Map<String, Object> values = new HashMap<>();
         for (int index = 0; index < pairs.length; index += 2) {
             values.put((String) pairs[index], pairs[index + 1]);

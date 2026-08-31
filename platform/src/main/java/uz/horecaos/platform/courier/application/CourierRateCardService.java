@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -70,7 +71,9 @@ public class CourierRateCardService {
         try {
             RateCardValidator.validateForActivation(card);
         } catch (RateCardValidator.InvalidRateCardException invalid) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, invalid.getMessage());
+            // InvalidRateCardException is always constructed with a message —
+            // it names the metre the ladder fails at — so the guard cannot fire.
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, java.util.Objects.requireNonNull(invalid.getMessage()));
         }
 
         if (!cards.activate(tenantId, cardId, actor.subject(), clock.instant())) {
@@ -95,11 +98,17 @@ public class CourierRateCardService {
         return card;
     }
 
+    /**
+     * A rate card to author, scoped as broadly or narrowly as its owner chooses.
+     *
+     * @param locationId    null applies the card to every location in the brand
+     * @param courierTypeId null applies the card to every courier type
+     */
     public record NewRateCard(
             UUID tenantId,
             UUID brandId,
-            UUID locationId,
-            UUID courierTypeId,
+            @Nullable UUID locationId,
+            @Nullable UUID courierTypeId,
             String code,
             int cardVersion,
             String currency,

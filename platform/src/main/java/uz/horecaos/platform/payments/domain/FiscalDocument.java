@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * An order's fiscal evidence, or the recorded fact that there will be none
@@ -32,17 +33,17 @@ public record FiscalDocument(
         UUID id,
         UUID tenantId,
         UUID orderId,
-        UUID legalEntityId,
-        UUID paymentIntentId,
-        UUID paymentTransactionId,
-        PaymentProviderType providerType,
+        @Nullable UUID legalEntityId,
+        @Nullable UUID paymentIntentId,
+        @Nullable UUID paymentTransactionId,
+        @Nullable PaymentProviderType providerType,
         FiscalDocumentType documentType,
-        UUID correctsDocumentId,
+        @Nullable UUID correctsDocumentId,
         FiscalStatus status,
         String reasonCode,
         String reasonNote,
         List<FiscalReceiptLine> lines,
-        FiscalEvidence evidence,
+        @Nullable FiscalEvidence evidence,
         int version,
         Instant createdAt) {
 
@@ -57,14 +58,14 @@ public record FiscalDocument(
      * evidence.
      */
     public record FiscalEvidence(
-            String externalReceiptId,
-            String fiscalSign,
-            String terminalId,
-            String receiptReference,
-            Instant registeredAt,
-            String receiptUrl,
-            String providerStatusCode,
-            String providerMessage) {}
+            @Nullable String externalReceiptId,
+            @Nullable String fiscalSign,
+            @Nullable String terminalId,
+            @Nullable String receiptReference,
+            @Nullable Instant registeredAt,
+            @Nullable String receiptUrl,
+            @Nullable String providerStatusCode,
+            @Nullable String providerMessage) {}
 
     public FiscalDocument {
         Objects.requireNonNull(id, "A document id is required");
@@ -93,7 +94,12 @@ public record FiscalDocument(
      * split inside a CLICK payment, and a cash order has no CLICK payment to split.
      */
     public static FiscalDocument notApplicableForCash(
-            UUID id, UUID tenantId, UUID orderId, UUID legalEntityId, UUID paymentIntentId, Instant createdAt) {
+            UUID id,
+            UUID tenantId,
+            UUID orderId,
+            @Nullable UUID legalEntityId,
+            UUID paymentIntentId,
+            Instant createdAt) {
         return new FiscalDocument(
                 id,
                 tenantId,

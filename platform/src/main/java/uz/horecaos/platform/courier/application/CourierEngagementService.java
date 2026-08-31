@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -169,14 +170,14 @@ public class CourierEngagementService {
                     "Only MANUAL_ATTESTATION is implemented; whether an authoritative "
                             + "machine-readable registration source exists is an open input on ADR 0042");
         }
-        if (!command.validUntil().isAfter(today(command.tenantId()))) {
+        if (!command.validUntil().isAfter(today())) {
             throw new ApiException(
                     ErrorCode.VALIDATION_FAILED, "A registration that has already expired cannot be attested as valid");
         }
         requireOwnEvidence(command.tenantId(), command.evidenceMediaId());
 
         CourierCompensationPolicy policy = policies.resolve(ResourceScope.tenant(command.tenantId()));
-        LocalDate decayDue = today(command.tenantId()).plusDays(policy.reverificationDays());
+        LocalDate decayDue = today().plusDays(policy.reverificationDays());
         LocalDate dueOn = decayDue.isBefore(command.validUntil()) ? decayDue : command.validUntil();
 
         String protectedRef = protection
@@ -200,7 +201,7 @@ public class CourierEngagementService {
                 command.method(),
                 command.actor().subject(),
                 command.evidenceMediaId(),
-                warningStateFor(dueOn, policy, today(command.tenantId())),
+                warningStateFor(dueOn, policy, today()),
                 clock.instant());
 
         if (!applied) {
@@ -328,7 +329,7 @@ public class CourierEngagementService {
      * <p>A null id is accepted. Evidence is optional under ADR 0042: a manual
      * attestation is a person's sworn sighting, and they may have sighted paper.
      */
-    private void requireOwnEvidence(UUID tenantId, UUID evidenceMediaId) {
+    private void requireOwnEvidence(UUID tenantId, @Nullable UUID evidenceMediaId) {
         if (evidenceMediaId == null) {
             return;
         }
@@ -348,14 +349,18 @@ public class CourierEngagementService {
                 : RegistrationWarningState.EXPIRING;
     }
 
-    private LocalDate today(UUID tenantId) {
+    private LocalDate today() {
         // The tenant's own day boundary belongs to ADR 0043's business-day
         // policy; until a courier engagement has a location on it, UTC is the
         // honest approximation and is stated rather than hidden.
         return LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC);
     }
 
-    /** @param displayReference a non-personal handle a dispatch board may show */
+    /**
+     * A courier engagement to create.
+     *
+     * @param displayReference a non-personal handle a dispatch board may show
+     */
     public record NewCourier(
             UUID tenantId,
             UUID courierTypeId,
@@ -367,13 +372,18 @@ public class CourierEngagementService {
             String reason,
             String correlationId) {}
 
+    /**
+     * A registration to verify.
+     *
+     * @param evidenceMediaId optional; checked for ownership only when present
+     */
     public record VerifyRegistration(
             UUID tenantId,
             UUID engagementId,
             String registrationIdentifier,
             LocalDate validUntil,
             VerificationMethod method,
-            UUID evidenceMediaId,
+            @Nullable UUID evidenceMediaId,
             ActorRef actor,
             String reason,
             String correlationId) {}

@@ -2,6 +2,7 @@ package uz.horecaos.platform.media.domain;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
  * What the bytes are, read from the image's own header (ADR 0010).
@@ -47,12 +48,14 @@ public final class ImageProbe {
     private ImageProbe() {}
 
     /**
+     * Reads an image's type and cost-relevant dimensions from its own header.
+     *
      * @param prefix the leading bytes of the object; a short or empty prefix is
      *               an ordinary outcome and yields empty
      * @return empty when the bytes are not a supported image, which the caller
      *         must treat as a rejection rather than as "unknown but probably fine"
      */
-    public static Optional<ProbedImage> probe(byte[] prefix) {
+    public static Optional<ProbedImage> probe(byte @Nullable [] prefix) {
         if (prefix == null || prefix.length < 16) {
             return Optional.empty();
         }

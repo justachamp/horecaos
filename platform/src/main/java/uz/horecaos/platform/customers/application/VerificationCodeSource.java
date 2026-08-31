@@ -36,6 +36,8 @@ public interface VerificationCodeSource {
     Code codeFor(String destination);
 
     /**
+     * A code and whether it still needs to be delivered.
+     *
      * @param value            the six digits the customer will be asked for
      * @param requiresDelivery false only for a preset code, which the customer
      *                         already knows. The caller must not call a transport

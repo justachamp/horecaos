@@ -35,6 +35,8 @@ public class EnvelopeValidator {
     }
 
     /**
+     * Parses and cross-checks one inbound Kafka record before any handler sees it.
+     *
      * @param headers the {@code horecaos-*} headers repeated on the Kafka record
      * @throws InvalidEnvelopeException when the record cannot be trusted
      */

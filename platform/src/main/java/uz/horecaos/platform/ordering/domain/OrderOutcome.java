@@ -1,6 +1,7 @@
 package uz.horecaos.platform.ordering.domain;
 
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The single terminal fact recorded for an order (ADR 0039).
@@ -30,14 +31,14 @@ import java.util.UUID;
 public record OrderOutcome(
         TerminalOutcomeKind kind,
         OutcomeSystemCategory systemCategory,
-        UUID reasonId,
-        Integer reasonVersion,
-        String reasonSnapshot,
+        @Nullable UUID reasonId,
+        @Nullable Integer reasonVersion,
+        @Nullable String reasonSnapshot,
         StockDisposition disposition,
-        LiabilityParty liabilityParty,
-        CustomerRefund customerRefund,
+        @Nullable LiabilityParty liabilityParty,
+        @Nullable CustomerRefund customerRefund,
         boolean reservationCommitted,
-        String noteEncrypted) {
+        @Nullable String noteEncrypted) {
 
     public OrderOutcome {
         if (kind == null) {

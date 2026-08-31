@@ -2,6 +2,7 @@ package uz.horecaos.platform.payments.domain;
 
 import java.util.Locale;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The payment method codes this build understands, and what each one implies.
@@ -49,10 +50,11 @@ public enum PaymentMethod {
 
     private final String code;
     private final PaymentTender tender;
-    private final PaymentProviderType provider;
+    private final @Nullable PaymentProviderType provider;
     private final CaptureTiming captureTiming;
 
-    PaymentMethod(String code, PaymentTender tender, PaymentProviderType provider, CaptureTiming captureTiming) {
+    PaymentMethod(
+            String code, PaymentTender tender, @Nullable PaymentProviderType provider, CaptureTiming captureTiming) {
         this.code = code;
         this.tender = tender;
         this.provider = provider;

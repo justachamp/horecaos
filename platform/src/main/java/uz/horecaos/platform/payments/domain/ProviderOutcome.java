@@ -3,6 +3,7 @@ package uz.horecaos.platform.payments.domain;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
  * What one provider call came to (ADR 0013, ADR 0007).
@@ -34,14 +35,14 @@ import java.util.Optional;
  */
 public record ProviderOutcome(
         Classification classification,
-        PaymentAttemptStatus observedStatus,
-        ProviderEvidence evidence,
-        String externalPaymentId,
-        String externalDocumentId,
-        SomAmount observedAmount,
-        String failureCode,
-        String detail,
-        Duration retryAfter) {
+        @Nullable PaymentAttemptStatus observedStatus,
+        @Nullable ProviderEvidence evidence,
+        @Nullable String externalPaymentId,
+        @Nullable String externalDocumentId,
+        @Nullable SomAmount observedAmount,
+        @Nullable String failureCode,
+        @Nullable String detail,
+        @Nullable Duration retryAfter) {
 
     public enum Classification {
 
@@ -74,8 +75,8 @@ public record ProviderOutcome(
 
     public static ProviderOutcome success(
             PaymentAttemptStatus observedStatus,
-            ProviderEvidence evidence,
-            String externalPaymentId,
+            @Nullable ProviderEvidence evidence,
+            @Nullable String externalPaymentId,
             SomAmount observedAmount) {
         return new ProviderOutcome(
                 Classification.SUCCESS,
@@ -89,7 +90,7 @@ public record ProviderOutcome(
                 null);
     }
 
-    public static ProviderOutcome rejected(String failureCode, String detail, ProviderEvidence evidence) {
+    public static ProviderOutcome rejected(String failureCode, String detail, @Nullable ProviderEvidence evidence) {
         return new ProviderOutcome(
                 Classification.REJECTED,
                 PaymentAttemptStatus.FAILED,

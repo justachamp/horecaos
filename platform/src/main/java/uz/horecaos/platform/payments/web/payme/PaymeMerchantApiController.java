@@ -8,6 +8,7 @@ import java.time.Clock;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -317,14 +318,6 @@ public class PaymeMerchantApiController {
     // -----------------------------------------------------------------------
 
     /**
-     * The request id, echoed verbatim and never interpreted.
-     *
-     * <p>Documented as an Integer, so a number is the expected case; a string is
-     * accepted and echoed as a string rather than refused, because refusing it would
-     * cost a real payment over a field that only has to come back the way it went
-     * out.
-     */
-    /**
      * At most {@link #MAX_REQUEST_BYTES}, refused rather than truncated.
      *
      * <p>Truncating would hand the parser a prefix, and a prefix of a well-formed
@@ -346,7 +339,15 @@ public class PaymeMerchantApiController {
         return body;
     }
 
-    private static Object requestIdOf(JsonNode root) {
+    /**
+     * The request id, echoed verbatim and never interpreted.
+     *
+     * <p>Documented as an Integer, so a number is the expected case; a string is
+     * accepted and echoed as a string rather than refused, because refusing it would
+     * cost a real payment over a field that only has to come back the way it went
+     * out.
+     */
+    private static @Nullable Object requestIdOf(JsonNode root) {
         JsonNode id = root.path("id");
         if (id.isIntegralNumber()) {
             return id.longValue();
@@ -364,7 +365,7 @@ public class PaymeMerchantApiController {
      * JSON-RPC request id otherwise — {@code CheckPerformTransaction} and
      * {@code GetStatement} have no transaction of their own.
      */
-    private static String providerReferenceOf(JsonNode root, Object requestId) {
+    private static @Nullable String providerReferenceOf(JsonNode root, @Nullable Object requestId) {
         JsonNode id = root.path("params").path("id");
         if (id.isString() && !id.asString().isBlank()) {
             return id.asString();
@@ -394,11 +395,11 @@ public class PaymeMerchantApiController {
      */
     private static final class Arrival {
 
-        private ProviderBinding binding;
+        private @Nullable ProviderBinding binding;
         private byte[] body = new byte[0];
-        private Object requestId;
-        private String method;
-        private String providerReference;
+        private @Nullable Object requestId;
+        private @Nullable String method;
+        private @Nullable String providerReference;
         private boolean authenticated;
         private String responseCode = OK;
 

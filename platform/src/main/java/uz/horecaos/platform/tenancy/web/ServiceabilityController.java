@@ -6,6 +6,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -91,10 +92,10 @@ public class ServiceabilityController {
     /** The wire shape. The storefront maps {@code reason} to wording and never renders it. */
     public record ServiceabilityView(
             boolean available,
-            String reason,
-            Instant nextAvailableAt,
+            @Nullable String reason,
+            @Nullable Instant nextAvailableAt,
             boolean acceptsScheduledOrders,
-            Integer preparationMinutes) {
+            @Nullable Integer preparationMinutes) {
 
         static ServiceabilityView of(Serviceability answer) {
             return new ServiceabilityView(

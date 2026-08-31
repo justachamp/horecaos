@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
@@ -254,6 +255,10 @@ class ExternalCallTransactionBoundaryTests {
     @EnableTransactionManagement(proxyTargetClass = true)
     static class TestConfiguration {
 
+        // Set by the enclosing class's @BeforeEach before this @Configuration is ever
+        // loaded (see setUp() below); NullAway cannot see initialization performed by a
+        // different class, which is what a Spring @Bean factory method being no-arg forces.
+        @SuppressWarnings("NullAway")
         private static DataSource dataSource;
 
         @Bean
@@ -400,7 +405,7 @@ class ExternalCallTransactionBoundaryTests {
         private final DataSource dataSource;
         private int calls;
         private boolean insideTransaction;
-        private String observedStatus;
+        private @Nullable String observedStatus;
 
         WatchfulHandler(DataSource dataSource) {
             this.dataSource = dataSource;

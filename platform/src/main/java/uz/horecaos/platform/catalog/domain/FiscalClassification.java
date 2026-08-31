@@ -2,6 +2,7 @@ package uz.horecaos.platform.catalog.domain;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Everything a Click or Payme receipt line needs to know about one priceable
@@ -47,16 +48,16 @@ import java.util.List;
  *                                  null when it is unrestricted
  */
 public record FiscalClassification(
-        String mxikCode,
-        String packageCode,
-        Integer fiscalUnitCode,
-        String fiscalName,
-        String barcode,
+        @Nullable String mxikCode,
+        @Nullable String packageCode,
+        @Nullable Integer fiscalUnitCode,
+        @Nullable String fiscalName,
+        @Nullable String barcode,
         boolean markingRequired,
         MarkingScheme markingScheme,
         boolean excisable,
-        Integer alcoholByVolumeBasisPoints,
-        Integer ageRestrictionYears) {
+        @Nullable Integer alcoholByVolumeBasisPoints,
+        @Nullable Integer ageRestrictionYears) {
 
     /**
      * Click caps {@code Name} at 63 characters.
@@ -133,7 +134,10 @@ public record FiscalClassification(
      * dish is not marked, not excisable and not age restricted.
      */
     public static FiscalClassification of(
-            String mxikCode, String packageCode, Integer fiscalUnitCode, String fiscalName) {
+            @Nullable String mxikCode,
+            @Nullable String packageCode,
+            @Nullable Integer fiscalUnitCode,
+            @Nullable String fiscalName) {
         return new FiscalClassification(
                 mxikCode, packageCode, fiscalUnitCode, fiscalName, null, false, MarkingScheme.NONE, false, null, null);
     }
@@ -193,7 +197,7 @@ public record FiscalClassification(
      * variant is that same physical good, and a modifier row left at the default
      * would otherwise say the good is unmarked and unrestricted.
      */
-    public FiscalClassification orInherited(FiscalClassification fallback) {
+    public FiscalClassification orInherited(@Nullable FiscalClassification fallback) {
         if (fallback == null || fallback.isEmpty()) {
             return this;
         }
@@ -217,14 +221,14 @@ public record FiscalClassification(
                 stricterAge(ageRestrictionYears, fallback.ageRestrictionYears()));
     }
 
-    private static Integer stricterAge(Integer own, Integer inherited) {
+    private static @Nullable Integer stricterAge(@Nullable Integer own, @Nullable Integer inherited) {
         if (own == null) {
             return inherited;
         }
         return inherited == null ? own : Math.max(own, inherited);
     }
 
-    private static String blankToNull(String value) {
+    private static @Nullable String blankToNull(@Nullable String value) {
         return value == null || value.isBlank() ? null : value.strip();
     }
 }

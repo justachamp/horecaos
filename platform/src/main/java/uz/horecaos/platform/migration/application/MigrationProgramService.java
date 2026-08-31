@@ -8,6 +8,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -451,6 +452,9 @@ public class MigrationProgramService {
     }
 
     /**
+     * What registering a program names: which estate is moving into which, under
+     * which approved policy.
+     *
      * @param policyVersion the version of the approved mapping and quarantine
      *                      policy this program executes, pinned on the program so
      *                      a later revision cannot retroactively change what an
@@ -460,6 +464,9 @@ public class MigrationProgramService {
             String name, String sourceEnvironment, String targetEnvironment, int policyVersion, String reason) {}
 
     /**
+     * What opening a scope names: the capability, the tenant, and how far the
+     * claim is narrowed underneath it.
+     *
      * @param brandId     null for a scope covering the whole tenant
      * @param locationId  null for a scope covering the whole brand; a location
      *                    always requires its brand
@@ -469,8 +476,8 @@ public class MigrationProgramService {
      */
     public record OpenScopeCommand(
             UUID tenantId,
-            UUID brandId,
-            UUID locationId,
+            @Nullable UUID brandId,
+            @Nullable UUID locationId,
             MigrationCapability capability,
             String sourceOwner,
             String targetOwner,

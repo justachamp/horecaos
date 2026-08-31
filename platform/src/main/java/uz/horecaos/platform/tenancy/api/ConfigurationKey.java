@@ -3,6 +3,7 @@ package uz.horecaos.platform.tenancy.api;
 import java.util.EnumSet;
 import java.util.Objects;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 
 /**
@@ -12,11 +13,15 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
  * fails at startup instead of silently resolving to a default at read time.
  *
  * @param <T> the resolved value type
+ * @param defaultValue absent when the key is declared with {@code
+ *                      explicitNullTerminates()} and no default — an explicit
+ *                      null at a scope then resolves to null rather than to a
+ *                      value nobody chose
  */
 public record ConfigurationKey<T>(
         String code,
         Class<T> valueType,
-        T defaultValue,
+        @Nullable T defaultValue,
         Set<ScopeType> settableScopes,
         String owningModule,
         boolean tenantVisible,
@@ -55,7 +60,7 @@ public record ConfigurationKey<T>(
     public static final class Builder<T> {
         private final String code;
         private final Class<T> valueType;
-        private T defaultValue;
+        private @Nullable T defaultValue;
         private Set<ScopeType> settableScopes = EnumSet.allOf(ScopeType.class);
         private String owningModule = "platform";
         private boolean tenantVisible;

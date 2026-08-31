@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -99,6 +100,8 @@ public class DeliverySourcingRunner {
     }
 
     /**
+     * Runs one sourcing tick for one claimed job.
+     *
      * @return the decision this tick reached, or empty when there was nothing to
      *         decide — a plan already settled, an order that stopped being
      *         deliverable, a branch that lost its pin
@@ -236,7 +239,7 @@ public class DeliverySourcingRunner {
             DeliveryPlan plan,
             Instant dueAt,
             DeliverySourcingService.Outcome outcome,
-            String errorCode,
+            @Nullable String errorCode,
             Instant now) {
 
         Instant latest = plan.pickup().latestAssignmentAt();

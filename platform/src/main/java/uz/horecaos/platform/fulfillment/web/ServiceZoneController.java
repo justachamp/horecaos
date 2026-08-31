@@ -175,6 +175,8 @@ public class ServiceZoneController {
             @NotBlank @Size(max = 200) String displayNameEn) {}
 
     /**
+     * A new draft version of a zone's geometry and delivery terms.
+     *
      * @param circle a circle around a branch, which is the shape the legacy
      *               {@code max_distance} import produces and the one most operators
      *               reach for. Mutually exclusive with {@code geoJson}

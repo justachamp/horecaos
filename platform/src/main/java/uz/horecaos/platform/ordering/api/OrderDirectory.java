@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The small read another module needs about an order (ADR 0019, consumed by
@@ -24,6 +25,8 @@ import java.util.UUID;
 public interface OrderDirectory {
 
     /**
+     * Looks up the small read another module is allowed to hold about this order.
+     *
      * @return empty when no order of that id belongs to this tenant, which is the
      *         same answer as "it does not exist" and deliberately so
      */
@@ -78,8 +81,8 @@ public interface OrderDirectory {
             UUID brandId,
             UUID locationId,
             String publicOrderNumber,
-            UUID customerAccountId,
-            String guestReferenceHash,
+            @Nullable UUID customerAccountId,
+            @Nullable String guestReferenceHash,
             String status,
             String currency,
             long totalMinor,

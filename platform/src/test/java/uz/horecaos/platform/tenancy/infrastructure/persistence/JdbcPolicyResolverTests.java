@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -43,9 +44,6 @@ class JdbcPolicyResolverTests {
     private static final String HASH_B = "b".repeat(64);
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private JdbcPolicyResolver resolver;
@@ -56,9 +54,6 @@ class JdbcPolicyResolverTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -164,8 +159,8 @@ class JdbcPolicyResolverTests {
     private UUID insertPolicy(
             ScopeType scopeType,
             UUID tenantId,
-            UUID brandId,
-            UUID locationId,
+            @Nullable UUID brandId,
+            @Nullable UUID locationId,
             int version,
             int timeoutSeconds,
             String timeoutAction,

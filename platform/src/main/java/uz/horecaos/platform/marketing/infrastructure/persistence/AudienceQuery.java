@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import uz.horecaos.platform.marketing.domain.AudiencePredicate;
@@ -101,7 +102,10 @@ final class AudienceQuery {
             return membershipClause(predicate, name, parameters, tenantId);
         }
 
-        String column = "m." + predicate.type().projectionColumn();
+        // AUDIENCE_MEMBERSHIP is the only type with no projection column, and it was
+        // refused above by the earlier branch, so this one is never null in
+        // practice; PredicateType.projectionColumn() is nullable only for that type.
+        String column = "m." + Objects.requireNonNull(predicate.type().projectionColumn());
 
         return switch (predicate.type().valueKind()) {
             case NUMERIC -> {
@@ -155,7 +159,9 @@ final class AudienceQuery {
     private static String birthdayClause(
             AudiencePredicate predicate, String name, Map<String, Object> parameters, LocalDate today) {
 
-        int window = Math.toIntExact(predicate.numericLow());
+        // BIRTHDAY_WITHIN_DAYS has ValueKind.NUMERIC, and AudiencePredicate's own
+        // compact constructor refuses a NUMERIC predicate with no numericLow.
+        int window = Math.toIntExact(Objects.requireNonNull(predicate.numericLow()));
         if (window < 0 || window > 182) {
             throw new IllegalArgumentException(
                     "A birthday window of %d days is not a birthday campaign".formatted(window));

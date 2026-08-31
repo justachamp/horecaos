@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -94,7 +95,11 @@ public class NotificationGateway {
      * leaves every uncertain message stuck in uncertainty.
      */
     public ProviderOutcome queryStatus(
-            UUID tenantId, UUID brandId, UUID locationId, String channel, String providerIdempotencyKey) {
+            UUID tenantId,
+            UUID brandId,
+            @Nullable UUID locationId,
+            String channel,
+            String providerIdempotencyKey) {
         return invoke(
                 tenantId,
                 brandId,
@@ -120,7 +125,7 @@ public class NotificationGateway {
     private ProviderOutcome invoke(
             UUID tenantId,
             UUID brandId,
-            UUID locationId,
+            @Nullable UUID locationId,
             String channel,
             String idempotencyKey,
             UUID explicitBindingId,

@@ -6,6 +6,7 @@ import java.util.Objects;
 import java.util.Optional;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import org.jspecify.annotations.Nullable;
 
 /**
  * An opaque, signed pagination cursor (ADR 0031).
@@ -43,7 +44,8 @@ public record Cursor(String sortKey, String filterHash) {
      * @return the cursor, or empty when it is malformed, unsigned, or was issued
      *         for a different filter set
      */
-    public static Optional<Cursor> decode(String encoded, String expectedFilterHash, CursorSigner signer) {
+    public static Optional<Cursor> decode(
+            @Nullable String encoded, String expectedFilterHash, CursorSigner signer) {
         if (encoded == null || encoded.isBlank()) {
             return Optional.empty();
         }

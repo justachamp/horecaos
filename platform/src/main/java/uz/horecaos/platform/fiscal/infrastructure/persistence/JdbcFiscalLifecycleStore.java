@@ -8,8 +8,10 @@ import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.fiscal.domain.FiscalDocumentState;
@@ -101,7 +103,11 @@ public class JdbcFiscalLifecycleStore {
                         row.getObject("tenant_id", UUID.class),
                         row.getObject("order_id", UUID.class),
                         row.getString("provider_type"),
-                        instant(row, "submitted_at"),
+                        requiredInstant(row, "submitted_at"),
+                        // Nullable by design at claim time: ReportingDeadline.of's own
+                        // javadoc calls a null recorded deadline "the normal case today";
+                        // requireNonNull here failed every sweep over rows the payment
+                        // seam creates.
                         instant(row, "reporting_deadline_at"),
                         row.getString("business_zone"),
                         row.getObject("version", Integer.class)))
@@ -276,7 +282,7 @@ public class JdbcFiscalLifecycleStore {
                         row.getObject("location_id", UUID.class),
                         row.getLong("total_minor"),
                         row.getString("currency"),
-                        instant(row, "closed_at"),
+                        requiredInstant(row, "closed_at"),
                         row.getString("business_zone"),
                         row.getObject("payment_intent_id", UUID.class),
                         row.getString("tender"),
@@ -371,7 +377,7 @@ public class JdbcFiscalLifecycleStore {
                         row.getObject("order_id", UUID.class),
                         row.getObject("legal_entity_id", UUID.class),
                         row.getString("provider_type"),
-                        instant(row, "created_at"),
+                        requiredInstant(row, "created_at"),
                         row.getString("business_zone"),
                         row.getObject("version", Integer.class)))
                 .list();
@@ -497,7 +503,7 @@ public class JdbcFiscalLifecycleStore {
      * because the question an operator is answering is "what has been waiting the
      * longest for me", not "what happened first".
      */
-    public List<FiscalDocumentRow> blocked(UUID tenantId, String reasonCode, int limit) {
+    public List<FiscalDocumentRow> blocked(UUID tenantId, @Nullable String reasonCode, int limit) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
         parameters.put("reasonCode", reasonCode);
@@ -635,7 +641,7 @@ public class JdbcFiscalLifecycleStore {
             UUID id,
             UUID tenantId,
             UUID orderId,
-            UUID legalEntityId,
+            @Nullable UUID legalEntityId,
             UUID paymentIntentId,
             String providerType,
             FiscalDocumentState state,
@@ -650,7 +656,7 @@ public class JdbcFiscalLifecycleStore {
             UUID orderId,
             String providerType,
             Instant submittedAt,
-            Instant reportingDeadlineAt,
+            @Nullable Instant reportingDeadlineAt,
             String businessZone,
             int version) {}
 
@@ -675,10 +681,10 @@ public class JdbcFiscalLifecycleStore {
             String reasonCode,
             String reasonNote,
             boolean hasEvidence,
-            Instant submittedAt,
-            Instant issuedAt,
-            Instant blockedAt,
-            Instant reportingDeadlineAt,
+            @Nullable Instant submittedAt,
+            @Nullable Instant issuedAt,
+            @Nullable Instant blockedAt,
+            @Nullable Instant reportingDeadlineAt,
             int attemptCount,
             int version,
             Instant createdAt) {
@@ -732,7 +738,7 @@ public class JdbcFiscalLifecycleStore {
                 // turn every count into zero.
                 attemptCount(row),
                 row.getObject("version", Integer.class),
-                instant(row, "created_at"));
+                requiredInstant(row, "created_at"));
     }
 
     private static int attemptCount(ResultSet row) throws SQLException {
@@ -746,12 +752,21 @@ public class JdbcFiscalLifecycleStore {
      * timestamps decide whether a reporting deadline has passed, a conversion that
      * means something different on a developer's laptop is not an option.
      */
-    private static Instant instant(ResultSet row, String column) throws SQLException {
+    private static @Nullable Instant instant(ResultSet row, String column) throws SQLException {
         OffsetDateTime value = row.getObject(column, OffsetDateTime.class);
         return value == null ? null : value.toInstant();
     }
 
-    private static OffsetDateTime utc(Instant value) {
+    /**
+     * The same read as {@link #instant}, for a column the schema guarantees is
+     * populated by the time this store reads it, so a caller may keep the field
+     * non-null rather than pushing every reader back to a null check.
+     */
+    private static Instant requiredInstant(ResultSet row, String column) throws SQLException {
+        return Objects.requireNonNull(instant(row, column), () -> column + " was unexpectedly null");
+    }
+
+    private static @Nullable OffsetDateTime utc(Instant value) {
         return value == null ? null : OffsetDateTime.ofInstant(value, ZoneOffset.UTC);
     }
 }

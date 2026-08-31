@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayAggregate;
@@ -224,7 +225,11 @@ public class ReportQueryService {
 
     /** One row's dimension values. Any of them null means "not grouped by". */
     public record Slice(
-            LocalDate businessDate, UUID locationId, String channelCode, String fulfilmentType, UUID legalEntityId) {
+            LocalDate businessDate,
+            @Nullable UUID locationId,
+            @Nullable String channelCode,
+            @Nullable String fulfilmentType,
+            @Nullable UUID legalEntityId) {
 
         String sortKey() {
             return "%s|%s|%s|%s|%s".formatted(businessDate, locationId, channelCode, fulfilmentType, legalEntityId);
@@ -232,6 +237,8 @@ public class ReportQueryService {
     }
 
     /**
+     * One row of the report: a slice, and the figures computed for it.
+     *
      * @param values metric code to figure. A null value means the slice had
      *               nothing to compute the metric from — an average check with no
      *               orders — and is never rendered as zero
@@ -250,8 +257,8 @@ public class ReportQueryService {
      */
     public record Provenance(
             Instant asOf,
-            LocalDate closedThrough,
-            Instant lastCloseCompletedAt,
+            @Nullable LocalDate closedThrough,
+            @Nullable Instant lastCloseCompletedAt,
             String businessDayStart,
             String timezone,
             int boundaryVersion,
@@ -263,10 +270,10 @@ public class ReportQueryService {
 
     public record SlaResult(List<SlaBucketAggregate> buckets, Provenance provenance) {}
 
-    public record MedianResult(Integer medianSeconds, Provenance provenance) {}
+    public record MedianResult(@Nullable Integer medianSeconds, Provenance provenance) {}
 
     /** A definition plus its signature state, which is what the metric dictionary shows. */
-    public record MetricView(MetricDefinition definition, String signedBy, Instant signedAt) {
+    public record MetricView(MetricDefinition definition, @Nullable String signedBy, @Nullable Instant signedAt) {
 
         public boolean provisional() {
             return signedBy == null;
@@ -292,7 +299,7 @@ public class ReportQueryService {
             late += row.lateCount();
         }
 
-        Long valueOf(MetricDefinition metric) {
+        @Nullable Long valueOf(MetricDefinition metric) {
             return switch (metric.id().code()) {
                 case "revenue.gross.v1" -> gross;
                 case "revenue.net.v1" -> net - refunded;
@@ -309,3 +316,4 @@ public class ReportQueryService {
         }
     }
 }
+

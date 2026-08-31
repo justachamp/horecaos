@@ -6,6 +6,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A stable hash over what an order asked for (ADR 0011).
@@ -29,6 +30,8 @@ public final class LineFingerprint {
     private LineFingerprint() {}
 
     /**
+     * The stable fingerprint for one order's line composition.
+     *
      * @param lines the exported lines. May be empty only in a test; an order with
      *              no lines is refused earlier, because a kitchen ticket for
      *              nothing is a ticket somebody has to walk over and ask about
@@ -50,7 +53,7 @@ public final class LineFingerprint {
     }
 
     /** A hash of the customer's telephone number, never the number (ADR 0029). */
-    public static String phoneHash(String phone) {
+    public static String phoneHash(@Nullable String phone) {
         // Normalised before hashing so "+998 90 123 45 67" and "+998901234567"
         // are the same customer. Without this the recovery read would fail to
         // match on formatting the restaurant's back office applied.
@@ -70,6 +73,8 @@ public final class LineFingerprint {
     }
 
     /**
+     * One exported order line, as used for fingerprinting.
+     *
      * @param unitAmountMinor whole minor units. For UZS a minor unit is a whole
      *                        som, which is why this is a long and never a double:
      *                        a fingerprint computed through floating point would

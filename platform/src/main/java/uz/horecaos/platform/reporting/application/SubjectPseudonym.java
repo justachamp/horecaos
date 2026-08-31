@@ -1,6 +1,7 @@
 package uz.horecaos.platform.reporting.application;
 
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 
@@ -35,8 +36,13 @@ public class SubjectPseudonym {
         this.protection = protection;
     }
 
-    /** @return null for an order with no customer account, which is not an error */
-    public String of(UUID tenantId, UUID customerAccountId) {
+    /**
+     * The pseudonym for one customer account.
+     *
+     * @return null for an order with no customer account, which is not an error
+     */
+    public @Nullable String of(UUID tenantId, @Nullable UUID customerAccountId) {
         return customerAccountId == null ? null : protection.lookupHash(tenantId, DOMAIN, customerAccountId.toString());
     }
 }
+

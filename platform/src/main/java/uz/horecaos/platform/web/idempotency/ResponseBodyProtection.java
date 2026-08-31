@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import uz.horecaos.platform.iam.api.protection.ClassificationScanner;
@@ -109,7 +110,7 @@ public class ResponseBodyProtection {
      * check that stopped at {@code ResponseEntity} would find nothing classified
      * on any endpoint in the codebase and pass forever.
      */
-    static Class<?> responseTypeOf(Type type) {
+    static @Nullable Class<?> responseTypeOf(Type type) {
         if (type instanceof ParameterizedType parameterized) {
             Type raw = parameterized.getRawType();
             if (raw instanceof Class<?> rawClass && isContainer(rawClass)) {

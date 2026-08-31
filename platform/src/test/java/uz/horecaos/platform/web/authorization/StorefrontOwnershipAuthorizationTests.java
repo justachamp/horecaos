@@ -16,6 +16,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -114,6 +115,9 @@ class StorefrontOwnershipAuthorizationTests {
      * the latest version it is a validate, not a migration, and it is the only
      * thing in this suite that would notice a clone that arrived at the wrong one.
      */
+    // @DynamicPropertySource is a static hook Spring's test runner guarantees
+    // runs before context startup and every test method, which NullAway cannot see.
+    @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
 
     @BeforeAll
@@ -511,7 +515,7 @@ class StorefrontOwnershipAuthorizationTests {
         return accountId;
     }
 
-    private UUID cart(UUID accountId, String guestHash) {
+    private UUID cart(@Nullable UUID accountId, @Nullable String guestHash) {
         UUID cartId = UUID.randomUUID();
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         jdbc.sql("""
@@ -535,7 +539,7 @@ class StorefrontOwnershipAuthorizationTests {
         return cartId;
     }
 
-    private static OrderDirectory.OrderSummary order(UUID accountId) {
+    private static OrderDirectory.OrderSummary order(@Nullable UUID accountId) {
         return new OrderDirectory.OrderSummary(
                 UUID.randomUUID(),
                 TENANT,

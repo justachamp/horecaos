@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -218,7 +219,8 @@ public class FiscalObligationService {
                 now);
     }
 
-    private NewFiscalDocument blocked(UUID id, OrderOwingADocument order, UUID legalEntityId, Instant now, String why) {
+    private NewFiscalDocument blocked(
+            UUID id, OrderOwingADocument order, @Nullable UUID legalEntityId, Instant now, String why) {
         // At WARN with the identifiers and no evidence on it, because ADR 0029 keeps
         // fiscal signs and receipt URLs out of logs and this line has to be
         // greppable when somebody asks why an order has no receipt.

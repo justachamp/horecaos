@@ -1,6 +1,7 @@
 package uz.horecaos.platform.migration.api;
 
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The single-writer gate every other module consults before it creates a fact
@@ -44,7 +45,8 @@ public interface MigrationOwnershipPort {
      * @param locationId the location being acted on, or null when the caller is
      *                   acting above it
      */
-    CapabilityOwnership ownershipOf(UUID tenantId, MigrationCapability capability, UUID brandId, UUID locationId);
+    CapabilityOwnership ownershipOf(
+            UUID tenantId, MigrationCapability capability, @Nullable UUID brandId, @Nullable UUID locationId);
 
     /**
      * Asserts that the target may create authoritative facts here, and throws
@@ -63,5 +65,6 @@ public interface MigrationOwnershipPort {
      * @throws TargetWritesFencedException when the target is not the writer for
      *         this capability at this scope
      */
-    void requireTargetMayWrite(UUID tenantId, MigrationCapability capability, UUID brandId, UUID locationId);
+    void requireTargetMayWrite(
+            UUID tenantId, MigrationCapability capability, @Nullable UUID brandId, @Nullable UUID locationId);
 }
