@@ -67,6 +67,11 @@
   the probe stanza reading `horecaos.iam.identity.drift.report.age.seconds`. Every
   claim in this implementation status line was checked against the source tree on
   2026-08-25, not against another document.
+  Two more closures on 2026-08-31: `TenantAccessPolicy` now implements the v1
+  answer this record already named — tenant management resolves through real
+  `iam.grants` capabilities instead of an org-nested role Keycloak cannot grant —
+  and `ensureMembership` sets non-blank name attributes while the realm's User
+  Profile relaxes the requirement, closing the keycloak#36108 password-grant trap.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture), security

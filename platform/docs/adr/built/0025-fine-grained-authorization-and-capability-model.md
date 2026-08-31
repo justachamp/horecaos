@@ -24,6 +24,11 @@
   `NO_STAFF_PRINCIPAL_HOLDS_THESE` gap is closed: its five unused constants were removed,
   and the three live partner/courier operation names are recorded by
   `NON_STAFF_RELATIONSHIP_AUTHORIZED` under ADR 0049.
+  The operational bootstrap gap closed 2026-08-31: `PlatformAdminBootstrapReconciler`
+  grants PLATFORM scope from configuration (idempotent, never revoking), and
+  `PlatformGrantController` grants/revokes it over HTTP under ADR 0027
+  maker-checker — the highest-authority action in the system, gated accordingly;
+  `create-platform-admin.sh` no longer touches SQL.
 - Date proposed: 2026-08-20
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture), security

@@ -23,6 +23,10 @@
   version at all. Caching is registered in `CacheRegistry` as `tenant.configuration` and
   `tenant.policy_current` but no resolver is `@Cacheable` and no outbox-driven eviction
   exists.
+  Authoring now exists for exactly one consumer as of 2026-08-31:
+  `ordering.acceptance`, via `PolicyAuthor`/`JdbcPolicyAuthor` and a control-plane
+  endpoint — versioned, never mutated in place, order pinning unaffected. The
+  other policy consumers and all of `ConfigurationResolver` remain read-only.
 - Date proposed: 2026-08-20
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture)

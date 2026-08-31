@@ -77,6 +77,11 @@
   the `platform-admin` realm role, so an operator on a fresh deployment can grant
   themselves `TENANT_ONBOARDING_MANAGE` through the ordinary audited API and
   start a run.
+  As of 2026-08-31, V0098 seeds the v1 default template as real reference data
+  with read endpoints (`OnboardingTemplateController`), tenant creation resolves
+  the default itself, and `DEFAULT_CONFIGURATION_APPLY` actually writes the
+  template's acceptance-policy default (RESTAURANT_APPROVAL) instead of applying
+  nothing — proven live by the proving run through pure HTTP.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture)
