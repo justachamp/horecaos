@@ -518,3 +518,41 @@ VALUES
     ('10000000-0000-0000-0000-000000000046', '10000000-0000-0000-0000-000000000001',
      '10000000-0000-0000-0000-000000000002', 'PHONE', 'tel:+998000000000', 20, 'PUBLISHED')
 ON CONFLICT (id) DO NOTHING;
+
+-- ---------------------------------------------------------------------------
+-- Commercial: entitlements the fixture tenant needs to see gated features
+-- work locally (ADR 0021, ADR 0058)
+-- ---------------------------------------------------------------------------
+--
+-- Without a subscription, every entitlement resolves to its catalogue
+-- safeDefault. Most of ADR 0021's keys default to available, but
+-- telegram.digests.enabled defaults FALSE on purpose — see EntitlementKeys —
+-- so digests would silently never send on a fresh laptop unless this fixture
+-- puts the tenant on a plan that grants it, the same way a real tenant would
+-- be after onboarding assigns one.
+
+INSERT INTO commercial.plans (id, code, name, status, version)
+VALUES ('10000000-0000-0000-0000-000000000050', 'LOCAL_DEV', 'Local development', 'ACTIVE', 0)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO commercial.plan_versions (
+    id, plan_id, version_number, currency, price_minor, billing_period, status,
+    terms_reference, effective_from, created_by, approved_by, activated_at
+) VALUES (
+    '10000000-0000-0000-0000-000000000051', '10000000-0000-0000-0000-000000000050',
+    1, 'UZS', 0, 'NONE', 'ACTIVE', 'local-fixture', now(),
+    'local-fixture-author', 'local-fixture-approver', now()
+) ON CONFLICT DO NOTHING;
+
+INSERT INTO commercial.plan_entitlements (
+    plan_version_id, entitlement_key, value_type, boolean_value, enforcement_mode, reset_period
+) VALUES (
+    '10000000-0000-0000-0000-000000000051', 'telegram.digests.enabled', 'BOOLEAN', true, 'METER_ONLY', 'NONE'
+) ON CONFLICT DO NOTHING;
+
+INSERT INTO commercial.subscriptions (
+    id, tenant_id, plan_version_id, status, start_at, current_period_start, current_period_end, version
+) VALUES (
+    '10000000-0000-0000-0000-000000000052', '10000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000051', 'ACTIVE', now(), now(), now() + interval '100 years', 0
+) ON CONFLICT DO NOTHING;

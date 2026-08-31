@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.notifications.api.OperationsSubscriptionDirectory;
+import uz.horecaos.platform.notifications.api.OperationsSubscriptionDirectory.ScopedBinding;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
 import uz.horecaos.platform.notifications.domain.NotificationClass;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
@@ -110,6 +111,68 @@ public class OperationsAlertFanoutService {
                         subjectType,
                         subjectId,
                         bindingId);
+            }
+        }
+    }
+
+    /**
+     * A digest's fan-out (ADR 0058): unlike {@link #fanOut}, the caller already
+     * has the binding list — {@link OperationsSubscriptionDirectory#tenantDigestBindings}
+     * or {@code #platformDigestBindings}, since a digest has no single order's
+     * scope to look bindings up against — and each binding carries its own
+     * tenant, because a platform-audience digest's bindings can live under
+     * different tenant rows. Reached through {@link
+     * uz.horecaos.platform.notifications.api.DigestFanout} rather than called
+     * directly: {@code reporting.application.DigestScheduler} is the one caller,
+     * and it lives outside this module for the module-boundary reason its own
+     * class doc explains.
+     *
+     * <p>Idempotency is the same discipline as {@link #fanOut}: {@code
+     * idempotencyKeyBase} is unique per (digest kind, period), so a scheduler
+     * tick that runs twice, on one replica or two, creates the same intent at
+     * most once per chat — the database's unique constraint on {@code
+     * (tenant_id, idempotency_key)} is what actually enforces it, not a claim
+     * this method takes.
+     */
+    public void fanOutDigest(
+            List<ScopedBinding> bindings,
+            String templateKey,
+            String subjectType,
+            UUID subjectId,
+            String idempotencyKeyBase,
+            Map<String, String> triggerVariables,
+            Duration expiry) {
+
+        if (bindings.isEmpty()) {
+            return;
+        }
+
+        Instant now = clock.instant();
+        String variablesJson = objectMapper.writeValueAsString(triggerVariables);
+
+        for (ScopedBinding binding : bindings) {
+            UUID endpointId = notifications.ensureProviderBindingEndpoint(binding.tenantId(), binding.bindingId(), now);
+            boolean created = notifications.createIntent(new NewNotification(
+                    UUID.randomUUID(),
+                    binding.tenantId(),
+                    binding.brandId(),
+                    binding.locationId(),
+                    NotificationClass.OPERATIONS_ALERT.name(),
+                    NotificationChannel.TELEGRAM.name(),
+                    templateKey,
+                    subjectType,
+                    subjectId,
+                    null,
+                    null,
+                    idempotencyKeyBase + ":" + binding.bindingId(),
+                    variablesJson,
+                    now,
+                    now.plus(expiry),
+                    now,
+                    endpointId));
+            if (!created) {
+                log.debug(
+                        "A digest already exists for {}/{} on binding {}", subjectType, subjectId, binding.bindingId());
             }
         }
     }

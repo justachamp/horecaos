@@ -18,6 +18,7 @@ import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
+import uz.horecaos.platform.notifications.api.OperationsSubscriptionDirectory.ScopedBinding;
 
 /**
  * Telegram bindings: creation through the {@code /link} handshake, the fan-out
@@ -75,6 +76,29 @@ public class TelegramBindingStore {
             long chatId,
             @Nullable Integer topicId,
             @Nullable Long linkedByTelegramUserId) {
+        return createBinding(
+                tenantId, installationId, brandId, locationId, chatId, topicId, linkedByTelegramUserId, "OPERATIONS");
+    }
+
+    /**
+     * Creates the binding pair for a given audience.
+     *
+     * @param audience {@code OPERATIONS} (tenant staff, the stage-1 default) or
+     *                 {@code PLATFORM} (control-plane digests, ADR 0058). A
+     *                 PLATFORM binding is still created under one tenant row —
+     *                 ADR 0026 bindings are tenant-scoped end to end — typically
+     *                 the platform's own operating tenant; the audience marks
+     *                 how its content is queried, not a different schema shape.
+     */
+    public UUID createBinding(
+            UUID tenantId,
+            UUID installationId,
+            UUID brandId,
+            @Nullable UUID locationId,
+            long chatId,
+            @Nullable Integer topicId,
+            @Nullable Long linkedByTelegramUserId,
+            String audience) {
         Instant now = clock.instant();
         UUID bindingId = UUID.randomUUID();
 
@@ -106,12 +130,13 @@ public class TelegramBindingStore {
                 INSERT INTO integration.telegram_bindings (
                     binding_id, tenant_id, chat_id, topic_id, audience, linked_by_telegram_user_id,
                     created_at, updated_at)
-                VALUES (:bindingId, :tenantId, :chatId, :topicId, 'OPERATIONS', :linkedBy, :now, :now)
+                VALUES (:bindingId, :tenantId, :chatId, :topicId, :audience, :linkedBy, :now, :now)
                 """)
                 .param("bindingId", bindingId)
                 .param("tenantId", tenantId)
                 .param("chatId", chatId)
                 .param("topicId", topicId)
+                .param("audience", audience)
                 .param("linkedBy", linkedByTelegramUserId)
                 .param("now", utc(now))
                 .update();
@@ -163,6 +188,63 @@ public class TelegramBindingStore {
                 .param("locationId", locationId)
                 .param("eventClass", eventClass)
                 .query(UUID.class)
+                .list();
+    }
+
+    /**
+     * Every {@code OPERATIONS}-audience chat subscribed to {@code eventClass}
+     * anywhere in the tenant, with the scope each was bound at — a digest's
+     * fan-out, which has no single order to scope against (ADR 0058).
+     */
+    public List<ScopedBinding> tenantDigestBindings(UUID tenantId, String eventClass) {
+        return jdbc.sql("""
+                SELECT b.id, b.brand_id, b.location_id
+                  FROM integration.bindings b
+                  JOIN integration.telegram_bindings tb
+                    ON tb.tenant_id = b.tenant_id AND tb.binding_id = b.id
+                  JOIN integration.telegram_binding_events tbe
+                    ON tbe.tenant_id = b.tenant_id AND tbe.binding_id = b.id
+                 WHERE b.tenant_id = :tenantId
+                   AND b.status = 'ACTIVE'
+                   AND tb.retired_at IS NULL
+                   AND tb.audience = 'OPERATIONS'
+                   AND tbe.event_class = :eventClass
+                   AND tbe.enabled
+                """)
+                .param("tenantId", tenantId)
+                .param("eventClass", eventClass)
+                .query((row, number) -> new ScopedBinding(
+                        tenantId,
+                        row.getObject("id", UUID.class),
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("location_id", UUID.class)))
+                .list();
+    }
+
+    /**
+     * Every {@code PLATFORM}-audience chat subscribed to {@code eventClass},
+     * platform-wide rather than filtered to one tenant (ADR 0058).
+     */
+    public List<ScopedBinding> platformDigestBindings(String eventClass) {
+        return jdbc.sql("""
+                SELECT b.tenant_id, b.id, b.brand_id, b.location_id
+                  FROM integration.bindings b
+                  JOIN integration.telegram_bindings tb
+                    ON tb.tenant_id = b.tenant_id AND tb.binding_id = b.id
+                  JOIN integration.telegram_binding_events tbe
+                    ON tbe.tenant_id = b.tenant_id AND tbe.binding_id = b.id
+                 WHERE b.status = 'ACTIVE'
+                   AND tb.retired_at IS NULL
+                   AND tb.audience = 'PLATFORM'
+                   AND tbe.event_class = :eventClass
+                   AND tbe.enabled
+                """)
+                .param("eventClass", eventClass)
+                .query((row, number) -> new ScopedBinding(
+                        row.getObject("tenant_id", UUID.class),
+                        row.getObject("id", UUID.class),
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("location_id", UUID.class)))
                 .list();
     }
 

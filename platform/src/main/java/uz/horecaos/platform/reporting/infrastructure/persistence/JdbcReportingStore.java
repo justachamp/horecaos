@@ -2,6 +2,7 @@ package uz.horecaos.platform.reporting.infrastructure.persistence;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -844,6 +845,85 @@ public class JdbcReportingStore {
             long recutValue,
             long difference,
             Instant detectedAt) {}
+
+    // ------------------------------------------------- day-close scheduling
+
+    /** Tenants the day-close heartbeat has to consider. Suspended/archived tenants stop taking orders. */
+    public List<UUID> activeTenantIds() {
+        return jdbc.sql("SELECT id FROM tenant.tenants WHERE status = 'ACTIVE' ORDER BY id")
+                .query(UUID.class)
+                .list();
+    }
+
+    /** When a tenant was created, which floors how far back the heartbeat ever looks for it. */
+    public Instant tenantCreatedAt(UUID tenantId) {
+        return jdbc.sql("SELECT created_at FROM tenant.tenants WHERE id = :tenantId")
+                .param("tenantId", tenantId)
+                .query((ResultSet row, int number) -> requireInstant(row, "created_at"))
+                .single();
+    }
+
+    /** The latest business date with a completed run of this kind, if any. */
+    public Optional<LocalDate> lastRunDate(UUID tenantId, String runKind) {
+        return jdbc.sql("""
+                SELECT max(business_date) AS business_date
+                  FROM reporting.close_runs
+                 WHERE tenant_id = :tenantId AND run_kind = :runKind AND status = 'COMPLETED'
+                """)
+                .param("tenantId", tenantId)
+                .param("runKind", runKind)
+                .query((ResultSet row, int number) -> row.getObject("business_date", LocalDate.class))
+                .optional()
+                .filter(Objects::nonNull);
+    }
+
+    /**
+     * Attempts to claim (tenant, business date, kind) for the calling replica.
+     *
+     * <p>An upsert against an expired-or-absent lease, not read-then-write, on
+     * the same shape as {@code integration.telegram_chat_locks}: two replicas
+     * racing a never-before-claimed day must not both succeed by each inserting
+     * a fresh row, and {@code ON CONFLICT} is what makes the second one lose.
+     */
+    public boolean tryClaimDayClose(
+            UUID tenantId,
+            LocalDate businessDate,
+            String runKind,
+            UUID leaseOwner,
+            Instant now,
+            Duration leaseDuration) {
+        return jdbc.sql("""
+                INSERT INTO reporting.day_close_claims (
+                    tenant_id, business_date, run_kind, lease_owner, lease_expires_at, created_at, updated_at)
+                VALUES (:tenantId, :businessDate, :runKind, :owner, :expires, :now, :now)
+                ON CONFLICT (tenant_id, business_date, run_kind) DO UPDATE
+                    SET lease_owner = excluded.lease_owner, lease_expires_at = excluded.lease_expires_at,
+                        updated_at = excluded.updated_at
+                    WHERE reporting.day_close_claims.lease_expires_at < :now
+                """)
+                        .param("tenantId", tenantId)
+                        .param("businessDate", businessDate)
+                        .param("runKind", runKind)
+                        .param("owner", leaseOwner)
+                        .param("expires", utc(now.plus(leaseDuration)))
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
+
+    /** Releases a claim this caller holds. A lost race releasing nothing is correct, not an error. */
+    public void releaseDayCloseClaim(UUID tenantId, LocalDate businessDate, String runKind, UUID leaseOwner) {
+        jdbc.sql("""
+                DELETE FROM reporting.day_close_claims
+                 WHERE tenant_id = :tenantId AND business_date = :businessDate AND run_kind = :runKind
+                   AND lease_owner = :owner
+                """)
+                .param("tenantId", tenantId)
+                .param("businessDate", businessDate)
+                .param("runKind", runKind)
+                .param("owner", leaseOwner)
+                .update();
+    }
 
     // ------------------------------------------------------------ mapping
 

@@ -537,8 +537,12 @@ public class JdbcOrderStore {
      * job and no event" because it is derived from the promise and the clock at
      * render time, and a count computed here would be wrong five seconds after
      * it was cached.
+     *
+     * @param locationId scoped to one location when given; every location in
+     *                   the brand when null, for a flat operations group with
+     *                   no single location to ask about (ADR 0058)
      */
-    public OrderCountsRow counts(UUID tenantId, UUID brandId, UUID locationId) {
+    public OrderCountsRow counts(UUID tenantId, UUID brandId, @Nullable UUID locationId) {
         return jdbc.sql("""
                 SELECT
                     count(*) FILTER (WHERE status IN ('RECEIVED', 'PAYMENT_AUTHORIZING', 'AWAITING_APPROVAL'))
@@ -553,7 +557,8 @@ public class JdbcOrderStore {
                         ('PAYMENT_FAILED', 'REJECTED', 'EXPIRED', 'COMPLETED', 'CANCELLED')) AS total_non_terminal,
                     count(*) AS total
                 FROM ordering.orders
-                WHERE tenant_id = :tenantId AND brand_id = :brandId AND location_id = :locationId
+                WHERE tenant_id = :tenantId AND brand_id = :brandId
+                  AND (:locationId::uuid IS NULL OR location_id = :locationId)
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)

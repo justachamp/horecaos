@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -47,6 +48,8 @@ import uz.horecaos.platform.integration.camel.notification.NotificationProcessor
 import uz.horecaos.platform.integration.camel.notification.NotificationRouteBuilder;
 import uz.horecaos.platform.integration.camel.notification.SmsGatewayAdapter;
 import uz.horecaos.platform.integration.provider.JdbcProviderInstallationLookup;
+import uz.horecaos.platform.notifications.api.OperationsSubscriptionDirectory;
+import uz.horecaos.platform.notifications.api.OperationsSubscriptionDirectory.ScopedBinding;
 import uz.horecaos.platform.notifications.application.NotificationDispatchService;
 import uz.horecaos.platform.notifications.application.NotificationEligibilityService;
 import uz.horecaos.platform.notifications.application.NotificationPreferenceService;
@@ -192,8 +195,8 @@ class NotificationDeliveryTests {
         // fan-out this trigger also performs has nothing to fan out to; a
         // directory that always answers empty makes that a true no-op rather
         // than a null dependency.
-        OperationsAlertFanoutService operationsAlerts = new OperationsAlertFanoutService(
-                (tenantId, brandId, locationId, eventClass) -> java.util.List.of(), notifications, objectMapper, clock);
+        OperationsAlertFanoutService operationsAlerts =
+                new OperationsAlertFanoutService(new NoTelegramBindings(), notifications, objectMapper, clock);
         trigger = new OrderNotificationTrigger(
                 notifications, operationsAlerts, objectMapper, clock, "SMS", Duration.ofHours(6));
 
@@ -891,6 +894,25 @@ class NotificationDeliveryTests {
                 jdbc.sql("SELECT t::text FROM %s t".formatted(table))
                         .query(String.class)
                         .list());
+    }
+
+    /** No Telegram binding exists in this SMS-focused suite: every lookup answers empty. */
+    private static final class NoTelegramBindings implements OperationsSubscriptionDirectory {
+
+        @Override
+        public List<UUID> subscribedBindings(UUID tenantId, UUID brandId, UUID locationId, String eventClass) {
+            return List.of();
+        }
+
+        @Override
+        public List<ScopedBinding> tenantDigestBindings(UUID tenantId, String eventClass) {
+            return List.of();
+        }
+
+        @Override
+        public List<ScopedBinding> platformDigestBindings(String eventClass) {
+            return List.of();
+        }
     }
 
     /**

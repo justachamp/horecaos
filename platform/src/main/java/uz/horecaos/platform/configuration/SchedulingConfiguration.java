@@ -46,12 +46,18 @@ public class SchedulingConfiguration {
      *
      * <p>{@link SchedulerPoolSizeTests} fails if the number of {@code @Scheduled}
      * methods ever climbs past this, so the constant cannot go quietly stale.
-     * ADR 0058 added two: {@code ApprovalDeadlineWarningSweeper.sweepOnce} and
-     * the {@code local}-profile {@code TelegramLongPollingConsumer.pollOnce} —
-     * counted here too, since the scan reads class metadata rather than a
-     * running context and does not know a bean will be conditionally absent.
+     * ADR 0058 added two in its first stage: {@code
+     * ApprovalDeadlineWarningSweeper.sweepOnce} and the {@code local}-profile
+     * {@code TelegramLongPollingConsumer.pollOnce} — counted here too, since the
+     * scan reads class metadata rather than a running context and does not know
+     * a bean will be conditionally absent. ADR 0043 and ADR 0058's second stage
+     * added five more: {@code DayCloseScheduler.closeDueDays} and {@code
+     * .recutSettledDays} (the day-close heartbeat ADR 0043 never had a
+     * production caller for), and {@code DigestScheduler}'s three cadences
+     * ({@code emitFifteenMinuteDigests}, {@code emitHalfDayDigests}, {@code
+     * emitDayCloseDigests}).
      */
-    static final int DEFAULT_POOL_SIZE = 31;
+    static final int DEFAULT_POOL_SIZE = 36;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

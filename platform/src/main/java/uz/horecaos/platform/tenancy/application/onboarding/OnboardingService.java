@@ -30,6 +30,8 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.tenancy.api.OnboardingHealth;
+import uz.horecaos.platform.tenancy.api.OnboardingHealthQuery;
 import uz.horecaos.platform.tenancy.api.TenantActivated;
 import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.api.TenantOnboardingFailed;
@@ -51,7 +53,7 @@ import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
  * readiness evidence.
  */
 @Service
-public class OnboardingService {
+public class OnboardingService implements OnboardingHealthQuery {
 
     private static final Logger log = LoggerFactory.getLogger(OnboardingService.class);
 
@@ -488,6 +490,19 @@ public class OnboardingService {
         events.publishEvent(new TenantActivated(UUID.randomUUID(), new TenantId(tenantId), runId, "ACTIVE", now));
 
         return new ActivationOutcome(true, "ACTIVATED", List.of(), null);
+    }
+
+    /** {@link OnboardingHealthQuery}: the same counts {@code OnboardingScheduler}'s own gauges read. */
+    @Override
+    public OnboardingHealth onboardingHealth() {
+        long waiting = jdbc.sql(
+                        "SELECT count(*) FROM tenant.onboarding_runs WHERE status NOT IN ('ACTIVE', 'CANCELLED', 'FAILED')")
+                .query(Long.class)
+                .single();
+        long failed = jdbc.sql("SELECT count(*) FROM tenant.onboarding_runs WHERE status = 'FAILED'")
+                .query(Long.class)
+                .single();
+        return new OnboardingHealth(waiting, failed);
     }
 
     /** Required steps that have not completed, which is what blocks READY. */
