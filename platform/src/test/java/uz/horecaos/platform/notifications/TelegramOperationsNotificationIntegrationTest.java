@@ -1,6 +1,7 @@
 package uz.horecaos.platform.notifications;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -27,6 +28,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
 import uz.horecaos.platform.iam.infrastructure.secrets.EnvironmentSecretResolver;
@@ -100,8 +103,7 @@ class TelegramOperationsNotificationIntegrationTest {
 
     @BeforeAll
     static void startDatabase() {
-        Assumptions.assumeTrue(
-                DockerClientFactory.instance().isDockerAvailable(), "Docker is required for this test");
+        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(), "Docker is required for this test");
         db = TestDatabase.migrated();
     }
 
@@ -124,8 +126,7 @@ class TelegramOperationsNotificationIntegrationTest {
         ObjectMapper objectMapper = JsonMapper.builder().build();
 
         SecretResolver secrets = new EnvironmentSecretResolver(
-                Map.of("horecaos.secrets.provider_notification.platform.telegram-bot", "a-test-bot-token")::get,
-                clock);
+                Map.of("horecaos.secrets.provider_notification.platform.telegram-bot", "a-test-bot-token")::get, clock);
 
         seedTenant();
         installationId = seedTelegramInstallation();
@@ -134,14 +135,16 @@ class TelegramOperationsNotificationIntegrationTest {
         JdbcTemplateStore templateStore = new JdbcTemplateStore(jdbc);
         NotificationTemplateService templates = new NotificationTemplateService(templateStore, objectMapper, clock);
 
+        AuditRecorder audit = new JdbcAuditRecorder(jdbc, objectMapper);
         TelegramBotApiClient botApiClient = new TelegramBotApiClient(objectMapper);
-        bindingStore = new TelegramBindingStore(jdbc, clock);
+        bindingStore = new TelegramBindingStore(jdbc, clock, audit);
         TelegramChatLockService locks = new TelegramChatLockService(jdbc, clock);
         TelegramMessageTracker tracker = new TelegramMessageTracker(jdbc, clock);
         TelegramRightsVerifier rights = new TelegramRightsVerifier(botApiClient);
         links = new TelegramLinkService(jdbc, clock, Duration.ofMinutes(15));
         webhookInstallations = new TelegramWebhookInstallationLookup(jdbc);
-        updateHandler = new TelegramUpdateHandler(links, rights, bindingStore, botApiClient, secrets, "ru");
+        updateHandler =
+                new TelegramUpdateHandler(links, rights, bindingStore, botApiClient, secrets, audit, clock, "ru");
 
         JdbcProviderInstallationLookup installationLookup = new JdbcProviderInstallationLookup(jdbc, clock);
         NotificationGateway gateway = new NotificationGateway(
@@ -173,8 +176,15 @@ class TelegramOperationsNotificationIntegrationTest {
 
         NoOpContactDirectory contacts = new NoOpContactDirectory();
         NotificationEligibilityService eligibility = new NotificationEligibilityService(
-                notifications, templates, (t, a, b, p, c) -> Optional.empty(), contacts,
-                orders, transport, objectMapper, clock, "ru");
+                notifications,
+                templates,
+                (t, a, b, p, c) -> Optional.empty(),
+                contacts,
+                orders,
+                transport,
+                objectMapper,
+                clock,
+                "ru");
         NotificationDispatchService dispatch = new NotificationDispatchService(
                 notifications, templateStore, contacts, transport, objectMapper, clock, 8, Duration.ofSeconds(30));
         worker = new NotificationWorker(notifications, eligibility, dispatch, clock, 50, Duration.ofMinutes(2));
@@ -205,7 +215,8 @@ class TelegramOperationsNotificationIntegrationTest {
     void theWholeStory() {
         long chatOne = -100111L;
         String codeOne = links.issueCode(TENANT, BRAND, null, "operator-1");
-        updateHandler.handle(webhookInstallations.find(installationId).orElseThrow(), linkUpdate(codeOne, chatOne, null, 555L));
+        updateHandler.handle(
+                webhookInstallations.find(installationId).orElseThrow(), linkUpdate(codeOne, chatOne, null, 555L));
 
         UUID bindingOne = onlyBindingFor(chatOne);
         assertThat(bindingOne).isNotNull();
@@ -222,7 +233,8 @@ class TelegramOperationsNotificationIntegrationTest {
         trigger.onOrderingEvent(orderConfirmed(orderTwo));
         drainUntilQuiet();
 
-        List<String> businessMessages = bot.messagesSentTo(chatOne).subList(1, bot.messagesSentTo(chatOne).size());
+        List<String> businessMessages = bot.messagesSentTo(chatOne)
+                .subList(1, bot.messagesSentTo(chatOne).size());
         assertThat(businessMessages).hasSize(2);
         assertThat(businessMessages.get(0)).contains("A-1");
         assertThat(businessMessages.get(1)).contains("A-2");
@@ -259,6 +271,47 @@ class TelegramOperationsNotificationIntegrationTest {
         assertThat(bot.messagesSentTo(chatTwoNew)).anyMatch(text -> text.contains("A-3"));
         // Nothing further ever reached the pre-migration chat id.
         assertThat(bot.messagesSentTo(chatTwoOld)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("a binding cannot be inserted under a tenant that does not own its ADR 0026 row")
+    void crossTenantBindingReferenceIsRejectedByTheDatabase() {
+        UUID otherTenant = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.tenants (id, slug, legal_name, display_name, default_currency, default_timezone, status, version)
+                VALUES (:id, 'telegram-pilot-other', 'Legal', 'Other', 'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
+                """)
+                .param("id", otherTenant)
+                .update();
+
+        UUID bindingId = bindingStore.createBinding(TENANT, installationId, BRAND, null, -100999L, null, 1L);
+
+        // fk_telegram_binding requires (tenant_id, binding_id) to match an
+        // integration.bindings row of the SAME tenant. otherTenant owns no such
+        // row — TENANT does — so this must fail at the database, not merely go
+        // unenforced by application code.
+        assertThatThrownBy(() -> jdbc.sql("""
+                        INSERT INTO integration.telegram_bindings (
+                            binding_id, tenant_id, chat_id, audience, created_at, updated_at)
+                        VALUES (:bindingId, :otherTenant, -100998, 'OPERATIONS', now(), now())
+                        """)
+                        .param("bindingId", bindingId)
+                        .param("otherTenant", otherTenant)
+                        .update())
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+
+        // Same law, at the recipient_endpoints boundary: an operations endpoint
+        // cannot point a different tenant's notification pipeline at this chat.
+        assertThatThrownBy(() -> jdbc.sql("""
+                        INSERT INTO notifications.recipient_endpoints (
+                            id, tenant_id, endpoint_type, provider_binding_id, status, created_at, updated_at)
+                        VALUES (:id, :otherTenant, 'PROVIDER_BINDING', :bindingId, 'ACTIVE', now(), now())
+                        """)
+                        .param("id", UUID.randomUUID())
+                        .param("otherTenant", otherTenant)
+                        .param("bindingId", bindingId)
+                        .update())
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
     }
 
     // ------------------------------------------------------------------- setup
@@ -303,16 +356,23 @@ class TelegramOperationsNotificationIntegrationTest {
 
     private void activateTelegramTemplate() {
         JdbcTemplateStore templateStore = new JdbcTemplateStore(jdbc);
-        NotificationTemplateService templates =
-                new NotificationTemplateService(templateStore, JsonMapper.builder().build(), Clock.fixed(NOW, ZoneOffset.UTC));
+        NotificationTemplateService templates = new NotificationTemplateService(
+                templateStore, JsonMapper.builder().build(), Clock.fixed(NOW, ZoneOffset.UTC));
         UUID templateId = templates.createTemplate(
-                TENANT, BRAND, OrderNotificationTrigger.ORDER_CONFIRMED,
-                NotificationClass.OPERATIONS_ALERT, NotificationChannel.TELEGRAM, null);
+                TENANT,
+                BRAND,
+                OrderNotificationTrigger.ORDER_CONFIRMED,
+                NotificationClass.OPERATIONS_ALERT,
+                NotificationChannel.TELEGRAM,
+                null);
 
         Map<MessageLocale, Wording> wordings = new LinkedHashMap<>();
-        MessageLocale.required().forEach(locale -> wordings.put(locale, new Wording(null, "Order {{orderNumber}} confirmed")));
+        MessageLocale.required()
+                .forEach(locale -> wordings.put(locale, new Wording(null, "Order {{orderNumber}} confirmed")));
         int version = templates.addVersion(
-                TENANT, templateId, wordings,
+                TENANT,
+                templateId,
+                wordings,
                 Map.of("orderNumber", "string", "amount", "string", "currency", "string", "reasonCode", "string"));
         templates.activate(TENANT, templateId, version, "test");
     }
@@ -388,9 +448,7 @@ class TelegramOperationsNotificationIntegrationTest {
                 SELECT count(*) FROM notifications.notifications
                 WHERE channel = 'TELEGRAM'
                   AND status NOT IN ('DELIVERED', 'FAILED_TERMINAL', 'EXPIRED', 'SUPPRESSED', 'MANUAL_REVIEW')
-                """)
-                .query(Long.class)
-                .single();
+                """).query(Long.class).single();
     }
 
     private UUID onlyBindingFor(long chatId) {
@@ -483,7 +541,8 @@ class TelegramOperationsNotificationIntegrationTest {
 
         @Override
         public Optional<OrderSummary> summary(UUID tenantId, UUID orderId) {
-            return Optional.ofNullable(summaries.get(orderId)).filter(summary -> summary.tenantId().equals(tenantId));
+            return Optional.ofNullable(summaries.get(orderId))
+                    .filter(summary -> summary.tenantId().equals(tenantId));
         }
     }
 }

@@ -5,11 +5,17 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
 
 /**
@@ -39,10 +45,12 @@ public class TelegramBindingStore {
 
     private final JdbcClient jdbc;
     private final Clock clock;
+    private final AuditRecorder audit;
 
-    public TelegramBindingStore(JdbcClient jdbc, Clock clock) {
+    public TelegramBindingStore(JdbcClient jdbc, Clock clock, AuditRecorder audit) {
         this.jdbc = jdbc;
         this.clock = clock;
+        this.audit = audit;
     }
 
     /**
@@ -165,8 +173,8 @@ public class TelegramBindingStore {
                 """)
                 .param("tenantId", tenantId)
                 .param("bindingId", bindingId)
-                .query((row, number) -> new ChatRef(
-                        bindingId, row.getLong("chat_id"), (Integer) row.getObject("topic_id")))
+                .query((row, number) ->
+                        new ChatRef(bindingId, row.getLong("chat_id"), (Integer) row.getObject("topic_id")))
                 .optional();
     }
 
@@ -179,7 +187,7 @@ public class TelegramBindingStore {
      */
     public void retire(UUID tenantId, UUID bindingId, String reason) {
         Instant now = clock.instant();
-        jdbc.sql("""
+        int retired = jdbc.sql("""
                 UPDATE integration.telegram_bindings
                 SET retired_at = :now, retired_reason = :reason, version = version + 1, updated_at = :now
                 WHERE tenant_id = :tenantId AND binding_id = :bindingId AND retired_at IS NULL
@@ -198,6 +206,22 @@ public class TelegramBindingStore {
                 .param("bindingId", bindingId)
                 .param("now", utc(now))
                 .update();
+
+        if (retired == 1) {
+            // ADR 0026: "binding activation and suspension... are ADR 0027
+            // audit facts." The actor is the platform itself — Telegram
+            // reported the failure, no operator asked for this — so a system
+            // job, not a user, which is also why no .because(...) reason
+            // string is required: AuditFact only demands one from a USER actor.
+            audit.record(AuditFact.of("integration.telegram_binding_retired", AuditClass.SECURITY)
+                    .by(ActorRef.systemJob("telegram-bot-api"))
+                    .at(ResourceScope.tenant(tenantId))
+                    .target("IntegrationBinding", bindingId)
+                    .changed(Map.of("reason", reason))
+                    .correlatedBy(bindingId.toString())
+                    .occurredAt(now)
+                    .build());
+        }
     }
 
     /**
@@ -218,11 +242,11 @@ public class TelegramBindingStore {
                 WHERE tenant_id = :tenantId AND binding_id = :bindingId
                   AND chat_id <> :newChatId AND retired_at IS NULL
                 """)
-                .param("tenantId", tenantId)
-                .param("bindingId", bindingId)
-                .param("newChatId", newChatId)
-                .param("now", utc(now))
-                .update()
+                        .param("tenantId", tenantId)
+                        .param("bindingId", bindingId)
+                        .param("newChatId", newChatId)
+                        .param("now", utc(now))
+                        .update()
                 == 1;
     }
 

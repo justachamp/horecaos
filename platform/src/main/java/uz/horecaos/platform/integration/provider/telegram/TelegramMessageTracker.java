@@ -30,7 +30,8 @@ public class TelegramMessageTracker {
     }
 
     /** The live tracked message for this exact concern, if the edit window has not closed. */
-    public Optional<Tracked> current(UUID tenantId, UUID bindingId, String subjectType, UUID subjectId, String templateKey) {
+    public Optional<Tracked> current(
+            UUID tenantId, UUID bindingId, String subjectType, UUID subjectId, String templateKey) {
         return jdbc.sql("""
                 SELECT id, telegram_message_id, content_hash, edit_window_expires_at
                 FROM integration.telegram_tracked_messages
@@ -46,7 +47,8 @@ public class TelegramMessageTracker {
                         row.getObject("id", UUID.class),
                         row.getLong("telegram_message_id"),
                         row.getString("content_hash"),
-                        row.getObject("edit_window_expires_at", OffsetDateTime.class).toInstant()))
+                        row.getObject("edit_window_expires_at", OffsetDateTime.class)
+                                .toInstant()))
                 .optional()
                 .filter(tracked -> tracked.editWindowExpiresAt().isAfter(clock.instant()));
     }

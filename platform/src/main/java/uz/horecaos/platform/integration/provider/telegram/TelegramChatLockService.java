@@ -52,12 +52,12 @@ public class TelegramChatLockService {
                     WHERE integration.telegram_chat_locks.lease_owner IS NULL
                        OR integration.telegram_chat_locks.lease_expires_at < :now
                 """)
-                .param("tenantId", tenantId)
-                .param("chatId", chatId)
-                .param("owner", leaseOwner)
-                .param("expires", utc(now.plus(leaseDuration)))
-                .param("now", utc(now))
-                .update()
+                        .param("tenantId", tenantId)
+                        .param("chatId", chatId)
+                        .param("owner", leaseOwner)
+                        .param("expires", utc(now.plus(leaseDuration)))
+                        .param("now", utc(now))
+                        .update()
                 == 1;
     }
 

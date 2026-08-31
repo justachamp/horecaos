@@ -32,7 +32,10 @@ import uz.horecaos.platform.integration.provider.telegram.TelegramWebhookInstall
  */
 @Component
 @Profile("local")
-@ConditionalOnProperty(name = "horecaos.notifications.telegram.long-polling.enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(
+        name = "horecaos.notifications.telegram.long-polling.enabled",
+        havingValue = "true",
+        matchIfMissing = true)
 public class TelegramLongPollingConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(TelegramLongPollingConsumer.class);
@@ -73,7 +76,8 @@ public class TelegramLongPollingConsumer {
     private void poll(WebhookInstallation installation) {
         ProviderCall call = new ProviderCall(
                 installation.baseUrl(),
-                secrets.resolve(SecretReference.parse(installation.secretReference())).reveal(),
+                secrets.resolve(SecretReference.parse(installation.secretReference()))
+                        .reveal(),
                 null,
                 Duration.ofSeconds(pollTimeoutSeconds + 10L));
 

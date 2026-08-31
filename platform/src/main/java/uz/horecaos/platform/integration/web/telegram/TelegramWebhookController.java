@@ -85,8 +85,8 @@ public class TelegramWebhookController {
             return ResponseEntity.status(403).build();
         }
 
-        String expected =
-                secrets.resolve(SecretReference.parse(installation.webhookSecretReference())).reveal();
+        String expected = secrets.resolve(SecretReference.parse(installation.webhookSecretReference()))
+                .reveal();
         if (presentedToken == null || !constantTimeEquals(presentedToken, expected)) {
             log.warn("Telegram webhook for installation {} presented an invalid secret token", installationId);
             return ResponseEntity.status(403).build();

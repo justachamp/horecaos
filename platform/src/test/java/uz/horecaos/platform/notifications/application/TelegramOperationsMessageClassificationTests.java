@@ -59,7 +59,9 @@ class TelegramOperationsMessageClassificationTests {
         // Telegram operations alert. Asserted here as the literal constants
         // that method writes, since the method itself is private and this is
         // the vocabulary a reviewer changing it has to keep clean.
-        assertClean(Map.of("orderNumber", "A-1", "amount", "1000 UZS", "currency", "UZS"), "NotificationEligibilityService.variablesFor");
+        assertClean(
+                Map.of("orderNumber", "A-1", "amount", "1000 UZS", "currency", "UZS"),
+                "NotificationEligibilityService.variablesFor");
     }
 
     @Test

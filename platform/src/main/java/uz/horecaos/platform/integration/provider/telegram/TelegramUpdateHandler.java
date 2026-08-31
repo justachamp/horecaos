@@ -1,5 +1,6 @@
 package uz.horecaos.platform.integration.provider.telegram;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
@@ -8,6 +9,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.ProviderCall;
@@ -38,6 +44,8 @@ public class TelegramUpdateHandler {
     private final TelegramBindingStore bindings;
     private final TelegramBotApiClient bots;
     private final SecretResolver secrets;
+    private final AuditRecorder audit;
+    private final Clock clock;
     private final String defaultLocale;
 
     public TelegramUpdateHandler(
@@ -46,12 +54,16 @@ public class TelegramUpdateHandler {
             TelegramBindingStore bindings,
             TelegramBotApiClient bots,
             SecretResolver secrets,
+            AuditRecorder audit,
+            Clock clock,
             @Value("${horecaos.notifications.telegram.group-locale:ru}") String defaultLocale) {
         this.links = links;
         this.rights = rights;
         this.bindings = bindings;
         this.bots = bots;
         this.secrets = secrets;
+        this.audit = audit;
+        this.clock = clock;
         this.defaultLocale = defaultLocale;
     }
 
@@ -115,8 +127,11 @@ public class TelegramUpdateHandler {
 
         var verification = rights.verify(call, chatId, topicId != null);
         if (!verification.sufficient()) {
-            bots.sendMessage(call, chatId, topicId, TelegramBotMessages.insufficientRights(
-                    defaultLocale, verification.actionableReason()));
+            bots.sendMessage(
+                    call,
+                    chatId,
+                    topicId,
+                    TelegramBotMessages.insufficientRights(defaultLocale, verification.actionableReason()));
             return;
         }
 
@@ -129,10 +144,29 @@ public class TelegramUpdateHandler {
                 topicId,
                 fromUserId == 0L ? null : fromUserId);
         bindings.subscribe(pending.tenantId(), bindingId, DEFAULT_SUBSCRIPTIONS);
-        links.consume(pending.id(), bindingId);
+        links.consume(pending.tenantId(), pending.id(), bindingId);
+
+        // ADR 0026: binding activation is an ADR 0027 audit fact. The actor is
+        // the operator who requested the code, not the bot or the Telegram user
+        // who typed the command — a Telegram user id is not a Keycloak identity,
+        // and the accountable party is whoever the platform actually
+        // authenticated and authorized to create this access.
+        audit.record(AuditFact.of("integration.telegram_binding_created", AuditClass.SECURITY)
+                .by(ActorRef.user(pending.requestedByPrincipalId(), null))
+                .at(ResourceScope.tenant(pending.tenantId()))
+                .target("IntegrationBinding", bindingId)
+                .because("Telegram group-link handshake completed")
+                .correlatedBy(bindingId.toString())
+                .occurredAt(clock.instant())
+                .build());
 
         bots.sendMessage(call, chatId, topicId, TelegramBotMessages.linked(defaultLocale));
-        log.info("Linked Telegram chat {} (topic {}) as binding {} for tenant {}", chatId, topicId, bindingId, pending.tenantId());
+        log.info(
+                "Linked Telegram chat {} (topic {}) as binding {} for tenant {}",
+                chatId,
+                topicId,
+                bindingId,
+                pending.tenantId());
     }
 
     /**
@@ -159,6 +193,7 @@ public class TelegramUpdateHandler {
 
     private ProviderCall resolveCall(WebhookInstallation installation) {
         SecretReference reference = SecretReference.parse(installation.secretReference());
-        return new ProviderCall(installation.baseUrl(), secrets.resolve(reference).reveal(), null, Duration.ofSeconds(15));
+        return new ProviderCall(
+                installation.baseUrl(), secrets.resolve(reference).reveal(), null, Duration.ofSeconds(15));
     }
 }

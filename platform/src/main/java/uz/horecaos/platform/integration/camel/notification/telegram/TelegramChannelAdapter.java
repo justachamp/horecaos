@@ -118,7 +118,8 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
                         + "only be resolved by a person reading the chat");
     }
 
-    private ProviderOutcome withCircuitBreaker(NotificationDispatch dispatch, ProviderCall call, UUID bindingId, ChatRef chat) {
+    private ProviderOutcome withCircuitBreaker(
+            NotificationDispatch dispatch, ProviderCall call, UUID bindingId, ChatRef chat) {
         try {
             return breakers.forBotApi().executeSupplier(() -> {
                 ProviderOutcome outcome = attempt(dispatch, call, bindingId, chat);
@@ -142,12 +143,17 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
 
         if (dispatch.subjectType() != null && dispatch.subjectId() != null && dispatch.templateKey() != null) {
             Optional<Tracked> tracked = tracker.current(
-                    dispatch.tenantId(), bindingId, dispatch.subjectType(), dispatch.subjectId(), dispatch.templateKey());
+                    dispatch.tenantId(),
+                    bindingId,
+                    dispatch.subjectType(),
+                    dispatch.subjectId(),
+                    dispatch.templateKey());
             if (tracked.isPresent()) {
                 if (tracked.get().contentHash().equals(contentHash)) {
                     // Already showing this exact content; nothing to send.
                     return ProviderOutcome.success(
-                            Map.of("providerStatus", "UNCHANGED"), String.valueOf(tracked.get().telegramMessageId()));
+                            Map.of("providerStatus", "UNCHANGED"),
+                            String.valueOf(tracked.get().telegramMessageId()));
                 }
                 Optional<ProviderOutcome> edited = tryEdit(dispatch, call, bindingId, chat, tracked.get(), contentHash);
                 if (edited.isPresent()) {
@@ -170,9 +176,15 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
      *         should fall through to sending a new message
      */
     private Optional<ProviderOutcome> tryEdit(
-            NotificationDispatch dispatch, ProviderCall call, UUID bindingId, ChatRef chat, Tracked tracked, String contentHash) {
+            NotificationDispatch dispatch,
+            ProviderCall call,
+            UUID bindingId,
+            ChatRef chat,
+            Tracked tracked,
+            String contentHash) {
 
-        TelegramCallResult result = bots.editMessageText(call, chat.chatId(), tracked.telegramMessageId(), dispatch.body());
+        TelegramCallResult result =
+                bots.editMessageText(call, chat.chatId(), tracked.telegramMessageId(), dispatch.body());
 
         if (result instanceof TelegramCallResult.ChatMigrated migrated) {
             ChatRef rewritten = rewriteAndFollow(dispatch.tenantId(), bindingId, chat, migrated.newChatId());
@@ -188,13 +200,14 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
             case TelegramCallResult.BindingRetirement retirement -> {
                 bindings.retire(dispatch.tenantId(), bindingId, retirement.reason());
                 tracker.supersede(dispatch.tenantId(), tracked.id());
-                yield Optional.of(ProviderOutcome.rejected(
-                        "BINDING_RETIRED_" + retirement.reason(), retirement.detail()));
+                yield Optional.of(
+                        ProviderOutcome.rejected("BINDING_RETIRED_" + retirement.reason(), retirement.detail()));
             }
             case TelegramCallResult.Retryable retryable ->
-                    Optional.of(ProviderOutcome.retryable(retryable.errorCode(), retryable.detail(), retryable.retryAfter()));
+                Optional.of(
+                        ProviderOutcome.retryable(retryable.errorCode(), retryable.detail(), retryable.retryAfter()));
             case TelegramCallResult.Uncertain uncertain ->
-                    Optional.of(ProviderOutcome.uncertain(uncertain.errorCode(), uncertain.detail()));
+                Optional.of(ProviderOutcome.uncertain(uncertain.errorCode(), uncertain.detail()));
             case TelegramCallResult.BusinessRejected rejected -> {
                 // Expired, deleted, or "message is not modified" by Telegram's own
                 // comparison. The message is gone from under this tracked row;
@@ -204,9 +217,10 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
                 yield Optional.empty();
             }
             case TelegramCallResult.ChatMigrated migratedAgain ->
-                    // A second migrate answer on the replay is not expected; treat
-                    // it as uncertain rather than looping.
-                    Optional.of(ProviderOutcome.uncertain("REPEATED_CHAT_MIGRATION", "Telegram reported migrate_to_chat_id twice"));
+                // A second migrate answer on the replay is not expected; treat
+                // it as uncertain rather than looping.
+                Optional.of(ProviderOutcome.uncertain(
+                        "REPEATED_CHAT_MIGRATION", "Telegram reported migrate_to_chat_id twice"));
         };
     }
 
@@ -240,12 +254,13 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
                 yield ProviderOutcome.rejected("BINDING_RETIRED_" + retirement.reason(), retirement.detail());
             }
             case TelegramCallResult.BusinessRejected rejected ->
-                    ProviderOutcome.rejected(rejected.errorCode(), rejected.detail());
+                ProviderOutcome.rejected(rejected.errorCode(), rejected.detail());
             case TelegramCallResult.Retryable retryable ->
-                    ProviderOutcome.retryable(retryable.errorCode(), retryable.detail(), retryable.retryAfter());
-            case TelegramCallResult.Uncertain uncertain -> ProviderOutcome.uncertain(uncertain.errorCode(), uncertain.detail());
+                ProviderOutcome.retryable(retryable.errorCode(), retryable.detail(), retryable.retryAfter());
+            case TelegramCallResult.Uncertain uncertain ->
+                ProviderOutcome.uncertain(uncertain.errorCode(), uncertain.detail());
             case TelegramCallResult.ChatMigrated migratedAgain ->
-                    ProviderOutcome.uncertain("REPEATED_CHAT_MIGRATION", "Telegram reported migrate_to_chat_id twice");
+                ProviderOutcome.uncertain("REPEATED_CHAT_MIGRATION", "Telegram reported migrate_to_chat_id twice");
         };
     }
 

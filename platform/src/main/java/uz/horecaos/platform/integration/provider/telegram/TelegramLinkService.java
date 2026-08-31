@@ -99,16 +99,17 @@ public class TelegramLinkService {
      *         caller treats as success — the binding it created stands
      */
     @Transactional
-    public boolean consume(UUID pendingLinkId, UUID createdBindingId) {
+    public boolean consume(UUID tenantId, UUID pendingLinkId, UUID createdBindingId) {
         return jdbc.sql("""
                 UPDATE integration.telegram_pending_links
                 SET consumed_at = :now, created_binding_id = :bindingId
-                WHERE id = :id AND consumed_at IS NULL
+                WHERE id = :id AND tenant_id = :tenantId AND consumed_at IS NULL
                 """)
-                .param("id", pendingLinkId)
-                .param("bindingId", createdBindingId)
-                .param("now", utc(clock.instant()))
-                .update()
+                        .param("id", pendingLinkId)
+                        .param("tenantId", tenantId)
+                        .param("bindingId", createdBindingId)
+                        .param("now", utc(clock.instant()))
+                        .update()
                 == 1;
     }
 

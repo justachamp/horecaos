@@ -102,7 +102,11 @@ public class OperationsAlertFanoutService {
                     now,
                     endpointId));
             if (!created) {
-                log.debug("An operations alert already exists for {}/{} on binding {}", subjectType, subjectId, bindingId);
+                log.debug(
+                        "An operations alert already exists for {}/{} on binding {}",
+                        subjectType,
+                        subjectId,
+                        bindingId);
             }
         }
     }

@@ -100,9 +100,10 @@ public final class FakeTelegramBotApi implements AutoCloseable {
         switch (method) {
             case "sendMessage" -> handleSendOrEdit(exchange, body, false);
             case "editMessageText" -> handleSendOrEdit(exchange, body, true);
-            case "getMe" -> respondOk(exchange, Map.of("id", BOT_USER_ID, "is_bot", true, "first_name", "HorecaOS Ops"));
-            case "getChatMember" -> respondOk(
-                    exchange, Map.of("status", chatMemberStatus, "can_manage_topics", canManageTopics.get()));
+            case "getMe" ->
+                respondOk(exchange, Map.of("id", BOT_USER_ID, "is_bot", true, "first_name", "HorecaOS Ops"));
+            case "getChatMember" ->
+                respondOk(exchange, Map.of("status", chatMemberStatus, "can_manage_topics", canManageTopics.get()));
             case "getUpdates" -> respondOk(exchange, List.of());
             default -> respond(exchange, 404, errorBody(404, "Not Found: unknown method"));
         }

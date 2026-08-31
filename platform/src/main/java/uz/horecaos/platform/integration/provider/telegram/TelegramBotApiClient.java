@@ -123,16 +123,17 @@ public class TelegramBotApiClient {
             if (response.statusCode() < 200 || response.statusCode() >= 300 || collected.truncated()) {
                 return List.of();
             }
-            Map<String, Object> parsed = collected.bytes().length == 0
-                    ? Map.of()
-                    : objectMapper.readValue(collected.bytes(), MAP_TYPE);
+            Map<String, Object> parsed =
+                    collected.bytes().length == 0 ? Map.of() : objectMapper.readValue(collected.bytes(), MAP_TYPE);
             Object result = parsed.get("result");
             return result instanceof List<?> list ? (List<Map<String, Object>>) list : List.of();
         } catch (InterruptedException failure) {
             Thread.currentThread().interrupt();
             return List.of();
         } catch (IOException | RuntimeException failure) {
-            log.debug("Telegram long-poll failed; will retry next tick: {}", failure.getClass().getSimpleName());
+            log.debug(
+                    "Telegram long-poll failed; will retry next tick: {}",
+                    failure.getClass().getSimpleName());
             return List.of();
         }
     }
@@ -159,12 +160,15 @@ public class TelegramBotApiClient {
             return TelegramCallResult.uncertain("INTERRUPTED", "The call was interrupted");
         } catch (IOException failure) {
             boolean mayHaveReached = mayHaveReachedProvider(failure);
-            log.warn("Telegram {} failed: {} (mayHaveReached={})", method, failure.getClass().getSimpleName(), mayHaveReached);
+            log.warn(
+                    "Telegram {} failed: {} (mayHaveReached={})",
+                    method,
+                    failure.getClass().getSimpleName(),
+                    mayHaveReached);
             return mayHaveReached
                     ? TelegramCallResult.uncertain(
                             failure.getClass().getSimpleName(), "No response after the request was sent")
-                    : TelegramCallResult.retryable(
-                            "CONNECTION_FAILED", "Could not reach the Bot API", null);
+                    : TelegramCallResult.retryable("CONNECTION_FAILED", "Could not reach the Bot API", null);
         } catch (RuntimeException failure) {
             return TelegramCallResult.uncertain(
                     "RESPONSE_UNREADABLE", "The Bot API answered but the response could not be interpreted");
@@ -238,7 +242,9 @@ public class TelegramBotApiClient {
 
         if (status == 400 || status == 404) {
             String lower = description.toLowerCase(Locale.ROOT);
-            if (lower.contains("thread not found") || lower.contains("topic_deleted") || lower.contains("topic was deleted")) {
+            if (lower.contains("thread not found")
+                    || lower.contains("topic_deleted")
+                    || lower.contains("topic was deleted")) {
                 return TelegramCallResult.bindingRetirement("THREAD_NOT_FOUND", description);
             }
             if (lower.contains("chat not found") || lower.contains("group chat was deactivated")) {

@@ -44,7 +44,8 @@ public class TelegramCircuitBreakers {
                 .waitDurationInOpenState(Duration.ofSeconds(30))
                 .permittedNumberOfCallsInHalfOpenState(3)
                 .automaticTransitionFromOpenToHalfOpenEnabled(true)
-                .recordException(failure -> failure instanceof ProviderCallFailed call && countsAsFailure(call.outcome()))
+                .recordException(
+                        failure -> failure instanceof ProviderCallFailed call && countsAsFailure(call.outcome()))
                 .build());
         ProviderCircuitMetrics.bind(registry, meters, "telegram-notification", clock);
     }

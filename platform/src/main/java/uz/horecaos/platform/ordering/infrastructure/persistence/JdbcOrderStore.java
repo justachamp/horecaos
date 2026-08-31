@@ -1225,7 +1225,8 @@ public class JdbcOrderStore {
                         row.getObject("brand_id", UUID.class),
                         row.getObject("location_id", UUID.class),
                         row.getString("public_order_number"),
-                        row.getObject("approval_deadline_at", OffsetDateTime.class).toInstant()))
+                        row.getObject("approval_deadline_at", OffsetDateTime.class)
+                                .toInstant()))
                 .list();
     }
 
