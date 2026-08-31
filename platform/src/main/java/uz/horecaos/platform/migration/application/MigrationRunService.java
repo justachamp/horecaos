@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -463,6 +464,9 @@ public class MigrationRunService {
     }
 
     /**
+     * What starting a run names: which migrator, applying which transformation
+     * code, and under which idempotency key.
+     *
      * @param transformationVersion the version of the transformation code this run
      *                              applies; a changed mapping is a new
      *                              {@code REMEDIATION} run rather than a silent
@@ -472,14 +476,25 @@ public class MigrationRunService {
             RunType runType, int transformationVersion, String startedBy, String reason, String idempotencyKey) {}
 
     /**
+     * What a worker reports back after a page of work: where it got to and what
+     * it counted.
+     *
      * @param sourceWatermark how far into the source the run has committed, which
      *                        is where a successor picks up if this one is killed
      * @param totals          the run's running totals, never a page's increments;
      *                        a retried checkpoint restates them and changes nothing
      */
     public record CheckpointCommand(
-            String sourceWatermark, String targetWatermark, Map<String, Object> checkpoint, Counters totals) {}
+            @Nullable String sourceWatermark,
+            @Nullable String targetWatermark,
+            @Nullable Map<String, Object> checkpoint,
+            @Nullable Counters totals) {}
 
-    /** @param checksum hex sha-256 of what the pass produced, and only on a completed run */
-    public record FinishRunCommand(RunStatus status, String checksum, int expectedVersion, String reason) {}
+    /**
+     * What closing a run names: the terminal status it ended in and, when it
+     * completed, the checksum of what it produced.
+     *
+     * @param checksum hex sha-256 of what the pass produced, and only on a completed run
+     */
+    public record FinishRunCommand(RunStatus status, @Nullable String checksum, int expectedVersion, String reason) {}
 }

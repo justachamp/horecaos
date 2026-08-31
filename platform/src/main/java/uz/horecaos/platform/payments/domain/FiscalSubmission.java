@@ -3,6 +3,7 @@ package uz.horecaos.platform.payments.domain;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
  * What a provider answered when asked to fiscalize (ADR 0013, ADR 0038).
@@ -22,9 +23,9 @@ import java.util.Optional;
 public record FiscalSubmission(
         ProviderOutcome.Classification classification,
         FiscalStatus status,
-        FiscalDocument.FiscalEvidence evidence,
-        String providerStatusCode,
-        String providerMessage,
+        FiscalDocument.@Nullable FiscalEvidence evidence,
+        @Nullable String providerStatusCode,
+        @Nullable String providerMessage,
         Instant submittedAt) {
 
     public FiscalSubmission {

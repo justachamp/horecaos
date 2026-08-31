@@ -8,9 +8,11 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
@@ -131,10 +133,9 @@ class OnboardingOutboxIntegrationTests {
 
     @Test
     void aRunThatRollsBackLeavesNoFactClaimingItStarted() {
-        transactions.execute(status -> {
+        transactions.executeWithoutResult(status -> {
             service.startRun(TENANT, TEMPLATE, 1, Map.of(), ADMIN);
             status.setRollbackOnly();
-            return null;
         });
 
         assertThat(jdbc.sql("SELECT count(*) FROM tenant.onboarding_runs")
@@ -249,11 +250,13 @@ class OnboardingOutboxIntegrationTests {
     @EnableTransactionManagement
     static class TestConfiguration {
 
-        private static DataSource dataSource;
+        // Wired from the outer class's setUp(), before the context refreshes;
+        // never read before that assignment happens.
+        private static @Nullable DataSource dataSource;
 
         @Bean
         DataSource dataSource() {
-            return dataSource;
+            return Objects.requireNonNull(dataSource, "setUp() must set the data source before the context refreshes");
         }
 
         @Bean

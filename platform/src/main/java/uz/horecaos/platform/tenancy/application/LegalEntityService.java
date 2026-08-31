@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -209,6 +210,8 @@ public class LegalEntityService {
     }
 
     /**
+     * Registers a new legal entity.
+     *
      * @param code stable and tenant-unique. A fiscal document and a merchant
      *             binding both point at the row it names and must still resolve a
      *             year later, so an entity is archived rather than deleted and its
@@ -217,15 +220,17 @@ public class LegalEntityService {
     public record RegisterLegalEntityCommand(
             String code,
             String legalName,
-            String shortName,
+            @Nullable String shortName,
             String tin,
             boolean vatRegistered,
-            String vatCertificateReference,
-            UUID taxProfileId,
-            String registeredAddress,
-            String contactPhone) {}
+            @Nullable String vatCertificateReference,
+            @Nullable UUID taxProfileId,
+            @Nullable String registeredAddress,
+            @Nullable String contactPhone) {}
 
     /**
+     * Assigns a legal entity as the seller at a branch from a date.
+     *
      * @param approvedBy ADR 0027 evidence, required. Which company sells at a
      *                   branch is a decision somebody signed, and the platform is
      *                   not entitled to record it anonymously
@@ -236,7 +241,7 @@ public class LegalEntityService {
             UUID legalEntityId,
             LocalDate effectiveFrom,
             String approvedBy,
-            String approvalReference) {}
+            @Nullable String approvalReference) {}
 
     /** Exposed so a console can render what an unbuilt stage 1 means for a tenant. */
     public boolean schemaAvailable() {

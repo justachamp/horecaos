@@ -3,6 +3,7 @@ package uz.horecaos.platform.fiscal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -64,9 +65,6 @@ class FiscalDocumentLifecycleTests {
     private static final Instant NOON = Instant.parse("2026-08-22T09:00:00Z");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private JdbcFiscalLifecycleStore store;
@@ -83,9 +81,6 @@ class FiscalDocumentLifecycleTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -592,9 +587,9 @@ class FiscalDocumentLifecycleTests {
     }
 
     private UUID seedOrder(String seed, String providerType) {
-        UUID orderId = UUID.nameUUIDFromBytes(("order:" + seed).getBytes());
-        UUID cartId = UUID.nameUUIDFromBytes(("cart:" + seed).getBytes());
-        UUID quoteId = UUID.nameUUIDFromBytes(("quote:" + seed).getBytes());
+        UUID orderId = UUID.nameUUIDFromBytes(("order:" + seed).getBytes(StandardCharsets.UTF_8));
+        UUID cartId = UUID.nameUUIDFromBytes(("cart:" + seed).getBytes(StandardCharsets.UTF_8));
+        UUID quoteId = UUID.nameUUIDFromBytes(("quote:" + seed).getBytes(StandardCharsets.UTF_8));
 
         jdbc.sql("""
                 INSERT INTO ordering.carts (id, tenant_id, brand_id, location_id, channel_id,
@@ -664,7 +659,7 @@ class FiscalDocumentLifecycleTests {
                 VALUES (:id, :t, :o, :b, :loc, :e, :tender, :code, :provider, 50000, 'UZS',
                     'PENDING', :timing, :key, 1, :at, :at)
                 """)
-                .param("id", UUID.nameUUIDFromBytes(("intent:" + seed).getBytes()))
+                .param("id", UUID.nameUUIDFromBytes(("intent:" + seed).getBytes(StandardCharsets.UTF_8)))
                 .param("t", TENANT)
                 .param("o", orderId)
                 .param("b", BRAND)
@@ -703,14 +698,14 @@ class FiscalDocumentLifecycleTests {
                 VALUES (:id, :t, 'ACTIVE', 'Customer', 1, 1)
                 """).param("id", CUSTOMER).param("t", TENANT).update();
 
-        channelId = UUID.nameUUIDFromBytes("fiscal-channel".getBytes());
+        channelId = UUID.nameUUIDFromBytes("fiscal-channel".getBytes(StandardCharsets.UTF_8));
         jdbc.sql("""
                 INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name,
                     status, guest_orders_allowed)
                 VALUES (:id, :t, 'TELEGRAM', 'TELEGRAM', 'Telegram bot', 'ACTIVE', false)
                 """).param("id", channelId).param("t", TENANT).update();
 
-        UUID catalogId = UUID.nameUUIDFromBytes("fiscal-catalog".getBytes());
+        UUID catalogId = UUID.nameUUIDFromBytes("fiscal-catalog".getBytes(StandardCharsets.UTF_8));
         jdbc.sql("""
                 INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
                 VALUES (:id, :t, :b, 'MAIN', 'Main menu', 'ACTIVE')
@@ -720,7 +715,7 @@ class FiscalDocumentLifecycleTests {
                 .param("b", BRAND)
                 .update();
 
-        publicationId = UUID.nameUUIDFromBytes("fiscal-publication".getBytes());
+        publicationId = UUID.nameUUIDFromBytes("fiscal-publication".getBytes(StandardCharsets.UTF_8));
         jdbc.sql("""
                 INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel,
                     status, content_hash, activated_at)

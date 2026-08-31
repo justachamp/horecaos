@@ -3,6 +3,7 @@ package uz.horecaos.platform.migration.application;
 import java.math.BigInteger;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.migration.domain.ReconciliationSeverity;
 
 /**
@@ -66,10 +67,10 @@ public interface MigrationReconciliationStore {
             int ruleVersion,
             String dimensionKey,
             String measureKind,
-            BigInteger expectedValue,
-            BigInteger actualValue,
-            BigInteger differenceValue,
-            String currency) {
+            @Nullable BigInteger expectedValue,
+            @Nullable BigInteger actualValue,
+            @Nullable BigInteger differenceValue,
+            @Nullable String currency) {
 
         /** How the refusal names this difference to the operator who hit it. */
         public String describe() {

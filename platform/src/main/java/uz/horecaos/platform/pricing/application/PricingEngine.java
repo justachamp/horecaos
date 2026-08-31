@@ -8,7 +8,9 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.fulfillment.api.ResolvedDeliveryCharge;
 import uz.horecaos.platform.pricing.domain.Money;
@@ -155,7 +157,10 @@ public class PricingEngine {
                 lineDiscountTotal = Math.addExact(lineDiscountTotal, off);
                 discounted.add(Quote.QuoteLine.item(
                         line.lineId(),
-                        line.variantId(),
+                        // Every element of `lines` here was built by item() a few
+                        // lines above and is therefore an ITEM line, which
+                        // QuoteLine's own constructor guarantees carries a variant.
+                        Objects.requireNonNull(line.variantId(), "an ITEM line always carries a variant"),
                         line.quantity(),
                         line.descriptionSnapshot(),
                         line.unitAmount(),
@@ -220,7 +225,9 @@ public class PricingEngine {
             Quote.QuoteLine line = lines.get(i);
             taxedLines.add(Quote.QuoteLine.item(
                     line.lineId(),
-                    line.variantId(),
+                    // Every element of `lines` is an ITEM line built by item(),
+                    // which QuoteLine's own constructor guarantees carries a variant.
+                    Objects.requireNonNull(line.variantId(), "an ITEM line always carries a variant"),
                     line.quantity(),
                     line.descriptionSnapshot(),
                     line.unitAmount(),
@@ -296,7 +303,7 @@ public class PricingEngine {
      * one: the first is filed, the second is visibly missing.
      */
     private Delivery applyDelivery(
-            ResolvedDeliveryCharge charge,
+            @Nullable ResolvedDeliveryCharge charge,
             long goodsSubtotal,
             String currency,
             List<Quote.QuoteLine> lines,
@@ -434,10 +441,15 @@ public class PricingEngine {
             if (line.type() != Quote.LineType.ITEM) {
                 continue;
             }
-            MenuMembershipLookup.Membership membership = offers.membership().get(line.variantId());
+            // Quote.QuoteLine.variantId is only ever null on a DELIVERY_FEE line
+            // (enforced by that record's own constructor), and the type check just
+            // above has already excluded those, so an ITEM line's variant is
+            // guaranteed present here even though the accessor's type is nullable.
+            UUID variantId = Objects.requireNonNull(line.variantId(), "an ITEM line always carries a variant");
+            MenuMembershipLookup.Membership membership = offers.membership().get(variantId);
             basketLines.add(new PromotionEvaluator.BasketLine(
                     line.lineId(),
-                    line.variantId(),
+                    variantId,
                     membership == null ? null : membership.productId(),
                     membership == null ? java.util.Set.of() : membership.categoryIds(),
                     line.quantity(),
@@ -493,7 +505,7 @@ public class PricingEngine {
      */
     private static final String DELIVERY_FEE_DESCRIPTION = "DELIVERY_FEE";
 
-    private record Delivery(long feeMinor, List<Quote.QuoteLine> lines, Long shortfallMinor) {}
+    private record Delivery(long feeMinor, List<Quote.QuoteLine> lines, @Nullable Long shortfallMinor) {}
 
     /**
      * Everything the total depends on, hashed.
@@ -618,12 +630,12 @@ public class PricingEngine {
              * delivered. Resolved before the engine runs, by the module that owns
              * geometry and clocks, so this class stays a pure function of values.
              */
-            ResolvedDeliveryCharge deliveryCharge,
+            @Nullable ResolvedDeliveryCharge deliveryCharge,
             /*
              * ADR 0018 stages 3 and 4, or null when nothing is on offer. Resolved
              * before the engine runs, like everything else here.
              */
-            PromotionInputs promotions) {
+            @Nullable PromotionInputs promotions) {
 
         /** A cart with no promotions in play, and every call site that predates them. */
         public PricingInputs(
@@ -638,7 +650,7 @@ public class PricingEngine {
                 Map<UUID, Long> variantPrices,
                 Map<UUID, Long> modifierPrices,
                 Map<UUID, String> descriptions,
-                ResolvedDeliveryCharge deliveryCharge) {
+                @Nullable ResolvedDeliveryCharge deliveryCharge) {
             this(
                     currency,
                     catalogPublicationId,
@@ -710,6 +722,8 @@ public class PricingEngine {
     }
 
     /**
+     * What one call to {@link #price} produced.
+     *
      * @param deliveryShortfallMinor how far the basket is below the zone's minimum,
      *                               or null when there is no minimum or it is met.
      *                               Reported rather than thrown, so the storefront
@@ -723,7 +737,7 @@ public class PricingEngine {
             Money total,
             List<Quote.QuoteLine> lines,
             List<Adjustment> adjustments,
-            Long deliveryShortfallMinor,
+            @Nullable Long deliveryShortfallMinor,
             String contextHash) {}
 
     /** Thrown when a cart contains something with no active price. */

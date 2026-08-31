@@ -3,6 +3,7 @@ package uz.horecaos.platform.tenancy.domain;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.tenancy.api.TenantId;
 
 public final class CustomerIdentityPolicy {
@@ -12,7 +13,7 @@ public final class CustomerIdentityPolicy {
     private final int version;
     private final CustomerIdentityMode mode;
     private final Instant effectiveFrom;
-    private Instant supersededAt;
+    private @Nullable Instant supersededAt;
 
     private CustomerIdentityPolicy(
             UUID id, TenantId tenantId, int version, CustomerIdentityMode mode, Instant effectiveFrom) {
@@ -76,7 +77,7 @@ public final class CustomerIdentityPolicy {
         return effectiveFrom;
     }
 
-    public Instant supersededAt() {
+    public @Nullable Instant supersededAt() {
         return supersededAt;
     }
 }

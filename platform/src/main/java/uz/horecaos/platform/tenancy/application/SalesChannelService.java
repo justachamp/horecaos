@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -152,7 +153,7 @@ public class SalesChannelService {
      * would resolve to the middle of it — and a cycle of two channels each pointing
      * at the other would be a configuration nobody could reason about.
      */
-    private UUID validatedPricePlane(UUID tenantId, UUID pricePlaneChannelId) {
+    private @Nullable UUID validatedPricePlane(UUID tenantId, @Nullable UUID pricePlaneChannelId) {
         if (pricePlaneChannelId == null) {
             return null;
         }
@@ -169,10 +170,10 @@ public class SalesChannelService {
             String code,
             String systemType,
             String displayName,
-            UUID pricePlaneChannelId,
+            @Nullable UUID pricePlaneChannelId,
             boolean externallyPriced,
             boolean guestOrdersAllowed,
-            UUID providerInstallationId) {}
+            @Nullable UUID providerInstallationId) {}
 
     public record ChannelMatrices(
             Map<String, Boolean> paymentMethods,

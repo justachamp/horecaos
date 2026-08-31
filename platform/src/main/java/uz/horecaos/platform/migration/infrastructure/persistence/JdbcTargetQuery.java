@@ -5,6 +5,7 @@ import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.migration.application.reconciliation.TargetQuery;
@@ -52,7 +53,7 @@ public class JdbcTargetQuery implements TargetQuery {
      * difference of zero for a discrepancy of a fraction — which is precisely the
      * difference an auditor asks about.
      */
-    static BigInteger exact(Object value) {
+    static @Nullable BigInteger exact(@Nullable Object value) {
         return switch (value) {
             case null -> null;
             case BigInteger exact -> exact;

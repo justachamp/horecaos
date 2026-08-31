@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import tools.jackson.databind.ObjectMapper;
@@ -64,25 +65,6 @@ public class JdbcMigrationScopeStore implements MigrationScopeStore {
     /**
      * {@inheritDoc}
      *
-     * <p>Exact at one specificity, never a fallback: which of {@code brandId} and
-     * {@code locationId} is null decides which of the three {@code
-     * ux_scope_claim_*} partial unique indexes this probes, so each call is a
-     * unique index lookup rather than a scan. The precedence between the three
-     * levels is {@code MigrationOwnershipService}'s to apply, and walking up to a
-     * broader level here would put that order in two places.
-     *
-     * <p>The nulls are matched with {@code IS NULL} and not {@code =}, as the
-     * port requires. A {@code brand_id = NULL} predicate is never true, so the
-     * tenant-wide probe would silently return nothing and every capability on an
-     * enrolled tenant would answer as unmanaged — the gate failing open, quietly.
-     *
-     * <p>No branch filters on state. A RETIRED scope keeps its claim, because a
-     * resolver choosing between a retired row and a live row at one specificity
-     * is choosing between two writers.
-     */
-    /**
-     * {@inheritDoc}
-     *
      * <p>{@code FOR SHARE} and not {@code FOR UPDATE}. Every gated write in the
      * platform passes through here, so an exclusive lock would serialise all of a
      * tenant's checkouts against each other for no benefit — they are not in
@@ -100,8 +82,28 @@ public class JdbcMigrationScopeStore implements MigrationScopeStore {
                 .optional();
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Exact at one specificity, never a fallback: which of {@code brandId} and
+     * {@code locationId} is null decides which of the three {@code
+     * ux_scope_claim_*} partial unique indexes this probes, so each call is a
+     * unique index lookup rather than a scan. The precedence between the three
+     * levels is {@code MigrationOwnershipService}'s to apply, and walking up to a
+     * broader level here would put that order in two places.
+     *
+     * <p>The nulls are matched with {@code IS NULL} and not {@code =}, as the
+     * port requires. A {@code brand_id = NULL} predicate is never true, so the
+     * tenant-wide probe would silently return nothing and every capability on an
+     * enrolled tenant would answer as unmanaged — the gate failing open, quietly.
+     *
+     * <p>No branch filters on state. A RETIRED scope keeps its claim, because a
+     * resolver choosing between a retired row and a live row at one specificity
+     * is choosing between two writers.
+     */
     @Override
-    public Optional<ScopeRow> findClaim(UUID tenantId, MigrationCapability capability, UUID brandId, UUID locationId) {
+    public Optional<ScopeRow> findClaim(
+            UUID tenantId, MigrationCapability capability, @Nullable UUID brandId, @Nullable UUID locationId) {
 
         String narrowing = locationId != null
                 ? " AND location_id = :locationId"

@@ -6,9 +6,11 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -76,13 +78,13 @@ public class PaymentAttemptService {
     private static final Duration UNCERTAINTY_DEADLINE = Duration.ofHours(2);
 
     /**
-     * Payme's transaction timeout, verbatim: 43,200,000 milliseconds.
+     * Payme's transaction timeout: 12 hours, Payme's own 43,200,000 milliseconds.
      *
      * <p>Measured from Payme's {@code params.time} and never from HorecaOS's own
      * creation time. Click imposes no expiry at all, so on Click the equivalent is
      * HorecaOS's reservation timeout and the provider is never told.
      */
-    public static final Duration PAYME_TRANSACTION_TIMEOUT = Duration.ofMillis(43_200_000L);
+    public static final Duration PAYME_TRANSACTION_TIMEOUT = Duration.ofHours(12);
 
     /**
      * What a settlement records as having settled a tender on a capture.
@@ -129,7 +131,8 @@ public class PaymentAttemptService {
         // that happened to hold a transaction of its own would otherwise roll
         // that record back with the exception, leaving a possibly-created invoice
         // with nothing named to resolve it.
-        this.independently = new TransactionTemplate(unitOfWork.getTransactionManager());
+        this.independently = new TransactionTemplate(Objects.requireNonNull(
+                unitOfWork.getTransactionManager(), "unitOfWork must already carry a transaction manager"));
         this.independently.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.providers =
                 providerPorts.stream().collect(Collectors.toMap(PaymentProviderPort::providerType, port -> port));
@@ -327,13 +330,13 @@ public class PaymentAttemptService {
             PaymentTransactionType type,
             PaymentAttemptStatus to,
             SomAmount amount,
-            String providerReference,
-            ProviderEvidence evidence,
-            String externalPaymentId,
-            String externalDocumentId,
+            @Nullable String providerReference,
+            @Nullable ProviderEvidence evidence,
+            @Nullable String externalPaymentId,
+            @Nullable String externalDocumentId,
             Instant occurredAt,
-            String protectedRequestReference,
-            String protectedResponseReference) {
+            @Nullable String protectedRequestReference,
+            @Nullable String protectedResponseReference) {
         PaymentAttemptStateMachine.require(attempt.status(), to);
 
         Instant now = clock.instant();
@@ -384,7 +387,7 @@ public class PaymentAttemptService {
      * this.
      */
     @Transactional
-    public void markUncertain(PaymentAttempt attempt, String failureCode) {
+    public void markUncertain(PaymentAttempt attempt, @Nullable String failureCode) {
         Instant now = clock.instant();
         UncertaintyResolver resolver = UncertaintyResolver.forProvider(attempt.providerType());
         attempts.markUncertain(
@@ -430,8 +433,10 @@ public class PaymentAttemptService {
             return attempt.status();
         }
 
-        Optional<ProviderBinding> binding =
-                bindings.resolve(attempt.tenantId(), sellerOf(attempt), attempt.providerType(), attempt.businessDate());
+        Optional<UUID> seller = sellerOf(attempt);
+        Optional<ProviderBinding> binding = seller.isEmpty()
+                ? Optional.empty()
+                : bindings.resolve(attempt.tenantId(), seller.get(), attempt.providerType(), attempt.businessDate());
         PaymentProviderPort provider = providers.get(attempt.providerType());
 
         if (binding.isEmpty() || provider == null) {
@@ -606,10 +611,8 @@ public class PaymentAttemptService {
         });
     }
 
-    private UUID sellerOf(PaymentAttempt attempt) {
-        return intents.find(attempt.tenantId(), attempt.intentId())
-                .map(PaymentIntent::legalEntityId)
-                .orElse(null);
+    private Optional<UUID> sellerOf(PaymentAttempt attempt) {
+        return intents.find(attempt.tenantId(), attempt.intentId()).flatMap(PaymentIntent::legalEntity);
     }
 
     /**

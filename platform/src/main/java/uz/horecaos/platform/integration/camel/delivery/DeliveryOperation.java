@@ -2,6 +2,7 @@ package uz.horecaos.platform.integration.camel.delivery;
 
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.integration.api.delivery.DeliveryCapability;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.DeliveryRequest;
 import uz.horecaos.platform.integration.api.provider.BindingRef;
@@ -14,17 +15,23 @@ import uz.horecaos.platform.integration.api.provider.BindingRef;
  * retry must reuse this exact command rather than build an equivalent one — a
  * fresh id would defeat the provider-side deduplication the retry depends on.
  *
+ * @param request            required only for a capability that builds a
+ *                           shipment from scratch (quote, reserve, create,
+ *                           schedule); null on every operation that instead
+ *                           names an existing one by reference
  * @param externalReference the provider's own id, required by every operation
  *                          except quote and create
+ * @param reason             a human-readable cancellation reason; only ever
+ *                           meaningful on {@link DeliveryCapability#CANCEL_SHIPMENT}
  */
 public record DeliveryOperation(
         UUID commandId,
         UUID tenantId,
         BindingRef binding,
         DeliveryCapability capability,
-        DeliveryRequest request,
-        String externalReference,
-        String reason,
+        @Nullable DeliveryRequest request,
+        @Nullable String externalReference,
+        @Nullable String reason,
         String correlationId) {
 
     public DeliveryOperation {

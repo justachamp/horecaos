@@ -3,6 +3,7 @@ package uz.horecaos.platform.pricing.api;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A priced cart as stored, in the shape an order copies from (ADR 0018).
@@ -14,13 +15,16 @@ import java.util.UUID;
  * <p>The line descriptions here are already snapshots taken at pricing time. An
  * order copies them rather than re-reading the menu, so a dish renamed next
  * month does not change what last week's receipt says was bought.
+ *
+ * @param customerAccountId null for a guest cart, which has no account to price
+ *                          loyalty or account-scoped terms against
  */
 public record QuoteSnapshot(
         UUID quoteId,
         UUID tenantId,
         UUID brandId,
         UUID locationId,
-        UUID customerAccountId,
+        @Nullable UUID customerAccountId,
         String currency,
         Status status,
         UUID catalogPublicationId,
@@ -46,7 +50,11 @@ public record QuoteSnapshot(
         adjustments = List.copyOf(adjustments);
     }
 
-    /** @param lineKey the cart's stable line key, so lines match up without relying on order */
+    /**
+     * One item line of a priced cart.
+     *
+     * @param lineKey the cart's stable line key, so lines match up without relying on order
+     */
     public record Line(
             String lineKey,
             UUID variantId,
@@ -66,11 +74,11 @@ public record QuoteSnapshot(
      */
     public record Adjustment(
             int sequence,
-            String lineKey,
+            @Nullable String lineKey,
             String adjustmentType,
             String sourceType,
             UUID sourceId,
-            Integer sourceVersion,
+            @Nullable Integer sourceVersion,
             long amountMinor,
             String descriptionCode) {}
 }

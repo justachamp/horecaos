@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Locale;
@@ -581,7 +582,7 @@ class CustomerSessionSurfaceTests {
                 VALUES (:id, :tenantId, 1, :mode, TIMESTAMPTZ '2020-01-01T00:00:00Z')
                 ON CONFLICT DO NOTHING
                 """)
-                .param("id", UUID.nameUUIDFromBytes(id.toString().getBytes()))
+                .param("id", UUID.nameUUIDFromBytes(id.toString().getBytes(StandardCharsets.UTF_8)))
                 .param("tenantId", id)
                 .param("mode", identityMode)
                 .update();

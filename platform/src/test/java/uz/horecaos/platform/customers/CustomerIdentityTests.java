@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -995,7 +996,12 @@ class CustomerIdentityTests {
     }
 
     private static void insertLegacyAddress(
-            JdbcClient client, UUID id, UUID tenantId, UUID accountId, Double latitude, Double longitude) {
+            JdbcClient client,
+            UUID id,
+            UUID tenantId,
+            UUID accountId,
+            @Nullable Double latitude,
+            @Nullable Double longitude) {
         client.sql("""
                 INSERT INTO customer.addresses (
                     id, tenant_id, customer_account_id, label, encrypted_fields,
@@ -1069,7 +1075,11 @@ class CustomerIdentityTests {
     }
 
     private void insertIdentityPolicy(
-            UUID tenantId, int version, CustomerIdentityPolicy mode, Instant effectiveFrom, Instant supersededAt) {
+            UUID tenantId,
+            int version,
+            CustomerIdentityPolicy mode,
+            Instant effectiveFrom,
+            @Nullable Instant supersededAt) {
         jdbc.sql("""
                 INSERT INTO tenant.customer_identity_policies (
                     id, tenant_id, version, identity_mode, effective_from, superseded_at)

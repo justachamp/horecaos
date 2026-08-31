@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.pos.api.CapabilitySnapshot;
 import uz.horecaos.platform.pos.api.PosCapability;
@@ -111,8 +112,8 @@ public interface PosAdapter {
     record PosContext(
             UUID tenantId,
             UUID installationId,
-            UUID bindingId,
-            String externalVenueReference,
+            @Nullable UUID bindingId,
+            @Nullable String externalVenueReference,
             Map<String, String> configuration,
             String correlationId) {
 
@@ -120,7 +121,7 @@ public interface PosAdapter {
             configuration = Map.copyOf(configuration == null ? Map.of() : configuration);
         }
 
-        public String config(String key, String fallback) {
+        public @Nullable String config(String key, @Nullable String fallback) {
             return configuration.getOrDefault(key, fallback);
         }
     }
@@ -148,7 +149,7 @@ public interface PosAdapter {
      *                        while an order auto-accepted and auto-sent to a
      *                        station is already food
      */
-    record ExportResult(ProviderOutcome outcome, String externalOrderId, boolean approvalPending) {}
+    record ExportResult(ProviderOutcome outcome, @Nullable String externalOrderId, boolean approvalPending) {}
 
     /**
      * What to look for when discovering whether an uncertain export landed.
@@ -164,8 +165,8 @@ public interface PosAdapter {
      *                             order is not a candidate
      */
     record ExportProbe(
-            String correlationReference,
-            String customerPhone,
+            @Nullable String correlationReference,
+            @Nullable String customerPhone,
             String lineFingerprint,
             List<uz.horecaos.platform.pos.domain.LineFingerprint.Line> lines,
             Instant windowStart,
@@ -203,7 +204,7 @@ public interface PosAdapter {
      */
     record OrderExport(
             UUID orderId,
-            String correlationReference,
+            @Nullable String correlationReference,
             String publicOrderNumber,
             Customer customer,
             List<Line> lines,
@@ -211,7 +212,7 @@ public interface PosAdapter {
             String currency,
             String fulfillmentMode,
             boolean requireProviderApproval,
-            Instant placedAt) {
+            @Nullable Instant placedAt) {
 
         public OrderExport {
             lines = List.copyOf(lines == null ? List.of() : lines);
@@ -223,7 +224,11 @@ public interface PosAdapter {
             return "OrderExport[order=" + orderId + ", lines=" + lines.size() + "]";
         }
 
-        public record Customer(String externalCustomerId, String name, String phone, String address) {
+        public record Customer(
+                @Nullable String externalCustomerId,
+                @Nullable String name,
+                @Nullable String phone,
+                @Nullable String address) {
 
             @Override
             public String toString() {

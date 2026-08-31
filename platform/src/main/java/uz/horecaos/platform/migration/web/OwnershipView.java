@@ -1,6 +1,7 @@
 package uz.horecaos.platform.migration.web;
 
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.migration.api.CapabilityOwnership;
 import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.domain.ReadMode;
@@ -23,7 +24,7 @@ import uz.horecaos.platform.migration.domain.WriteMode;
  *                scope at all
  */
 public record OwnershipView(
-        UUID scopeId,
+        @Nullable UUID scopeId,
         MigrationCapability capability,
         ScopeState state,
         WriteMode writeMode,

@@ -5,6 +5,7 @@ import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -49,7 +50,7 @@ public class JdbcLegacyQuery implements LegacyQuery {
         return jdbc.sql(sql).params(parameters).query().listOfRows();
     }
 
-    private static BigInteger exact(Object value) {
+    private static @Nullable BigInteger exact(@Nullable Object value) {
         return switch (value) {
             case null -> null;
             case BigInteger exact -> exact;

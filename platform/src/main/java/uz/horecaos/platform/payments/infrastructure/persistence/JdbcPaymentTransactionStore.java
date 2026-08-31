@@ -8,6 +8,7 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -150,9 +151,14 @@ public class JdbcPaymentTransactionStore {
                 providerState == null
                         ? null
                         : new ProviderEvidence(
-                                providerState, row.getString("provider_reason"), instant(row, "recorded_at")),
-                instant(row, "occurred_at"),
-                instant(row, "recorded_at"),
+                                providerState,
+                                row.getString("provider_reason"),
+                                Objects.requireNonNull(
+                                        instant(row, "recorded_at"), "payment_transactions.recorded_at is NOT NULL")),
+                Objects.requireNonNull(
+                        instant(row, "occurred_at"), "payment_transactions.occurred_at is NOT NULL"),
+                Objects.requireNonNull(
+                        instant(row, "recorded_at"), "payment_transactions.recorded_at is NOT NULL"),
                 row.getString("protected_request_reference"),
                 row.getString("protected_response_reference"));
     }

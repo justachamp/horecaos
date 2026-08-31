@@ -9,6 +9,7 @@ import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.integration.api.delivery.DeliveryCapability;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
+import uz.horecaos.platform.integration.outbox.ReconciliationRequester;
 import uz.horecaos.platform.integration.outbox.ShipmentReconciliationOutbox;
 
 /**
@@ -28,13 +29,19 @@ public class DeliveryProcessor {
     private final DeliveryGateway gateway;
     private final DeliveryCircuitBreakers breakers;
     private final MeterRegistry meters;
-    private final ShipmentReconciliationOutbox reconciliations;
+    private final ReconciliationRequester reconciliations;
 
+    /**
+     * Depends on {@link ReconciliationRequester} rather than
+     * {@link ShipmentReconciliationOutbox} itself: this class only ever asks for a
+     * reconciliation, never appends a settlement, and the narrower type is what
+     * lets a route test substitute a recording double with no database behind it.
+     */
     public DeliveryProcessor(
             DeliveryGateway gateway,
             DeliveryCircuitBreakers breakers,
             MeterRegistry meters,
-            ShipmentReconciliationOutbox reconciliations) {
+            ReconciliationRequester reconciliations) {
         this.gateway = gateway;
         this.breakers = breakers;
         this.meters = meters;

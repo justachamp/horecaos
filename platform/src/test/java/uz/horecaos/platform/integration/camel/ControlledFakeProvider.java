@@ -149,9 +149,11 @@ public final class ControlledFakeProvider implements AutoCloseable {
             case ACCEPTED_THEN_TIMEOUT -> {
                 // The dangerous one: the effect happens and the caller never
                 // learns it did.
-                String reference = idempotencyKey == null
-                        ? newReference()
-                        : idempotentResponses.computeIfAbsent(idempotencyKey, key -> newReference());
+                if (idempotencyKey == null) {
+                    newReference();
+                } else {
+                    idempotentResponses.computeIfAbsent(idempotencyKey, key -> newReference());
+                }
                 sleep(3_000);
                 exchange.close();
             }

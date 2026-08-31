@@ -9,6 +9,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -187,6 +188,8 @@ public class ApprovalPolicyController {
     }
 
     /**
+     * Request to author a new maker-checker policy version for an action.
+     *
      * @param scopeType                  the level the policy governs
      * @param brandId                    required for BRAND and LOCATION policies
      * @param locationId                 required for LOCATION policies
@@ -205,23 +208,27 @@ public class ApprovalPolicyController {
     public record AuthorPolicyRequest(
             @NotBlank @Size(max = 128) String actionCode,
             @NotBlank String scopeType,
-            UUID brandId,
-            UUID locationId,
+            @Nullable UUID brandId,
+            @Nullable UUID locationId,
 
             @NotBlank @Size(max = ApprovalPolicyService.MAXIMUM_THRESHOLD_LENGTH)
             String thresholdDescription,
 
             @NotBlank @Size(max = 128) String requiredApproverCapability,
-            Instant validFrom,
+            @Nullable Instant validFrom,
             @NotBlank @Size(max = 1000) String reason) {}
 
     /**
+     * Request to end an active policy version.
+     *
      * @param effectiveAt when the threshold stops applying, or absent for now
      */
     public record EndPolicyRequest(
-            Instant effectiveAt, @NotBlank @Size(max = 1000) String reason) {}
+            @Nullable Instant effectiveAt, @NotBlank @Size(max = 1000) String reason) {}
 
     /**
+     * A policy version as returned to a console.
+     *
      * @param governsNow whether this version is the one an action resolving right
      *                   now would find, so an operator reading the list does not
      *                   have to compare two timestamps to answer the only question
@@ -231,13 +238,13 @@ public class ApprovalPolicyController {
             UUID id,
             String actionCode,
             String scopeType,
-            UUID brandId,
-            UUID locationId,
+            @Nullable UUID brandId,
+            @Nullable UUID locationId,
             boolean legacyScopeWide,
             String thresholdDescription,
             String requiredApproverCapability,
             Instant validFrom,
-            Instant validUntil,
+            @Nullable Instant validUntil,
             int version,
             String authoredBy,
             Instant createdAt,

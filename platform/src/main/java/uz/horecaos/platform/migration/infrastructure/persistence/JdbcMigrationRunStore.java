@@ -10,8 +10,10 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import tools.jackson.databind.ObjectMapper;
@@ -190,8 +192,8 @@ public class JdbcMigrationRunStore implements MigrationRunStore {
     public boolean checkpoint(
             UUID tenantId,
             UUID runId,
-            String sourceWatermark,
-            String targetWatermark,
+            @Nullable String sourceWatermark,
+            @Nullable String targetWatermark,
             Map<String, Object> checkpoint,
             Counters totals) {
         return jdbc.sql("""
@@ -255,7 +257,12 @@ public class JdbcMigrationRunStore implements MigrationRunStore {
      */
     @Override
     public Optional<Integer> finish(
-            UUID tenantId, UUID runId, RunStatus terminal, String checksum, int expectedVersion, Instant finishedAt) {
+            UUID tenantId,
+            UUID runId,
+            RunStatus terminal,
+            @Nullable String checksum,
+            int expectedVersion,
+            Instant finishedAt) {
         return jdbc.sql("""
                 UPDATE migration.runs
                 SET status = :status,
@@ -280,7 +287,7 @@ public class JdbcMigrationRunStore implements MigrationRunStore {
      * A watermark is opaque and may legitimately be absent — a backfill that has
      * not yet read a page has none — so a HashMap rather than {@code Map.of}.
      */
-    private static Map<String, Object> watermarks(String source, String target) {
+    private static Map<String, Object> watermarks(@Nullable String source, @Nullable String target) {
         Map<String, Object> params = new HashMap<>();
         params.put("sourceWatermark", source);
         params.put("targetWatermark", target);
@@ -324,7 +331,11 @@ public class JdbcMigrationRunStore implements MigrationRunStore {
                 row.getString("started_by"),
                 row.getString("idempotency_key"),
                 row.getInt("version"),
-                instantOrNull(row, "started_at"),
+                // started_at is NOT NULL DEFAULT now() (V0024), unlike the program's
+                // start time; instantOrNull is still the right reader since it is the
+                // one column accessor this package has, but the column itself never
+                // is.
+                Objects.requireNonNull(instantOrNull(row, "started_at")),
                 instantOrNull(row, "finished_at"));
     }
 }

@@ -7,6 +7,7 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -181,7 +182,7 @@ public class ServiceScheduleService {
                                 : command.effectiveUntil().toString());
     }
 
-    private UUID actorId() {
+    private @Nullable UUID actorId() {
         try {
             return UUID.fromString(currentActor.get().subject());
         } catch (IllegalArgumentException notAUuid) {
@@ -200,5 +201,6 @@ public class ServiceScheduleService {
 
     public record CreateScheduleCommand(String name, boolean acceptsScheduledOrders, List<WeeklySchedule.Rule> rules) {}
 
-    public record ChangeServiceStateCommand(ServiceMode mode, String reasonCode, String note, Instant effectiveUntil) {}
+    public record ChangeServiceStateCommand(
+            ServiceMode mode, @Nullable String reasonCode, @Nullable String note, @Nullable Instant effectiveUntil) {}
 }

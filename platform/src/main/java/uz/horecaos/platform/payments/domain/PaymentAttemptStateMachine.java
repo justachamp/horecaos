@@ -62,6 +62,8 @@ public final class PaymentAttemptStateMachine {
     }
 
     /**
+     * Throws unless {@code from -> to} is a permitted transition.
+     *
      * @throws IllegalStateException naming both states, because the message is
      *                               read by whoever is holding a customer on the
      *                               phone about a payment

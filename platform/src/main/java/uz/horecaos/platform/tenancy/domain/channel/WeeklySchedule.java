@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A named timetable, evaluated in local wall-clock time (ADR 0036).
@@ -19,7 +20,8 @@ import java.util.Optional;
  * exception, the first opening thirteen days away — be tested without a database
  * and without waiting for the clock.
  */
-public record WeeklySchedule(List<Rule> rules, Map<LocalDate, Exception> exceptions, boolean acceptsScheduledOrders) {
+public record WeeklySchedule(
+        List<Rule> rules, Map<LocalDate, DatedException> exceptions, boolean acceptsScheduledOrders) {
 
     /**
      * How far forward {@link #nextOpeningAtOrAfter} will look.
@@ -51,14 +53,14 @@ public record WeeklySchedule(List<Rule> rules, Map<LocalDate, Exception> excepti
     }
 
     /** A dated override of one calendar date. */
-    public record Exception(boolean closedAllDay, LocalTime opensAt, LocalTime closesAt) {
+    public record DatedException(boolean closedAllDay, @Nullable LocalTime opensAt, @Nullable LocalTime closesAt) {
 
-        public static Exception closed() {
-            return new Exception(true, null, null);
+        public static DatedException closed() {
+            return new DatedException(true, null, null);
         }
 
-        public static Exception open(LocalTime opensAt, LocalTime closesAt) {
-            return new Exception(
+        public static DatedException open(LocalTime opensAt, LocalTime closesAt) {
+            return new DatedException(
                     false,
                     Objects.requireNonNull(opensAt, "An open exception needs an opening time"),
                     Objects.requireNonNull(closesAt, "An open exception needs a closing time"));
@@ -75,7 +77,7 @@ public record WeeklySchedule(List<Rule> rules, Map<LocalDate, Exception> excepti
 
     /** Whether a dated exception closes this date outright (resolver rule 5). */
     public boolean closedByExceptionOn(LocalDate date) {
-        Exception exception = exceptions.get(date);
+        DatedException exception = exceptions.get(date);
         return exception != null && exception.closedAllDay();
     }
 
@@ -124,11 +126,17 @@ public record WeeklySchedule(List<Rule> rules, Map<LocalDate, Exception> excepti
      * opposite of what the operator asked for.
      */
     private List<Window> windowsOn(LocalDate date) {
-        Exception exception = exceptions.get(date);
+        DatedException exception = exceptions.get(date);
         if (exception != null) {
+            // The DatedException invariant: opensAt/closesAt are present exactly
+            // when closedAllDay is false — enforced by closed() and open() above,
+            // so a non-closedAllDay exception always carries both times.
             return exception.closedAllDay()
                     ? List.of()
-                    : List.of(window(date, exception.opensAt(), exception.closesAt()));
+                    : List.of(window(
+                            date,
+                            Objects.requireNonNull(exception.opensAt()),
+                            Objects.requireNonNull(exception.closesAt())));
         }
         int day = date.getDayOfWeek().getValue();
         return rules.stream()

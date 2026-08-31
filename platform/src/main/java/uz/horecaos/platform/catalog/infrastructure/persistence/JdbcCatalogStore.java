@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import tools.jackson.databind.ObjectMapper;
@@ -85,7 +86,7 @@ public class JdbcCatalogStore {
             UUID tenantId,
             UUID brandId,
             UUID productId,
-            String sku,
+            @Nullable String sku,
             String unitCode,
             boolean isDefault,
             int sortOrder,
@@ -114,7 +115,7 @@ public class JdbcCatalogStore {
             UUID tenantId,
             UUID brandId,
             UUID catalogId,
-            UUID parentCategoryId,
+            @Nullable UUID parentCategoryId,
             String code,
             int sortOrder,
             Status status) {
@@ -281,7 +282,7 @@ public class JdbcCatalogStore {
             UUID entityId,
             String locale,
             String name,
-            String description) {
+            @Nullable String description) {
         jdbc.sql("""
                 INSERT INTO catalog.translations (
                     tenant_id, brand_id, entity_type, entity_id, locale, name, description)
@@ -379,7 +380,12 @@ public class JdbcCatalogStore {
      * three branches of an if is where the third branch gets forgotten.
      */
     public void upsertFiscalClassification(
-            UUID tenantId, UUID brandId, PriceableNode node, FiscalClassification fiscal, String source, UUID actorId) {
+            UUID tenantId,
+            UUID brandId,
+            PriceableNode node,
+            FiscalClassification fiscal,
+            String source,
+            @Nullable UUID actorId) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("id", UUID.randomUUID());
@@ -644,7 +650,7 @@ public class JdbcCatalogStore {
      * variant rather than one per (variant, category) pair.
      */
     public List<VariantAvailabilityRow> variantsAtLocation(
-            UUID tenantId, UUID brandId, UUID locationId, String locale, UUID cursorVariantId, int limit) {
+            UUID tenantId, UUID brandId, UUID locationId, String locale, @Nullable UUID cursorVariantId, int limit) {
         return jdbc.sql("""
                 SELECT v.id AS variant_id,
                        t.name AS product_name,
@@ -888,9 +894,9 @@ public class JdbcCatalogStore {
             PublicationStatus status,
             String contentHash,
             ValidationFinding.Report report,
-            UUID actorId,
+            @Nullable UUID actorId,
             Instant createdAt,
-            Instant activatedAt) {
+            @Nullable Instant activatedAt) {
         jdbc.sql("""
                 INSERT INTO catalog.publications (
                     id, tenant_id, brand_id, catalog_id, channel, status, content_hash,
@@ -1133,13 +1139,17 @@ public class JdbcCatalogStore {
      *                     inventory.stock_items} row at this location at all
      */
     public record VariantAvailabilityRow(
-            UUID variantId, String productName, String categoryName, boolean available, String trackingMode) {}
+            UUID variantId,
+            String productName,
+            @Nullable String categoryName,
+            boolean available,
+            @Nullable String trackingMode) {}
 
     public record PublicationRow(
             UUID id, PublicationStatus status, String contentHash, UUID catalogId, String channel) {}
 
     public record TranslationRow(
-            EntityType entityType, UUID entityId, String locale, String name, String description) {}
+            EntityType entityType, UUID entityId, String locale, String name, @Nullable String description) {}
 
     public record MediaRelationRow(EntityType entityType, UUID entityId, UUID mediaAssetId, String role) {}
 }

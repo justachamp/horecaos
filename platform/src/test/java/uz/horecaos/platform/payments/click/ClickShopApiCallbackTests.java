@@ -9,6 +9,7 @@ import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.AfterAll;
@@ -471,8 +472,9 @@ class ClickShopApiCallbackTests {
         MerchantApiCall submitted = transport.calls().getFirst();
         assertThat(submitted.path()).isEqualTo("/payment/ofd_data/submit_items");
         @SuppressWarnings("unchecked")
-        List<Map<String, Object>> items =
-                (List<Map<String, Object>>) submitted.body().get("items");
+        List<Map<String, Object>> items = Objects.requireNonNull(
+                (List<Map<String, Object>>) submitted.body().get("items"),
+                "submit_items must always carry an items array");
         // Two units at 400 som: the line total is 800 som, which is 80,000 tiyin.
         // Click's Price is the line total and Payme's price is the unit price — the
         // same word, a factor of quantity apart.
@@ -1031,7 +1033,6 @@ class ClickShopApiCallbackTests {
         }
     }
 
-    /** The outbound half, faked: what the adapter sent, and what it was told. */
     /** Collects the events {@code PaymentAttemptService} publishes on a capture. */
     private static final class RecordingEventPublisher implements ApplicationEventPublisher {
 
@@ -1050,6 +1051,7 @@ class ClickShopApiCallbackTests {
         }
     }
 
+    /** The outbound half, faked: what the adapter sent, and what it was told. */
     private static final class RecordingTransport implements MerchantApiTransport {
 
         private final List<MerchantApiCall> calls = new CopyOnWriteArrayList<>();

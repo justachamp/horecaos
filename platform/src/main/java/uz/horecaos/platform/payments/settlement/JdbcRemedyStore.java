@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.payments.api.EntitlementBenefit;
@@ -60,14 +61,14 @@ public class JdbcRemedyStore {
             long attestedMoneyMinor,
             long platformSettledMinor,
             SettlementBasis settlementBasis,
-            ExecutionChannel executionChannel,
-            String providerReference,
-            String executedBy,
-            Instant executedAt,
+            @Nullable ExecutionChannel executionChannel,
+            @Nullable String providerReference,
+            @Nullable String executedBy,
+            @Nullable Instant executedAt,
             VerificationState verificationState,
-            String verificationSource,
-            Instant verifiedAt,
-            Long deliveryFeeBasisMinor,
+            @Nullable String verificationSource,
+            @Nullable Instant verifiedAt,
+            @Nullable Long deliveryFeeBasisMinor,
             String recordedBy,
             Instant recordedAt,
             UUID approvalRequestId,
@@ -527,12 +528,12 @@ public class JdbcRemedyStore {
                 row.getInt("version"));
     }
 
-    private static Instant instant(ResultSet row, String column) throws SQLException {
+    private static @Nullable Instant instant(ResultSet row, String column) throws SQLException {
         OffsetDateTime value = row.getObject(column, OffsetDateTime.class);
         return value == null ? null : value.toInstant();
     }
 
-    private static OffsetDateTime utc(Instant instant) {
+    private static @Nullable OffsetDateTime utc(@Nullable Instant instant) {
         return instant == null ? null : instant.atOffset(ZoneOffset.UTC);
     }
 }

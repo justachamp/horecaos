@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.courier.domain.CostBasis;
@@ -198,7 +199,12 @@ public class JdbcDeliveryCostStore {
     }
 
     public boolean matchLine(
-            UUID tenantId, UUID lineId, UUID shipmentId, MatchStatus status, Long varianceMinor, String reasonCode) {
+            UUID tenantId,
+            UUID lineId,
+            @Nullable UUID shipmentId,
+            MatchStatus status,
+            @Nullable Long varianceMinor,
+            @Nullable String reasonCode) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
@@ -261,32 +267,46 @@ public class JdbcDeliveryCostStore {
 
     // -------------------------------------------------------------------- rows
 
+    /**
+     * One recognised cost, on one path at one basis.
+     *
+     * <p>{@code legalEntityId} is null until ADR 0038's registry resolves one;
+     * {@code sourceId} where the source is a partner booking with no local row;
+     * the courier and provider identify whichever path the line is on, so each
+     * is null on the other's lines; {@code supersedesLineId} only on a
+     * correction.
+     */
     public record CostLineRow(
             UUID id,
             UUID tenantId,
             UUID shipmentId,
-            UUID legalEntityId,
+            @Nullable UUID legalEntityId,
             LocalDate businessDate,
             CostPath costPath,
             CostBasis costBasis,
             long amountMinor,
             String currency,
             String sourceType,
-            UUID sourceId,
-            UUID courierId,
-            String providerCode,
+            @Nullable UUID sourceId,
+            @Nullable UUID courierId,
+            @Nullable String providerCode,
             Instant recognisedAt,
-            UUID supersedesLineId,
+            @Nullable UUID supersedesLineId,
             String recordedBy) {}
 
     public record PathTotal(CostPath costPath, String currency, long totalMinor, int shipmentCount) {}
 
+    /**
+     * A partner invoice as imported.
+     *
+     * @param legalEntityId null until ADR 0038's registry can resolve one
+     */
     public record InvoiceRow(
             UUID id,
             UUID tenantId,
             String providerCode,
             String providerInvoiceRef,
-            UUID legalEntityId,
+            @Nullable UUID legalEntityId,
             LocalDate periodStart,
             LocalDate periodEnd,
             long totalMinor,
@@ -294,18 +314,25 @@ public class JdbcDeliveryCostStore {
             String status,
             String importedBy) {}
 
+    /**
+     * One line of a partner invoice.
+     *
+     * <p>{@code shipmentId} is null until matching resolves the partner's own
+     * reference, and stays null on an {@code UNMATCHED_LINE}; the variance and
+     * its reason exist only where matching found one.
+     */
     public record InvoiceLineRow(
             UUID id,
             UUID tenantId,
             UUID invoiceId,
             String providerShipmentRef,
-            UUID shipmentId,
+            @Nullable UUID shipmentId,
             long amountMinor,
             String currency,
             PartnerChargeType chargeType,
             MatchStatus matchStatus,
-            Long varianceMinor,
-            String reasonCode) {}
+            @Nullable Long varianceMinor,
+            @Nullable String reasonCode) {}
 
     // ----------------------------------------------------------------- mapping
 
@@ -339,7 +366,9 @@ public class JdbcDeliveryCostStore {
                 rs.getObject("source_id", UUID.class),
                 rs.getObject("courier_id", UUID.class),
                 rs.getString("provider_code"),
-                JdbcCourierStore.instant(rs.getObject("recognised_at", OffsetDateTime.class)),
+                // recognised_at is NOT NULL: every insert stamps the recognition instant.
+                java.util.Objects.requireNonNull(
+                        JdbcCourierStore.instant(rs.getObject("recognised_at", OffsetDateTime.class))),
                 rs.getObject("supersedes_line_id", UUID.class),
                 rs.getString("recorded_by"));
     }

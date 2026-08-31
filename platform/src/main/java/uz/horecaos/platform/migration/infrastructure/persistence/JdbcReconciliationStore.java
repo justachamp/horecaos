@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.migration.application.MigrationReconciliationStore;
@@ -324,20 +325,20 @@ public class JdbcReconciliationStore implements MigrationReconciliationStore {
      */
     public record ReconciliationMeasure(
             String kind,
-            BigInteger expected,
-            BigInteger actual,
-            Currency currency,
-            String expectedChecksum,
-            String actualChecksum) {
+            @Nullable BigInteger expected,
+            @Nullable BigInteger actual,
+            @Nullable Currency currency,
+            @Nullable String expectedChecksum,
+            @Nullable String actualChecksum) {
 
-        public static ReconciliationMeasure count(BigInteger expected, BigInteger actual) {
+        public static ReconciliationMeasure count(@Nullable BigInteger expected, @Nullable BigInteger actual) {
             Objects.requireNonNull(expected, "A count rule compares an expected value");
             Objects.requireNonNull(actual, "A count rule compares an actual value");
             return new ReconciliationMeasure("COUNT", expected, actual, null, null, null);
         }
 
         public static ReconciliationMeasure amount(
-                BigInteger expectedMinor, BigInteger actualMinor, Currency currency) {
+                @Nullable BigInteger expectedMinor, @Nullable BigInteger actualMinor, Currency currency) {
             Objects.requireNonNull(expectedMinor, "An amount rule compares an expected value");
             Objects.requireNonNull(actualMinor, "An amount rule compares an actual value");
             Objects.requireNonNull(currency, "An amount is meaningless without its currency");
@@ -350,9 +351,17 @@ public class JdbcReconciliationStore implements MigrationReconciliationStore {
             return new ReconciliationMeasure("CHECKSUM", null, null, null, expected, actual);
         }
 
-        /** Whether the two sides agreed, whichever way this rule compares them. */
+        /**
+         * Whether the two sides agreed, whichever way this rule compares them.
+         *
+         * <p>Safe without a null check here: {@code kind} decides which pair is
+         * present, and the three factories above never construct an instance
+         * missing the pair its own kind uses.
+         */
         public boolean matched() {
-            return "CHECKSUM".equals(kind) ? expectedChecksum.equals(actualChecksum) : expected.equals(actual);
+            return "CHECKSUM".equals(kind)
+                    ? Objects.requireNonNull(expectedChecksum).equals(actualChecksum)
+                    : Objects.requireNonNull(expected).equals(actual);
         }
 
         // A HashMap: whichever kind this is, four of the six columns are null by
@@ -372,6 +381,8 @@ public class JdbcReconciliationStore implements MigrationReconciliationStore {
     }
 
     /**
+     * One measured comparison, ready to be written.
+     *
      * @param scopeId     copied from the run so the cutover gate can ask its
      *                    question without a join. The composite foreign key keeps
      *                    the copy honest: a result cannot name a scope its own run
@@ -394,10 +405,12 @@ public class JdbcReconciliationStore implements MigrationReconciliationStore {
             String dimensionKey,
             ReconciliationSeverity severity,
             ReconciliationMeasure measure,
-            String sampleReference,
+            @Nullable String sampleReference,
             Instant evaluatedAt) {}
 
     /**
+     * One measured comparison as stored, with its settlement if it has one.
+     *
      * @param difference the stored difference, read back rather than recomputed,
      *                   because it is the figure the approval was given against.
      *                   Null for a checksum rule, which has no numeric sides
@@ -412,12 +425,12 @@ public class JdbcReconciliationStore implements MigrationReconciliationStore {
             String dimensionKey,
             ReconciliationSeverity severity,
             ReconciliationMeasure measure,
-            BigInteger difference,
-            String sampleReference,
+            @Nullable BigInteger difference,
+            @Nullable String sampleReference,
             ReconciliationStatus status,
-            String approvedBy,
-            Instant approvedAt,
-            Instant resolvedAt,
-            Instant createdAt,
-            Instant updatedAt) {}
+            @Nullable String approvedBy,
+            @Nullable Instant approvedAt,
+            @Nullable Instant resolvedAt,
+            @Nullable Instant createdAt,
+            @Nullable Instant updatedAt) {}
 }

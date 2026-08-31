@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -41,9 +42,6 @@ class OrderAcceptancePolicyServiceTests {
     private static final UUID SIBLING_LOCATION = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac121105");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private OrderAcceptancePolicyService service;
@@ -54,9 +52,6 @@ class OrderAcceptancePolicyServiceTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -256,11 +251,17 @@ class OrderAcceptancePolicyServiceTests {
                 true);
     }
 
-    private void activate(String scopeType, UUID brandId, UUID locationId, OrderAcceptancePolicy policy) {
+    private void activate(
+            String scopeType, @Nullable UUID brandId, @Nullable UUID locationId, OrderAcceptancePolicy policy) {
         activate(scopeType, brandId, locationId, policy, 1);
     }
 
-    private void activate(String scopeType, UUID brandId, UUID locationId, OrderAcceptancePolicy policy, int version) {
+    private void activate(
+            String scopeType,
+            @Nullable UUID brandId,
+            @Nullable UUID locationId,
+            OrderAcceptancePolicy policy,
+            int version) {
 
         UUID id = UUID.randomUUID();
         String document = """
@@ -325,7 +326,7 @@ class OrderAcceptancePolicyServiceTests {
                     """)
                     .param("id", brand)
                     .param("tenantId", TENANT)
-                    .param("code", "B" + suffix(brand).toUpperCase())
+                    .param("code", "B" + suffix(brand).toUpperCase(java.util.Locale.ROOT))
                     .param("slug", "b-" + suffix(brand))
                     .update();
         }
@@ -338,7 +339,7 @@ class OrderAcceptancePolicyServiceTests {
                     .param("id", location)
                     .param("tenantId", TENANT)
                     .param("brandId", BRAND)
-                    .param("code", "L" + suffix(location).toUpperCase())
+                    .param("code", "L" + suffix(location).toUpperCase(java.util.Locale.ROOT))
                     .param("slug", "l-" + suffix(location))
                     .update();
         }

@@ -121,6 +121,8 @@ public class LoyaltyAdjustmentService {
     }
 
     /**
+     * One operator-authored movement against one account.
+     *
      * @param amountMinor signed. Positive credits the customer; negative debits
      *                    them. There is no second account on this command and
      *                    there is no overload that takes one

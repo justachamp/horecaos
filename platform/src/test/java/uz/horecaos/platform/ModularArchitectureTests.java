@@ -52,7 +52,7 @@ class ModularArchitectureTests {
         // deciding whether an order is acceptable, rather than fulfilment.
         // Checked on imports rather than by Modulith, which allows any dependency
         // on a third-party library.
-        List<String> offenders = sourcesIn(DOMAIN_MODULES)
+        List<String> offenders = sourcesIn(DOMAIN_MODULES).stream()
                 .filter(ModularArchitectureTests::importsCamel)
                 .map(Path::toString)
                 .toList();
@@ -86,11 +86,13 @@ class ModularArchitectureTests {
         }
     }
 
-    private static Stream<Path> sourcesIn(List<String> modules) throws IOException {
+    private static List<Path> sourcesIn(List<String> modules) throws IOException {
         Path root = Path.of("src/main/java/uz/horecaos/platform");
-        return Files.walk(root)
-                .filter(path -> path.toString().endsWith(".java"))
-                .filter(path -> modules.stream().anyMatch(module -> path.startsWith(root.resolve(module))));
+        try (Stream<Path> paths = Files.walk(root)) {
+            return paths.filter(path -> path.toString().endsWith(".java"))
+                    .filter(path -> modules.stream().anyMatch(module -> path.startsWith(root.resolve(module))))
+                    .toList();
+        }
     }
 
     private static boolean importsCamel(Path source) {

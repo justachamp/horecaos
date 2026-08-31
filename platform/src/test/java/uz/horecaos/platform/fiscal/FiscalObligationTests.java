@@ -2,6 +2,7 @@ package uz.horecaos.platform.fiscal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -56,9 +57,6 @@ class FiscalObligationTests {
     private static final Instant NOW = Instant.parse("2026-08-24T09:00:00Z");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private JdbcFiscalLifecycleStore store;
@@ -77,9 +75,6 @@ class FiscalObligationTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -485,9 +480,9 @@ class FiscalObligationTests {
     }
 
     private UUID order(String seed, String providerType, String status, String intentStatus, Instant closedAt) {
-        UUID orderId = UUID.nameUUIDFromBytes(("order:" + seed).getBytes());
-        UUID cartId = UUID.nameUUIDFromBytes(("cart:" + seed).getBytes());
-        UUID quoteId = UUID.nameUUIDFromBytes(("quote:" + seed).getBytes());
+        UUID orderId = UUID.nameUUIDFromBytes(("order:" + seed).getBytes(StandardCharsets.UTF_8));
+        UUID cartId = UUID.nameUUIDFromBytes(("cart:" + seed).getBytes(StandardCharsets.UTF_8));
+        UUID quoteId = UUID.nameUUIDFromBytes(("quote:" + seed).getBytes(StandardCharsets.UTF_8));
 
         jdbc.sql("""
                 INSERT INTO ordering.carts (id, tenant_id, brand_id, location_id, channel_id,
@@ -578,7 +573,7 @@ class FiscalObligationTests {
                 VALUES (:id, :t, :o, :b, :loc, NULL, :tender, :code, :provider, 50000, 'UZS',
                     :status, :timing, :key, :settledAt, 1, :at, :at)
                 """)
-                .param("id", UUID.nameUUIDFromBytes(("intent:" + seed).getBytes()))
+                .param("id", UUID.nameUUIDFromBytes(("intent:" + seed).getBytes(StandardCharsets.UTF_8)))
                 .param("t", TENANT)
                 .param("o", orderId)
                 .param("b", BRAND)
@@ -644,14 +639,14 @@ class FiscalObligationTests {
                 VALUES (:id, :t, 'ACTIVE', 'Customer', 1, 1)
                 """).param("id", CUSTOMER).param("t", TENANT).update();
 
-        channelId = UUID.nameUUIDFromBytes("obligation-channel".getBytes());
+        channelId = UUID.nameUUIDFromBytes("obligation-channel".getBytes(StandardCharsets.UTF_8));
         jdbc.sql("""
                 INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name,
                     status, guest_orders_allowed)
                 VALUES (:id, :t, 'TELEGRAM', 'TELEGRAM', 'Telegram bot', 'ACTIVE', false)
                 """).param("id", channelId).param("t", TENANT).update();
 
-        UUID catalogId = UUID.nameUUIDFromBytes("obligation-catalog".getBytes());
+        UUID catalogId = UUID.nameUUIDFromBytes("obligation-catalog".getBytes(StandardCharsets.UTF_8));
         jdbc.sql("""
                 INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
                 VALUES (:id, :t, :b, 'MAIN', 'Main menu', 'ACTIVE')
@@ -661,7 +656,7 @@ class FiscalObligationTests {
                 .param("b", BRAND)
                 .update();
 
-        publicationId = UUID.nameUUIDFromBytes("obligation-publication".getBytes());
+        publicationId = UUID.nameUUIDFromBytes("obligation-publication".getBytes(StandardCharsets.UTF_8));
         jdbc.sql("""
                 INSERT INTO catalog.publications (id, tenant_id, brand_id, catalog_id, channel,
                     status, content_hash, activated_at)
@@ -673,8 +668,8 @@ class FiscalObligationTests {
                 .param("cat", catalogId)
                 .update();
 
-        firstCompany = UUID.nameUUIDFromBytes("company:first".getBytes());
-        secondCompany = UUID.nameUUIDFromBytes("company:second".getBytes());
+        firstCompany = UUID.nameUUIDFromBytes("company:first".getBytes(StandardCharsets.UTF_8));
+        secondCompany = UUID.nameUUIDFromBytes("company:second".getBytes(StandardCharsets.UTF_8));
         jdbc.sql("""
                 INSERT INTO tenant.legal_entities (id, tenant_id, code, legal_name, tin, status)
                 VALUES (:id, :t, 'FIRST', 'Birinchi MCHJ', '123456789', 'ACTIVE')

@@ -29,7 +29,7 @@ class PosModuleBoundaryTests {
         // ADR 0007's central rule. A route deciding whether an export landed is
         // exactly the coupling this boundary exists to prevent: that decision
         // needs to be shown to a person, and route DSL has nobody to show it to.
-        List<String> offenders = sources()
+        List<String> offenders = sources().stream()
                 .filter(path -> imports(path, "org.apache.camel"))
                 .map(Path::toString)
                 .toList();
@@ -42,7 +42,7 @@ class PosModuleBoundaryTests {
     @Test
     @DisplayName("no provider name escapes the provider package")
     void onlyTheAdapterKnowsWhoTheProviderIs() throws IOException {
-        List<String> offenders = sources()
+        List<String> offenders = sources().stream()
                 .filter(path -> !path.toString().contains("/infrastructure/clopos/"))
                 .filter(path -> {
                     String source = read(path);
@@ -63,7 +63,7 @@ class PosModuleBoundaryTests {
         // whose correctness has to be provable by reading them. A database call
         // inside either would make every assertion about them a question about
         // what was in the database at the time.
-        List<String> offenders = sources()
+        List<String> offenders = sources().stream()
                 .filter(path -> path.toString().contains("/pos/domain/"))
                 .filter(path -> imports(path, "org.springframework.jdbc")
                         || imports(path, "java.net.http")
@@ -77,13 +77,15 @@ class PosModuleBoundaryTests {
     @Test
     @DisplayName("the scan finds the files it claims to check")
     void theScanIsNotSilentlyEmpty() throws IOException {
-        assertThat(sources().count())
+        assertThat(sources())
                 .as("a scan that finds nothing would pass forever")
-                .isGreaterThan(20);
+                .hasSizeGreaterThan(20);
     }
 
-    private static Stream<Path> sources() throws IOException {
-        return Files.walk(MODULE).filter(path -> path.toString().endsWith(".java"));
+    private static List<Path> sources() throws IOException {
+        try (Stream<Path> paths = Files.walk(MODULE)) {
+            return paths.filter(path -> path.toString().endsWith(".java")).toList();
+        }
     }
 
     private static boolean imports(Path source, String prefix) {

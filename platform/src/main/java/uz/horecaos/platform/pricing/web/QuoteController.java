@@ -11,7 +11,9 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -107,11 +109,13 @@ public class QuoteController {
         var acceptance = quotes.accept(tenantId, quoteId, body.contextHash());
 
         return switch (acceptance.outcome()) {
-            case ACCEPTED ->
-                ResponseEntity.ok(new AcceptanceResponse(
-                        acceptance.outcome().name(),
-                        acceptance.total().minor(),
-                        acceptance.total().currency()));
+            case ACCEPTED -> {
+                // Only the ACCEPTED outcome carries a total (see Acceptance.accepted());
+                // requireNonNull documents that invariant for a checker that cannot see
+                // across the switch on its own.
+                var total = Objects.requireNonNull(acceptance.total(), "an ACCEPTED acceptance always carries a total");
+                yield ResponseEntity.ok(new AcceptanceResponse(acceptance.outcome().name(), total.minor(), total.currency()));
+            }
             // 409 rather than 400: the request was well-formed and the state moved
             // underneath it, which is exactly what a conflict means.
             case PRICE_CHANGED ->
@@ -134,7 +138,11 @@ public class QuoteController {
             @Positive @Max(999) int quantity,
             @Size(max = 20) List<UUID> modifierOptionIds) {}
 
-    /** @param contextHash the hash returned with the quote, proving the cart is unchanged */
+    /**
+     * The proof checkout offers that the cart it is accepting is the cart that was priced.
+     *
+     * @param contextHash the hash returned with the quote, proving the cart is unchanged
+     */
     public record AcceptanceRequest(@NotBlank String contextHash) {}
 
     public record AcceptanceResponse(String outcome, long totalMinor, String currency) {}
@@ -180,16 +188,25 @@ public class QuoteController {
         }
     }
 
+    /**
+     * One line of a priced cart, an item or the delivery fee.
+     *
+     * @param variantId null on the delivery-fee line, never on an item line.
+     */
     public record LineResponse(
             String lineId,
-            UUID variantId,
+            @Nullable UUID variantId,
             int quantity,
             String description,
             long unitAmountMinor,
             long finalAmountMinor,
             long taxAmountMinor) {}
 
-    /** Every step that made up the total, so "why is this 47,000 som" has an answer. */
+    /**
+     * Every step that made up the total, so "why is this 47,000 som" has an answer.
+     *
+     * @param lineId null for an order-level step, such as tax
+     */
     public record AdjustmentResponse(
-            int sequence, String lineId, String type, String descriptionCode, long amountMinor) {}
+            int sequence, @Nullable String lineId, String type, String descriptionCode, long amountMinor) {}
 }

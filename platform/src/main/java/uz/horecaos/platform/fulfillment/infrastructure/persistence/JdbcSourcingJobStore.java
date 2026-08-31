@@ -6,6 +6,7 @@ import static uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDe
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -117,7 +118,8 @@ public class JdbcSourcingJobStore {
                         row.getObject("delivery_plan_id", UUID.class),
                         row.getInt("attempt_count"),
                         row.getObject("lease_token", UUID.class),
-                        instant(row, "created_at")))
+                        // created_at is NOT NULL: every job is created with the plan.
+                        Objects.requireNonNull(instant(row, "created_at"))))
                 .list();
     }
 

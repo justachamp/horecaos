@@ -3,6 +3,7 @@ package uz.horecaos.platform.audit.application;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -51,7 +52,11 @@ public class PlatformGrantService {
 
     @Transactional
     public Outcome grant(
-            String principalSubject, String roleCode, String reason, Instant validUntil, String granterSubject) {
+            String principalSubject,
+            String roleCode,
+            String reason,
+            @Nullable Instant validUntil,
+            String granterSubject) {
         ApprovalOutcome approval = approvals.requireApproval(new ApprovalRequestCommand(
                 ApprovalAction.IAM_PLATFORM_GRANT_MANAGE.code(),
                 parametersHash("grant", principalSubject, roleCode, reason, validUntil),
@@ -93,7 +98,11 @@ public class PlatformGrantService {
     }
 
     private static String parametersHash(
-            String action, String subjectOrGrantId, String roleCode, String reason, Instant validUntil) {
+            String action,
+            String subjectOrGrantId,
+            @Nullable String roleCode,
+            String reason,
+            @Nullable Instant validUntil) {
         return ApprovalParameters.none()
                 .and("action", action)
                 .and("subjectOrGrantId", subjectOrGrantId)
@@ -103,11 +112,11 @@ public class PlatformGrantService {
                 .hash();
     }
 
-    private static UUID pendingRequestId(ApprovalOutcome outcome) {
+    private static @Nullable UUID pendingRequestId(ApprovalOutcome outcome) {
         return outcome instanceof ApprovalOutcome.Pending pending ? pending.requestId() : null;
     }
 
-    public record Outcome(Status status, UUID grantId, UUID approvalRequestId) {
+    public record Outcome(Status status, @Nullable UUID grantId, @Nullable UUID approvalRequestId) {
 
         public enum Status {
             GRANTED,
@@ -128,7 +137,7 @@ public class PlatformGrantService {
             return new Outcome(Status.NO_CHANGE, grantId, null);
         }
 
-        static Outcome awaitingApproval(UUID requestId) {
+        static Outcome awaitingApproval(@Nullable UUID requestId) {
             return new Outcome(Status.AWAITING_APPROVAL, null, requestId);
         }
     }

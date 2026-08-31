@@ -2,6 +2,7 @@ package uz.horecaos.platform.migration.web;
 
 import java.time.Instant;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.iam.api.protection.Classified;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.migration.application.MigrationRunStore.Counters;
@@ -34,15 +35,15 @@ public record RunView(
         UUID scopeId,
         RunType runType,
         RunStatus status,
-        String sourceWatermark,
-        String targetWatermark,
+        @Nullable String sourceWatermark,
+        @Nullable String targetWatermark,
         int transformationVersion,
         RunCountersView counters,
-        String checksum,
+        @Nullable String checksum,
         String startedBy,
         int version,
         Instant startedAt,
-        Instant finishedAt) {
+        @Nullable Instant finishedAt) {
 
     /**
      * The five dispositions a run counts.

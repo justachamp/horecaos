@@ -13,6 +13,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -53,9 +54,6 @@ class ApprovalPolicyServiceTests {
     private static final Instant START = Instant.parse("2026-08-20T10:00:00Z");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private ApprovalPolicyService authoring;
@@ -68,9 +66,6 @@ class ApprovalPolicyServiceTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -718,7 +713,7 @@ class ApprovalPolicyServiceTests {
         return newVersionFrom(threshold, null);
     }
 
-    private NewPolicyVersion newVersionFrom(String threshold, Instant validFrom) {
+    private NewPolicyVersion newVersionFrom(String threshold, @Nullable Instant validFrom) {
         return new NewPolicyVersion(
                 ResourceScope.tenant(TENANT),
                 ACTION,

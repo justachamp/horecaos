@@ -46,9 +46,6 @@ class QuoteAndReservationTests {
     private static final Instant NOW = Instant.parse("2026-08-21T12:00:00Z");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private JdbcPricingStore pricingStore;
@@ -69,9 +66,6 @@ class QuoteAndReservationTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for quote and reservation tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll

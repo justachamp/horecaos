@@ -4,6 +4,8 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.fulfillment.api.InternalFleetPort.FleetCandidate;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.BookingIntent;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.PartnerOption;
@@ -121,9 +123,15 @@ public final class SourcingPlanner {
             // partner now is precisely how a plan ends up with two couriers.
             return new SourcingDecision.EscalateToOperations(SourcingDecision.AWAITING_RECONCILIATION);
         }
-        if (progress.hasLiveOffer(now)) {
+        UUID outstandingOffer = progress.outstandingOffer();
+        Instant offerExpiresAt = progress.offerExpiresAt();
+        // Inlined rather than delegated to SourcingProgress.hasLiveOffer(now): the
+        // pairing invariant that method enforces is real, but it is enforced in a
+        // different method, and a null check written there does not narrow these
+        // two accessors here.
+        if (outstandingOffer != null && offerExpiresAt != null && now.isBefore(offerExpiresAt)) {
             return new SourcingDecision.WaitForInternal(
-                    progress.outstandingOffer(), progress.offerExpiresAt(), SourcingDecision.OFFER_OUTSTANDING);
+                    outstandingOffer, offerExpiresAt, SourcingDecision.OFFER_OUTSTANDING);
         }
 
         Instant handoverDeadline = handoverDeadline(plan, policy, mode);
@@ -162,7 +170,21 @@ public final class SourcingPlanner {
                     partners.isEmpty() ? SourcingDecision.NO_PARTNER_CONFIGURED : SourcingDecision.PARTNERS_EXHAUSTED);
         }
 
-        String reason = mode == SourcingMode.PARTNER_ONLY ? SourcingDecision.PARTNER_ONLY_MODE : fleetReason;
+        String reason;
+        if (mode == SourcingMode.PARTNER_ONLY) {
+            reason = SourcingDecision.PARTNER_ONLY_MODE;
+        } else if (fleetReason != null) {
+            reason = fleetReason;
+        } else {
+            // Unreachable: the only other mode that falls through to here is
+            // FLEET_FIRST (FLEET_ONLY and MANUAL both returned above), and
+            // fleetReason is null only inside the branch above that already
+            // returned an OfferInternal decision. Stated rather than assumed, so
+            // a future mode added to usesFleet()/usesPartners() fails loudly
+            // instead of silently booking a partner for no recorded reason.
+            throw new IllegalStateException(
+                    "Reached partner booking with neither a fleet refusal reason nor partner-only mode");
+        }
         return bookWith(partner.get(), plan, policy, now, reason);
     }
 
@@ -174,7 +196,7 @@ public final class SourcingPlanner {
      * is a rate-card problem, and running out of clock is a preparation-estimate
      * problem.
      */
-    private static String fleetRefusal(
+    private static @Nullable String fleetRefusal(
             List<FleetCandidate> candidates,
             Optional<FleetCandidate> next,
             SourcingProgress progress,

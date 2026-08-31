@@ -180,7 +180,7 @@ public class ProviderHttpClient {
             String method,
             String path,
             Map<String, String> headers,
-            Object body,
+            @Nullable Object body,
             Function<Map<String, Object>, ProviderOutcome> onSuccess) {
 
         try {
@@ -262,7 +262,7 @@ public class ProviderHttpClient {
      * {@code ExecutionException} reads as a lost reply — which is the difference
      * between a safe retry and a second charge.
      */
-    private static IOException unwrap(Throwable cause) throws IOException {
+    private static IOException unwrap(@Nullable Throwable cause) throws IOException {
         switch (cause) {
             case IOException io -> throw io;
             case RuntimeException runtime -> throw runtime;

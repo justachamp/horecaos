@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.ordering.domain.OrderOutcome;
@@ -770,8 +771,8 @@ public class JdbcOrderStore {
             OrderStatus from,
             OrderStatus to,
             Instant now,
-            String acceptedByActorType,
-            String acceptedByActorId) {
+            @Nullable String acceptedByActorType,
+            @Nullable String acceptedByActorId) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);

@@ -31,7 +31,7 @@ import uz.horecaos.platform.iam.api.ResourceScope;
  *
  * <p>That has a further consequence the web layer must respect: the build gate
  * refuses a declared scope wider than the path, so migration endpoints belong
- * under a platform path and not under {@code /tenants/&#123;tenantId&#125;}.
+ * under a platform path and not under {@code /tenants/{tenantId}}.
  *
  * <p>The role check is unconditional and the capability check sits behind the
  * same {@code horecaos.authorization.enforce} flag as the rest of ADR 0025, matching

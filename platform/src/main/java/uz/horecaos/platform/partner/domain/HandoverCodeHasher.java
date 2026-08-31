@@ -7,6 +7,7 @@ import java.util.Locale;
 import java.util.Objects;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Turns a handover code into the value stored beside the order (ADR 0040).
@@ -35,6 +36,8 @@ public final class HandoverCodeHasher {
     private final byte[] pepper;
 
     /**
+     * Builds a hasher keyed on the tenant-independent handover pepper.
+     *
      * @param pepper resolved from the ADR 0028 secret store at startup. Never a
      *               literal, never a property with a default, and never
      *               committed — ADR 0028's rule, and the reason this constructor
@@ -49,6 +52,8 @@ public final class HandoverCodeHasher {
     }
 
     /**
+     * Hashes one handover code, peppered and bound to its order.
+     *
      * @param orderId bound into the digest so a hash cannot be lifted from one
      *                order and replayed against another
      */
@@ -67,7 +72,7 @@ public final class HandoverCodeHasher {
         }
     }
 
-    public boolean matches(java.util.UUID orderId, String storedHash, String attempt) {
+    public boolean matches(java.util.UUID orderId, @Nullable String storedHash, @Nullable String attempt) {
         if (storedHash == null || attempt == null || attempt.isBlank()) {
             return false;
         }

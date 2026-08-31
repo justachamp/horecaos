@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -248,7 +249,7 @@ public class ReservationService {
             throw ApiException.staleVersion(expectedVersion, reservation.version());
         }
 
-        audit.record(AuditFact.of("dinein.reservation." + to.name().toLowerCase(), AuditClass.BUSINESS)
+        audit.record(AuditFact.of("dinein.reservation." + to.name().toLowerCase(Locale.ROOT), AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.location(tenantId, reservation.brandId(), reservation.locationId()))
                 .target("dinein.reservation", reservationId)

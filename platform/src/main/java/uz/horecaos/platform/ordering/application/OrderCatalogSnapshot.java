@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * What ordering needs from the catalog in order to take a snapshot (ADR 0016,
@@ -52,12 +53,14 @@ public interface OrderCatalogSnapshot {
     Optional<Duration> longestPreparationOverride(UUID tenantId, UUID brandId, UUID locationId, Set<UUID> variantIds);
 
     /**
+     * A variant's customer-facing identity, as it was shown at the time ordered.
+     *
      * @param productName the dish as the customer saw it
      * @param variantName null when the variant has no name of its own, which is
      *                    the common case: most variants are "regular" or "large"
      *                    and the customer-facing name is the dish
      */
-    record VariantDescriptor(UUID productId, String productName, String variantName, String sku) {}
+    record VariantDescriptor(UUID productId, String productName, @Nullable String variantName, String sku) {}
 
     record ModifierDescriptor(UUID groupId, String groupName, String optionName) {}
 }

@@ -2,6 +2,7 @@ package uz.horecaos.platform.tenancy.domain;
 
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.tenancy.api.LegalEntityId;
 import uz.horecaos.platform.tenancy.api.TenantId;
 
@@ -35,12 +36,12 @@ public final class LegalEntity {
     private final String code;
     private final TaxpayerNumber tin;
     private String legalName;
-    private String shortName;
+    private @Nullable String shortName;
     private boolean vatRegistered;
-    private String vatCertificateReference;
-    private UUID taxProfileId;
-    private String registeredAddress;
-    private String contactPhone;
+    private @Nullable String vatCertificateReference;
+    private @Nullable UUID taxProfileId;
+    private @Nullable String registeredAddress;
+    private @Nullable String contactPhone;
     private OperatingUnitStatus status;
     private int version;
 
@@ -49,13 +50,13 @@ public final class LegalEntity {
             TenantId tenantId,
             String code,
             String legalName,
-            String shortName,
+            @Nullable String shortName,
             TaxpayerNumber tin,
             boolean vatRegistered,
-            String vatCertificateReference,
-            UUID taxProfileId,
-            String registeredAddress,
-            String contactPhone,
+            @Nullable String vatCertificateReference,
+            @Nullable UUID taxProfileId,
+            @Nullable String registeredAddress,
+            @Nullable String contactPhone,
             OperatingUnitStatus status,
             int version) {
         this.id = Objects.requireNonNull(id, "Legal entity ID is required");
@@ -83,13 +84,13 @@ public final class LegalEntity {
             TenantId tenantId,
             String code,
             String legalName,
-            String shortName,
+            @Nullable String shortName,
             TaxpayerNumber tin,
             boolean vatRegistered,
-            String vatCertificateReference,
-            UUID taxProfileId,
-            String registeredAddress,
-            String contactPhone,
+            @Nullable String vatCertificateReference,
+            @Nullable UUID taxProfileId,
+            @Nullable String registeredAddress,
+            @Nullable String contactPhone,
             OperatingUnitStatus status,
             int version) {
         return new LegalEntity(
@@ -118,7 +119,7 @@ public final class LegalEntity {
      * though it were still registered, and every receipt it issues charges VAT it
      * does not owe.
      */
-    public void applyVatRegistration(boolean registered, String certificateReference) {
+    public void applyVatRegistration(boolean registered, @Nullable String certificateReference) {
         String reference =
                 certificateReference == null || certificateReference.isBlank() ? null : certificateReference.strip();
         if (!registered && reference != null) {
@@ -137,16 +138,16 @@ public final class LegalEntity {
      * because VAT registration belongs to the company, and a tenant with one
      * registered and one unregistered company cannot be expressed by brand scope.
      */
-    public void useTaxProfile(UUID profileId) {
+    public void useTaxProfile(@Nullable UUID profileId) {
         this.taxProfileId = profileId;
     }
 
-    public void describeRegistration(String address, String phone) {
+    public void describeRegistration(@Nullable String address, @Nullable String phone) {
         this.registeredAddress = address == null || address.isBlank() ? null : address.strip();
         this.contactPhone = phone == null || phone.isBlank() ? null : phone.strip();
     }
 
-    public void rename(String newLegalName, String newShortName) {
+    public void rename(String newLegalName, @Nullable String newShortName) {
         this.legalName = Brand.normalizedName(newLegalName);
         this.shortName = newShortName == null || newShortName.isBlank() ? null : newShortName.strip();
     }
@@ -196,7 +197,7 @@ public final class LegalEntity {
         return legalName;
     }
 
-    public String shortName() {
+    public @Nullable String shortName() {
         return shortName;
     }
 
@@ -208,19 +209,19 @@ public final class LegalEntity {
         return vatRegistered;
     }
 
-    public String vatCertificateReference() {
+    public @Nullable String vatCertificateReference() {
         return vatCertificateReference;
     }
 
-    public UUID taxProfileId() {
+    public @Nullable UUID taxProfileId() {
         return taxProfileId;
     }
 
-    public String registeredAddress() {
+    public @Nullable String registeredAddress() {
         return registeredAddress;
     }
 
-    public String contactPhone() {
+    public @Nullable String contactPhone() {
         return contactPhone;
     }
 

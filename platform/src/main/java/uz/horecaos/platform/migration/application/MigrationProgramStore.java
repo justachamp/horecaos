@@ -3,6 +3,7 @@ package uz.horecaos.platform.migration.application;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Reads and writes {@code migration.programs}.
@@ -44,8 +45,8 @@ public interface MigrationProgramStore {
             ProgramStatus from,
             ProgramStatus to,
             int expectedVersion,
-            Instant startedAt,
-            Instant completedAt,
+            @Nullable Instant startedAt,
+            @Nullable Instant completedAt,
             Instant now);
 
     /**
@@ -62,7 +63,7 @@ public interface MigrationProgramStore {
             String sourceEnvironment,
             String targetEnvironment,
             int policyVersion,
-            Instant startedAt,
-            Instant completedAt,
+            @Nullable Instant startedAt,
+            @Nullable Instant completedAt,
             int version) {}
 }

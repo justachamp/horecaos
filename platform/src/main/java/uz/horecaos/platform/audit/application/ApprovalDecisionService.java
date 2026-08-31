@@ -7,8 +7,10 @@ import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -118,7 +120,7 @@ public class ApprovalDecisionService {
      *
      * @param subject the caller, used only to answer {@code mayDecide} per row
      */
-    public List<PendingApproval> pending(UUID tenantId, String actionCode, int limit, String subject) {
+    public List<PendingApproval> pending(UUID tenantId, @Nullable String actionCode, int limit, String subject) {
         StringBuilder sql = new StringBuilder("""
                 SELECT r.id, r.tenant_id, r.action_code, r.parameters_hash,
                        r.scope_type, r.scope_id, r.threshold_description,
@@ -230,7 +232,16 @@ public class ApprovalDecisionService {
 
         return load(tenantId, requestId)
                 .map(decided -> new DecidedApproval(
-                        decided.id(), decided.actionCode(), decided.status(), decided.decidedBy(), decided.decidedAt()))
+                        decided.id(),
+                        decided.actionCode(),
+                        decided.status(),
+                        // decide() above just moved this request out of PENDING, so
+                        // the row decided_by/decided_at are read back from is one
+                        // whose decision has already been written; RequestRow's own
+                        // type stays honestly @Nullable because a PENDING row (the
+                        // shape mapRequest produces) has neither.
+                        Objects.requireNonNull(decided.decidedBy(), "A decided request has a decider"),
+                        Objects.requireNonNull(decided.decidedAt(), "A decided request has a decision time")))
                 .orElseThrow(() ->
                         new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No approval request %s".formatted(requestId)));
     }
@@ -392,8 +403,8 @@ public class ApprovalDecisionService {
             String requestedBy,
             Instant requestedAt,
             Instant expiresAt,
-            String decidedBy,
-            Instant decidedAt) {}
+            @Nullable String decidedBy,
+            @Nullable Instant decidedAt) {}
 
     /**
      * One request waiting for a second signature.
@@ -425,7 +436,7 @@ public class ApprovalDecisionService {
             Instant expiresAt,
             boolean mayDecide) {
 
-        static PendingApproval of(RequestRow row, boolean mayDecide) {
+        private static PendingApproval of(RequestRow row, boolean mayDecide) {
             return new PendingApproval(
                     row.id(),
                     row.actionCode(),

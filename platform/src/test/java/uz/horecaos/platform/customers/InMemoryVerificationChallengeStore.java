@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.customers.application.VerificationChallengeStore;
 import uz.horecaos.platform.customers.domain.ChallengeStatus;
 
@@ -44,10 +45,10 @@ final class InMemoryVerificationChallengeStore implements VerificationChallengeS
             ChallengeStatus status,
             Instant issuedAt,
             Instant expiresAt,
-            Instant settledAt,
-            String grantHash,
-            Instant grantExpiresAt,
-            Instant grantRedeemedAt) {
+            @Nullable Instant settledAt,
+            @Nullable String grantHash,
+            @Nullable Instant grantExpiresAt,
+            @Nullable Instant grantRedeemedAt) {
 
         Row with(ChallengeStatus newStatus, Instant settled) {
             return new Row(

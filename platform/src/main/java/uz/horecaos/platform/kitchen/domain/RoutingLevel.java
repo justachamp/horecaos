@@ -8,7 +8,9 @@ package uz.horecaos.platform.kitchen.domain;
  * the routed row alone; a cook asking during service, and an operator trying to
  * fix a mis-mapped menu afterwards, both need the one that actually applied.
  *
- * <p>Declared most specific first, and {@link #resolve} depends on that order.
+ * <p>Declared most specific first, and
+ * {@link uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore#resolveStation}
+ * depends on that order.
  */
 public enum RoutingLevel {
 

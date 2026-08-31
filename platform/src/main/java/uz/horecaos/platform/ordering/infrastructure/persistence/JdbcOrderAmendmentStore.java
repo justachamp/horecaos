@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.ordering.domain.AmendmentCommandType;
@@ -282,7 +283,7 @@ public class JdbcOrderAmendmentStore {
                 instantOrNull(row, "settled_at"));
     }
 
-    private static Instant instantOrNull(ResultSet row, String column) throws SQLException {
+    private static @Nullable Instant instantOrNull(ResultSet row, String column) throws SQLException {
         OffsetDateTime value = row.getObject(column, OffsetDateTime.class);
         return value == null ? null : value.toInstant();
     }
@@ -319,7 +320,7 @@ public class JdbcOrderAmendmentStore {
             boolean requiresApproval,
             UUID approvalRequestId,
             String confirmationAttestedBy,
-            Instant confirmationAttestedAt,
+            @Nullable Instant confirmationAttestedAt,
             String confirmationChannel,
             String idempotencyKey,
             Instant expiresAt,
@@ -328,7 +329,7 @@ public class JdbcOrderAmendmentStore {
             String createdByActorId,
             int version,
             Instant createdAt,
-            Instant settledAt) {}
+            @Nullable Instant settledAt) {}
 
     public record CommandRow(
             int sequence, AmendmentCommandType commandType, String payloadJson, String rejectedReasonCode) {}

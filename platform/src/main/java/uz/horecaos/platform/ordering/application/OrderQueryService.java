@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -109,7 +110,7 @@ public class OrderQueryService {
      * @param revision the revision to read at, or null for the current one
      */
     @Transactional(readOnly = true)
-    public Optional<OrderDetail> detail(UUID tenantId, UUID orderId, Integer revision) {
+    public Optional<OrderDetail> detail(UUID tenantId, UUID orderId, @Nullable Integer revision) {
         return orders.find(tenantId, orderId).map(order -> {
             List<OrderLineRow> lines = orders.lines(tenantId, orderId, revision);
             Map<UUID, List<OrderModifierRow>> modifiers = orders.lineModifiers(tenantId, orderId).stream()
@@ -135,7 +136,7 @@ public class OrderQueryService {
      * snapshot row that was never written.
      */
     private CustomerDetail customerDetail(UUID tenantId, OrderRow order) {
-        String customerType;
+        @Nullable String customerType;
         if (order.customerAccountId() != null) {
             customerType = "ACCOUNT";
         } else if (order.guestReferenceHash() != null) {
@@ -160,7 +161,8 @@ public class OrderQueryService {
                 row.anonymizedAt() != null);
     }
 
-    private String decryptForDisplay(UUID tenantId, UUID orderId, String column, String ciphertext) {
+    private @Nullable String decryptForDisplay(
+            UUID tenantId, UUID orderId, String column, @Nullable String ciphertext) {
         if (ciphertext == null) {
             return null;
         }
@@ -281,9 +283,9 @@ public class OrderQueryService {
      */
     @Transactional(readOnly = true)
     public List<JdbcOrderStore.CustomerOrderRow> forCustomer(
-            UUID tenantId, UUID brandId, UUID accountId, UUID cursorOrderId, int limit) {
+            UUID tenantId, UUID brandId, UUID accountId, @Nullable UUID cursorOrderId, int limit) {
 
-        Instant before = null;
+        @Nullable Instant before = null;
         if (cursorOrderId != null) {
             before = orders.customerOrderCursor(tenantId, brandId, accountId, cursorOrderId)
                     .orElseThrow(UnknownCursorException::new);
@@ -357,12 +359,12 @@ public class OrderQueryService {
      *                             an empty customer
      */
     public record CustomerDetail(
-            String displayName,
-            String contactDecrypted,
+            @Nullable String displayName,
+            @Nullable String contactDecrypted,
             boolean hasAddress,
             boolean hasDeliveryInstructions,
             boolean transactionalContactAllowed,
-            String customerType,
+            @Nullable String customerType,
             boolean anonymized) {
 
         /**
@@ -381,7 +383,7 @@ public class OrderQueryService {
      * The full delivery address and instructions, as {@link #revealCustomerAddress}
      * returns them.
      */
-    public record CustomerAddressReveal(DeliveryDestination address, String deliveryInstructions) {
+    public record CustomerAddressReveal(DeliveryDestination address, @Nullable String deliveryInstructions) {
 
         @Override
         public String toString() {

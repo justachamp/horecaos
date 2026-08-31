@@ -7,6 +7,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -204,8 +205,12 @@ public class ClickCallbackProcessor {
         // signature verifies under A's key, and B's order is captured and
         // fiscalized under B's legal entity on A's money. The Payme side already
         // scopes every read by merchant_binding_id; this is the same rule.
+        // request.hasEveryRequiredField() above already refused any arrival missing
+        // merchant_trans_id, so it is present here on every path that reaches this line.
         Optional<PaymentAttempt> found = attempts.findByMerchantTransId(
-                        account.tenantId(), PaymentProviderType.CLICK, request.merchantTransId())
+                        account.tenantId(),
+                        PaymentProviderType.CLICK,
+                        Objects.requireNonNull(request.merchantTransId()))
                 .filter(candidate -> candidate.merchantBindingId().equals(account.bindingId()));
         if (found.isEmpty()) {
             return ClickCallbackDecision.failed(ClickShopApiError.USER_DOES_NOT_EXIST);
@@ -511,8 +516,8 @@ public class ClickCallbackProcessor {
         CallbackKind kind = ClickCallbackRequest.ACTION_COMPLETE.equals(expectedAction)
                 ? CallbackKind.CLICK_COMPLETE
                 : CallbackKind.CLICK_PREPARE;
-        String reference =
-                request.clickTransId() == null || request.clickTransId().isBlank() ? "unknown" : request.clickTransId();
+        String clickTransId = request.clickTransId();
+        String reference = clickTransId == null || clickTransId.isBlank() ? "unknown" : clickTransId;
 
         Instant now = clock.instant();
         try {

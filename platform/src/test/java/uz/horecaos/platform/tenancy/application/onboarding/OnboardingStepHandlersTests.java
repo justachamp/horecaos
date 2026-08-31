@@ -11,6 +11,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -276,7 +277,7 @@ class OnboardingStepHandlersTests {
     @Test
     void catalogReadinessPassesWithAPublishedAvailableItem() {
         UUID catalogId = insertCatalog();
-        UUID variantId = insertProductAndVariant(catalogId, "BURGER");
+        UUID variantId = insertProductAndVariant("BURGER");
         insertPublication(catalogId, "STOREFRONT");
         insertLocationOffering(variantId, "AVAILABLE");
 
@@ -553,7 +554,7 @@ class OnboardingStepHandlersTests {
         return catalogId;
     }
 
-    private UUID insertProductAndVariant(UUID catalogId, String code) {
+    private UUID insertProductAndVariant(String code) {
         UUID productId = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO catalog.products (id, tenant_id, brand_id, code, status)
@@ -655,7 +656,7 @@ class OnboardingStepHandlersTests {
     }
 
     /** Creates, activates and binds a DELIVERY zone at {@code locationId}, naming {@code tariffId} or none. */
-    private void activeDeliveryZone(UUID tariffId) {
+    private void activeDeliveryZone(@Nullable UUID tariffId) {
         var zoneStore = new JdbcServiceZoneStore(jdbc);
         var zones = new ServiceZoneService(zoneStore, JsonMapper.builder().build(), CLOCK);
         UUID actor = UUID.randomUUID();

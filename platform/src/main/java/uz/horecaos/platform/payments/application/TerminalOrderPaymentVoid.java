@@ -161,8 +161,10 @@ public class TerminalOrderPaymentVoid {
             return;
         }
 
-        Optional<ProviderBinding> binding = bindings.resolve(
-                tenantId, intent.legalEntity().orElse(null), attempt.providerType(), attempt.businessDate());
+        Optional<UUID> seller = intent.legalEntity();
+        Optional<ProviderBinding> binding = seller.isEmpty()
+                ? Optional.empty()
+                : bindings.resolve(tenantId, seller.get(), attempt.providerType(), attempt.businessDate());
         PaymentProviderPort provider = providers.get(attempt.providerType());
         if (binding.isEmpty() || provider == null || !binding.get().supportsReversal()) {
             unvoidable(orderId, attempt, "no void surface is configured for this binding");

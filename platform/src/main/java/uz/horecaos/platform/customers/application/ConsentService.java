@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.customers.api.ConsentDirectory;
@@ -47,14 +48,14 @@ public class ConsentService implements ConsentDirectory {
     public UUID record(
             UUID tenantId,
             UUID accountId,
-            UUID brandId,
+            @Nullable UUID brandId,
             String purpose,
-            String channel,
+            @Nullable String channel,
             Decision decision,
             String policyVersion,
             Source source,
-            String evidenceReference,
-            Instant decidedAt) {
+            @Nullable String evidenceReference,
+            @Nullable Instant decidedAt) {
 
         UUID id = UUID.randomUUID();
         store.insertConsentDecision(

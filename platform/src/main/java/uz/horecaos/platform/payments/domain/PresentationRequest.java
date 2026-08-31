@@ -4,6 +4,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 
 /**
  * What the caller asked to be shown, and to whom (ADR 0013).
@@ -26,7 +27,10 @@ import java.util.Set;
  *                 language parameter at all
  */
 public record PresentationRequest(
-        PresentationKind preferredKind, String returnUrl, String language, String pushRecipient) {
+        PresentationKind preferredKind,
+        @Nullable String returnUrl,
+        @Nullable String language,
+        @Nullable String pushRecipient) {
 
     /** The three Payme documents; anything else is silently ignored by Payme. */
     private static final Set<String> LANGUAGES = Set.of("ru", "uz", "en");

@@ -4,6 +4,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -80,7 +81,7 @@ public class MigrationOwnershipService implements MigrationOwnershipPort {
     @Override
     @Transactional(propagation = Propagation.SUPPORTS, readOnly = true)
     public CapabilityOwnership ownershipOf(
-            UUID tenantId, MigrationCapability capability, UUID brandId, UUID locationId) {
+            UUID tenantId, MigrationCapability capability, @Nullable UUID brandId, @Nullable UUID locationId) {
 
         return resolve(tenantId, capability, brandId, locationId)
                 .map(MigrationOwnershipService::answerFor)
@@ -111,7 +112,8 @@ public class MigrationOwnershipService implements MigrationOwnershipPort {
      */
     @Override
     @Transactional(propagation = Propagation.SUPPORTS)
-    public void requireTargetMayWrite(UUID tenantId, MigrationCapability capability, UUID brandId, UUID locationId) {
+    public void requireTargetMayWrite(
+            UUID tenantId, MigrationCapability capability, @Nullable UUID brandId, @Nullable UUID locationId) {
 
         CapabilityOwnership resolved = ownershipOf(tenantId, capability, brandId, locationId);
 
@@ -164,7 +166,8 @@ public class MigrationOwnershipService implements MigrationOwnershipPort {
      * belongs to one tenant's program and there is no platform-wide owner to fall
      * back to.
      */
-    private Optional<ScopeRow> resolve(UUID tenantId, MigrationCapability capability, UUID brandId, UUID locationId) {
+    private Optional<ScopeRow> resolve(
+            UUID tenantId, MigrationCapability capability, @Nullable UUID brandId, @Nullable UUID locationId) {
 
         if (locationId != null) {
             Optional<ScopeRow> branch = scopes.findClaim(tenantId, capability, brandId, locationId);

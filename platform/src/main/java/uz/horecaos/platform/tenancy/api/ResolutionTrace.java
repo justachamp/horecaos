@@ -2,6 +2,7 @@ package uz.horecaos.platform.tenancy.api;
 
 import java.util.List;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 
 /**
@@ -12,7 +13,8 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
  * @param winningScope     the scope level that supplied it, absent for a code default
  * @param inspectedLevels  each level considered, most specific first, and what was found
  */
-public record ResolutionTrace(String keyCode, Source source, ScopeType winningScope, List<Level> inspectedLevels) {
+public record ResolutionTrace(
+        String keyCode, Source source, @Nullable ScopeType winningScope, List<Level> inspectedLevels) {
 
     public enum Source {
         SCOPED_VALUE,

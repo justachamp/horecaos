@@ -5,6 +5,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Locale;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The SHOP API {@code sign_string}, and the MERCHANT API {@code Auth} header
@@ -51,25 +52,25 @@ public final class ClickSignature {
     /** {@code action=0}. Signs seven fields; no {@code merchant_prepare_id}. */
     public static String prepare(
             String secretKey,
-            String clickTransId,
-            String serviceId,
-            String merchantTransId,
-            String rawAmount,
-            String action,
-            String signTime) {
+            @Nullable String clickTransId,
+            @Nullable String serviceId,
+            @Nullable String merchantTransId,
+            @Nullable String rawAmount,
+            @Nullable String action,
+            @Nullable String signTime) {
         return md5(concat(clickTransId, serviceId, secretKey, merchantTransId, rawAmount, action, signTime));
     }
 
     /** {@code action=1}. Signs eight fields; {@code merchant_prepare_id} is the fifth. */
     public static String complete(
             String secretKey,
-            String clickTransId,
-            String serviceId,
-            String merchantTransId,
-            String merchantPrepareId,
-            String rawAmount,
-            String action,
-            String signTime) {
+            @Nullable String clickTransId,
+            @Nullable String serviceId,
+            @Nullable String merchantTransId,
+            @Nullable String merchantPrepareId,
+            @Nullable String rawAmount,
+            @Nullable String action,
+            @Nullable String signTime) {
         return md5(concat(
                 clickTransId, serviceId, secretKey, merchantTransId, merchantPrepareId, rawAmount, action, signTime));
     }
@@ -108,7 +109,7 @@ public final class ClickSignature {
      * promised anywhere; length-safe because a short or absent {@code sign_string}
      * must answer {@code -1} rather than throw.
      */
-    public static boolean matches(String expected, String received) {
+    public static boolean matches(@Nullable String expected, @Nullable String received) {
         if (expected == null || received == null) {
             return false;
         }
@@ -131,7 +132,7 @@ public final class ClickSignature {
         return merchantUserId + ":" + sha1(timestamp + secretKey) + ":" + timestamp;
     }
 
-    private static String concat(String... parts) {
+    private static String concat(@Nullable String... parts) {
         StringBuilder joined = new StringBuilder();
         for (String part : parts) {
             // A null field cannot reach a correct signature, and a request missing

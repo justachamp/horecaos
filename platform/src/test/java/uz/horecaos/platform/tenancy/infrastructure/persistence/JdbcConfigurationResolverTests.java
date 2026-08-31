@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -35,9 +36,6 @@ class JdbcConfigurationResolverTests {
     private static final UUID OTHER_TENANT = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120401");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private JdbcConfigurationResolver resolver;
@@ -49,9 +47,6 @@ class JdbcConfigurationResolverTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -167,7 +162,8 @@ class JdbcConfigurationResolverTests {
         return ResourceScope.location(TENANT, BRAND, LOCATION);
     }
 
-    private void insertInteger(ScopeType scopeType, UUID tenantId, UUID brandId, UUID locationId, int value) {
+    private void insertInteger(
+            ScopeType scopeType, @Nullable UUID tenantId, @Nullable UUID brandId, @Nullable UUID locationId, int value) {
         jdbc.sql("""
                 INSERT INTO tenant.configuration_values
                     (id, key_code, scope_type, tenant_id, brand_id, location_id,
@@ -188,12 +184,12 @@ class JdbcConfigurationResolverTests {
     private void insertTenantHierarchy(
             UUID tenantId,
             String tenantSlug,
-            UUID brandId,
-            String brandCode,
-            String brandSlug,
-            UUID locationId,
-            String locationCode,
-            String locationSlug) {
+            @Nullable UUID brandId,
+            @Nullable String brandCode,
+            @Nullable String brandSlug,
+            @Nullable UUID locationId,
+            @Nullable String locationCode,
+            @Nullable String locationSlug) {
 
         jdbc.sql("""
                 INSERT INTO tenant.tenants

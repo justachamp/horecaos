@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -309,17 +310,21 @@ public class JdbcTemplateStore {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
-    /** @param activeVersion null until a version is activated */
+    /**
+     * A template, and which version of it is live.
+     *
+     * @param activeVersion null until a version is activated
+     */
     public record TemplateRow(
             UUID id,
             UUID tenantId,
-            UUID brandId,
+            @Nullable UUID brandId,
             String templateKey,
             String notificationClass,
             String channel,
-            String consentPurpose,
+            @Nullable String consentPurpose,
             String status,
-            Integer activeVersion,
+            @Nullable Integer activeVersion,
             int version) {
 
         /** Whether this row is the tenant's default rather than a brand's override. */
@@ -333,11 +338,11 @@ public class JdbcTemplateStore {
             UUID templateId,
             int versionNumber,
             String locale,
-            String subjectTemplate,
+            @Nullable String subjectTemplate,
             String bodyTemplate,
             String variablesSchemaJson,
             String contentHash,
             String status,
-            String approvedBy,
-            Instant activatedAt) {}
+            @Nullable String approvedBy,
+            @Nullable Instant activatedAt) {}
 }

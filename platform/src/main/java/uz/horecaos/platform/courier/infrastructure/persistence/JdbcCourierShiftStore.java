@@ -7,8 +7,10 @@ import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.courier.domain.DutyState;
@@ -183,8 +185,8 @@ public class JdbcCourierShiftStore {
             UUID shiftId,
             ShiftStatus status,
             String closeSource,
-            String closeReasonCode,
-            String protectedClosePoint,
+            @Nullable String closeReasonCode,
+            @Nullable String protectedClosePoint,
             long paidSeconds,
             long breakSeconds,
             Instant closedAt) {
@@ -251,6 +253,8 @@ public class JdbcCourierShiftStore {
     }
 
     /**
+     * Ends the one open break on a shift, if there is one.
+     *
      * @param endedBySource {@code COURIER} when the courier ended it, {@code
      *                      SHIFT_CLOSE} when a close swept it up. A manager never
      *                      appears here
@@ -299,7 +303,9 @@ public class JdbcCourierShiftStore {
                 .query((ResultSet rs, int rowNumber) -> new BreakRow(
                         rs.getObject("id", UUID.class),
                         rs.getObject("shift_id", UUID.class),
-                        JdbcCourierStore.instant(rs.getObject("started_at", OffsetDateTime.class)),
+                        // started_at is NOT NULL: a break that never started is not a row.
+                        Objects.requireNonNull(
+                                JdbcCourierStore.instant(rs.getObject("started_at", OffsetDateTime.class))),
                         JdbcCourierStore.instant(rs.getObject("ended_at", OffsetDateTime.class)),
                         rs.getString("ended_by_source")))
                 .list();
@@ -364,7 +370,7 @@ public class JdbcCourierShiftStore {
             long confirmedMinor,
             long varianceMinor,
             String status,
-            String reasonCode,
+            @Nullable String reasonCode,
             String confirmedBy,
             Instant confirmedAt) {
 
@@ -390,6 +396,14 @@ public class JdbcCourierShiftStore {
 
     // -------------------------------------------------------------------- rows
 
+    /**
+     * A shift as every reader sees it.
+     *
+     * <p>The close columns, {@code paidSeconds} included, are null while the
+     * shift is live; {@code approvalRequestId} until hours are approved; and
+     * {@code settlementPeriodId} until an earning or a close attaches the shift
+     * to a period.
+     */
     public record ShiftRow(
             UUID id,
             UUID tenantId,
@@ -400,21 +414,23 @@ public class JdbcCourierShiftStore {
             ShiftStatus status,
             DutyState dutyState,
             Instant openedAt,
-            Instant closedAt,
+            @Nullable Instant closedAt,
             String openSource,
-            String closeSource,
-            String closeReasonCode,
-            String protectedOpenPoint,
-            Long paidSeconds,
+            @Nullable String closeSource,
+            @Nullable String closeReasonCode,
+            @Nullable String protectedOpenPoint,
+            @Nullable Long paidSeconds,
             long breakSeconds,
             ShiftEnforcement enforcementMode,
             UUID enforcementPolicyId,
             Integer enforcementPolicyVersion,
-            UUID approvalRequestId,
-            UUID settlementPeriodId,
+            @Nullable UUID approvalRequestId,
+            @Nullable UUID settlementPeriodId,
             int version) {}
 
-    public record BreakRow(UUID id, UUID shiftId, Instant startedAt, Instant endedAt, String endedBySource) {}
+    /** One break on one shift; {@code endedAt} is null while it is still open. */
+    public record BreakRow(
+            UUID id, UUID shiftId, Instant startedAt, @Nullable Instant endedAt, @Nullable String endedBySource) {}
 
     /**
      * One courier on shift at one branch, as dispatch needs to see them.
@@ -427,6 +443,13 @@ public class JdbcCourierShiftStore {
     public record FleetRow(
             UUID courierId, UUID shiftId, int offerTtlSeconds, int concurrencyCeiling, int deliveriesThisShift) {}
 
+    /**
+     * The three-figure cash handover.
+     *
+     * <p>The declared and confirmed figures, and everything recorded with them,
+     * are null until the courier declares and the cashier confirms; the reason
+     * code only ever exists on a variance.
+     */
     public record HandoverRow(
             UUID id,
             UUID tenantId,
@@ -436,13 +459,13 @@ public class JdbcCourierShiftStore {
             String status,
             String currency,
             long expectedMinor,
-            Long declaredMinor,
-            Long confirmedMinor,
-            Long varianceMinor,
-            Instant declaredAt,
-            String confirmedBy,
-            Instant confirmedAt,
-            String reasonCode) {}
+            @Nullable Long declaredMinor,
+            @Nullable Long confirmedMinor,
+            @Nullable Long varianceMinor,
+            @Nullable Instant declaredAt,
+            @Nullable String confirmedBy,
+            @Nullable Instant confirmedAt,
+            @Nullable String reasonCode) {}
 
     // ----------------------------------------------------------------- mapping
 
@@ -472,7 +495,9 @@ public class JdbcCourierShiftStore {
                 rs.getObject("engagement_id", UUID.class),
                 ShiftStatus.valueOf(rs.getString("status")),
                 DutyState.valueOf(rs.getString("duty_state")),
-                JdbcCourierStore.instant(rs.getObject("opened_at", OffsetDateTime.class)),
+                // opened_at is a NOT NULL column; the guard keeps that checked
+                // rather than assumed once the helper's return went @Nullable.
+                Objects.requireNonNull(JdbcCourierStore.instant(rs.getObject("opened_at", OffsetDateTime.class))),
                 JdbcCourierStore.instant(rs.getObject("closed_at", OffsetDateTime.class)),
                 rs.getString("open_source"),
                 rs.getString("close_source"),

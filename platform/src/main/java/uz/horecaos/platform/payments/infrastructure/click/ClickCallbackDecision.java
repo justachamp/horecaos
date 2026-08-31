@@ -1,6 +1,7 @@
 package uz.horecaos.platform.payments.infrastructure.click;
 
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * What HorecaOS decided about one SHOP API arrival (ADR 0013).
@@ -20,7 +21,8 @@ import java.util.UUID;
  *                              inbox. Null when the request never got as far as
  *                              naming one, which is every signature failure
  */
-public record ClickCallbackDecision(ClickShopApiError error, Integer merchantTransactionId, UUID attemptId) {
+public record ClickCallbackDecision(
+        ClickShopApiError error, @Nullable Integer merchantTransactionId, @Nullable UUID attemptId) {
 
     static ClickCallbackDecision failed(ClickShopApiError error) {
         return new ClickCallbackDecision(error, null, null);

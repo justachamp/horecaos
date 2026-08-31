@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -16,7 +17,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
+import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
+import uz.horecaos.platform.iam.api.secrets.SecretReference;
+import uz.horecaos.platform.iam.api.secrets.SecretResolver;
+import uz.horecaos.platform.iam.api.secrets.SecretValue;
+import uz.horecaos.platform.integration.provider.ProviderCapabilityReconciliationService;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.api.ApiException;
 
@@ -26,6 +32,19 @@ class ProviderInstallationControllerTests {
     private static final UUID TENANT = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac121601");
     private static final UUID BRAND = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac121602");
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-08-26T10:00:00Z"), ZoneOffset.UTC);
+
+    /** Neither test in this class reaches the capability-reconciliation path. */
+    private static final SecretResolver UNUSED_SECRETS = new SecretResolver() {
+        @Override
+        public SecretValue resolve(SecretReference reference) {
+            throw new UnsupportedOperationException("not exercised by these tests");
+        }
+
+        @Override
+        public SecretValue resolveFresh(SecretReference reference) {
+            throw new UnsupportedOperationException("not exercised by these tests");
+        }
+    };
 
     private static TestDatabase.Handle db;
     private static String jdbcUrl;
@@ -65,7 +84,15 @@ class ProviderInstallationControllerTests {
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         hierarchy();
         controller = new ProviderInstallationController(
-                jdbc, fact -> {}, () -> new AuthenticatedActor("operator", Set.of(), Map.of()), CLOCK, null);
+                jdbc,
+                fact -> {},
+                () -> new AuthenticatedActor("operator", Set.of(), Map.of()),
+                CLOCK,
+                // Neither test here calls the capability-reconciliation endpoint, so
+                // this is a real but idle collaborator rather than a stand-in for one:
+                // an empty catalogue and a resolver that is never asked to resolve.
+                new ProviderCapabilityReconciliationService(
+                        jdbc, List.of(), UNUSED_SECRETS, new ObjectMapper(), CLOCK));
     }
 
     @Test

@@ -1,5 +1,6 @@
 package uz.horecaos.platform.web.authorization;
 
+import java.util.Locale;
 import uz.horecaos.platform.iam.api.ResourceScope;
 
 /**
@@ -14,7 +15,7 @@ public final class ScopeNotFoundException extends RuntimeException {
     private final ResourceScope.ScopeType scopeType;
 
     public ScopeNotFoundException(ResourceScope scope) {
-        super("No such %s".formatted(scope.type().name().toLowerCase()));
+        super("No such %s".formatted(scope.type().name().toLowerCase(Locale.ROOT)));
         this.scopeType = scope.type();
     }
 

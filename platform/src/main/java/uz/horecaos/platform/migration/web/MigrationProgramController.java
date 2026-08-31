@@ -38,7 +38,7 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * Programs and the scopes opened under them (ADR 0024).
  *
  * <p>Under {@code /api/v1/platform-admin} and not under {@code
- * /control-plane/tenants/&#123;tenantId&#125;}, although every scope names a
+ * /control-plane/tenants/{tenantId}}, although every scope names a
  * tenant. Three things follow from that and none of them are incidental. A
  * program spans tenants, so there is no one tenant to put in the path. A scope's
  * tenant is one of its attributes and not its address: the row is found by its

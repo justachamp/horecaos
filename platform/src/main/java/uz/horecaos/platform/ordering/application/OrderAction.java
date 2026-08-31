@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.application;
 
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
 
 /**
@@ -11,4 +12,4 @@ import uz.horecaos.platform.ordering.domain.OrderStatus;
  *                      both leave {@code AWAITING_APPROVAL} and the response
  *                      already carries the order's current status
  */
-public record OrderAction(OrderActionCode code, OrderStatus targetStatus) {}
+public record OrderAction(OrderActionCode code, @Nullable OrderStatus targetStatus) {}

@@ -8,8 +8,10 @@ import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.loyalty.domain.AccountStatus;
@@ -272,14 +274,14 @@ public class JdbcLoyaltyStore {
             EntryType entryType,
             long amountMinor,
             long balanceAfterMinor,
-            UUID lotId,
-            UUID orderId,
-            UUID tenderId,
-            UUID ruleId,
-            Integer ruleVersion,
+            @Nullable UUID lotId,
+            @Nullable UUID orderId,
+            @Nullable UUID tenderId,
+            @Nullable UUID ruleId,
+            @Nullable Integer ruleVersion,
             String reasonCode,
             String actor,
-            UUID approvalId,
+            @Nullable UUID approvalId,
             String idempotencyKey,
             Instant occurredAt) {}
 
@@ -383,7 +385,7 @@ public class JdbcLoyaltyStore {
                         row.getObject("order_id", UUID.class),
                         row.getObject("tender_id", UUID.class),
                         row.getString("reason_code"),
-                        instant(row, "occurred_at")))
+                        requiredInstant(row, "occurred_at")))
                 .list();
     }
 
@@ -407,7 +409,7 @@ public class JdbcLoyaltyStore {
                         row.getObject("order_id", UUID.class),
                         row.getObject("tender_id", UUID.class),
                         row.getString("reason_code"),
-                        instant(row, "occurred_at")))
+                        requiredInstant(row, "occurred_at")))
                 .list();
     }
 
@@ -513,13 +515,15 @@ public class JdbcLoyaltyStore {
                         row.getLong("written_off_minor"),
                         row.getString("reason_code"),
                         row.getString("actor"),
-                        instant(row, "occurred_at")))
+                        requiredInstant(row, "occurred_at")))
                 .optional();
     }
 
     // ---------------------------------------------------------- reconciliation
 
     /**
+     * How far one account's cached balance has drifted from its own ledger.
+     *
      * @param driftMinor what the cached balance carries that the movements do not
      *                   explain. Positive is a balance with no entry behind it;
      *                   negative is an entry with no movement behind it
@@ -641,8 +645,8 @@ public class JdbcLoyaltyStore {
                 .query((row, number) -> new LotConsumption.AvailableLot(
                         row.getObject("id", UUID.class),
                         row.getLong("remaining_minor"),
-                        instant(row, "expires_at"),
-                        instant(row, "earns_at")))
+                        requiredInstant(row, "expires_at"),
+                        requiredInstant(row, "earns_at")))
                 .list();
     }
 
@@ -1079,7 +1083,7 @@ public class JdbcLoyaltyStore {
                 .param("tenantId", tenantId)
                 .param("reservationId", reservationId)
                 .query((row, number) -> new LotConsumption(
-                        row.getObject("lot_id", UUID.class), row.getLong("amount_minor"), instant(row, "expires_at")))
+                        row.getObject("lot_id", UUID.class), row.getLong("amount_minor"), requiredInstant(row, "expires_at")))
                 .list();
     }
 
@@ -1284,6 +1288,8 @@ public class JdbcLoyaltyStore {
     // --------------------------------------------------------- liability
 
     /**
+     * What one brand owes in outstanding points.
+     *
      * @param outstandingMinor what the tenant would owe if every point were spent
      * @param heldMinor        the part currently held by an unsettled tender
      */
@@ -1340,8 +1346,8 @@ public class JdbcLoyaltyStore {
                 row.getObject("account_id", UUID.class),
                 row.getLong("granted_minor"),
                 row.getLong("remaining_minor"),
-                instant(row, "earns_at"),
-                instant(row, "expires_at"),
+                requiredInstant(row, "earns_at"),
+                requiredInstant(row, "expires_at"),
                 LotStatus.valueOf(row.getString("status")));
     }
 
@@ -1354,7 +1360,7 @@ public class JdbcLoyaltyStore {
                 row.getObject("tender_id", UUID.class),
                 row.getLong("amount_minor"),
                 ReservationStatus.valueOf(row.getString("status")),
-                instant(row, "expires_at"),
+                requiredInstant(row, "expires_at"),
                 row.getInt("version"));
     }
 
@@ -1366,12 +1372,21 @@ public class JdbcLoyaltyStore {
         return List.of((String[]) array.getArray());
     }
 
-    private static Instant instant(ResultSet row, String column) throws SQLException {
+    private static @Nullable Instant instant(ResultSet row, String column) throws SQLException {
         OffsetDateTime value = row.getObject(column, OffsetDateTime.class);
         return value == null ? null : value.toInstant();
     }
 
-    private static OffsetDateTime utc(Instant instant) {
+    /**
+     * The same read as {@link #instant}, for a column every row this store maps
+     * carries, so a caller may keep the field non-null rather than pushing every
+     * reader back to a null check.
+     */
+    private static Instant requiredInstant(ResultSet row, String column) throws SQLException {
+        return Objects.requireNonNull(instant(row, column), () -> column + " was unexpectedly null");
+    }
+
+    private static @Nullable OffsetDateTime utc(Instant instant) {
         return instant == null ? null : instant.atOffset(ZoneOffset.UTC);
     }
 }

@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
@@ -101,5 +102,5 @@ public class OnboardingTemplateService {
             List<String> requiredSteps,
             Map<String, Object> defaultConfiguration,
             String createdBy,
-            Instant createdAt) {}
+            @Nullable Instant createdAt) {}
 }

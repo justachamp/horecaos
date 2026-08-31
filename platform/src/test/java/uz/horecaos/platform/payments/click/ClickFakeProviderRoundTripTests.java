@@ -74,7 +74,6 @@ import uz.horecaos.platform.support.TestDatabase;
 @ActiveProfiles("local")
 class ClickFakeProviderRoundTripTests {
 
-    private static final String UZS = "UZS";
     private static final long AMOUNT_SOM = 15_000L;
     private static final String CLICK_SECRET = "round-trip-test-click-secret";
     private static final String CLICK_SERVICE_ID = "roundtrip-service-1";
@@ -89,6 +88,10 @@ class ClickFakeProviderRoundTripTests {
     private static final UUID INTEGRATION_BINDING = UUID.randomUUID();
     private static final UUID MERCHANT_BINDING = UUID.randomUUID();
 
+    // NullAway does not recognise @DynamicPropertySource (see #properties below) as a
+    // field initializer the way it does @BeforeAll/@BeforeEach; `database` is always
+    // set there before any @Test method runs.
+    @SuppressWarnings("NullAway")
     private static TestDatabase.Handle database;
 
     @BeforeAll

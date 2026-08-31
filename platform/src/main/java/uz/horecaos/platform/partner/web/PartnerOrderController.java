@@ -126,6 +126,8 @@ public class PartnerOrderController {
     }
 
     /**
+     * One partner order push, as ADR 0031's contract accepts it.
+     *
      * @param handoverCode the code the courier will read out, if the partner
      *                     issues one. It is hashed on arrival and never stored,
      *                     returned, logged, or traced in the clear.
@@ -177,6 +179,8 @@ public class PartnerOrderController {
     }
 
     /**
+     * The partner's own totals for a push, taken as stated.
+     *
      * @param taxMinor omitted when the partner reports no tax. Omitted and zero
      *                 are different claims and are stored differently.
      */
@@ -197,6 +201,8 @@ public class PartnerOrderController {
             Long taxMinor) {}
 
     /**
+     * The result of one order push, as reported back to the partner.
+     *
      * @param unmappedItems non-empty means the order was accepted with items the
      *                      catalogue does not carry. Reported back so the
      *                      partner's own console can show the venue what to fix,

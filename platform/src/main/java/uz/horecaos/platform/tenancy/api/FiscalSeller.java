@@ -3,6 +3,7 @@ package uz.horecaos.platform.tenancy.api;
 import java.time.LocalDate;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Who a branch sold as, on one business date (ADR 0038).
@@ -40,7 +41,7 @@ public record FiscalSeller(
         UUID assignmentId,
         int assignmentVersion,
         LocalDate effectiveFrom,
-        LocalDate effectiveUntil) {
+        @Nullable LocalDate effectiveUntil) {
 
     public FiscalSeller {
         Objects.requireNonNull(legalEntityId, "A legal entity ID is required");

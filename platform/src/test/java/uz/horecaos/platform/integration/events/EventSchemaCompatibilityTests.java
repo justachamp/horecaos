@@ -5,12 +5,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
@@ -129,7 +131,7 @@ class EventSchemaCompatibilityTests {
     private String currentSchemaSource(EventContract contract) throws Exception {
         try (InputStream source = getClass().getClassLoader().getResourceAsStream(contract.schemaPath())) {
             assertThat(source).as("schema %s must exist", contract.schemaPath()).isNotNull();
-            return new String(source.readAllBytes());
+            return new String(Objects.requireNonNull(source).readAllBytes(), StandardCharsets.UTF_8);
         }
     }
 

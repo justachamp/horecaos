@@ -74,9 +74,6 @@ class CatalogPublicationTests {
             FiscalClassification.of("10202001001000000", "1512315", 1, "Burger, dona");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private JdbcCatalogStore store;
@@ -90,9 +87,6 @@ class CatalogPublicationTests {
         Assumptions.assumeTrue(
                 DockerClientFactory.instance().isDockerAvailable(), "Docker is required for catalog publication tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -1134,7 +1128,7 @@ class CatalogPublicationTests {
         authoring.attachModifierGroup(TENANT, BRAND, mixer.productId(), extras, 0);
 
         var snapshot = new CatalogSnapshotLoader(store, media, allPriced(), LOCALE).load(TENANT, BRAND, catalogId);
-        var option = snapshot.optionsByGroup().get(extras).stream()
+        var option = snapshot.optionsByGroup().getOrDefault(extras, List.of()).stream()
                 .filter(candidate -> candidate.id().equals(linked))
                 .findFirst()
                 .orElseThrow();
@@ -1332,12 +1326,6 @@ class CatalogPublicationTests {
     }
 
     /**
-     * Controls which assets count as verified.
-     *
-     * <p>Media has its own lifecycle tests against real MinIO; what matters here
-     * is only how catalog reacts to an asset that is not yet displayable.
-     */
-    /**
      * A verified asset of this tenant, inserted the way finalize leaves one.
      *
      * <p>{@code AVAILABLE} needs its three verified columns filled — V0015's
@@ -1365,6 +1353,12 @@ class CatalogPublicationTests {
         return assetId;
     }
 
+    /**
+     * Controls which assets count as verified.
+     *
+     * <p>Media has its own lifecycle tests against real MinIO; what matters here
+     * is only how catalog reacts to an asset that is not yet displayable.
+     */
     private static final class MutableMediaAvailability implements MediaAvailability {
 
         private Set<MediaAssetId> displayable = Set.of();

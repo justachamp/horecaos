@@ -2,6 +2,7 @@ package uz.horecaos.platform.fiscal.domain;
 
 import java.time.DateTimeException;
 import java.time.ZoneId;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,11 +28,13 @@ public final class BusinessZone {
     private BusinessZone() {}
 
     /**
+     * Resolves the branch's own timezone, falling back when it is absent or unrecognized.
+     *
      * @param named    the branch's timezone as the row holds it, possibly null
      * @param about    what the caller is resolving a zone for, so the warning names
      *                 the row somebody has to fix
      */
-    public static ZoneId resolve(String named, ZoneId fallback, Object about) {
+    public static ZoneId resolve(@Nullable String named, ZoneId fallback, Object about) {
         if (named == null) {
             return fallback;
         }

@@ -13,6 +13,7 @@ import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -260,6 +261,8 @@ public class PriceAuthoringController {
     }
 
     /**
+     * A price book to draft.
+     *
      * @param currency ISO 4217. The book's currency, and every item in one quote
      *                 must resolve to one of them
      * @param priority settles overlap deterministically; row order and wall-clock
@@ -279,10 +282,18 @@ public class PriceAuthoringController {
         }
     }
 
-    /** @param amountMinor whole som for UZS, VAT included */
+    /**
+     * What a variant or modifier option costs.
+     *
+     * @param amountMinor whole som for UZS, VAT included
+     */
     public record PriceRequest(@PositiveOrZero long amountMinor) {}
 
-    /** @param rateBasisPoints 1200 is 12%; integers throughout, so no rate is ever a float */
+    /**
+     * The brand's VAT rate for a jurisdiction.
+     *
+     * @param rateBasisPoints 1200 is 12%; integers throughout, so no rate is ever a float
+     */
     public record TaxProfileRequest(
             PricingEngine.TaxMode mode,
             @NotNull @PositiveOrZero @Max(9999) Integer rateBasisPoints) {}
@@ -293,7 +304,7 @@ public class PriceAuthoringController {
             String currency,
             String status,
             Instant validFrom,
-            Instant validUntil,
+            @Nullable Instant validUntil,
             int priority,
             int version) {
 

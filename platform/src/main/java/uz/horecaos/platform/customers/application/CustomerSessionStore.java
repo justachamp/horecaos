@@ -3,6 +3,7 @@ package uz.horecaos.platform.customers.application;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Persistence for customer sessions, stated as a contract (ADR 0051).
@@ -75,7 +76,7 @@ public interface CustomerSessionStore {
             UUID tenantId,
             UUID brandId,
             UUID accountId,
-            UUID identityPartitionBrandId,
+            @Nullable UUID identityPartitionBrandId,
             String tokenHash,
             Instant issuedAt,
             Instant expiresAt) {}
@@ -91,8 +92,8 @@ public interface CustomerSessionStore {
             UUID tenantId,
             UUID brandId,
             UUID accountId,
-            UUID identityPartitionBrandId,
+            @Nullable UUID identityPartitionBrandId,
             Instant issuedAt,
             Instant expiresAt,
-            Instant revokedAt) {}
+            @Nullable Instant revokedAt) {}
 }

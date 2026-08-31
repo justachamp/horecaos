@@ -7,6 +7,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -287,7 +288,7 @@ public class QuarantineService {
      * pointer was inconvenient. So the field refuses anything that does not look
      * like a pointer, and the message says why rather than only that it did.
      */
-    private static String validatedEvidenceReference(String reference) {
+    private static @Nullable String validatedEvidenceReference(@Nullable String reference) {
         if (reference == null || reference.isBlank()) {
             return null;
         }
@@ -338,6 +339,9 @@ public class QuarantineService {
     }
 
     /**
+     * What filing a quarantine item names: the legacy identity, why it could not
+     * migrate, and where the diagnosis is held.
+     *
      * @param reasonCode                 from the approved quarantine vocabulary,
      *                                   pattern-constrained rather than free text
      *                                   so it cannot become the field the failing
@@ -347,7 +351,7 @@ public class QuarantineService {
      *                                   a reason code. Never the evidence itself
      */
     public record QuarantineCommand(
-            String entityType, String legacyId, String reasonCode, String sanitizedEvidenceReference) {
+            String entityType, String legacyId, String reasonCode, @Nullable String sanitizedEvidenceReference) {
 
         public QuarantineCommand {
             Objects.requireNonNull(entityType, "An entity type is required");
@@ -357,6 +361,8 @@ public class QuarantineService {
     }
 
     /**
+     * What settling an item names: how it was resolved and why.
+     *
      * @param resolutionCode how the item was settled: re-imported after a source
      *                       fix, mapped by hand under review, or accepted as not
      *                       migratable

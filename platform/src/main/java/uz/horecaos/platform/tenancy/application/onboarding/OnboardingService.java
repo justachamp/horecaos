@@ -8,8 +8,10 @@ import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -197,21 +199,21 @@ public class OnboardingService {
     public boolean runNextStep(UUID runId) {
         Claim claim = transactions.execute(ignored -> claimNextStep(runId, clock.instant()));
 
-        if (claim.handler() == null) {
+        OnboardingStepHandler handler = claim.handler();
+        if (handler == null) {
             return claim.advanced();
         }
+        // Claim's own invariant (see its javadoc): step and token are non-null
+        // exactly when handler is.
+        DueStep step = Objects.requireNonNull(claim.step());
+        UUID token = Objects.requireNonNull(claim.token());
 
         OnboardingStepHandler.StepResult result;
         try {
-            result = claim.handler()
-                    .execute(new OnboardingStepHandler.StepContext(
-                            runId,
-                            claim.step().tenantId(),
-                            inputFor(claim.step()),
-                            claim.step().externalReference(),
-                            claim.step().attemptCount() + 1));
+            result = handler.execute(new OnboardingStepHandler.StepContext(
+                    runId, step.tenantId(), inputFor(step), step.externalReference(), step.attemptCount() + 1));
         } catch (RuntimeException failure) {
-            log.warn("Onboarding step {} threw", claim.step().step(), failure);
+            log.warn("Onboarding step {} threw", step.step(), failure);
             result = OnboardingStepHandler.StepResult.retry(
                     "TRANSIENT_INFRASTRUCTURE", failure.getClass().getSimpleName());
         }
@@ -221,7 +223,7 @@ public class OnboardingService {
         Instant finished = clock.instant();
         OnboardingStepHandler.StepResult outcome = result;
         transactions.executeWithoutResult(ignored -> {
-            applyResult(runId, claim.step(), claim.token(), outcome, finished);
+            applyResult(runId, step, token, outcome, finished);
             refreshRunStatus(runId);
         });
         return true;
@@ -585,7 +587,13 @@ public class OnboardingService {
     }
 
     private void release(
-            UUID stepId, UUID claimToken, String status, String errorCode, String detail, Instant now, Duration delay) {
+            UUID stepId,
+            UUID claimToken,
+            String status,
+            @Nullable String errorCode,
+            @Nullable String detail,
+            Instant now,
+            Duration delay) {
 
         int released = jdbc.sql("""
                 UPDATE tenant.onboarding_steps
@@ -665,7 +673,7 @@ public class OnboardingService {
      * raw error on a topic, and the detail is whatever Keycloak or a provider
      * said about a named person.
      */
-    private FailedStep firstFailedRequiredStep(UUID runId) {
+    private @Nullable FailedStep firstFailedRequiredStep(UUID runId) {
         return jdbc.sql("""
                 SELECT step_key, last_error_code FROM tenant.onboarding_steps
                  WHERE run_id = :runId AND required AND status = 'FAILED'
@@ -721,11 +729,18 @@ public class OnboardingService {
     }
 
     /**
+     * What {@link #activate} decided.
+     *
      * @param outstandingRequired what still blocks activation, so the caller can
      *                            say why rather than only that it refused
+     * @param approvalRequestId   the pending ADR 0027 approval's id, present only
+     *                            when the outcome is AWAITING_APPROVAL
      */
     public record ActivationOutcome(
-            boolean activated, String outcome, List<String> outstandingRequired, UUID approvalRequestId) {}
+            boolean activated,
+            String outcome,
+            List<String> outstandingRequired,
+            @Nullable UUID approvalRequestId) {}
 
     private record FailedStep(String stepKey, String errorCode) {}
 
@@ -735,11 +750,19 @@ public class OnboardingService {
     /**
      * What the claim transaction decided.
      *
+     * @param step     null exactly when {@link #handler} is, in the no-work cases
+     *                 {@link #none()} and {@link #handled()}
+     * @param token    the claim token a handler must present back, null with
+     *                 {@link #step}
      * @param handler  null when there is nothing for a handler to do, which is
      *                 the only case the caller has to distinguish
      * @param advanced whether the run moved, so a drain loop knows to come back
      */
-    private record Claim(DueStep step, UUID token, OnboardingStepHandler handler, boolean advanced) {
+    private record Claim(
+            @Nullable DueStep step,
+            @Nullable UUID token,
+            @Nullable OnboardingStepHandler handler,
+            boolean advanced) {
 
         static Claim none() {
             return new Claim(null, null, null, false);

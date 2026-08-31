@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -414,8 +415,8 @@ public class ImportService {
             UUID tenantId,
             RunRow run,
             SourceCursorStore.Cursor cursor,
-            String nextKey,
-            String watermark,
+            @Nullable String nextKey,
+            @Nullable String watermark,
             long rowsCommitted,
             boolean exhausted) {
 
@@ -471,7 +472,7 @@ public class ImportService {
 
     /** One page's dispositions, mutable because it is filled in a loop and thrown away. */
     private static final class Tally {
-        private String entityType;
+        private @Nullable String entityType;
         private long created;
         private long updated;
         private long skipped;
@@ -497,7 +498,7 @@ public class ImportService {
             long updated,
             long skipped,
             long quarantined,
-            String nextKey,
+            @Nullable String nextKey,
             boolean exhausted) {
 
         static PageOutcome exhausted(String entityType) {

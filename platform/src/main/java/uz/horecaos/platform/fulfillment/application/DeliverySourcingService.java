@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -171,7 +172,7 @@ public class DeliverySourcingService {
             SourcingDecision.BookPartner decision,
             SourcingProgress progress,
             ResolvedPolicy<DeliverySourcingPolicy> policy,
-            DeliveryQuote quote,
+            @Nullable DeliveryQuote quote,
             Instant now) {
 
         UUID commandId = commandId(
@@ -412,7 +413,7 @@ public class DeliverySourcingService {
      * null — an unquoted partner is still bookable — and {@code findFirst} on a
      * null element throws rather than answering "none".
      */
-    private static DeliveryQuote quoteFor(List<ScoredPartner> scored, SourcingDecision.BookPartner decision) {
+    private static @Nullable DeliveryQuote quoteFor(List<ScoredPartner> scored, SourcingDecision.BookPartner decision) {
         for (ScoredPartner candidate : scored) {
             if (candidate.partner().bindingId().equals(decision.partner().bindingId())) {
                 return candidate.quote();
@@ -493,10 +494,10 @@ public class DeliverySourcingService {
     public record Outcome(
             SourcingDecision decision,
             SourcingProgress progress,
-            BookingReceipt receipt,
+            @Nullable BookingReceipt receipt,
             UUID policyId,
             int policyVersion,
-            UUID attemptId,
+            @Nullable UUID attemptId,
             boolean won) {
 
         public boolean assigned() {

@@ -3,8 +3,10 @@ package uz.horecaos.platform.courier.application;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -76,10 +78,12 @@ public class RegistrationComplianceSweeper {
         // are both legitimate.
         for (EngagementRow engagement : couriers.expiringBetween(today, today.plusDays(90))) {
             CourierCompensationPolicy policy = policies.resolve(ResourceScope.tenant(engagement.tenantId()));
-            LocalDate dueOn = engagement.reverificationDueOn();
-            long remaining = today.until(dueOn).getDays()
-                    + 31L * today.until(dueOn).getMonths()
-                    + 366L * today.until(dueOn).getYears();
+            // expiringBetween selects on reverification_due_on, so every row has one.
+            LocalDate dueOn = Objects.requireNonNull(engagement.reverificationDueOn());
+            // An exact day count. The Period-arithmetic approximation this
+            // replaces drifted by a day or two around short months, which is
+            // enough to ring a rung early or late.
+            long remaining = ChronoUnit.DAYS.between(today, dueOn);
 
             if (remaining > policy.warningDays()) {
                 continue;
@@ -124,6 +128,8 @@ public class RegistrationComplianceSweeper {
             if (engagement.status() != EngagementStatus.ACTIVE) {
                 continue;
             }
+            // dueBy selects on reverification_due_on, so every row has one.
+            LocalDate dueOn = Objects.requireNonNull(engagement.reverificationDueOn());
             boolean suspended = couriers.suspend(
                     engagement.tenantId(),
                     engagement.id(),
@@ -135,22 +141,9 @@ public class RegistrationComplianceSweeper {
                 continue;
             }
             lapsed++;
-            couriers.claimNotice(
-                    engagement.tenantId(),
-                    engagement.id(),
-                    0,
-                    "COURIER",
-                    engagement.reverificationDueOn(),
-                    clock.instant());
-            couriers.claimNotice(
-                    engagement.tenantId(),
-                    engagement.id(),
-                    0,
-                    "MANAGER",
-                    engagement.reverificationDueOn(),
-                    clock.instant());
-            notifications.registrationLapsed(
-                    engagement.tenantId(), engagement.courierId(), engagement.reverificationDueOn());
+            couriers.claimNotice(engagement.tenantId(), engagement.id(), 0, "COURIER", dueOn, clock.instant());
+            couriers.claimNotice(engagement.tenantId(), engagement.id(), 0, "MANAGER", dueOn, clock.instant());
+            notifications.registrationLapsed(engagement.tenantId(), engagement.courierId(), dueOn);
 
             audit.record(AuditFact.of("courier.registration.lapsed", AuditClass.BUSINESS)
                     .by(ActorRef.systemJob("courier-registration-sweeper"))

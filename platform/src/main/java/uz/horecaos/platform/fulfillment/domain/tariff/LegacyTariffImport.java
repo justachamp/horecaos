@@ -4,6 +4,7 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Turns one legacy branch's {@code vendors.delivery} JSON into a HorecaOS rate table
@@ -71,15 +72,15 @@ public final class LegacyTariffImport {
      *                       can say out loud that it drops it, rather than the
      *                       parser silently never having had it
      */
-    public record LegacyDiscount(long value, String mode, Long minOrderPrice, List<LegacyWindow> times) {}
+    public record LegacyDiscount(long value, String mode, @Nullable Long minOrderPrice, List<LegacyWindow> times) {}
 
     /** {@code VendorDeliveryConfig}. Every field, including the inert ones. */
     public record LegacyDeliveryConfig(
             int distance,
             int maxDistance,
             long distancePrice,
-            Long minOrderPrice,
-            LegacyDiscount discount,
+            @Nullable Long minOrderPrice,
+            @Nullable LegacyDiscount discount,
             List<LegacyStep> pricesPerKm,
             List<LegacyPeak> peakHours) {}
 
@@ -212,7 +213,7 @@ public final class LegacyTariffImport {
      * discount with an empty or absent {@code times} has never reduced a single
      * fee, whatever value it carries.
      */
-    private static List<TariffDiscount> discountsFor(LegacyDiscount discount) {
+    private static List<TariffDiscount> discountsFor(@Nullable LegacyDiscount discount) {
         if (discount == null || discount.times() == null || discount.times().isEmpty()) {
             return List.of();
         }

@@ -78,6 +78,7 @@ class OnboardingTemplateServiceTests {
                 (java.util.Map<String, Object>) template.defaultConfiguration().get("acceptancePolicy");
 
         assertThat(acceptancePolicy).isNotNull();
+        java.util.Objects.requireNonNull(acceptancePolicy);
         assertThat(acceptancePolicy.get("mode")).isEqualTo("RESTAURANT_APPROVAL");
         assertThat(acceptancePolicy.get("approvalChannel")).isEqualTo("HORECAOS_OPERATIONS");
     }

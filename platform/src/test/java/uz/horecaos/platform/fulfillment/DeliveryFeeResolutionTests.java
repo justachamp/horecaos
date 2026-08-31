@@ -12,6 +12,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
@@ -185,7 +186,7 @@ class DeliveryFeeResolutionTests {
         assertThat(resolution.tariffVersion()).isEqualTo(1);
         assertThat(resolution.bandSequence()).isZero();
         assertThat(resolution.distanceMeters()).isBetween(1_700, 1_800);
-        assertThat(resolution.distanceSource().name()).isEqualTo("RADIUS");
+        assertThat(Objects.requireNonNull(resolution.distanceSource()).name()).isEqualTo("RADIUS");
     }
 
     @Test
@@ -816,7 +817,7 @@ class DeliveryFeeResolutionTests {
         // provider is slow is a worse outcome than a fee that is a little wrong and
         // says so on its own evidence row.
         assertThat(resolution.outcome()).isEqualTo(DeliveryFeeOutcome.RESOLVED);
-        assertThat(resolution.distanceSource().name()).isEqualTo("RADIUS_FALLBACK");
+        assertThat(Objects.requireNonNull(resolution.distanceSource()).name()).isEqualTo("RADIUS_FALLBACK");
         assertThat(resolution.distanceMode()).isEqualTo(DistanceMode.ROAD);
         // 1,797 m straight line inflated by the 1.3 detour factor is 2,336 m, which
         // is three started kilometres at 2,000 each.

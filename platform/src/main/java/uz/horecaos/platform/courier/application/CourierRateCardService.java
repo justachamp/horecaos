@@ -70,7 +70,9 @@ public class CourierRateCardService {
         try {
             RateCardValidator.validateForActivation(card);
         } catch (RateCardValidator.InvalidRateCardException invalid) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, invalid.getMessage());
+            // InvalidRateCardException is always constructed with a message —
+            // it names the metre the ladder fails at — so the guard cannot fire.
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, java.util.Objects.requireNonNull(invalid.getMessage()));
         }
 
         if (!cards.activate(tenantId, cardId, actor.subject(), clock.instant())) {

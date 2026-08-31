@@ -2,6 +2,7 @@ package uz.horecaos.platform.migration.api;
 
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The one way a legacy row becomes a target row (ADR 0024, step 4).
@@ -67,7 +68,12 @@ public interface ImportPort<T> {
      *                          to, or null on first import
      */
     record ImportTarget(
-            UUID tenantId, UUID brandId, UUID locationId, UUID scopeId, String legacyId, UUID existingTargetId) {
+            UUID tenantId,
+            @Nullable UUID brandId,
+            @Nullable UUID locationId,
+            UUID scopeId,
+            String legacyId,
+            @Nullable UUID existingTargetId) {
 
         public ImportTarget {
             Objects.requireNonNull(tenantId, "A tenant is required");

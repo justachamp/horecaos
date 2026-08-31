@@ -428,8 +428,9 @@ class FailureOperationsServiceTests {
 
         // The maker asks about one consumer's dead letter, and that is the row a
         // checker opens and reconciles.
-        catchThrowable(() -> operations.resolveInboxMessage(
+        Throwable refusal = catchThrowable(() -> operations.resolveInboxMessage(
                 CONSUMER, eventId, FailureCategory.UNCERTAIN_EXTERNAL_OUTCOME, OPERATOR, RECONCILED, EVIDENCE));
+        assertThat(refusal).isInstanceOf(FailureOperationsService.SecondApproverRequiredException.class);
         UUID requestId = pendingRequestIds().getFirst();
         approvals.decide(
                 requestId, ApprovalService.Decision.APPROVE, CHECKER, "Reconciled against the provider statement");

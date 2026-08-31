@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -1363,7 +1364,7 @@ class DatabasePrivilegeTests {
      * A scan that silently stops matching is worse than no scan, because the suite
      * stays green while the coverage leaves.
      */
-    static Set<Requirement> statementPrivileges(String source) {
+    private static Set<Requirement> statementPrivileges(String source) {
         Set<Requirement> found = new LinkedHashSet<>();
         for (Map.Entry<Pattern, String> statement : STATEMENTS) {
             Matcher matcher = statement.getKey().matcher(source);
@@ -1402,8 +1403,10 @@ class DatabasePrivilegeTests {
 
     /** The table, if the schema is one a migration of ours creates. */
     private static Optional<String> owned(String schema, String table) {
-        String lowered = schema.toLowerCase();
-        return OWNED_SCHEMAS.contains(lowered) ? Optional.of(lowered + "." + table.toLowerCase()) : Optional.empty();
+        String lowered = schema.toLowerCase(Locale.ROOT);
+        return OWNED_SCHEMAS.contains(lowered)
+                ? Optional.of(lowered + "." + table.toLowerCase(Locale.ROOT))
+                : Optional.empty();
     }
 
     private static boolean insideAComment(String source, int at) {
@@ -1423,7 +1426,7 @@ class DatabasePrivilegeTests {
      */
     private static List<String> lockedTables(String source, int at) {
         String query = source.substring(Math.max(0, at - 3_000), at);
-        int head = query.toUpperCase().lastIndexOf("SELECT ");
+        int head = query.toUpperCase(Locale.ROOT).lastIndexOf("SELECT ");
         if (head >= 0) {
             query = query.substring(head);
         }
@@ -1435,7 +1438,7 @@ class DatabasePrivilegeTests {
             owned(candidate.group(1), candidate.group(2)).ifPresent(table -> {
                 all.add(table);
                 if (candidate.group(3) != null) {
-                    byAlias.put(candidate.group(3).toLowerCase(), table);
+                    byAlias.put(candidate.group(3).toLowerCase(Locale.ROOT), table);
                 }
             });
         }
@@ -1443,7 +1446,7 @@ class DatabasePrivilegeTests {
         Matcher named = LOCK_NAMES.matcher(source.substring(at, Math.min(source.length(), at + 200)));
         if (named.find()) {
             List<String> targets = Stream.of(named.group(1).split(","))
-                    .map(alias -> byAlias.get(alias.trim().toLowerCase()))
+                    .map(alias -> byAlias.get(alias.trim().toLowerCase(Locale.ROOT)))
                     .filter(java.util.Objects::nonNull)
                     .toList();
             if (!targets.isEmpty()) {

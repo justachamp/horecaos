@@ -2,9 +2,11 @@ package uz.horecaos.platform.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
@@ -54,9 +56,6 @@ class CatalogTranslationTenantScopeTests {
     private static final FiscalClassification UNCLASSIFIED = FiscalClassification.unclassified();
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private JdbcCatalogStore store;
@@ -68,9 +67,6 @@ class CatalogTranslationTenantScopeTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for catalog translation scope tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -174,9 +170,9 @@ class CatalogTranslationTenantScopeTests {
 
         assertThat(foreign).isInstanceOf(CatalogAuthoringService.UnknownCatalogEntityException.class);
         assertThat(absent).isInstanceOf(CatalogAuthoringService.UnknownCatalogEntityException.class);
-        assertThat(foreign.getMessage().replace(productA.toString(), "ID"))
+        assertThat(Objects.requireNonNull(foreign.getMessage()).replace(productA.toString(), "ID"))
                 .as("the two refusals must not differ in anything but the id the caller already sent")
-                .isEqualTo(absent.getMessage().replace(nowhere.toString(), "ID"));
+                .isEqualTo(Objects.requireNonNull(absent.getMessage()).replace(nowhere.toString(), "ID"));
 
         assertThat(jdbc.sql("SELECT count(*) FROM catalog.translations WHERE tenant_id = :t")
                         .param("t", TENANT_B)
@@ -237,12 +233,8 @@ class CatalogTranslationTenantScopeTests {
     }
 
     private Throwable catchTranslate(UUID entityId) {
-        try {
-            authoring.translate(TENANT_B, BRAND_B, EntityType.PRODUCT, entityId, LOCALE, "Arzon osh", null);
-            return null;
-        } catch (Throwable thrown) {
-            return thrown;
-        }
+        return catchThrowable(
+                () -> authoring.translate(TENANT_B, BRAND_B, EntityType.PRODUCT, entityId, LOCALE, "Arzon osh", null));
     }
 
     private Map<String, Object> translation(UUID tenantId, UUID entityId) {

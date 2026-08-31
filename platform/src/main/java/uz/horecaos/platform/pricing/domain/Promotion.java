@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A promotion, as a value the engine can evaluate without touching a database
@@ -33,10 +34,11 @@ public record Promotion(
         int priority,
         boolean requiresCoupon,
         /** Null is uncapped. Always positive when present. */
-        Long maximumDiscountMinor,
+        @Nullable Long maximumDiscountMinor,
         String currency,
         Instant validFrom,
-        Instant validUntil,
+        /** Null is open-ended: the promotion never lapses on its own. */
+        @Nullable Instant validUntil,
         int definitionVersion,
         List<Condition> conditions,
         List<Action> actions) {

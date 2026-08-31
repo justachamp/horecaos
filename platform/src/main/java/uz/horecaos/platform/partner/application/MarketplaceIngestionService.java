@@ -459,6 +459,8 @@ public class MarketplaceIngestionService {
     }
 
     /**
+     * One line of a partner's push, before catalogue mapping.
+     *
      * @param taxAmountMinor null when the partner stated no tax on the line,
      *                       which is not the same as tax of zero
      */
@@ -471,6 +473,8 @@ public class MarketplaceIngestionService {
             Long taxAmountMinor) {}
 
     /**
+     * What became of one partner push.
+     *
      * @param unmappedItems the partner item identifiers the catalogue does not
      *                      carry. Non-empty is an accepted order with a
      *                      location-visible exception on it, not a failure: a

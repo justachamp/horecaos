@@ -3,6 +3,7 @@ package uz.horecaos.platform.ordering.api;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.tenancy.api.TenantId;
 
 /**
@@ -12,6 +13,9 @@ import uz.horecaos.platform.tenancy.api.TenantId;
  * and "the restaurant never looked" lead to different customer wording, different
  * operational follow-up, and different quality metrics for the branch; one code
  * covering both would hide the second inside the first.
+ *
+ * @param approvalDeadlineAt the timer that expired, or null for an order whose
+ *                           record predates the approval timer and never armed one
  */
 public record OrderExpired(
         UUID eventId,
@@ -20,7 +24,7 @@ public record OrderExpired(
         Instant occurredAt,
         UUID brandId,
         UUID locationId,
-        Instant approvalDeadlineAt,
+        @Nullable Instant approvalDeadlineAt,
         String status,
         int orderVersion)
         implements OrderingEvent {
@@ -59,7 +63,7 @@ public record OrderExpired(
             UUID locationId,
             // ISO-8601 text; see OrderAwaitingApproval for why the wire shape of a
             // timestamp is pinned rather than left to the serializer.
-            String approvalDeadlineAt,
+            @Nullable String approvalDeadlineAt,
             String status,
             int orderVersion) {}
 }

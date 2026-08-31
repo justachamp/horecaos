@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.payments.domain.CallbackKind;
@@ -50,11 +51,11 @@ public class JdbcProviderCallbackStore {
             String providerReference,
             String requestBodyHash,
             boolean signatureValid,
-            UUID attemptId,
+            @Nullable UUID attemptId,
             String responseCode,
             Instant receivedAt,
-            String protectedRequestReference,
-            String protectedResponseReference) {
+            @Nullable String protectedRequestReference,
+            @Nullable String protectedResponseReference) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("id", id);
         parameters.put("tenantId", tenantId);

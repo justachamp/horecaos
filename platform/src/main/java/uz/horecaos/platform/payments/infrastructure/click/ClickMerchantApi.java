@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.integration.api.payment.MerchantApiCall;
 import uz.horecaos.platform.integration.api.payment.MerchantApiTransport;
@@ -201,7 +202,7 @@ public class ClickMerchantApi {
             String operation,
             String method,
             String path,
-            Map<String, Object> body,
+            @Nullable Map<String, Object> body,
             boolean mutating) {
 
         String merchantUser = binding.merchantUser().orElse(null);
@@ -308,7 +309,7 @@ public class ClickMerchantApi {
                             && ClickErrorCodes.uncertainMutation(body.get("error_code")));
         }
 
-        public String field(String name) {
+        public @Nullable String field(String name) {
             Object value = body.get(name);
             return value == null ? null : String.valueOf(value);
         }

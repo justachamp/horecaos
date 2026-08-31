@@ -3,6 +3,7 @@ package uz.horecaos.platform.migration.application.importing;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Where extraction of one entity type in one scope got to
@@ -46,6 +47,8 @@ public interface SourceCursorStore {
     boolean advance(UUID tenantId, UUID scopeId, String entityType, Advance advance, int expectedVersion, Instant now);
 
     /**
+     * Where one entity type's extraction stands.
+     *
      * @param lastStableKey exclusive lower bound for the next page, or null when
      *                      nothing has been read
      * @param watermark     the change position a catch-up resumes from, paired
@@ -61,9 +64,9 @@ public interface SourceCursorStore {
             UUID scopeId,
             String entityType,
             String stableKeyColumn,
-            String lastStableKey,
-            String watermark,
-            String watermarkColumn,
+            @Nullable String lastStableKey,
+            @Nullable String watermark,
+            @Nullable String watermarkColumn,
             UUID advancedByRunId,
             int transformationVersion,
             long pagesCommitted,
@@ -81,8 +84,8 @@ public interface SourceCursorStore {
      * exactly the page that was retried.
      */
     record Advance(
-            String lastStableKey,
-            String watermark,
+            @Nullable String lastStableKey,
+            @Nullable String watermark,
             UUID advancedByRunId,
             int transformationVersion,
             long pagesCommitted,

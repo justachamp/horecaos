@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One try at one provider through one merchant account (ADR 0013).
@@ -40,19 +41,19 @@ public record PaymentAttempt(
         UUID merchantBindingId,
         String merchantTransId,
         LocalDate businessDate,
-        String externalPaymentId,
-        String externalDocumentId,
+        @Nullable String externalPaymentId,
+        @Nullable String externalDocumentId,
         SomAmount amount,
         PaymentAttemptStatus status,
-        PresentationKind presentationKind,
-        ProviderEvidence evidence,
-        Instant providerCreatedAt,
-        Instant expiresAt,
-        String failureCode,
-        Uncertainty uncertainty,
+        @Nullable PresentationKind presentationKind,
+        @Nullable ProviderEvidence evidence,
+        @Nullable Instant providerCreatedAt,
+        @Nullable Instant expiresAt,
+        @Nullable String failureCode,
+        @Nullable Uncertainty uncertainty,
         int version,
         Instant createdAt,
-        Instant settledAt) {
+        @Nullable Instant settledAt) {
 
     /**
      * The obligation an uncertain attempt carries.
@@ -64,7 +65,11 @@ public record PaymentAttempt(
      * pair-completeness CHECKs make in the schema.
      */
     public record Uncertainty(
-            Instant since, UncertaintyResolver resolver, Instant deadline, int resolutionAttempts, Instant resolvedAt) {
+            Instant since,
+            UncertaintyResolver resolver,
+            Instant deadline,
+            int resolutionAttempts,
+            @Nullable Instant resolvedAt) {
 
         public Uncertainty {
             Objects.requireNonNull(since, "An uncertainty needs the moment it was first observed");

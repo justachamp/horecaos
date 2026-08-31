@@ -9,6 +9,7 @@ import java.util.UUID;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -286,7 +287,7 @@ class CustomerIdentityModeMigrationTests {
             int version,
             String mode,
             OffsetDateTime effectiveFrom,
-            OffsetDateTime supersededAt) {
+            @Nullable OffsetDateTime supersededAt) {
         jdbc.sql("""
                 INSERT INTO tenant.customer_identity_policies (
                     id, tenant_id, version, identity_mode, effective_from, superseded_at)

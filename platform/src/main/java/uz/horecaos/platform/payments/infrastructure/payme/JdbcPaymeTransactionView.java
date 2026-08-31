@@ -6,8 +6,10 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.payments.domain.PaymentAttemptStatus;
@@ -118,11 +120,16 @@ public class JdbcPaymeTransactionView {
                 row.getObject("tenant_id", UUID.class),
                 row.getString("external_payment_id"),
                 row.getString("merchant_trans_id"),
-                instant(row, "provider_created_at"),
+                // Every row here is filtered to external_payment_id IS NOT NULL, so
+                // Payme already created the transaction and stamped its own creation
+                // time.
+                Objects.requireNonNull(instant(row, "provider_created_at")),
                 new SomAmount(row.getLong("requested_amount_minor"), row.getString("currency")),
                 PaymentAttemptStatus.valueOf(row.getString("status")),
                 row.getString("provider_reason"),
-                instant(row, "create_time"),
+                // Same reasoning: an attempt with a Payme id has a RESERVE transaction
+                // recording when it was created.
+                Objects.requireNonNull(instant(row, "create_time")),
                 instant(row, "perform_time"),
                 instant(row, "cancel_time"));
     }
@@ -133,12 +140,12 @@ public class JdbcPaymeTransactionView {
      * timestamps decide whether a twelve-hour window has closed, that difference is
      * a performed transaction that should have been cancelled.
      */
-    private static Instant instant(ResultSet row, String column) throws SQLException {
+    private static @Nullable Instant instant(ResultSet row, String column) throws SQLException {
         OffsetDateTime value = row.getObject(column, OffsetDateTime.class);
         return value == null ? null : value.toInstant();
     }
 
     private static OffsetDateTime utc(Instant at) {
-        return at == null ? null : OffsetDateTime.ofInstant(at, ZoneOffset.UTC);
+        return OffsetDateTime.ofInstant(at, ZoneOffset.UTC);
     }
 }

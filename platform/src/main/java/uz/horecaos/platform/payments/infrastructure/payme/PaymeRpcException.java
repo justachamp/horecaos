@@ -2,6 +2,7 @@ package uz.horecaos.platform.payments.infrastructure.payme;
 
 import java.util.Objects;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A JSON-RPC error on its way to a Payme response body (ADR 0013).
@@ -21,9 +22,9 @@ public class PaymeRpcException extends RuntimeException {
 
     private final int code;
     private final PaymeMessage localised;
-    private final String data;
+    private final @Nullable String data;
 
-    public PaymeRpcException(int code, PaymeMessage localised, String data) {
+    public PaymeRpcException(int code, PaymeMessage localised, @Nullable String data) {
         super(
                 Objects.requireNonNull(localised, "A localised message is required")
                         .en(),

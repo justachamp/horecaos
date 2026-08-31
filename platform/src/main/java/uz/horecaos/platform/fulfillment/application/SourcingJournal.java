@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.BookingReceipt;
 import uz.horecaos.platform.fulfillment.domain.sourcing.AttemptStatus;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryQuote;
@@ -118,21 +119,26 @@ public interface SourcingJournal {
      *                       depends on
      * @param quoteId        the quote this selection was made on, or null when the
      *                       partner could not be quoted
+     * @param policyId       the ADR 0030 policy this decision resolved under, or
+     *                       null when nothing was configured and ADR 0014's
+     *                       provisional timings applied
      */
     record PartnerAttempt(
             UUID tenantId,
             UUID planId,
             UUID bindingId,
             String idempotencyKey,
-            UUID quoteId,
+            @Nullable UUID quoteId,
             String decisionReason,
-            UUID policyId,
+            @Nullable UUID policyId,
             int policyVersion,
             Instant now) {}
 
     /**
      * @param expiresAt when the offer lapses. Never null: a courier who is never
      *                  told an offer ended holds an order nobody else can be given
+     * @param policyId  the ADR 0030 policy this decision resolved under, or null
+     *                  when nothing was configured
      */
     record InternalOffer(
             UUID tenantId,
@@ -141,7 +147,7 @@ public interface SourcingJournal {
             String idempotencyKey,
             Instant expiresAt,
             String decisionReason,
-            UUID policyId,
+            @Nullable UUID policyId,
             int policyVersion,
             Instant now) {}
 

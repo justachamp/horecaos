@@ -7,6 +7,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -35,7 +36,8 @@ public class JdbcCustomerStore {
      * nothing — which would make every sign-in look like a first sign-in and
      * create a fresh account each time.
      */
-    public Optional<UUID> findLinkedAccount(UUID tenantId, UUID partitionBrandId, String issuer, String subject) {
+    public Optional<UUID> findLinkedAccount(
+            UUID tenantId, @Nullable UUID partitionBrandId, String issuer, String subject) {
         return jdbc.sql("""
                 SELECT customer_account_id FROM customer.principal_links
                 WHERE tenant_id = :tenantId
@@ -117,7 +119,11 @@ public class JdbcCustomerStore {
      *                      policy migration is migrating from
      */
     public void insertAccount(
-            UUID accountId, UUID tenantId, UUID partitionBrandId, Integer policyVersion, Instant now) {
+            UUID accountId,
+            UUID tenantId,
+            @Nullable UUID partitionBrandId,
+            @Nullable Integer policyVersion,
+            Instant now) {
         jdbc.sql("""
                 INSERT INTO customer.customer_accounts (
                     id, tenant_id, identity_partition_brand_id, status,
@@ -138,7 +144,7 @@ public class JdbcCustomerStore {
     public void insertPrincipalLink(
             UUID linkId,
             UUID tenantId,
-            UUID partitionBrandId,
+            @Nullable UUID partitionBrandId,
             UUID accountId,
             String issuer,
             String subject,
@@ -403,9 +409,9 @@ public class JdbcCustomerStore {
             UUID tenantId,
             UUID accountId,
             int expectedVersion,
-            String displayName,
-            String preferredLocale,
-            String preferredTimezone,
+            @Nullable String displayName,
+            @Nullable String preferredLocale,
+            @Nullable String preferredTimezone,
             Instant now) {
         return jdbc.sql("""
                 UPDATE customer.customer_accounts
@@ -444,9 +450,9 @@ public class JdbcCustomerStore {
             UUID accountId,
             String label,
             String encryptedFields,
-            String encryptedInstructions,
-            Double latitude,
-            Double longitude,
+            @Nullable String encryptedInstructions,
+            @Nullable Double latitude,
+            @Nullable Double longitude,
             String coordinateSource,
             Instant now) {
         jdbc.sql("""
@@ -524,9 +530,9 @@ public class JdbcCustomerStore {
             int expectedVersion,
             String label,
             String encryptedFields,
-            String encryptedInstructions,
-            Double latitude,
-            Double longitude,
+            @Nullable String encryptedInstructions,
+            @Nullable Double latitude,
+            @Nullable Double longitude,
             String coordinateSource,
             Instant now) {
         return jdbc.sql("""
@@ -640,13 +646,13 @@ public class JdbcCustomerStore {
             UUID id,
             UUID tenantId,
             UUID accountId,
-            UUID brandId,
+            @Nullable UUID brandId,
             String purpose,
-            String channel,
+            @Nullable String channel,
             String decision,
             String policyVersion,
             String source,
-            String evidenceReference,
+            @Nullable String evidenceReference,
             Instant decidedAt) {
         jdbc.sql("""
                 INSERT INTO customer.consent_decisions (
@@ -755,12 +761,12 @@ public class JdbcCustomerStore {
      */
     public record AccountRow(
             UUID id,
-            UUID partitionBrandId,
+            @Nullable UUID partitionBrandId,
             String status,
-            String displayName,
-            String preferredLocale,
-            String preferredTimezone,
-            Integer identityPolicyVersion,
+            @Nullable String displayName,
+            @Nullable String preferredLocale,
+            @Nullable String preferredTimezone,
+            @Nullable Integer identityPolicyVersion,
             int version,
             Instant createdAt) {
 
@@ -775,9 +781,9 @@ public class JdbcCustomerStore {
             UUID id,
             String label,
             String encryptedFields,
-            String encryptedInstructions,
-            Double latitude,
-            Double longitude,
+            @Nullable String encryptedInstructions,
+            @Nullable Double latitude,
+            @Nullable Double longitude,
             String coordinateSource,
             int version) {
 

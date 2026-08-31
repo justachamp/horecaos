@@ -1,5 +1,7 @@
 package uz.horecaos.platform.payments.infrastructure.click;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Click's {@code payment_status}, which is not Click's {@code error_code}
  * (ADR 0013).
@@ -40,7 +42,7 @@ public enum ClickPaymentStatus {
     /** The field was absent or unparseable — which several endpoints do legitimately. */
     UNKNOWN;
 
-    public static ClickPaymentStatus of(Object raw) {
+    public static ClickPaymentStatus of(@Nullable Object raw) {
         if (raw == null) {
             return UNKNOWN;
         }

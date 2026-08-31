@@ -9,8 +9,10 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.migration.domain.MappingStatus;
@@ -244,11 +246,16 @@ public class JdbcEntityMappingStore {
                 MappingStatus.valueOf(row.getString("mapping_status")),
                 row.getObject("superseded_by_mapping_id", UUID.class),
                 row.getObject("run_id", UUID.class),
-                instantOrNull(row, "created_at"),
-                instantOrNull(row, "updated_at"));
+                // Both NOT NULL DEFAULT now() (V0024); instantOrNull is still the
+                // right reader since it is the one column accessor this package has,
+                // but neither column itself is ever absent.
+                Objects.requireNonNull(instantOrNull(row, "created_at")),
+                Objects.requireNonNull(instantOrNull(row, "updated_at")));
     }
 
     /**
+     * One legacy identity's crosswalk entry, as written.
+     *
      * @param sourceVersion the source row version this mapping was built from, in
      *                      whatever the source calls a version. Compared as an
      *                      opaque token and never ordered
@@ -262,26 +269,27 @@ public class JdbcEntityMappingStore {
             UUID scopeId,
             String entityType,
             String legacyId,
-            UUID targetId,
-            String sourceVersion,
-            Long targetVersion,
+            @Nullable UUID targetId,
+            @Nullable String sourceVersion,
+            @Nullable Long targetVersion,
             int transformationVersion,
             MappingStatus status,
             UUID runId,
             Instant occurredAt) {}
 
+    /** One legacy identity's crosswalk entry, as read back. */
     public record EntityMappingRow(
             UUID mappingId,
             UUID tenantId,
             UUID scopeId,
             String entityType,
             String legacyId,
-            UUID targetId,
-            String sourceVersion,
-            Long targetVersion,
+            @Nullable UUID targetId,
+            @Nullable String sourceVersion,
+            @Nullable Long targetVersion,
             int transformationVersion,
             MappingStatus status,
-            UUID supersededByMappingId,
+            @Nullable UUID supersededByMappingId,
             UUID runId,
             Instant createdAt,
             Instant updatedAt) {}

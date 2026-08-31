@@ -3,6 +3,7 @@ package uz.horecaos.platform.tenancy.domain;
 import java.time.LocalDate;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Which company a branch sold under, and between which dates (ADR 0038).
@@ -39,9 +40,9 @@ public record LocationFiscalAssignment(
         UUID locationId,
         UUID legalEntityId,
         LocalDate effectiveFrom,
-        LocalDate effectiveUntil,
+        @Nullable LocalDate effectiveUntil,
         String approvedBy,
-        String approvalReference,
+        @Nullable String approvalReference,
         int version) {
 
     public LocationFiscalAssignment {

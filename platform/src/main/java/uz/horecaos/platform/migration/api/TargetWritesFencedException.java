@@ -2,6 +2,7 @@ package uz.horecaos.platform.migration.api;
 
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.migration.domain.ScopeState;
 import uz.horecaos.platform.migration.domain.WriteMode;
 
@@ -23,12 +24,12 @@ import uz.horecaos.platform.migration.domain.WriteMode;
 public class TargetWritesFencedException extends RuntimeException {
 
     private final MigrationCapability capability;
-    private final UUID scopeId;
+    private final @Nullable UUID scopeId;
     private final ScopeState state;
     private final WriteMode writeMode;
 
     public TargetWritesFencedException(
-            MigrationCapability capability, UUID scopeId, ScopeState state, WriteMode writeMode) {
+            MigrationCapability capability, @Nullable UUID scopeId, ScopeState state, WriteMode writeMode) {
         super(describe(capability, scopeId, state, writeMode));
         this.capability = Objects.requireNonNull(capability, "A capability is required");
         this.scopeId = scopeId;

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -166,13 +167,13 @@ public class OrderRemedyService {
             String currency,
             String reasonCode,
             String reason,
-            ExecutionChannel channel,
-            String providerReference,
-            String executedBy,
-            Instant executedAt,
+            @Nullable ExecutionChannel channel,
+            @Nullable String providerReference,
+            @Nullable String executedBy,
+            @Nullable Instant executedAt,
             ActorRef actor,
             String idempotencyKey,
-            String correlationId) {}
+            @Nullable String correlationId) {}
 
     /**
      * @param uses      how many future orders this is good for, at most
@@ -194,13 +195,13 @@ public class OrderRemedyService {
             String reason,
             ActorRef actor,
             String idempotencyKey,
-            String correlationId) {}
+            @Nullable String correlationId) {}
 
     /**
      * @param remedy null when {@code approval} says a second pair of eyes is
      *               needed, in which case nothing was written and nothing moved
      */
-    public record RemedyOutcome(ApprovalOutcome approval, JdbcRemedyStore.RemedyRow remedy) {
+    public record RemedyOutcome(ApprovalOutcome approval, JdbcRemedyStore.@Nullable RemedyRow remedy) {
 
         public boolean recorded() {
             return remedy != null;
@@ -778,7 +779,7 @@ public class OrderRemedyService {
             String reason,
             ActorRef actor,
             UUID approvalId,
-            String correlationId,
+            @Nullable String correlationId,
             Map<String, Object> changes,
             Instant now) {
 

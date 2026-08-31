@@ -141,9 +141,6 @@ class LoyaltyLedgerAndSplitTenderTests {
             NOW.minus(java.time.Duration.ofDays(1)).atOffset(java.time.ZoneOffset.UTC);
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private DataSource dataSource;
     private JdbcClient jdbc;
@@ -175,9 +172,6 @@ class LoyaltyLedgerAndSplitTenderTests {
         Assumptions.assumeTrue(
                 DockerClientFactory.instance().isDockerAvailable(), "Docker is required for loyalty tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll

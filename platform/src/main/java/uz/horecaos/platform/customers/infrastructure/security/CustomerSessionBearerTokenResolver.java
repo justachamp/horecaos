@@ -1,6 +1,7 @@
 package uz.horecaos.platform.customers.infrastructure.security;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
@@ -40,8 +41,9 @@ public class CustomerSessionBearerTokenResolver implements BearerTokenResolver {
     private final DefaultBearerTokenResolver delegate = new DefaultBearerTokenResolver();
 
     @Override
-    public String resolve(HttpServletRequest request) {
-        if (CustomerSessionToken.looksLikeOne(presentedBearer(request))) {
+    public @Nullable String resolve(HttpServletRequest request) {
+        String presented = presentedBearer(request);
+        if (presented != null && CustomerSessionToken.looksLikeOne(presented)) {
             return null;
         }
         return delegate.resolve(request);
@@ -53,7 +55,7 @@ public class CustomerSessionBearerTokenResolver implements BearerTokenResolver {
      * <p>Read from the header directly rather than through the delegate, because
      * the delegate is the thing being kept away from it.
      */
-    public static String presentedBearer(HttpServletRequest request) {
+    public static @Nullable String presentedBearer(HttpServletRequest request) {
         String header = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (header == null || !header.regionMatches(true, 0, BEARER, 0, BEARER.length())) {
             return null;

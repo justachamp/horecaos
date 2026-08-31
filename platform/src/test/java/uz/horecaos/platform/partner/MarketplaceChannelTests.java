@@ -89,9 +89,6 @@ class MarketplaceChannelTests {
     private static final String CLIENT_ID = "partner-uzum-tezkor";
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private JdbcPartnerStore store;
@@ -141,7 +138,6 @@ class MarketplaceChannelTests {
             };
 
     private UUID branch;
-    private UUID siblingBranch;
     private UUID installation;
     private UUID binding;
     private UUID deliveryBinding;
@@ -153,9 +149,6 @@ class MarketplaceChannelTests {
         Assumptions.assumeTrue(
                 DockerClientFactory.instance().isDockerAvailable(), "Docker is required for marketplace channel tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -1282,7 +1275,9 @@ class MarketplaceChannelTests {
                 """).param("id", BRAND).param("tenantId", TENANT).update();
 
         branch = insertLocation("CENTRE", "centre");
-        siblingBranch = insertLocation("NORTH", "north");
+        // A second location in the same tenant, so a query that forgets a
+        // location predicate has more than one row to leak across.
+        insertLocation("NORTH", "north");
 
         jdbc.sql("""
                 INSERT INTO integration.provider_environments (

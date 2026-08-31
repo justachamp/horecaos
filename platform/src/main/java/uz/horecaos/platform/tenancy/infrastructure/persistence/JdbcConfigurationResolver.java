@@ -13,7 +13,7 @@ import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.tenancy.api.ResolutionTrace;
 import uz.horecaos.platform.tenancy.api.Resolved;
 import uz.horecaos.platform.tenancy.domain.configuration.ScopeResolution;
-import uz.horecaos.platform.tenancy.domain.configuration.ScopedValue;
+import uz.horecaos.platform.tenancy.domain.configuration.ScopedConfigurationRow;
 
 /**
  * SQL adapter for ADR 0030 configuration resolution.
@@ -59,7 +59,7 @@ public class JdbcConfigurationResolver implements ConfigurationResolver {
         return resolve(key, scope);
     }
 
-    private Map<ScopeType, ScopedValue> storedValues(ConfigurationKey<?> key, ResourceScope scope) {
+    private Map<ScopeType, ScopedConfigurationRow> storedValues(ConfigurationKey<?> key, ResourceScope scope) {
         List<Row> rows = jdbc.sql(SELECT_CHAIN)
                 .param("keyCode", key.code())
                 .param("tenantId", scope.tenantId())
@@ -75,13 +75,13 @@ public class JdbcConfigurationResolver implements ConfigurationResolver {
                         resultSet.getBoolean("is_explicit_null")))
                 .list();
 
-        Map<ScopeType, ScopedValue> values = new EnumMap<>(ScopeType.class);
+        Map<ScopeType, ScopedConfigurationRow> values = new EnumMap<>(ScopeType.class);
         for (Row row : rows) {
             values.put(
                     row.scopeType(),
                     row.explicitNull()
-                            ? ScopedValue.explicitNull(row.scopeType())
-                            : ScopedValue.of(row.scopeType(), row.typedValue(key)));
+                            ? ScopedConfigurationRow.explicitNull(row.scopeType())
+                            : ScopedConfigurationRow.of(row.scopeType(), row.typedValue(key)));
         }
         return values;
     }
@@ -121,11 +121,11 @@ public class JdbcConfigurationResolver implements ConfigurationResolver {
             return ResourceScope.platform();
         }
         if (brandId == null) {
-            return new ResourceScope(ScopeType.TENANT, tenantId, null, null);
+            return ResourceScope.tenant(tenantId);
         }
         if (locationId == null) {
-            return new ResourceScope(ScopeType.BRAND, tenantId, brandId, null);
+            return ResourceScope.brand(tenantId, brandId);
         }
-        return new ResourceScope(ScopeType.LOCATION, tenantId, brandId, locationId);
+        return ResourceScope.location(tenantId, brandId, locationId);
     }
 }

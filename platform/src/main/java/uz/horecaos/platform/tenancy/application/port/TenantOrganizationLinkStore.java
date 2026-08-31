@@ -25,6 +25,8 @@ public interface TenantOrganizationLinkStore {
     List<TenantOrganizationLink> tenantsToReconcile(int limit);
 
     /**
+     * One tenant's belief about its Keycloak organization link.
+     *
      * @param organizationId empty when the tenant has never been linked
      * @param expectedAlias  the deterministic alias ADR 0009 derives from the
      *                       tenant slug, which is the only alias a reconciliation

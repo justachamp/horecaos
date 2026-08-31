@@ -1,5 +1,6 @@
 package uz.horecaos.platform.web.api;
 
+import java.util.Locale;
 import org.springframework.http.HttpStatus;
 
 /**
@@ -112,6 +113,6 @@ public enum ErrorCode {
 
     /** The documentation URI clients can follow; stable per code. */
     public String typeUri() {
-        return "https://docs.horecaos.uz/problems/" + name().toLowerCase().replace('_', '-');
+        return "https://docs.horecaos.uz/problems/" + name().toLowerCase(Locale.ROOT).replace('_', '-');
     }
 }

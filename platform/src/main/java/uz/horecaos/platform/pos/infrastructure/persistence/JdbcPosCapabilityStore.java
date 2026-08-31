@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
@@ -65,10 +66,10 @@ public class JdbcPosCapabilityStore {
             UUID installationId,
             PosCapability capability,
             String probeStatus,
-            Integer providerStatusCode,
-            String providerErrorCode,
-            String evidence,
-            String adapterVersion,
+            @Nullable Integer providerStatusCode,
+            @Nullable String providerErrorCode,
+            @Nullable String evidence,
+            @Nullable String adapterVersion,
             Instant probedAt) {
 
         Map<String, Object> parameters = new HashMap<>();

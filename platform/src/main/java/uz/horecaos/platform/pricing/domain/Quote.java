@@ -3,6 +3,7 @@ package uz.horecaos.platform.pricing.domain;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A priced cart (ADR 0018).
@@ -10,13 +11,18 @@ import java.util.UUID;
  * <p>Every amount that made up the total is recorded, because a customer asking
  * "why is this 47,000 som" and an auditor asking the same question need the same
  * answer, and neither can be given one by a total alone.
+ *
+ * <p>{@code brandId}, {@code locationId}, and {@code customerAccountId} are null
+ * only on the header-only reconstruction an idempotent replay returns from
+ * {@code QuoteService.reload}: the stored row is the authority there, and the
+ * three are re-read from it only when a caller asks for the detail.
  */
 public record Quote(
         UUID quoteId,
         UUID tenantId,
-        UUID brandId,
-        UUID locationId,
-        UUID customerAccountId,
+        @Nullable UUID brandId,
+        @Nullable UUID locationId,
+        @Nullable UUID customerAccountId,
         String currency,
         Status status,
         UUID catalogPublicationId,
@@ -46,6 +52,8 @@ public record Quote(
     }
 
     /**
+     * One line of a priced cart, an item or the delivery fee.
+     *
      * @param type                what kind of line this is. ADR 0037 makes the
      *                            delivery charge a line rather than an adjustment,
      *                            because this market requires it on its own receipt
@@ -60,7 +68,7 @@ public record Quote(
     public record QuoteLine(
             String lineId,
             LineType type,
-            UUID variantId,
+            @Nullable UUID variantId,
             int quantity,
             String descriptionSnapshot,
             Money unitAmount,
@@ -115,16 +123,21 @@ public record Quote(
     /**
      * One step of the calculation, in the order it was applied.
      *
+     * @param lineId null for an order-level step, such as tax or an order-wide
+     *               promotion discount, and set for a step that lands on one line
      * @param sourceType and sourceId identify what caused it — a price book, a
-     *                   tax profile — so the same inputs can be re-derived later
+     *                   tax profile — so the same inputs can be re-derived later.
+     *                   sourceId is null when the source itself carries no id at
+     *                   this stage, such as a delivery charge from an unresolved
+     *                   zone or tariff
      */
     public record Adjustment(
             int sequence,
-            String lineId,
+            @Nullable String lineId,
             Type type,
             String sourceType,
-            UUID sourceId,
-            Integer sourceVersion,
+            @Nullable UUID sourceId,
+            @Nullable Integer sourceVersion,
             Money amount,
             String descriptionCode) {
 

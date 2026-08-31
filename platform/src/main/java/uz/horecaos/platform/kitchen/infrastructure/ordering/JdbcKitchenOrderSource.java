@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource;
@@ -100,7 +101,7 @@ public class JdbcKitchenOrderSource implements KitchenOrderSource {
                 lines));
     }
 
-    private static Instant instant(OffsetDateTime value) {
+    private static @Nullable Instant instant(@Nullable OffsetDateTime value) {
         return value == null ? null : value.toInstant();
     }
 
@@ -113,8 +114,8 @@ public class JdbcKitchenOrderSource implements KitchenOrderSource {
             String fulfillmentMode,
             String channelCode,
             String status,
-            Instant promisedAt,
-            Integer prepMinutes,
-            Integer travelMinutes,
+            @Nullable Instant promisedAt,
+            @Nullable Integer prepMinutes,
+            @Nullable Integer travelMinutes,
             int version) {}
 }

@@ -17,6 +17,7 @@ import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -99,9 +100,6 @@ class RefundAndRemedyTests {
     private static final long THRESHOLD = 200_000L;
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private DataSource dataSource;
     private JdbcClient jdbc;
@@ -134,9 +132,6 @@ class RefundAndRemedyTests {
         Assumptions.assumeTrue(
                 DockerClientFactory.instance().isDockerAvailable(), "Docker is required for remedy tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -935,7 +930,10 @@ class RefundAndRemedyTests {
     // --------------------------------------------------------------- helpers
 
     private record RefundEvidence(
-            ExecutionChannel channel, String providerReference, String executedBy, Instant executedAt) {}
+            @Nullable ExecutionChannel channel,
+            @Nullable String providerReference,
+            @Nullable String executedBy,
+            @Nullable Instant executedAt) {}
 
     private static RefundEvidence consoleRefund() {
         return new RefundEvidence(ExecutionChannel.PROVIDER_CONSOLE, "CLICK-REV-1", "cashier-7", NOW);
@@ -1052,7 +1050,7 @@ class RefundAndRemedyTests {
         return orderId;
     }
 
-    private UUID order(String number, long totalMinor, long feeMinor, UUID customer) {
+    private UUID order(String number, long totalMinor, long feeMinor, @Nullable UUID customer) {
         UUID orderId = UUID.randomUUID();
         UUID quoteId = UUID.randomUUID();
         UUID cartId = UUID.randomUUID();

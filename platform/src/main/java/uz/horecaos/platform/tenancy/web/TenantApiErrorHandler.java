@@ -28,12 +28,12 @@ public class TenantApiErrorHandler {
 
     @ExceptionHandler(TenantResourceNotFoundException.class)
     ProblemDetail notFound(TenantResourceNotFoundException exception) {
-        return ApiProblem.of(ErrorCode.RESOURCE_NOT_FOUND, exception.getMessage());
+        return ApiProblem.of(ErrorCode.RESOURCE_NOT_FOUND, detailOf(exception));
     }
 
     @ExceptionHandler(TenantResourceConflictException.class)
     ProblemDetail conflict(TenantResourceConflictException exception) {
-        return ApiProblem.of(ErrorCode.RESOURCE_CONFLICT, exception.getMessage());
+        return ApiProblem.of(ErrorCode.RESOURCE_CONFLICT, detailOf(exception));
     }
 
     /**
@@ -52,7 +52,7 @@ public class TenantApiErrorHandler {
      */
     @ExceptionHandler(IllegalStateException.class)
     ProblemDetail stateConflict(IllegalStateException exception) {
-        return ApiProblem.of(ErrorCode.RESOURCE_CONFLICT, exception.getMessage());
+        return ApiProblem.of(ErrorCode.RESOURCE_CONFLICT, detailOf(exception));
     }
 
     /**
@@ -64,6 +64,17 @@ public class TenantApiErrorHandler {
      */
     @ExceptionHandler(IllegalArgumentException.class)
     ProblemDetail invalid(IllegalArgumentException exception) {
-        return ApiProblem.of(ErrorCode.VALIDATION_FAILED, exception.getMessage());
+        return ApiProblem.of(ErrorCode.VALIDATION_FAILED, detailOf(exception));
+    }
+
+    /**
+     * {@link Throwable#getMessage()} is nullable in the general case; every
+     * exception this handler maps is raised with a message in practice, but a
+     * response body must never depend on that holding for every future call
+     * site.
+     */
+    private static String detailOf(Exception exception) {
+        String message = exception.getMessage();
+        return message != null ? message : exception.getClass().getSimpleName();
     }
 }

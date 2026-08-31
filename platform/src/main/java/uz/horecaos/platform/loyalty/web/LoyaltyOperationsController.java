@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -106,6 +107,8 @@ public class LoyaltyOperationsController {
     }
 
     /**
+     * A manual adjustment against one account.
+     *
      * @param amountMinor signed whole som. There is no second account field on
      *                    this record, and adding one would be the transfer this
      *                    design refuses
@@ -120,8 +123,12 @@ public class LoyaltyOperationsController {
             @NotBlank String idempotencyKey,
             String correlationId) {}
 
-    /** @param status NOT_REQUIRED, PENDING, APPROVED, or DECLINED (ADR 0027) */
-    public record AdjustmentResponse(String status, UUID approvalRequestId) {
+    /**
+     * What an adjustment decided.
+     *
+     * @param status NOT_REQUIRED, PENDING, APPROVED, or DECLINED (ADR 0027)
+     */
+    public record AdjustmentResponse(String status, @Nullable UUID approvalRequestId) {
 
         static AdjustmentResponse of(ApprovalOutcome outcome) {
             return switch (outcome) {

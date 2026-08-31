@@ -10,8 +10,10 @@ import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -262,10 +264,10 @@ public class JdbcPaymentAttemptStore {
             UUID attemptId,
             PaymentAttemptStatus from,
             PaymentAttemptStatus to,
-            ProviderEvidence evidence,
-            String externalPaymentId,
-            String externalDocumentId,
-            String failureCode,
+            @Nullable ProviderEvidence evidence,
+            @Nullable String externalPaymentId,
+            @Nullable String externalDocumentId,
+            @Nullable String failureCode,
             Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
@@ -321,7 +323,7 @@ public class JdbcPaymentAttemptStore {
             UncertaintyResolver resolver,
             Instant since,
             Instant deadline,
-            String failureCode) {
+            @Nullable String failureCode) {
         return jdbc.sql("""
                 UPDATE payments.payment_attempts
                 SET status = 'UNCERTAIN',
@@ -384,8 +386,8 @@ public class JdbcPaymentAttemptStore {
             UUID tenantId,
             UUID attemptId,
             PresentationKind kind,
-            String externalInvoiceId,
-            Instant expiresAt,
+            @Nullable String externalInvoiceId,
+            @Nullable Instant expiresAt,
             Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
@@ -480,7 +482,9 @@ public class JdbcPaymentAttemptStore {
                         : new ProviderEvidence(
                                 providerState,
                                 row.getString("provider_reason"),
-                                instant(row, "provider_state_recorded_at")),
+                                Objects.requireNonNull(
+                                        instant(row, "provider_state_recorded_at"),
+                                        "provider_state_recorded_at must be set alongside provider_state")),
                 instant(row, "provider_created_at"),
                 instant(row, "expires_at"),
                 row.getString("failure_code"),
@@ -489,13 +493,15 @@ public class JdbcPaymentAttemptStore {
                         : new PaymentAttempt.Uncertainty(
                                 uncertainSince,
                                 UncertaintyResolver.valueOf(resolver),
-                                instant(row, "uncertain_deadline"),
+                                Objects.requireNonNull(
+                                        instant(row, "uncertain_deadline"),
+                                        "uncertain_deadline must be set alongside uncertain_since"),
                                 // getInt answers 0 for SQL NULL, which here would be a
                                 // plausible count rather than an obvious error.
                                 row.getObject("uncertain_resolution_attempts", Integer.class),
                                 instant(row, "uncertain_resolved_at")),
                 row.getObject("version", Integer.class),
-                instant(row, "created_at"),
+                Objects.requireNonNull(instant(row, "created_at"), "payment_attempts.created_at is NOT NULL"),
                 instant(row, "settled_at"));
     }
 }

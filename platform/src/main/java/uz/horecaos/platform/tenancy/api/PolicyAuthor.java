@@ -24,6 +24,8 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 public interface PolicyAuthor {
 
     /**
+     * Publishes the next version of a policy document at a scope.
+     *
      * @param key      identifies the policy and, via {@link PolicyKey#settableScopes()},
      *                 which scope levels may hold a version of it at all
      * @param scope    where this version applies; must be one of {@code

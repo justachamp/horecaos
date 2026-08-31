@@ -20,6 +20,9 @@ public enum ShiftTransition {
     CLOSE(Set.of(ShiftActor.COURIER, ShiftActor.MANAGER, ShiftActor.SWEEPER)),
     APPROVE_HOURS(Set.of(ShiftActor.MANAGER));
 
+    // The checker cannot see immutability through the interface type, but every
+    // value assigned is a Set.of(...) unmodifiable set and the field is final.
+    @SuppressWarnings("ImmutableEnumChecker")
     private final Set<ShiftActor> permitted;
 
     ShiftTransition(Set<ShiftActor> permitted) {

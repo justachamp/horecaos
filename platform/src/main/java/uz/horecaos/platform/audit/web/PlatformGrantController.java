@@ -105,6 +105,8 @@ public class PlatformGrantController {
     }
 
     /**
+     * Request to grant a {@code PLATFORM}-scope role to a principal.
+     *
      * @param validUntil set it for support access, which should lapse on its own
      *                   rather than waiting for someone to remember
      */

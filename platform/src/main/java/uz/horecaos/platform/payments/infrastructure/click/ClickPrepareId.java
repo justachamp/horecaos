@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Click's {@code merchant_prepare_id}, derived rather than minted (ADR 0013).
@@ -53,7 +54,7 @@ public final class ClickPrepareId {
      * leading zero or a stray space is a mismatch worth answering {@code -6} to
      * rather than one to normalise away.
      */
-    public static boolean matches(UUID attemptId, String received) {
+    public static boolean matches(UUID attemptId, @Nullable String received) {
         return received != null && Integer.toString(forAttempt(attemptId)).equals(received.strip());
     }
 

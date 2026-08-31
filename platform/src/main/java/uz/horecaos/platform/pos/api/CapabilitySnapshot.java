@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
  * What one installation's credential was actually observed to be able to do
@@ -27,7 +28,8 @@ import java.util.Optional;
  * @param adapterVersion the adapter that did the discovering, so a snapshot
  *                       cannot be read as though later code had produced it
  */
-public record CapabilitySnapshot(Map<PosCapability, Entry> entries, Instant verifiedAt, String adapterVersion) {
+public record CapabilitySnapshot(
+        Map<PosCapability, Entry> entries, @Nullable Instant verifiedAt, @Nullable String adapterVersion) {
 
     public CapabilitySnapshot {
         entries = entries == null ? Map.of() : Map.copyOf(entries);
@@ -82,10 +84,10 @@ public record CapabilitySnapshot(Map<PosCapability, Entry> entries, Instant veri
             CapabilitySupport support,
             IdempotencyBehaviour idempotency,
             boolean pushSupported,
-            String capabilityVersion,
+            @Nullable String capabilityVersion,
             Map<String, String> limits,
-            String evidence,
-            Instant verifiedAt) {
+            @Nullable String evidence,
+            @Nullable Instant verifiedAt) {
 
         public Entry {
             limits = limits == null ? Map.of() : Map.copyOf(limits);

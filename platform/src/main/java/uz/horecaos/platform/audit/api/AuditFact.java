@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.iam.api.ResourceScope;
 
 /**
@@ -19,17 +20,17 @@ public record AuditFact(
         String actionCode,
         ActorRef actor,
         ResourceScope scope,
-        String targetType,
-        UUID targetId,
-        Long targetVersion,
+        @Nullable String targetType,
+        @Nullable UUID targetId,
+        @Nullable Long targetVersion,
         Outcome outcome,
-        String reason,
+        @Nullable String reason,
         Map<String, Object> changeDocument,
-        String evidenceReference,
-        String capabilityUsed,
-        UUID approvalRequestId,
+        @Nullable String evidenceReference,
+        @Nullable String capabilityUsed,
+        @Nullable UUID approvalRequestId,
         String correlationId,
-        String causationId,
+        @Nullable String causationId,
         Instant occurredAt) {
 
     public enum Outcome {
@@ -65,20 +66,20 @@ public record AuditFact(
         private final String actionCode;
         private final AuditClass auditClass;
         private UUID id = UUID.randomUUID();
-        private ActorRef actor;
-        private ResourceScope scope;
-        private String targetType;
-        private UUID targetId;
-        private Long targetVersion;
+        private @Nullable ActorRef actor;
+        private @Nullable ResourceScope scope;
+        private @Nullable String targetType;
+        private @Nullable UUID targetId;
+        private @Nullable Long targetVersion;
         private Outcome outcome = Outcome.SUCCEEDED;
-        private String reason;
+        private @Nullable String reason;
         private Map<String, Object> changeDocument = Map.of();
-        private String evidenceReference;
-        private String capabilityUsed;
-        private UUID approvalRequestId;
-        private String correlationId;
-        private String causationId;
-        private Instant occurredAt;
+        private @Nullable String evidenceReference;
+        private @Nullable String capabilityUsed;
+        private @Nullable UUID approvalRequestId;
+        private @Nullable String correlationId;
+        private @Nullable String causationId;
+        private @Nullable Instant occurredAt;
 
         private Builder(String actionCode, AuditClass auditClass) {
             this.actionCode = actionCode;
@@ -126,7 +127,7 @@ public record AuditFact(
             return this;
         }
 
-        public Builder evidence(String reference) {
+        public Builder evidence(@Nullable String reference) {
             this.evidenceReference = reference;
             return this;
         }
@@ -136,7 +137,7 @@ public record AuditFact(
             return this;
         }
 
-        public Builder underApproval(UUID requestId) {
+        public Builder underApproval(@Nullable UUID requestId) {
             this.approvalRequestId = requestId;
             return this;
         }
@@ -157,12 +158,16 @@ public record AuditFact(
         }
 
         public AuditFact build() {
+            // Re-checked here, with the same messages the compact constructor
+            // enforces, so the builder's fields can honestly stay @Nullable while
+            // this method still hands AuditFact's non-null components non-null
+            // values — NullAway cannot see across the constructor call otherwise.
             return new AuditFact(
                     id,
                     auditClass,
                     actionCode,
-                    actor,
-                    scope,
+                    Objects.requireNonNull(actor, "An actor is required"),
+                    Objects.requireNonNull(scope, "A scope is required"),
                     targetType,
                     targetId,
                     targetVersion,
@@ -172,9 +177,9 @@ public record AuditFact(
                     evidenceReference,
                     capabilityUsed,
                     approvalRequestId,
-                    correlationId,
+                    Objects.requireNonNull(correlationId, "A correlation ID is required"),
                     causationId,
-                    occurredAt);
+                    Objects.requireNonNull(occurredAt, "An occurrence time is required"));
         }
     }
 }

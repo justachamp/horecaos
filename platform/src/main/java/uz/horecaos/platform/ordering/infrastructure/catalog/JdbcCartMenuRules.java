@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
@@ -125,7 +126,7 @@ public class JdbcCartMenuRules implements CartMenuRules {
                 Map.copyOf(options));
     }
 
-    private static int intOf(Object raw, int whenAbsent) {
+    private static int intOf(@Nullable Object raw, int whenAbsent) {
         return raw instanceof Number number ? number.intValue() : whenAbsent;
     }
 

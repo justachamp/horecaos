@@ -3,6 +3,7 @@ package uz.horecaos.platform.migration.application;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Reads and writes {@code migration.quarantine_items} and the quarantined half
@@ -94,11 +95,11 @@ public interface MigrationQuarantineStore {
             String entityType,
             String legacyId,
             String reasonCode,
-            String sanitizedEvidenceReference,
+            @Nullable String sanitizedEvidenceReference,
             String status,
-            String resolutionCode,
-            String resolvedBy,
-            Instant resolvedAt) {
+            @Nullable String resolutionCode,
+            @Nullable String resolvedBy,
+            @Nullable Instant resolvedAt) {
 
         public static final String OPEN = "OPEN";
         public static final String RESOLVED = "RESOLVED";

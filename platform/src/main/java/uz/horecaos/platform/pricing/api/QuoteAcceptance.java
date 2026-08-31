@@ -1,5 +1,7 @@
 package uz.horecaos.platform.pricing.api;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * The outcome of accepting a quote (ADR 0018).
  *
@@ -9,8 +11,9 @@ package uz.horecaos.platform.pricing.api;
  *
  * @param totalMinor the accepted total in integer minor units; zero unless the
  *                   outcome is {@link Outcome#ACCEPTED}
+ * @param currency null unless the outcome is {@link Outcome#ACCEPTED}
  */
-public record QuoteAcceptance(Outcome outcome, long totalMinor, String currency) {
+public record QuoteAcceptance(Outcome outcome, long totalMinor, @Nullable String currency) {
 
     public enum Outcome {
         ACCEPTED,

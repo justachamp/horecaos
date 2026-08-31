@@ -73,6 +73,10 @@ class MerchantBindingControllerEndpointTests {
     /** A test-scoped reference. What matters is its shape, never a value behind it. */
     private static final String SECRET_REFERENCE = "horecaos:test:provider_payment:tenant:click-mb";
 
+    // NullAway does not recognise @DynamicPropertySource (see #properties below) as a
+    // field initializer the way it does @BeforeAll/@BeforeEach; `db` is always set
+    // there before any @Test method runs.
+    @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
 
     @BeforeAll

@@ -1,11 +1,11 @@
 package uz.horecaos.platform.courier.application;
 
-import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.courier.application.port.LegalEntityResolver;
@@ -60,7 +60,6 @@ public class CourierAccrualService {
     private final CourierPolicyResolver policies;
     private final LegalEntityResolver legalEntities;
     private final FieldProtection protection;
-    private final Clock clock;
 
     public CourierAccrualService(
             JdbcCourierLedgerStore ledgerStore,
@@ -71,8 +70,7 @@ public class CourierAccrualService {
             CourierLedgerService ledger,
             CourierPolicyResolver policies,
             LegalEntityResolver legalEntities,
-            FieldProtection protection,
-            Clock clock) {
+            FieldProtection protection) {
         this.ledgerStore = ledgerStore;
         this.rateCards = rateCards;
         this.shifts = shifts;
@@ -82,7 +80,6 @@ public class CourierAccrualService {
         this.policies = policies;
         this.legalEntities = legalEntities;
         this.protection = protection;
-        this.clock = clock;
     }
 
     /**
@@ -249,7 +246,7 @@ public class CourierAccrualService {
                         new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such courier: " + command.courierId()));
     }
 
-    private String protectPoint(UUID tenantId, UUID earningId, String column, String point) {
+    private @Nullable String protectPoint(UUID tenantId, UUID earningId, String column, @Nullable String point) {
         if (point == null) {
             return null;
         }
@@ -263,6 +260,8 @@ public class CourierAccrualService {
     }
 
     /**
+     * The delivery fact as ADR 0014 reports it, ready to be priced.
+     *
      * @param acceptedAt          when the courier accepted, which is the instant
      *                            the rate card is resolved at. Resolving at
      *                            delivery would let a card activated mid-trip
@@ -282,20 +281,20 @@ public class CourierAccrualService {
             UUID brandId,
             UUID locationId,
             UUID courierId,
-            UUID shiftId,
+            @Nullable UUID shiftId,
             UUID shipmentId,
             UUID assignmentAttemptId,
             int distanceMeters,
             DistanceSource distanceSource,
             Instant acceptedAt,
             Instant deliveredAt,
-            Instant promisedDeliveryEnd,
-            Integer graceSeconds,
+            @Nullable Instant promisedDeliveryEnd,
+            @Nullable Integer graceSeconds,
             int onTimePolicyVersion,
-            Instant kitchenHandoverAt,
-            Instant pickupWindowEnd,
+            @Nullable Instant kitchenHandoverAt,
+            @Nullable Instant pickupWindowEnd,
             long cashToCollectMinor,
             boolean geoUnverified,
-            String pickupPoint,
-            String deliveryPoint) {}
+            @Nullable String pickupPoint,
+            @Nullable String deliveryPoint) {}
 }

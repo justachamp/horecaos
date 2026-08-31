@@ -3,6 +3,7 @@ package uz.horecaos.platform.fulfillment.api;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 
 /**
@@ -16,6 +17,8 @@ import uz.horecaos.platform.tenancy.api.GeoPoint;
  * @param locationId       the location the customer chose. Resolution is against
  *                         this branch and no other; there is no path that
  *                         substitutes a covering one
+ * @param quoteId          the quote this resolution will be pinned to, or null for
+ *                         a simulation that writes nothing and has no quote to name
  * @param pricingAuthority read from {@code ordering.orders.pricing_authority}
  *                         once ADR 0040 adds it, and seeded meanwhile from the
  *                         channel's {@code externally_priced} default. Passed in
@@ -35,7 +38,7 @@ public record DeliveryFeeQuery(
         UUID tenantId,
         UUID brandId,
         UUID locationId,
-        UUID quoteId,
+        @Nullable UUID quoteId,
         GeoPoint destination,
         String currency,
         long goodsSubtotalMinor,

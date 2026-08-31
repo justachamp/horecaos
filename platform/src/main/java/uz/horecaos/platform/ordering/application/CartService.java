@@ -5,8 +5,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -356,10 +358,16 @@ public class CartService {
                 tenantId,
                 cartId,
                 saved.addressId(),
-                encrypt(tenantId, cartId, ADDRESS_COLUMN, objectMapper.writeValueAsString(destination)),
+                // Never blank: a located destination always serializes to a real
+                // document, so encrypt's "nothing to encrypt" branch is unreachable
+                // here — asserted rather than silently re-typed as optional.
+                Objects.requireNonNull(
+                        encrypt(tenantId, cartId, ADDRESS_COLUMN, objectMapper.writeValueAsString(destination))),
                 encrypt(tenantId, cartId, INSTRUCTIONS_COLUMN, note),
-                encrypt(tenantId, cartId, RECIPIENT_NAME_COLUMN, command.recipientName()),
-                encrypt(tenantId, cartId, RECIPIENT_PHONE_COLUMN, command.recipientPhone()),
+                // DestinationCommand's constructor already refused a blank name or
+                // phone, so this is the same non-null guarantee, not a new check.
+                Objects.requireNonNull(encrypt(tenantId, cartId, RECIPIENT_NAME_COLUMN, command.recipientName())),
+                Objects.requireNonNull(encrypt(tenantId, cartId, RECIPIENT_PHONE_COLUMN, command.recipientPhone())),
                 destination.latitude(),
                 destination.longitude(),
                 now);
@@ -391,11 +399,19 @@ public class CartService {
                 .map(row -> new CapturedDestination(
                         row.customerAddressId(),
                         objectMapper.readValue(
-                                decrypt(tenantId, cartId, ADDRESS_COLUMN, row.addressEncrypted(), purpose),
+                                // row.addressEncrypted() is never null: upsertFulfillment
+                                // never stores one, so decrypt's null branch is
+                                // unreachable here.
+                                Objects.requireNonNull(
+                                        decrypt(tenantId, cartId, ADDRESS_COLUMN, row.addressEncrypted(), purpose)),
                                 DeliveryDestination.class),
                         decrypt(tenantId, cartId, INSTRUCTIONS_COLUMN, row.instructionsEncrypted(), purpose),
-                        decrypt(tenantId, cartId, RECIPIENT_NAME_COLUMN, row.recipientNameEncrypted(), purpose),
-                        decrypt(tenantId, cartId, RECIPIENT_PHONE_COLUMN, row.recipientPhoneEncrypted(), purpose)));
+                        // Same guarantee as the address: upsertFulfillment never stores
+                        // a null recipient name or phone.
+                        Objects.requireNonNull(
+                                decrypt(tenantId, cartId, RECIPIENT_NAME_COLUMN, row.recipientNameEncrypted(), purpose)),
+                        Objects.requireNonNull(decrypt(
+                                tenantId, cartId, RECIPIENT_PHONE_COLUMN, row.recipientPhoneEncrypted(), purpose))));
     }
 
     /**
@@ -414,7 +430,7 @@ public class CartService {
                 .map(JdbcCartStore.CartFulfillmentRow::customerAddressId);
     }
 
-    private String encrypt(UUID tenantId, UUID cartId, String column, String plaintext) {
+    private @Nullable String encrypt(UUID tenantId, UUID cartId, String column, @Nullable String plaintext) {
         if (plaintext == null || plaintext.isBlank()) {
             return null;
         }
@@ -423,7 +439,8 @@ public class CartService {
                 .serialize();
     }
 
-    private String decrypt(UUID tenantId, UUID cartId, String column, String ciphertext, String purpose) {
+    private @Nullable String decrypt(
+            UUID tenantId, UUID cartId, String column, @Nullable String ciphertext, String purpose) {
         if (ciphertext == null) {
             return null;
         }
@@ -551,14 +568,18 @@ public class CartService {
                         tenantId,
                         rebuilt.cartId(),
                         captured.customerAddressId(),
-                        encrypt(
+                        // Never blank, and never a missing recipient: same guarantees
+                        // as setDestination, carried across the rebuild.
+                        Objects.requireNonNull(encrypt(
                                 tenantId,
                                 rebuilt.cartId(),
                                 ADDRESS_COLUMN,
-                                objectMapper.writeValueAsString(captured.destination())),
+                                objectMapper.writeValueAsString(captured.destination()))),
                         encrypt(tenantId, rebuilt.cartId(), INSTRUCTIONS_COLUMN, captured.deliveryNote()),
-                        encrypt(tenantId, rebuilt.cartId(), RECIPIENT_NAME_COLUMN, captured.recipientName()),
-                        encrypt(tenantId, rebuilt.cartId(), RECIPIENT_PHONE_COLUMN, captured.recipientPhone()),
+                        Objects.requireNonNull(
+                                encrypt(tenantId, rebuilt.cartId(), RECIPIENT_NAME_COLUMN, captured.recipientName())),
+                        Objects.requireNonNull(encrypt(
+                                tenantId, rebuilt.cartId(), RECIPIENT_PHONE_COLUMN, captured.recipientPhone())),
                         captured.destination().latitude(),
                         captured.destination().longitude(),
                         now));
@@ -599,8 +620,8 @@ public class CartService {
         return ids;
     }
 
-    /** The customer's note, decrypted for the one place that may see it. */
-    public String revealNote(UUID tenantId, CartLineRow line, String purpose) {
+    /** The customer's note, decrypted for the one place that may see it. Null when there is none. */
+    public @Nullable String revealNote(UUID tenantId, CartLineRow line, String purpose) {
         if (line.customerNoteEncrypted() == null) {
             return null;
         }
@@ -747,7 +768,7 @@ public class CartService {
     public record CapturedDestination(
             UUID customerAddressId,
             DeliveryDestination destination,
-            String deliveryNote,
+            @Nullable String deliveryNote,
             String recipientName,
             String recipientPhone) {
 
@@ -773,7 +794,7 @@ public class CartService {
      *                          standing instruction saved with the address
      */
     public record DestinationCommand(
-            UUID customerAddressId, String recipientName, String recipientPhone, String deliveryNote) {
+            UUID customerAddressId, String recipientName, String recipientPhone, @Nullable String deliveryNote) {
 
         public DestinationCommand {
             if (customerAddressId == null) {
@@ -794,7 +815,11 @@ public class CartService {
         }
     }
 
-    /** @param cartVersion the version after the quote was attached */
+    /**
+     * A cart, freshly priced.
+     *
+     * @param cartVersion the version after the quote was attached
+     */
     public record PricedCart(UUID cartId, int cartVersion, QuoteSnapshot quote) {}
 
     /** A cart operation refused for a business reason, with a stable code. */

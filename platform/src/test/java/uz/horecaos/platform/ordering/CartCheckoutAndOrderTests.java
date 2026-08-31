@@ -20,6 +20,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -141,9 +142,6 @@ class CartCheckoutAndOrderTests {
     private static final Instant NOW = Instant.parse("2026-08-21T07:00:00Z");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private DataSource dataSource;
     private JdbcClient jdbc;
@@ -205,9 +203,6 @@ class CartCheckoutAndOrderTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for cart, checkout and order tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -442,6 +437,8 @@ class CartCheckoutAndOrderTests {
                 new uz.horecaos.platform.ordering.infrastructure.JdbcDeliveryOrderPort(jdbc, protection, objectMapper);
 
         seedTenancyAndCatalog();
+        seedPublication("STOREFRONT");
+        seedPublishedModifierRules();
         seedPricingAndStock();
     }
 
@@ -1199,7 +1196,7 @@ class CartCheckoutAndOrderTests {
     }
 
     /** No ADR 0038 assignment, which is what a real build resolves today. */
-    private static final UUID NO_SELLER = null;
+    private static final @Nullable UUID NO_SELLER = null;
 
     /**
      * The real {@link uz.horecaos.platform.payments.application.PaymentIntentService}
@@ -1210,7 +1207,7 @@ class CartCheckoutAndOrderTests {
      * that decides what the checkout does — the capture timing, the intent row, the
      * cash fiscal document — is production code against production SQL.
      */
-    private PaymentIntentPort realPayments(UUID sellerId) {
+    private PaymentIntentPort realPayments(@Nullable UUID sellerId) {
         PaymentLegalEntityResolver sellers = (tenantId, locationId, businessDate) -> Optional.ofNullable(sellerId);
 
         PaymentBindingResolver bindings = new PaymentBindingResolver() {
@@ -1402,8 +1399,9 @@ class CartCheckoutAndOrderTests {
         var mine = readyCart();
         var theirs = readyCart();
 
-        var foreignQuote = readCart(theirs).pricingQuoteId();
-        var foreignHash = readCart(theirs).pricingContextHash();
+        // readyCart() always prices the cart before returning it.
+        var foreignQuote = java.util.Objects.requireNonNull(readCart(theirs).pricingQuoteId());
+        var foreignHash = java.util.Objects.requireNonNull(readCart(theirs).pricingContextHash());
 
         var refused = tx(() -> checkout.checkout(new CheckoutService.CheckoutCommand(
                 TENANT,
@@ -1988,8 +1986,11 @@ class CartCheckoutAndOrderTests {
                 .isEqualTo(orderStore.find(TENANT, orderId).orElseThrow().publicOrderNumber());
         assertThat(delivery.currency()).isEqualTo("UZS");
         assertThat(delivery.preparation())
-                .isEqualTo(Duration.ofMinutes(
-                        orderStore.find(TENANT, orderId).orElseThrow().promise().prepMinutes()));
+                .isEqualTo(Duration.ofMinutes(java.util.Objects.requireNonNull(orderStore
+                        .find(TENANT, orderId)
+                        .orElseThrow()
+                        .promise()
+                        .prepMinutes())));
         assertThat(delivery.prepaid())
                 .as("nothing has been captured, so the courier collects at the door")
                 .isFalse();
@@ -2403,8 +2404,10 @@ class CartCheckoutAndOrderTests {
         var outcome = tx(() -> remedies.recordRefund(refundOf(placed.orderId(), 100_000L)));
 
         assertThat(outcome.recorded()).isTrue();
-        assertThat(outcome.remedy().amountMinor()).isEqualTo(100_000L);
-        assertThat(outcome.remedy().attestedMoneyMinor())
+        // A recorded outcome always carries the remedy it recorded.
+        var remedy = java.util.Objects.requireNonNull(outcome.remedy());
+        assertThat(remedy.amountMinor()).isEqualTo(100_000L);
+        assertThat(remedy.attestedMoneyMinor())
                 .as("cash out of the drawer is money this platform never held and cannot prove "
                         + "moved, so all of it is an attestation")
                 .isEqualTo(100_000L);
@@ -2440,7 +2443,9 @@ class CartCheckoutAndOrderTests {
         var outcome = tx(() -> remedies.recordDeliveryFeeReimbursement(refundOf(placed.orderId(), 12_000L)));
 
         assertThat(outcome.recorded()).isTrue();
-        assertThat(outcome.remedy().deliveryFeeBasisMinor()).isEqualTo(12_000L);
+        // A recorded outcome always carries the remedy it recorded.
+        assertThat(java.util.Objects.requireNonNull(outcome.remedy()).deliveryFeeBasisMinor())
+                .isEqualTo(12_000L);
         assertThat(refundedMinor(placed.orderId()))
                 .as("the fee was part of the total and was settled by the same tenders, so it "
                         + "comes back through them")
@@ -4068,8 +4073,6 @@ class CartCheckoutAndOrderTests {
 
         burgerVariant = seedProduct("BURGER", "Qo'y burger");
         pizzaVariant = seedProduct("PIZZA", "Pizza");
-        seedPublication("STOREFRONT");
-        seedPublishedModifierRules();
     }
 
     private void insertLocation(UUID id, String code, String slug) {
@@ -4095,6 +4098,7 @@ class CartCheckoutAndOrderTests {
                 """).param("id", id).param("tenantId", TENANT).update();
     }
 
+    /** Every call in this suite publishes to STOREFRONT, so the id is always the current one. */
     private void seedPublication(String channel) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
@@ -4108,9 +4112,7 @@ class CartCheckoutAndOrderTests {
                 .param("catalogId", catalogId)
                 .param("channel", channel)
                 .update();
-        if ("STOREFRONT".equals(channel)) {
-            publicationId = id;
-        }
+        publicationId = id;
     }
 
     /**
@@ -4130,7 +4132,8 @@ class CartCheckoutAndOrderTests {
         UUID extrasGroup = UUID.randomUUID();
         extrasBacon = UUID.randomUUID();
 
-        insertPublicationItem("PRODUCT", productIdByCode.get("PIZZA"), """
+        // seedTenancyAndCatalog() seeds PIZZA before setUp() calls this method.
+        insertPublicationItem("PRODUCT", java.util.Objects.requireNonNull(productIdByCode.get("PIZZA")), """
                 {"code": "PIZZA", "status": "ACTIVE",
                  "variants": [{"variantId": "%s", "status": "ACTIVE"}],
                  "modifierGroupIds": ["%s"]}

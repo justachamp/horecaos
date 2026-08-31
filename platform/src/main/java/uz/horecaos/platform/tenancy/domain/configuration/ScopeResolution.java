@@ -33,13 +33,13 @@ public final class ScopeResolution {
      * @param values the stored rows found for that scope chain, keyed by level
      */
     public static <T> Resolved<T> resolve(
-            ConfigurationKey<T> key, ResourceScope scope, Map<ScopeType, ScopedValue> values) {
+            ConfigurationKey<T> key, ResourceScope scope, Map<ScopeType, ScopedConfigurationRow> values) {
 
         List<Level> inspected = new ArrayList<>(4);
 
         for (ResourceScope level : scope.chain()) {
             ScopeType scopeType = level.type();
-            ScopedValue stored = values.get(scopeType);
+            ScopedConfigurationRow stored = values.get(scopeType);
 
             if (stored == null) {
                 inspected.add(new Level(scopeType, Outcome.NOT_SET));

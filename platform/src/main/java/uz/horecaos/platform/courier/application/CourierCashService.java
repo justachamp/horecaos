@@ -3,6 +3,7 @@ package uz.horecaos.platform.courier.application;
 import java.time.Clock;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -87,7 +88,12 @@ public class CourierCashService {
      */
     @Transactional
     public HandoverRow confirm(
-            UUID tenantId, UUID handoverId, long confirmedMinor, String reasonCode, ActorRef actor, String reason) {
+            UUID tenantId,
+            UUID handoverId,
+            long confirmedMinor,
+            @Nullable String reasonCode,
+            ActorRef actor,
+            String reason) {
 
         HandoverRow handover = handover(tenantId, handoverId);
         if (handover.declaredMinor() == null) {

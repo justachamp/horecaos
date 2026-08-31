@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.Waypoint;
 
 /**
@@ -54,6 +55,9 @@ public interface DeliveryOrderPort {
      *                         the customer pay for delivery" without re-running ADR
      *                         0037 against today's zones, and never raised because a
      *                         partner cost more
+     * @param deliveryFeeResolutionId the ADR 0037 evidence row this fee was priced
+     *                         against, or null for an order whose snapshot predates
+     *                         one
      * @param prepaid          whether HorecaOS already took the money. False instructs
      *                         a partner to collect from the recipient, so a wrong
      *                         value charges the customer twice
@@ -67,7 +71,7 @@ public interface DeliveryOrderPort {
             String orderReference,
             Duration preparation,
             long deliveryFeeMinor,
-            UUID deliveryFeeResolutionId,
+            @Nullable UUID deliveryFeeResolutionId,
             String currency,
             boolean prepaid,
             long itemValueMinor,

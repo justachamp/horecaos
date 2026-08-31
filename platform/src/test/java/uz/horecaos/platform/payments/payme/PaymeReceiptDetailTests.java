@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import uz.horecaos.platform.payments.domain.FiscalReceiptLine;
@@ -33,7 +35,8 @@ class PaymeReceiptDetailTests {
         Map<String, Object> detail = PaymeReceiptDetail.of(List.of(line), TiyinAmount.of(new SomAmount(75_000, UZS)));
 
         @SuppressWarnings("unchecked")
-        List<Map<String, Object>> items = (List<Map<String, Object>>) detail.get("items");
+        List<Map<String, Object>> items =
+                Objects.requireNonNull((List<Map<String, Object>>) detail.get("items"), "detail must carry items");
         assertThat(items).hasSize(1);
         // 25 000 som a portion, in tiyin, and three portions. Click would have been
         // sent 7 500 000 in the same field.
@@ -57,7 +60,8 @@ class PaymeReceiptDetailTests {
         Map<String, Object> detail = PaymeReceiptDetail.of(List.of(line), TiyinAmount.of(new SomAmount(70_000, UZS)));
 
         @SuppressWarnings("unchecked")
-        List<Map<String, Object>> items = (List<Map<String, Object>>) detail.get("items");
+        List<Map<String, Object>> items =
+                Objects.requireNonNull((List<Map<String, Object>>) detail.get("items"), "detail must carry items");
         assertThat(items.getFirst()).containsEntry("price", 2_500_000L).containsEntry("discount", 500_000L);
     }
 
@@ -139,7 +143,8 @@ class PaymeReceiptDetailTests {
                 .isEqualTo("NO_RECEIPT_LINES");
     }
 
-    private static FiscalReceiptLine line(String name, int quantity, long unitPriceSom, SomAmount discount) {
+    private static FiscalReceiptLine line(
+            String name, int quantity, long unitPriceSom, @Nullable SomAmount discount) {
         return new FiscalReceiptLine(
                 name,
                 "00702001001000001",

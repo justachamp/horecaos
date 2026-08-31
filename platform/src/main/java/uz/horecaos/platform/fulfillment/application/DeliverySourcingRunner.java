@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -236,7 +237,7 @@ public class DeliverySourcingRunner {
             DeliveryPlan plan,
             Instant dueAt,
             DeliverySourcingService.Outcome outcome,
-            String errorCode,
+            @Nullable String errorCode,
             Instant now) {
 
         Instant latest = plan.pickup().latestAssignmentAt();

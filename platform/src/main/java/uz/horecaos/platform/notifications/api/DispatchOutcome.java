@@ -3,6 +3,7 @@ package uz.horecaos.platform.notifications.api;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * What came back from a send (ADR 0020, ADR 0007).
@@ -24,13 +25,13 @@ import java.util.UUID;
  */
 public record DispatchOutcome(
         Status status,
-        String externalMessageId,
-        String providerStatus,
-        String errorCode,
-        String detail,
-        Duration retryAfter,
-        UUID providerBindingId,
-        String providerType) {
+        @Nullable String externalMessageId,
+        @Nullable String providerStatus,
+        @Nullable String errorCode,
+        @Nullable String detail,
+        @Nullable Duration retryAfter,
+        @Nullable UUID providerBindingId,
+        @Nullable String providerType) {
 
     public enum Status {
 

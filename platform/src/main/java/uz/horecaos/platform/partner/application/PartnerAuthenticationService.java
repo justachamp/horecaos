@@ -55,6 +55,9 @@ public class PartnerAuthenticationService {
     }
 
     /**
+     * Turns a partner's client-credentials token into the principal it is
+     * scoped to act as.
+     *
      * @param clientId the {@code azp} / {@code client_id} claim of a
      *                 client-credentials token. A token issued for a human
      *                 carries a subject and an organization claim and never

@@ -152,6 +152,8 @@ public class HandoverVerificationService {
     }
 
     /**
+     * The outcome of one verification attempt.
+     *
      * @param attemptsRemaining what the branch is told. Never how close the guess
      *                          was, and never the expected value.
      */

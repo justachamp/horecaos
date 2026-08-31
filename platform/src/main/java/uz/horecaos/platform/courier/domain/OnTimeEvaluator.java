@@ -2,6 +2,7 @@ package uz.horecaos.platform.courier.domain;
 
 import java.time.Duration;
 import java.time.Instant;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The on-time outcome, computed once at delivery from values snapshotted at
@@ -16,6 +17,8 @@ public final class OnTimeEvaluator {
     private OnTimeEvaluator() {}
 
     /**
+     * Judges one delivery against the promise snapshotted at acceptance.
+     *
      * @param promisedDeliveryEnd the ADR 0014 plan's promise as it stood when the
      *                            courier accepted; null when the plan recorded none
      * @param kitchenHandoverAt   when the branch actually handed the bag over
@@ -23,10 +26,10 @@ public final class OnTimeEvaluator {
      */
     public static OnTimeOutcome evaluate(
             Instant deliveredAt,
-            Instant promisedDeliveryEnd,
+            @Nullable Instant promisedDeliveryEnd,
             int graceSeconds,
-            Instant kitchenHandoverAt,
-            Instant pickupWindowEnd) {
+            @Nullable Instant kitchenHandoverAt,
+            @Nullable Instant pickupWindowEnd) {
 
         if (promisedDeliveryEnd == null) {
             return OnTimeOutcome.UNKNOWN;

@@ -154,6 +154,12 @@ public final class OnboardingStepHandlers {
             }
 
             try {
+                // EnsureMembership.email/existingSubjectId (iam.api) are one-of-two
+                // by construction — the guard above already refused when both
+                // email and subject are absent — but that module is outside this
+                // change's scope and the fields are not yet annotated @Nullable
+                // there.
+                @SuppressWarnings("NullAway")
                 var membership = organizations.ensureMembership(new OrganizationProvisioner.EnsureMembership(
                         String.valueOf(organizationId),
                         email == null ? null : String.valueOf(email),

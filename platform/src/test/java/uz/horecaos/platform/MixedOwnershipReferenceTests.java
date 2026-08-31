@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Locale;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
@@ -563,7 +564,7 @@ class MixedOwnershipReferenceTests {
                 .param("tenantId", tenantId)
                 .param(
                         "code",
-                        "R" + id.toString().replace("-", "").substring(0, 20).toUpperCase())
+                        "R" + id.toString().replace("-", "").substring(0, 20).toUpperCase(Locale.ROOT))
                 .update();
         return id;
     }
@@ -582,7 +583,7 @@ class MixedOwnershipReferenceTests {
                                 + brandId.toString()
                                         .replace("-", "")
                                         .substring(0, 8)
-                                        .toUpperCase())
+                                        .toUpperCase(Locale.ROOT))
                 .param("slug", "brand-" + brandId)
                 .update();
 
@@ -598,7 +599,7 @@ class MixedOwnershipReferenceTests {
                 .param("brandId", brandId)
                 .param(
                         "code",
-                        "Z" + zoneId.toString().replace("-", "").substring(0, 8).toUpperCase())
+                        "Z" + zoneId.toString().replace("-", "").substring(0, 8).toUpperCase(Locale.ROOT))
                 .update();
         return zoneId;
     }
@@ -690,7 +691,7 @@ class MixedOwnershipReferenceTests {
     /** A 64-character lowercase hex string, which is all the CHECK asks of it. */
     private static String hash(UUID seed) {
         return (seed.toString().replace("-", "") + seed.toString().replace("-", ""))
-                .toLowerCase()
+                .toLowerCase(Locale.ROOT)
                 .substring(0, 64);
     }
 }

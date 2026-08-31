@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.fulfillment.domain.VersionStatus;
@@ -114,7 +115,7 @@ public class JdbcDeliveryTariffStore {
         return load(tenantId, tariffId, version);
     }
 
-    private Optional<DeliveryTariff> load(UUID tenantId, UUID tariffId, Integer version) {
+    private Optional<DeliveryTariff> load(UUID tenantId, UUID tariffId, @Nullable Integer version) {
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
         params.put("tariffId", tariffId);
@@ -445,7 +446,7 @@ public class JdbcDeliveryTariffStore {
             Long maxFeeMinor,
             DistanceAccrual distanceAccrual,
             Long feeRoundingStepMinor,
-            RoundingRule feeRoundingRule) {}
+            @Nullable RoundingRule feeRoundingRule) {}
 
     private static OffsetDateTime timestamp(Instant instant) {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);

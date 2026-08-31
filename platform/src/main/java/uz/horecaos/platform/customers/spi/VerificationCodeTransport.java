@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The seam a one-time code leaves the platform through (ADR 0015, ADR 0020,
@@ -66,7 +67,7 @@ public interface VerificationCodeTransport {
             String destination,
             String code,
             Duration validFor,
-            String locale,
+            @Nullable String locale,
             Instant issuedAt) {
 
         public VerificationMessage {
@@ -110,7 +111,7 @@ public interface VerificationCodeTransport {
      *                   body: gateways are known to echo the request — which here
      *                   is the number and the code — back inside an error
      */
-    record Outcome(Status status, String reasonCode) {
+    record Outcome(Status status, @Nullable String reasonCode) {
 
         public enum Status {
 

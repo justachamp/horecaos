@@ -169,6 +169,8 @@ public class OnboardingController {
     }
 
     /**
+     * Starts an onboarding run.
+     *
      * @param templateId omit to use the platform's current default template
      *                   (Gap B) — {@code GET .../control-plane/onboarding-templates/default}
      *                   shows which one that resolves to. The template's own
@@ -185,7 +187,11 @@ public class OnboardingController {
 
     public record RunSummary(UUID id, String status, String currentPhase, String startedBy, String lastError) {}
 
-    /** @param outstandingRequired what still blocks activation, named rather than implied */
+    /**
+     * One onboarding run with every step.
+     *
+     * @param outstandingRequired what still blocks activation, named rather than implied
+     */
     public record RunView(RunSummary run, List<StepView> steps, List<String> outstandingRequired) {}
 
     public record StepView(

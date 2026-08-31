@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -493,7 +494,11 @@ public class GrantManagementService {
 
     /** @param validUntil null for an open-ended grant; set it for support access */
     public record GrantCommand(
-            String principalSubject, String roleCode, ResourceScope scope, String reason, Instant validUntil) {}
+            String principalSubject,
+            String roleCode,
+            ResourceScope scope,
+            String reason,
+            @Nullable Instant validUntil) {}
 
     public record GrantView(
             UUID id,

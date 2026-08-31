@@ -2,6 +2,7 @@ package uz.horecaos.platform.fulfillment.domain.tariff;
 
 import java.time.DayOfWeek;
 import java.time.LocalTime;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A peak-hours rule (ADR 0037).
@@ -35,7 +36,7 @@ public record TariffTimeRule(
         int dayMask,
         LocalTime fromTime,
         LocalTime toTime,
-        String bandSet,
+        @Nullable String bandSet,
         int multiplierBasisPoints,
         long surchargeMinor) {
 

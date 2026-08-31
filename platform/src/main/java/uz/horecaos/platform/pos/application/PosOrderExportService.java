@@ -220,7 +220,7 @@ public class PosOrderExportService {
                     attemptNumber,
                     "REJECTED",
                     refusal.code(),
-                    refusal.getMessage(),
+                    refusal.detail(),
                     startedAt,
                     clock.instant());
             exports.settle(
@@ -229,9 +229,9 @@ public class PosOrderExportService {
                     ExportState.REJECTED,
                     null,
                     refusal.code(),
-                    refusal.getMessage(),
+                    refusal.detail(),
                     clock.instant());
-            return ProviderOutcome.rejected(refusal.code(), refusal.getMessage());
+            return ProviderOutcome.rejected(refusal.code(), refusal.detail());
         }
 
         ExportResult result = prepared.adapter().exportOrder(prepared.context(), prepared.order());
@@ -320,10 +320,10 @@ public class PosOrderExportService {
                     ExportState.AWAITING_OPERATOR,
                     null,
                     null,
-                    refusal.getMessage(),
+                    refusal.detail(),
                     null,
                     clock.instant());
-            return ProviderOutcome.uncertain(refusal.code(), refusal.getMessage());
+            return ProviderOutcome.uncertain(refusal.code(), refusal.detail());
         }
 
         RecoveryRead read = prepared.adapter()
@@ -621,13 +621,27 @@ public class PosOrderExportService {
 
         private final String code;
 
+        /**
+         * Duplicates {@link Throwable#getMessage()}, which is declared to return
+         * {@code @Nullable String} for every throwable. This one is always
+         * constructed with a real message, and callers that hand it to a
+         * non-nullable detail field want that guarantee spelled out rather than
+         * re-checked at every call site.
+         */
+        private final String detail;
+
         ExportNotPossible(String code, String message) {
             super(message, null, false, false);
             this.code = code;
+            this.detail = message;
         }
 
         String code() {
             return code;
+        }
+
+        String detail() {
+            return detail;
         }
     }
 

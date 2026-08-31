@@ -211,7 +211,7 @@ class TenantControlPlaneServiceTests {
             @Override
             public uz.horecaos.platform.iam.api.CapabilityView viewFor(String subject, java.util.UUID tenantId) {
                 return new uz.horecaos.platform.iam.api.CapabilityView(
-                        subject, null, java.util.Set.of(), java.util.List.of(), 0);
+                        subject, "", java.util.Set.of(), java.util.List.of(), 0);
             }
         };
     }

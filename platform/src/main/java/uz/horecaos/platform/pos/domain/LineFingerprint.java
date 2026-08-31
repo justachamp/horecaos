@@ -6,6 +6,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A stable hash over what an order asked for (ADR 0011).
@@ -50,7 +51,7 @@ public final class LineFingerprint {
     }
 
     /** A hash of the customer's telephone number, never the number (ADR 0029). */
-    public static String phoneHash(String phone) {
+    public static String phoneHash(@Nullable String phone) {
         // Normalised before hashing so "+998 90 123 45 67" and "+998901234567"
         // are the same customer. Without this the recovery read would fail to
         // match on formatting the restaurant's back office applied.

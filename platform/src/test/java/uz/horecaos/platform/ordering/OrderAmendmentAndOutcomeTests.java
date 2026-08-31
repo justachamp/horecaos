@@ -103,9 +103,6 @@ class OrderAmendmentAndOutcomeTests {
     private static final Instant NOW = Instant.parse("2026-08-21T07:00:00Z");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private DataSource dataSource;
     private JdbcClient jdbc;
@@ -139,9 +136,6 @@ class OrderAmendmentAndOutcomeTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for amendment and outcome tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -1503,7 +1497,6 @@ class OrderAmendmentAndOutcomeTests {
         inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, burgerVariant, TrackingMode.BINARY);
     }
 
-    /** The unwired payments port, which is a stand-in in production too. */
     /**
      * A points ledger nothing in this suite is allowed to touch.
      *
@@ -1540,6 +1533,7 @@ class OrderAmendmentAndOutcomeTests {
                 }
             };
 
+    /** The unwired payments port, which is a stand-in in production too. */
     private static final PaymentIntentPort UNWIRED_PAYMENTS = new PaymentIntentPort() {
         @Override
         public UUID createIntent(

@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import uz.horecaos.platform.integration.outbox.RelayStore;
 import uz.horecaos.platform.integration.retry.RetryBackoff;
 
 @Component
@@ -21,7 +22,7 @@ public class OutboxRelay {
     private static final Logger logger = LoggerFactory.getLogger(OutboxRelay.class);
     private static final int MAX_ERROR_LENGTH = 2000;
 
-    private final JdbcOutboxStore outbox;
+    private final RelayStore outbox;
     private final OutboxPublisher publisher;
     private final Clock clock;
     private final int batchSize;
@@ -33,8 +34,14 @@ public class OutboxRelay {
     private final Counter deadLetterCounter;
     private final AtomicBoolean running = new AtomicBoolean();
 
+    /**
+     * Depends on {@link RelayStore} rather than {@link JdbcOutboxStore} itself:
+     * this relay only ever claims, publishes, and fails a batch, never appends,
+     * and the narrower type is what lets a backoff test substitute a recording
+     * double with no database behind it.
+     */
     public OutboxRelay(
-            JdbcOutboxStore outbox,
+            RelayStore outbox,
             OutboxPublisher publisher,
             Clock clock,
             MeterRegistry meterRegistry,

@@ -3,6 +3,7 @@ package uz.horecaos.platform.migration.application.importing;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * What each transformation version means
@@ -37,5 +38,5 @@ public interface TransformationRegistryStore {
             String ruleDigest,
             String summary,
             String declaredBy,
-            Instant retiredAt) {}
+            @Nullable Instant retiredAt) {}
 }

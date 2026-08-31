@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * How fulfilment reaches a courier partner without knowing one exists
@@ -76,16 +77,16 @@ public interface ShipmentBookingPort {
      *                   {@code HORECAOS_POLICY}, never as a partner promise
      */
     record QuoteOutcome(
-            Long priceMinor,
-            String currency,
-            Integer pickupEtaSeconds,
-            Integer deliveryEtaSeconds,
-            Integer distanceMeters,
-            Integer deadHeadMeters,
-            Instant expiresAt,
+            @Nullable Long priceMinor,
+            @Nullable String currency,
+            @Nullable Integer pickupEtaSeconds,
+            @Nullable Integer deliveryEtaSeconds,
+            @Nullable Integer distanceMeters,
+            @Nullable Integer deadHeadMeters,
+            @Nullable Instant expiresAt,
             boolean partnerSuppliedExpiry,
-            String failureCode,
-            String detail) {
+            @Nullable String failureCode,
+            @Nullable String detail) {
 
         public QuoteOutcome {
             if ((priceMinor == null) != (currency == null)) {
@@ -235,12 +236,12 @@ public interface ShipmentBookingPort {
             double latitude,
             double longitude,
             String address,
-            String contactName,
-            String contactPhone,
-            String comment,
-            String entrance,
-            String floor,
-            String apartment) {
+            @Nullable String contactName,
+            @Nullable String contactPhone,
+            @Nullable String comment,
+            @Nullable String entrance,
+            @Nullable String floor,
+            @Nullable String apartment) {
 
         @Override
         public String toString() {

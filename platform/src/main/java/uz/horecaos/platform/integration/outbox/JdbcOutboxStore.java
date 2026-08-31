@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Repository
-public class JdbcOutboxStore {
+public class JdbcOutboxStore implements RelayStore {
 
     private final JdbcClient jdbc;
 
@@ -22,6 +22,7 @@ public class JdbcOutboxStore {
         this.jdbc = jdbc;
     }
 
+    /** Writes one event for {@link OutboxRelay} to publish later, in the caller's own transaction. */
     public void append(NewOutboxEvent event) {
         jdbc.sql("""
                         INSERT INTO integration.outbox_events (
@@ -53,6 +54,7 @@ public class JdbcOutboxStore {
                 .update();
     }
 
+    @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public List<ClaimedOutboxEvent> claimBatch(Instant now, Duration leaseDuration, int batchSize) {
         if (batchSize < 1) {
@@ -108,6 +110,7 @@ public class JdbcOutboxStore {
                 .list();
     }
 
+    @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean markPublished(UUID eventId, UUID claimToken, Instant publishedAt) {
         return jdbc.sql("""
@@ -129,6 +132,7 @@ public class JdbcOutboxStore {
                 == 1;
     }
 
+    @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean markFailed(
             UUID eventId, UUID claimToken, Instant now, Instant nextAttemptAt, String error, boolean deadLetter) {

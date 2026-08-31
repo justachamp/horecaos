@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -216,7 +217,7 @@ class PlatformGrantServiceTests {
                 .update();
     }
 
-    private String activeGrant(String subject) {
+    private @Nullable String activeGrant(String subject) {
         return jdbc.sql("""
                 SELECT r.code FROM iam.grants g JOIN iam.roles r ON r.id = g.role_id
                  WHERE g.principal_subject = :subject AND g.scope_type = 'PLATFORM' AND g.status = 'ACTIVE'

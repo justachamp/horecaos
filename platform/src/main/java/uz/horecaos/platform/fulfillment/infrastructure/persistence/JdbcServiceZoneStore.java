@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.fulfillment.domain.BranchOrigin;
@@ -462,14 +463,14 @@ public class JdbcServiceZoneStore {
             UUID zoneId,
             ZoneRole role,
             int version,
-            UUID originLocationId,
-            UUID regionId,
-            Boolean regionIsPlatform,
+            @Nullable UUID originLocationId,
+            @Nullable UUID regionId,
+            @Nullable Boolean regionIsPlatform,
             int priority,
             String currency,
-            UUID deliveryTariffId,
-            Long freeDeliveryFromMinor,
-            Long minBasketMinor,
+            @Nullable UUID deliveryTariffId,
+            @Nullable Long freeDeliveryFromMinor,
+            @Nullable Long minBasketMinor,
             UUID createdBy,
             Instant createdAt) {
 

@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -58,10 +59,12 @@ public class PaymeCredentials {
     }
 
     /**
+     * Verifies the request's Basic header against the binding's cashbox key.
+     *
      * @throws PaymeRpcException {@code -32504}, which the caller renders in an
      *                           HTTP 200 body
      */
-    public void authenticate(ProviderBinding binding, String authorizationHeader) {
+    public void authenticate(ProviderBinding binding, @Nullable String authorizationHeader) {
         if (authorizationHeader == null || !authorizationHeader.startsWith(BASIC_PREFIX)) {
             throw PaymeErrors.insufficientPrivilege();
         }

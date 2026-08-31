@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -270,7 +271,7 @@ public class CustomerVerificationService {
      * leave a live challenge whose code nobody can know. One statement, so it needs
      * no transaction of its own.
      */
-    private void withdraw(UUID tenantId, Opened opened, String reason) {
+    private void withdraw(UUID tenantId, Opened opened, @Nullable String reason) {
         challenges.deleteUnsent(tenantId, opened.challengeId());
         log.warn("Withdrew verification challenge {}: the transport answered {}", opened.challengeId(), reason);
     }
@@ -528,7 +529,7 @@ public class CustomerVerificationService {
                 .build();
     }
 
-    private static ApiException unsendable(String reason) {
+    private static ApiException unsendable(@Nullable String reason) {
         return new ApiException(
                 ErrorCode.INTERNAL_ERROR,
                 "The code could not be sent. Try again.",

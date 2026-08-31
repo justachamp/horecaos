@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -319,7 +320,8 @@ public class NotificationDispatchService {
      * do not know whether we sent it" need different handling from support, and
      * collapsing them would let somebody resend a message the customer already has.
      */
-    private void escalateOrRetry(NotificationRow row, AttemptRow attempt, String reason, Instant nextAttemptAt) {
+    private void escalateOrRetry(
+            NotificationRow row, AttemptRow attempt, @Nullable String reason, Instant nextAttemptAt) {
         Instant now = clock.instant();
         if (row.attemptCount() < maximumAttempts) {
             notifications.settle(

@@ -108,6 +108,8 @@ public interface OrderSettlementPort {
     void recordTerminalOutcome(UUID tenantId, UUID orderId, String reasonCode, String actor);
 
     /**
+     * What checkout asks payments to plan a settlement from.
+     *
      * @param customerAccountId       null for a guest checkout, which has no
      *                                balance to draw on and therefore no balance
      *                                tender

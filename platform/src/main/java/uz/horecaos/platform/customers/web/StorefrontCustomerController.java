@@ -12,6 +12,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -450,7 +451,7 @@ public class StorefrontCustomerController {
             String status,
             String identityMode,
             String profileScope,
-            Integer identityPolicyVersion,
+            @Nullable Integer identityPolicyVersion,
             /*
              * A customer's own name, and the ADR 0029 name heuristic does not
              * catch it: it looks for "firstName" and "fullName", while
@@ -461,10 +462,10 @@ public class StorefrontCustomerController {
              * in plain text for a day.
              */
             @Classified(value = DataClass.PERSONAL, reason = "the customer's own name")
-            String displayName,
+            @Nullable String displayName,
 
-            String preferredLocale,
-            String preferredTimezone,
+            @Nullable String preferredLocale,
+            @Nullable String preferredTimezone,
             List<ContactPointSummary> contactPoints,
             int version,
             Instant createdAt) {
@@ -521,9 +522,9 @@ public class StorefrontCustomerController {
             UUID addressId,
             String label,
             AddressFields fields,
-            String deliveryInstructions,
-            Double latitude,
-            Double longitude,
+            @Nullable String deliveryInstructions,
+            @Nullable Double latitude,
+            @Nullable Double longitude,
             CoordinateSource coordinateSource,
             int version) {
 
@@ -557,8 +558,8 @@ public class StorefrontCustomerController {
     public record SaveAddressRequest(
             @Size(max = 64) String label,
             @NotNull @Valid AddressFields fields,
-            @Size(max = 500) String deliveryInstructions,
-            @DecimalMin("-90") @DecimalMax("90") Double latitude,
-            @DecimalMin("-180") @DecimalMax("180") Double longitude,
+            @Size(max = 500) @Nullable String deliveryInstructions,
+            @DecimalMin("-90") @DecimalMax("90") @Nullable Double latitude,
+            @DecimalMin("-180") @DecimalMax("180") @Nullable Double longitude,
             @NotNull CoordinateSource coordinateSource) {}
 }

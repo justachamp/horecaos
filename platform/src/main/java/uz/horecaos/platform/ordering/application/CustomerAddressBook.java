@@ -2,6 +2,7 @@ package uz.horecaos.platform.ordering.application;
 
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.ordering.domain.DeliveryDestination;
 
 /**
@@ -29,6 +30,9 @@ public interface CustomerAddressBook {
      * alone would let one customer deliver an order to another customer's home —
      * or, more quietly, learn that a given address id is real.
      *
+     * @param customerAccountId null for a guest cart, which has no saved address
+     *                          to look up — answered empty, the same as any other
+     *                          address that is not this account's
      * @param purpose recorded as an ADR 0027 fact by the reveal. "One customer
      *                choosing where their dinner goes" and "an export of every
      *                address a tenant holds" are the same decrypt to a key and
@@ -37,7 +41,8 @@ public interface CustomerAddressBook {
      *         not exist. All three are one answer to a caller, because telling
      *         them apart is how an id becomes probeable
      */
-    Optional<SavedDestination> destination(UUID tenantId, UUID customerAccountId, UUID addressId, String purpose);
+    Optional<SavedDestination> destination(
+            UUID tenantId, @Nullable UUID customerAccountId, UUID addressId, String purpose);
 
     /**
      * A revealed address, with the label that names it and nothing else.
@@ -54,7 +59,10 @@ public interface CustomerAddressBook {
      *                             column and re-encrypted into its own column
      */
     record SavedDestination(
-            UUID addressId, String label, DeliveryDestination destination, String deliveryInstructions) {
+            UUID addressId,
+            String label,
+            @Nullable DeliveryDestination destination,
+            @Nullable String deliveryInstructions) {
 
         /** Whether this address can be routed to at all. */
         public boolean located() {

@@ -20,11 +20,11 @@ import java.util.UUID;
 public interface MerchantLegalEntityGate {
 
     /**
-     * @return empty when {@code legalEntityId} does not belong to {@code tenantId}
-     *         at all; otherwise whether it may currently be named as a seller.
-     *         The two are kept apart so a caller can refuse "no such legal
-     *         entity" as not-found and "that entity cannot sell right now" as a
-     *         conflict, rather than collapsing both into one answer
+     * Returns empty when {@code legalEntityId} does not belong to {@code tenantId}
+     * at all; otherwise whether it may currently be named as a seller.
+     * The two are kept apart so a caller can refuse "no such legal
+     * entity" as not-found and "that entity cannot sell right now" as a
+     * conflict, rather than collapsing both into one answer.
      */
     Optional<Boolean> activeFor(UUID tenantId, UUID legalEntityId);
 }

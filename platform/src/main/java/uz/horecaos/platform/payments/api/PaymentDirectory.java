@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The small read another module needs about an order's payment (ADR 0013).
@@ -29,6 +30,8 @@ public interface PaymentDirectory {
     List<UnfiscalizedCashOrder> unfiscalizedCashOrders(UUID tenantId, Instant from, Instant to, int limit);
 
     /**
+     * The payment facts another module is allowed to know about an order.
+     *
      * @param paid           whether the money has arrived, which is not the same as
      *                       whether an attempt succeeded: a reversed capture leaves
      *                       this true and a returned amount beside it
@@ -43,7 +46,7 @@ public interface PaymentDirectory {
             UUID orderId,
             String tender,
             String paymentMethodCode,
-            String providerType,
+            @Nullable String providerType,
             String status,
             boolean paid,
             boolean uncertain,
@@ -52,8 +55,8 @@ public interface PaymentDirectory {
             long capturedMinor,
             long returnedMinor,
             String currency,
-            String fiscalStatus,
-            String fiscalReasonCode) {}
+            @Nullable String fiscalStatus,
+            @Nullable String fiscalReasonCode) {}
 
     record UnfiscalizedCashOrder(
             UUID orderId, UUID fiscalDocumentId, String reasonCode, String reasonNote, Instant recordedAt) {}

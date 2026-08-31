@@ -5,6 +5,7 @@ import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * What this plan's sourcing has already tried (ADR 0014).
@@ -40,8 +41,8 @@ import java.util.UUID;
 public record SourcingProgress(
         Instant startedAt,
         Set<UUID> offeredCouriers,
-        UUID outstandingOffer,
-        Instant offerExpiresAt,
+        @Nullable UUID outstandingOffer,
+        @Nullable Instant offerExpiresAt,
         Set<UUID> attemptedPartners,
         boolean uncertainAttempt) {
 
@@ -82,6 +83,6 @@ public record SourcingProgress(
     }
 
     public boolean hasLiveOffer(Instant now) {
-        return outstandingOffer != null && now.isBefore(offerExpiresAt);
+        return outstandingOffer != null && offerExpiresAt != null && now.isBefore(offerExpiresAt);
     }
 }

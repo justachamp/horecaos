@@ -15,6 +15,8 @@ import java.util.UUID;
 public interface ServiceabilityResolver {
 
     /**
+     * Resolves whether this channel/location/mode may take an order right now.
+     *
      * @param at the instant to answer for — passed in rather than read from a
      *           clock inside, so a scheduled order can ask about its own start
      *           time and so a test can ask about 01:00 without waiting for it

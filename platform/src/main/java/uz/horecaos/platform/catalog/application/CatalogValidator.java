@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Category;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
@@ -221,7 +222,7 @@ public class CatalogValidator {
             FiscalClassification fiscal,
             EntityType type,
             UUID entityId,
-            String entityCode) {
+            @Nullable String entityCode) {
 
         if (!snapshot.fiscal().referenceLoaded() || fiscal.mxikCode() == null) {
             return;
@@ -552,7 +553,7 @@ public class CatalogValidator {
          * the brand default. Publication refuses to proceed without the default,
          * so a published item always has at least one name.
          */
-        public LocalizedText text(EntityType type, UUID entityId, String locale) {
+        public @Nullable LocalizedText text(EntityType type, UUID entityId, String locale) {
             LocalizedText requested = translations.get(translationKey(type, entityId, locale));
             return requested != null ? requested : translations.get(translationKey(type, entityId, defaultLocale));
         }
@@ -563,7 +564,7 @@ public class CatalogValidator {
     }
 
     /** A name and optional description in one locale. */
-    public record LocalizedText(String locale, String name, String description) {}
+    public record LocalizedText(String locale, String name, @Nullable String description) {}
 
     /**
      * Everything the fiscal rules need, loaded with the rest of the snapshot

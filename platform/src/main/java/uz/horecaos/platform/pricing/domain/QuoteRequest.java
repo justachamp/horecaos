@@ -3,6 +3,7 @@ package uz.horecaos.platform.pricing.domain;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.fulfillment.api.PricingAuthority;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 
@@ -11,16 +12,20 @@ import uz.horecaos.platform.tenancy.api.GeoPoint;
  *
  * <p>Every field here is an input to the context hash, which is what lets
  * checkout prove the cart it is accepting is the cart that was priced.
+ *
+ * @param customerAccountId null for a guest cart, which has no account to price
+ *                          loyalty or account-scoped terms against
+ * @param delivery null for a cart being collected rather than delivered
  */
 public record QuoteRequest(
         UUID tenantId,
         UUID brandId,
         UUID locationId,
-        UUID customerAccountId,
+        @Nullable UUID customerAccountId,
         String channel,
         List<Line> lines,
         String idempotencyKey,
-        Delivery delivery) {
+        @Nullable Delivery delivery) {
 
     public QuoteRequest {
         Objects.requireNonNull(tenantId, "A tenant id is required");
@@ -39,7 +44,7 @@ public record QuoteRequest(
             UUID tenantId,
             UUID brandId,
             UUID locationId,
-            UUID customerAccountId,
+            @Nullable UUID customerAccountId,
             String channel,
             List<Line> lines,
             String idempotencyKey) {
@@ -68,6 +73,8 @@ public record QuoteRequest(
     }
 
     /**
+     * One line of the cart being priced.
+     *
      * @param lineId stable within the cart, so a re-quote can be compared line by
      *               line rather than by position
      * @param modifierOptionIds priced individually and added to the line

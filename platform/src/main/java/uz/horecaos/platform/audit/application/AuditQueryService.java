@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
@@ -111,7 +112,7 @@ public class AuditQueryService {
                 .list();
     }
 
-    private static int boundedLimit(Integer requested) {
+    private static int boundedLimit(@Nullable Integer requested) {
         if (requested == null) {
             return 50;
         }
@@ -144,12 +145,12 @@ public class AuditQueryService {
             Instant occurredAt) {}
 
     public record AuditQuery(
-            UUID tenantId,
-            String actorSubject,
-            String actionCode,
-            UUID targetId,
-            String auditClass,
-            Instant from,
-            Instant to,
-            Integer limit) {}
+            @Nullable UUID tenantId,
+            @Nullable String actorSubject,
+            @Nullable String actionCode,
+            @Nullable UUID targetId,
+            @Nullable String auditClass,
+            @Nullable Instant from,
+            @Nullable Instant to,
+            @Nullable Integer limit) {}
 }

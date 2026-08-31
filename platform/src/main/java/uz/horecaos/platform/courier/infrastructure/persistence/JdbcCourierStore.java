@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.courier.domain.EngagementStatus;
@@ -199,7 +200,7 @@ public class JdbcCourierStore {
             LocalDate reverificationDueOn,
             VerificationMethod method,
             String verifiedBy,
-            UUID evidenceMediaId,
+            @Nullable UUID evidenceMediaId,
             RegistrationWarningState warningState,
             Instant now) {
 
@@ -425,6 +426,11 @@ public class JdbcCourierStore {
 
     // ------------------------------------------------------------------- rows
 
+    /**
+     * A vehicle class and its dispatch numbers.
+     *
+     * @param maxDistanceMeters null when the class has no upper distance bound
+     */
     public record CourierTypeRow(
             UUID id,
             UUID tenantId,
@@ -432,7 +438,7 @@ public class JdbcCourierStore {
             String displayName,
             String vehicleClass,
             int minDistanceMeters,
-            Integer maxDistanceMeters,
+            @Nullable Integer maxDistanceMeters,
             int maxConcurrentAssignments,
             int offerTtlSeconds,
             String status) {}
@@ -447,22 +453,31 @@ public class JdbcCourierStore {
             String status,
             int version) {}
 
+    /**
+     * An engagement as the ordinary projection reads it.
+     *
+     * <p>Everything after {@code engagedFrom} is absent until the act that
+     * writes it happens: the registration fields until {@link #verify}, the
+     * suspension reason until a suspension. {@code protectedRegistrationRef} is
+     * always null here — the projection deliberately never selects the
+     * ciphertext column.
+     */
     public record EngagementRow(
             UUID id,
             UUID tenantId,
             UUID courierId,
             EngagementStatus status,
             LocalDate engagedFrom,
-            LocalDate engagedUntil,
-            String protectedRegistrationRef,
-            LocalDate registrationValidUntil,
-            Instant registrationVerifiedAt,
-            String registrationVerifiedBy,
-            VerificationMethod verificationMethod,
-            UUID evidenceMediaId,
-            LocalDate reverificationDueOn,
+            @Nullable LocalDate engagedUntil,
+            @Nullable String protectedRegistrationRef,
+            @Nullable LocalDate registrationValidUntil,
+            @Nullable Instant registrationVerifiedAt,
+            @Nullable String registrationVerifiedBy,
+            @Nullable VerificationMethod verificationMethod,
+            @Nullable UUID evidenceMediaId,
+            @Nullable LocalDate reverificationDueOn,
             RegistrationWarningState warningState,
-            String suspensionReasonCode,
+            @Nullable String suspensionReasonCode,
             int version) {}
 
     public record AdjustmentReasonRow(
@@ -536,11 +551,11 @@ public class JdbcCourierStore {
                 rs.getInt("version"));
     }
 
-    static Instant instant(OffsetDateTime value) {
+    static @Nullable Instant instant(@Nullable OffsetDateTime value) {
         return value == null ? null : value.toInstant();
     }
 
-    static OffsetDateTime utc(Instant value) {
+    static @Nullable OffsetDateTime utc(@Nullable Instant value) {
         return value == null ? null : value.atOffset(ZoneOffset.UTC);
     }
 }

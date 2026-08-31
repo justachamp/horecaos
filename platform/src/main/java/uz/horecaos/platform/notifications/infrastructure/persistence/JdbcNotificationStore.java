@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -214,7 +215,8 @@ public class JdbcNotificationStore {
      * is what makes "why did the customer not get their confirmation?"
      * unanswerable, which is the question support actually receives.
      */
-    public boolean markSuppressed(UUID tenantId, UUID notificationId, UUID claimToken, String reason, Instant now) {
+    public boolean markSuppressed(
+            UUID tenantId, UUID notificationId, @Nullable UUID claimToken, String reason, Instant now) {
         return jdbc.sql("""
                 UPDATE notifications.notifications
                 SET status = 'SUPPRESSED', suppression_reason = :reason, claim_token = NULL,
@@ -233,7 +235,7 @@ public class JdbcNotificationStore {
     }
 
     public boolean markSending(
-            UUID tenantId, UUID notificationId, UUID claimToken, String renderedContentHash, Instant now) {
+            UUID tenantId, UUID notificationId, @Nullable UUID claimToken, String renderedContentHash, Instant now) {
         return jdbc.sql("""
                 UPDATE notifications.notifications
                 SET status = 'SENDING', rendered_content_hash = :hash, version = version + 1,
@@ -257,7 +259,7 @@ public class JdbcNotificationStore {
      * let a second worker pick the row up and send the message whose fate this call
      * is in the middle of establishing.
      */
-    public boolean markReconciling(UUID tenantId, UUID notificationId, UUID claimToken, Instant now) {
+    public boolean markReconciling(UUID tenantId, UUID notificationId, @Nullable UUID claimToken, Instant now) {
         return jdbc.sql("""
                 UPDATE notifications.notifications
                 SET status = 'RECONCILING', version = version + 1, updated_at = :now
@@ -285,10 +287,10 @@ public class JdbcNotificationStore {
     public boolean settle(
             UUID tenantId,
             UUID notificationId,
-            UUID claimToken,
+            @Nullable UUID claimToken,
             String status,
             Instant nextAttemptAt,
-            String lastError,
+            @Nullable String lastError,
             Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
@@ -446,8 +448,8 @@ public class JdbcNotificationStore {
             UUID tenantId,
             UUID notificationId,
             String channel,
-            UUID providerBindingId,
-            String providerType,
+            @Nullable UUID providerBindingId,
+            @Nullable String providerType,
             int attemptNumber,
             String providerIdempotencyKey,
             Instant now) {
@@ -496,11 +498,11 @@ public class JdbcNotificationStore {
             UUID tenantId,
             UUID attemptId,
             String status,
-            String externalMessageId,
-            String failureCode,
-            UUID providerBindingId,
-            String providerType,
-            Instant acknowledgedAt,
+            @Nullable String externalMessageId,
+            @Nullable String failureCode,
+            @Nullable UUID providerBindingId,
+            @Nullable String providerType,
+            @Nullable Instant acknowledgedAt,
             Instant now) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
@@ -760,7 +762,7 @@ public class JdbcNotificationStore {
                 row.getInt("version"));
     }
 
-    private static Instant instant(OffsetDateTime value) {
+    private static @Nullable Instant instant(@Nullable OffsetDateTime value) {
         return value == null ? null : value.toInstant();
     }
 
@@ -796,6 +798,8 @@ public class JdbcNotificationStore {
             Instant createdAt) {}
 
     /**
+     * The notification row, as claimed and settled by the worker.
+     *
      * @param templateVersion null until eligibility freezes one, which is a
      *                        different thing from version zero
      */
@@ -803,40 +807,40 @@ public class JdbcNotificationStore {
             UUID id,
             UUID tenantId,
             UUID brandId,
-            UUID locationId,
+            @Nullable UUID locationId,
             String notificationClass,
             String channel,
             String templateKey,
-            UUID templateId,
-            Integer templateVersion,
-            String locale,
+            @Nullable UUID templateId,
+            @Nullable Integer templateVersion,
+            @Nullable String locale,
             String subjectType,
             UUID subjectId,
-            UUID recipientEndpointId,
-            UUID recipientAccountId,
+            @Nullable UUID recipientEndpointId,
+            @Nullable UUID recipientAccountId,
             UUID triggerEventId,
             String idempotencyKey,
             String status,
-            String suppressionReason,
+            @Nullable String suppressionReason,
             String variablesJson,
-            String variablesHash,
-            String renderedContentHash,
+            @Nullable String variablesHash,
+            @Nullable String renderedContentHash,
             Instant scheduledAt,
-            Instant expiresAt,
+            @Nullable Instant expiresAt,
             int attemptCount,
             Instant nextAttemptAt,
-            UUID claimToken,
-            Instant terminalAt,
-            String lastError,
+            @Nullable UUID claimToken,
+            @Nullable Instant terminalAt,
+            @Nullable String lastError,
             int version,
             Instant createdAt) {}
 
     public record EndpointRow(
             UUID id,
-            UUID customerAccountId,
+            @Nullable UUID customerAccountId,
             String endpointType,
-            UUID contactPointId,
-            String operationsEndpointReference,
+            @Nullable UUID contactPointId,
+            @Nullable String operationsEndpointReference,
             String normalizedHash,
             String verificationStatus,
             String status) {}
@@ -845,16 +849,16 @@ public class JdbcNotificationStore {
             UUID id,
             UUID notificationId,
             String channel,
-            UUID providerBindingId,
-            String providerType,
+            @Nullable UUID providerBindingId,
+            @Nullable String providerType,
             int attemptNumber,
             String providerIdempotencyKey,
             String status,
-            String externalMessageId,
-            String failureCode,
+            @Nullable String externalMessageId,
+            @Nullable String failureCode,
             boolean uncertainOutcome,
             Instant requestedAt,
-            Instant acknowledgedAt) {}
+            @Nullable Instant acknowledgedAt) {}
 
     public record StatusEventRow(
             String providerEventId, String normalizedStatus, String providerStatus, Instant occurredAt) {}

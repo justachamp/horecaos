@@ -93,7 +93,7 @@ public class JdbcLegacySourceReader implements LegacySourceReader {
     public SourcePage readChanges(ExtractionSpec spec, String watermark, String afterKey, int limit) {
         if (!spec.hasWatermark()) {
             throw new IllegalArgumentException(
-                    ("%s declares no watermark column, so it has no incremental feed").formatted(spec.entityType()));
+                    "%s declares no watermark column, so it has no incremental feed".formatted(spec.entityType()));
         }
 
         // Inclusive on the watermark and ordered by (watermark, key). The legacy

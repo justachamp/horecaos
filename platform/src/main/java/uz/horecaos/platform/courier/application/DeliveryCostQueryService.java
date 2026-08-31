@@ -3,6 +3,7 @@ package uz.horecaos.platform.courier.application;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.courier.domain.CostBasis;
 import uz.horecaos.platform.courier.domain.CostPath;
@@ -36,10 +37,12 @@ public class DeliveryCostQueryService {
     }
 
     /**
+     * The two-line cost report over one basis and one date range.
+     *
      * @param basis required. A caller with none is asking a question with two
      *              answers and no way to tell which one it got
      */
-    public CostReport report(UUID tenantId, CostBasis basis, LocalDate from, LocalDate to) {
+    public CostReport report(UUID tenantId, @Nullable CostBasis basis, LocalDate from, LocalDate to) {
         if (basis == null) {
             throw new ApiException(
                     ErrorCode.VALIDATION_FAILED,
@@ -82,6 +85,8 @@ public class DeliveryCostQueryService {
     }
 
     /**
+     * Two lines and a total, never one number.
+     *
      * @param shipmentsWithoutThisBasis shipments carrying cost at some other
      *                                  basis, reported beside the total rather
      *                                  than dropped. A report at INVOICED that

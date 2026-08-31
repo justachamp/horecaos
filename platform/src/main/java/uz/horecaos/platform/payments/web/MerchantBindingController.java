@@ -12,6 +12,7 @@ import java.net.URI;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -173,8 +174,8 @@ public class MerchantBindingController {
             @NotNull UUID installationId,
             @NotNull UUID integrationBindingId,
             @NotBlank @Size(max = 255) String merchantAccountReference,
-            @Size(max = 255) String merchantUserReference,
-            @Size(max = 255) String merchantIdReference,
+            @Size(max = 255) @Nullable String merchantUserReference,
+            @Size(max = 255) @Nullable String merchantIdReference,
 
             @NotBlank
             @Size(max = 512)
@@ -190,7 +191,7 @@ public class MerchantBindingController {
             boolean supportsReversal,
             boolean supportsPartnerFiscalization,
             @NotNull LocalDate effectiveFrom,
-            LocalDate effectiveUntil) {
+            @Nullable LocalDate effectiveUntil) {
 
         RegisterMerchantBindingCommand toCommand() {
             return new RegisterMerchantBindingCommand(
@@ -218,15 +219,15 @@ public class MerchantBindingController {
             UUID installationId,
             UUID integrationBindingId,
             String merchantAccountReference,
-            String merchantUserReference,
-            String merchantIdReference,
+            @Nullable String merchantUserReference,
+            @Nullable String merchantIdReference,
             String secretReference,
             String callbackPathSegment,
             boolean supportsReversal,
             boolean supportsPartnerFiscalization,
             MerchantBindingStatus status,
             LocalDate effectiveFrom,
-            LocalDate effectiveUntil,
+            @Nullable LocalDate effectiveUntil,
             int version) {
 
         static MerchantBindingView of(MerchantBinding binding) {

@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -17,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -822,7 +824,7 @@ class StorefrontCustomerSurfaceTests {
                 VALUES (:id, :tenantId, 1, :mode, TIMESTAMPTZ '2020-01-01T00:00:00Z')
                 ON CONFLICT DO NOTHING
                 """)
-                .param("id", UUID.nameUUIDFromBytes(id.toString().getBytes()))
+                .param("id", UUID.nameUUIDFromBytes(id.toString().getBytes(StandardCharsets.UTF_8)))
                 .param("tenantId", id)
                 .param("mode", identityMode)
                 .update();
@@ -848,7 +850,7 @@ class StorefrontCustomerSurfaceTests {
      * accounts for one subject: the partition is on the row and on the link, and
      * resolution matches them with {@code IS NOT DISTINCT FROM}.
      */
-    private UUID account(UUID tenantId, UUID partitionBrandId, String subject) {
+    private UUID account(UUID tenantId, @Nullable UUID partitionBrandId, String subject) {
         UUID accountId = UUID.randomUUID();
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         jdbc.sql("""

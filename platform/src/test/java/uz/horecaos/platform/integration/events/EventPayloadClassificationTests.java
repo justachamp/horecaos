@@ -9,6 +9,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import uz.horecaos.platform.ordering.api.OrderingEvent;
 import uz.horecaos.platform.tenancy.api.TenancyEvent;
@@ -87,7 +88,7 @@ class EventPayloadClassificationTests {
                         calls an authorized API with the identifier (ADR 0032).""").isEmpty();
     }
 
-    private static Class<?> payloadTypeOf(Class<?> eventType) {
+    private static @Nullable Class<?> payloadTypeOf(Class<?> eventType) {
         return Arrays.stream(eventType.getDeclaredClasses())
                 .filter(Class::isRecord)
                 .filter(candidate -> candidate.getSimpleName().equals("Payload"))
@@ -95,7 +96,8 @@ class EventPayloadClassificationTests {
                 .orElse(null);
     }
 
-    private static void inspect(Class<?> type, String path, Set<Class<?>> visited, List<String> violations) {
+    private static void inspect(
+            @Nullable Class<?> type, String path, Set<Class<?>> visited, List<String> violations) {
         if (type == null || !type.isRecord() || !visited.add(type)) {
             return;
         }

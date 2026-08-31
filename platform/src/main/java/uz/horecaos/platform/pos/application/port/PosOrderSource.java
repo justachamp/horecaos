@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The order facts a till needs, read once and never copied (ADR 0011).
@@ -54,11 +55,11 @@ public interface PosOrderSource {
             String fulfillmentMode,
             String currency,
             long totalMinor,
-            Instant placedAt,
-            UUID customerAccountId,
-            String customerName,
-            String customerPhone,
-            String customerAddress,
+            @Nullable Instant placedAt,
+            @Nullable UUID customerAccountId,
+            @Nullable String customerName,
+            @Nullable String customerPhone,
+            @Nullable String customerAddress,
             List<Line> lines) {
 
         public ExportableOrder {
@@ -82,7 +83,7 @@ public interface PosOrderSource {
                 UUID lineId,
                 UUID sourceVariantId,
                 String productNameSnapshot,
-                String variantNameSnapshot,
+                @Nullable String variantNameSnapshot,
                 int quantity,
                 long unitAmountMinor,
                 List<UUID> modifierOptionIds) {

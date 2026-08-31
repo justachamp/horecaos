@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A point in the ownership hierarchy at which a configuration value or policy
@@ -18,8 +19,13 @@ import java.util.UUID;
  * <p>Lives in {@code iam.api} and is expressed in raw identifiers rather than
  * tenancy value types. Tenancy already depends on {@code iam.api}, so taking a
  * dependency the other way would make the two modules cyclic.
+ *
+ * @param tenantId absent only for {@link ScopeType#PLATFORM}
+ * @param brandId present only for {@link ScopeType#BRAND} and {@link ScopeType#LOCATION}
+ * @param locationId present only for {@link ScopeType#LOCATION}
  */
-public record ResourceScope(ScopeType type, UUID tenantId, UUID brandId, UUID locationId) {
+public record ResourceScope(
+        ScopeType type, @Nullable UUID tenantId, @Nullable UUID brandId, @Nullable UUID locationId) {
 
     public enum ScopeType {
         PLATFORM,
@@ -89,7 +95,7 @@ public record ResourceScope(ScopeType type, UUID tenantId, UUID brandId, UUID lo
     }
 
     /** The identifier of this scope level, or {@code null} for the platform. */
-    public UUID scopeId() {
+    public @Nullable UUID scopeId() {
         return switch (type) {
             case PLATFORM -> null;
             case TENANT -> tenantId;

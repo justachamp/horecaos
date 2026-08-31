@@ -1,6 +1,7 @@
 package uz.horecaos.platform.ordering.api;
 
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Step 7 of ADR 0019's checkout transaction: "create a provider-neutral payment
@@ -59,7 +60,7 @@ public interface PaymentIntentPort {
      *                    refund can reach it either
      * @return the intent id, or null when no payment is required
      */
-    UUID createIntent(
+    @Nullable UUID createIntent(
             UUID tenantId,
             UUID orderId,
             long amountMinor,

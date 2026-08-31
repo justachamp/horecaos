@@ -13,6 +13,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -112,9 +113,7 @@ class CourierCompensationTests {
     private static final Instant NOON = Instant.parse("2026-08-25T07:00:00Z");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
     private static String username;
-    private static String password;
 
     private DataSource dataSource;
     private JdbcClient jdbc;
@@ -162,9 +161,7 @@ class CourierCompensationTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for courier compensation tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
         username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -248,8 +245,7 @@ class CourierCompensationTests {
                 ledger,
                 policyResolver,
                 legalEntities,
-                protection,
-                clock);
+                protection);
         settlement = new CourierSettlementService(
                 ledgerStore, courierStore, costStore, approvals, audit, objectMapper, clock);
         cash = new CourierCashService(shiftStore, ledger, audit, clock);
@@ -500,7 +496,7 @@ class CourierCompensationTests {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> compliance =
-                (Map<String, Object>) statement.document().get("compliance");
+                (Map<String, Object>) Objects.requireNonNull(statement.document().get("compliance"));
         assertThat(compliance.get("flag")).isEqualTo(true);
         assertThat((List<?>) compliance.get("affectedEntryIds")).hasSize(1);
     }
@@ -669,14 +665,15 @@ class CourierCompensationTests {
 
         CourierShiftService.CloseOutcome outcome = shifts.close(new CourierShiftService.CloseShift(
                 TENANT, shift.id(), ShiftActor.COURIER, courier(), null, "done", null, UZS));
+        UUID handoverId = Objects.requireNonNull(outcome.cashHandoverId());
 
-        Throwable refused = catchThrowable(
-                () -> cash.declare(TENANT, outcome.cashHandoverId(), UUID.randomUUID(), 120_000, courier()));
+        Throwable refused =
+                catchThrowable(() -> cash.declare(TENANT, handoverId, UUID.randomUUID(), 120_000, courier()));
 
         assertThat(refused).isInstanceOf(ApiException.class);
         assertThat(((ApiException) refused).errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
         assertThat(shiftStore
-                        .findHandover(TENANT, outcome.cashHandoverId())
+                        .findHandover(TENANT, handoverId)
                         .orElseThrow()
                         .status())
                 .as("the ownership refusal happens before the handover is mutated")
@@ -694,9 +691,10 @@ class CourierCompensationTests {
         CourierShiftService.CloseOutcome outcome = shifts.close(new CourierShiftService.CloseShift(
                 TENANT, shift.id(), ShiftActor.COURIER, courier(), null, "done", null, UZS));
         assertThat(outcome.cashHandoverId()).isNotNull();
+        UUID handoverId = Objects.requireNonNull(outcome.cashHandoverId());
 
-        cash.declare(TENANT, outcome.cashHandoverId(), courierId, 120_000, courier());
-        cash.confirm(TENANT, outcome.cashHandoverId(), 120_000, null, cashier(), "counted");
+        cash.declare(TENANT, handoverId, courierId, 120_000, courier());
+        cash.confirm(TENANT, handoverId, 120_000, null, cashier(), "counted");
 
         long cashPosition =
                 ledgerStore
@@ -719,8 +717,9 @@ class CourierCompensationTests {
         CourierShiftService.CloseOutcome shortfall = shifts.close(new CourierShiftService.CloseShift(
                 TENANT, second.id(), ShiftActor.COURIER, courier(), null, "done", null, UZS));
 
-        cash.declare(TENANT, shortfall.cashHandoverId(), courierId, 85_000, courier());
-        cash.confirm(TENANT, shortfall.cashHandoverId(), 85_000, "SHORT_AT_COUNT", cashier(), "five thousand short");
+        UUID shortfallHandoverId = Objects.requireNonNull(shortfall.cashHandoverId());
+        cash.declare(TENANT, shortfallHandoverId, courierId, 85_000, courier());
+        cash.confirm(TENANT, shortfallHandoverId, 85_000, "SHORT_AT_COUNT", cashier(), "five thousand short");
 
         List<LedgerEntryRow> variances = entriesOfType(LedgerEntryType.CASH_VARIANCE);
         assertThat(variances).hasSize(1);
@@ -737,9 +736,9 @@ class CourierCompensationTests {
         CourierShiftService.CloseOutcome outcome = shifts.close(new CourierShiftService.CloseShift(
                 TENANT, shift.id(), ShiftActor.COURIER, courier(), null, "done", null, UZS));
 
-        cash.declare(TENANT, outcome.cashHandoverId(), courierId, 40_000, courier());
-        assertThat(catchThrowable(
-                        () -> cash.confirm(TENANT, outcome.cashHandoverId(), 40_000, null, cashier(), "counted")))
+        UUID handoverId = Objects.requireNonNull(outcome.cashHandoverId());
+        cash.declare(TENANT, handoverId, courierId, 40_000, courier());
+        assertThat(catchThrowable(() -> cash.confirm(TENANT, handoverId, 40_000, null, cashier(), "counted")))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("reason code");
     }
@@ -801,7 +800,8 @@ class CourierCompensationTests {
                 "the order never arrived",
                 "corr"));
         assertThat(approved.written()).isTrue();
-        assertThat(approved.entry().approvalRequestId()).isNotNull();
+        assertThat(Objects.requireNonNull(approved.entry()).approvalRequestId())
+                .isNotNull();
     }
 
     @Test
@@ -824,7 +824,7 @@ class CourierCompensationTests {
         clock.set(NOON.plus(Duration.ofHours(5)));
         CourierShiftService.CloseOutcome outcome = shifts.close(new CourierShiftService.CloseShift(
                 TENANT, shift.id(), ShiftActor.COURIER, courier(), null, "done", null, UZS));
-        cash.declare(TENANT, outcome.cashHandoverId(), courierId, 80_000, courier());
+        cash.declare(TENANT, Objects.requireNonNull(outcome.cashHandoverId()), courierId, 80_000, courier());
         // The courier keeps the cash: nothing is confirmed, so he is still holding it.
 
         PeriodRow period = ledgerStore.findOpenPeriod(TENANT, courierId).orElseThrow();

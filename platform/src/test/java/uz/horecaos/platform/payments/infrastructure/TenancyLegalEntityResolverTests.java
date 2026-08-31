@@ -86,7 +86,7 @@ class TenancyLegalEntityResolverTests {
         PaymentLegalEntityResolver resolver = new TenancyLegalEntityResolver(directory);
         PaymentBindingResolver bindings = boundResolverFor(LEGAL_ENTITY);
 
-        var intents = new PaymentIntentService(null, null, resolver, bindings, null, null, null);
+        var intents = serviceUnderTest(resolver, bindings);
 
         assertThat(intents.canAcceptPayment(TENANT, LOCATION, "CLICK", BUSINESS_DATE))
                 .as("a legal entity is assigned and a merchant account exists for it, so the "
@@ -100,7 +100,7 @@ class TenancyLegalEntityResolverTests {
         PaymentLegalEntityResolver resolver = new TenancyLegalEntityResolver(directory);
         PaymentBindingResolver bindings = boundResolverFor(LEGAL_ENTITY);
 
-        var intents = new PaymentIntentService(null, null, resolver, bindings, null, null, null);
+        var intents = serviceUnderTest(resolver, bindings);
 
         assertThat(intents.canAcceptPayment(TENANT, LOCATION, "CLICK", BUSINESS_DATE))
                 .as("no seller is assigned to this location, so there is still nothing for a "
@@ -111,17 +111,26 @@ class TenancyLegalEntityResolverTests {
     @Test
     void cashNeedsNoLegalEntityAtAll() {
         LegalEntityDirectory directory = (tenantId, locationId, businessDate) -> Optional.empty();
-        var intents = new PaymentIntentService(
-                null,
-                null,
-                new TenancyLegalEntityResolver(directory),
-                boundResolverFor(LEGAL_ENTITY),
-                null,
-                null,
-                null);
+        var intents = serviceUnderTest(new TenancyLegalEntityResolver(directory), boundResolverFor(LEGAL_ENTITY));
 
         assertThat(intents.canAcceptPayment(TENANT, LOCATION, "CASH", BUSINESS_DATE))
                 .isTrue();
+    }
+
+    /**
+     * Wired with only what {@code canAcceptPayment}'s four-argument overload
+     * touches: the legal-entity resolver and the binding resolver.
+     *
+     * <p>The other three collaborators are concrete JDBC/fiscal types with no
+     * interface to fake here, and this suite never calls a method that would
+     * reach them — so they are deliberately left null rather than stood up for
+     * real, which is not the same thing as the constructor's own contract
+     * allowing null.
+     */
+    @SuppressWarnings("NullAway")
+    private static PaymentIntentService serviceUnderTest(
+            PaymentLegalEntityResolver resolver, PaymentBindingResolver bindings) {
+        return new PaymentIntentService(null, null, resolver, bindings, null, null, null);
     }
 
     private static FiscalSeller fiscalSeller(UUID legalEntityId) {

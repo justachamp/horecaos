@@ -9,6 +9,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -406,7 +407,7 @@ public class TenantControlPlaneService {
             String displayName,
             String defaultCurrency,
             String defaultTimezone,
-            String keycloakOrganizationId,
+            @Nullable String keycloakOrganizationId,
             TenantStatus status,
             CustomerIdentityMode customerIdentityMode) {}
 
@@ -456,12 +457,12 @@ public class TenantControlPlaneService {
             String displayName,
             String timezone,
             OperatingUnitStatus status,
-            String addressLine,
-            String district,
-            String city,
-            String landmark,
-            String contactPhone,
-            Double latitude,
-            Double longitude,
+            @Nullable String addressLine,
+            @Nullable String district,
+            @Nullable String city,
+            @Nullable String landmark,
+            @Nullable String contactPhone,
+            @Nullable Double latitude,
+            @Nullable Double longitude,
             CoordinateSource coordinateSource) {}
 }

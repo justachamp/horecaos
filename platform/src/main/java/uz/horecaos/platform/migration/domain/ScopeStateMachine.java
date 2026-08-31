@@ -3,6 +3,7 @@ package uz.horecaos.platform.migration.domain;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -93,7 +94,10 @@ public final class ScopeStateMachine {
         // retired one.
         for (ScopeState state : ScopeState.values()) {
             if (!state.terminal() && !state.holding()) {
-                transitions.get(state).addAll(HOLDING);
+                // Every non-terminal, non-holding state was given an entry above, so
+                // this lookup cannot miss; requireNonNull says so rather than
+                // silently tolerating a state the table forgot to cover.
+                Objects.requireNonNull(transitions.get(state)).addAll(HOLDING);
             }
         }
 

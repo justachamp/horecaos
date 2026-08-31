@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.ordering.domain.OutcomeReasonKind;
@@ -81,7 +82,7 @@ public class JdbcOutcomeReasonStore {
             String stockDisposition,
             String liabilityParty,
             String customerRefund,
-            List<String> allowedFulfillmentModes,
+            @Nullable List<String> allowedFulfillmentModes,
             Instant now) {
 
         Map<String, Object> params = new HashMap<>();
@@ -215,7 +216,7 @@ public class JdbcOutcomeReasonStore {
      * reason has none at all, and returning an empty list for both would make
      * "valid for no mode" and "modes do not apply" the same value.
      */
-    private static List<String> modes(Array array) throws SQLException {
+    private static @Nullable List<String> modes(@Nullable Array array) throws SQLException {
         if (array == null) {
             return null;
         }
@@ -239,7 +240,7 @@ public class JdbcOutcomeReasonStore {
             String stockDisposition,
             String liabilityParty,
             String customerRefund,
-            List<String> allowedFulfillmentModes,
+            @Nullable List<String> allowedFulfillmentModes,
             Instant createdAt) {}
 
     public record ReasonRow(
@@ -251,7 +252,7 @@ public class JdbcOutcomeReasonStore {
             String stockDisposition,
             String liabilityParty,
             String customerRefund,
-            List<String> allowedFulfillmentModes,
+            @Nullable List<String> allowedFulfillmentModes,
             String status,
             int version,
             Instant createdAt,

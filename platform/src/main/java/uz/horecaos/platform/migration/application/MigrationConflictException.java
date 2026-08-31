@@ -1,5 +1,7 @@
 package uz.horecaos.platform.migration.application;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * The caller's view of the control plane is out of date, or something else
  * already holds the claim they asked for (ADR 0031).
@@ -13,26 +15,27 @@ package uz.horecaos.platform.migration.application;
  */
 public class MigrationConflictException extends RuntimeException {
 
-    private final Integer expectedVersion;
-    private final Integer actualVersion;
+    private final @Nullable Integer expectedVersion;
+    private final @Nullable Integer actualVersion;
 
     public MigrationConflictException(String message) {
         this(message, null, null);
     }
 
-    public MigrationConflictException(String message, Integer expectedVersion, Integer actualVersion) {
+    public MigrationConflictException(
+            String message, @Nullable Integer expectedVersion, @Nullable Integer actualVersion) {
         super(message);
         this.expectedVersion = expectedVersion;
         this.actualVersion = actualVersion;
     }
 
     /** The version the caller believed it was acting on, or null. */
-    public Integer expectedVersion() {
+    public @Nullable Integer expectedVersion() {
         return expectedVersion;
     }
 
     /** The version actually stored, or null. */
-    public Integer actualVersion() {
+    public @Nullable Integer actualVersion() {
         return actualVersion;
     }
 

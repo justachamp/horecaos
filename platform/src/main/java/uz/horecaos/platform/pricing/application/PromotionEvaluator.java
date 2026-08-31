@@ -7,8 +7,10 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.pricing.domain.Promotion;
 import uz.horecaos.platform.pricing.domain.Promotion.Action;
@@ -336,7 +338,11 @@ public class PromotionEvaluator {
     private Benefit capped(
             Promotion promotion, Map<String, Long> perLine, long orderMinor, long deliveryMinor, long uncapped) {
 
-        long cap = promotion.maximumDiscountMinor();
+        // Every caller only reaches capped() after confirming maximumDiscountMinor
+        // is present and exceeded; requireNonNull documents that invariant rather
+        // than letting an unboxing NPE explain it badly if it were ever violated.
+        long cap = Objects.requireNonNull(
+                promotion.maximumDiscountMinor(), "capped() is only called once a maximum discount is known");
         List<String> keys = new ArrayList<>(perLine.keySet());
         long[] weights = new long[keys.size() + 2];
         for (int i = 0; i < keys.size(); i++) {
@@ -438,10 +444,15 @@ public class PromotionEvaluator {
         }
     }
 
+    /**
+     * One priced line of the basket, as stages 3 and 4 see it.
+     *
+     * @param productId null when the variant matched no catalog membership row.
+     */
     public record BasketLine(
             String lineId,
             UUID variantId,
-            UUID productId,
+            @Nullable UUID productId,
             Set<UUID> categoryIds,
             int quantity,
             long unitAmountMinor,

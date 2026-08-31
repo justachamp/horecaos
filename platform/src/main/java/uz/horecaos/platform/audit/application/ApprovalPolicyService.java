@@ -8,9 +8,11 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -88,7 +90,7 @@ public class ApprovalPolicyService {
      * HorecaOS's floor rather than the tenant's setting, and a tenant surface that
      * showed them would invite an end-date request this surface refuses anyway.
      */
-    public List<PolicyView> list(UUID tenantId, String actionCode, boolean includeEnded, int limit) {
+    public List<PolicyView> list(UUID tenantId, @Nullable String actionCode, boolean includeEnded, int limit) {
         if (actionCode != null && !actionCode.isBlank()) {
             ApprovalAction.require(actionCode);
         }
@@ -336,7 +338,8 @@ public class ApprovalPolicyService {
      * instant some other version was covering.
      */
     @Transactional
-    public PolicyView endDate(UUID tenantId, UUID policyId, Instant requestedEnd, ActorRef actor, String reason) {
+    public PolicyView endDate(
+            UUID tenantId, UUID policyId, @Nullable Instant requestedEnd, ActorRef actor, String reason) {
 
         Instant now = clock.instant();
         PolicyView policy = read(tenantId, policyId)
@@ -464,7 +467,12 @@ public class ApprovalPolicyService {
      * and somebody called it off.
      */
     private PolicyView cancelScheduled(
-            UUID tenantId, PolicyView policy, Instant requestedEnd, ActorRef actor, String reason, Instant now) {
+            UUID tenantId,
+            PolicyView policy,
+            @Nullable Instant requestedEnd,
+            ActorRef actor,
+            String reason,
+            Instant now) {
 
         if (requestedEnd != null && requestedEnd.isAfter(policy.validFrom())) {
             // Ending it after it starts is not a cancellation; it is scheduling a
@@ -637,7 +645,8 @@ public class ApprovalPolicyService {
      *                  from a shortening because the two are different facts: one
      *                  threshold applied and stopped, the other never applied
      */
-    private record SupersededVersion(UUID id, int version, Instant validUntil, Instant closesAt, boolean voided) {}
+    private record SupersededVersion(
+            UUID id, int version, @Nullable Instant validUntil, Instant closesAt, boolean voided) {}
 
     private static Map<String, Object> changeDocument(
             String actionCode,
@@ -671,10 +680,21 @@ public class ApprovalPolicyService {
         if (policy.legacyScopeWide()) {
             return ResourceScope.tenant(policy.tenantId());
         }
+        // brandId/locationId are @Nullable on PolicyView because a TENANT-scope
+        // row genuinely carries neither, but a row whose own scope_type reads
+        // BRAND or LOCATION always has the identifier that scope requires — the
+        // same guarantee ResourceScope's own compact constructor enforces on the
+        // scope it builds.
         return switch (ScopeType.valueOf(policy.scopeType())) {
             case TENANT -> ResourceScope.tenant(policy.tenantId());
-            case BRAND -> ResourceScope.brand(policy.tenantId(), policy.brandId());
-            case LOCATION -> ResourceScope.location(policy.tenantId(), policy.brandId(), policy.locationId());
+            case BRAND ->
+                ResourceScope.brand(
+                        policy.tenantId(), Objects.requireNonNull(policy.brandId(), "A BRAND policy has a brand ID"));
+            case LOCATION ->
+                ResourceScope.location(
+                        policy.tenantId(),
+                        Objects.requireNonNull(policy.brandId(), "A LOCATION policy has a brand ID"),
+                        Objects.requireNonNull(policy.locationId(), "A LOCATION policy has a location ID"));
             case PLATFORM -> ResourceScope.platform();
         };
     }
@@ -787,7 +807,7 @@ public class ApprovalPolicyService {
             String actionCode,
             String thresholdDescription,
             String requiredApproverCapability,
-            Instant validFrom,
+            @Nullable Instant validFrom,
             ActorRef actor,
             String reason) {}
 
@@ -795,15 +815,15 @@ public class ApprovalPolicyService {
     public record PolicyView(
             UUID id,
             UUID tenantId,
-            UUID brandId,
-            UUID locationId,
+            @Nullable UUID brandId,
+            @Nullable UUID locationId,
             boolean legacyScopeWide,
             String actionCode,
             String scopeType,
             String thresholdDescription,
             String requiredApproverCapability,
             Instant validFrom,
-            Instant validUntil,
+            @Nullable Instant validUntil,
             int version,
             String authoredBy,
             Instant createdAt) {

@@ -33,6 +33,7 @@
         <palantir-java-format.version>2.97.0</palantir-java-format.version>
         <error-prone.version>2.50.0</error-prone.version>
         <nullaway.version>0.14.1</nullaway.version>
+        <jspecify.version>1.0.1</jspecify.version>
         <dependency-check.version>13.0.0</dependency-check.version>
         <maven.compiler.parameters>true</maven.compiler.parameters>
         <project.build.outputTimestamp>2026-08-18T00:00:00Z</project.build.outputTimestamp>
@@ -44,6 +45,21 @@
     </properties>
 
     <dependencies>
+        <dependency>
+            <!-- ADR 0054 NullAway follow-up. The @Nullable/@NonNull family
+                 NullAway's default configuration recognises (simple-name
+                 match) and the modern, framework-neutral choice for a
+                 codebase with no prior nullability annotations — jspecify is
+                 the annotation set NullAway's own docs recommend adopting
+                 going forward. `provided` scope: these are source/compile-time
+                 markers (RUNTIME retention for reflection tools, but nothing
+                 here reads them at runtime) and must not ship in the
+                 application artifact. -->
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+            <version>${jspecify.version}</version>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
@@ -247,7 +263,23 @@
                              javac's default ifError=INIT stop policy runs before
                              the Error Prone plugin gets a chance to see the tree. -->
                         <arg>--should-stop=ifError=FLOW</arg>
-                        <arg>-Xplugin:ErrorProne -XepAllErrorsAsWarnings -XepOpt:NullAway:AnnotatedPackages=uz.horecaos.platform</arg>
+                        <arg>-Xplugin:ErrorProne -XepAllErrorsAsWarnings -Xep:StringConcatToTextBlock:OFF -XepOpt:NullAway:AnnotatedPackages=uz.horecaos.platform</arg>
+                        <!-- StringConcatToTextBlock is OFF because the checker itself crashes
+                             (Iterables.getLast inside matchLiteral) on valid code in
+                             FiscalObligationService — a tool bug, not a finding; re-enable on
+                             an Error Prone release that fixes it. -->
+                        <!-- javac's default -Xmaxwarns is 100: past that count it
+                             silently drops the rest of the diagnostics for that
+                             compilation unit set, with no error and no summary
+                             line distinguishable from "no more warnings". The
+                             2026-08-30 adoption inventory in ADR 0054 was
+                             measured without this flag and undercounted for
+                             exactly that reason (100 main + 100 test = 200,
+                             suspiciously exact). Set high enough that this
+                             codebase's whole warning count is never silently
+                             truncated again. -->
+                        <arg>-Xmaxwarns</arg>
+                        <arg>100000</arg>
                     </compilerArgs>
                     <annotationProcessorPaths>
                         <path>

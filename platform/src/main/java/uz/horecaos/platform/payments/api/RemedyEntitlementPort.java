@@ -3,6 +3,7 @@ package uz.horecaos.platform.payments.api;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The future-discount entitlements a customer holds, and the single call that
@@ -20,7 +21,7 @@ import java.util.UUID;
  *
  * <p><strong>There is no reservation on this interface, and its absence is a
  * decision.</strong> {@link #redeem} takes the use at order placement, in one
- * conditional UPDATE bounded by {@code uses_consumed &lt; uses_granted}, so two
+ * conditional UPDATE bounded by {@code uses_consumed < uses_granted}, so two
  * carts racing for the last use produce one winner and one clean refusal rather
  * than two discounts. The cost is that the loser was quoted a price it cannot
  * have, which ADR 0031 already has a shape for — {@code PRICE_CHANGED} — and the
@@ -48,6 +49,8 @@ public interface RemedyEntitlementPort {
     RedemptionOutcome redeem(RedeemCommand command);
 
     /**
+     * A single entitlement grant and what remains spendable on it.
+     *
      * @param percentBasisPoints null unless the benefit is {@link EntitlementBenefit#PERCENT}
      * @param amountMinor        null unless the benefit is
      *                           {@link EntitlementBenefit#FIXED_AMOUNT}; whole som (ADR 0018)
@@ -67,6 +70,8 @@ public interface RemedyEntitlementPort {
             Instant expiresAt) {}
 
     /**
+     * What to redeem, and how much of it pricing has decided to spend.
+     *
      * @param subtotalDiscountMinor what pricing took off the subtotal, in whole som
      * @param deliveryDiscountMinor what pricing took off the delivery fee
      */
@@ -80,6 +85,8 @@ public interface RemedyEntitlementPort {
             String currency) {}
 
     /**
+     * What happened to the redemption attempt.
+     *
      * @param redeemed        false when the entitlement was exhausted, expired,
      *                        revoked, or is not this customer's
      * @param usesRemaining   after this call. Still meaningful on a refusal that
@@ -90,7 +97,7 @@ public interface RemedyEntitlementPort {
      * @param refusalCode     null when redeemed; otherwise why, so pricing can
      *                        tell "already used up" from "not yours"
      */
-    record RedemptionOutcome(boolean redeemed, int usesRemaining, String refusalCode) {
+    record RedemptionOutcome(boolean redeemed, int usesRemaining, @Nullable String refusalCode) {
 
         public static RedemptionOutcome took(int usesRemaining) {
             return new RedemptionOutcome(true, usesRemaining, null);

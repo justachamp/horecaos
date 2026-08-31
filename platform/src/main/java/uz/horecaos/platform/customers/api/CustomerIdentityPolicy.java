@@ -1,5 +1,7 @@
 package uz.horecaos.platform.customers.api;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * How a tenant partitions customer identity (ADR 0015).
  *
@@ -22,7 +24,7 @@ public enum CustomerIdentityPolicy {
     BRAND_ISOLATED;
 
     /** Null under {@link #TENANT_SHARED}; the brand under {@link #BRAND_ISOLATED}. */
-    public java.util.UUID partitionFor(java.util.UUID brandId) {
+    public java.util.@Nullable UUID partitionFor(java.util.UUID brandId) {
         return this == BRAND_ISOLATED ? brandId : null;
     }
 }

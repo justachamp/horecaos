@@ -3,6 +3,7 @@ package uz.horecaos.platform.customers.application;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.customers.api.CustomerIdentityPolicy;
 
 /**
@@ -25,7 +26,7 @@ public record CustomerSession(
         UUID tenantId,
         UUID brandId,
         UUID accountId,
-        UUID identityPartitionBrandId,
+        @Nullable UUID identityPartitionBrandId,
         Instant issuedAt,
         Instant expiresAt) {
 

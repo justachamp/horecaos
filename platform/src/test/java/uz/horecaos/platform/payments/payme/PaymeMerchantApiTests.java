@@ -17,8 +17,10 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -70,8 +72,8 @@ class PaymeMerchantApiTests {
     private static final long AMOUNT_SOM = 150_000L;
     private static final long AMOUNT_TIYIN = 15_000_000L;
 
-    /** 43,200,000 ms, verbatim from the {@code CreateTransaction} page. */
-    private static final Duration TWELVE_HOURS = Duration.ofMillis(43_200_000L);
+    /** Twelve hours: 43,200,000 ms, verbatim from the {@code CreateTransaction} page. */
+    private static final Duration TWELVE_HOURS = Duration.ofHours(12);
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
@@ -768,7 +770,8 @@ class PaymeMerchantApiTests {
             // and both reference implementations use the plural. The plural is what
             // Payme reads.
             @SuppressWarnings("unchecked")
-            List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("transactions");
+            List<Map<String, Object>> rows = Objects.requireNonNull(
+                    (List<Map<String, Object>>) result.get("transactions"), "GetStatement must always carry rows");
             assertThat(rows).extracting(row -> row.get("state")).containsExactly(1, 2, -1, -2);
             assertThat(rows.getFirst())
                     .containsEntry("amount", AMOUNT_TIYIN)
@@ -809,7 +812,8 @@ class PaymeMerchantApiTests {
                 .thenReturn(Optional.of(attempt));
     }
 
-    private PaymentAttempt attempt(PaymentAttemptStatus status, String externalPaymentId, Instant expiresAt) {
+    private PaymentAttempt attempt(
+            PaymentAttemptStatus status, @Nullable String externalPaymentId, @Nullable Instant expiresAt) {
         return new PaymentAttempt(
                 attemptId,
                 tenantId,
@@ -837,8 +841,8 @@ class PaymeMerchantApiTests {
             PaymentAttemptStatus status,
             Instant paymeCreated,
             Instant createTime,
-            Instant performTime,
-            Instant cancelTime) {
+            @Nullable Instant performTime,
+            @Nullable Instant cancelTime) {
         return new PaymeTransactionView(
                 attemptId,
                 tenantId,

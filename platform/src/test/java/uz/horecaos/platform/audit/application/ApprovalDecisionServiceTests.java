@@ -72,9 +72,6 @@ class ApprovalDecisionServiceTests {
     private static final String BYSTANDER = "cashier-1";
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private TransactionTemplate transactions;
@@ -89,9 +86,6 @@ class ApprovalDecisionServiceTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -207,8 +201,9 @@ class ApprovalDecisionServiceTests {
     void aSelfApprovalRefusalIsRecordedEvenThoughItThrows() {
         UUID requestId = raise();
 
-        catchThrowable(() -> decisions.decide(
+        Throwable refusal = catchThrowable(() -> decisions.decide(
                 TENANT, requestId, ApprovalService.Decision.APPROVE, ActorRef.user(MAKER, null), "trying anyway"));
+        assertThat(refusal).isInstanceOf(ApiException.class);
 
         assertThat(jdbc.sql("""
                 SELECT count(*) FROM audit.audit_events

@@ -7,6 +7,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.courier.application.port.LegalEntityResolver;
@@ -232,6 +233,8 @@ public class CourierLedgerService {
     }
 
     /**
+     * Everything a caller states about the entry it wants appended.
+     *
      * @param locationId  used to resolve the ADR 0038 legal entity; null where the
      *                    entry belongs to no branch, such as a payout
      * @param occurredAt  when the fact happened, which a prior-period adjustment
@@ -240,17 +243,17 @@ public class CourierLedgerService {
     public record NewEntry(
             UUID tenantId,
             UUID courierId,
-            UUID locationId,
+            @Nullable UUID locationId,
             LedgerEntryType entryType,
             long amountMinor,
             String currency,
             String sourceType,
-            UUID sourceId,
+            @Nullable UUID sourceId,
             AdjustmentOrigin origin,
-            String reasonCode,
+            @Nullable String reasonCode,
             Instant occurredAt,
             String idempotencyKey,
-            UUID approvalRequestId,
-            UUID adjustsEntryId,
+            @Nullable UUID approvalRequestId,
+            @Nullable UUID adjustsEntryId,
             String createdBy) {}
 }

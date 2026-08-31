@@ -2,6 +2,7 @@ package uz.horecaos.platform.payments.infrastructure.click;
 
 import java.util.Map;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One SHOP API arrival, held exactly as it came off the wire (ADR 0013).
@@ -25,17 +26,17 @@ import java.util.Objects;
  *                          and the payment must be voided, answered {@code -9}
  */
 public record ClickCallbackRequest(
-        String clickTransId,
-        String serviceId,
-        String clickPaydocId,
-        String merchantTransId,
-        String merchantPrepareId,
-        String amount,
-        String action,
-        String error,
-        String errorNote,
-        String signTime,
-        String signString) {
+        @Nullable String clickTransId,
+        @Nullable String serviceId,
+        @Nullable String clickPaydocId,
+        @Nullable String merchantTransId,
+        @Nullable String merchantPrepareId,
+        @Nullable String amount,
+        @Nullable String action,
+        @Nullable String error,
+        @Nullable String errorNote,
+        @Nullable String signTime,
+        @Nullable String signString) {
 
     /** Prepare. */
     public static final String ACTION_PREPARE = "0";
@@ -96,11 +97,12 @@ public record ClickCallbackRequest(
      * {@code -9}, whichever action this was.
      */
     public boolean reportsClickSideFailure() {
-        if (!present(error)) {
+        String reported = error;
+        if (reported == null || reported.isBlank()) {
             return false;
         }
         try {
-            return Long.parseLong(error.strip()) < 0;
+            return Long.parseLong(reported.strip()) < 0;
         } catch (NumberFormatException unparseable) {
             // Not a number where the protocol promises one. Treated as a failure
             // report rather than ignored: the conservative reading refuses to
@@ -127,8 +129,8 @@ public record ClickCallbackRequest(
         return amountAsSom(amount);
     }
 
-    static java.util.Optional<Long> amountAsSom(String raw) {
-        if (!present(raw)) {
+    static java.util.Optional<Long> amountAsSom(@Nullable String raw) {
+        if (raw == null || raw.isBlank()) {
             return java.util.Optional.empty();
         }
         try {
@@ -139,7 +141,7 @@ public record ClickCallbackRequest(
         }
     }
 
-    private static boolean present(String value) {
+    private static boolean present(@Nullable String value) {
         return value != null && !value.isBlank();
     }
 

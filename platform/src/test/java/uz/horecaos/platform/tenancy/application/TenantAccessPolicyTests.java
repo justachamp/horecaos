@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.springframework.security.access.AccessDeniedException;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -41,7 +40,7 @@ class TenantAccessPolicyTests {
     void deniesCrossTenantReads() {
         TenantAccessPolicy policy = policy(actor(Set.of(), Map.of("another-organization", Set.of("tenant-owner"))));
 
-        assertThatThrownBy(() -> policy.requireTenantRead(TENANT)).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> policy.requireTenantRead(TENANT)).isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
     }
 
     /**
@@ -50,7 +49,7 @@ class TenantAccessPolicyTests {
      * ever assigned one, and the proving run hit a live 403 because of it for
      * an owner who held a real {@code iam.grants} grant the whole time. It
      * now resolves through the same {@link uz.horecaos.platform.iam.api.AuthorizationService}
-     * {@link #requireTenantRead} already uses, with the exact capability and
+     * {@link TenantAccessPolicy#requireTenantRead} already uses, with the exact capability and
      * scope the calling controller's own {@code @RequiresCapability} already
      * declared.
      */
@@ -88,7 +87,7 @@ class TenantAccessPolicyTests {
                         TENANT,
                         Capability.BRAND_WRITE,
                         ResourceScope.tenant(TENANT.id().value())))
-                .isInstanceOf(AccessDeniedException.class);
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
     }
 
     @Test
@@ -142,7 +141,7 @@ class TenantAccessPolicyTests {
         TenantAccessPolicy policy =
                 enforcingPolicy(actor(Set.of(), Map.of("another-organization", Set.of("tenant-owner"))), allowAll());
 
-        assertThatThrownBy(() -> policy.requireTenantRead(TENANT)).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> policy.requireTenantRead(TENANT)).isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
     }
 
     /** Shadow mode, which the build no longer runs in but still supports. */
@@ -177,7 +176,7 @@ class TenantAccessPolicyTests {
             @Override
             public uz.horecaos.platform.iam.api.CapabilityView viewFor(String subject, java.util.UUID tenantId) {
                 return new uz.horecaos.platform.iam.api.CapabilityView(
-                        subject, null, java.util.Set.of(), java.util.List.of(), 0);
+                        subject, "", java.util.Set.of(), java.util.List.of(), 0);
             }
         };
     }
@@ -205,13 +204,13 @@ class TenantAccessPolicyTests {
                     String subject,
                     uz.horecaos.platform.iam.api.Capability capability,
                     uz.horecaos.platform.iam.api.ResourceScope scope) {
-                throw new AccessDeniedException(capability, scope);
+                throw new uz.horecaos.platform.iam.api.AuthorizationService.AccessDeniedException(capability, scope);
             }
 
             @Override
             public uz.horecaos.platform.iam.api.CapabilityView viewFor(String subject, java.util.UUID tenantId) {
                 return new uz.horecaos.platform.iam.api.CapabilityView(
-                        subject, null, java.util.Set.of(), java.util.List.of(), 0);
+                        subject, "", java.util.Set.of(), java.util.List.of(), 0);
             }
         };
     }

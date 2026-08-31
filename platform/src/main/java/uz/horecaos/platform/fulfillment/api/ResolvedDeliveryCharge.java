@@ -2,6 +2,7 @@ package uz.horecaos.platform.fulfillment.api;
 
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The charge ADR 0018's stage 5 consumes (ADR 0037).
@@ -40,17 +41,17 @@ public record ResolvedDeliveryCharge(
         String currency,
         long feeMinor,
         long tariffDiscountMinor,
-        Long minBasketMinor,
-        Long freeDeliveryFromMinor,
-        UUID zoneId,
-        Integer zoneVersion,
-        UUID tariffId,
-        Integer tariffVersion,
-        Integer bandSequence,
-        Integer timeRuleSequence,
-        Integer distanceMeters,
-        String distanceMode,
-        String distanceSource,
+        @Nullable Long minBasketMinor,
+        @Nullable Long freeDeliveryFromMinor,
+        @Nullable UUID zoneId,
+        @Nullable Integer zoneVersion,
+        @Nullable UUID tariffId,
+        @Nullable Integer tariffVersion,
+        @Nullable Integer bandSequence,
+        @Nullable Integer timeRuleSequence,
+        @Nullable Integer distanceMeters,
+        @Nullable String distanceMode,
+        @Nullable String distanceSource,
         List<UUID> losingZoneIds) {
 
     public ResolvedDeliveryCharge {

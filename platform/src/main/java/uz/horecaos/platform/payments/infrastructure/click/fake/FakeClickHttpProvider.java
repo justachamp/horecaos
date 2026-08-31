@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicLong;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.core.type.TypeReference;
@@ -114,7 +115,7 @@ public final class FakeClickHttpProvider {
 
     private final JsonMapper json = JsonMapper.builder().build();
     private final Clock clock;
-    private final String expectedSecret;
+    private final @Nullable String expectedSecret;
 
     private final Map<String, PaymentRecord> paymentsById = new ConcurrentHashMap<>();
     private final Map<String, String> paymentIdByMerchantTransId = new ConcurrentHashMap<>();
@@ -125,7 +126,7 @@ public final class FakeClickHttpProvider {
     private final AtomicLong invoiceIdSequence = new AtomicLong(400_000_001);
     private final AtomicLong receiptNumberSequence = new AtomicLong(1);
 
-    private HttpServer server;
+    private @Nullable HttpServer server;
 
     public FakeClickHttpProvider() {
         this(Clock.systemUTC(), null);
@@ -136,7 +137,7 @@ public final class FakeClickHttpProvider {
      *                       {@code null} skips verification, for a caller that only
      *                       needs the wire shape and not the credential path.
      */
-    public FakeClickHttpProvider(Clock clock, String expectedSecret) {
+    public FakeClickHttpProvider(Clock clock, @Nullable String expectedSecret) {
         this.clock = clock;
         this.expectedSecret = expectedSecret;
     }
@@ -205,7 +206,7 @@ public final class FakeClickHttpProvider {
     }
 
     /** Test-only window onto what {@code submit_items}/{@code submit_qrcode} recorded. */
-    String readOfdUrl(String paymentId) {
+    @Nullable String readOfdUrl(String paymentId) {
         return ofdUrlByPaymentId.get(paymentId);
     }
 
@@ -457,7 +458,7 @@ public final class FakeClickHttpProvider {
         ofdUrlByPaymentId.put(paymentId, url);
     }
 
-    private PaymentRecord forMerchantTransId(String serviceId, String merchantTransId) {
+    private @Nullable PaymentRecord forMerchantTransId(String serviceId, String merchantTransId) {
         String paymentId = paymentIdByMerchantTransId.get(merchantTransId);
         if (paymentId == null) {
             return null;
@@ -543,7 +544,7 @@ public final class FakeClickHttpProvider {
         if (header == null) {
             return false;
         }
-        String[] parts = header.split(":");
+        String[] parts = header.split(":", -1);
         if (parts.length != 3) {
             return false;
         }

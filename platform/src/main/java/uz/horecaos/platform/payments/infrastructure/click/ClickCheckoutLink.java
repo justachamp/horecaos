@@ -5,6 +5,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.payments.domain.SomAmount;
 
 /**
@@ -39,6 +40,8 @@ public final class ClickCheckoutLink {
     private ClickCheckoutLink() {}
 
     /**
+     * Builds the unsigned {@code my.click.uz/services/pay/} redirect URL.
+     *
      * @param merchantId Click's {@code merchant_id}, documented as mandatory.
      *                   Nullable here because the ADR 0013 merchant binding models
      *                   only {@code service_id} and {@code merchant_user_id}, so
@@ -50,13 +53,13 @@ public final class ClickCheckoutLink {
      *                   choose
      */
     public static String build(
-            String merchantId,
+            @Nullable String merchantId,
             String serviceId,
-            String merchantUserId,
+            @Nullable String merchantUserId,
             String transactionParam,
             SomAmount amount,
-            String returnUrl,
-            String cardType) {
+            @Nullable String returnUrl,
+            @Nullable String cardType) {
 
         Map<String, String> parameters = new LinkedHashMap<>();
         putIfPresent(parameters, "merchant_id", merchantId);
@@ -92,7 +95,7 @@ public final class ClickCheckoutLink {
         return BigDecimal.valueOf(amount.value()).setScale(2).toPlainString();
     }
 
-    private static void putIfPresent(Map<String, String> parameters, String name, String value) {
+    private static void putIfPresent(Map<String, String> parameters, String name, @Nullable String value) {
         if (value != null && !value.isBlank()) {
             parameters.put(name, value);
         }

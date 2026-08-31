@@ -1,6 +1,7 @@
 package uz.horecaos.platform.tenancy.domain.channel;
 
 import java.util.Collection;
+import org.jspecify.annotations.Nullable;
 
 /**
  * How long the kitchen says it will take (ADR 0036).
@@ -20,12 +21,14 @@ public final class PreparationPromise {
     private PreparationPromise() {}
 
     /**
+     * The promised preparation time: the band, then the longest override.
+     *
      * @param bandMinutes     the band covering the order's start instant, or null
      *                        when no band covers it
      * @param overrideMinutes per-line overrides for the items in the basket
      * @return the promised preparation time, or null when nothing said anything
      */
-    public static Integer minutes(Integer bandMinutes, Collection<Integer> overrideMinutes) {
+    public static @Nullable Integer minutes(@Nullable Integer bandMinutes, Collection<Integer> overrideMinutes) {
         Integer longest = bandMinutes;
         if (overrideMinutes != null) {
             for (Integer override : overrideMinutes) {

@@ -3,6 +3,7 @@ package uz.horecaos.platform.integration.outbox;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 record NewOutboxEvent(
         UUID eventId,
@@ -14,7 +15,7 @@ record NewOutboxEvent(
         String topic,
         String partitionKey,
         String correlationId,
-        String causationId,
+        @Nullable String causationId,
         Instant occurredAt,
         String payloadJson,
         String traceContextJson) {

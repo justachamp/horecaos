@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
@@ -194,7 +195,7 @@ public class JdbcDeliveryOrderPort implements DeliveryOrderPort {
         return Duration.ofMinutes(prepMinutes == null ? OrderPromise.DEFAULT_PREP_MINUTES : prepMinutes);
     }
 
-    private String reveal(UUID tenantId, UUID orderId, String column, String ciphertext) {
+    private @Nullable String reveal(UUID tenantId, UUID orderId, String column, @Nullable String ciphertext) {
         if (ciphertext == null) {
             return null;
         }

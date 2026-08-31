@@ -3,6 +3,7 @@ package uz.horecaos.platform.payments.domain;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The result of presenting a payment to the customer (ADR 0013).
@@ -27,12 +28,12 @@ import java.util.Optional;
  */
 public record ProviderInvoice(
         PresentationKind presentationKind,
-        String checkoutUrl,
-        String qrPayload,
-        String externalInvoiceId,
-        String providerToken,
-        String invoicePayload,
-        Instant expiresAt) {
+        @Nullable String checkoutUrl,
+        @Nullable String qrPayload,
+        @Nullable String externalInvoiceId,
+        @Nullable String providerToken,
+        @Nullable String invoicePayload,
+        @Nullable Instant expiresAt) {
 
     public ProviderInvoice {
         Objects.requireNonNull(presentationKind, "A presentation kind is required");

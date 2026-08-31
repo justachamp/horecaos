@@ -3,6 +3,7 @@ package uz.horecaos.platform.iam.api.grants;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * {@code PLATFORM}-scope grant and revoke (ADR 0025, Gap A of the 2026-08-30
@@ -30,12 +31,23 @@ import java.util.UUID;
 public interface PlatformGrantAuthority {
 
     /**
+     * Grants a {@code PLATFORM}-scope role to a principal.
+     *
      * @param validUntil null for an open-ended grant; set it for support access
      * @return the new grant's id
      */
-    UUID grant(String principalSubject, String roleCode, String reason, Instant validUntil, String granterSubject);
+    UUID grant(
+            String principalSubject,
+            String roleCode,
+            String reason,
+            @Nullable Instant validUntil,
+            String granterSubject);
 
-    /** @return whether an active grant was found and revoked */
+    /**
+     * Revokes an active {@code PLATFORM}-scope grant.
+     *
+     * @return whether an active grant was found and revoked
+     */
     boolean revoke(UUID grantId, String revokerSubject, String reason);
 
     /** Every active {@code PLATFORM}-scope grant. */

@@ -2,6 +2,7 @@ package uz.horecaos.platform.partner.domain;
 
 import java.util.Locale;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A partner's identifier for an order, and the normalisation search uses
@@ -20,7 +21,8 @@ import java.util.Objects;
  * zero-pads, and collapsing them would make one unfindable rather than two
  * findable.
  */
-public record ExternalReference(ExternalReferenceType type, String value, String normalisedValue, String issuedBy) {
+public record ExternalReference(
+        ExternalReferenceType type, String value, String normalisedValue, @Nullable String issuedBy) {
 
     public ExternalReference {
         Objects.requireNonNull(type, "A reference type is required");
@@ -30,7 +32,11 @@ public record ExternalReference(ExternalReferenceType type, String value, String
     }
 
     public static ExternalReference partner(ExternalReferenceType type, String value) {
-        return new ExternalReference(type, value, null, "PARTNER");
+        // The third argument is recomputed unconditionally by the compact
+        // constructor below, so `value` here is a non-null placeholder rather
+        // than the stored normalisedValue -- passing null would work too, but
+        // would misstate that this record ever legitimately holds one.
+        return new ExternalReference(type, value, value, "PARTNER");
     }
 
     /**

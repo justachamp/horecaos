@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -56,9 +57,6 @@ class OnboardingServiceTests {
     private static final ActorRef APPROVER = ActorRef.user("platform-admin-2", "Second Admin");
 
     private static TestDatabase.Handle db;
-    private static String jdbcUrl;
-    private static String username;
-    private static String password;
 
     private JdbcClient jdbc;
     private TransactionTemplate transactions;
@@ -69,9 +67,10 @@ class OnboardingServiceTests {
     private JdbcTenantControlPlaneStore store;
 
     // Only so that the gauge under test stays strongly reachable while it is
-    // read; see stalledAgeSeconds().
-    private SimpleMeterRegistry gaugeMeters;
-    private OnboardingScheduler gaugeScheduler;
+    // read; see stalledAgeSeconds(). Set only by that method, on the one test
+    // that reads the gauge, not by setUp().
+    private @Nullable SimpleMeterRegistry gaugeMeters;
+    private @Nullable OnboardingScheduler gaugeScheduler;
 
     @BeforeAll
     static void startDatabase() {
@@ -79,9 +78,6 @@ class OnboardingServiceTests {
                 DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required for PostgreSQL integration tests");
         db = TestDatabase.migrated();
-        jdbcUrl = db.jdbcUrl();
-        username = db.username();
-        password = db.password();
     }
 
     @AfterAll
@@ -496,12 +492,14 @@ class OnboardingServiceTests {
     private double stalledAgeSeconds() {
         gaugeMeters = new SimpleMeterRegistry();
         gaugeScheduler = schedulerWithBatchSize(gaugeMeters, 4);
-        double age = gaugeMeters
-                .get("horecaos.onboarding.runs.stalled.age.seconds")
-                .gauge()
-                .value();
-        java.lang.ref.Reference.reachabilityFence(gaugeScheduler);
-        return age;
+        try {
+            return gaugeMeters
+                    .get("horecaos.onboarding.runs.stalled.age.seconds")
+                    .gauge()
+                    .value();
+        } finally {
+            java.lang.ref.Reference.reachabilityFence(gaugeScheduler);
+        }
     }
 
     private OnboardingScheduler schedulerWithBatchSize(int batchSize) {
@@ -727,7 +725,7 @@ class OnboardingServiceTests {
 
         private int organizationCalls;
         private int createdOrganizations;
-        private String lastMembershipOrganizationId;
+        private @Nullable String lastMembershipOrganizationId;
         private boolean failNextMembership;
 
         @Override
