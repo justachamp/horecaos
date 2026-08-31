@@ -17,12 +17,22 @@
   whole taxonomy plus `migrate_to_chat_id` against a real PostgreSQL
   (`TelegramOperationsNotificationIntegrationTest`). `TELEGRAM` spans the four V0026
   channel CHECK constraints and a binding-shaped `recipient_endpoints.provider_binding_id`
-  variant (V0099–V0101). Not built: customer 1:1 linking, digests (blocked on ADR
-  0043's day-close caller), control-plane audience, and every other domain's trigger
-  listener (payments, fulfillment, fiscal, inventory, onboarding, bands) — named as
-  separate items in this record's own checklist. Group language is one configured
-  default, not real tenant configuration, pending a tenant-language column. Bot
-  topology remains this record's own open input.
+  variant (V0099–V0101). Stage 2's operations build-out landed with wave 6:
+  `DigestScheduler` delivers the 15-minute, half-day and day-close digests to both
+  the OPERATIONS and PLATFORM audiences (V0103's audience widening, riding ADR
+  0043's new day-close heartbeat; entitlement-gated behind
+  `telegram.digests.enabled`), and every named domain outside fulfillment grew its
+  own trigger listener — payments attempt failures and operator escalations, fiscal
+  blocks, inventory's `ITEM_86D`, integration dead letters and POS export stalls
+  (V0104), onboarding's stuck-run sweeper, and the ops band escalation endpoint —
+  gated behind `telegram.operations_alerts.enabled`; ADR 0060's interactive bot
+  rides the same bindings. Not built: customer 1:1 linking (the customer half of
+  stage 2), a real platform-owned binding model (a PLATFORM-audience digest binding
+  still lives under one tenant row with no dedicated provisioning flow), fulfillment
+  triggers, the provider circuit breaker's OPEN-transition hook (platform-scoped;
+  nothing publishes it yet), and tenant-language configuration beyond the one
+  configured default. Bot topology is decided (bot-per-brand): the decision section
+  records it.
 - Date proposed: 2026-08-30
 - Date decided: 2026-08-30
 - Deciders: platform owner (directed the channel and the per-surface scope), Claude

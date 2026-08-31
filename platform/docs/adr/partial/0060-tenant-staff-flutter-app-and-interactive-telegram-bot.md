@@ -1,10 +1,20 @@
 # ADR 0060: Service runs from a pocket — the staff Flutter app and the interactive Telegram bot
 
 - Decision status: Accepted
-- Implementation status: Not started — this record only. The operations backend it
-  fronts largely exists (order actions, counts, the availability listing and toggle,
-  grants); the kitchen (ADR 0041), stats (ADR 0043), and staff-invitation (ADR 0009)
-  halves are Partial to the depth their own records state.
+- Implementation status: Partial — the interactive Telegram bot half is built and
+  callable end to end (wave 6): staff Telegram identity linking (`/link` in a 1:1
+  chat, `integration.telegram_staff_links`, V0105), `BotCallbackAuthorizer` with
+  opaque callback tokens (`integration.bot_action_tokens`, V0106) re-checked live
+  through `AuthorizationService.require` on every tap and audited per ADR 0027 with
+  the real staff actor, inline Approve/Reject with immediate ack, keyboard
+  stripping and lost-race settlement through `ordering`'s `OrderDecisionPort`,
+  typed `/86` and `/stats` commands with multi-tenant DM disambiguation, and the
+  stop-list audit gap closed on both the web and bot channels
+  (`InventoryService.setAvailabilityAudited`) — entitlement-gated behind
+  `integration.telegram_bot.interactive_enabled`. The staff Flutter app half —
+  shell, kitchen views, stop-list and stats screens, user management, generated
+  operations-client adoption — has not been started. `GrantChanged`-driven
+  proactive keyboard cleanup remains the stated v2 enhancement.
 - Date proposed: 2026-08-30
 - Date decided: 2026-08-30
 - Deciders: platform owner (directed both surfaces and the no-POS tenant focus), Claude

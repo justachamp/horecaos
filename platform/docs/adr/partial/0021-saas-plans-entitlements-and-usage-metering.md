@@ -8,10 +8,14 @@
   ledger with idempotent movements, adjustments and exact rebuild, and the
   platform-admin and control-plane APIs with four-eyes approval and audit, all
   covered by `CommercialPlatformTests`, `EntitlementBoundaryTests` and
-  `EnforcementCeilingKeyTests`. Not built, and it is what keeps this from being
-  usable: **no product module calls `EntitlementService` or `UsageMeter`** — the
-  grep for either outside `uz.horecaos.platform.commercial` is empty, so no feature
-  is gated and no usage is metered; no consumer is wired to the ADR 0005 inbox;
+  `EnforcementCeilingKeyTests`. The first real `EntitlementService` callers landed with
+  wave 6: `DigestScheduler` gates every Telegram digest behind
+  `telegram.digests.enabled` (opt-in `FALSE` default — the first key a plan can
+  actually close), `TelegramOperationsEntitlementGate` gates the operations alert
+  fan-out, and `BotCallbackAuthorizer` gates bot interactivity, so entitlement
+  resolution now runs on production paths. Still not built: **no product module
+  calls `UsageMeter`** — no usage is metered anywhere,
+  so nothing enforces a quantity limit; no consumer is wired to the ADR 0005 inbox;
   there is no period close, invoice export, dashboard, alert or runbook; and no
   onboarding path creates a subscription.
 - Date proposed: 2026-08-19
