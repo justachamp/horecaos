@@ -415,7 +415,12 @@ class CartCheckoutAndOrderTests {
 
         // One factory, so the wired-payments tests below assemble a checkout that
         // differs from the one every other test uses in exactly one collaborator.
-        checkoutWith = port -> new CheckoutService(
+        // CheckoutService itself is now an orchestrator over package-private
+        // collaborators; CheckoutServiceTestFactory (same package as the
+        // collaborators, so it may construct them) assembles them from exactly
+        // the ports this suite already wires by hand, in the same order the
+        // constructor used to take them.
+        checkoutWith = port -> uz.horecaos.platform.ordering.application.CheckoutServiceTestFactory.create(
                 cartStore,
                 orderStore,
                 attemptStore,
