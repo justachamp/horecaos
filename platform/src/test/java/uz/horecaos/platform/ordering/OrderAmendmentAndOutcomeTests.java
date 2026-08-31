@@ -281,7 +281,12 @@ class OrderAmendmentAndOutcomeTests {
         var migrationOwnership = new MigrationOwnershipService(
                 new JdbcMigrationScopeStore(jdbc, objectMapper), new SimpleMeterRegistry());
 
-        checkout = new CheckoutService(
+        // CheckoutService is now an orchestrator over package-private
+        // collaborators; CheckoutServiceTestFactory (same package as the
+        // collaborators, so it may construct them) assembles them from exactly
+        // the ports this suite already wires by hand, in the same order the
+        // constructor used to take them.
+        checkout = uz.horecaos.platform.ordering.application.CheckoutServiceTestFactory.create(
                 cartStore,
                 orderStore,
                 attemptStore,
