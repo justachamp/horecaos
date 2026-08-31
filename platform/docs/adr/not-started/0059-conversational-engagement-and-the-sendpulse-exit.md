@@ -11,9 +11,9 @@
   (architecture and scope discipline; deep-reviewed 2026-08-30 and amended)
 - Depends on: 0020, 0025, 0026, 0027, 0028, 0029, 0044, 0051, 0058
 - Supersedes / Superseded by: —
-- Open inputs: whether the brand bot, flows, and inbox are entitlement-gated per plan
-  (ADR 0021 — the machinery exists and gates nothing yet; as this is pitched as a SaaS
-  differentiator, the plan question deserves an owner answer before rollout stage 2).
+- Open inputs: none for gating — resolved by the owner on 2026-08-31: entitlement-
+  gated from day one under the shared Telegram entitlement key family (ADR 0021),
+  decided together with ADR 0058's bot-per-brand topology.
   The Instagram/Meta adapter trigger is resolved: the owner's own directive alone —
   no tenant demand or market threshold gates it. Flow authoring is resolved: YAML,
   and no visual builder will ever be built.

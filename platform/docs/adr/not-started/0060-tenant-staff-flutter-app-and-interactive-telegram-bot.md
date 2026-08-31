@@ -12,9 +12,8 @@
   authorization/audit code, and amended)
 - Depends on: 0025, 0027, 0033, 0035, 0039, 0041, 0043, 0045, 0055, 0058, 0059
 - Supersedes / Superseded by: —
-- Open inputs: whether the staff bot and staff app are entitlement-gated per plan
-  (ADR 0021 — same question, same owner, as ADR 0059's; answer before per-tenant
-  enablement ships).
+- Open inputs: none — the owner resolved gating on 2026-08-31: entitlement-gated
+  from day one under the shared Telegram entitlement key family (ADR 0021).
 
 ## Context
 

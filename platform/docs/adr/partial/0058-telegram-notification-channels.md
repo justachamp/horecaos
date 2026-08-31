@@ -30,12 +30,14 @@
   mechanics and the corpus, and amended accordingly)
 - Depends on: 0004, 0006, 0007, 0020, 0025, 0026, 0027, 0028, 0029, 0032, 0033, 0043, 0045
 - Supersedes / Superseded by: —
-- Open inputs: bot topology per brand — and this is a THROUGHPUT decision as much as a
-  branding one: all traffic on one bot shares one ~30 msg/s ceiling, so a shared
-  platform bot lets one tenant's marketing blast throttle another tenant's order
-  alerts, while bot-per-brand isolates them at the cost of token lifecycle (owner;
-  the first pilot tenant answers it). Whether supervisor stat digests are
-  entitlement-gated (ADR 0021) from day one (owner).
+- Open inputs: none. Both resolved by the owner on 2026-08-31: **bot-per-brand** —
+  each brand registers its own BotFather bot (an onboarding runbook step; tokens as
+  ADR 0026 installations), keeping brand identity in chats and isolating every
+  tenant's throughput from every other's, and mapping 1:1 onto the SendPulse exit
+  since the existing bot is already per-brand; and **entitlement-gated from day
+  one** — the Telegram feature family (digests, brand bot, inbox, staff surfaces)
+  sits behind an ADR 0021 entitlement key family, giving that record's
+  built-but-uncalled machinery its first real caller.
 
 ## Context
 
