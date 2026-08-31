@@ -153,6 +153,7 @@ public enum PlatformRole {
                     ORDER_CANCEL,
                     ORDER_STATE_OVERRIDE,
                     ORDER_OUTCOME_REASON_MANAGE,
+                    ORDER_ACCEPTANCE_POLICY_MANAGE,
                     REFUND_REQUEST,
                     REFUND_APPROVE,
                     REFUND_EXECUTE,
@@ -265,6 +266,7 @@ public enum PlatformRole {
                     ORDER_CANCEL,
                     ORDER_STATE_OVERRIDE,
                     ORDER_OUTCOME_REASON_MANAGE,
+                    ORDER_ACCEPTANCE_POLICY_MANAGE,
                     REFUND_REQUEST,
                     RECOVERY_CASE_MANAGE,
                     // Reading a fiscal document, never asking a tax authority's agent for

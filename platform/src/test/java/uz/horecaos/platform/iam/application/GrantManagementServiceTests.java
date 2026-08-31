@@ -76,6 +76,8 @@ class GrantManagementServiceTests {
     private static String username;
     private static String password;
 
+    private static final String PLATFORM_GRANTER = "platform-granter-1";
+
     private JdbcClient jdbc;
     private JdbcAuthorizationService authorization;
     private GrantManagementService service;
@@ -135,6 +137,7 @@ class GrantManagementServiceTests {
         new RoleRegistrySynchronizer(jdbc).synchronize();
         insertHierarchy();
         insertGrant(OWNER, PlatformRole.TENANT_OWNER, "TENANT", TENANT);
+        insertPlatformGrant(PLATFORM_GRANTER, PlatformRole.PLATFORM_ADMIN);
     }
 
     @Test
@@ -470,6 +473,88 @@ class GrantManagementServiceTests {
                 .extracting(GrantManagementService.GrantView::id)
                 .contains(kept)
                 .doesNotContain(revoked);
+    }
+
+    // ----------------------------------------------------------------- Gap A: grant()/revoke() already work at
+    // PLATFORM scope
+
+    /**
+     * {@code grant} needs no change for {@code PLATFORM} scope: {@code
+     * resolveRole} resolves a {@link PlatformRole} without a tenant, and a
+     * {@code PLATFORM}-scope grant already covers itself. What Gap A actually
+     * adds sits in {@code audit.application.PlatformGrantService} (ADR 0027's
+     * maker-checker) and {@code audit.web.PlatformGrantController} (the HTTP
+     * surface) — see {@code PlatformGrantServiceTests} for the approval-gated
+     * behaviour this file deliberately does not re-test.
+     */
+    @Test
+    void grantAlreadySupportsPlatformScope() {
+        UUID grantId = service.grant(
+                new GrantManagementService.GrantCommand(
+                        "new-support-1",
+                        "platform-support",
+                        ResourceScope.platform(),
+                        "onboarding a support agent",
+                        null),
+                PLATFORM_GRANTER);
+
+        assertThat(grantId).isNotNull();
+        assertThat(authorization.has("new-support-1", Capability.TENANT_READ, ResourceScope.platform()))
+                .isTrue();
+    }
+
+    @Test
+    void aNonPlatformAdminCannotGrantAtPlatformScope() {
+        assertThatThrownBy(() -> service.grant(
+                        new GrantManagementService.GrantCommand(
+                                "someone", "platform-support", ResourceScope.platform(), "escalation attempt", null),
+                        OWNER))
+                .as("OWNER holds only a TENANT-scope grant; PLATFORM is a different scope entirely")
+                .isInstanceOf(AuthorizationService.AccessDeniedException.class);
+    }
+
+    @Test
+    void platformAdminIsStillNeverGrantableAtPlatformScope() {
+        assertThatThrownBy(() -> service.grant(
+                        new GrantManagementService.GrantCommand(
+                                "someone", "platform-admin", ResourceScope.platform(), "escalation attempt", null),
+                        PLATFORM_GRANTER))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Keycloak");
+    }
+
+    /**
+     * {@code revoke}'s {@code IS NOT DISTINCT FROM} fix, proven directly: a
+     * {@code null} tenantId now finds and revokes a {@code PLATFORM} grant,
+     * where {@code = :tenantId} matched nothing before.
+     */
+    @Test
+    void revokeNowReachesAPlatformScopeGrant() {
+        UUID grantId = service.grant(
+                new GrantManagementService.GrantCommand(
+                        "new-support-2", "platform-support", ResourceScope.platform(), "onboarding", null),
+                PLATFORM_GRANTER);
+
+        assertThat(service.revoke(null, grantId, PLATFORM_GRANTER, "role no longer needed"))
+                .isTrue();
+        assertThat(authorization.has("new-support-2", Capability.TENANT_READ, ResourceScope.platform()))
+                .isFalse();
+    }
+
+    private void insertPlatformGrant(String subject, PlatformRole role) {
+        jdbc.sql("""
+                INSERT INTO iam.grants
+                    (id, tenant_id, principal_subject, role_id, role_is_platform,
+                     scope_type, scope_id,
+                     status, granted_by, reason, valid_from)
+                VALUES (:id, NULL, :subject, :roleId, true, 'PLATFORM', NULL,
+                        'ACTIVE', 'fixture', 'fixture', :validFrom)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("validFrom", CLOCK_INSTANT.minusSeconds(3600).atOffset(ZoneOffset.UTC))
+                .param("subject", subject)
+                .param("roleId", RoleRegistrySynchronizer.platformRoleId(role))
+                .update();
     }
 
     private void insertGrant(String subject, PlatformRole role, String scopeType, UUID scopeId) {

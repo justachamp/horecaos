@@ -348,7 +348,13 @@ class CartCheckoutAndOrderTests {
 
         var tenantContext = new JdbcOrderingTenantContext(jdbc);
         var catalogSnapshot = new JdbcOrderCatalogSnapshot(jdbc, "uz");
-        var policies = new OrderAcceptancePolicyService(new JdbcPolicyResolver(jdbc, objectMapper));
+        var policies = new OrderAcceptancePolicyService(
+                new JdbcPolicyResolver(jdbc, objectMapper),
+                new uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor(
+                        jdbc,
+                        objectMapper,
+                        new uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder(jdbc, objectMapper),
+                        clock));
 
         carts = new CartService(
                 cartStore,

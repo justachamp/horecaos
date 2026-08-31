@@ -32,7 +32,28 @@ public enum ApprovalAction {
     COURIER_MANUAL_PENALTY("courier.adjustment.create.manual-penalty", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY),
 
     TENANT_ACTIVATE("tenant.activate", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL),
-    INTEGRATION_FAILURE_RESOLVE("integration.failure.resolve", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL);
+    INTEGRATION_FAILURE_RESOLVE("integration.failure.resolve", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL),
+
+    /**
+     * ADR 0025, Gap A of the 2026-08-30 proving run: granting or revoking a
+     * {@code PLATFORM}-scope role — the highest-authority action this
+     * platform's own grant model can express, since {@code PLATFORM_ADMIN}
+     * covers every capability in {@link uz.horecaos.platform.iam.api.Capability}
+     * bar one.
+     *
+     * <p>{@code ALLOW_WITHOUT_APPROVAL} is the normal initial mode this
+     * registry documents for every new action, and there is no pre-existing
+     * hard requirement here to preserve the way {@link #COURIER_MANUAL_PENALTY}
+     * preserved ADR 0042's — before {@code PlatformGrantController} existed,
+     * nothing gated this action at all. A single platform-admin signature is
+     * therefore the honest default, exactly as {@link #TENANT_ACTIVATE}'s is,
+     * and any deployment wanting a second signature on its own platform
+     * grants authors an {@code audit.approval_policies} row naming this code
+     * at {@code PLATFORM} scope — the schema already carries that scope (see
+     * V0082); tightening the default requires the same reviewed, observed
+     * change ADR 0050 requires of every other action.
+     */
+    IAM_PLATFORM_GRANT_MANAGE("iam.platform-grant.manage", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL);
 
     /** What an action does when no valid policy resolves at the requested scope. */
     public enum MissingPolicyMode {

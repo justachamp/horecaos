@@ -170,6 +170,46 @@ set -a
 source .env
 set +a
 
+section "Phase 1: identity bootstrap (Keycloak only, before the API starts)"
+
+# GAP (Keycloak, worked around with local-dev-only scripts, not a Java
+# change): horecaos-realm.json ships no realm users and horecaos-api is
+# bearerOnly with directAccessGrantsEnabled=false — correctly, it is the
+# resource server, not something anybody signs into. Nothing in the realm
+# supports non-interactive (password-grant) token acquisition, which this
+# script needs to drive the API headlessly the way a human would through
+# Swagger UI's Authorize button. infra/keycloak/create-local-dev-client.sh
+# creates a confidential, direct-grant-enabled client scoped to local/loopback
+# only, mirroring create-local-web-client.sh's own guard.
+log "Creating the local-dev password-grant Keycloak client (infra/keycloak/create-local-dev-client.sh)"
+DEV_CLIENT_SECRET="$(./infra/keycloak/create-local-dev-client.sh)"
+evidence "client horecaos-local-dev created/updated, direct grants enabled, loopback-only"
+
+# GAP (Keycloak, same class): no platform-admin realm user exists on a fresh
+# deployment either — ADR 0003 deliberately leaves who holds the role to each
+# deployment. infra/keycloak/create-platform-admin.sh creates one and assigns
+# the horecaos-api platform-admin client role directly (a normal, global,
+# non-org-scoped role mapping — nothing ADR-0009-specific). It now prints the
+# subject id on stdout (and only that; everything else it logs goes to
+# stderr) instead of the username, which is exactly what Gap A's config
+# bootstrap needs next.
+log "Creating the platform-admin realm user (infra/keycloak/create-platform-admin.sh)"
+ADMIN_SUBJECT="$(HORECAOS_PLATFORM_ADMIN_PASSWORD="${PLATFORM_ADMIN_PASSWORD}" \
+  ./infra/keycloak/create-platform-admin.sh "${PLATFORM_ADMIN_USERNAME}" 2>>"${LOG_FILE}")"
+[ -n "${ADMIN_SUBJECT}" ] || fail "create-platform-admin.sh did not print a subject id"
+evidence "realm user ${PLATFORM_ADMIN_USERNAME} holds the horecaos-api platform-admin client role; subject=${ADMIN_SUBJECT}"
+
+# GAP A, CLOSED (was: one direct SQL insert into iam.grants, the load-bearing
+# gap of the whole run). PlatformAdminBootstrapReconciler — an
+# ApplicationRunner, the same pattern RoleRegistrySynchronizer already uses —
+# now reconciles horecaos.iam.bootstrap-platform-admins on every startup: it
+# creates the PLATFORM-scope platform-admin grant for every subject listed,
+# idempotently, and never revokes one config no longer names. Exporting the
+# subject id here, before the API starts, is the whole fix — no SQL, no
+# bespoke endpoint call, just the config a real deployment would set too.
+export HORECAOS_IAM_BOOTSTRAP_PLATFORM_ADMINS="${ADMIN_SUBJECT}"
+log "HORECAOS_IAM_BOOTSTRAP_PLATFORM_ADMINS=${ADMIN_SUBJECT} exported for the API's own startup (Gap A, closed)"
+
 section "Phase 0: start the API"
 
 # A stale `spring-boot:run` from an earlier session left bound to this port
@@ -203,33 +243,8 @@ done
 evidence "GET ${API}/actuator/health/readiness -> ready"
 
 # ---------------------------------------------------------------------------
-# Phase 1: identity bootstrap (local dev only — every accommodation named)
+# Phase 1 (continued): acquire the platform-admin token; prove Gap A closed
 # ---------------------------------------------------------------------------
-
-section "Phase 1: identity bootstrap"
-
-# GAP (Keycloak, worked around with local-dev-only scripts, not a Java
-# change): horecaos-realm.json ships no realm users and horecaos-api is
-# bearerOnly with directAccessGrantsEnabled=false — correctly, it is the
-# resource server, not something anybody signs into. Nothing in the realm
-# supports non-interactive (password-grant) token acquisition, which this
-# script needs to drive the API headlessly the way a human would through
-# Swagger UI's Authorize button. infra/keycloak/create-local-dev-client.sh
-# creates a confidential, direct-grant-enabled client scoped to local/loopback
-# only, mirroring create-local-web-client.sh's own guard.
-log "Creating the local-dev password-grant Keycloak client (infra/keycloak/create-local-dev-client.sh)"
-DEV_CLIENT_SECRET="$(./infra/keycloak/create-local-dev-client.sh)"
-evidence "client horecaos-local-dev created/updated, direct grants enabled, loopback-only"
-
-# GAP (Keycloak, same class): no platform-admin realm user exists on a fresh
-# deployment either — ADR 0003 deliberately leaves who holds the role to each
-# deployment. infra/keycloak/create-platform-admin.sh creates one and assigns
-# the horecaos-api platform-admin client role directly (a normal, global,
-# non-org-scoped role mapping — nothing ADR-0009-specific).
-log "Creating the platform-admin realm user (infra/keycloak/create-platform-admin.sh)"
-HORECAOS_PLATFORM_ADMIN_PASSWORD="${PLATFORM_ADMIN_PASSWORD}" \
-  ./infra/keycloak/create-platform-admin.sh "${PLATFORM_ADMIN_USERNAME}" >>"${LOG_FILE}" 2>&1
-evidence "realm user ${PLATFORM_ADMIN_USERNAME} holds the horecaos-api platform-admin client role"
 
 kc_token() {
   local username="$1" password="$2" scope="$3"
@@ -241,65 +256,37 @@ kc_token() {
 
 ADMIN_TOKEN="$(kc_token "${PLATFORM_ADMIN_USERNAME}" "${PLATFORM_ADMIN_PASSWORD}" "")"
 [ -n "${ADMIN_TOKEN}" ] && [ "${ADMIN_TOKEN}" != "null" ] || fail "could not acquire a platform-admin token"
-ADMIN_SUBJECT="$(python3 -c "
-import base64, json
-t = '${ADMIN_TOKEN}'.split('.')[1]
-t += '=' * (-len(t) % 4)
-print(json.loads(base64.urlsafe_b64decode(t))['sub'])
-")"
-evidence "platform-admin token acquired; sub=${ADMIN_SUBJECT}"
+evidence "platform-admin token acquired for subject ${ADMIN_SUBJECT}"
 
-# GAP (application code, worked around with one direct SQL insert — this is
-# the load-bearing gap of the whole run, documented in
-# docs/runbooks/proving-run.md as Gap A): the ADR 0025 fresh-deployment
-# bootstrap bypass in JdbcAuthorizationService confers exactly one capability
-# to a platform-admin realm-role holder — IAM_GRANT_MANAGE, at any scope —
-# and nothing else, "so a platform admin can create the first grant and must
-# then grant themselves everything else through the ordinary audited API."
-# But GrantController's own grant endpoint is nested under
-# /control-plane/tenants/{tenantId}/grants and can only ever construct a
-# TENANT/BRAND/LOCATION scope from that path — never PLATFORM. There is
-# therefore no HTTP endpoint anywhere in this codebase that can create a
-# PLATFORM-scope grant, which is exactly what creating the very first tenant
-# needs (TenantControlPlaneController.createTenant requires TENANT_WRITE at
-# PLATFORM scope). Confirmed live: a fresh platform-admin token gets a plain
-# 403 INSUFFICIENT_CAPABILITY from POST /control-plane/tenants before this.
-# The one-time row below mirrors the exact shape
-# ControlPlaneWiringIntegrationTests.grantPlatformAdministration already uses
-# as a test fixture for the same reason: no API path exists, and the honest
-# thing to do is name that rather than build an ad hoc endpoint under this
-# task. iam.roles already carries the platform-admin row —
-# RoleRegistrySynchronizer seeds it as an ApplicationRunner on every startup.
-log "Bootstrapping the platform-admin's first grant directly in iam.grants (no PLATFORM-scope grant endpoint exists — see Gap A)"
-psql_app <<SQL
-INSERT INTO iam.grants
-    (id, tenant_id, principal_subject, role_id, role_is_platform, scope_type, scope_id,
-     status, granted_by, reason)
-SELECT gen_random_uuid(), NULL, '${ADMIN_SUBJECT}', id, true, 'PLATFORM', NULL,
-       'ACTIVE', 'tools/proving-run bootstrap', 'Fresh-deployment IAM_GRANT_MANAGE bypass cannot reach PLATFORM scope; see docs/runbooks/proving-run.md Gap A'
-  FROM iam.roles WHERE code = 'platform-admin' AND tenant_id IS NULL
-ON CONFLICT DO NOTHING;
-SQL
-evidence "iam.grants now carries a PLATFORM-scope platform-admin grant for ${ADMIN_SUBJECT}"
+# GAP A, PROVEN CLOSED LIVE (was: the load-bearing gap of the whole run — see
+# docs/runbooks/proving-run.md for the full history). Creating a tenant needs
+# TENANT_WRITE at PLATFORM scope, which nothing but a real PLATFORM-scope
+# grant can satisfy; the bootstrap bypass only ever confers IAM_GRANT_MANAGE.
+# If PlatformAdminBootstrapReconciler had not run, this would fail with the
+# same 403 INSUFFICIENT_CAPABILITY the original proving run hit. Proving it
+# here, before phase 2, is what makes every later phase's success evidence
+# that the config bootstrap worked rather than an assumption — and it
+# exercises the new front door itself (audit.web.PlatformGrantController)
+# rather than only the config path.
+GAP_A_PROOF_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' -X POST "${API}/api/v1/control-plane/grants" \
+  -H "Authorization: Bearer ${ADMIN_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"principalSubject":"gap-a-proof-subject","roleCode":"platform-support","reason":"proving run: Gap A closed"}')"
+[ "${GAP_A_PROOF_STATUS}" = "200" ] || fail "Gap A regression: POST /control-plane/grants (a PLATFORM-scope grant) returned ${GAP_A_PROOF_STATUS}, not 200 — the config bootstrap did not take effect"
+evidence "POST /control-plane/grants (PLATFORM scope) -> 200 (Gap A closed: config bootstrap + audit.web.PlatformGrantController, no SQL)"
 
-# GAP (application code, worked around with one direct SQL insert, same
-# class as Gap A — named as Gap B in the runbook): tenant.onboarding_runs has
-# a NOT NULL foreign key to tenant.onboarding_templates, and nothing in
-# production code — no migration, no local-fixtures seed, no controller —
-# ever creates a template row. Every test that starts a run inserts one by
-# hand (OnboardingFullRunIntegrationTests.seedARealisticTenant, mirrored
-# exactly below: code 'default', version 1, status ACTIVE, empty
-# required_steps). Confirmed by reading OnboardingController/OnboardingService
-# and grepping the whole tree for an OnboardingTemplateController that does
-# not exist.
-log "Seeding the onboarding template row (no authoring endpoint exists — see Gap B)"
-TEMPLATE_ID="$(uuidgen | tr 'A-Z' 'a-z')"
-psql_app <<SQL
-INSERT INTO tenant.onboarding_templates (id, code, version, status, required_steps, created_by)
-VALUES ('${TEMPLATE_ID}', 'default', 1, 'ACTIVE', '[]'::jsonb, 'tools/proving-run bootstrap')
-ON CONFLICT DO NOTHING;
-SQL
-evidence "onboarding template ${TEMPLATE_ID} (code=default, version=1) seeded"
+# ---------------------------------------------------------------------------
+# Phase 2a: the default onboarding template (Gap B, closed)
+# ---------------------------------------------------------------------------
+
+# GAP B, CLOSED (was: one direct SQL insert into tenant.onboarding_templates,
+# the same class as Gap A). V0098 seeds the v1 platform default template as
+# versioned reference data; OnboardingTemplateController exposes it
+# read-only. Fetched here as evidence; deliberately NOT passed to the
+# start-run call in phase 3 below — Gap B's other half is that omitting
+# templateId there now resolves to this same template automatically.
+TEMPLATE_JSON="$(req GET "${API}/api/v1/control-plane/onboarding-templates/default" 200 -H "Authorization: Bearer ${ADMIN_TOKEN}")"
+TEMPLATE_ID="$(echo "${TEMPLATE_JSON}" | jq -r .id)"
+evidence "default onboarding template ${TEMPLATE_ID} (code=default, version=$(echo "${TEMPLATE_JSON}" | jq -r .version)) resolved via GET .../onboarding-templates/default (Gap B closed: V0098 + OnboardingTemplateController, no SQL)"
 
 # ---------------------------------------------------------------------------
 # Phase 2: tenant, brand, location (platform-admin, control-plane API)
@@ -338,63 +325,18 @@ req PUT "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands/${BRAND_ID}/loc
   > /dev/null
 evidence "location place recorded (Tashkent, 41.3350,69.2880)"
 
-# GAP (application code — confirmed live, worked around by having
-# platform-admin do this instead of the tenant owner; named as Gap C in the
-# runbook, NOT fixed in code because the fix is a real design decision, not a
-# one-line change): TenantAccessPolicy.requireTenantManagement, which gates
-# createBrand/createLocation/describeLocation, accepts either the global
-# platform-admin realm role OR an org-nested Keycloak client role
-# ("tenant-owner"/"tenant-admin") read from the token's own
-# "organization"."<org>"."resource_access" claim. Nothing in this codebase —
-# not TenantOwnerLinkOrInvite, not any script — ever assigns that nested
-# role; OrganizationProvisioner's own class javadoc explains why
-# (ensureOrganizationRoles was deliberately left unimplemented: Keycloak 26.7's
-# Organizations Admin REST API has no organization-scoped role sub-resource).
-# TenantOwnerAuthorityGrantorAdapter instead confers the tenant-owner
-# capability BUNDLE through iam.grants — which is real and sufficient for
-# every @RequiresCapability-gated endpoint (legal entity, catalog, payments,
-# channels — everything phase 3 below does) — but requireTenantManagement is
-# a second, independent, older check that iam.grants cannot satisfy. A
-# linked tenant owner is therefore capability-eligible but access-policy-
-# blocked from ever creating a second brand or location for their own
-# tenant. Verified live in this same script below, right after the owner
-# signs in, as a deliberate negative check — then this run proceeds with
-# platform-admin owning brand/location creation, which is what a real
-# deployment would do too until this gap is closed.
-gap "TenantAccessPolicy.requireTenantManagement will refuse the tenant owner on createBrand/createLocation later in this run (confirmed live below) — no code path ever grants the Keycloak org-nested role it checks. See docs/runbooks/proving-run.md Gap C."
-
-# ---------------------------------------------------------------------------
-# Phase 2b: RESTAURANT_APPROVAL acceptance policy (no authoring endpoint)
-# ---------------------------------------------------------------------------
-
-section "Phase 2b: order acceptance policy"
-
-# GAP (application code, worked around with one direct SQL insert — Gap D):
-# minimum-viable-cutover.md names RESTAURANT_APPROVAL through Operations as
-# the intended v1 acceptance mode, and OrderAcceptancePolicyService resolves
-# it through ADR 0030's generic tenant.policies mechanism — but that
-# mechanism is read-only in this codebase (JdbcPolicyResolver has no writer
-# anywhere; minimum-viable-cutover.md itself lists "control-plane editing UI"
-# for ADR 0030 as "Not blocking", i.e. deliberately deferred). Absent a
-# policy, OrderAcceptancePolicy.platformDefault() applies (AUTO_CONFIRM),
-# which is a legitimate answer but not the one this slice is meant to prove.
-# The row below is the same shape a real policy-authoring write would
-# produce; there is no HTTP path to it today.
-log "Seeding an ordering.acceptance=RESTAURANT_APPROVAL policy (no authoring endpoint exists — see Gap D)"
-ACCEPTANCE_DOC='{"mode":"RESTAURANT_APPROVAL","approvalChannel":"HORECAOS_OPERATIONS","approvalTimeoutSeconds":600,"timeoutAction":"AUTO_REJECT","rejectionReasonRequired":false,"notifyCustomerWhilePending":true}'
-ACCEPTANCE_HASH="$(printf '%s' "${ACCEPTANCE_DOC}" | shasum -a 256 | awk '{print $1}')"
-ACCEPTANCE_POLICY_ID="$(uuidgen | tr 'A-Z' 'a-z')"
-psql_migrator <<SQL
-INSERT INTO tenant.policies
-    (id, key_code, scope_type, tenant_id, brand_id, location_id, version, status,
-     document, document_hash, valid_from, created_by, approved_by)
-VALUES ('${ACCEPTANCE_POLICY_ID}', 'ordering.acceptance', 'TENANT', '${TENANT_ID}', NULL, NULL, 1, 'ACTIVE',
-        '${ACCEPTANCE_DOC}'::jsonb, '${ACCEPTANCE_HASH}', now(),
-        'tools/proving-run bootstrap', 'tools/proving-run bootstrap');
-INSERT INTO tenant.policy_current (key_code, scope_type, tenant_id, brand_id, location_id, policy_id, policy_version, activated_by)
-VALUES ('ordering.acceptance', 'TENANT', '${TENANT_ID}', NULL, NULL, '${ACCEPTANCE_POLICY_ID}', 1, 'tools/proving-run bootstrap');
-SQL
-evidence "tenant ${TENANT_ID} now resolves ordering.acceptance = RESTAURANT_APPROVAL"
+# GAP C, CLOSED (was: confirmed live, worked around by having platform-admin
+# do this instead of the tenant owner). TenantAccessPolicy.requireTenantManagement
+# used to accept only the global platform-admin realm role or an org-nested
+# Keycloak client role ("tenant-owner"/"tenant-admin") that nothing in this
+# codebase ever assigned — Keycloak 26.7's Organizations Admin REST API has
+# no organization-scoped role sub-resource at all
+# (OrganizationProvisioner's own class javadoc). It now resolves through the
+# same AuthorizationService/iam.grants every other endpoint uses, with the
+# exact capability and scope the calling controller's own @RequiresCapability
+# already declares. Proven live below, right after the owner signs in: the
+# owner creates a second brand and location themselves — the exact proving-run
+# scenario Gap C names.
 
 # ---------------------------------------------------------------------------
 # Phase 3: onboarding run — first pass, expect a real failure
@@ -402,12 +344,14 @@ evidence "tenant ${TENANT_ID} now resolves ordering.acceptance = RESTAURANT_APPR
 
 section "Phase 3: start the onboarding run"
 
+# templateId deliberately omitted: Gap B's other half is that the control
+# plane now resolves the platform's current default template on its own
+# (OnboardingController.start), the same one fetched as TEMPLATE_ID above.
 RUN_JSON="$(req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/onboarding-runs" 200 \
   -H "Authorization: Bearer ${ADMIN_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
-  -d "$(jq -n --arg t "${TEMPLATE_ID}" --arg email "${OWNER_EMAIL}" \
-        '{templateId:$t, templateVersion:1, ownerEmail:$email}')")"
+  -d "$(jq -n --arg email "${OWNER_EMAIL}" '{ownerEmail:$email}')")"
 RUN_ID="$(echo "${RUN_JSON}" | jq -r .runId)"
-evidence "onboarding run ${RUN_ID} started for tenant ${TENANT_ID}, owner email ${OWNER_EMAIL}"
+evidence "onboarding run ${RUN_ID} started for tenant ${TENANT_ID}, owner email ${OWNER_EMAIL} (templateId omitted; resolved the default automatically)"
 
 run_view() { req GET "${API}/api/v1/control-plane/tenants/${TENANT_ID}/onboarding-runs/${RUN_ID}" 200 -H "Authorization: Bearer ${ADMIN_TOKEN}"; }
 
@@ -449,44 +393,70 @@ done
 [ -n "${OWNER_SUBJECT}" ] && [ "${OWNER_SUBJECT}" != "null" ] || fail "TENANT_OWNER_LINK_OR_INVITE never completed"
 evidence "owner Keycloak subject ${OWNER_SUBJECT} linked (ADR 0009 organization membership, real Keycloak Admin API call)"
 
-# GAP (Keycloak behavior, worked around in this script — not a code change,
-# and arguably not even a HorecaOS gap): KeycloakOrganizationProvisioner
-# creates the invited owner with only username/email (deliberately — ADR
-# 0009's own membership contract). Keycloak 26's declarative User Profile
-# then refuses ANY password-grant login for an account missing firstName or
-# lastName with the misleading invalid_grant "Account is not fully set up" —
-# no exception, no realm setting names it (confirmed by reproducing it
-# against a stock realm with DEBUG logging: this is
-# https://github.com/keycloak/keycloak/issues/36108, a known Keycloak 26.0.7+
-# regression). A real owner hitting this in a browser just sees Keycloak's
-# own "complete your profile" required-action screen and fills it in; a
-# script has no browser, so it does the Keycloak Admin API equivalent
-# directly, plus setting the password a real owner would set through
-# Keycloak's own invitation/reset flow.
-log "Patching the owner's Keycloak profile and setting a password (Keycloak 26 User Profile quirk — see Gap E in the runbook; a browser flow shows this as a normal 'complete your profile' step)"
+# GAP D, closed, proven live: DEFAULT_CONFIGURATION_APPLY (step 3, right
+# after the owner link) applies the template's default_configuration —
+# RESTAURANT_APPROVAL, fetched as evidence back in phase 2a — as the
+# tenant's ordering.acceptance policy, with zero manual policy work from
+# this script. Waited for here, before touching payment/catalog, so its
+# completion is evidence rather than an assumption phase 9 later relies on.
+log "Waiting for step 3 (DEFAULT_CONFIGURATION_APPLY) to complete"
+DEFAULT_CONFIG_WAIT_ELAPSED=0
+DEFAULT_CONFIG_APPLIED=""
+while [ "${DEFAULT_CONFIG_WAIT_ELAPSED}" -lt 60 ]; do
+  VIEW="$(run_view)"
+  DEFAULT_CONFIG_STEP="$(echo "${VIEW}" | jq -r '.steps[] | select(.stepKey=="DEFAULT_CONFIGURATION_APPLY")')"
+  if [ "$(echo "${DEFAULT_CONFIG_STEP}" | jq -r .status)" = "COMPLETED" ]; then
+    DEFAULT_CONFIG_APPLIED="true"
+    break
+  fi
+  sleep 4
+  DEFAULT_CONFIG_WAIT_ELAPSED=$((DEFAULT_CONFIG_WAIT_ELAPSED + 4))
+done
+[ "${DEFAULT_CONFIG_APPLIED}" = "true" ] || fail "DEFAULT_CONFIGURATION_APPLY never completed"
+
+ACCEPTANCE_POLICY_JSON="$(req GET "${API}/api/v1/control-plane/tenants/${TENANT_ID}/order-acceptance-policy" 200 -H "Authorization: Bearer ${ADMIN_TOKEN}")"
+ACCEPTANCE_MODE="$(echo "${ACCEPTANCE_POLICY_JSON}" | jq -r .mode)"
+[ "${ACCEPTANCE_MODE}" = "RESTAURANT_APPROVAL" ] || fail "Gap D regression: tenant ${TENANT_ID} resolves ordering.acceptance = ${ACCEPTANCE_MODE}, not RESTAURANT_APPROVAL — the template default did not apply"
+evidence "GET .../order-acceptance-policy -> RESTAURANT_APPROVAL (Gap D closed: V0098 default_configuration + DefaultConfigurationApply + PolicyAuthor, no SQL), isPlatformDefault=$(echo "${ACCEPTANCE_POLICY_JSON}" | jq -r .isPlatformDefault)"
+
+# GAP E, CLOSED (was: an Admin-API PATCH of firstName/lastName here, worked
+# around because KeycloakOrganizationProvisioner.ensureMembership created the
+# invited owner with only username/email — deliberately, ADR 0009's own
+# membership contract — and Keycloak 26's declarative User Profile refuses
+# ANY password-grant login for an account missing either, with the
+# misleading invalid_grant "Account is not fully set up"
+# (keycloak/keycloak#36108, still present in the pinned 26.7.0). Fixed at
+# both ends: ensureMembership now always sets honest placeholder name
+# attributes (PENDING_FIRST_NAME/PENDING_LAST_NAME) so a fresh invite never
+# creates a nameless account in the first place, and
+# infra/keycloak/realm/horecaos-realm.json's declarative user profile no
+# longer requires firstName/lastName at all for local dev, so an account
+# missing them (a fixture, an older row) still authenticates. Only the
+# password reset remains — a real owner would set theirs through Keycloak's
+# own invitation/reset flow, and a script has to stand in for that click.
+log "Setting the owner's password (the one Keycloak step with no HTTP equivalent — a real owner does this through Keycloak's own reset flow)"
 KC_ADMIN_TOKEN="$(kc_admin_token)"
-curl -sf -o /dev/null -X PUT "${KC}/admin/realms/${KC_REALM}/users/${OWNER_SUBJECT}" \
-  -H "Authorization: Bearer ${KC_ADMIN_TOKEN}" -H "Content-Type: application/json" \
-  -d '{"firstName":"Proving Run","lastName":"Owner","enabled":true,"emailVerified":true}'
 curl -sf -o /dev/null -X PUT "${KC}/admin/realms/${KC_REALM}/users/${OWNER_SUBJECT}/reset-password" \
   -H "Authorization: Bearer ${KC_ADMIN_TOKEN}" -H "Content-Type: application/json" \
   -d "$(jq -n --arg p "${OWNER_PASSWORD}" '{type:"password", value:$p, temporary:false}')"
-evidence "owner profile completed and password set"
+evidence "owner password set (Gap E closed: no profile PATCH needed — ensureMembership sets honest placeholder names, and the local realm's profile no longer requires them)"
 
 OWNER_TOKEN="$(kc_token "${OWNER_EMAIL}" "${OWNER_PASSWORD}" "organization:${TENANT_SLUG}")"
 [ -n "${OWNER_TOKEN}" ] && [ "${OWNER_TOKEN}" != "null" ] || fail "could not acquire an owner token"
 evidence "owner signed in over HTTP with organization:${TENANT_SLUG} scope"
 
-log "Confirming Gap C live: the owner cannot create a second brand"
-GAP_C_STATUS="$(curl -sS -o /tmp/gap-c-body-${RUN_SUFFIX}.json -w '%{http_code}' -X POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands" \
-  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
-  -d '{"code":"SECOND","slug":"second-brand-should-fail","displayName":"Should be refused"}')"
-if [ "${GAP_C_STATUS}" = "403" ]; then
-  evidence "confirmed: owner createBrand -> 403 $(jq -r .code /tmp/gap-c-body-${RUN_SUFFIX}.json 2>/dev/null) (Gap C is real, not theoretical)"
-else
-  log "NOTE: owner createBrand returned ${GAP_C_STATUS}, not the expected 403 — Gap C may have been fixed since this script was written; see $(cat /tmp/gap-c-body-${RUN_SUFFIX}.json)"
-fi
-rm -f "/tmp/gap-c-body-${RUN_SUFFIX}.json"
+# GAP C, CLOSED — proven live further down, right after the tenant reaches
+# ACTIVE (end of Phase 6). It used to run here, but every onboarding
+# readiness validator (PAYMENT_CONFIGURATION_VALIDATE, then
+# CATALOG_READINESS_VALIDATE, and by the same logic MEDIA_READINESS_VALIDATE
+# and FRONTEND_DOMAIN_VALIDATE too) checks every brand and location the
+# tenant has, so a throwaway proof brand created mid-onboarding has to be
+# fully configured — payments, catalog, media, domain — just to let an
+# unrelated run finish, which is not what this gap is about and not
+# something a real second brand would need on day one. Proving the grant
+# works once the tenant is already active demonstrates exactly the same
+# thing (an ordinary tenant-owner grant, no Keycloak org-nested role)
+# without dragging onboarding readiness into it.
 
 log "Waiting for the run to reach READY or a FAILED step"
 VIEW="$(wait_for_run_status "READY,FAILED" 90)"
@@ -672,14 +642,17 @@ PB_ACT="$(req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands/${BR
   -H "Authorization: Bearer ${OWNER_TOKEN}" -H "If-Match: ${PB_VERSION}" -H "Idempotency-Key: $(idemp)")"
 evidence "price book ${PRICE_BOOK_ID} ACTIVE: $(echo "${PB_ACT}" | jq -c '{status,currency,priority}')"
 
-# GAP (application code — real, and independent of onboarding readiness;
-# named Gap F): ACTIVATION_SMOKE_TEST prices a representative item via
-# CartPricingPort directly and never checks inventory, so an onboarding run
-# can reach READY/ACTIVE while its only item is not actually orderable.
-# Confirmed live: checkout against a priced, published, channel-bound item
-# with no stock item refused 409 ITEMS_UNAVAILABLE/NOT_STOCKED_AT_LOCATION
-# until this section ran. Listed here as a finding, not worked around with
-# SQL — the front door (InventoryController) exists and is used.
+# GAP F, CLOSED: ACTIVATION_SMOKE_TEST used to price a representative item
+# via CartPricingPort directly and never check inventory, so an onboarding
+# run could reach READY/ACTIVE while its only item was not actually
+# orderable — confirmed live, checkout against a priced, published,
+# channel-bound item with no stock item refused 409
+# ITEMS_UNAVAILABLE/NOT_STOCKED_AT_LOCATION. The smoke test now also calls
+# InventoryReservationPort.checkAvailability (the same read
+# reserveForQuote takes) and fails ACTIVATION_SMOKE_TEST by name if nothing
+# is actually stocked. The listing below is no longer optional scaffolding
+# this script chose to do anyway — omitting it would now fail the
+# onboarding run itself at phase 3, not just this script's later checkout.
 CHANNELS_JSON="$(req GET "${API}/api/v1/control-plane/tenants/${TENANT_ID}/sales-channels" 200 -H "Authorization: Bearer ${OWNER_TOKEN}")"
 CHANNEL_ID="$(echo "${CHANNELS_JSON}" | jq -r '.[] | select(.code=="STOREFRONT") | .id')"
 [ -n "${CHANNEL_ID}" ] && [ "${CHANNEL_ID}" != "null" ] || fail "no STOREFRONT channel found — StorefrontChannelSeeder should have created one on TenantCreated"
@@ -690,7 +663,7 @@ req PUT "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands/${BRAND_ID}/cat
   -d '{"status":"AVAILABLE","fulfillmentModes":["PICKUP"]}' > /dev/null
 evidence "location offering set AVAILABLE for pickup"
 
-log "Listing the variant as BINARY-tracked stock and marking it available (ADR 0017 — see Gap F: onboarding's own smoke test does not require this)"
+log "Listing the variant as BINARY-tracked stock and marking it available (ADR 0017 — Gap F closed: ACTIVATION_SMOKE_TEST now requires this too)"
 req POST "${API}/api/v1/tenants/${TENANT_ID}/brands/${BRAND_ID}/locations/${LOCATION_ID}/inventory/stock-items" 200 \
   -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
   -d "$(jq -n --arg v "${VARIANT_ID}" '{variantId:$v, trackingMode:"BINARY"}')" > /dev/null
@@ -713,23 +686,32 @@ req PUT "${API}/api/v1/control-plane/tenants/${TENANT_ID}/sales-channels/${CHANN
   -d "$(jq -n --arg l "${LOCATION_ID}" '{locationIds:[$l]}')" > /dev/null
 evidence "STOREFRONT channel: CASH+CLICK enabled, PICKUP enabled, bound to location ${LOCATION_ID}"
 
+# Deliberately 00:00-23:59, not a merchant-realistic 08:00-23:00: this script
+# runs at whatever wall-clock hour a human or CI kicks it off, in the
+# location's own Asia/Tashkent timezone, and Phase 7 needs the location
+# OPEN when it places the order regardless of when that is (a 23:47 Tashkent
+# run against 08:00-23:00 hours produced a real, correct 409
+# OUTSIDE_SERVICE_HOURS — the check working exactly as designed, just not
+# what this script wants of it). A merchant's actual hours are exercised by
+# ServiceHoursTests/ServiceScheduleResolutionTests instead, where the clock
+# is a fixture the test controls.
 SCHED_JSON="$(req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands/${BRAND_ID}/service-schedules" 200 \
   -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
   -d '{"name":"Standard hours","acceptsScheduledOrders":false,"rules":[
-        {"dayOfWeek":1,"opensAt":"08:00:00","closesAt":"23:00:00"},
-        {"dayOfWeek":2,"opensAt":"08:00:00","closesAt":"23:00:00"},
-        {"dayOfWeek":3,"opensAt":"08:00:00","closesAt":"23:00:00"},
-        {"dayOfWeek":4,"opensAt":"08:00:00","closesAt":"23:00:00"},
-        {"dayOfWeek":5,"opensAt":"08:00:00","closesAt":"23:00:00"},
-        {"dayOfWeek":6,"opensAt":"08:00:00","closesAt":"23:00:00"},
-        {"dayOfWeek":7,"opensAt":"08:00:00","closesAt":"23:00:00"}
+        {"dayOfWeek":1,"opensAt":"00:00:00","closesAt":"23:59:59"},
+        {"dayOfWeek":2,"opensAt":"00:00:00","closesAt":"23:59:59"},
+        {"dayOfWeek":3,"opensAt":"00:00:00","closesAt":"23:59:59"},
+        {"dayOfWeek":4,"opensAt":"00:00:00","closesAt":"23:59:59"},
+        {"dayOfWeek":5,"opensAt":"00:00:00","closesAt":"23:59:59"},
+        {"dayOfWeek":6,"opensAt":"00:00:00","closesAt":"23:59:59"},
+        {"dayOfWeek":7,"opensAt":"00:00:00","closesAt":"23:59:59"}
       ]}')"
 SCHEDULE_ID="$(echo "${SCHED_JSON}" | jq -r .id)"
 
 req PUT "${API}/api/v1/operations/tenants/${TENANT_ID}/brands/${BRAND_ID}/locations/${LOCATION_ID}/service-bindings" 204 \
   -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
   -d "$(jq -n --arg s "${SCHEDULE_ID}" '{fulfillmentMode:"PICKUP", scheduleId:$s}')" > /dev/null
-evidence "08:00-23:00 daily schedule ${SCHEDULE_ID} bound to location for PICKUP"
+evidence "00:00-23:59 daily schedule ${SCHEDULE_ID} bound to location for PICKUP (wide open, so this script's own run time never trips OUTSIDE_SERVICE_HOURS)"
 
 PUB_JSON="$(req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands/${BRAND_ID}/catalog/catalogs/${CATALOG_ID}/publications?channel=STOREFRONT" 200 \
   -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Idempotency-Key: $(idemp)")"
@@ -774,6 +756,31 @@ evidence "tenant activation outcome: $(echo "${ACTIVATE_JSON}" | jq -r .outcome)
 TENANT_STATUS="$(req GET "${API}/api/v1/control-plane/tenants/${TENANT_ID}" 200 -H "Authorization: Bearer ${ADMIN_TOKEN}" | jq -r .status)"
 [ "${TENANT_STATUS}" = "ACTIVE" ] || fail "tenant status is ${TENANT_STATUS}, expected ACTIVE"
 evidence "tenant ${TENANT_ID} is ACTIVE"
+
+# GAP C, CLOSED, PROVEN LIVE — the exact proving-run scenario this gap names:
+# the tenant owner, holding only a real iam.grants tenant-owner grant (never
+# the Keycloak org-nested role TenantAccessPolicy used to require, which
+# Keycloak 26.7's Organizations Admin REST API has no sub-resource to grant
+# in the first place — OrganizationProvisioner's own class javadoc), creates
+# a second brand and a location under it. Done here, after activation, so
+# this throwaway proof brand never has to satisfy onboarding readiness
+# (payments/catalog/media/domain) for a run it has nothing to do with.
+SECOND_BRAND_JSON="$(req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands" 201 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"code":"SECOND","slug":"second-brand","displayName":"Proving Run Second Brand"}')"
+SECOND_BRAND_ID="$(echo "${SECOND_BRAND_JSON}" | jq -r .id)"
+evidence "owner created a second brand ${SECOND_BRAND_ID} (Gap C closed: TenantAccessPolicy resolves through iam.grants, no Keycloak org-role needed)"
+
+SECOND_LOCATION_JSON="$(req POST "${API}/api/v1/control-plane/tenants/${TENANT_ID}/brands/${SECOND_BRAND_ID}/locations" 201 \
+  -H "Authorization: Bearer ${OWNER_TOKEN}" -H "Content-Type: application/json" -H "Idempotency-Key: $(idemp)" \
+  -d '{"code":"SECOND01","slug":"second-location","displayName":"Proving Run Second Location","timezone":"Asia/Tashkent"}')"
+evidence "owner created a location $(echo "${SECOND_LOCATION_JSON}" | jq -r .id) under the second brand (Gap C closed)"
+
+# GAP C, negative case: organization MEMBERSHIP alone (ADR 0003's coarse
+# gate) stays a member without the tenant-owner grant. Re-proven by the unit
+# suite (TenantAccessPolicyTests, ControlPlaneWiringIntegrationTests) rather
+# than live here — constructing a second Keycloak identity that is a member
+# but deliberately un-granted is exactly what those tests already cover.
 
 # ---------------------------------------------------------------------------
 # Phase 7: the customer — phone+OTP, menu, cart, quote, checkout with CLICK

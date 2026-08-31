@@ -302,6 +302,13 @@ class OnboardingOutboxIntegrationTests {
         }
 
         @Bean
+        uz.horecaos.platform.tenancy.api.PolicyAuthor policyAuthor(
+                JdbcClient jdbc, ObjectMapper objectMapper, AuditRecorder recorder, Clock clock) {
+            return new uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor(
+                    jdbc, objectMapper, recorder, clock);
+        }
+
+        @Bean
         TenantControlPlaneStore tenantControlPlaneStore(JdbcClient jdbc) {
             return new JdbcTenantControlPlaneStore(jdbc);
         }
@@ -345,11 +352,13 @@ class OnboardingOutboxIntegrationTests {
         List<OnboardingStepHandler> onboardingStepHandlers(
                 OrganizationProvisioner organizations,
                 TenantOwnerAuthorityGrantor authority,
-                TenantControlPlaneStore tenants) {
+                TenantControlPlaneStore tenants,
+                JdbcClient jdbc,
+                uz.horecaos.platform.tenancy.api.PolicyAuthor policyAuthor) {
             List<OnboardingStepHandler> handlers = new java.util.ArrayList<>(List.of(
                     new OnboardingStepHandlers.KeycloakOrganizationReconcile(organizations, tenants),
                     new OnboardingStepHandlers.TenantOwnerLinkOrInvite(organizations, authority),
-                    new OnboardingStepHandlers.DefaultConfigurationApply(),
+                    new OnboardingStepHandlers.DefaultConfigurationApply(jdbc, policyAuthor),
                     new OnboardingStepHandlers.BrandsAndLocationsValidate(tenants)));
             for (OnboardingStep step : new OnboardingStep[] {
                 OnboardingStep.PAYMENT_CONFIGURATION_VALIDATE,

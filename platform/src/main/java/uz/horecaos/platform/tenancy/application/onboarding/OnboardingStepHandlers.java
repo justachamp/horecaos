@@ -3,6 +3,7 @@ package uz.horecaos.platform.tenancy.application.onboarding;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -10,12 +11,17 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.iam.api.grants.TenantOwnerAuthorityGrantor;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.MediaAvailability;
 import uz.horecaos.platform.tenancy.api.FiscalSeller;
 import uz.horecaos.platform.tenancy.api.LegalEntityDirectory;
+import uz.horecaos.platform.tenancy.api.PolicyAuthor;
+import uz.horecaos.platform.tenancy.api.PolicyKey;
 import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStep;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
@@ -175,9 +181,48 @@ public final class OnboardingStepHandlers {
         }
     }
 
-    /** Applies the template's default configuration. No external side effect. */
+    /**
+     * Applies the template's default configuration (Gap D of the 2026-08-30
+     * proving run).
+     *
+     * <p>{@code acceptancePolicy}, when present, is applied as the tenant's
+     * {@code TENANT}-scope {@code ordering.acceptance} policy (ADR 0030)
+     * through {@link PolicyAuthor} — the same generic write a human uses
+     * through {@code OrderAcceptancePolicyController}. The key code is a
+     * literal rather than {@code OrderAcceptancePolicyService.ACCEPTANCE},
+     * for the reason this file's class javadoc gives for reading another
+     * module's schema by name instead of importing its types: {@code
+     * ordering} already depends on {@code tenancy.api}, so the reverse import
+     * would close the same cycle. tenancy does not need to know what an
+     * {@code OrderAcceptancePolicy} means to apply one — only that {@link
+     * PolicyAuthor} knows how to store whatever document a {@code
+     * PolicyKey}'s code names, and that {@code ordering} will read this exact
+     * shape back through its own, real key.
+     *
+     * <p>Idempotent by construction, not by accident: it never overwrites a
+     * policy this key/scope already resolves, whether that resolution came
+     * from an earlier attempt at this same step or from an owner who has
+     * since authored their own version through the real endpoint. A retry
+     * that clobbered a deliberate change would be the platform default
+     * reasserting itself over somebody's decision — the same asymmetry
+     * {@code PlatformAdminBootstrapReconciler} keeps for Gap A's grants.
+     */
     @Component
     public static class DefaultConfigurationApply implements OnboardingStepHandler {
+
+        /**
+         * {@code OrderAcceptancePolicyService.ACCEPTANCE.code()}: kept a literal
+         * rather than an import — see this handler's own javadoc.
+         */
+        private static final String ACCEPTANCE_POLICY_KEY_CODE = "ordering.acceptance";
+
+        private final JdbcClient jdbc;
+        private final PolicyAuthor policyAuthor;
+
+        public DefaultConfigurationApply(JdbcClient jdbc, PolicyAuthor policyAuthor) {
+            this.jdbc = jdbc;
+            this.policyAuthor = policyAuthor;
+        }
 
         @Override
         public OnboardingStep step() {
@@ -187,8 +232,48 @@ public final class OnboardingStepHandlers {
         @Override
         public StepResult execute(StepContext context) {
             Object defaults = context.input().get("defaultConfiguration");
-            int applied = defaults instanceof Map<?, ?> map ? map.size() : 0;
-            return StepResult.completed(Map.of("appliedKeys", applied), null);
+            Map<?, ?> configuration = defaults instanceof Map<?, ?> map ? map : Map.of();
+
+            boolean acceptancePolicyApplied = applyAcceptancePolicyDefault(context.tenantId(), configuration);
+
+            return StepResult.completed(
+                    Map.of("appliedKeys", configuration.size(), "acceptancePolicyApplied", acceptancePolicyApplied),
+                    null);
+        }
+
+        private boolean applyAcceptancePolicyDefault(UUID tenantId, Map<?, ?> defaultConfiguration) {
+            Object acceptancePolicy = defaultConfiguration.get("acceptancePolicy");
+            if (!(acceptancePolicy instanceof Map<?, ?> document) || document.isEmpty()) {
+                return false;
+            }
+
+            boolean alreadyResolved = Boolean.TRUE.equals(jdbc.sql("""
+                    SELECT EXISTS (SELECT 1 FROM tenant.policy_current
+                                    WHERE key_code = :keyCode AND scope_type = 'TENANT' AND tenant_id = :tenantId)
+                    """)
+                    .param("keyCode", ACCEPTANCE_POLICY_KEY_CODE)
+                    .param("tenantId", tenantId)
+                    .query(Boolean.class)
+                    .single());
+            if (alreadyResolved) {
+                return true;
+            }
+
+            PolicyKey<Map> key = new PolicyKey<>(
+                    ACCEPTANCE_POLICY_KEY_CODE,
+                    Map.class,
+                    EnumSet.of(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND, ScopeType.LOCATION),
+                    "ordering",
+                    false,
+                    "Template default: how an order is accepted");
+
+            policyAuthor.author(
+                    key,
+                    ResourceScope.tenant(tenantId),
+                    document,
+                    ActorRef.systemJob("onboarding-default-configuration-apply"),
+                    "Applied from the onboarding template's default configuration (ADR 0008)");
+            return true;
         }
     }
 

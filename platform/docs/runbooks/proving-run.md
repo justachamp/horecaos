@@ -148,6 +148,27 @@ already is), or document this SQL step as part of the real deployment
 bootstrap in `docs/runbooks/deploy.md`. Today, a real production deployment
 would hit the identical wall.
 
+**Closed by** (2026-08-30 gap-closure wave): `horecaos.iam.bootstrap-platform-admins`
+(`IamBootstrapProperties`) drives `PlatformAdminBootstrapReconciler`, an
+`ApplicationRunner` in the same pattern as `RoleRegistrySynchronizer` — it
+ensures every configured Keycloak subject holds the platform-admin grant on
+every startup, idempotently, and **never revokes** (config absence is not a
+revocation decision; see the class javadoc). `infra/keycloak/create-platform-admin.sh`
+now only touches Keycloak and prints the subject id and the config key to put
+it under; `tools/proving-run` exports that env var before starting the API,
+so the very first grant needs no SQL, ever. The second half — a genuine HTTP
+endpoint for every `PLATFORM`-scope grant after the first — is
+`audit.web.PlatformGrantController` (`POST`/`DELETE`/`GET
+/control-plane/grants`), backed by `iam.api.grants.PlatformGrantAuthority` for
+the write and `audit.application.PlatformGrantService` for ADR 0027's
+maker-checker in front of it (`ApprovalAction.IAM_PLATFORM_GRANT_MANAGE`,
+`ALLOW_WITHOUT_APPROVAL` by ADR 0050's normal initial default — a deployment
+that wants a second signature on its own platform grants authors a
+`PLATFORM`-scope `audit.approval_policies` row for that action code). It lives
+in `audit`, not `iam`, because `audit` already depends on `iam.api` and the
+reverse edge would have closed a module cycle — see `PlatformGrantAuthority`'s
+own javadoc.
+
 ### Gap B — no HTTP path creates an onboarding template
 
 `tenant.onboarding_runs.template_id` has a `NOT NULL` foreign key to
@@ -162,6 +183,17 @@ required_steps='[]'::jsonb`).
 matching the weight of the decision), or a migration that seeds the single
 `default` template a fresh deployment needs, closing this the same way
 Gap A's real fix would.
+
+**Closed by** (2026-08-30 gap-closure wave): migration `V0098` seeds the v1
+platform default template as versioned reference data — `code='default'`,
+`version=1`, `required_steps` mirroring the code-owned `OnboardingStep` enum
+for documentation, and `default_configuration` carrying the
+`RESTAURANT_APPROVAL` acceptance-policy document Gap D applies (see below).
+`OnboardingTemplateController` exposes `list`/`get`/`default` read-only at
+`PLATFORM` scope (authoring and versioning stay explicitly out of scope, per
+the task); `OnboardingController.start` resolves the current default
+automatically when a caller omits `templateId`, so tenant creation without an
+explicit template uses it.
 
 ### Gap C — the tenant owner cannot create a second brand or location
 
@@ -192,6 +224,20 @@ real way to grant the nested role once Keycloak exposes one. Recorded here
 rather than patched, because guessing wrong would silently reopen ADR 0003's
 tenant-boundary question.
 
+**Closed by** (2026-08-30 gap-closure wave, owner decision: drop the org-role
+check): `TenantAccessPolicy.requireTenantManagement` now takes the exact
+capability and scope the calling controller's own `@RequiresCapability`
+already declares and resolves through the same `AuthorizationService`/
+`iam.grants` every other endpoint uses — `BRAND_WRITE`/`LOCATION_WRITE` at the
+scope the interceptor already checked. Organization membership stays the
+coarse gate ADR 0003 assigns it (a stranger to the tenant's organization is
+still refused before the capability is even asked about), exactly mirroring
+the pattern `requireTenantRead` already used. `ControlPlaneWiringIntegrationTests
+.aTenantOwnerCreatesASecondBrandAndLocation` reproduces this exact scenario
+live: an owner holding only a real `tenant-owner` `iam.grants` row — granted
+through the ordinary `POST .../grants` endpoint, never written into the table
+by hand — creates a second brand and a location under it.
+
 ### Gap D — no HTTP path authors an order acceptance policy
 
 [minimum-viable-cutover.md](../minimum-viable-cutover.md) names
@@ -216,6 +262,25 @@ platform-admin or tenant-owner only) is the real fix, and is already known
 work — this just confirms it is genuinely absent today, not merely
 undocumented.
 
+**Closed by** (2026-08-30 gap-closure wave, owner decision: `RESTAURANT_APPROVAL`
+is the v1 template default): two halves. First, `tenancy.api.PolicyAuthor`
+(implemented by `JdbcPolicyAuthor`) is the writer ADR 0030's `tenant.policies`/
+`tenant.policy_current` never had — versioned, never in-place mutation, and
+`JdbcPolicyResolver.pinned` keeps answering with an old version's document
+forever, which `OrderAcceptancePolicyServiceTests` proves directly (authoring
+a new version never rewrites what an already-accepted order pinned to).
+`ordering.web.OrderAcceptancePolicyController` exposes it at
+`.../tenants/{tenantId}/order-acceptance-policy`, capability-gated by the new
+`ORDER_ACCEPTANCE_POLICY_MANAGE`, with scoped overrides via the existing
+`brandId`/`locationId` body fields the resolution model already supports (no
+model change). Second, `V0098`'s template `default_configuration` carries the
+`RESTAURANT_APPROVAL` document, and `OnboardingStepHandlers.DefaultConfigurationApply`
+now actually applies it — idempotently, and never over a policy an owner has
+since authored themselves — instead of doing nothing. A fresh tenant's first
+order now lands `AWAITING_APPROVAL` with zero manual policy work; see
+`OnboardingFullRunIntegrationTests.aRealisticCashOnlyPickupOnlyTenantReachesReadyOnEveryStep`'s
+own acceptance-policy assertion.
+
 ### Gap E — Keycloak 26's User Profile blocks password-grant login for an incomplete profile
 
 `KeycloakOrganizationProvisioner.ensureMembership` creates the invited owner
@@ -233,10 +298,28 @@ a known Keycloak 26.0.7+ regression, still present in the pinned 26.7.0.
 A real owner hitting this in a browser sees Keycloak's own "complete your
 profile" required-action screen and fills it in as part of signing in for the
 first time — this is not a HorecaOS bug and not something a human ever
-notices. A script has no browser, so `tools/proving-run` does the Keycloak
-Admin API equivalent directly (`PUT /admin/realms/horecaos/users/{id}` with
-`firstName`/`lastName`), plus setting the password a real owner would set
-through Keycloak's own invitation/reset flow.
+notices. A script has no browser, so — until this was closed at the
+application layer — `tools/proving-run` did the Keycloak Admin API equivalent
+directly (`PUT /admin/realms/horecaos/users/{id}` with `firstName`/`lastName`),
+plus setting the password a real owner would set through Keycloak's own
+invitation/reset flow.
+
+**Closed by** (2026-08-30 gap-closure wave): fixed at both ends, verified live
+against the real Keycloak 26.7.0 realm both before and after (a nameless
+account got the exact `invalid_grant` / "Account is not fully set up" under
+the stock profile, and a normal token under the relaxed one — see
+`infra/keycloak/README.md`). `KeycloakOrganizationProvisioner.ensureMembership`
+now always sets honest placeholder name attributes
+(`PENDING_FIRST_NAME`/`PENDING_LAST_NAME` — legible as placeholders, not a
+guessed identity ADR 0009's membership contract never had) on every account it
+creates, so a fresh invite never produces a nameless account to begin with;
+`KeycloakOrganizationIntegrationTests.aNewMemberIsCreatedWithNonBlankNameAttributes`
+proves it against the real realm. `infra/keycloak/realm/horecaos-realm.json`
+additionally installs a `declarative-user-profile` `components` block that
+relaxes `firstName`/`lastName` to optional for local dev — belt and braces for
+a fixture or an account this codebase did not create. The Admin-API PATCH
+workaround is gone from `tools/proving-run`; only the password reset remains,
+which has no HTTP equivalent a real owner's own reset flow does not also need.
 
 Two more Keycloak-only local-dev artifacts exist for the identity bootstrap
 this run needs, both loopback-guarded like `create-local-web-client.sh`:
@@ -275,6 +358,21 @@ the variant as `BINARY`-tracked stock and marks it available
 means **an activated tenant is not proof that its menu can actually be
 ordered from** — worth a line in `ACTIVATION_SMOKE_TEST`'s own scope, or in
 its own class Javadoc, so a future reader does not assume it.
+
+**Closed by** (2026-08-30 gap-closure wave): `InventoryReservationPort` gained
+`checkAvailability` — the exact read `reserveForQuote` already took
+atomically before holding stock, now exposed read-only so a caller can ask
+without reserving anything. `ACTIVATION_SMOKE_TEST` calls it after pricing the
+representative item and fails the step (`ITEM_NOT_AVAILABLE_TO_SELL`, naming
+the item's SKU and the underlying reason —
+`NOT_STOCKED_AT_LOCATION`/`SOLD_OUT`) rather than completing on a clean quote
+alone. `OrderingOnboardingStepHandlersTests` proves both directions:
+`failsWhenTheQuotableItemHasNoStockRecord` /
+`failsWhenTheQuotableItemIsMarkedSoldOut` for the failure, and
+`passesWhenServiceabilityAQuoteAndInventoryAllResolve` for the pass. The
+listing `tools/proving-run` performs in phase 5 is no longer optional
+scaffolding this script chose to do anyway — omitting it now fails the
+onboarding run itself at phase 3, not just a later checkout.
 
 ### Two things that were investigated as gaps and turned out not to be
 

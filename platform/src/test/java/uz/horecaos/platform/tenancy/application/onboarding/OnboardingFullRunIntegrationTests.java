@@ -35,6 +35,8 @@ import uz.horecaos.platform.iam.application.GrantManagementService;
 import uz.horecaos.platform.iam.application.TenantOwnerAuthorityGrantorAdapter;
 import uz.horecaos.platform.iam.infrastructure.authorization.JdbcAuthorizationService;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
+import uz.horecaos.platform.inventory.application.InventoryService;
+import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcMediaAssetStore;
 import uz.horecaos.platform.ordering.application.onboarding.OrderingOnboardingStepHandlers;
 import uz.horecaos.platform.pricing.application.PricingEngine;
@@ -45,6 +47,7 @@ import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
 import uz.horecaos.platform.tenancy.application.ServiceabilityService;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcLegalEntityStore;
+import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcServiceabilityStore;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcTenantControlPlaneStore;
@@ -158,7 +161,33 @@ class OnboardingFullRunIntegrationTests {
 
     @Test
     void aRealisticCashOnlyPickupOnlyTenantReachesReadyOnEveryStep() {
-        UUID runId = service.startRun(tenantId, templateId, 1, Map.of("ownerEmail", "owner@acme.example"), ADMIN);
+        // Exactly the shape OnboardingController.start() now builds from the
+        // resolved template's default_configuration (Gap B/D): a fresh tenant
+        // gets RESTAURANT_APPROVAL applied with zero manual policy work.
+        UUID runId = service.startRun(
+                tenantId,
+                templateId,
+                1,
+                Map.of(
+                        "ownerEmail",
+                        "owner@acme.example",
+                        "defaultConfiguration",
+                        Map.of(
+                                "acceptancePolicy",
+                                Map.of(
+                                        "mode",
+                                        "RESTAURANT_APPROVAL",
+                                        "approvalChannel",
+                                        "HORECAOS_OPERATIONS",
+                                        "approvalTimeoutSeconds",
+                                        600,
+                                        "timeoutAction",
+                                        "AUTO_REJECT",
+                                        "rejectionReasonRequired",
+                                        false,
+                                        "notifyCustomerWhilePending",
+                                        true))),
+                ADMIN);
 
         drain(runId);
 
@@ -195,6 +224,17 @@ class OnboardingFullRunIntegrationTests {
                 """).param("tenantId", tenantId).query(String.class).list())
                 .as("TENANT_OWNER_LINK_OR_INVITE must grant the linked subject tenant-owner authority")
                 .containsExactly("tenant-owner");
+
+        // Gap D: DEFAULT_CONFIGURATION_APPLY applied the template's default
+        // acceptance policy, with zero manual policy work — this tenant's
+        // first order will land AWAITING_APPROVAL rather than silently
+        // AUTO_CONFIRM under the platform default.
+        assertThat(jdbc.sql("""
+                SELECT p.document->>'mode' FROM tenant.policy_current c
+                  JOIN tenant.policies p ON p.id = c.policy_id
+                 WHERE c.key_code = 'ordering.acceptance' AND c.scope_type = 'TENANT' AND c.tenant_id = :tenantId
+                """).param("tenantId", tenantId).query(String.class).single())
+                .isEqualTo("RESTAURANT_APPROVAL");
     }
 
     private String lastErrorOf(UUID runId, String stepKey) {
@@ -240,6 +280,11 @@ class OnboardingFullRunIntegrationTests {
         var grantManagement =
                 new GrantManagementService(jdbc, authorizationService, authorizationService, event -> {}, CLOCK);
         TenantOwnerAuthorityGrantor authority = new TenantOwnerAuthorityGrantorAdapter(grantManagement);
+        var policyAuthor = new JdbcPolicyAuthor(
+                jdbc,
+                JsonMapper.builder().build(),
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                CLOCK);
 
         var channels = new JdbcSalesChannelStore(jdbc);
         var serviceability = new ServiceabilityService(new JdbcServiceabilityStore(jdbc), CLOCK);
@@ -264,10 +309,12 @@ class OnboardingFullRunIntegrationTests {
                         .map(a -> a.status().isDisplayable())
                         .orElse(false));
 
+        var inventory = new InventoryService(new JdbcInventoryStore(jdbc), CLOCK);
+
         return List.of(
                 new OnboardingStepHandlers.KeycloakOrganizationReconcile(provisioner, tenants),
                 new OnboardingStepHandlers.TenantOwnerLinkOrInvite(provisioner, authority),
-                new OnboardingStepHandlers.DefaultConfigurationApply(),
+                new OnboardingStepHandlers.DefaultConfigurationApply(jdbc, policyAuthor),
                 new OnboardingStepHandlers.BrandsAndLocationsValidate(tenants),
                 new OnboardingStepHandlers.PaymentConfigurationValidate(
                         tenants, new JdbcLegalEntityStore(jdbc), jdbc, CLOCK),
@@ -276,7 +323,8 @@ class OnboardingFullRunIntegrationTests {
                 new OnboardingStepHandlers.CatalogReadinessValidate(tenants, jdbc),
                 new OnboardingStepHandlers.MediaReadinessValidate(jdbc, media),
                 new OnboardingStepHandlers.FrontendDomainValidate(),
-                new OrderingOnboardingStepHandlers.ActivationSmokeTest(jdbc, channels, serviceability, pricing, CLOCK));
+                new OrderingOnboardingStepHandlers.ActivationSmokeTest(
+                        jdbc, channels, serviceability, pricing, inventory, CLOCK));
     }
 
     /** Records nothing; every call simply succeeds, the way a healthy Keycloak would. */
@@ -479,6 +527,35 @@ class OnboardingFullRunIntegrationTests {
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .param("from", validFrom)
+                .update();
+
+        // Gap F: ACTIVATION_SMOKE_TEST now checks real availability, not just a
+        // clean quote, so the one item this fixture sells has to actually be
+        // stocked here — the same BINARY listing tools/proving-run performs
+        // through InventoryController in phase 5.
+        UUID stockItemId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO inventory.stock_items
+                    (id, tenant_id, brand_id, location_id, variant_id, tracking_mode, created_at, updated_at)
+                VALUES (:id, :tenantId, :brandId, :locationId, :variantId, 'BINARY', :now, :now)
+                """)
+                .param("id", stockItemId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("variantId", variantId)
+                .param("now", java.time.OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC))
+                .update();
+        jdbc.sql("""
+                INSERT INTO inventory.positions
+                    (stock_item_id, tenant_id, brand_id, location_id, binary_available, updated_at)
+                VALUES (:id, :tenantId, :brandId, :locationId, true, :now)
+                """)
+                .param("id", stockItemId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("now", java.time.OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC))
                 .update();
 
         // No POS binding, no media reference, no custom domain: each of those

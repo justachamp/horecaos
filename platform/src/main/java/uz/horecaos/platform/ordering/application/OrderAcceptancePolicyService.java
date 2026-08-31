@@ -3,9 +3,11 @@ package uz.horecaos.platform.ordering.application;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.ordering.domain.OrderAcceptancePolicy;
+import uz.horecaos.platform.tenancy.api.PolicyAuthor;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
 import uz.horecaos.platform.tenancy.api.PolicyResolver;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
@@ -34,9 +36,11 @@ public class OrderAcceptancePolicyService {
             "How an order is accepted: automatically, or by restaurant approval.");
 
     private final PolicyResolver policies;
+    private final PolicyAuthor author;
 
-    public OrderAcceptancePolicyService(PolicyResolver policies) {
+    public OrderAcceptancePolicyService(PolicyResolver policies, PolicyAuthor author) {
         this.policies = policies;
+        this.author = author;
     }
 
     /**
@@ -44,11 +48,31 @@ public class OrderAcceptancePolicyService {
      * an order must persist so the decision stays explainable.
      */
     public Effective resolve(UUID tenantId, UUID brandId, UUID locationId) {
-        ResourceScope scope = ResourceScope.location(tenantId, brandId, locationId);
+        return resolveAt(ResourceScope.location(tenantId, brandId, locationId));
+    }
 
+    /**
+     * The same resolution, at whatever scope a caller already has — the read
+     * side of Gap D's authoring surface, where a tenant may want to see what
+     * is in force at the tenant or brand level without naming one location.
+     */
+    public Effective resolveAt(ResourceScope scope) {
         return policies.resolve(ACCEPTANCE, scope)
                 .map(resolved -> new Effective(resolved.document(), resolved.policyId(), resolved.policyVersion()))
                 .orElseGet(() -> new Effective(OrderAcceptancePolicy.platformDefault(), null, 0));
+    }
+
+    /**
+     * Publishes the next version of the acceptance policy at a scope the
+     * resolution model already supports (Gap D of the 2026-08-30 proving
+     * run). Never mutates a version already in force — {@link
+     * uz.horecaos.platform.tenancy.api.PolicyResolver#pinned} keeps answering
+     * for every order that already resolved an earlier one, exactly as ADR
+     * 0030 requires.
+     */
+    public Effective author(ResourceScope scope, OrderAcceptancePolicy document, ActorRef authoredBy, String reason) {
+        ResolvedPolicy<OrderAcceptancePolicy> resolved = author.author(ACCEPTANCE, scope, document, authoredBy, reason);
+        return new Effective(resolved.document(), resolved.policyId(), resolved.policyVersion());
     }
 
     /**

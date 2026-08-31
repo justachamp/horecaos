@@ -21,6 +21,9 @@ import uz.horecaos.platform.fulfillment.application.DeliveryFeeResolver;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryFeeResolutionStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryTariffStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZoneStore;
+import uz.horecaos.platform.inventory.api.TrackingMode;
+import uz.horecaos.platform.inventory.application.InventoryService;
+import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
 import uz.horecaos.platform.pricing.application.PricingEngine;
 import uz.horecaos.platform.pricing.application.QuoteService;
 import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingContext;
@@ -138,8 +141,16 @@ class OrderingOnboardingStepHandlersTests {
         assertThat(result.errorCode()).isEqualTo("QUOTE_REFUSED");
     }
 
+    /**
+     * Gap F, closed: pricing cleanly is not the same as being sellable.
+     * Everything a checkout needs to quote is present and nothing has ever
+     * listed the item as stock — the exact shape the proving run found live,
+     * where {@code ACTIVATION_SMOKE_TEST} passed and the tenant's very first
+     * real order refused {@code 409 ITEMS_UNAVAILABLE}/{@code
+     * NOT_STOCKED_AT_LOCATION}.
+     */
     @Test
-    void passesWhenServiceabilityAndAQuoteBothResolve() {
+    void failsWhenTheQuotableItemHasNoStockRecord() {
         UUID channelId = insertChannel();
         bindChannelToLocation(channelId);
         enableFulfillmentMode(channelId, "PICKUP");
@@ -147,10 +158,59 @@ class OrderingOnboardingStepHandlersTests {
         insertPublication();
         insertLocationOffering(variantId);
         seedPricing(variantId);
+        // Deliberately no inventory.stock_items row: the item is priceable and
+        // published, but nobody has ever told inventory it exists here.
+
+        StepResult result = handler().execute(context());
+
+        assertThat(result.outcome()).isEqualTo(StepResult.Outcome.FAILED);
+        assertThat(result.errorCode()).isEqualTo("ITEM_NOT_AVAILABLE_TO_SELL");
+        assertThat(result.detail())
+                .as("an operator reading this must be told which item, not just that onboarding failed")
+                .contains("SKU-BURGER")
+                .contains("NOT_STOCKED_AT_LOCATION");
+    }
+
+    /** The other direction: sold out is refused the same way an absent stock row is. */
+    @Test
+    void failsWhenTheQuotableItemIsMarkedSoldOut() {
+        UUID channelId = insertChannel();
+        bindChannelToLocation(channelId);
+        enableFulfillmentMode(channelId, "PICKUP");
+        UUID variantId = insertProductAndVariant("BURGER");
+        insertPublication();
+        insertLocationOffering(variantId);
+        seedPricing(variantId);
+        UUID stockItemId =
+                inventory().listVariantAtLocation(tenantId, brandId, locationId, variantId, TrackingMode.BINARY);
+        inventory().setAvailability(tenantId, locationId, variantId, false, "onboarding-test-sold-out", null);
+        assertThat(stockItemId).isNotNull();
+
+        StepResult result = handler().execute(context());
+
+        assertThat(result.outcome()).isEqualTo(StepResult.Outcome.FAILED);
+        assertThat(result.errorCode()).isEqualTo("ITEM_NOT_AVAILABLE_TO_SELL");
+        assertThat(result.detail()).contains("SOLD_OUT");
+    }
+
+    @Test
+    void passesWhenServiceabilityAQuoteAndInventoryAllResolve() {
+        UUID channelId = insertChannel();
+        bindChannelToLocation(channelId);
+        enableFulfillmentMode(channelId, "PICKUP");
+        UUID variantId = insertProductAndVariant("BURGER");
+        insertPublication();
+        insertLocationOffering(variantId);
+        seedPricing(variantId);
+        inventory().listVariantAtLocation(tenantId, brandId, locationId, variantId, TrackingMode.BINARY);
 
         StepResult result = handler().execute(context());
 
         assertThat(result.outcome()).isEqualTo(StepResult.Outcome.COMPLETED);
+    }
+
+    private InventoryService inventory() {
+        return new InventoryService(new JdbcInventoryStore(jdbc), CLOCK);
     }
 
     private OrderingOnboardingStepHandlers.ActivationSmokeTest handler() {
@@ -169,7 +229,8 @@ class OrderingOnboardingStepHandlersTests {
                 channels,
                 deliveryFees,
                 CLOCK);
-        return new OrderingOnboardingStepHandlers.ActivationSmokeTest(jdbc, channels, serviceability, pricing, CLOCK);
+        return new OrderingOnboardingStepHandlers.ActivationSmokeTest(
+                jdbc, channels, serviceability, pricing, inventory(), CLOCK);
     }
 
     private OnboardingStepHandler.StepContext context() {

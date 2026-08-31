@@ -69,6 +69,7 @@ public class InventoryService implements InventoryReservationPort {
      * simply because nobody had listed it, which is how a kitchen receives an
      * order for a dish it does not make.
      */
+    @Override
     @Transactional(readOnly = true)
     public AvailabilityDecision checkAvailability(UUID tenantId, UUID locationId, Set<UUID> variantIds) {
 

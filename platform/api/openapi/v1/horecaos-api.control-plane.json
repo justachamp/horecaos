@@ -1,6 +1,41 @@
 {
   "components" : {
     "schemas" : {
+      "AcceptancePolicyResponse" : {
+        "properties" : {
+          "approvalChannel" : {
+            "type" : "string"
+          },
+          "approvalTimeoutSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "isPlatformDefault" : {
+            "type" : "boolean"
+          },
+          "mode" : {
+            "type" : "string"
+          },
+          "notifyCustomerWhilePending" : {
+            "type" : "boolean"
+          },
+          "policyId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "policyVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rejectionReasonRequired" : {
+            "type" : "boolean"
+          },
+          "timeoutAction" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ActivateRequest" : {
         "properties" : {
           "actorId" : {
@@ -259,6 +294,47 @@
           }
         },
         "required" : [ "actionCode", "reason", "requiredApproverCapability", "scopeType", "thresholdDescription" ],
+        "type" : "object"
+      },
+      "AuthorRequest" : {
+        "properties" : {
+          "approvalChannel" : {
+            "enum" : [ "NONE", "HORECAOS_OPERATIONS", "POS", "EITHER" ],
+            "type" : "string"
+          },
+          "approvalTimeoutSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "mode" : {
+            "enum" : [ "AUTO_CONFIRM", "RESTAURANT_APPROVAL" ],
+            "type" : "string"
+          },
+          "notifyCustomerWhilePending" : {
+            "type" : "boolean"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "rejectionReasonRequired" : {
+            "type" : "boolean"
+          },
+          "timeoutAction" : {
+            "enum" : [ "AUTO_REJECT", "AUTO_CONFIRM" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "approvalChannel", "mode", "reason", "timeoutAction" ],
         "type" : "object"
       },
       "BandRequest" : {
@@ -2026,6 +2102,68 @@
         },
         "type" : "object"
       },
+      "PlatformGrantRequest" : {
+        "properties" : {
+          "principalSubject" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "roleCode" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "validUntil" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "required" : [ "principalSubject", "reason", "roleCode" ],
+        "type" : "object"
+      },
+      "PlatformGrantResponse" : {
+        "properties" : {
+          "approvalRequestId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "grantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "outcome" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PlatformGrantView" : {
+        "properties" : {
+          "grantedBy" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "principalSubject" : {
+            "type" : "string"
+          },
+          "roleCode" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PolicyCoverageResponse" : {
         "properties" : {
           "actionCode" : {
@@ -2678,6 +2816,45 @@
         },
         "type" : "object"
       },
+      "TemplateView" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "createdBy" : {
+            "type" : "string"
+          },
+          "defaultConfiguration" : {
+            "additionalProperties" : { },
+            "type" : "object"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "requiredSteps" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "TenantView" : {
         "properties" : {
           "customerIdentityMode" : {
@@ -2880,6 +3057,95 @@
   },
   "openapi" : "3.1.0",
   "paths" : {
+    "/api/v1/control-plane/grants" : {
+      "get" : {
+        "operationId" : "list_6",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PlatformGrantView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List active PLATFORM-scope grants",
+        "tags" : [ "Platform authorization" ]
+      },
+      "post" : {
+        "description" : "A granter may confer only capabilities it already holds. platform-admin is never grantable here. Subject to ADR 0027 approval when a tenant has configured a policy for iam.platform-grant.manage; absent one, a single signature suffices (ADR 0050).",
+        "operationId" : "grant_1",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlatformGrantRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformGrantResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Grant a PLATFORM-scope role",
+        "tags" : [ "Platform authorization" ]
+      }
+    },
+    "/api/v1/control-plane/grants/{grantId}" : {
+      "delete" : {
+        "description" : "Subject to the same ADR 0027 approval gate as granting one.",
+        "operationId" : "revoke_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "grantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformGrantResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Revoke a PLATFORM-scope grant",
+        "tags" : [ "Platform authorization" ]
+      }
+    },
     "/api/v1/control-plane/integration/failures/inbox/{consumerName}" : {
       "get" : {
         "operationId" : "inboxFailures",
@@ -3228,6 +3494,76 @@
         "tags" : [ "Integration failures" ]
       }
     },
+    "/api/v1/control-plane/onboarding-templates" : {
+      "get" : {
+        "operationId" : "list_7",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/TemplateView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every onboarding template version",
+        "tags" : [ "Onboarding templates" ]
+      }
+    },
+    "/api/v1/control-plane/onboarding-templates/default" : {
+      "get" : {
+        "description" : "The newest ACTIVE version of the platform's 'default' template.",
+        "operationId" : "currentDefault",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TemplateView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The template a run uses when none is specified",
+        "tags" : [ "Onboarding templates" ]
+      }
+    },
+    "/api/v1/control-plane/onboarding-templates/{templateId}" : {
+      "get" : {
+        "operationId" : "get_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "templateId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TemplateView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One onboarding template version",
+        "tags" : [ "Onboarding templates" ]
+      }
+    },
     "/api/v1/control-plane/plans" : {
       "get" : {
         "description" : "Only activated versions. A draft is an unfinished commercial decision and showing one invites somebody to quote it.",
@@ -3363,7 +3699,7 @@
       },
       "post" : {
         "description" : "Never an edit. The previous open version is closed at the instant this one starts, so what an earlier approver was shown stays readable and the version snapshotted onto their request still means what it said.",
-        "operationId" : "author",
+        "operationId" : "author_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -6537,6 +6873,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs" : {
       "post" : {
+        "description" : "Omit templateId to use the platform's current default template (Gap B).",
         "operationId" : "start_1",
         "parameters" : [ {
           "in" : "path",
@@ -6732,6 +7069,88 @@
         },
         "summary" : "Reopen failed steps",
         "tags" : [ "Tenant onboarding" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/order-acceptance-policy" : {
+      "get" : {
+        "description" : "Omit brandId/locationId for the tenant-wide resolution; supply either to see what a specific brand or location actually resolves, including any override.",
+        "operationId" : "effective",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AcceptancePolicyResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The policy currently in force",
+        "tags" : [ "Order acceptance policy" ]
+      },
+      "post" : {
+        "description" : "Never edits a version in force. Orders already accepted keep the version they resolved (ADR 0030); this only changes what a new order resolves from now on.",
+        "operationId" : "author",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AuthorRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AcceptancePolicyResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Publish the next version",
+        "tags" : [ "Order acceptance policy" ]
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons" : {
@@ -7621,6 +8040,9 @@
     "description" : "The maker-checker queue: actions waiting for a second signature",
     "name" : "Approval requests"
   }, {
+    "description" : "How a paid order is accepted: automatically, or by staff (ADR 0002)",
+    "name" : "Order acceptance policy"
+  }, {
     "description" : "Named, reusable opening timetables",
     "name" : "Service schedules"
   }, {
@@ -7645,6 +8067,9 @@
     "description" : "Versioned distance bands and peak-hour rules",
     "name" : "Delivery tariffs"
   }, {
+    "description" : "PLATFORM-scope capability grants (ADR 0025, ADR 0027)",
+    "name" : "Platform authorization"
+  }, {
     "description" : "Reviewed catalog imports from a point of sale",
     "name" : "POS catalog synchronization"
   }, {
@@ -7656,6 +8081,9 @@
   }, {
     "description" : "Capability grants and session context",
     "name" : "Authorization"
+  }, {
+    "description" : "Read-only: which templates exist and what they configure (ADR 0008)",
+    "name" : "Onboarding templates"
   }, {
     "description" : "Tenant, brand, and single-brand location onboarding",
     "name" : "SaaS control plane"

@@ -173,7 +173,10 @@ class KitchenExecutionTests {
                 orderStore,
                 new RecordingCapacity(),
                 new OrderInventoryProcess(new JdbcOrderProcessStore(jdbc), REFUSES_INVENTORY, objectMapper, clock),
-                new OrderAcceptancePolicyService(new JdbcPolicyResolver(jdbc, objectMapper)),
+                new OrderAcceptancePolicyService(
+                        new JdbcPolicyResolver(jdbc, objectMapper),
+                        new uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor(
+                                jdbc, objectMapper, audit, clock)),
                 settlements,
                 audit,
                 event -> {},
@@ -692,7 +695,9 @@ class KitchenExecutionTests {
                         JsonMapper.builder().build(),
                         Clock.fixed(NOON, ZoneOffset.UTC)),
                 new OrderAcceptancePolicyService(
-                        new JdbcPolicyResolver(jdbc, JsonMapper.builder().build())),
+                        new JdbcPolicyResolver(jdbc, JsonMapper.builder().build()),
+                        new uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor(
+                                jdbc, JsonMapper.builder().build(), audit, Clock.fixed(NOON, ZoneOffset.UTC))),
                 settlements,
                 audit,
                 event -> {},
@@ -743,7 +748,9 @@ class KitchenExecutionTests {
                         JsonMapper.builder().build(),
                         Clock.fixed(NOON, ZoneOffset.UTC)),
                 new OrderAcceptancePolicyService(
-                        new JdbcPolicyResolver(jdbc, JsonMapper.builder().build())),
+                        new JdbcPolicyResolver(jdbc, JsonMapper.builder().build()),
+                        new uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor(
+                                jdbc, JsonMapper.builder().build(), audit, Clock.fixed(NOON, ZoneOffset.UTC))),
                 settlements,
                 audit,
                 event -> {},
@@ -800,7 +807,9 @@ class KitchenExecutionTests {
                         JsonMapper.builder().build(),
                         Clock.fixed(NOON, ZoneOffset.UTC)),
                 new OrderAcceptancePolicyService(
-                        new JdbcPolicyResolver(jdbc, JsonMapper.builder().build())),
+                        new JdbcPolicyResolver(jdbc, JsonMapper.builder().build()),
+                        new uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor(
+                                jdbc, JsonMapper.builder().build(), audit, Clock.fixed(NOON, ZoneOffset.UTC))),
                 settlements,
                 audit,
                 event -> {},
@@ -1152,6 +1161,12 @@ class KitchenExecutionTests {
         @Override
         public boolean release(UUID tenantId, UUID quoteId) {
             throw new AssertionError("A kitchen proposal must not release a reservation");
+        }
+
+        @Override
+        public uz.horecaos.platform.inventory.api.AvailabilityDecision checkAvailability(
+                UUID tenantId, UUID locationId, java.util.Set<UUID> variantIds) {
+            throw new AssertionError("A kitchen proposal must not read live availability");
         }
     };
 
