@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
@@ -18,9 +19,11 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
+import uz.horecaos.platform.catalog.application.CatalogItemDisplayLookup;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
+import uz.horecaos.platform.inventory.api.ItemAvailabilityChanged;
 import uz.horecaos.platform.inventory.api.TrackingMode;
 import uz.horecaos.platform.inventory.application.InventoryService;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
@@ -91,7 +94,9 @@ class CatalogAvailabilityReadModelTests {
         store = new JdbcCatalogStore(jdbc, JsonMapper.builder().build());
         authoring = new CatalogAuthoringService(store);
         inventory = new InventoryService(
-                new JdbcInventoryStore(jdbc), Clock.fixed(Instant.parse("2026-08-30T10:00:00Z"), ZoneOffset.UTC));
+                new JdbcInventoryStore(jdbc),
+                event -> {},
+                Clock.fixed(Instant.parse("2026-08-30T10:00:00Z"), ZoneOffset.UTC));
     }
 
     @Test
@@ -142,6 +147,77 @@ class CatalogAvailabilityReadModelTests {
                     assertThat(row.available()).as("stopped").isFalse();
                     assertThat(row.variantId()).isEqualTo(plov.defaultVariantId());
                 });
+    }
+
+    @Test
+    @DisplayName("toggling a variant off publishes the ADR 0058 stop-list event with the stock item's own brand")
+    void togglingOffPublishesAnAvailabilityChangedEvent() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var plov = authoring.createProduct(
+                TENANT, BRAND, catalogId, "PLOV", "Osh", null, LOCALE, "SKU-PLOV", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, plov.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+
+        List<Object> published = new ArrayList<>();
+        InventoryService capturing = new InventoryService(
+                new JdbcInventoryStore(jdbc),
+                published::add,
+                Clock.fixed(Instant.parse("2026-08-30T10:00:00Z"), ZoneOffset.UTC));
+        capturing.listVariantAtLocation(TENANT, BRAND, LOCATION, plov.defaultVariantId(), TrackingMode.BINARY);
+        published.clear(); // listVariantAtLocation itself publishes nothing; kept explicit rather than assumed.
+
+        capturing.setAvailability(TENANT, LOCATION, plov.defaultVariantId(), false, "SOLD_OUT", ACTOR);
+
+        List<ItemAvailabilityChanged> events = published.stream()
+                .filter(ItemAvailabilityChanged.class::isInstance)
+                .map(ItemAvailabilityChanged.class::cast)
+                .toList();
+        assertThat(events).hasSize(1);
+        ItemAvailabilityChanged event = events.get(0);
+        assertThat(event.tenantId()).isEqualTo(TENANT);
+        assertThat(event.brandId()).isEqualTo(BRAND);
+        assertThat(event.locationId()).isEqualTo(LOCATION);
+        assertThat(event.variantId()).isEqualTo(plov.defaultVariantId());
+        assertThat(event.available()).isFalse();
+        assertThat(event.reasonCode()).isEqualTo("SOLD_OUT");
+
+        // The trigger's own name resolution, exercised against the real
+        // catalog read model rather than assumed: the variant this event
+        // names resolves back to the product's own translation.
+        assertThat(new CatalogItemDisplayLookup(store).displayName(TENANT, plov.defaultVariantId()))
+                .contains("Osh");
+    }
+
+    @Test
+    @DisplayName("toggling a variant back on does not publish a second stop-list-shaped surprise")
+    void togglingBackOnStillPublishesTheSymmetricEvent() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var plov = authoring.createProduct(
+                TENANT, BRAND, catalogId, "PLOV", "Osh", null, LOCALE, "SKU-PLOV", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, plov.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+
+        List<Object> published = new ArrayList<>();
+        InventoryService capturing = new InventoryService(
+                new JdbcInventoryStore(jdbc),
+                published::add,
+                Clock.fixed(Instant.parse("2026-08-30T10:00:00Z"), ZoneOffset.UTC));
+        capturing.listVariantAtLocation(TENANT, BRAND, LOCATION, plov.defaultVariantId(), TrackingMode.BINARY);
+        capturing.setAvailability(TENANT, LOCATION, plov.defaultVariantId(), false, "SOLD_OUT", ACTOR);
+        published.clear();
+
+        capturing.setAvailability(TENANT, LOCATION, plov.defaultVariantId(), true, "RESTOCKED", ACTOR);
+
+        List<ItemAvailabilityChanged> events = published.stream()
+                .filter(ItemAvailabilityChanged.class::isInstance)
+                .map(ItemAvailabilityChanged.class::cast)
+                .toList();
+        assertThat(events).hasSize(1);
+        // The event itself fires for both directions (InventoryEvent's own
+        // Javadoc); it is InventoryOperationsAlertTrigger.onAvailabilityChanged
+        // that narrows this to the off-transition alone, asserted directly
+        // in InventoryOperationsAlertTriggerTests.
+        assertThat(events.get(0).available()).isTrue();
     }
 
     @Test

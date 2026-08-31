@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
+import uz.horecaos.platform.notifications.api.OperationsAlertPort;
 import uz.horecaos.platform.notifications.api.OperationsSubscriptionDirectory;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
 import uz.horecaos.platform.notifications.domain.NotificationClass;
@@ -35,22 +36,25 @@ import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotific
  * structure.
  */
 @Component
-public class OperationsAlertFanoutService {
+public class OperationsAlertFanoutService implements OperationsAlertPort {
 
     private static final Logger log = LoggerFactory.getLogger(OperationsAlertFanoutService.class);
 
     private final OperationsSubscriptionDirectory subscriptions;
     private final JdbcNotificationStore notifications;
+    private final TelegramOperationsEntitlementGate entitlements;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
     public OperationsAlertFanoutService(
             OperationsSubscriptionDirectory subscriptions,
             JdbcNotificationStore notifications,
+            TelegramOperationsEntitlementGate entitlements,
             ObjectMapper objectMapper,
             Clock clock) {
         this.subscriptions = subscriptions;
         this.notifications = notifications;
+        this.entitlements = entitlements;
         this.objectMapper = objectMapper;
         this.clock = clock;
     }
@@ -63,6 +67,7 @@ public class OperationsAlertFanoutService {
      * @param triggerEventId null for an alert with no originating Kafka event,
      *                       e.g. a scheduled sweep
      */
+    @Override
     public void fanOut(
             UUID tenantId,
             UUID brandId,
@@ -75,6 +80,17 @@ public class OperationsAlertFanoutService {
             String idempotencyKeyBase,
             Map<String, String> triggerVariables,
             Duration expiry) {
+
+        // Entitlement first and cheapest: a tenant whose plan excludes the
+        // Telegram family never reaches the subscription lookup at all. ADR
+        // 0058's own open input ("entitlement-gated from day one"), checked
+        // once here rather than in each of the module triggers that call
+        // this method, so every operations alert — order, payment, fiscal,
+        // inventory, integration — is gated the same way without each
+        // trigger needing to know entitlements exist.
+        if (!entitlements.enabledFor(tenantId)) {
+            return;
+        }
 
         List<UUID> bindingIds = subscriptions.subscribedBindings(tenantId, brandId, locationId, eventClass);
         if (bindingIds.isEmpty()) {

@@ -82,6 +82,7 @@ public class JdbcFiscalLifecycleStore {
         return jdbc.sql("""
                 SELECT d.id, d.tenant_id, d.order_id, d.provider_type, d.submitted_at,
                        d.reporting_deadline_at, d.version,
+                       i.brand_id AS brand_id, i.location_id AS location_id,
                        COALESCE(l.timezone, :fallbackZone) AS business_zone
                 FROM fiscal.fiscal_documents d
                 LEFT JOIN payments.payment_intents i
@@ -110,7 +111,12 @@ public class JdbcFiscalLifecycleStore {
                         // seam creates.
                         instant(row, "reporting_deadline_at"),
                         row.getString("business_zone"),
-                        row.getObject("version", Integer.class)))
+                        row.getObject("version", Integer.class),
+                        // Also nullable: the LEFT JOIN's own reason, restated on
+                        // ReportingCandidate's own Javadoc — a document with no
+                        // intent must still be swept.
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("location_id", UUID.class)))
                 .list();
     }
 
@@ -650,6 +656,16 @@ public class JdbcFiscalLifecycleStore {
             Instant openedAt) {}
 
     /** A document the sweep has claimed, with everything its deadline needs. */
+    /**
+     * @param brandId, @param locationId the branch this document's payment intent
+     *        named, resolved through the same {@code LEFT JOIN} {@code
+     *        business_zone} already uses — null under the same condition
+     *        {@code business_zone} falls back for: a document with no intent
+     *        (or an intent naming no location) must still be swept and
+     *        blocked, it just cannot be routed to an ADR 0058 operations
+     *        chat once blocked, because {@code OperationsAlertFanoutService}
+     *        has no scope to fan out on
+     */
     public record ReportingCandidate(
             UUID id,
             UUID tenantId,
@@ -658,7 +674,9 @@ public class JdbcFiscalLifecycleStore {
             Instant submittedAt,
             @Nullable Instant reportingDeadlineAt,
             String businessZone,
-            int version) {}
+            int version,
+            @Nullable UUID brandId,
+            @Nullable UUID locationId) {}
 
     /**
      * One fiscal document, as this module reads it.

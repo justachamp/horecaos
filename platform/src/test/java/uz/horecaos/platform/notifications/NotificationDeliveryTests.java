@@ -57,6 +57,7 @@ import uz.horecaos.platform.notifications.application.NotificationTemplateServic
 import uz.horecaos.platform.notifications.application.NotificationWorker;
 import uz.horecaos.platform.notifications.application.OperationsAlertFanoutService;
 import uz.horecaos.platform.notifications.application.OrderNotificationTrigger;
+import uz.horecaos.platform.notifications.application.TelegramOperationsEntitlementGate;
 import uz.horecaos.platform.notifications.domain.MessageLocale;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
 import uz.horecaos.platform.notifications.domain.NotificationClass;
@@ -193,7 +194,11 @@ class NotificationDeliveryTests {
         // directory that always answers empty makes that a true no-op rather
         // than a null dependency.
         OperationsAlertFanoutService operationsAlerts = new OperationsAlertFanoutService(
-                (tenantId, brandId, locationId, eventClass) -> java.util.List.of(), notifications, objectMapper, clock);
+                (tenantId, brandId, locationId, eventClass) -> java.util.List.of(),
+                notifications,
+                new TelegramOperationsEntitlementGate(new AlwaysEntitledService()),
+                objectMapper,
+                clock);
         trigger = new OrderNotificationTrigger(
                 notifications, operationsAlerts, objectMapper, clock, "SMS", Duration.ofHours(6));
 

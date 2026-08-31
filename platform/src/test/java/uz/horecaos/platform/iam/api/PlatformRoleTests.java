@@ -29,7 +29,11 @@ class PlatformRoleTests {
      * catalogue is HorecaOS's price list rather than a tenant's, a metric signature
      * moves a definition to settled on every tenant's screen at once, the
      * migration control plane records which estate is being retired, and the
-     * inbox failure worklist spans tenants.
+     * inbox failure worklist spans tenants. {@code control-plane-alert.raise}
+     * joins them for the same reason (ADR 0058): a control-band metric is
+     * arithmetic over the whole fleet, never one tenant's concern, so there
+     * is no tenant-scoped grant of it to withhold — see that capability's
+     * own Javadoc.
      */
     private static final Set<Capability> PLATFORM_STAFF_ONLY = EnumSet.of(
             Capability.PLATFORM_ADMIN,
@@ -42,7 +46,8 @@ class PlatformRoleTests {
             Capability.MIGRATION_SCOPE_MANAGE,
             Capability.MIGRATION_RUN_EXECUTE,
             Capability.MIGRATION_CUTOVER_APPROVE,
-            Capability.MIGRATION_QUARANTINE_RESOLVE);
+            Capability.MIGRATION_QUARANTINE_RESOLVE,
+            Capability.CONTROL_PLANE_ALERT_RAISE);
 
     /**
      * ADR 0049 operations authorised by a typed non-staff relationship rather

@@ -25,6 +25,7 @@ import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.fiscal.api.FiscalDocumentBlocked;
 import uz.horecaos.platform.fiscal.api.PartnerFiscalizationPort;
 import uz.horecaos.platform.fiscal.application.FiscalDocumentService;
 import uz.horecaos.platform.fiscal.application.FiscalReportingPolicyService;
@@ -125,6 +126,7 @@ class FiscalDocumentLifecycleTests {
                         new JdbcPolicyResolver(jdbc, JsonMapper.builder().build())),
                 partner,
                 audit,
+                event -> {},
                 Clock.fixed(now, ZoneOffset.UTC),
                 "Asia/Tashkent",
                 java.time.Duration.ofMinutes(1));
@@ -151,6 +153,40 @@ class FiscalDocumentLifecycleTests {
         assertThat(row.reportingDeadlineAt())
                 .as("the deadline actually applied is recorded, or a false positive is unarguable")
                 .isEqualTo(NOON.plusSeconds(3600));
+    }
+
+    @Test
+    @DisplayName("a block publishes the ADR 0058 operations alert with the order's own brand and location")
+    void aBlockPublishesTheOperationsAlertEvent() {
+        UUID order = seedOrder("S-alert", "PAYME");
+        UUID document = submittedDocument(order, "PAYME", NOON);
+        List<Object> published = new ArrayList<>();
+
+        int blocked = new FiscalDocumentService(
+                        store,
+                        new FiscalReportingPolicyService(new JdbcPolicyResolver(
+                                jdbc, JsonMapper.builder().build())),
+                        partner,
+                        audit,
+                        published::add,
+                        Clock.fixed(NOON.plusSeconds(3601), ZoneOffset.UTC),
+                        "Asia/Tashkent",
+                        java.time.Duration.ofMinutes(1))
+                .sweepOverdueReports(50);
+
+        assertThat(blocked).isEqualTo(1);
+        List<FiscalDocumentBlocked> events = published.stream()
+                .filter(FiscalDocumentBlocked.class::isInstance)
+                .map(FiscalDocumentBlocked.class::cast)
+                .toList();
+        assertThat(events).hasSize(1);
+        FiscalDocumentBlocked event = events.get(0);
+        assertThat(event.tenantId()).isEqualTo(TENANT);
+        assertThat(event.brandId()).isEqualTo(BRAND);
+        assertThat(event.locationId()).isEqualTo(LOCATION);
+        assertThat(event.documentId()).isEqualTo(document);
+        assertThat(event.orderId()).isEqualTo(order);
+        assertThat(event.reasonCode()).isEqualTo(FiscalReasonCode.PROVIDER_REPORT_OVERDUE);
     }
 
     @Test

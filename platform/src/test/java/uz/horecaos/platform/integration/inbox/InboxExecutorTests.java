@@ -6,6 +6,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -24,6 +25,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.integration.api.DeadLetterRecorded;
 import uz.horecaos.platform.integration.api.ExternalEventEnvelope;
 import uz.horecaos.platform.integration.api.InboxHandler;
 import uz.horecaos.platform.support.TestDatabase;
@@ -47,6 +49,7 @@ class InboxExecutorTests {
     private JdbcClient jdbc;
     private InboxExecutor executor;
     private RecordingHandler handler;
+    private List<Object> publishedEvents;
 
     @BeforeAll
     static void startDatabase() {
@@ -73,6 +76,7 @@ class InboxExecutorTests {
 
         Clock clock = Clock.fixed(TEST_NOW, ZoneOffset.UTC);
         handler = new RecordingHandler(jdbc);
+        publishedEvents = new ArrayList<>();
         executor = new InboxExecutor(
                 new JdbcInboxStore(jdbc, clock),
                 new InboxHandlerRegistry(List.of(handler)),
@@ -80,7 +84,15 @@ class InboxExecutorTests {
                 JsonMapper.builder().build(),
                 new TransactionTemplate(new DataSourceTransactionManager(dataSource)),
                 new SimpleMeterRegistry(),
+                publishedEvents::add,
                 10);
+    }
+
+    private List<DeadLetterRecorded> deadLetterEvents() {
+        return publishedEvents.stream()
+                .filter(DeadLetterRecorded.class::isInstance)
+                .map(DeadLetterRecorded.class::cast)
+                .toList();
     }
 
     @Test
@@ -167,6 +179,12 @@ class InboxExecutorTests {
 
         assertThat(offer(eventId, "altered", 1)).isEqualTo(InboxResult.CONTRACT_COLLISION);
         assertThat(status(eventId)).isEqualTo("DEAD_LETTER");
+
+        assertThat(deadLetterEvents()).singleElement().satisfies(event -> {
+            assertThat(event.source()).isEqualTo(DeadLetterRecorded.SOURCE_INBOX);
+            assertThat(event.reasonCode()).isEqualTo("PAYLOAD_INVALID");
+            assertThat(event.tenantId()).isEqualTo(TENANT);
+        });
     }
 
     @Test
@@ -176,6 +194,11 @@ class InboxExecutorTests {
         assertThat(offer(eventId, "first", 0, "TenantCreated", 99)).isEqualTo(InboxResult.UNSUPPORTED);
         assertThat(status(eventId)).isEqualTo("DEAD_LETTER");
         assertThat(handler.handled()).isEmpty();
+
+        assertThat(deadLetterEvents()).singleElement().satisfies(event -> {
+            assertThat(event.aggregateId()).isEqualTo(AGGREGATE);
+            assertThat(event.reasonCode()).isEqualTo("CONTRACT_UNSUPPORTED");
+        });
     }
 
     @Test
@@ -240,6 +263,7 @@ class InboxExecutorTests {
                 JsonMapper.builder().build(),
                 new TransactionTemplate(new DataSourceTransactionManager(db.dataSource())),
                 new SimpleMeterRegistry(),
+                event -> {},
                 10);
 
         UUID eventId = UUID.randomUUID();

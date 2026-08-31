@@ -97,7 +97,7 @@ class QuoteAndReservationTests {
         clock = new MutableClock(NOW);
         pricingStore = new JdbcPricingStore(jdbc, JsonMapper.builder().build());
         inventoryStore = new JdbcInventoryStore(jdbc);
-        inventory = new InventoryService(inventoryStore, clock);
+        inventory = new InventoryService(inventoryStore, event -> {}, clock);
         channelStore = new JdbcSalesChannelStore(jdbc);
         // ADR 0037. The real resolver, so a collected cart travels the production
         // path rather than a stand-in that could not refuse anything. It is never

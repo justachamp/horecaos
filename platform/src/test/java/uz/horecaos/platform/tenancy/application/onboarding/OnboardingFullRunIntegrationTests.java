@@ -309,7 +309,7 @@ class OnboardingFullRunIntegrationTests {
                         .map(a -> a.status().isDisplayable())
                         .orElse(false));
 
-        var inventory = new InventoryService(new JdbcInventoryStore(jdbc), CLOCK);
+        var inventory = new InventoryService(new JdbcInventoryStore(jdbc), event -> {}, CLOCK);
 
         return List.of(
                 new OnboardingStepHandlers.KeycloakOrganizationReconcile(provisioner, tenants),

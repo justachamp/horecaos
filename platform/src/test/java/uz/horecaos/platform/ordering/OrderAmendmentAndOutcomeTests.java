@@ -192,7 +192,7 @@ class OrderAmendmentAndOutcomeTests {
         var channelStore = new JdbcSalesChannelStore(jdbc);
         var serviceabilityStore = new JdbcServiceabilityStore(jdbc);
 
-        inventory = new InventoryService(inventoryStore, clock);
+        inventory = new InventoryService(inventoryStore, event -> {}, clock);
         var deliveryFees = new uz.horecaos.platform.fulfillment.application.DeliveryFeeResolver(
                 new uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZoneStore(jdbc),
                 new uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryTariffStore(jdbc),

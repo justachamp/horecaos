@@ -28,6 +28,8 @@ import shutil
 import statistics
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -37,6 +39,15 @@ STATE = ROOT / "ops/state"
 INTENT = ROOT / "intent"
 
 GREEN, RED, YELLOW, DIM, OFF = "\033[32m", "\033[31m", "\033[33m", "\033[2m", "\033[0m"
+
+# ADR 0058: control-band tier escalations reach the control-plane audience
+# through this endpoint rather than the in-process Java notification
+# pipeline, because this script is not the JVM and cannot subscribe to a
+# Spring event. See notify_control_plane's own docstring for the honest
+# v1 shape (a log line and a counter, not yet a live Telegram send) and
+# ControlPlaneAlertController's Javadoc for the endpoint side.
+CONTROL_PLANE_URL = os.environ.get("HORECAOS_CONTROL_PLANE_URL", "https://api.horecaos.uz")
+CONTROL_PLANE_TOKEN = os.environ.get("HORECAOS_CONTROL_PLANE_TOKEN")
 
 
 def load_config() -> dict:
@@ -221,6 +232,53 @@ the deploy gate will block it, and that is correct. Do not try to route around i
         print(f"{GREEN}       diagnosis written{OFF}")
 
 
+def notify_control_plane(metric: dict, value: float, verdict: dict, action: str) -> None:
+    """POSTs this breach to the ADR 0058 control-plane alert endpoint.
+
+    Best-effort and silent-to-the-caller on failure: this watcher's job is
+    detection and diagnosis (respond(), above), and a notification-delivery
+    outage must never stop the next sample or block Claude's diagnosis.
+    HORECAOS_CONTROL_PLANE_TOKEN is a Keycloak service-account bearer token
+    for a principal holding CONTROL_PLANE_ALERT_RAISE (ADR 0025);
+    provisioning that account is an operations runbook step, not something
+    this script can do for itself — see ControlPlaneAlertController's own
+    Javadoc. Unset, this simply does not send, the same graceful
+    degradation respond() already has for a missing claude CLI.
+    """
+    if not CONTROL_PLANE_TOKEN:
+        print(f"{DIM}       HORECAOS_CONTROL_PLANE_TOKEN not set; control-plane alert not sent{OFF}")
+        return
+
+    today = datetime.now(timezone.utc).date().isoformat()
+    payload = json.dumps({
+        "metricId": metric["id"],
+        "description": metric.get("description", "").strip(),
+        "value": f"{value:.4g}",
+        "unit": metric.get("unit", ""),
+        "tier": verdict["tier"],
+        "reason": f"{verdict['reason']} (action: {action})",
+    }).encode()
+    request = urllib.request.Request(
+        f"{CONTROL_PLANE_URL}/api/v1/control-plane/alerts/control-band-escalations",
+        data=payload,
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {CONTROL_PLANE_TOKEN}",
+            # Stable for one metric/tier/day, so a retried sample after a
+            # transient failure replays rather than double-alerting; a new
+            # day or a tier change is honestly a new escalation.
+            "Idempotency-Key": f"control-band:{metric['id']}:{verdict['tier']}:{today}",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            if response.status not in (200, 202):
+                print(f"{YELLOW}       control-plane alert returned HTTP {response.status}{OFF}")
+    except (urllib.error.URLError, TimeoutError, ValueError) as failure:
+        print(f"{YELLOW}       control-plane alert not sent: {failure}{OFF}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -282,6 +340,14 @@ def main() -> int:
         colour = RED if tier >= 2 else YELLOW
         print(f"{colour}tier {tier}{OFF} {metric['id']:<28} {value:<12.4g} "
               f"{verdict['reason']} → {action}")
+
+        # Every real breach reaches the control-plane audience, not only
+        # the tiers that also invoke Claude below: ADR 0058 asks for "tier
+        # escalations", and a tier-1 log-only breach is still an
+        # escalation a platform operator should be able to see without
+        # tailing this script's own output.
+        if not args.dry_run:
+            notify_control_plane(metric, value, verdict, action)
 
         if action in ("diagnose", "act"):
             respond(metric, value, verdict, action, args.dry_run)

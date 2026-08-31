@@ -10,8 +10,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import uz.horecaos.platform.integration.api.DeadLetterRecorded;
 import uz.horecaos.platform.integration.retry.RetryBackoff;
 
 @Component
@@ -23,6 +25,7 @@ public class OutboxRelay {
 
     private final RelayStore outbox;
     private final OutboxPublisher publisher;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
     private final int batchSize;
     private final Duration leaseDuration;
@@ -42,6 +45,7 @@ public class OutboxRelay {
     public OutboxRelay(
             RelayStore outbox,
             OutboxPublisher publisher,
+            ApplicationEventPublisher events,
             Clock clock,
             MeterRegistry meterRegistry,
             @Value("${horecaos.messaging.outbox.batch-size:20}") int batchSize,
@@ -68,6 +72,7 @@ public class OutboxRelay {
         }
         this.outbox = outbox;
         this.publisher = publisher;
+        this.events = events;
         this.clock = clock;
         this.batchSize = batchSize;
         this.leaseDuration = leaseDuration;
@@ -126,6 +131,28 @@ public class OutboxRelay {
                         event.eventId(),
                         event.eventType(),
                         event.attemptCount());
+                // Plain @EventListener on the consuming side, not
+                // @TransactionalEventListener: this relay is a background
+                // sweep over already-committed outbox rows, not a business
+                // transaction a fact should wait to commit alongside — there
+                // is no commit here for a TransactionalEventListener to
+                // defer to, and one would silently drop this event.
+                // eventId is the outbox row's own id, not a fresh one: a row
+                // dead-letters exactly once (a dead-lettered row leaves the
+                // claim query for good), so this is what
+                // IntegrationOperationsAlertTrigger dedupes its notification
+                // idempotency key on — the same reasoning
+                // OrderNotificationTrigger gives for keying on orderId
+                // rather than a replay's fresh event id, applied to the one
+                // field here that is actually stable.
+                events.publishEvent(new DeadLetterRecorded(
+                        event.eventId(),
+                        event.tenantId(),
+                        DeadLetterRecorded.SOURCE_OUTBOX,
+                        event.aggregateType(),
+                        event.aggregateId(),
+                        "RETRY_EXHAUSTED",
+                        failedAt));
             } else {
                 failedCounter.increment();
                 logger.warn(

@@ -649,6 +649,39 @@ public class JdbcCatalogStore {
      * #productIdsByCategory} uses elsewhere, so the join fans out to one row per
      * variant rather than one per (variant, category) pair.
      */
+    /**
+     * The product name a variant is sold under, for a message naming it
+     * outside catalog's own screens (ADR 0058's {@code ITEM_86D} alert).
+     *
+     * <p>One locale, preferring the platform's own fallback order
+     * ({@code MessageLocale.FALLBACK} is {@code ru}, then {@code uz-Latn},
+     * then {@code en}, then whatever translation exists at all) rather than
+     * a caller-supplied locale: ADR 0058 already accepts one configured
+     * group language rather than real tenant configuration for the alert
+     * text itself, and a product's own name is the same kind of proper noun
+     * {@code OrderNotificationTrigger} never translates either.
+     *
+     * @return empty when the variant does not resolve to a product at all,
+     *         or the product carries no translation in any locale
+     */
+    public Optional<String> productNameFor(UUID tenantId, UUID variantId) {
+        return jdbc.sql("""
+                SELECT t.name
+                FROM catalog.variants v
+                JOIN catalog.products p
+                    ON p.id = v.product_id AND p.tenant_id = v.tenant_id AND p.brand_id = v.brand_id
+                JOIN catalog.translations t
+                    ON t.entity_type = 'PRODUCT' AND t.entity_id = p.id AND t.tenant_id = p.tenant_id
+                WHERE v.tenant_id = :tenantId AND v.id = :variantId
+                ORDER BY CASE t.locale WHEN 'ru' THEN 0 WHEN 'uz-Latn' THEN 1 WHEN 'en' THEN 2 ELSE 3 END
+                LIMIT 1
+                """)
+                .param("tenantId", tenantId)
+                .param("variantId", variantId)
+                .query(String.class)
+                .optional();
+    }
+
     public List<VariantAvailabilityRow> variantsAtLocation(
             UUID tenantId, UUID brandId, UUID locationId, String locale, @Nullable UUID cursorVariantId, int limit) {
         return jdbc.sql("""

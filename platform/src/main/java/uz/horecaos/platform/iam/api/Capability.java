@@ -608,6 +608,16 @@ public enum Capability {
     NOTIFICATION_RETRY("notification.retry", "notification", "retry"),
 
     /**
+     * ADR 0058: raising a control-plane alert from outside the Java
+     * process — {@code ops/control_band_watch.py}'s tier escalations
+     * (ADR 0023, {@code ops/bands.yaml}) today, and any future non-Java
+     * platform signal tomorrow. Platform-scoped only: a control-band metric
+     * is arithmetic over the whole fleet, never one tenant's concern, so
+     * there is no tenant-scoped grant of this capability to withhold.
+     */
+    CONTROL_PLANE_ALERT_RAISE("control-plane-alert.raise", "control-plane-alert", "raise"),
+
+    /**
      * ADR 0044: defining an audience, and reading the segments already defined.
      *
      * <p>Read-only over a query, not over the customers themselves — the result is
