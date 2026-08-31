@@ -19,6 +19,14 @@ import java.util.UUID;
  *
  * @param recipientValue the phone number or address, resolved for this call only
  * @param subject null on channels that have no subject, which SMS does not
+ * @param subjectType what this message is about ({@code notifications.notifications.subject_type}),
+ *                     carried through so a channel that tracks live state per
+ *                     concern (ADR 0058's Telegram edit-vs-send lifecycle) can key
+ *                     on it without a second lookup back into this module
+ * @param subjectId the paired identifier, e.g. an order id
+ * @param templateKey the semantic message key, which distinguishes two different
+ *                     concerns about the same subject (a warning from a
+ *                     confirmation) from two updates of the same one
  */
 public record NotificationDispatch(
         UUID notificationId,
@@ -31,7 +39,10 @@ public record NotificationDispatch(
         String subject,
         String body,
         String providerIdempotencyKey,
-        String correlationId) {
+        String correlationId,
+        String subjectType,
+        UUID subjectId,
+        String templateKey) {
 
     public NotificationDispatch {
         Objects.requireNonNull(notificationId, "A notification id is required");

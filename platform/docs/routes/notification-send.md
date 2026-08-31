@@ -12,16 +12,16 @@ Required by ADR 0007. A production route may not ship without one of these; see
 | Input contract | `NotificationSendOperation` v1 (in-process command record) |
 | Output contract | `ProviderOutcome` v1 |
 | Source | `direct:notification.send`; status queries enter at `direct:notification.status` |
-| Destination | Messaging gateway over HTTPS, selected by the ADR 0026 binding that holds the `SEND_SMS` capability |
+| Destination | A messaging gateway over HTTPS, selected by the ADR 0026 binding that holds the channel's capability: `SEND_SMS`, or `SEND_TELEGRAM` (ADR 0058 — the Bot API, resolved by exact binding id rather than by "primary for scope", because several chats legitimately subscribe to the same event) |
 | Service identity | Per-installation gateway credential, ADR 0026 |
 | Secret reference type | `horecaos:{env}:provider_notification:{owner}:{id}` (ADR 0028) |
 | Connect timeout | 5s |
 | Total timeout | 15s per call, the gateway default |
 | Retry classification | **None on the send.** ADR 0020 already gives a notification a durable attempt counter and backoff; a second policy in-route would multiply against it. Bounded redelivery (3 attempts, 2s, doubling) exists on `notification.status.v1` only, because a status query has no side effect |
 | Idempotency key | `NotificationSendOperation.providerIdempotencyKey`, stable across attempts and also the value the status query asks about |
-| Circuit breaker | **None.** The send is already bounded by ADR 0020's per-notification attempt counter, and a shared breaker would silence every brand's messages because one gateway account was throttled. Revisit when a second gateway exists to fail over to |
+| Circuit breaker | **None at the route.** The send is already bounded by ADR 0020's per-notification attempt counter, and a shared breaker would silence every brand's messages because one gateway account was throttled. `TelegramChannelAdapter` (ADR 0058) is the one exception, and deliberately one level lower than this route: a single, platform-wide breaker over the Bot API itself, distinct from a per-binding failure (403, a deleted topic), which retires the binding instead and never opens it. Its alert rides `ProviderCircuitMetrics`' existing gauge — the same non-Telegram mechanism ADR 0023 already uses for the payment and POS breakers — because an alert that can only ride the failing transport is not an alert |
 | Dead-letter destination | `notification.send.dead-letter` → an `UNCERTAIN` outcome for the `notifications` module to reconcile, then ADR 0006 failure operations |
-| PII classification | The recipient's phone number and the rendered message body — personal data under ADR 0029. `NotificationDispatch` and `NotificationSendOperation` both override `toString` to omit them, because Camel prints exchange bodies into route logs and error messages by default |
+| PII classification | SMS: the recipient's phone number and the rendered body — personal data under ADR 0029. `NotificationDispatch` and `NotificationSendOperation` both override `toString` to omit them, because Camel prints exchange bodies into route logs and error messages by default. Telegram operations messages carry no customer PII by construction (ADR 0058): the trigger only ever populates order number, amount, currency, and a reason code, verified by `TelegramOperationsMessageClassificationTests` |
 | Expected volume | Pilot: under 5,000 messages/day/tenant |
 | SLO | p95 under 4s for a send; under 2s for a status query |
 | Runbook | `docs/routes/notification-send.md#runbook` |

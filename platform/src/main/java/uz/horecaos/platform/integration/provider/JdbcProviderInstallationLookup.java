@@ -74,6 +74,29 @@ public class JdbcProviderInstallationLookup implements ProviderInstallationLooku
     }
 
     @Override
+    public Optional<BindingRef> binding(UUID tenantId, UUID bindingId) {
+        return jdbc.sql("""
+                SELECT b.id, b.installation_id, b.tenant_id, b.brand_id, b.location_id,
+                       i.provider_category, i.provider_type
+                  FROM integration.bindings b
+                  JOIN integration.installations i
+                    ON i.id = b.installation_id AND i.tenant_id = b.tenant_id
+                 WHERE b.tenant_id = :tenantId AND b.id = :bindingId AND b.status = 'ACTIVE'
+                """)
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .query((rs, n) -> new BindingRef(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("installation_id", UUID.class),
+                        rs.getObject("tenant_id", UUID.class),
+                        ProviderCategory.valueOf(rs.getString("provider_category")),
+                        rs.getString("provider_type"),
+                        rs.getObject("brand_id", UUID.class),
+                        rs.getObject("location_id", UUID.class)))
+                .optional();
+    }
+
+    @Override
     public Optional<InstallationSnapshot> installation(UUID tenantId, UUID installationId) {
         return jdbc.sql("""
                 SELECT i.id, i.provider_category, i.provider_type, i.environment_code,

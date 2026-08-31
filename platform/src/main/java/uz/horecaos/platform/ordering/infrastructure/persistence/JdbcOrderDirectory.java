@@ -1,5 +1,8 @@
 package uz.horecaos.platform.ordering.infrastructure.persistence;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -38,5 +41,11 @@ public class JdbcOrderDirectory implements OrderDirectory {
                         order.currency(),
                         order.totalMinor(),
                         order.version()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ApprovalDeadlineWarning> ordersNearingApprovalDeadline(Instant now, Duration within, int limit) {
+        return orders.ordersNearingApprovalDeadline(now, now.plus(within), limit);
     }
 }

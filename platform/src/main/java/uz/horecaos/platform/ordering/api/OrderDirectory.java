@@ -1,5 +1,7 @@
 package uz.horecaos.platform.ordering.api;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -26,6 +28,40 @@ public interface OrderDirectory {
      *         same answer as "it does not exist" and deliberately so
      */
     Optional<OrderSummary> summary(UUID tenantId, UUID orderId);
+
+    /**
+     * Orders whose approval deadline falls inside {@code (now, now + within]} —
+     * the board's own severity threshold for "about to breach"
+     * (docs/operations-spec/orders.md §2.6: {@code AWAITING_APPROVAL with < 2 min
+     * to deadline}), read here rather than reimplemented, because Внимание's
+     * queue and ADR 0058's Telegram warning have to agree on when "about to"
+     * starts.
+     *
+     * <p>Cross-tenant by design, the same way {@code OrderProcessWorker}'s own
+     * timer sweep is: this is infrastructure scanning a partial index
+     * ({@code ix_orders_awaiting_approval}), not a tenant-scoped business read,
+     * and the caller (a scheduled sweeper) is expected to act tenant-row-by-row.
+     * A pure read, unlike the timer sweep — nothing here claims or mutates the
+     * order, so calling it twice before the same deadline is safe and expected:
+     * the caller's own idempotency key on the resulting notification, not this
+     * method, is what prevents a duplicate warning.
+     *
+     * <p>Defaulted to empty rather than made abstract, so the several hand-written
+     * {@code OrderDirectory} test doubles that predate ADR 0058 do not all need a
+     * mechanical implementation of a sweep they never exercise.
+     */
+    default List<ApprovalDeadlineWarning> ordersNearingApprovalDeadline(
+            Instant now, java.time.Duration within, int limit) {
+        return List.of();
+    }
+
+    record ApprovalDeadlineWarning(
+            UUID tenantId,
+            UUID orderId,
+            UUID brandId,
+            UUID locationId,
+            String publicOrderNumber,
+            Instant approvalDeadlineAt) {}
 
     /**
      * What a consumer may hold about an order.

@@ -17,6 +17,7 @@ import uz.horecaos.platform.notifications.api.DispatchOutcome;
 import uz.horecaos.platform.notifications.api.NotificationDispatch;
 import uz.horecaos.platform.notifications.api.NotificationTransport;
 import uz.horecaos.platform.notifications.domain.ContentHashes;
+import uz.horecaos.platform.notifications.domain.NotificationChannel;
 import uz.horecaos.platform.notifications.domain.NotificationStatus;
 import uz.horecaos.platform.notifications.domain.TemplateRenderer;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
@@ -111,6 +112,26 @@ public class NotificationDispatchService {
             return;
         }
 
+        if (NotificationChannel.valueOf(row.channel()).requiresPerEndpointOrdering()
+                && row.recipientEndpointId() != null
+                && notifications.hasOlderPendingForEndpoint(
+                        row.tenantId(), row.channel(), row.recipientEndpointId(), row.createdAt(), row.id())) {
+            // ADR 0058's ordering boundary: an older message to the same chat is
+            // still outstanding, so this one waits rather than risking a race that
+            // sends it first. A short requeue rather than escalateOrRetry's
+            // backoff — this is a scheduling deferral, not a provider failure, and
+            // must not read as one in an operator's eyes.
+            notifications.settle(
+                    row.tenantId(),
+                    row.id(),
+                    row.claimToken(),
+                    NotificationStatus.RETRY_PENDING.name(),
+                    now.plusSeconds(2),
+                    "Waiting for an older message to the same chat to send first",
+                    now);
+            return;
+        }
+
         Optional<AttemptRow> open = notifications.openAttempt(row.tenantId(), row.id());
         if (open.isPresent() && "UNCERTAIN".equals(open.get().status())) {
             reconcile(row, open.get(), now);
@@ -127,8 +148,7 @@ public class NotificationDispatchService {
         AttemptRow attempt = open.orElseGet(() -> openNewAttempt(row, now));
         Rendered rendered = render(row);
 
-        String recipientValue = contacts.resolveValue(row.tenantId(), endpointContactPoint(row), REVEAL_PURPOSE)
-                .orElse(null);
+        String recipientValue = resolveRecipientValue(row);
         if (recipientValue == null) {
             // The customer removed the number between eligibility and now. Not a
             // suppression — the message was eligible when it was decided — and not
@@ -159,7 +179,10 @@ public class NotificationDispatchService {
                 rendered.subject(),
                 rendered.body(),
                 attempt.providerIdempotencyKey(),
-                org.slf4j.MDC.get("correlationId")));
+                org.slf4j.MDC.get("correlationId"),
+                row.subjectType(),
+                row.subjectId(),
+                row.templateKey()));
 
         record(row, attempt, outcome, clock.instant());
     }
@@ -384,12 +407,32 @@ public class NotificationDispatchService {
                 TemplateRenderer.render(version.bodyTemplate(), variables));
     }
 
-    private UUID endpointContactPoint(NotificationRow row) {
-        return notifications
+    /**
+     * The value to send to, resolved by what shape the endpoint actually is.
+     *
+     * <p>A contact-point endpoint resolves through ADR 0015 for the length of
+     * this call, exactly as before. A binding-shaped endpoint (ADR 0058:
+     * operations groups today) needs no PII resolution at all — the binding id
+     * itself is already a non-sensitive ADR 0026 reference, so it travels as the
+     * recipient value verbatim and the Telegram adapter resolves the chat from it
+     * directly. An operations config string does the same. Both are configuration
+     * references, never personal data, which is why neither goes near
+     * {@link RecipientContactDirectory}.
+     */
+    private String resolveRecipientValue(NotificationRow row) {
+        JdbcNotificationStore.EndpointRow endpoint = notifications
                 .endpoint(row.tenantId(), row.recipientEndpointId())
-                .map(JdbcNotificationStore.EndpointRow::contactPointId)
                 .orElseThrow(() ->
                         new IllegalStateException("Notification %s has no resolvable endpoint".formatted(row.id())));
+
+        if (endpoint.providerBindingId() != null) {
+            return endpoint.providerBindingId().toString();
+        }
+        if (endpoint.operationsEndpointReference() != null) {
+            return endpoint.operationsEndpointReference();
+        }
+        return contacts.resolveValue(row.tenantId(), endpoint.contactPointId(), REVEAL_PURPOSE)
+                .orElse(null);
     }
 
     /**

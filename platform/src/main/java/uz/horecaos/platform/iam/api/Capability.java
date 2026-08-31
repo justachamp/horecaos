@@ -508,6 +508,17 @@ public enum Capability {
 
     INTEGRATION_INSTALLATION_MANAGE("integration.installation.manage", "integration", "installation.manage"),
     INTEGRATION_BINDING_ACTIVATE("integration.binding.activate", "integration", "binding.activate"),
+
+    /**
+     * ADR 0058: issuing a short-lived {@code /link <code>} for the Telegram
+     * group-linking handshake.
+     *
+     * <p>Separate from {@link #INTEGRATION_INSTALLATION_MANAGE} because issuing a
+     * code creates nothing by itself — the binding only exists once the bot
+     * verifies its own rights in the group and the code is redeemed. It is closer
+     * to "generate an invite" than to "configure a provider account".
+     */
+    INTEGRATION_TELEGRAM_LINK_ISSUE("integration.telegram-link.issue", "integration", "telegram-link.issue"),
     /**
      * ADR 0012: reading a POS catalog synchronization run, its staged snapshot,
      * its differences, and its conflicts.

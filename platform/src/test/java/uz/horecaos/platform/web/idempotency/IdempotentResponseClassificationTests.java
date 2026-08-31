@@ -98,7 +98,16 @@ class IdempotentResponseClassificationTests {
             "PosOrderExportController#discover",
             "PosOrderExportController#resolve",
             "PosSyncRunController#reconcileCapabilities",
-            "PosSyncRunController#start");
+            "PosSyncRunController#start",
+            // ADR 0058: the short-lived /link handshake code itself. Not
+            // customer data — this is what ADR 0029 classifies, and there is no
+            // data subject here — but it is a single-use, fifteen-minute
+            // credential, so replaying it from the idempotent-response cache is
+            // read as intentional (the same client retrying the same request
+            // needs to see the same code) rather than as a gap: the code
+            // expires and is spent on first use regardless of how many times
+            // this response is replayed.
+            "TelegramLinkCodeController#issue");
 
     @Test
     @DisplayName("every idempotent handler's response is either scannable or reviewed")
