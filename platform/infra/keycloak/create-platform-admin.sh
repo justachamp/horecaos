@@ -12,11 +12,27 @@
 # admin console. This does the same thing through the admin API, so it is a
 # repeatable command instead of a click sequence nobody wrote down.
 #
+# This script only ever touches Keycloak. It used to be paired with a direct
+# `INSERT INTO iam.grants` (in this script's own earlier form, and still in
+# tools/proving-run before this same change) to give the new user their first
+# PLATFORM-scope grant — the honest workaround for there being no HTTP path
+# to one. That grant is now created by PlatformAdminBootstrapReconciler, an
+# ApplicationRunner that reconciles horecaos.iam.bootstrap-platform-admins
+# (a list of Keycloak subject ids) on every startup. This script's part of
+# that is printing the one thing the reconciler needs and Keycloak is the
+# only source of: the subject id. Put it under that configuration key (an env
+# var locally: HORECAOS_IAM_BOOTSTRAP_PLATFORM_ADMINS) and restart the API —
+# no SQL, ever.
+#
 # Idempotent: safe to run repeatedly; a second run only resets the password
 # and re-asserts the role.
 #
 # Usage:
 #   HORECAOS_PLATFORM_ADMIN_PASSWORD=... infra/keycloak/create-platform-admin.sh [username]
+#
+# Prints the created/reused user's Keycloak subject id on stdout (and only
+# that, so `subject="$(... )"` captures it cleanly); everything else goes to
+# stderr.
 
 set -euo pipefail
 
@@ -96,4 +112,9 @@ else
   echo "==> ${NEW_USERNAME} already holds the platform-admin client role" >&2
 fi
 
-echo "${NEW_USERNAME}"
+echo "==> Subject: ${user_id}" >&2
+echo "==> Put it under horecaos.iam.bootstrap-platform-admins" \
+     "(HORECAOS_IAM_BOOTSTRAP_PLATFORM_ADMINS locally) and (re)start the API;" \
+     "PlatformAdminBootstrapReconciler grants it PLATFORM-scope platform-admin" \
+     "on startup, no SQL needed." >&2
+echo "${user_id}"

@@ -13,11 +13,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.ordering.domain.AcceptanceMode;
 import uz.horecaos.platform.ordering.domain.ApprovalChannel;
 import uz.horecaos.platform.ordering.domain.ApprovalTimeoutAction;
 import uz.horecaos.platform.ordering.domain.OrderAcceptancePolicy;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyResolver;
 
 /**
@@ -69,9 +73,79 @@ class OrderAcceptancePolicyServiceTests {
         jdbc.sql("TRUNCATE TABLE tenant.policy_current CASCADE").update();
         jdbc.sql("TRUNCATE TABLE tenant.policies CASCADE").update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
+        jdbc.sql("TRUNCATE TABLE audit.audit_events").update();
         service = new OrderAcceptancePolicyService(
-                new JdbcPolicyResolver(jdbc, JsonMapper.builder().build()));
+                new JdbcPolicyResolver(jdbc, JsonMapper.builder().build()),
+                new JdbcPolicyAuthor(
+                        jdbc,
+                        JsonMapper.builder().build(),
+                        new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                        java.time.Clock.systemUTC()));
         insertHierarchy();
+    }
+
+    // ----------------------------------------------------------------- Gap D: authoring
+
+    @Test
+    void authoringPublishesVersionOneAndItResolvesImmediately() {
+        var published = service.author(
+                ResourceScope.tenant(TENANT), approval(600), ActorRef.user("owner-1", null), "go-live default");
+
+        assertThat(published.policyVersion()).isEqualTo(1);
+        assertThat(service.resolve(TENANT, BRAND, LOCATION).policy().approvalTimeoutSeconds())
+                .isEqualTo(600);
+    }
+
+    @Test
+    void authoringASecondVersionSupersedesTheFirstForNewResolutions() {
+        service.author(ResourceScope.tenant(TENANT), approval(600), ActorRef.user("owner-1", null), "initial");
+
+        var second = service.author(
+                ResourceScope.tenant(TENANT), approval(60), ActorRef.user("owner-1", null), "shorten the window");
+
+        assertThat(second.policyVersion()).isEqualTo(2);
+        assertThat(service.resolve(TENANT, BRAND, LOCATION).policy().approvalTimeoutSeconds())
+                .as("the newest authored version is what a new order resolves")
+                .isEqualTo(60);
+    }
+
+    /**
+     * The property Gap D exists to prove: authoring a new version must never
+     * rewrite what an order already accepted under an old one.
+     */
+    @Test
+    void anOrderPinnedToAnEarlierAuthoredVersionIsUnaffectedByALaterOne() {
+        var first =
+                service.author(ResourceScope.tenant(TENANT), approval(600), ActorRef.user("owner-1", null), "initial");
+        var atAcceptance = service.resolve(TENANT, BRAND, LOCATION);
+        assertThat(atAcceptance.policyId()).isEqualTo(first.policyId());
+
+        service.author(ResourceScope.tenant(TENANT), approval(60), ActorRef.user("owner-1", null), "tighten it");
+
+        assertThat(service.resolve(TENANT, BRAND, LOCATION).policy().approvalTimeoutSeconds())
+                .as("a fresh resolution now sees the new version")
+                .isEqualTo(60);
+        assertThat(service.pinned(atAcceptance.policyId(), atAcceptance.policyVersion())
+                        .approvalTimeoutSeconds())
+                .as("the order's own pinned version must still read 600, forever")
+                .isEqualTo(600);
+    }
+
+    @Test
+    void aLocationOverrideAuthoredLaterWinsOverTheTenantDefault() {
+        service.author(ResourceScope.tenant(TENANT), approval(600), ActorRef.user("owner-1", null), "tenant default");
+
+        service.author(
+                ResourceScope.location(TENANT, BRAND, LOCATION),
+                approval(90),
+                ActorRef.user("owner-1", null),
+                "this branch is busier");
+
+        assertThat(service.resolve(TENANT, BRAND, LOCATION).policy().approvalTimeoutSeconds())
+                .isEqualTo(90);
+        assertThat(service.resolve(TENANT, BRAND, SIBLING_LOCATION).policy().approvalTimeoutSeconds())
+                .as("the override is this location's alone")
+                .isEqualTo(600);
     }
 
     @Test

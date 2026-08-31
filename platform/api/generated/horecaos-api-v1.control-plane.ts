@@ -9,6 +9,18 @@ export type ApiProblem = {
   code?: string; correlationId?: string; errors?: Array<{ field?: string; code?: string }>;
 };
 
+export interface AcceptancePolicyResponse {
+  approvalChannel?: string;
+  approvalTimeoutSeconds?: number;
+  isPlatformDefault?: boolean;
+  mode?: string;
+  notifyCustomerWhilePending?: boolean;
+  policyId?: string;
+  policyVersion?: number;
+  rejectionReasonRequired?: boolean;
+  timeoutAction?: string;
+}
+
 export interface ActivateRequest {
   actorId: string;
 }
@@ -91,6 +103,18 @@ export interface AuthorPolicyRequest {
   scopeType: string;
   thresholdDescription: string;
   validFrom?: string;
+}
+
+export interface AuthorRequest {
+  approvalChannel: "NONE" | "HORECAOS_OPERATIONS" | "POS" | "EITHER";
+  approvalTimeoutSeconds?: number;
+  brandId?: string;
+  locationId?: string;
+  mode: "AUTO_CONFIRM" | "RESTAURANT_APPROVAL";
+  notifyCustomerWhilePending?: boolean;
+  reason: string;
+  rejectionReasonRequired?: boolean;
+  timeoutAction: "AUTO_REJECT" | "AUTO_CONFIRM";
 }
 
 export interface BandRequest {
@@ -639,6 +663,27 @@ export interface PlanVersionResponse {
   versionNumber?: number;
 }
 
+export interface PlatformGrantRequest {
+  principalSubject: string;
+  reason: string;
+  roleCode: string;
+  validUntil?: string;
+}
+
+export interface PlatformGrantResponse {
+  approvalRequestId?: string;
+  grantId?: string;
+  outcome?: string;
+}
+
+export interface PlatformGrantView {
+  grantedBy?: string;
+  id?: string;
+  principalSubject?: string;
+  roleCode?: string;
+  status?: string;
+}
+
 export interface PolicyCoverageResponse {
   actionCode?: string;
   configuredAnywhere?: boolean;
@@ -853,6 +898,18 @@ export interface TaxProfileResponse {
   version?: number;
 }
 
+export interface TemplateView {
+  code?: string;
+  createdAt?: string;
+  createdBy?: string;
+  defaultConfiguration?: {  };
+  description?: string;
+  id?: string;
+  requiredSteps?: Array<string>;
+  status?: string;
+  version?: number;
+}
+
 export interface TenantView {
   customerIdentityMode?: "TENANT_SHARED" | "BRAND_ISOLATED";
   defaultCurrency?: string;
@@ -918,6 +975,9 @@ export interface ZoneView {
 }
 
 export interface Operations {
+  "list_6": { method: "GET"; path: "/api/v1/control-plane/grants"; request: { parameters: Record<string, never> }; responses: { "200": Array<PlatformGrantView> } };
+  "grant_1": { method: "POST"; path: "/api/v1/control-plane/grants"; request: { parameters: Record<string, never>; body: PlatformGrantRequest }; responses: { "200": PlatformGrantResponse } };
+  "revoke_1": { method: "DELETE"; path: "/api/v1/control-plane/grants/{grantId}"; request: { parameters: { path: { grantId: string } }; body: ReasonRequest }; responses: { "200": PlatformGrantResponse } };
   "inboxFailures": { method: "GET"; path: "/api/v1/control-plane/integration/failures/inbox/{consumerName}"; request: { parameters: { path: { consumerName: string }; query: { limit?: number; status?: string; tenantId?: string } } }; responses: { "200": PageFailureSummary } };
   "inboxFailure": { method: "GET"; path: "/api/v1/control-plane/integration/failures/inbox/{consumerName}/{eventId}"; request: { parameters: { path: { consumerName: string; eventId: string }; query: { tenantId?: string } } }; responses: { "200": InboxFailureDetail } };
   "resolveInbox": { method: "POST"; path: "/api/v1/control-plane/integration/failures/inbox/{consumerName}/{eventId}/resolve"; request: { parameters: { path: { consumerName: string; eventId: string } }; body: ResolveRequest }; responses: { "200": {  } } };
@@ -926,11 +986,14 @@ export interface Operations {
   "outboxFailure": { method: "GET"; path: "/api/v1/control-plane/integration/failures/outbox/{eventId}"; request: { parameters: { path: { eventId: string }; query: { tenantId?: string } } }; responses: { "200": OutboxFailureDetail } };
   "resolveOutbox": { method: "POST"; path: "/api/v1/control-plane/integration/failures/outbox/{eventId}/resolve"; request: { parameters: { path: { eventId: string } }; body: ResolveRequest }; responses: { "200": {  } } };
   "retryOutbox": { method: "POST"; path: "/api/v1/control-plane/integration/failures/outbox/{eventId}/retry"; request: { parameters: { path: { eventId: string } }; body: ReasonRequest }; responses: { "200": {  } } };
+  "list_7": { method: "GET"; path: "/api/v1/control-plane/onboarding-templates"; request: { parameters: Record<string, never> }; responses: { "200": Array<TemplateView> } };
+  "currentDefault": { method: "GET"; path: "/api/v1/control-plane/onboarding-templates/default"; request: { parameters: Record<string, never> }; responses: { "200": TemplateView } };
+  "get_2": { method: "GET"; path: "/api/v1/control-plane/onboarding-templates/{templateId}"; request: { parameters: { path: { templateId: string } } }; responses: { "200": TemplateView } };
   "planCatalogue": { method: "GET"; path: "/api/v1/control-plane/plans"; request: { parameters: Record<string, never> }; responses: { "200": Array<PlanVersionResponse> } };
   "createTenant": { method: "POST"; path: "/api/v1/control-plane/tenants"; request: { parameters: Record<string, never>; body: CreateTenantRequest }; responses: { "200": TenantView } };
   "getTenant": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": TenantView } };
   "list_5": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/approval-policies"; request: { parameters: { path: { tenantId: string }; query: { actionCode?: string; includeEnded?: boolean; limit?: number } } }; responses: { "200": PagePolicyResponse } };
-  "author": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/approval-policies"; request: { parameters: { path: { tenantId: string } }; body: AuthorPolicyRequest }; responses: { "200": PolicyResponse } };
+  "author_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/approval-policies"; request: { parameters: { path: { tenantId: string } }; body: AuthorPolicyRequest }; responses: { "200": PolicyResponse } };
   "coverage": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/approval-policies/coverage"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<PolicyCoverageResponse> } };
   "endDate": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/approval-policies/{policyId}/expiry"; request: { parameters: { path: { policyId: string; tenantId: string } }; body: EndPolicyRequest }; responses: { "200": PolicyResponse } };
   "pending": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/approval-requests"; request: { parameters: { path: { tenantId: string }; query: { actionCode?: string; limit?: number } } }; responses: { "200": PagePendingApprovalResponse } };
@@ -1000,6 +1063,8 @@ export interface Operations {
   "get": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}"; request: { parameters: { path: { runId: string; tenantId: string } } }; responses: { "200": RunView } };
   "activate": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}/activate"; request: { parameters: { path: { runId: string; tenantId: string } }; body: ReasonRequest }; responses: { "200": ActivationOutcome } };
   "resume": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}/resume"; request: { parameters: { path: { runId: string; tenantId: string } }; body: ReasonRequest }; responses: { "200": {  } } };
+  "effective": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/order-acceptance-policy"; request: { parameters: { path: { tenantId: string }; query: { brandId?: string; locationId?: string } } }; responses: { "200": AcceptancePolicyResponse } };
+  "author": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/order-acceptance-policy"; request: { parameters: { path: { tenantId: string } }; body: AuthorRequest }; responses: { "200": AcceptancePolicyResponse } };
   "list_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string }; query: { activeOnly?: boolean; kind: "CANCELLATION" | "COMPLETION" } } }; responses: { "200": Array<ReasonResponse> } };
   "create_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string } }; body: ReasonRequest }; responses: { "200": IdResponse } };
   "categories": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/categories"; request: { parameters: { path: { tenantId: string }; query: { kind: "CANCELLATION" | "COMPLETION" } } }; responses: { "200": Array<string> } };

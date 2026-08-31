@@ -250,6 +250,45 @@ class KeycloakOrganizationIntegrationTests {
         assertThat(membersOf(organizationB.organizationId())).containsExactly(membership.subjectId());
     }
 
+    /**
+     * The actual regression (keycloak/keycloak#36108), proven at its root cause
+     * rather than reproducing Keycloak's own login refusal from a unit that has
+     * no client credential able to create a direct-grant client to test with.
+     *
+     * <p>Keycloak 26's declarative User Profile refuses password-grant login for
+     * any account missing {@code firstName} or {@code lastName} with a bare
+     * {@code invalid_grant} / "Account is not fully set up" — verified live
+     * against this same realm (see {@code infra/keycloak/README.md}). A user
+     * {@code ensureMembership} creates with either blank is exactly that
+     * account, so asserting both are present and non-blank on the row Keycloak
+     * actually stored is what stands between a fresh invite and that refusal.
+     */
+    @Test
+    void aNewMemberIsCreatedWithNonBlankNameAttributes() {
+        UUID tenantId = UUID.randomUUID();
+        var organization = provisioner.ensureOrganization(
+                new OrganizationProvisioner.EnsureOrganization(tenantId, alias, "Acme", null));
+        organizationsToRemove.add(organization.organizationId());
+        String email = alias + "@example.test";
+
+        var membership = provisioner.ensureMembership(
+                new OrganizationProvisioner.EnsureMembership(organization.organizationId(), email, null));
+        usersToRemove.add(membership.subjectId());
+
+        Map<String, Object> stored = admin.get()
+                .uri("/admin/realms/{realm}/users/{id}", REALM, membership.subjectId())
+                .retrieve()
+                .body(MAP);
+
+        assertThat(stored).isNotNull();
+        assertThat(String.valueOf(stored.get("firstName")))
+                .as("ADR 0009 only ever knows a username and an email at invite time, but Keycloak 26 still "
+                        + "refuses login for a blank firstName")
+                .isNotBlank()
+                .isNotEqualTo("null");
+        assertThat(String.valueOf(stored.get("lastName"))).isNotBlank().isNotEqualTo("null");
+    }
+
     @Test
     void theReadOnlyCredentialCanReadTheOrganizationAndCannotCreateOne() {
         var organization = provisioner.ensureOrganization(

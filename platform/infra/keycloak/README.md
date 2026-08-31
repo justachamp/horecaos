@@ -109,3 +109,36 @@ one form somebody remembered:
 `notUsername` and `notEmail` are there because these are staff accounts created
 by an administrator during onboarding, and the address is the obvious thing to
 type when inventing a first password for somebody else.
+
+## Declarative User Profile: firstName/lastName are not required
+
+Keycloak 26's declarative User Profile defaults every attribute group's
+`firstName` and `lastName` to required for the `user` role. `ensureMembership`
+(`KeycloakOrganizationProvisioner`) now always sets sensible name attributes on
+a user it creates, so this normally never matters — but a password-grant login
+for **any** account still missing one (an operator-created user, a fixture, a
+partially-provisioned retry) is refused with the misleading `invalid_grant` /
+"Account is not fully set up", no exception anywhere in the logs, and no realm
+setting names it. This is
+[keycloak/keycloak#36108](https://github.com/keycloak/keycloak/issues/36108), a
+known Keycloak 26.0.7+ regression, still present in the pinned 26.7.0.
+
+`realm/horecaos-realm.json`'s `components` block installs a
+`declarative-user-profile` config identical to Keycloak's own default except
+that `firstName` and `lastName` carry no `required` block, so a local
+deployment authenticates a name-incomplete account instead of refusing it —
+belt and braces alongside the application-side fix, and the only lever
+available for a fixture or an account this codebase did not create. Verified
+live against Keycloak 26.7.0: a nameless account gets the exact
+`invalid_grant` / "Account is not fully set up" response under the stock
+profile, and a normal token under this one. Confirm the same after changing
+either the realm import or `ensureMembership`:
+
+```bash
+docker compose down -v && make up
+infra/keycloak/create-local-dev-client.sh   # a direct-grant client to test with
+```
+
+then create a user via the Admin API with only `username`/`email` (no name),
+set a policy-compliant password, and confirm a password-grant token comes back
+rather than `invalid_grant`.

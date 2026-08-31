@@ -30,6 +30,16 @@ public class KeycloakOrganizationProvisioner implements OrganizationProvisioner 
 
     private static final Logger log = LoggerFactory.getLogger(KeycloakOrganizationProvisioner.class);
 
+    /**
+     * Placeholders written on every account this class creates (see {@link
+     * #ensureMembership}). Deliberately legible as placeholders rather than a
+     * guessed identity — ADR 0009's membership contract does not know a real
+     * name at invite time, only a username and an email.
+     */
+    private static final String PENDING_FIRST_NAME = "Pending";
+
+    private static final String PENDING_LAST_NAME = "Profile";
+
     private final RestClient client;
     private final OrganizationDirectory directory;
     private final String realm;
@@ -120,7 +130,28 @@ public class KeycloakOrganizationProvisioner implements OrganizationProvisioner 
                             "enabled",
                             true,
                             "emailVerified",
-                            false))
+                            false,
+                            // Keycloak 26's declarative User Profile marks firstName
+                            // and lastName required for the "user" role by default,
+                            // and refuses password-grant login for any account
+                            // missing either with a bare "invalid_grant" / "Account
+                            // is not fully set up" — no exception, no realm setting
+                            // names it (keycloak/keycloak#36108, still present in the
+                            // pinned 26.7.0). ADR 0009's membership contract only
+                            // ever knows a username and an email at invite time, so
+                            // these are honest placeholders, not a guessed identity
+                            // — see PENDING_FIRST_NAME/PENDING_LAST_NAME. A real
+                            // owner overwrites them the first time they open the
+                            // Keycloak account console or a frontend profile screen;
+                            // nothing here gates that on a required action, because
+                            // a pending UPDATE_PROFILE required action reproduces
+                            // the identical "Account is not fully set up" refusal
+                            // (verified live) and would only move this bug from
+                            // "missing attribute" to "unactioned required action".
+                            "firstName",
+                            PENDING_FIRST_NAME,
+                            "lastName",
+                            PENDING_LAST_NAME))
                     .retrieve()
                     .toBodilessEntity();
             subjectId = findUserByEmail(command.email())

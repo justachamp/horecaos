@@ -121,6 +121,22 @@ public enum Capability {
     ORDER_OUTCOME_REASON_MANAGE("order.outcome-reason.manage", "order", "outcome-reason.manage"),
 
     /**
+     * ADR 0030, Gap D of the 2026-08-30 proving run: authoring and versioning
+     * the tenant's order acceptance policy — whether a paid order confirms
+     * itself or waits for staff.
+     *
+     * <p>Held by an administrator, on the same argument {@link
+     * #ORDER_OUTCOME_REASON_MANAGE} carries: this is decided once, in
+     * advance, by somebody who can be asked to justify it, not from the order
+     * board mid-shift. Never folded into {@link #TENANT_WRITE} — the tenant's
+     * profile and its order-acceptance behaviour are different decisions with
+     * different consequences, the same distinction that keeps {@link
+     * #LEGAL_ENTITY_MANAGE} and {@link #PAYMENT_MERCHANT_BINDING_MANAGE}
+     * their own capabilities.
+     */
+    ORDER_ACCEPTANCE_POLICY_MANAGE("order.acceptance-policy.manage", "order", "acceptance-policy.manage"),
+
+    /**
      * ADR 0013: reading an order's payment — the intent, its attempts, and the
      * provider states recorded beside HorecaOS's own.
      *

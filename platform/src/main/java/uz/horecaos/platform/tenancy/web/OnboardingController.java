@@ -4,7 +4,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +20,8 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.tenancy.application.onboarding.OnboardingService;
+import uz.horecaos.platform.tenancy.application.onboarding.OnboardingTemplateService;
+import uz.horecaos.platform.tenancy.application.onboarding.OnboardingTemplateService.TemplateView;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
@@ -37,28 +38,39 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 public class OnboardingController {
 
     private final OnboardingService onboarding;
+    private final OnboardingTemplateService templates;
     private final JdbcClient jdbc;
     private final CurrentActor currentActor;
 
-    public OnboardingController(OnboardingService onboarding, JdbcClient jdbc, CurrentActor currentActor) {
+    public OnboardingController(
+            OnboardingService onboarding,
+            OnboardingTemplateService templates,
+            JdbcClient jdbc,
+            CurrentActor currentActor) {
         this.onboarding = onboarding;
+        this.templates = templates;
         this.jdbc = jdbc;
         this.currentActor = currentActor;
     }
 
     @PostMapping
     @RequiresCapability(value = Capability.TENANT_ONBOARDING_MANAGE, mutating = true)
-    @Operation(summary = "Start an onboarding run")
+    @Operation(
+            summary = "Start an onboarding run",
+            description = "Omit templateId to use the platform's current default template (Gap B).")
     ResponseEntity<Map<String, Object>> start(@PathVariable UUID tenantId, @Valid @RequestBody StartRequest request) {
+
+        TemplateView template =
+                request.templateId() == null ? templates.currentDefault() : templates.get(request.templateId());
 
         UUID runId = onboarding.startRun(
                 tenantId,
-                request.templateId(),
-                request.templateVersion(),
+                template.id(),
+                template.version(),
                 Map.of(
                         "ownerEmail", request.ownerEmail() == null ? "" : request.ownerEmail(),
                         "ownerSubjectId", request.ownerSubjectId() == null ? "" : request.ownerSubjectId(),
-                        "defaultConfiguration", Map.of()),
+                        "defaultConfiguration", template.defaultConfiguration()),
                 actor());
 
         return ResponseEntity.ok(Map.of("runId", runId));
@@ -156,9 +168,16 @@ public class OnboardingController {
         return ActorRef.user(currentActor.get().subject(), null);
     }
 
+    /**
+     * @param templateId omit to use the platform's current default template
+     *                   (Gap B) — {@code GET .../control-plane/onboarding-templates/default}
+     *                   shows which one that resolves to. The template's own
+     *                   {@code version} is always used; a caller cannot pin a
+     *                   run to a version other than the one {@code templateId}
+     *                   currently names.
+     */
     public record StartRequest(
-            @NotNull UUID templateId,
-            int templateVersion,
+            UUID templateId,
             @Size(max = 320) String ownerEmail,
             @Size(max = 255) String ownerSubjectId) {}
 

@@ -7,6 +7,18 @@ spring:
     locations: classpath:db/migration,classpath:db/local-fixtures
 
 horecaos:
+  iam:
+    # PlatformAdminBootstrapReconciler's config bootstrap (ADR 0025, Gap A).
+    # Empty by default here too — nothing hardcodes a UUID, because it is a
+    # Keycloak-assigned subject id nobody knows until that user exists.
+    # `infra/keycloak/create-platform-admin.sh` creates the local platform-admin
+    # user and prints its subject id and this exact key; `tools/proving-run`
+    # exports HORECAOS_IAM_BOOTSTRAP_PLATFORM_ADMINS before starting the API so
+    # the reconciler grants that subject on the very first startup, with no SQL
+    # step of its own. A developer running `make run` by hand does the same:
+    #   HORECAOS_PLATFORM_ADMIN_PASSWORD=... infra/keycloak/create-platform-admin.sh
+    #   HORECAOS_IAM_BOOTSTRAP_PLATFORM_ADMINS=<printed subject id> make run
+    bootstrap-platform-admins: ${HORECAOS_IAM_BOOTSTRAP_PLATFORM_ADMINS:}
   secrets:
     data_encryption:
       platform:

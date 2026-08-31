@@ -43,6 +43,22 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * nothing in the schema ever related the two. See {@link #resolveRole}, and
  * V0086 for the trigger that holds the same rule when this service is not the
  * writer.
+ *
+ * <p><strong>{@code grant} and {@code revoke} already work for {@code PLATFORM}
+ * scope</strong> (Gap A of the 2026-08-30 proving run): {@link #resolveRole}
+ * resolves a {@link PlatformRole} without needing a tenant at all, and {@link
+ * #revoke} matches a {@code NULL} {@code tenant_id} correctly. Deliberately
+ * this class still does not know that a {@code PLATFORM} grant is the
+ * highest-authority action in the system and needs ADR 0027's maker-checker
+ * before it takes effect — putting that here would give {@code iam} a
+ * dependency on {@code audit}, and {@code audit} already depends on {@code
+ * iam} for {@link ResourceScope} and {@link uz.horecaos.platform.iam.api.CurrentActor},
+ * so the reverse edge would close a module cycle {@code ModularArchitectureTests}
+ * exists to catch. {@code audit.application.PlatformGrantService} is where
+ * that gate lives instead, calling {@link #grant} and {@link #revoke}
+ * unchanged after the approval clears — the same shape {@code
+ * ApprovalDecisionService} already uses to depend on {@code iam.api} without
+ * {@code iam} ever depending back.
  */
 @Service
 public class GrantManagementService {
@@ -81,9 +97,27 @@ public class GrantManagementService {
         ResolvedRole role = resolveRole(command.roleCode(), command.scope().tenantId());
         requireGrantable(role, command.scope(), granterSubject);
 
-        UUID grantId = UUID.randomUUID();
-        Instant now = clock.instant();
+        UUID grantId = insertGrantRow(command, role, granterSubject, clock.instant());
+        evictAndPublish(new GrantChanged(
+                grantId,
+                GrantChanged.Change.GRANTED,
+                command.principalSubject(),
+                command.scope(),
+                granterSubject,
+                command.reason(),
+                Map.of(
+                        "role",
+                        role.code(),
+                        "scope",
+                        command.scope().type().name(),
+                        "validUntil",
+                        String.valueOf(command.validUntil())),
+                clock.instant()));
+        return grantId;
+    }
 
+    private UUID insertGrantRow(GrantCommand command, ResolvedRole role, String grantedBy, Instant now) {
+        UUID grantId = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO iam.grants (
                     id, tenant_id, principal_subject, role_id, role_is_platform,
@@ -100,27 +134,11 @@ public class GrantManagementService {
                 .param("roleId", role.id())
                 .param("scopeType", command.scope().type().name())
                 .param("scopeId", command.scope().scopeId())
-                .param("grantedBy", granterSubject)
+                .param("grantedBy", grantedBy)
                 .param("reason", command.reason())
                 .param("validFrom", at(now))
                 .param("validUntil", command.validUntil() == null ? null : at(command.validUntil()))
                 .update();
-
-        evictAndPublish(new GrantChanged(
-                grantId,
-                GrantChanged.Change.GRANTED,
-                command.principalSubject(),
-                command.scope(),
-                granterSubject,
-                command.reason(),
-                Map.of(
-                        "role",
-                        role.code(),
-                        "scope",
-                        command.scope().type().name(),
-                        "validUntil",
-                        String.valueOf(command.validUntil())),
-                now));
         return grantId;
     }
 
@@ -177,30 +195,7 @@ public class GrantManagementService {
             return existing.get();
         }
 
-        UUID grantId = UUID.randomUUID();
-        Instant now = clock.instant();
-
-        jdbc.sql("""
-                INSERT INTO iam.grants (
-                    id, tenant_id, principal_subject, role_id, role_is_platform,
-                    scope_type, scope_id,
-                    status, granted_by, reason, valid_from, valid_until)
-                VALUES (:id, :tenantId, :subject, :roleId, :roleIsPlatform,
-                        :scopeType, :scopeId,
-                        'ACTIVE', :grantedBy, :reason, :validFrom, :validUntil)
-                """)
-                .param("id", grantId)
-                .param("roleIsPlatform", role.platformDefined())
-                .param("tenantId", command.scope().tenantId())
-                .param("subject", command.principalSubject())
-                .param("roleId", role.id())
-                .param("scopeType", command.scope().type().name())
-                .param("scopeId", command.scope().scopeId())
-                .param("grantedBy", systemActor)
-                .param("reason", command.reason())
-                .param("validFrom", at(now))
-                .param("validUntil", command.validUntil() == null ? null : at(command.validUntil()))
-                .update();
+        UUID grantId = insertGrantRow(command, role, systemActor, clock.instant());
 
         evictAndPublish(new GrantChanged(
                 grantId,
@@ -216,7 +211,7 @@ public class GrantManagementService {
                         command.scope().type().name(),
                         "validUntil",
                         String.valueOf(command.validUntil())),
-                now));
+                clock.instant()));
         return grantId;
     }
 
@@ -242,7 +237,8 @@ public class GrantManagementService {
     }
 
     /**
-     * Revokes a grant belonging to {@code tenantId}.
+     * Revokes a grant belonging to {@code tenantId}, or — Gap A — a {@code
+     * PLATFORM}-scope grant when {@code tenantId} is {@code null}.
      *
      * <p>The tenant is a parameter rather than being read from the grant row
      * because it is the tenant the caller was <em>authorised against</em>, and
@@ -250,13 +246,22 @@ public class GrantManagementService {
      * opaque UUID that travels through support tickets, exports and logs, so
      * treating it as proof of ownership would let any tenant's grant
      * administrator revoke another tenant's grants and lock their staff out.
+     *
+     * <p>{@code IS NOT DISTINCT FROM} rather than {@code =} on {@code
+     * tenant_id}: SQL's three-valued logic means {@code tenant_id = NULL} is
+     * never true, so a caller passing {@code tenantId = null} to reach a
+     * {@code PLATFORM} grant (whose row genuinely has a {@code NULL} {@code
+     * tenant_id} — {@code ck_grant_scope_id} makes the two facts identical)
+     * used to match nothing at all. This is a strict widening: for every
+     * non-null {@code tenantId} the two operators agree exactly, so no
+     * existing tenant-scoped caller changes behaviour.
      */
     @Transactional
     public boolean revoke(UUID tenantId, UUID grantId, String revokerSubject, String reason) {
         var existing = jdbc.sql("""
                 SELECT principal_subject, tenant_id, scope_type, scope_id
                   FROM iam.grants
-                 WHERE id = :id AND tenant_id = :tenantId AND status = 'ACTIVE'
+                 WHERE id = :id AND tenant_id IS NOT DISTINCT FROM :tenantId AND status = 'ACTIVE'
                 """)
                 .param("id", grantId)
                 .param("tenantId", tenantId)
@@ -274,7 +279,7 @@ public class GrantManagementService {
         int updated = jdbc.sql("""
                 UPDATE iam.grants
                    SET status = 'REVOKED', version = version + 1, updated_at = :now
-                 WHERE id = :id AND tenant_id = :tenantId AND status = 'ACTIVE'
+                 WHERE id = :id AND tenant_id IS NOT DISTINCT FROM :tenantId AND status = 'ACTIVE'
                 """)
                 .param("id", grantId)
                 .param("tenantId", tenantId)
@@ -287,7 +292,7 @@ public class GrantManagementService {
                     grantId,
                     GrantChanged.Change.REVOKED,
                     grant.principalSubject(),
-                    ResourceScope.tenant(grant.tenantId()),
+                    grant.tenantId() == null ? ResourceScope.platform() : ResourceScope.tenant(grant.tenantId()),
                     revokerSubject,
                     reason,
                     Map.of("scope", grant.scopeType()),
@@ -306,6 +311,27 @@ public class GrantManagementService {
                  ORDER BY g.created_at DESC
                 """)
                 .param("tenantId", tenantId)
+                .query((rs, n) -> new GrantView(
+                        rs.getObject("id", UUID.class),
+                        rs.getString("principal_subject"),
+                        rs.getString("role_code"),
+                        rs.getString("scope_type"),
+                        rs.getObject("scope_id", UUID.class),
+                        rs.getString("status"),
+                        rs.getString("granted_by")))
+                .list();
+    }
+
+    /** The active {@code PLATFORM}-scope grants (Gap A), for the console that authors them. */
+    public List<GrantView> listPlatformGrants() {
+        return jdbc.sql("""
+                SELECT g.id, g.principal_subject, r.code AS role_code, g.scope_type, g.scope_id,
+                       g.status, g.granted_by, g.valid_from, g.valid_until
+                  FROM iam.grants g
+                  JOIN iam.roles r ON r.id = g.role_id
+                 WHERE g.tenant_id IS NULL AND g.scope_type = 'PLATFORM' AND g.status = 'ACTIVE'
+                 ORDER BY g.created_at DESC
+                """)
                 .query((rs, n) -> new GrantView(
                         rs.getObject("id", UUID.class),
                         rs.getString("principal_subject"),

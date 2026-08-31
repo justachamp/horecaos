@@ -5,9 +5,12 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
+import uz.horecaos.platform.inventory.api.AvailabilityDecision;
+import uz.horecaos.platform.inventory.api.InventoryReservationPort;
 import uz.horecaos.platform.pricing.api.CartPricingPort;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
@@ -63,6 +66,19 @@ public final class OrderingOnboardingStepHandlers {
      * idempotency key on every attempt (the onboarding run id plus the
      * location id) so a retried step finds its own quote rather than
      * accumulating a new row every time the scheduler tries again.
+     *
+     * <p><strong>Being quotable is not being sellable.</strong> A published,
+     * priced item with no {@code inventory.stock_items} row (or one marked
+     * sold out) priced clean for the exact reason {@code CartPricingPort}
+     * never touches inventory — and reached {@code READY} that way until this
+     * check existed, confirmed live: a fresh tenant activated with a menu no
+     * real checkout could actually complete, refused
+     * {@code 409 ITEMS_UNAVAILABLE}/{@code NOT_STOCKED_AT_LOCATION} on its
+     * first real order. This calls {@link InventoryReservationPort#checkAvailability},
+     * the exact read {@link InventoryReservationPort#reserveForQuote} takes
+     * atomically before it holds anything — never the reservation itself,
+     * because a smoke test that held real stock during onboarding would take
+     * inventory away from a location that has not even opened.
      */
     @Component
     public static class ActivationSmokeTest implements OnboardingStepHandler {
@@ -77,6 +93,7 @@ public final class OrderingOnboardingStepHandlers {
         private final SalesChannelLookup channels;
         private final ServiceabilityResolver serviceability;
         private final CartPricingPort pricing;
+        private final InventoryReservationPort inventory;
         private final Clock clock;
 
         public ActivationSmokeTest(
@@ -84,11 +101,13 @@ public final class OrderingOnboardingStepHandlers {
                 SalesChannelLookup channels,
                 ServiceabilityResolver serviceability,
                 CartPricingPort pricing,
+                InventoryReservationPort inventory,
                 Clock clock) {
             this.jdbc = jdbc;
             this.channels = channels;
             this.serviceability = serviceability;
             this.pricing = pricing;
+            this.inventory = inventory;
             this.clock = clock;
         }
 
@@ -131,12 +150,14 @@ public final class OrderingOnboardingStepHandlers {
                     return StepResult.retry("SERVICEABILITY_UNAVAILABLE", failure.getMessage());
                 }
 
-                Optional<UUID> variantId = representativeItem(context.tenantId(), location.brandId(), location.id());
-                if (variantId.isEmpty()) {
+                Optional<RepresentativeItem> item =
+                        representativeItem(context.tenantId(), location.brandId(), location.id());
+                if (item.isEmpty()) {
                     return StepResult.failed(
                             "NO_AVAILABLE_ITEM",
                             "Location %s has no item available to quote".formatted(location.code()));
                 }
+                UUID variantId = item.get().variantId();
 
                 try {
                     pricing.priceCart(new CartPricingPort.PricingCommand(
@@ -145,13 +166,25 @@ public final class OrderingOnboardingStepHandlers {
                             location.id(),
                             null,
                             STOREFRONT_CHANNEL,
-                            List.of(new CartPricingPort.PricingCommand.Item(
-                                    "smoke-test", variantId.get(), 1, List.of())),
+                            List.of(new CartPricingPort.PricingCommand.Item("smoke-test", variantId, 1, List.of())),
                             "onboarding-smoke:%s:%s".formatted(context.runId(), location.id())));
                 } catch (CartPricingPort.PricingRefusedException refused) {
                     return StepResult.failed(
                             "QUOTE_REFUSED",
                             "Location %s: %s (%s)".formatted(location.code(), refused.getMessage(), refused.code()));
+                }
+
+                AvailabilityDecision availability =
+                        inventory.checkAvailability(context.tenantId(), location.id(), Set.of(variantId));
+                if (!availability.available()) {
+                    String reasons = availability.unavailableItems().stream()
+                            .map(AvailabilityDecision.Unavailable::reason)
+                            .distinct()
+                            .collect(java.util.stream.Collectors.joining(", "));
+                    return StepResult.failed(
+                            "ITEM_NOT_AVAILABLE_TO_SELL",
+                            "Location %s: item %s (%s) prices cleanly but is not actually available to sell (%s)"
+                                    .formatted(location.code(), item.get().sku(), variantId, reasons));
                 }
             }
             return StepResult.completed(Map.of(), null);
@@ -188,20 +221,25 @@ public final class OrderingOnboardingStepHandlers {
                     .map(FulfillmentMode::valueOf);
         }
 
-        private Optional<UUID> representativeItem(UUID tenantId, UUID brandId, UUID locationId) {
+        private Optional<RepresentativeItem> representativeItem(UUID tenantId, UUID brandId, UUID locationId) {
             return jdbc.sql("""
-                    SELECT variant_id FROM catalog.location_offerings
-                     WHERE tenant_id = :tenantId AND brand_id = :brandId AND location_id = :locationId
-                       AND status = 'AVAILABLE'
+                    SELECT o.variant_id, v.sku FROM catalog.location_offerings o
+                      JOIN catalog.variants v ON v.id = o.variant_id AND v.tenant_id = o.tenant_id
+                     WHERE o.tenant_id = :tenantId AND o.brand_id = :brandId AND o.location_id = :locationId
+                       AND o.status = 'AVAILABLE'
                      LIMIT 1
                     """)
                     .param("tenantId", tenantId)
                     .param("brandId", brandId)
                     .param("locationId", locationId)
-                    .query(UUID.class)
+                    .query((row, n) ->
+                            new RepresentativeItem(row.getObject("variant_id", UUID.class), row.getString("sku")))
                     .optional();
         }
 
         private record LocationRow(UUID id, UUID brandId, String code) {}
+
+        /** The item {@link #execute} quotes and then checks for real availability, named for the failure message. */
+        private record RepresentativeItem(UUID variantId, String sku) {}
     }
 }

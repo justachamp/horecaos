@@ -113,6 +113,17 @@ horecaos:
     base-url: ${HORECAOS_KEYCLOAK_BASE_URL:http://localhost:8081}
     realm: ${HORECAOS_KEYCLOAK_REALM:horecaos}
     provisioning-client-id: ${HORECAOS_KEYCLOAK_PROVISIONING_CLIENT_ID:horecaos-provisioning}
+  iam:
+    # ADR 0025 fresh-deployment bootstrap (PlatformAdminBootstrapReconciler).
+    # A comma-separated list of Keycloak subject ids that must hold the
+    # platform-admin grant; reconciled — created if missing, NEVER revoked —
+    # on every startup. Empty by default: a fresh deployment holds nobody
+    # accountable for platform administration until an operator deliberately
+    # names one, the same way infra/keycloak/create-platform-admin.sh leaves a
+    # fresh realm holding nobody. Blank/empty entries are dropped rather than
+    # rejected, so an unset env var resolves to "nobody configured" rather than
+    # a startup failure — a config typo here must not lock everyone out.
+    bootstrap-platform-admins: ${HORECAOS_IAM_BOOTSTRAP_PLATFORM_ADMINS:}
   environment: ${HORECAOS_ENVIRONMENT:local}
   migration:
     # ADR 0024 extraction. Off unless a migration is actually running: a platform

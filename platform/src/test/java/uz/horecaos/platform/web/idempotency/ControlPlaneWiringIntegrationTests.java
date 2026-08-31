@@ -297,6 +297,128 @@ class ControlPlaneWiringIntegrationTests {
                 .isEqualTo(200);
     }
 
+    // ----------------------------------------------------------------- Gap C: tenant-owner management
+
+    private static final String OWNER_SUBJECT = "gap-c-owner-subject";
+    private static final String MEMBER_WITHOUT_GRANT_SUBJECT = "gap-c-member-without-grant";
+    private static final String FIXTURE_ORGANIZATION_ID = "gap-c-fixture-organization";
+
+    /**
+     * The exact proving-run scenario (Gap C), reproduced live against the real
+     * interceptor and the real {@code TenantAccessPolicy}: a tenant owner
+     * holding a real {@code tenant-owner} grant — conferred here through the
+     * ordinary {@code PlatformGrantController}-adjacent tenant grant endpoint,
+     * not written into {@code iam.grants} by hand — creates a second brand and
+     * a location under it. Before the fix this was a live {@code 403
+     * TENANT_ACCESS_DENIED}, because {@code TenantAccessPolicy.requireTenantManagement}
+     * checked a Keycloak org-nested role nothing in this codebase ever
+     * assigned.
+     */
+    @Test
+    void aTenantOwnerCreatesASecondBrandAndLocation() throws Exception {
+        String tenantId = createTenantLinkedToOrganization("gap-c-tenant");
+        grantTenantOwner(tenantId, OWNER_SUBJECT);
+
+        MvcResult brand = mvc.perform(post(TENANTS + "/" + tenantId + "/brands")
+                        .with(memberOf(OWNER_SUBJECT))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "gap-c-brand")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"SECOND","slug":"second-brand","displayName":"Second Brand"}"""))
+                .andReturn();
+        assertThat(brand.getResponse().getStatus())
+                .as(brand.getResponse().getContentAsString())
+                .isEqualTo(201);
+        String brandId = jdbc.sql("SELECT id::text FROM tenant.brands WHERE code = 'SECOND'")
+                .query(String.class)
+                .single();
+
+        MvcResult location = mvc.perform(post(TENANTS + "/" + tenantId + "/brands/" + brandId + "/locations")
+                        .with(memberOf(OWNER_SUBJECT))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "gap-c-location")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"LOC1","slug":"second-location","displayName":"Second Location",
+                                 "timezone":"Asia/Tashkent"}"""))
+                .andReturn();
+        assertThat(location.getResponse().getStatus())
+                .as(location.getResponse().getContentAsString())
+                .isEqualTo(201);
+    }
+
+    /** The other half: a member of the organization holding no tenant-owner grant is still refused. */
+    @Test
+    void aMemberWithoutTheGrantIsRefusedBrandCreation() throws Exception {
+        String tenantId = createTenantLinkedToOrganization("gap-c-tenant-refused");
+
+        MvcResult refused = mvc.perform(post(TENANTS + "/" + tenantId + "/brands")
+                        .with(memberOf(MEMBER_WITHOUT_GRANT_SUBJECT))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "gap-c-refused")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"NOPE","slug":"nope-brand","displayName":"Should be refused"}"""))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(jdbc.sql("SELECT count(*) FROM tenant.brands WHERE code = 'NOPE'")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
+    private String createTenantLinkedToOrganization(String slug) throws Exception {
+        MvcResult created = mvc.perform(post(TENANTS)
+                        .with(platformAdmin())
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "gap-c-create-" + slug)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(tenantBody(slug)))
+                .andReturn();
+        assertThat(created.getResponse().getStatus()).isEqualTo(201);
+        String tenantId = jdbc.sql("SELECT id::text FROM tenant.tenants WHERE slug = :slug")
+                .param("slug", slug)
+                .query(String.class)
+                .single();
+
+        MvcResult linked = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                                TENANTS + "/" + tenantId + "/identity/keycloak-organization")
+                        .with(platformAdmin())
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "gap-c-link-" + slug)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"organizationId":"%s"}""".formatted(FIXTURE_ORGANIZATION_ID)))
+                .andReturn();
+        assertThat(linked.getResponse().getStatus())
+                .as(linked.getResponse().getContentAsString())
+                .isEqualTo(200);
+        return tenantId;
+    }
+
+    /** The ordinary, audited path — not a row written by hand into iam.grants. */
+    private void grantTenantOwner(String tenantId, String subject) throws Exception {
+        MvcResult granted = mvc.perform(post(TENANTS + "/" + tenantId + "/grants")
+                        .with(platformAdmin())
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "gap-c-grant-" + subject)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"principalSubject":"%s","roleCode":"tenant-owner","reason":"Gap C proving-run scenario"}""".formatted(subject)))
+                .andReturn();
+        assertThat(granted.getResponse().getStatus())
+                .as(granted.getResponse().getContentAsString())
+                .isEqualTo(200);
+    }
+
+    /**
+     * A member of the fixture tenant's Keycloak organization, holding no
+     * realm role at all — {@link #createTenantLinkedToOrganization} always
+     * links to the one fixture organization id, which is all this needs.
+     */
+    private static org.springframework.test.web.servlet.request.RequestPostProcessor memberOf(String subject) {
+        return jwt().jwt(builder -> builder.subject(subject)
+                .claim(
+                        "organization",
+                        Map.of("fixture-org", Map.of("id", FIXTURE_ORGANIZATION_ID, "resource_access", Map.of()))));
+    }
+
     private long tenantCount() {
         return jdbc.sql("SELECT count(*) FROM tenant.tenants").query(Long.class).single();
     }

@@ -1,6 +1,7 @@
 package uz.horecaos.platform.inventory.api;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -39,4 +40,17 @@ public interface InventoryReservationPort {
 
     /** Frees a hold when a checkout fails, an order is rejected, or a cart is abandoned. */
     boolean release(UUID tenantId, UUID quoteId);
+
+    /**
+     * The same check {@link #reserveForQuote} takes atomically with its hold,
+     * without taking one (ADR 0017, ADR 0008).
+     *
+     * <p>For a caller that needs to know whether stock would allow a sale right
+     * now and must not hold any of it while finding out — the ADR 0008
+     * {@code ACTIVATION_SMOKE_TEST} onboarding step is the one today. Reusing
+     * this rather than a bespoke read is the whole point: onboarding readiness
+     * and a real checkout must agree about what "available" means, or a tenant
+     * can pass the smoke test under a rule its own customers never see.
+     */
+    AvailabilityDecision checkAvailability(UUID tenantId, UUID locationId, Set<UUID> variantIds);
 }

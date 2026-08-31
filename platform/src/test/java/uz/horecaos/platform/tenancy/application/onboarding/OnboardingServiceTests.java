@@ -116,7 +116,7 @@ class OnboardingServiceTests {
                 // transaction starts and stops; a no-op here would test a shape
                 // the application never runs.
                 transactions,
-                allHandlers(provisioner, store),
+                allHandlers(provisioner, store, jdbc),
                 recorder,
                 new JdbcApprovalService(jdbc, recorder, clock, new SimpleMeterRegistry()),
                 published,
@@ -159,7 +159,7 @@ class OnboardingServiceTests {
         OnboardingService serviceMissingOneHandler = new OnboardingService(
                 jdbc,
                 transactions,
-                allHandlers(provisioner, store).stream()
+                allHandlers(provisioner, store, jdbc).stream()
                         .filter(handler -> handler.step() != OnboardingStep.CATALOG_READINESS_VALIDATE)
                         .toList(),
                 new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
@@ -617,11 +617,11 @@ class OnboardingServiceTests {
      * itself.
      */
     private static List<OnboardingStepHandler> allHandlers(
-            OrganizationProvisioner provisioner, JdbcTenantControlPlaneStore store) {
+            OrganizationProvisioner provisioner, JdbcTenantControlPlaneStore store, JdbcClient jdbc) {
         List<OnboardingStepHandler> handlers = new java.util.ArrayList<>(List.of(
                 new OnboardingStepHandlers.KeycloakOrganizationReconcile(provisioner, store),
                 new OnboardingStepHandlers.TenantOwnerLinkOrInvite(provisioner, NO_OP_GRANTOR),
-                new OnboardingStepHandlers.DefaultConfigurationApply(),
+                new OnboardingStepHandlers.DefaultConfigurationApply(jdbc, NO_OP_POLICY_AUTHOR),
                 new OnboardingStepHandlers.BrandsAndLocationsValidate(store)));
         for (OnboardingStep step : new OnboardingStep[] {
             OnboardingStep.PAYMENT_CONFIGURATION_VALIDATE,
@@ -638,6 +638,28 @@ class OnboardingServiceTests {
     }
 
     private static final TenantOwnerAuthorityGrantor NO_OP_GRANTOR = (tenantId, subjectId, reason) -> {};
+
+    /**
+     * DEFAULT_CONFIGURATION_APPLY's acceptancePolicy path is exercised by
+     * {@code OnboardingFullRunIntegrationTests} and {@code
+     * OrderAcceptancePolicyServiceTests}; this file's own fixture never
+     * supplies a "defaultConfiguration.acceptancePolicy" input, so the real
+     * writer is never called and this stands in only to satisfy the
+     * constructor.
+     */
+    private static final uz.horecaos.platform.tenancy.api.PolicyAuthor NO_OP_POLICY_AUTHOR =
+            new uz.horecaos.platform.tenancy.api.PolicyAuthor() {
+                @Override
+                public <P> uz.horecaos.platform.tenancy.api.ResolvedPolicy<P> author(
+                        uz.horecaos.platform.tenancy.api.PolicyKey<P> key,
+                        uz.horecaos.platform.iam.api.ResourceScope scope,
+                        P document,
+                        uz.horecaos.platform.audit.api.ActorRef authoredBy,
+                        String reason) {
+                    throw new UnsupportedOperationException(
+                            "PolicyAuthor is not exercised by OnboardingServiceTests' own fixture");
+                }
+            };
 
     /** A step whose real business rule is tested elsewhere; here it just completes. */
     private record AlwaysCompletes(OnboardingStep step) implements OnboardingStepHandler {

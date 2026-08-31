@@ -16,6 +16,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.tenancy.api.BrandCreated;
@@ -173,7 +174,7 @@ public class TenantControlPlaneService {
     public BrandView createBrand(TenantId tenantId, CreateBrandCommand command) {
         Objects.requireNonNull(command, "Create brand command is required");
         Tenant tenant = requireTenant(tenantId);
-        accessPolicy.requireTenantManagement(tenant);
+        accessPolicy.requireTenantManagement(tenant, Capability.BRAND_WRITE, ResourceScope.tenant(tenantId.value()));
 
         Brand brand = Brand.draft(
                 new BrandId(UUID.randomUUID()),
@@ -223,7 +224,8 @@ public class TenantControlPlaneService {
     public LocationView createLocation(TenantId tenantId, BrandId brandId, CreateLocationCommand command) {
         Objects.requireNonNull(command, "Create location command is required");
         Tenant tenant = requireTenant(tenantId);
-        accessPolicy.requireTenantManagement(tenant);
+        accessPolicy.requireTenantManagement(
+                tenant, Capability.LOCATION_WRITE, ResourceScope.brand(tenantId.value(), brandId.value()));
         Brand brand = requireBrand(tenantId, brandId);
 
         Location location = Location.draft(
@@ -282,7 +284,8 @@ public class TenantControlPlaneService {
 
         Objects.requireNonNull(command, "Describe location command is required");
         Tenant tenant = requireTenant(tenantId);
-        accessPolicy.requireTenantManagement(tenant);
+        accessPolicy.requireTenantManagement(
+                tenant, Capability.LOCATION_WRITE, ResourceScope.brand(tenantId.value(), brandId.value()));
         Brand brand = requireBrand(tenantId, brandId);
 
         Location location = store.findLocations(brand).stream()
