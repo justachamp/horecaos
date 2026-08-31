@@ -11,11 +11,14 @@ import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.integration.api.provider.BindingRef;
 import uz.horecaos.platform.integration.api.provider.ProviderCategory;
 import uz.horecaos.platform.integration.api.provider.ProviderEntityMappingLookup;
+import uz.horecaos.platform.integration.api.provider.ProviderHealth;
+import uz.horecaos.platform.integration.api.provider.ProviderHealthQuery;
 import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
 
 /** SQL adapter for ADR 0026 binding and mapping resolution. */
 @Repository
-public class JdbcProviderInstallationLookup implements ProviderInstallationLookup, ProviderEntityMappingLookup {
+public class JdbcProviderInstallationLookup
+        implements ProviderInstallationLookup, ProviderEntityMappingLookup, ProviderHealthQuery {
 
     private static final String SELECT_BINDINGS = """
             SELECT b.id, b.installation_id, b.tenant_id, b.brand_id, b.location_id,
@@ -148,6 +151,22 @@ public class JdbcProviderInstallationLookup implements ProviderInstallationLooku
                 .param("externalId", externalId)
                 .query(UUID.class)
                 .optional();
+    }
+
+    /**
+     * {@link ProviderHealthQuery}: platform-wide, not tenant-scoped — a control-plane
+     * digest's own audience, per ADR 0058.
+     */
+    @Override
+    public ProviderHealth providerHealth() {
+        long active = jdbc.sql("SELECT count(*) FROM integration.installations WHERE status = 'ACTIVE'")
+                .query(Long.class)
+                .single();
+        long failing = jdbc.sql(
+                        "SELECT count(*) FROM integration.installations WHERE last_connection_status = 'FAILED'")
+                .query(Long.class)
+                .single();
+        return new ProviderHealth(active, failing);
     }
 
     private List<Candidate> candidates(UUID tenantId, UUID brandId, @Nullable UUID locationId, String capabilityCode) {

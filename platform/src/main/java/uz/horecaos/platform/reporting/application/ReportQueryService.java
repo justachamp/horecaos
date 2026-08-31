@@ -149,6 +149,36 @@ public class ReportQueryService {
         return views;
     }
 
+    // ---------------------------------------------------- digest facts (ADR 0058)
+
+    /** What {@code DigestScheduler} reads: one tenant's most recently closed business day, or empty if none has. */
+    @Transactional(readOnly = true)
+    public Optional<DigestFacts> mostRecentlyClosedDay(UUID tenantId) {
+        return store.lastRunDate(tenantId, "CLOSE").map(businessDate -> {
+            List<BranchDayAggregate> rows = store.readAggregates(tenantId, businessDate, businessDate);
+            long completed = 0;
+            long cancelled = 0;
+            long gross = 0;
+            long net = 0;
+            long refunded = 0;
+            for (BranchDayAggregate row : rows) {
+                completed += row.orderCount();
+                cancelled += row.cancelledCount();
+                gross += row.grossSom();
+                net += row.netSom();
+                refunded += row.refundedSom();
+            }
+            boolean openDivergence = store.readOpenDivergences(tenantId).stream()
+                    .anyMatch(divergence -> divergence.businessDate().equals(businessDate));
+            return new DigestFacts(businessDate, completed, cancelled, gross, net, refunded, openDivergence);
+        });
+    }
+
+    /** Every tenant a platform digest sums across (ADR 0058). Suspended/archived tenants stop taking orders. */
+    public List<UUID> activeTenantIds() {
+        return store.activeTenantIds();
+    }
+
     // ------------------------------------------------------------- refusals
 
     private void refuseMixedBoundaryRegime(ReportQuery query) {

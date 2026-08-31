@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.notifications.api.OperationsSubscriptionDirectory;
+import uz.horecaos.platform.notifications.api.OperationsSubscriptionDirectory.ScopedBinding;
 
 /** {@link OperationsSubscriptionDirectory} over Telegram bindings (ADR 0058), the only channel this slice has. */
 @Component
@@ -18,5 +19,15 @@ public class TelegramOperationsSubscriptionDirectory implements OperationsSubscr
     @Override
     public List<UUID> subscribedBindings(UUID tenantId, UUID brandId, UUID locationId, String eventClass) {
         return bindings.subscribedBindings(tenantId, brandId, locationId, eventClass);
+    }
+
+    @Override
+    public List<ScopedBinding> tenantDigestBindings(UUID tenantId, String eventClass) {
+        return bindings.tenantDigestBindings(tenantId, eventClass);
+    }
+
+    @Override
+    public List<ScopedBinding> platformDigestBindings(String eventClass) {
+        return bindings.platformDigestBindings(eventClass);
     }
 }

@@ -109,6 +109,23 @@ public final class EntitlementKeys {
             .describedAs("Whether the advanced reporting surfaces are available.")
             .build();
 
+    /**
+     * ADR 0058's Telegram feature family (digests, brand bot, inbox, staff
+     * surfaces), starting with digests. Default {@code FALSE}, not {@code TRUE}
+     * like this catalogue's other features: every other key here defaults open
+     * because no plan catalogue exists yet to close it, but a boolean everyone
+     * already holds true is not a gate ADR 0021's machinery can be proven
+     * against. This one is opt-in from the day it ships, which is what "day one"
+     * gating in ADR 0058's resolved open input means — a tenant is entitled
+     * because a plan or override says so, not because nobody decided otherwise.
+     */
+    public static final EntitlementKey<Boolean> TELEGRAM_DIGESTS_ENABLED = EntitlementKey.feature(
+                    "telegram.digests.enabled")
+            .safeDefault(Boolean.FALSE)
+            .ownedBy("notifications")
+            .describedAs("Whether Telegram supervisor digests (15-minute, half-day, day-close) may be delivered.")
+            .build();
+
     private static final Map<String, EntitlementKey<?>> BY_CODE = index(List.of(
             BRANDS_MAX_COUNT,
             LOCATIONS_MAX_COUNT,
@@ -121,7 +138,8 @@ public final class EntitlementKeys {
             POS_INTEGRATIONS_ENABLED,
             DELIVERY_PARTNER_INTEGRATIONS_ENABLED,
             PAYMENTS_PROVIDER_INTEGRATIONS_ENABLED,
-            ANALYTICS_ADVANCED_ENABLED));
+            ANALYTICS_ADVANCED_ENABLED,
+            TELEGRAM_DIGESTS_ENABLED));
 
     private EntitlementKeys() {}
 

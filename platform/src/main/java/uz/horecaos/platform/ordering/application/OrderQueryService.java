@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
+import uz.horecaos.platform.ordering.api.OrderCounts;
+import uz.horecaos.platform.ordering.api.OrderCountsQuery;
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
 import uz.horecaos.platform.ordering.domain.DeliveryDestination;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderProcessStore;
@@ -37,7 +39,7 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.T
  * shows up on an operations screen rather than only in a startup log.
  */
 @Service
-public class OrderQueryService {
+public class OrderQueryService implements OrderCountsQuery {
 
     private static final String ORDER_LINE_TABLE = "ordering.order_lines";
     private static final String NOTE_COLUMN = "note_encrypted";
@@ -238,6 +240,23 @@ public class OrderQueryService {
     @Transactional(readOnly = true)
     public OrderCountsRow counts(UUID tenantId, UUID brandId, UUID locationId) {
         return orders.counts(tenantId, brandId, locationId);
+    }
+
+    /** {@link OrderCountsQuery}: the same read, in the type another module is allowed to see. */
+    @Override
+    @Transactional(readOnly = true)
+    public OrderCounts liveCounts(UUID tenantId, UUID brandId, @Nullable UUID locationId) {
+        OrderCountsRow row = orders.counts(tenantId, brandId, locationId);
+        return new OrderCounts(
+                row.newOrders(),
+                row.awaitingApproval(),
+                row.inKitchen(),
+                row.ready(),
+                row.fulfilling(),
+                row.completed(),
+                row.cancelled(),
+                row.totalNonTerminal(),
+                row.total());
     }
 
     /**

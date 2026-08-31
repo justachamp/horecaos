@@ -3,12 +3,18 @@ package uz.horecaos.platform.notifications.application;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import uz.horecaos.platform.iam.api.protection.ClassificationScanner;
+import uz.horecaos.platform.integration.api.provider.ProviderHealth;
+import uz.horecaos.platform.ordering.api.OrderCounts;
 import uz.horecaos.platform.ordering.api.OrderDirectory.ApprovalDeadlineWarning;
+import uz.horecaos.platform.reporting.application.DigestFacts;
+import uz.horecaos.platform.reporting.application.DigestScheduler;
+import uz.horecaos.platform.tenancy.api.OnboardingHealth;
 
 /**
  * ADR 0058's PII lint, extending {@code EventPayloadClassificationTests}' genre
@@ -26,6 +32,12 @@ import uz.horecaos.platform.ordering.api.OrderDirectory.ApprovalDeadlineWarning;
  * message may render with, which is exactly what ADR 0020's "only allowlisted
  * typed variables from a versioned schema can render" makes closed enough to
  * assert about completely.
+ *
+ * <p>{@link DigestScheduler}'s three vocabularies (live counts, closed-day
+ * totals, platform totals) join the same discipline here even though the class
+ * itself lives in {@code reporting} rather than {@code notifications} — see its
+ * own class doc for why — because a digest is exactly the kind of group message
+ * ADR 0058's "numbers and deep links only" rule exists for.
  */
 class TelegramOperationsMessageClassificationTests {
 
@@ -62,6 +74,55 @@ class TelegramOperationsMessageClassificationTests {
         assertClean(
                 Map.of("orderNumber", "A-1", "amount", "1000 UZS", "currency", "UZS"),
                 "NotificationEligibilityService.variablesFor");
+    }
+
+    @Test
+    void theFifteenMinuteDigestVariablesCarryNoProtectedFieldAndAreExhaustive() {
+        OrderCounts counts = new OrderCounts(1, 2, 3, 4, 5, 6, 7, 8, 9);
+        Map<String, String> variables = DigestScheduler.fifteenMinuteVariables(counts);
+        assertClean(variables, "DigestScheduler.fifteenMinuteVariables");
+        assertThat(variables.keySet())
+                .containsExactlyInAnyOrder(
+                        "newOrderCount",
+                        "pendingApprovalCount",
+                        "kitchenCount",
+                        "readyCount",
+                        "fulfillingCount",
+                        "completedCount",
+                        "cancelledCount",
+                        "totalActiveCount");
+    }
+
+    @Test
+    void theClosedDayDigestVariablesCarryNoProtectedFieldAndAreExhaustive() {
+        DigestFacts facts = new DigestFacts(LocalDate.of(2026, 8, 21), 10, 1, 500_000L, 480_000L, 20_000L, false);
+        Map<String, String> variables = DigestScheduler.closedDayVariables(facts);
+        assertClean(variables, "DigestScheduler.closedDayVariables");
+        assertThat(variables.keySet())
+                .containsExactlyInAnyOrder(
+                        "businessDate",
+                        "ordersCompleted",
+                        "ordersCancelled",
+                        "grossRevenueSom",
+                        "netRevenueSom",
+                        "refundedSom",
+                        "hasDivergence");
+    }
+
+    @Test
+    void thePlatformDigestVariablesCarryNoProtectedFieldAndAreExhaustive() {
+        Map<String, String> variables = DigestScheduler.platformVariables(
+                3, 42, 9_000_000L, new OnboardingHealth(1, 0), new ProviderHealth(5, 0));
+        assertClean(variables, "DigestScheduler.platformVariables");
+        assertThat(variables.keySet())
+                .containsExactlyInAnyOrder(
+                        "activeTenantCount",
+                        "totalOrdersCompleted",
+                        "totalGrossRevenueSom",
+                        "onboardingRunsPending",
+                        "onboardingRunsFailed",
+                        "activeInstallations",
+                        "failingConnections");
     }
 
     @Test
