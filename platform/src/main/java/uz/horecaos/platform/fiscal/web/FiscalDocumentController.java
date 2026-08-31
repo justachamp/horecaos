@@ -240,7 +240,11 @@ public class FiscalDocumentController {
     /** Every command here records why, because ADR 0027 refuses a user action without one. */
     record ResolutionRequest(@NotBlank @Size(max = 255) String reason) {}
 
-    record ResolutionResponse(UUID documentId, String outcome, int version, @Nullable String warning) {}
+    record ResolutionResponse(
+            UUID documentId,
+            String outcome,
+            int version,
+            @Nullable String warning) {}
 
     /**
      * The blocked worklist, as reported to an operator.
@@ -248,7 +252,10 @@ public class FiscalDocumentController {
      * @param warning present when no provider adapter is wired, so the gap appears
      *                on every read rather than in a startup log nobody sees again
      */
-    record BlockedWorklistResponse(int count, List<BlockedDocumentResponse> documents, @Nullable String warning) {}
+    record BlockedWorklistResponse(
+            int count,
+            List<BlockedDocumentResponse> documents,
+            @Nullable String warning) {}
 
     /**
      * One document on the worklist, or one document of an order.

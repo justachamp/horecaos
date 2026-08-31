@@ -206,7 +206,8 @@ public final class FakeClickHttpProvider {
     }
 
     /** Test-only window onto what {@code submit_items}/{@code submit_qrcode} recorded. */
-    @Nullable String readOfdUrl(String paymentId) {
+    @Nullable
+    String readOfdUrl(String paymentId) {
         return ofdUrlByPaymentId.get(paymentId);
     }
 

@@ -189,10 +189,11 @@ public class TerminalOrderPaymentVoid {
                         attempt.id(),
                         orderId);
             }
-            case REJECTED, RETRYABLE -> unvoidable(
-                    orderId,
-                    attempt,
-                    outcome.failureCode() == null ? "provider gave no failure code" : outcome.failureCode());
+            case REJECTED, RETRYABLE ->
+                unvoidable(
+                        orderId,
+                        attempt,
+                        outcome.failureCode() == null ? "provider gave no failure code" : outcome.failureCode());
         }
     }
 

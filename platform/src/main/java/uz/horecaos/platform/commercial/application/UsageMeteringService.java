@@ -215,5 +215,9 @@ public class UsageMeteringService implements UsageMeter {
     }
 
     /** A cached figure that disagreed with the ledger it is supposed to summarise. */
-    public record Divergence(String entitlementKey, String periodKey, @Nullable Long stored, long recomputed) {}
+    public record Divergence(
+            String entitlementKey,
+            String periodKey,
+            @Nullable Long stored,
+            long recomputed) {}
 }

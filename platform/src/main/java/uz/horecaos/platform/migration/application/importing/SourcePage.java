@@ -20,7 +20,8 @@ import uz.horecaos.platform.migration.api.LegacyRecord;
  *                 second query. A page that is exactly full is not the last page,
  *                 even when it happens to be
  */
-public record SourcePage(List<LegacyRecord> records, @Nullable String nextKey, boolean exhausted) {
+public record SourcePage(
+        List<LegacyRecord> records, @Nullable String nextKey, boolean exhausted) {
 
     public SourcePage {
         Objects.requireNonNull(records, "A page has a row list, possibly empty");

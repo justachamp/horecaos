@@ -564,7 +564,8 @@ public class CatalogValidator {
     }
 
     /** A name and optional description in one locale. */
-    public record LocalizedText(String locale, String name, @Nullable String description) {}
+    public record LocalizedText(
+            String locale, String name, @Nullable String description) {}
 
     /**
      * Everything the fiscal rules need, loaded with the rest of the snapshot

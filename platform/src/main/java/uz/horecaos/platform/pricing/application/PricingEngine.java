@@ -501,7 +501,10 @@ public class PricingEngine {
      */
     private static final String DELIVERY_FEE_DESCRIPTION = "DELIVERY_FEE";
 
-    private record Delivery(long feeMinor, List<Quote.QuoteLine> lines, @Nullable Long shortfallMinor) {}
+    private record Delivery(
+            long feeMinor,
+            List<Quote.QuoteLine> lines,
+            @Nullable Long shortfallMinor) {}
 
     /**
      * Everything the total depends on, hashed.

@@ -47,7 +47,10 @@ public interface OrganizationProvisioner {
     MembershipRef ensureMembership(EnsureMembership command);
 
     record EnsureOrganization(
-            UUID tenantId, String alias, String displayName, @Nullable String existingOrganizationId) {
+            UUID tenantId,
+            String alias,
+            String displayName,
+            @Nullable String existingOrganizationId) {
 
         public EnsureOrganization {
             Objects.requireNonNull(tenantId, "A tenant id is required");
@@ -55,7 +58,8 @@ public interface OrganizationProvisioner {
         }
     }
 
-    record EnsureMembership(String organizationId, String email, @Nullable String existingSubjectId) {
+    record EnsureMembership(
+            String organizationId, String email, @Nullable String existingSubjectId) {
 
         public EnsureMembership {
             Objects.requireNonNull(organizationId, "An organization id is required");

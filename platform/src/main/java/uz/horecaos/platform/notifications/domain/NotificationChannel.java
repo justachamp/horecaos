@@ -59,4 +59,3 @@ public enum NotificationChannel {
         return perEndpointOrdered;
     }
 }
-

@@ -224,7 +224,8 @@ public class ApprovalPolicyController {
      * @param effectiveAt when the threshold stops applying, or absent for now
      */
     public record EndPolicyRequest(
-            @Nullable Instant effectiveAt, @NotBlank @Size(max = 1000) String reason) {}
+            @Nullable Instant effectiveAt,
+            @NotBlank @Size(max = 1000) String reason) {}
 
     /**
      * A policy version as returned to a console.

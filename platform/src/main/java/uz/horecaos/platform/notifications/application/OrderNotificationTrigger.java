@@ -206,4 +206,3 @@ public class OrderNotificationTrigger {
         return objectMapper.writeValueAsString(variables);
     }
 }
-

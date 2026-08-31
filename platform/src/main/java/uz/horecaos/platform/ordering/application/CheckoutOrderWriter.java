@@ -7,10 +7,12 @@ import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -96,13 +98,23 @@ class CheckoutOrderWriter {
             String publicNumber,
             OrderAcceptancePolicyService.Effective policy,
             boolean approvalRequired,
-            Instant approvalDeadline,
-            boolean paymentFirst) {}
+            @Nullable Instant approvalDeadline,
+            boolean paymentFirst) {
+
+        Written {
+            if (approvalRequired != (approvalDeadline != null)) {
+                throw new IllegalArgumentException("approvalDeadline must be set exactly when approval is required");
+            }
+        }
+    }
 
     Written create(CheckoutCommand command, Eligible eligible, UUID orderId, Set<UUID> variantIds, Instant now) {
         CartRow cart = eligible.cart();
         SalesChannel channel = eligible.channel();
         QuoteSnapshot quote = eligible.quote();
+        // CheckoutEligibilityGuard already refused any command with no payment
+        // method before this collaborator ever runs.
+        String paymentMethodCode = Objects.requireNonNull(command.paymentMethodCode());
 
         var policy = acceptancePolicies.resolve(command.tenantId(), command.brandId(), cart.locationId());
         boolean approvalRequired = policy.policy().mode() == AcceptanceMode.RESTAURANT_APPROVAL;
@@ -116,7 +128,7 @@ class CheckoutOrderWriter {
         // the answer is ADR 0013's capture timing for the channel's method, and
         // ordering owning a copy of that table is how the two drift apart.
         boolean paymentFirst =
-                payments.paymentRequiredBeforeConfirmation(command.tenantId(), orderId, command.paymentMethodCode());
+                payments.paymentRequiredBeforeConfirmation(command.tenantId(), orderId, paymentMethodCode);
 
         orders.insertOrder(new JdbcOrderStore.NewOrder(
                 orderId,
@@ -363,7 +375,7 @@ class CheckoutOrderWriter {
         return objectMapper.writeValueAsString(captured.destination());
     }
 
-    private String protect(UUID tenantId, UUID orderId, String column, String plaintext) {
+    private @Nullable String protect(UUID tenantId, UUID orderId, String column, @Nullable String plaintext) {
         if (plaintext == null || plaintext.isBlank()) {
             return null;
         }
@@ -385,11 +397,13 @@ class CheckoutOrderWriter {
      * person's words; copying the cart's ciphertext into an order line would
      * produce a note nobody could ever read again.
      */
-    private String reEncryptNote(UUID tenantId, CartLineRow cartLine, UUID orderLineId) {
+    private @Nullable String reEncryptNote(UUID tenantId, @Nullable CartLineRow cartLine, UUID orderLineId) {
         if (cartLine == null || cartLine.customerNoteEncrypted() == null) {
             return null;
         }
-        String note = cartService.revealNote(tenantId, cartLine, "ORDER_SNAPSHOT");
+        // revealNote returns null only when customerNoteEncrypted() is null,
+        // which is already excluded above.
+        String note = Objects.requireNonNull(cartService.revealNote(tenantId, cartLine, "ORDER_SNAPSHOT"));
         return protection
                 .protect(
                         tenantId,

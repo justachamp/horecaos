@@ -10,7 +10,6 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
-import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
@@ -878,7 +877,8 @@ public class OperationsOrderController {
      * @param targetStatus the status {@code ADVANCE} would move the order to.
      *                     Null for every other action
      */
-    public record OrderActionResponse(String action, @Nullable String targetStatus) {
+    public record OrderActionResponse(
+            String action, @Nullable String targetStatus) {
 
         static List<OrderActionResponse> allFor(
                 OrderStatus status, uz.horecaos.platform.tenancy.api.FulfillmentMode mode) {

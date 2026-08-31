@@ -430,7 +430,11 @@ public class JdbcCourierShiftStore {
 
     /** One break on one shift; {@code endedAt} is null while it is still open. */
     public record BreakRow(
-            UUID id, UUID shiftId, Instant startedAt, @Nullable Instant endedAt, @Nullable String endedBySource) {}
+            UUID id,
+            UUID shiftId,
+            Instant startedAt,
+            @Nullable Instant endedAt,
+            @Nullable String endedBySource) {}
 
     /**
      * One courier on shift at one branch, as dispatch needs to see them.

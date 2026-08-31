@@ -455,7 +455,11 @@ public class StorefrontCatalogQuery {
      *
      * @param amountMinor null when unpriced, and never zero for "no price".
      */
-    public record MenuModifierOption(UUID optionId, String code, int maximumQuantity, @Nullable Long amountMinor) {
+    public record MenuModifierOption(
+            UUID optionId,
+            String code,
+            int maximumQuantity,
+            @Nullable Long amountMinor) {
 
         MenuModifierOption withPrice(@Nullable Long price) {
             return new MenuModifierOption(optionId, code, maximumQuantity, price);

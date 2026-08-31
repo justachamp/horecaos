@@ -84,13 +84,14 @@ class PlatformGrantServiceTests {
         // No request is authenticated in this fixture; isPlatformAdmin only ever compares
         // this actor's subject against the fixture's own, so a subject that never matches
         // one under test keeps that check false, exactly as the old `() -> null` did.
-        JdbcAuthorizationService authorization = new JdbcAuthorizationService(
-                jdbc, CLOCK, () -> new AuthenticatedActor("no-request-actor-in-fixture", Set.of(), Map.of())) {
-            @Override
-            public void evictGrants(String subject, @Nullable UUID tenantId) {
-                // no cache in this fixture
-            }
-        };
+        JdbcAuthorizationService authorization =
+                new JdbcAuthorizationService(
+                        jdbc, CLOCK, () -> new AuthenticatedActor("no-request-actor-in-fixture", Set.of(), Map.of())) {
+                    @Override
+                    public void evictGrants(String subject, @Nullable UUID tenantId) {
+                        // no cache in this fixture
+                    }
+                };
         GrantManagementService grantManagement =
                 new GrantManagementService(jdbc, authorization, authorization, event -> {}, CLOCK);
         ApprovalService approvals = new JdbcApprovalService(

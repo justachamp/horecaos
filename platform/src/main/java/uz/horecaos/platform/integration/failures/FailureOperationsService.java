@@ -406,11 +406,7 @@ public class FailureOperationsService {
      * declared fine.
      */
     public boolean resolveOutboxEvent(
-            UUID eventId,
-            FailureCategory category,
-            ActorRef actor,
-            String reason,
-            @Nullable String evidenceReference) {
+            UUID eventId, FailureCategory category, ActorRef actor, String reason, @Nullable String evidenceReference) {
 
         requireResolutionInputs(category, reason, evidenceReference);
         return report(
@@ -418,11 +414,7 @@ public class FailureOperationsService {
     }
 
     private Resolution resolveOutboxWithin(
-            UUID eventId,
-            FailureCategory category,
-            ActorRef actor,
-            String reason,
-            @Nullable String evidenceReference) {
+            UUID eventId, FailureCategory category, ActorRef actor, String reason, @Nullable String evidenceReference) {
 
         Optional<UUID> tenantId = outboxTenant(eventId);
         if (tenantId.isEmpty()) {

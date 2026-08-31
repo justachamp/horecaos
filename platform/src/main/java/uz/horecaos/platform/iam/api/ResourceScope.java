@@ -25,7 +25,10 @@ import org.jspecify.annotations.Nullable;
  * @param locationId present only for {@link ScopeType#LOCATION}
  */
 public record ResourceScope(
-        ScopeType type, @Nullable UUID tenantId, @Nullable UUID brandId, @Nullable UUID locationId) {
+        ScopeType type,
+        @Nullable UUID tenantId,
+        @Nullable UUID brandId,
+        @Nullable UUID locationId) {
 
     public enum ScopeType {
         PLATFORM,

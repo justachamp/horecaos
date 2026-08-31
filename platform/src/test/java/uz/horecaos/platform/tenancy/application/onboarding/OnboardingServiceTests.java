@@ -244,8 +244,8 @@ class OnboardingServiceTests {
 
         // A configured activation-approval policy (above) means this outcome is
         // AWAITING_APPROVAL, which is the one case approvalRequestId() is set.
-        UUID requestId = Objects.requireNonNull(
-                service.activate(runId, ADMIN, "go live").approvalRequestId());
+        UUID requestId =
+                Objects.requireNonNull(service.activate(runId, ADMIN, "go live").approvalRequestId());
         new JdbcApprovalService(
                         jdbc,
                         new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),

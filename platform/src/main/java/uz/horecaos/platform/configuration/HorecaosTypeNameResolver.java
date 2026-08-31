@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
@@ -49,7 +50,15 @@ class HorecaosTypeNameResolver extends TypeNameResolver {
     private static final String WEB_SEGMENT = "/web/";
     private static final String TEST_CLASSES_SEGMENT = "/test-classes/";
 
-    private static volatile Set<String> collidingSimpleNames;
+    /**
+     * Initialization-on-demand holder: the classpath scan runs on first access to {@link
+     * #collidingSimpleNames()} (not at {@link HorecaosTypeNameResolver} class-load), and the JLS
+     * class-initialization guarantee makes the lazy computation thread-safe without a
+     * double-checked-locking field that would otherwise have to be {@code @Nullable}.
+     */
+    private static final class CollidingSimpleNamesHolder {
+        private static final Set<String> COLLIDING_SIMPLE_NAMES = scanForCollidingSimpleNames();
+    }
 
     @Override
     protected String getNameOfClass(Class<?> cls) {
@@ -69,17 +78,7 @@ class HorecaosTypeNameResolver extends TypeNameResolver {
     }
 
     private static Set<String> collidingSimpleNames() {
-        Set<String> resolved = collidingSimpleNames;
-        if (resolved == null) {
-            synchronized (HorecaosTypeNameResolver.class) {
-                resolved = collidingSimpleNames;
-                if (resolved == null) {
-                    resolved = scanForCollidingSimpleNames();
-                    collidingSimpleNames = resolved;
-                }
-            }
-        }
-        return resolved;
+        return CollidingSimpleNamesHolder.COLLIDING_SIMPLE_NAMES;
     }
 
     private static Set<String> scanForCollidingSimpleNames() {
@@ -109,7 +108,7 @@ class HorecaosTypeNameResolver extends TypeNameResolver {
      * class. Read from the resource's path and filename only — the class is never loaded, so
      * this scan has no risk of triggering static initialisers or classloading cycles.
      */
-    private static String webLayerSimpleNameOf(Resource resource) {
+    private static @Nullable String webLayerSimpleNameOf(Resource resource) {
         String filename = resource.getFilename();
         if (filename == null || !filename.endsWith(".class")) {
             return null;

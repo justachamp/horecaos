@@ -22,7 +22,9 @@ import org.jspecify.annotations.Nullable;
  *                              naming one, which is every signature failure
  */
 public record ClickCallbackDecision(
-        ClickShopApiError error, @Nullable Integer merchantTransactionId, @Nullable UUID attemptId) {
+        ClickShopApiError error,
+        @Nullable Integer merchantTransactionId,
+        @Nullable UUID attemptId) {
 
     static ClickCallbackDecision failed(ClickShopApiError error) {
         return new ClickCallbackDecision(error, null, null);

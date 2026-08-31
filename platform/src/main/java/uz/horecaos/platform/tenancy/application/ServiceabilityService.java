@@ -129,7 +129,9 @@ public class ServiceabilityService implements ServiceabilityResolver, LocationCa
         // only ever absent on the "no such channel" fallback row, and rules 1-2
         // above already returned for that case, so it is present here.
         if (!store.hasLivePublication(
-                tenantId, brandId, Objects.requireNonNull(channel.channelCode(), "Channel code missing for an existing channel"))) {
+                tenantId,
+                brandId,
+                Objects.requireNonNull(channel.channelCode(), "Channel code missing for an existing channel"))) {
             return Serviceability.refused(ServiceabilityReason.NO_LIVE_MENU, null, acceptsScheduledOrders);
         }
 

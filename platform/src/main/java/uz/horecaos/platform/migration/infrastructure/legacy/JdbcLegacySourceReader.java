@@ -92,7 +92,8 @@ public class JdbcLegacySourceReader implements LegacySourceReader {
     }
 
     @Override
-    public SourcePage readChanges(ExtractionSpec spec, @Nullable String watermark, @Nullable String afterKey, int limit) {
+    public SourcePage readChanges(
+            ExtractionSpec spec, @Nullable String watermark, @Nullable String afterKey, int limit) {
         if (!spec.hasWatermark()) {
             throw new IllegalArgumentException(
                     "%s declares no watermark column, so it has no incremental feed".formatted(spec.entityType()));

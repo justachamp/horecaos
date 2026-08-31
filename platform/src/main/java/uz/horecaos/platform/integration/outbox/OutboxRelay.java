@@ -12,7 +12,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import uz.horecaos.platform.integration.outbox.RelayStore;
 import uz.horecaos.platform.integration.retry.RetryBackoff;
 
 @Component

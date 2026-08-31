@@ -391,10 +391,7 @@ class EntitlementBoundaryTests {
     // ------------------------------------------------------------- fixtures
 
     private static EntitlementValue counted(
-            @Nullable Long limit,
-            EnforcementMode declared,
-            EnforcementMode effective,
-            @Nullable Long overagePrice) {
+            @Nullable Long limit, EnforcementMode declared, EnforcementMode effective, @Nullable Long overagePrice) {
         return new EntitlementValue(
                 ORDERS,
                 limit,

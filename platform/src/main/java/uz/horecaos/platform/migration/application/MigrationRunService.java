@@ -496,5 +496,6 @@ public class MigrationRunService {
      *
      * @param checksum hex sha-256 of what the pass produced, and only on a completed run
      */
-    public record FinishRunCommand(RunStatus status, @Nullable String checksum, int expectedVersion, String reason) {}
+    public record FinishRunCommand(
+            RunStatus status, @Nullable String checksum, int expectedVersion, String reason) {}
 }

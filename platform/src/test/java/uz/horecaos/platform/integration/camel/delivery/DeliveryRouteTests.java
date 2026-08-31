@@ -7,8 +7,8 @@ import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.apache.camel.CamelContext;
@@ -244,11 +244,13 @@ class DeliveryRouteTests {
         // learns it is unsettled; the difference is that the platform now owes
         // itself an answer and will go and get one.
         assertThat(outcome.status()).isEqualTo(ProviderOutcome.Status.UNCERTAIN);
-        assertThat(Objects.requireNonNull(reconciliations).requested()).singleElement().satisfies(command -> {
-            assertThat(command.externalReference()).isEqualTo("ext-1");
-            assertThat(command.capability()).isEqualTo("CREATE_ON_DEMAND_SHIPMENT");
-            assertThat(command.uncertainErrorCode()).isEqualTo("READ_TIMEOUT");
-        });
+        assertThat(Objects.requireNonNull(reconciliations).requested())
+                .singleElement()
+                .satisfies(command -> {
+                    assertThat(command.externalReference()).isEqualTo("ext-1");
+                    assertThat(command.capability()).isEqualTo("CREATE_ON_DEMAND_SHIPMENT");
+                    assertThat(command.uncertainErrorCode()).isEqualTo("READ_TIMEOUT");
+                });
         assertThat(partner.creates)
                 .as("the original create is never repeated; only the query is")
                 .isEqualTo(1);

@@ -88,8 +88,7 @@ public class KafkaRealtimeSignalPublisher implements RealtimeSignalPublisher {
         // by ADR 0023's outbox age gauge, and one log line per signal would
         // bury it under thousands of copies of the same fact.
         log.debug(
-                "Could not publish a realtime signal for {}; clients fall back to polling", signal.channel(),
-                failure);
+                "Could not publish a realtime signal for {}; clients fall back to polling", signal.channel(), failure);
     }
 
     /**

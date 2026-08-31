@@ -58,5 +58,9 @@ public record TenantOnboardingFailed(
         return new Payload(tenantId.value(), runId, stepKey, errorCode);
     }
 
-    public record Payload(UUID tenantId, UUID runId, @Nullable String stepKey, @Nullable String errorCode) {}
+    public record Payload(
+            UUID tenantId,
+            UUID runId,
+            @Nullable String stepKey,
+            @Nullable String errorCode) {}
 }

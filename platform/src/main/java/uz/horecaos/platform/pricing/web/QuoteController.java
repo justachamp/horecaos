@@ -114,7 +114,8 @@ public class QuoteController {
                 // requireNonNull documents that invariant for a checker that cannot see
                 // across the switch on its own.
                 var total = Objects.requireNonNull(acceptance.total(), "an ACCEPTED acceptance always carries a total");
-                yield ResponseEntity.ok(new AcceptanceResponse(acceptance.outcome().name(), total.minor(), total.currency()));
+                yield ResponseEntity.ok(
+                        new AcceptanceResponse(acceptance.outcome().name(), total.minor(), total.currency()));
             }
             // 409 rather than 400: the request was well-formed and the state moved
             // underneath it, which is exactly what a conflict means.

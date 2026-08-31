@@ -8,8 +8,10 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -107,10 +109,17 @@ public class CheckoutService {
 
         // 2. Every validation, before anything is written.
         var check = eligibility.check(command, now);
-        if (!check.isEligible()) {
-            return ledger.settle(attemptId, null, check.rejectionCode(), check.rejectionDetail(), now);
-        }
+        // Checking the resolved value directly (rather than check.isEligible())
+        // is what lets the compiler carry the non-null fact into the rest of
+        // this method; CheckoutEligibilityGuard.Result guarantees the two
+        // travel together.
         CheckoutEligibilityGuard.Eligible eligible = check.eligible();
+        if (eligible == null) {
+            // Result's own compact constructor guarantees rejectionCode is set
+            // exactly when eligible is not.
+            String rejectionCode = Objects.requireNonNull(check.rejectionCode());
+            return ledger.settle(attemptId, null, rejectionCode, check.rejectionDetail(), now);
+        }
 
         // 3-5. Hold the stock, claim a kitchen slot, and accept the quote — the
         // point of no return. Every refusal from here has already compensated
@@ -126,7 +135,8 @@ public class CheckoutService {
         UUID orderId = reservedOrder.orderId();
 
         // 6. The order, and everything it must remember for ever.
-        var written = orderWriter.create(command, eligible, orderId, reservedOrder.quantities().keySet(), now);
+        var written = orderWriter.create(
+                command, eligible, orderId, reservedOrder.quantities().keySet(), now);
 
         // 7. The settlement (ADR 0046) and the provider-neutral payment intent
         // (ADR 0013), both local rows only.
@@ -152,8 +162,11 @@ public class CheckoutService {
         if (written.paymentFirst()) {
             finalStatus = progression.awaitPayment(command, orderId, now);
         } else if (written.approvalRequired()) {
+            // Written's own compact constructor guarantees approvalDeadline is
+            // set exactly when approvalRequired is true.
+            Instant approvalDeadline = Objects.requireNonNull(written.approvalDeadline());
             finalStatus = progression.awaitApproval(
-                    command, eligible.cart(), orderId, written.policy().policy(), written.approvalDeadline(), now);
+                    command, eligible.cart(), orderId, written.policy().policy(), approvalDeadline, now);
         } else {
             finalStatus = progression.confirmImmediately(
                     command, eligible.cart(), orderId, written.policy().policy(), eligible.quote(), now);
@@ -189,9 +202,11 @@ public class CheckoutService {
      *                            customer has since edited on another device
      * @param contextHash         the hash the cart was priced at, proving the
      *                            basket is the one that produced the total
-     * @param paymentMethodCode   how the order will be paid. Required: a checkout
+     * @param paymentMethodCode   how the order will be paid, or null/blank when the
+     *                            caller named none. Effectively required: a checkout
      *                            that names none is refused with
-     *                            {@code PAYMENT_METHOD_REQUIRED}, because the
+     *                            {@code PAYMENT_METHOD_REQUIRED} by
+     *                            {@link CheckoutEligibilityGuard}, because the
      *                            settlement is planned from it and an order with
      *                            no settlement can never be refunded
      * @param redeemFromBalanceMinor how much of the total the customer asked to
@@ -210,11 +225,11 @@ public class CheckoutService {
             UUID quoteId,
             String contextHash,
             String idempotencyKey,
-            String paymentMethodCode,
+            @Nullable String paymentMethodCode,
             long redeemFromBalanceMinor,
             String actorType,
-            String actorId,
-            String correlationId) {
+            @Nullable String actorId,
+            @Nullable String correlationId) {
 
         /**
          * Everything that makes this request the request it is.
@@ -253,18 +268,23 @@ public class CheckoutService {
      * @param outcome    CREATED on the first success, REPLAYED when an earlier
      *                   identical request had already created it, REJECTED for a
      *                   settled business refusal
+     * @param orderId    null for a REJECTED outcome: no order was ever created
+     * @param publicOrderNumber null for a REJECTED outcome, for the same reason
+     * @param status     null for a REJECTED outcome, for the same reason
+     * @param rejectionCode null on CREATED and REPLAYED, where there is no rejection
+     * @param rejectionDetail null on CREATED and REPLAYED, for the same reason
      * @param warnings   platform gaps that apply to this order; carried on every
      *                   result so an unwired port is visible on a report rather
      *                   than only in a startup log
      */
     public record CheckoutResult(
             Outcome outcome,
-            UUID orderId,
-            String publicOrderNumber,
-            OrderStatus status,
+            @Nullable UUID orderId,
+            @Nullable String publicOrderNumber,
+            @Nullable OrderStatus status,
             int orderVersion,
-            String rejectionCode,
-            String rejectionDetail,
+            @Nullable String rejectionCode,
+            @Nullable String rejectionDetail,
             List<AvailabilityDecision.Unavailable> unavailableItems,
             List<String> warnings) {
 
@@ -274,7 +294,7 @@ public class CheckoutService {
             REJECTED
         }
 
-        static CheckoutResult rejected(String code, String detail, List<String> warnings) {
+        static CheckoutResult rejected(String code, @Nullable String detail, List<String> warnings) {
             return new CheckoutResult(Outcome.REJECTED, null, null, null, 0, code, detail, List.of(), warnings);
         }
 

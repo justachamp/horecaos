@@ -91,7 +91,7 @@ public class ReportingApiErrorHandler {
      * and a Problem Details body has no good way to render an absent one.
      */
     private static String message(Throwable exception) {
-        return Objects.requireNonNullElse(exception.getMessage(), exception.getClass().getSimpleName());
+        return Objects.requireNonNullElse(
+                exception.getMessage(), exception.getClass().getSimpleName());
     }
 }
-

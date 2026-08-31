@@ -545,8 +545,7 @@ public class JdbcRemedyStore {
     private static Instant requiredInstant(ResultSet row, String column) throws SQLException {
         Instant value = instant(row, column);
         if (value == null) {
-            throw new IllegalStateException(
-                    "Column " + column + " is NOT NULL in the schema but this row had none");
+            throw new IllegalStateException("Column " + column + " is NOT NULL in the schema but this row had none");
         }
         return value;
     }

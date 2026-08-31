@@ -297,5 +297,8 @@ public class AudienceService {
 
     /** What a build produced, before any campaign is attached to it. */
     public record SnapshotResult(
-            UUID snapshotId, int candidateCount, int memberCount, @Nullable Instant metricWatermarkAt) {}
+            UUID snapshotId,
+            int candidateCount,
+            int memberCount,
+            @Nullable Instant metricWatermarkAt) {}
 }

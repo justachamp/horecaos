@@ -458,8 +458,7 @@ public class ImportService {
         }
     }
 
-    private void checkpointRun(
-            UUID tenantId, RunRow run, String nextKey, @Nullable String watermark, Tally tally) {
+    private void checkpointRun(UUID tenantId, RunRow run, String nextKey, @Nullable String watermark, Tally tally) {
         Counters before = run.counters();
         Counters totals = new Counters(
                 before.scanned() + tally.scanned(),

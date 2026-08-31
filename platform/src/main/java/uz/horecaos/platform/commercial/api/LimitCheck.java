@@ -82,8 +82,8 @@ public record LimitCheck(
         // billableOverage() being true is exactly the invariant that guarantees
         // a unit price is set; this makes that guarantee explicit rather than
         // unboxing a value the checker cannot otherwise prove is present.
-        Long unitPriceMinor = Objects.requireNonNull(
-                value.overageUnitPriceMinor(), "A billable overage always carries a unit price");
+        Long unitPriceMinor =
+                Objects.requireNonNull(value.overageUnitPriceMinor(), "A billable overage always carries a unit price");
         return Math.multiplyExact(overageQuantity, unitPriceMinor);
     }
 

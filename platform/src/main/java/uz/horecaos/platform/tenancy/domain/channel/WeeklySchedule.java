@@ -53,7 +53,10 @@ public record WeeklySchedule(
     }
 
     /** A dated override of one calendar date. */
-    public record DatedException(boolean closedAllDay, @Nullable LocalTime opensAt, @Nullable LocalTime closesAt) {
+    public record DatedException(
+            boolean closedAllDay,
+            @Nullable LocalTime opensAt,
+            @Nullable LocalTime closesAt) {
 
         public static DatedException closed() {
             return new DatedException(true, null, null);

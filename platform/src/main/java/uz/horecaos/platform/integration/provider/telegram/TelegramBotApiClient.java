@@ -20,6 +20,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -63,7 +64,7 @@ public class TelegramBotApiClient {
                 .build();
     }
 
-    public TelegramCallResult sendMessage(ProviderCall call, long chatId, Integer topicId, String text) {
+    public TelegramCallResult sendMessage(ProviderCall call, long chatId, @Nullable Integer topicId, String text) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("chat_id", chatId);
         if (topicId != null) {

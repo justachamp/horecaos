@@ -1,15 +1,28 @@
 # ADR 0058: Telegram is a first-class notification channel for all three surfaces
 
 - Decision status: Accepted
-- Implementation status: Not started — this record only. The pieces it builds on exist
-  to the depth their own records state, and one of them shallower than this record
-  first assumed: the notification pipeline (ADR 0020) is today in-process,
-  order-events-only and SMS-only — no `notifications.commands` topic exists in the
-  Kafka catalog, and no other domain writes anything the notifications module
-  consumes. This record therefore adds both a channel adapter AND the per-domain
-  trigger listeners its event list requires. Provider installations (ADR 0026),
-  secret references (ADR 0028), and the metric layer the digests need (ADR 0043,
-  whose day-close still has no production caller) are as their records state.
+- Implementation status: Partial — Rollout stage 1 (operations groups) is built and
+  callable end to end: `TelegramLinkCodeController` issues a short opaque code
+  (`integration.telegram_pending_links`), `TelegramUpdateHandler`/`TelegramRightsVerifier`
+  verify the bot's own rights via `getChatMember` before creating a binding,
+  `TelegramChannelAdapter` sends through the existing ADR 0007 route with a per-chat
+  durable lease (`integration.telegram_chat_locks`) plus an ordering precondition, the
+  full Bot API error taxonomy (429/403/`migrate_to_chat_id`/topic-gone —
+  `TelegramBotApiClient`), and an edit-vs-send lifecycle
+  (`integration.telegram_tracked_messages`); a platform-wide circuit breaker alerts over
+  the existing ADR 0023 metric mechanism, never Telegram itself.
+  `OrderNotificationTrigger` fans order-confirmed/rejected out to every subscribed chat
+  and `ApprovalDeadlineWarningSweeper` adds the flagship approval-deadline warning at
+  the board's own two-minute severity threshold. `FakeTelegramBotApi` exercises the
+  whole taxonomy plus `migrate_to_chat_id` against a real PostgreSQL
+  (`TelegramOperationsNotificationIntegrationTest`). `TELEGRAM` spans the four V0026
+  channel CHECK constraints and a binding-shaped `recipient_endpoints.provider_binding_id`
+  variant (V0099–V0101). Not built: customer 1:1 linking, digests (blocked on ADR
+  0043's day-close caller), control-plane audience, and every other domain's trigger
+  listener (payments, fulfillment, fiscal, inventory, onboarding, bands) — named as
+  separate items in this record's own checklist. Group language is one configured
+  default, not real tenant configuration, pending a tenant-language column. Bot
+  topology remains this record's own open input.
 - Date proposed: 2026-08-30
 - Date decided: 2026-08-30
 - Deciders: platform owner (directed the channel and the per-surface scope), Claude

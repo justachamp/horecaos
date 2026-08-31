@@ -420,9 +420,10 @@ public class OrderAmendmentService {
             switch (command.commandType()) {
                 case SET_KITCHEN_NOTE -> kitchenNote = String.valueOf(payload.getOrDefault("note", ""));
                 case SET_CALLBACK_REQUESTED -> callbackRequested = Boolean.TRUE.equals(payload.get("requested"));
-                case SET_CASH_TENDERED -> cashTendered = ((Number)
-                                Objects.requireNonNull(payload.get("amountMinor"), "cashTendered command has no amount"))
-                        .longValue();
+                case SET_CASH_TENDERED ->
+                    cashTendered = ((Number) Objects.requireNonNull(
+                                    payload.get("amountMinor"), "cashTendered command has no amount"))
+                            .longValue();
                 default -> throw new IllegalStateException("No built handler for " + command.commandType());
             }
         }

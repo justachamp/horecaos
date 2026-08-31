@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -94,7 +95,10 @@ public class TelegramUpdateHandler {
         if (!(chatObject instanceof Map<?, ?> chat)) {
             return;
         }
-        long chatId = ((Number) chat.get("id")).longValue();
+        if (!(chat.get("id") instanceof Number chatIdNumber)) {
+            return;
+        }
+        long chatId = chatIdNumber.longValue();
         String chatType = String.valueOf(chat.get("type"));
         if (!("group".equals(chatType) || "supergroup".equals(chatType))) {
             bots.sendMessage(call, chatId, null, TelegramBotMessages.notAGroup(defaultLocale));
@@ -126,12 +130,14 @@ public class TelegramUpdateHandler {
         }
 
         var verification = rights.verify(call, chatId, topicId != null);
-        if (!verification.sufficient()) {
+        // Checking the reason directly (rather than !verification.sufficient())
+        // is what lets the compiler carry the non-null fact into the message
+        // below; Verification guarantees the two travel together (see
+        // TelegramRightsVerifier.Verification.ok()/failed()).
+        String insufficientReason = verification.actionableReason();
+        if (insufficientReason != null) {
             bots.sendMessage(
-                    call,
-                    chatId,
-                    topicId,
-                    TelegramBotMessages.insufficientRights(defaultLocale, verification.actionableReason()));
+                    call, chatId, topicId, TelegramBotMessages.insufficientRights(defaultLocale, insufficientReason));
             return;
         }
 
@@ -178,7 +184,7 @@ public class TelegramUpdateHandler {
      * present, by comparing only the part of the first token before any
      * {@code @}.
      */
-    private static String linkCode(String text) {
+    private static @Nullable String linkCode(String text) {
         String trimmed = text.strip();
         int firstSpace = trimmed.indexOf(' ');
         String commandToken = firstSpace < 0 ? trimmed : trimmed.substring(0, firstSpace);

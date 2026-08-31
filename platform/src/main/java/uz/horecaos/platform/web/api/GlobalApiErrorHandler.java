@@ -29,8 +29,7 @@ public class GlobalApiErrorHandler {
 
     @ExceptionHandler(ApiException.class)
     ProblemDetail apiException(ApiException exception) {
-        return ApiProblem.withProperties(
-                exception.errorCode(), detailOrTitle(exception), exception.properties());
+        return ApiProblem.withProperties(exception.errorCode(), detailOrTitle(exception), exception.properties());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

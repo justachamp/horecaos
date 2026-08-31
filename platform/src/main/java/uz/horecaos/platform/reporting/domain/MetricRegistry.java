@@ -295,4 +295,3 @@ public final class MetricRegistry {
         }
     }
 }
-

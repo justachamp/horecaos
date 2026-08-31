@@ -36,5 +36,9 @@ public final class SupportContent {
      *     artwork with an uploaded asset.
      */
     public record SocialLink(
-            UUID linkId, String platform, String url, @Nullable String imageUrl, int sortOrder) {}
+            UUID linkId,
+            String platform,
+            String url,
+            @Nullable String imageUrl,
+            int sortOrder) {}
 }

@@ -35,11 +35,7 @@ public interface NotificationTransport {
      * would leave every uncertain message stuck in uncertainty forever.
      */
     DispatchOutcome reconcile(
-            UUID tenantId,
-            UUID brandId,
-            @Nullable UUID locationId,
-            String channel,
-            String providerIdempotencyKey);
+            UUID tenantId, UUID brandId, @Nullable UUID locationId, String channel, String providerIdempotencyKey);
 
     /**
      * Whether a real adapter is present for a channel.

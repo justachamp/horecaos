@@ -205,9 +205,15 @@ public class NoorDeliveryAdapter implements DeliveryPartner {
         pickup.put("lat", request.pickup().latitude());
         pickup.put("lon", request.pickup().longitude());
         pickup.put("address", request.pickup().address());
-        pickup.put("contact_name", request.pickup().contactName() == null ? "" : request.pickup().contactName());
-        pickup.put("contact_phone", request.pickup().contactPhone() == null ? "" : request.pickup().contactPhone());
-        pickup.put("comment", request.pickup().comment() == null ? "" : request.pickup().comment());
+        pickup.put(
+                "contact_name",
+                request.pickup().contactName() == null ? "" : request.pickup().contactName());
+        pickup.put(
+                "contact_phone",
+                request.pickup().contactPhone() == null ? "" : request.pickup().contactPhone());
+        pickup.put(
+                "comment",
+                request.pickup().comment() == null ? "" : request.pickup().comment());
         body.put("pickup", pickup);
         body.put("dropoff", dropoff(request));
         body.put("delivery", delivery);

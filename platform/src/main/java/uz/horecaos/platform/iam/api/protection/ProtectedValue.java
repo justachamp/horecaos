@@ -68,7 +68,8 @@ public record ProtectedValue(String keyId, String algorithm, byte[] nonce, byte[
     }
 
     public static ProtectedValue deserialize(String stored) {
-        String[] parts = Objects.requireNonNull(stored, "A stored value is required").split("\\$", -1);
+        String[] parts =
+                Objects.requireNonNull(stored, "A stored value is required").split("\\$", -1);
         if (parts.length != 5 || !parts[0].startsWith("v")) {
             throw new IllegalArgumentException("Malformed protected value");
         }

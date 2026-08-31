@@ -195,8 +195,9 @@ public class MarketplaceIngestionService {
         }
 
         String handoverCode = push.handoverCode();
-        HandoverChallengeType challengeType =
-                handoverCode == null || handoverCode.isBlank() ? HandoverChallengeType.NONE : HandoverChallengeType.CODE;
+        HandoverChallengeType challengeType = handoverCode == null || handoverCode.isBlank()
+                ? HandoverChallengeType.NONE
+                : HandoverChallengeType.CODE;
 
         // The order id is chosen here rather than by the adapter, because the
         // handover hash is bound to it: a hash computed after the row exists

@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -59,6 +60,8 @@ public class OperationsAlertFanoutService {
      *                           appends the binding id so a re-scan or a replayed
      *                           trigger fans out to the same set exactly once
      *                           per chat rather than zero or many times
+     * @param triggerEventId null for an alert with no originating Kafka event,
+     *                       e.g. a scheduled sweep
      */
     public void fanOut(
             UUID tenantId,
@@ -68,7 +71,7 @@ public class OperationsAlertFanoutService {
             String templateKey,
             String subjectType,
             UUID subjectId,
-            UUID triggerEventId,
+            @Nullable UUID triggerEventId,
             String idempotencyKeyBase,
             Map<String, String> triggerVariables,
             Duration expiry) {

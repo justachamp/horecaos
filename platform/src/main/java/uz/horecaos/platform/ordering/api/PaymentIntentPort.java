@@ -60,7 +60,8 @@ public interface PaymentIntentPort {
      *                    refund can reach it either
      * @return the intent id, or null when no payment is required
      */
-    @Nullable UUID createIntent(
+    @Nullable
+    UUID createIntent(
             UUID tenantId,
             UUID orderId,
             long amountMinor,

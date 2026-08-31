@@ -203,4 +203,3 @@ public class OperationsNotificationController {
 
     public record StatusEventResponse(String normalizedStatus, String providerStatus, Instant occurredAt) {}
 }
-

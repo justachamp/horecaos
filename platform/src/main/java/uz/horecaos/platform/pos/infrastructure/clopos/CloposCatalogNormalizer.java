@@ -241,8 +241,7 @@ public final class CloposCatalogNormalizer {
     private static String requiredId(Map<String, Object> raw, String key) {
         String value = id(raw, key);
         if (value == null) {
-            throw new IllegalStateException(
-                    "Clopos response is missing the required field \"" + key + "\"");
+            throw new IllegalStateException("Clopos response is missing the required field \"" + key + "\"");
         }
         return value;
     }
@@ -256,8 +255,7 @@ public final class CloposCatalogNormalizer {
     private static String requiredText(Map<String, Object> raw, String key) {
         String value = text(raw, key);
         if (value == null) {
-            throw new IllegalStateException(
-                    "Clopos response is missing the required field \"" + key + "\"");
+            throw new IllegalStateException("Clopos response is missing the required field \"" + key + "\"");
         }
         return value;
     }

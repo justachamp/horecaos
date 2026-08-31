@@ -334,7 +334,9 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                     Objects.requireNonNullElse(noBook.getMessage(), "NO_PRICE_BOOK"));
         } catch (NoTaxProfileException noTax) {
             throw new PricingRefusedException(
-                    "NO_TAX_PROFILE", command.brandId(), Objects.requireNonNullElse(noTax.getMessage(), "NO_TAX_PROFILE"));
+                    "NO_TAX_PROFILE",
+                    command.brandId(),
+                    Objects.requireNonNullElse(noTax.getMessage(), "NO_TAX_PROFILE"));
         } catch (PricingEngine.UnsupportedTaxModeException unsupported) {
             throw new PricingRefusedException(
                     "UNSUPPORTED_TAX_MODE",
@@ -359,7 +361,8 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                 // Only the ACCEPTED outcome carries a total (see Acceptance.accepted());
                 // requireNonNull documents that invariant for a checker that cannot see
                 // across the switch on its own.
-                Money total = Objects.requireNonNull(acceptance.total(), "an ACCEPTED acceptance always carries a total");
+                Money total =
+                        Objects.requireNonNull(acceptance.total(), "an ACCEPTED acceptance always carries a total");
                 yield new QuoteAcceptance(QuoteAcceptance.Outcome.ACCEPTED, total.minor(), total.currency());
             }
             case PRICE_CHANGED -> new QuoteAcceptance(QuoteAcceptance.Outcome.PRICE_CHANGED, 0L, null);

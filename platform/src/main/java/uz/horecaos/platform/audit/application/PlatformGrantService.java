@@ -116,7 +116,8 @@ public class PlatformGrantService {
         return outcome instanceof ApprovalOutcome.Pending pending ? pending.requestId() : null;
     }
 
-    public record Outcome(Status status, @Nullable UUID grantId, @Nullable UUID approvalRequestId) {
+    public record Outcome(
+            Status status, @Nullable UUID grantId, @Nullable UUID approvalRequestId) {
 
         public enum Status {
             GRANTED,

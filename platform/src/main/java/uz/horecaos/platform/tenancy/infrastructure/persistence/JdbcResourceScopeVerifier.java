@@ -36,11 +36,13 @@ public class JdbcResourceScopeVerifier implements ResourceScopeVerifier {
             // capability question, and it is asked immediately after this one.
             case PLATFORM -> true;
             case TENANT -> tenantExists(Objects.requireNonNull(scope.tenantId()));
-            case BRAND -> brandExists(Objects.requireNonNull(scope.tenantId()), Objects.requireNonNull(scope.brandId()));
-            case LOCATION -> locationExists(
-                    Objects.requireNonNull(scope.tenantId()),
-                    Objects.requireNonNull(scope.brandId()),
-                    Objects.requireNonNull(scope.locationId()));
+            case BRAND ->
+                brandExists(Objects.requireNonNull(scope.tenantId()), Objects.requireNonNull(scope.brandId()));
+            case LOCATION ->
+                locationExists(
+                        Objects.requireNonNull(scope.tenantId()),
+                        Objects.requireNonNull(scope.brandId()),
+                        Objects.requireNonNull(scope.locationId()));
         };
     }
 

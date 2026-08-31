@@ -237,7 +237,8 @@ public class CourierAdjustmentService {
      * What the request produced: a written entry, or the approval it now waits
      * on. Exactly one of the two is present, and {@link #written()} says which.
      */
-    public record Outcome(@Nullable LedgerEntryRow entry, @Nullable UUID approvalRequestId) {
+    public record Outcome(
+            @Nullable LedgerEntryRow entry, @Nullable UUID approvalRequestId) {
 
         public static Outcome recorded(LedgerEntryRow entry) {
             return new Outcome(entry, entry.approvalRequestId());

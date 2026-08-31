@@ -124,7 +124,11 @@ public final class QuoteScoring {
     }
 
     private static ScoredPartner score(
-            PartnerOption partner, @Nullable DeliveryQuote quote, PickupPlan plan, Instant now, int configuredPosition) {
+            PartnerOption partner,
+            @Nullable DeliveryQuote quote,
+            PickupPlan plan,
+            Instant now,
+            int configuredPosition) {
 
         if (quote == null) {
             return new ScoredPartner(partner, null, true, NOT_QUOTED, configuredPosition);

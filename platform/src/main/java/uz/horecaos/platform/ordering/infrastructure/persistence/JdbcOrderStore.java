@@ -1684,5 +1684,8 @@ public class JdbcOrderStore {
      *                always carries an outcome, and V0087 constrains it
      */
     public record ProgressProposalRow(
-            UUID id, UUID orderId, String proposedStatus, @Nullable String outcome) {}
+            UUID id,
+            UUID orderId,
+            String proposedStatus,
+            @Nullable String outcome) {}
 }

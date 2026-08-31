@@ -236,7 +236,20 @@ public class TelegramChannelAdapter implements NotificationChannelAdapter {
 
         return switch (result) {
             case TelegramCallResult.Success success -> {
-                long messageId = ((Number) success.result().get("message_id")).longValue();
+                Object messageIdValue = success.result().get("message_id");
+                if (!(messageIdValue instanceof Number messageIdNumber)) {
+                    // sendMessage's "result" is a Telegram Message object, which
+                    // always carries message_id; if it is ever absent the send
+                    // still happened (Telegram answered ok:true) but nothing here
+                    // can track it for a future edit or content-hash dedupe.
+                    // Uncertain, not a crash: the provider accepted the call.
+                    log.error(
+                            "Telegram sendMessage for binding {} succeeded without a message_id in the response",
+                            bindingId);
+                    yield ProviderOutcome.uncertain(
+                            "MISSING_MESSAGE_ID", "Telegram accepted the message but the response had no message_id");
+                }
+                long messageId = messageIdNumber.longValue();
                 if (dispatch.subjectType() != null && dispatch.subjectId() != null && dispatch.templateKey() != null) {
                     tracker.recordSent(
                             dispatch.tenantId(),

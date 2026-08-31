@@ -250,10 +250,7 @@ public class OrderQueryService {
      */
     @Transactional(readOnly = true)
     public Optional<OrderDetail> detailForCustomer(
-            UUID tenantId,
-            UUID orderId,
-            @Nullable UUID customerAccountId,
-            @Nullable String guestReferenceHash) {
+            UUID tenantId, UUID orderId, @Nullable UUID customerAccountId, @Nullable String guestReferenceHash) {
         return detail(tenantId, orderId).filter(found -> {
             OrderRow order = found.order();
             if (customerAccountId != null) {
@@ -390,7 +387,8 @@ public class OrderQueryService {
      * The full delivery address and instructions, as {@link #revealCustomerAddress}
      * returns them.
      */
-    public record CustomerAddressReveal(DeliveryDestination address, @Nullable String deliveryInstructions) {
+    public record CustomerAddressReveal(
+            DeliveryDestination address, @Nullable String deliveryInstructions) {
 
         @Override
         public String toString() {

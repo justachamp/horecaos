@@ -41,7 +41,8 @@ public interface CustomerPolicyLookup {
      *                no governed decision was ever made, which is what a later
      *                migration needs to know
      */
-    record ResolvedIdentityPolicy(CustomerIdentityPolicy mode, @Nullable Integer version) {
+    record ResolvedIdentityPolicy(
+            CustomerIdentityPolicy mode, @Nullable Integer version) {
 
         /**
          * What governs a tenant that has never chosen.

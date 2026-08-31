@@ -119,7 +119,8 @@ class AuditQueryAndPartitionTests {
 
         assertThat(view.getClass().getRecordComponents())
                 .as("redacted structure is still revealing in bulk, so it is a separate audited read")
-                .noneMatch(component -> component.getName().toLowerCase(Locale.ROOT).contains("change"));
+                .noneMatch(component ->
+                        component.getName().toLowerCase(Locale.ROOT).contains("change"));
     }
 
     @Test

@@ -134,8 +134,7 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
      * comes from the response type, so an endpoint that starts answering with an
      * address is protected by the change that makes it do so.
      */
-    private void storeResponse(
-            UUID recordId, int status, String body, HandlerMethod handler, @Nullable UUID tenantId) {
+    private void storeResponse(UUID recordId, int status, String body, HandlerMethod handler, @Nullable UUID tenantId) {
 
         Optional<DataClass> classification = responseProtection.classificationOf(handler);
         if (classification.isEmpty()) {

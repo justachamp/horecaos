@@ -96,7 +96,8 @@ public class OrderAcceptancePolicyService {
      * @param policyId null when the platform default applied, which is itself a
      *                 fact worth recording rather than inventing an identifier for
      */
-    public record Effective(OrderAcceptancePolicy policy, @Nullable UUID policyId, int policyVersion) {
+    public record Effective(
+            OrderAcceptancePolicy policy, @Nullable UUID policyId, int policyVersion) {
 
         public boolean isPlatformDefault() {
             return policyId == null;

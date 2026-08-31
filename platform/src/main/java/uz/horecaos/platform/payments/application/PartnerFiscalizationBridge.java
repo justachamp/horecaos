@@ -123,7 +123,8 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
             return Outcome.NO_PROVIDER_PATH;
         }
 
-        Optional<ProviderBinding> binding = bindings.resolve(tenantId, legalEntityId, providerType, LocalDate.now(clock));
+        Optional<ProviderBinding> binding =
+                bindings.resolve(tenantId, legalEntityId, providerType, LocalDate.now(clock));
         if (binding.isEmpty() || !binding.get().supportsPartnerFiscalization()) {
             return Outcome.NO_PROVIDER_PATH;
         }

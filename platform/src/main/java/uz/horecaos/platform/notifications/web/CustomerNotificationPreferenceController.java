@@ -151,4 +151,3 @@ public class CustomerNotificationPreferenceController {
     public record PreferenceResponse(
             UUID brandId, String notificationClass, String channel, boolean enabled, int version) {}
 }
-

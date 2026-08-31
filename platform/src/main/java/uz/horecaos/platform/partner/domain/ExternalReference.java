@@ -22,7 +22,10 @@ import org.jspecify.annotations.Nullable;
  * findable.
  */
 public record ExternalReference(
-        ExternalReferenceType type, String value, String normalisedValue, @Nullable String issuedBy) {
+        ExternalReferenceType type,
+        String value,
+        String normalisedValue,
+        @Nullable String issuedBy) {
 
     public ExternalReference {
         Objects.requireNonNull(type, "A reference type is required");

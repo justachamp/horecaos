@@ -1018,8 +1018,8 @@ class CartCheckoutAndOrderTests {
         // The operator gives up on a customer who has wandered off. The order
         // has never confirmed, so the pre-confirmation cancellation path applies.
         int version = orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().version();
-        tx(() ->
-                orderState.cancel(TENANT, orderIdOf(placed), version, "CUSTOMER_UNREACHABLE", "USER", "operator", null));
+        tx(() -> orderState.cancel(
+                TENANT, orderIdOf(placed), version, "CUSTOMER_UNREACHABLE", "USER", "operator", null));
         assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().status())
                 .isEqualTo(OrderStatus.CANCELLED);
 
@@ -1992,11 +1992,8 @@ class CartCheckoutAndOrderTests {
                 .isEqualTo(orderStore.find(TENANT, orderId).orElseThrow().publicOrderNumber());
         assertThat(delivery.currency()).isEqualTo("UZS");
         assertThat(delivery.preparation())
-                .isEqualTo(Duration.ofMinutes(java.util.Objects.requireNonNull(orderStore
-                        .find(TENANT, orderId)
-                        .orElseThrow()
-                        .promise()
-                        .prepMinutes())));
+                .isEqualTo(Duration.ofMinutes(java.util.Objects.requireNonNull(
+                        orderStore.find(TENANT, orderId).orElseThrow().promise().prepMinutes())));
         assertThat(delivery.prepaid())
                 .as("nothing has been captured, so the courier collects at the door")
                 .isFalse();
@@ -2187,7 +2184,8 @@ class CartCheckoutAndOrderTests {
         allowGuestOrders();
         var placed = tx(() -> checkout.checkout(guestCheckoutCommand(readyGuestCart(), "customer-block-guest")));
 
-        var customer = orderQuery.detail(TENANT, orderIdOf(placed)).orElseThrow().customer();
+        var customer =
+                orderQuery.detail(TENANT, orderIdOf(placed)).orElseThrow().customer();
         assertThat(customer.customerType()).isEqualTo("GUEST");
     }
 
@@ -2847,7 +2845,8 @@ class CartCheckoutAndOrderTests {
                 .as("the money unwinds first; a customer refunded 80 000 on this order gets "
                         + "80 000 som and no points back")
                 .isEqualTo(80_000L);
-        assertThat(Objects.requireNonNull(outcome.remedy()).platformSettledMinor()).isZero();
+        assertThat(Objects.requireNonNull(outcome.remedy()).platformSettledMinor())
+                .isZero();
     }
 
     /**
@@ -3297,8 +3296,7 @@ class CartCheckoutAndOrderTests {
      * an equivalence and a fixture that violated it would fail on the insert rather
      * than in the assertion.
      */
-    private UUID insertAddress(
-            UUID accountId, String label, @Nullable Double latitude, @Nullable Double longitude) {
+    private UUID insertAddress(UUID accountId, String label, @Nullable Double latitude, @Nullable Double longitude) {
         UUID addressId = UUID.randomUUID();
         String document = objectMapper.writeValueAsString(Map.of(
                 "line1", "Amir Temur 12",
@@ -4164,7 +4162,8 @@ class CartCheckoutAndOrderTests {
                 {"code": "PIZZA", "status": "ACTIVE",
                  "variants": [{"variantId": "%s", "status": "ACTIVE"}],
                  "modifierGroupIds": ["%s"]}
-                """.formatted(pizzaVariant, sizeGroup));
+                """.formatted(
+                        pizzaVariant, sizeGroup));
 
         insertPublicationItem("MODIFIER_GROUP", sizeGroup, """
                 {"code": "SIZE", "required": true, "minimumSelections": 1,

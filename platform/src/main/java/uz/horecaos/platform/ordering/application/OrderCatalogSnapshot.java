@@ -60,7 +60,8 @@ public interface OrderCatalogSnapshot {
      *                    the common case: most variants are "regular" or "large"
      *                    and the customer-facing name is the dish
      */
-    record VariantDescriptor(UUID productId, String productName, @Nullable String variantName, String sku) {}
+    record VariantDescriptor(
+            UUID productId, String productName, @Nullable String variantName, String sku) {}
 
     record ModifierDescriptor(UUID groupId, String groupName, String optionName) {}
 }

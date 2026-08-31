@@ -205,5 +205,8 @@ public class ServiceScheduleService {
     public record CreateScheduleCommand(String name, boolean acceptsScheduledOrders, List<WeeklySchedule.Rule> rules) {}
 
     public record ChangeServiceStateCommand(
-            ServiceMode mode, @Nullable String reasonCode, @Nullable String note, @Nullable Instant effectiveUntil) {}
+            ServiceMode mode,
+            @Nullable String reasonCode,
+            @Nullable String note,
+            @Nullable Instant effectiveUntil) {}
 }

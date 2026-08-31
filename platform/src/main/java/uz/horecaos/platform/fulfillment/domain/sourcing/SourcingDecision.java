@@ -51,8 +51,10 @@ public sealed interface SourcingDecision {
      *               booking made now
      */
     record BookPartner(
-            PartnerOption partner, BookingIntent intent, @Nullable Instant requestedPickupAt, String reason)
-            implements SourcingDecision {}
+            PartnerOption partner,
+            BookingIntent intent,
+            @Nullable Instant requestedPickupAt,
+            String reason) implements SourcingDecision {}
 
     /**
      * No automated path remains. ADR 0014: create {@code MANUAL_ACTION_REQUIRED},

@@ -183,8 +183,7 @@ public class JdbcPartnerStore {
         insertPush(push, "REJECTED", code.name(), null);
     }
 
-    private void insertPush(
-            InboundPush push, String outcome, @Nullable String rejectionCode, @Nullable UUID orderId) {
+    private void insertPush(InboundPush push, String outcome, @Nullable String rejectionCode, @Nullable UUID orderId) {
         Map<String, Object> row = new HashMap<>();
         row.put("id", UUID.randomUUID());
         row.put("tenantId", push.tenantId());

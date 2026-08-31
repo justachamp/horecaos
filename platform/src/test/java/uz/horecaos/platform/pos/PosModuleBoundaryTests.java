@@ -77,9 +77,7 @@ class PosModuleBoundaryTests {
     @Test
     @DisplayName("the scan finds the files it claims to check")
     void theScanIsNotSilentlyEmpty() throws IOException {
-        assertThat(sources())
-                .as("a scan that finds nothing would pass forever")
-                .hasSizeGreaterThan(20);
+        assertThat(sources()).as("a scan that finds nothing would pass forever").hasSizeGreaterThan(20);
     }
 
     private static List<Path> sources() throws IOException {

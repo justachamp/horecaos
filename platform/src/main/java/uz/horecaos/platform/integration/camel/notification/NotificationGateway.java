@@ -95,11 +95,7 @@ public class NotificationGateway {
      * leaves every uncertain message stuck in uncertainty.
      */
     public ProviderOutcome queryStatus(
-            UUID tenantId,
-            UUID brandId,
-            @Nullable UUID locationId,
-            String channel,
-            String providerIdempotencyKey) {
+            UUID tenantId, UUID brandId, @Nullable UUID locationId, String channel, String providerIdempotencyKey) {
         return invoke(
                 tenantId,
                 brandId,
@@ -114,7 +110,7 @@ public class NotificationGateway {
                 (adapter, call) -> adapter.queryStatus(providerIdempotencyKey, call));
     }
 
-    private static UUID tryParseUuid(String value) {
+    private static @Nullable UUID tryParseUuid(String value) {
         try {
             return UUID.fromString(value);
         } catch (IllegalArgumentException | NullPointerException malformed) {
@@ -128,7 +124,7 @@ public class NotificationGateway {
             @Nullable UUID locationId,
             String channel,
             String idempotencyKey,
-            UUID explicitBindingId,
+            @Nullable UUID explicitBindingId,
             BiFunction<NotificationChannelAdapter, ProviderCall, ProviderOutcome> operation) {
 
         // ADR 0024. The real suppression is in OrderNotificationTrigger, which

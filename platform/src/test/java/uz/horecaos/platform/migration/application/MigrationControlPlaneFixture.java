@@ -10,11 +10,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -227,8 +227,7 @@ abstract class MigrationControlPlaneFixture {
 
     // ------------------------------------------------------------- shorthands
 
-    protected UUID openScope(
-            MigrationCapability capability, @Nullable UUID brandId, @Nullable UUID locationId) {
+    protected UUID openScope(MigrationCapability capability, @Nullable UUID brandId, @Nullable UUID locationId) {
         return programs.openScope(
                         programId,
                         new OpenScopeCommand(

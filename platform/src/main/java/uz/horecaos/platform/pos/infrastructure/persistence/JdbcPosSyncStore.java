@@ -88,8 +88,7 @@ public class JdbcPosSyncStore {
         return runId;
     }
 
-    public void markStatus(
-            UUID tenantId, UUID runId, String status, @Nullable String timestampColumn, Instant now) {
+    public void markStatus(UUID tenantId, UUID runId, String status, @Nullable String timestampColumn, Instant now) {
 
         // The timestamp column is chosen from a closed set in code rather than
         // taken from a caller's string, because a column name cannot be a bound

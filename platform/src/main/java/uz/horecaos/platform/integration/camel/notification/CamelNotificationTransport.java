@@ -42,11 +42,7 @@ public class CamelNotificationTransport implements NotificationTransport {
 
     @Override
     public DispatchOutcome reconcile(
-            UUID tenantId,
-            UUID brandId,
-            @Nullable UUID locationId,
-            String channel,
-            String providerIdempotencyKey) {
+            UUID tenantId, UUID brandId, @Nullable UUID locationId, String channel, String providerIdempotencyKey) {
         ProviderOutcome outcome = send(
                 NotificationRouteBuilder.STATUS_ENDPOINT,
                 NotificationSendOperation.queryStatus(tenantId, brandId, locationId, channel, providerIdempotencyKey));

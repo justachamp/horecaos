@@ -92,8 +92,9 @@ class JdbcAuthorizationServiceTests {
         // reaches a path depending on the value calls set() first. This default
         // is never observed; it exists so the field has an honest initial value
         // rather than a null the interface does not allow.
-        private uz.horecaos.platform.iam.api.AuthenticatedActor value = new uz.horecaos.platform.iam.api.AuthenticatedActor(
-                "no-actor-set-in-fixture", java.util.Set.of(), java.util.Map.of());
+        private uz.horecaos.platform.iam.api.AuthenticatedActor value =
+                new uz.horecaos.platform.iam.api.AuthenticatedActor(
+                        "no-actor-set-in-fixture", java.util.Set.of(), java.util.Map.of());
 
         void set(String subject, java.util.Set<String> globalRoles) {
             value = new uz.horecaos.platform.iam.api.AuthenticatedActor(subject, globalRoles, java.util.Map.of());

@@ -44,8 +44,7 @@ public record Cursor(String sortKey, String filterHash) {
      * @return the cursor, or empty when it is malformed, unsigned, or was issued
      *         for a different filter set
      */
-    public static Optional<Cursor> decode(
-            @Nullable String encoded, String expectedFilterHash, CursorSigner signer) {
+    public static Optional<Cursor> decode(@Nullable String encoded, String expectedFilterHash, CursorSigner signer) {
         if (encoded == null || encoded.isBlank()) {
             return Optional.empty();
         }

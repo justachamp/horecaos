@@ -20,15 +20,13 @@ public interface ProviderInstallationLookup {
      *                   such as SMS verification that a tenant binds once per
      *                   brand rather than per location
      */
-    Optional<BindingRef> primaryBinding(
-            UUID tenantId, UUID brandId, @Nullable UUID locationId, String capabilityCode);
+    Optional<BindingRef> primaryBinding(UUID tenantId, UUID brandId, @Nullable UUID locationId, String capabilityCode);
 
     /**
      * Every eligible provider, for capabilities where asking several is safe.
      * ADR 0014 quotes multiple couriers this way before booking exactly one.
      */
-    List<BindingRef> candidateBindings(
-            UUID tenantId, UUID brandId, @Nullable UUID locationId, String capabilityCode);
+    List<BindingRef> candidateBindings(UUID tenantId, UUID brandId, @Nullable UUID locationId, String capabilityCode);
 
     /** Non-sensitive installation detail. Never a credential. */
     Optional<InstallationSnapshot> installation(UUID tenantId, UUID installationId);

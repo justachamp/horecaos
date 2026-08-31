@@ -193,9 +193,10 @@ class TelemetryDecisionTests {
         // "acc" and "batteryPercent" are the fields somebody would be tempted to
         // add to save a read.
         assertThat(List.of(RealtimeSignal.class.getRecordComponents()))
-                .noneMatch(component -> component.getName().toLowerCase(Locale.ROOT).contains("battery")
-                        || component.getName().toLowerCase(Locale.ROOT).contains("accuracy")
-                        || component.getName().toLowerCase(Locale.ROOT).contains("speed"));
+                .noneMatch(component ->
+                        component.getName().toLowerCase(Locale.ROOT).contains("battery")
+                                || component.getName().toLowerCase(Locale.ROOT).contains("accuracy")
+                                || component.getName().toLowerCase(Locale.ROOT).contains("speed"));
     }
 
     @Test
@@ -205,9 +206,10 @@ class TelemetryDecisionTests {
         // worse than nothing: it looks like a position, it is treated as one, and
         // the courier it sends somebody to is a kilometre away.
         assertThat(List.of(CoarseCourier.class.getRecordComponents()))
-                .noneMatch(component -> component.getName().toLowerCase(Locale.ROOT).contains("lat")
-                        || component.getName().toLowerCase(Locale.ROOT).contains("lon")
-                        || component.getName().toLowerCase(Locale.ROOT).contains("geohash"));
+                .noneMatch(component ->
+                        component.getName().toLowerCase(Locale.ROOT).contains("lat")
+                                || component.getName().toLowerCase(Locale.ROOT).contains("lon")
+                                || component.getName().toLowerCase(Locale.ROOT).contains("geohash"));
     }
 
     // ------------------------------------------------------------------- the map rules

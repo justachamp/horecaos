@@ -461,8 +461,8 @@ public class StorefrontCustomerController {
              * the idempotency record of a profile edit keeps the customer's name
              * in plain text for a day.
              */
-            @Classified(value = DataClass.PERSONAL, reason = "the customer's own name")
-            @Nullable String displayName,
+            @Classified(value = DataClass.PERSONAL, reason = "the customer's own name") @Nullable
+            String displayName,
 
             @Nullable String preferredLocale,
             @Nullable String preferredTimezone,

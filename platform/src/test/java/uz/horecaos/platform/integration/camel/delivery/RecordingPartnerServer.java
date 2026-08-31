@@ -43,8 +43,7 @@ final class RecordingPartnerServer implements AutoCloseable {
     }
 
     static RecordingPartnerServer start() throws IOException {
-        HttpServer server =
-                HttpServer.create(new InetSocketAddress(InetAddress.getAllByName("127.0.0.1")[0], 0), 0);
+        HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getAllByName("127.0.0.1")[0], 0), 0);
         RecordingPartnerServer fake = new RecordingPartnerServer(server);
         server.createContext("/", fake::handle);
         server.start();
@@ -132,7 +131,8 @@ final class RecordingPartnerServer implements AutoCloseable {
 
         /** Reads a nested field, e.g. {@code field("delivery", "product_paid")}. */
         @SuppressWarnings("unchecked")
-        @Nullable Object field(String... path) {
+        @Nullable
+        Object field(String... path) {
             Object current = body;
             for (String segment : path) {
                 if (!(current instanceof Map<?, ?> map)) {

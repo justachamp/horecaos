@@ -97,7 +97,8 @@ public interface RemedyEntitlementPort {
      * @param refusalCode     null when redeemed; otherwise why, so pricing can
      *                        tell "already used up" from "not yours"
      */
-    record RedemptionOutcome(boolean redeemed, int usesRemaining, @Nullable String refusalCode) {
+    record RedemptionOutcome(
+            boolean redeemed, int usesRemaining, @Nullable String refusalCode) {
 
         public static RedemptionOutcome took(int usesRemaining) {
             return new RedemptionOutcome(true, usesRemaining, null);

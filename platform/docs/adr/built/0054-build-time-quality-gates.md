@@ -108,33 +108,113 @@ committed. Error Prone emits its findings in every compile log. The warning
 inventory at adoption is recorded in this ADR so promotion work is sized, not
 guessed.
 
-## Adoption inventory (2026-08-30)
+## Adoption inventory (2026-08-30, corrected 2026-08-31)
 
 Measured on the fully-formatted tree, `./mvnw verify` with Error Prone and
-NullAway wired in (main + test compile combined): **200 warnings**, all
-non-blocking (`-XepAllErrorsAsWarnings`). NullAway dominates, as expected for
-an unannotated codebase's first pass — its findings are directional, not
-exhaustive (see Accepted trade-offs).
+NullAway wired in (main + test compile combined): the figure originally
+recorded here — **200 warnings** — was wrong. javac's default `-Xmaxwarns` is
+100; past that count it silently drops the remaining diagnostics for a
+compilation-unit set, with no error and no summary line distinguishable from
+"no more warnings." 100 main + 100 test is exactly 200, which is what should
+have been the tell. The pom's compiler args did not set `-Xmaxwarns`, so the
+count above was two truncated buckets, not a true total.
+
+With `-Xmaxwarns 100000` added to `maven-compiler-plugin`'s `compilerArgs`,
+the same tree produces **4,374 warnings**:
 
 | Check | Count | Source |
 |---|---:|---|
-| NullAway | 157 | NullAway (nullness) |
-| MissingSummary | 17 | Error Prone (Javadoc) |
-| StringCaseLocaleUsage | 10 | Error Prone (locale-sensitive case conversion) |
-| UnusedVariable | 9 | Error Prone (dead code) |
-| NotJavadoc | 3 | Error Prone (comment misparsed as Javadoc) |
-| ExposedPrivateType | 2 | Error Prone (API leakage) |
+| NullAway | 3,779 | NullAway (nullness) |
+| MissingSummary | 281 | Error Prone (Javadoc) |
+| UnusedVariable | 153 | Error Prone (dead code) |
+| StringCaseLocaleUsage | 33 | Error Prone (locale-sensitive case conversion) |
+| DefaultCharset | 31 | Error Prone (platform-default charset) |
+| NotJavadoc | 14 | Error Prone (comment misparsed as Javadoc) |
+| ReturnValueIgnored | 13 | Error Prone (ignored return value) |
+| SameNameButDifferent | 8 | Error Prone (shadowed identifier) |
+| StringSplitter | 6 | Error Prone (`String.split` footgun) |
+| UnnecessaryParentheses | 5 | Error Prone |
+| ImmutableEnumChecker | 5 | Error Prone |
+| AddressSelection | 5 | Error Prone (`InetAddress` resolution) |
+| FutureReturnValueIgnored | 4 | Error Prone |
+| InvalidParam | 3 | Error Prone (Javadoc `@param`) |
+| EscapedEntity | 3 | Error Prone (Javadoc) |
+| ArrayRecordComponent | 3 | Error Prone (mutable record component) |
+| ReferenceEquality | 2 | Error Prone |
+| InvalidLink | 2 | Error Prone (Javadoc `{@link}`) |
+| FormatString | 2 | Error Prone |
+| CanonicalDuration | 2 | Error Prone |
+| BoxingComparator | 2 | Error Prone |
+| AvoidCommonTypeNames | 2 | Error Prone |
+| AssignmentExpression | 2 | Error Prone |
+| UnusedMethod | 1 | Error Prone (dead code) |
+| UnsynchronizedOverridesSynchronized | 1 | Error Prone |
+| UnnecessaryStringBuilder | 1 | Error Prone |
 | StreamResourceLeak | 1 | Error Prone (unclosed stream) |
+| ReachabilityFenceUsage | 1 | Error Prone |
+| OrphanedFormatString | 1 | Error Prone |
+| LoopOverCharArray | 1 | Error Prone |
+| LongDoubleConversion | 1 | Error Prone |
+| JavaPeriodGetDays | 1 | Error Prone |
+| InputStreamSlowMultibyteRead | 1 | Error Prone |
+| ExposedPrivateType | 1 | Error Prone (API leakage) |
+| DuplicateBranches | 1 | Error Prone |
 | CheckReturnValue | 1 | Error Prone (ignored return value) |
+| ByteBufferBackingArray | 1 | Error Prone |
 
-Eight distinct checks fired — fewer than the top-20 this section budgets for.
-Promotion candidates in ascending order of remaining work:
-`StreamResourceLeak` and `CheckReturnValue` (1 each) are each a single
-inspection away from promotion to build-failing; `ExposedPrivateType` (2),
-`NotJavadoc` (3), and `UnusedVariable` (9) are next; `StringCaseLocaleUsage`
-(10) and `MissingSummary` (17) are larger but still bounded; `NullAway` (157)
-needs `@Nullable`/`@NonNull` annotation coverage to build up before its
-warning count is a promotion signal rather than noise.
+Thirty-six distinct checks fired, not eight — the earlier table only ever saw
+the first 100 warnings in each of the main and test compilation-unit sets, so
+every check outside NullAway/MissingSummary/StringCaseLocaleUsage/
+UnusedVariable/NotJavadoc/ExposedPrivateType/StreamResourceLeak/
+CheckReturnValue was invisible from the start, and even those eight were
+undercounted (NullAway alone was 3,779, not 157).
+
+## Promotion (2026-08-31)
+
+The inventory above is now **zero across every check**. `-XepAllErrorsAsWarnings`
+is removed from the compiler plugin's args; Error Prone's own default-ERROR
+checks and NullAway now fail the build directly. NullAway is pinned to
+`-Xep:NullAway:ERROR` explicitly (equivalent to its default once the blanket
+downgrade is gone, spelled out for clarity).
+
+29 `@SuppressWarnings("NullAway")` sites remain, each with a one-line (or
+short) justification comment immediately above it — none blanket, none at
+class or file scope. They fall into four patterns:
+
+- **Cross-module documented-but-unannotated contracts** (7 sites, `tenancy`
+  module): a field the target module's own Javadoc already documents as
+  optional (e.g. `ExtractionSpec.filter`, `ImportResult.targetVersion`,
+  `TransformationOutcome.quarantine`'s `evidenceReference`), but that module
+  was out of this change's scope and its own field is not yet annotated
+  `@Nullable`. Removable once that module gets its own annotation pass.
+- **A static field a test-runner hook initializes before any `@Test` runs**
+  (16 sites): fifteen via `@DynamicPropertySource`, one via an enclosing
+  class's `@BeforeEach` — NullAway does not recognize either as a field
+  initializer the way it does a class's own `@BeforeAll`/`@BeforeEach`. A
+  recurring, structural pattern in this test suite, not a one-off.
+- **Deliberately-null test fixtures proving a real invariant** (4 sites): a
+  fixture that constructs a record or dependency with a `null` in a slot the
+  production types don't yet mark `@Nullable`, on purpose — either because
+  the test is exercising unrelated fields (`RemedyApprovalHashTests`, 2
+  sites), proving a production defensive null-check does its job without
+  standing up a real dependency (`MigrationControlPlaneFixture`), or because
+  the constructor dependencies genuinely aren't reachable from the test and
+  are left null on purpose (`TenancyLegalEntityResolverTests`).
+- **NullAway's local-variable dataflow needs the suppression to span a whole
+  method** (2 sites, `MigrationExtractionAndTransformationTests`,
+  `LegacyFilterTests`): the value's nullability is tracked from declaration
+  through to where it is finally used several statements later, so a
+  single-statement suppression does not reach far enough.
+
+Since the true final NullAway count is zero and every remaining suppression
+carries a justification, NullAway is promoted to `ERROR` alongside the rest
+of Error Prone rather than held at `WARN`.
+
+Promotion was verified to actually bite: a scratch violation
+(`return value.length()` on a `@Nullable String` with no guard) was added to
+a throwaway file, `./mvnw compile` failed with
+`[NullAway] dereferenced expression 'value' is @Nullable` as a hard
+`COMPILATION ERROR`, and the scratch file was then deleted.
 
 ## References
 

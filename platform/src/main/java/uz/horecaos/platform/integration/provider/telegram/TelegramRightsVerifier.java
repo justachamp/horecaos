@@ -2,6 +2,7 @@ package uz.horecaos.platform.integration.provider.telegram;
 
 import java.util.Map;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.integration.api.delivery.DeliveryPartner.ProviderCall;
 
@@ -59,7 +60,7 @@ public class TelegramRightsVerifier {
         return Verification.ok();
     }
 
-    public record Verification(boolean sufficient, String actionableReason) {
+    public record Verification(boolean sufficient, @Nullable String actionableReason) {
 
         static Verification ok() {
             return new Verification(true, null);

@@ -242,7 +242,9 @@ class OpenApiContractTests {
                     parameter.path("in").asText() + ":" + parameter.path("name").asText();
             JsonNode replacement = current.get(key);
             assertThat(replacement)
-                    .as("published %s parameter %s on %s %s must remain", key, method.toUpperCase(Locale.ROOT), path, method)
+                    .as(
+                            "published %s parameter %s on %s %s must remain",
+                            key, method.toUpperCase(Locale.ROOT), path, method)
                     .isNotNull();
             if (replacement == null) {
                 // Unreachable: the assertion above already failed the test with a
@@ -283,7 +285,9 @@ class OpenApiContractTests {
                 .isTrue();
         if (!oldBody.path("required").asBoolean(false)) {
             assertThat(newBody.path("required").asBoolean(false))
-                    .as("published optional request body on %s %s cannot become required", method.toUpperCase(Locale.ROOT), path)
+                    .as(
+                            "published optional request body on %s %s cannot become required",
+                            method.toUpperCase(Locale.ROOT), path)
                     .isFalse();
         }
         assertSchemasCompatible(

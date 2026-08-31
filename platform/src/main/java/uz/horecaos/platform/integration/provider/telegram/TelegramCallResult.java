@@ -2,6 +2,7 @@ package uz.horecaos.platform.integration.provider.telegram;
 
 import java.time.Duration;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One Bot API call's outcome, in ADR 0058's taxonomy — a superset of ADR 0007's
@@ -18,8 +19,9 @@ public sealed interface TelegramCallResult {
 
     record Success(Map<String, Object> result) implements TelegramCallResult {}
 
-    /** Transport or provider fault, safe to retry. */
-    record Retryable(String errorCode, String detail, Duration retryAfter) implements TelegramCallResult {}
+    /** Transport or provider fault, safe to retry. {@code retryAfter} is null when the provider gave no hint. */
+    record Retryable(
+            String errorCode, String detail, @Nullable Duration retryAfter) implements TelegramCallResult {}
 
     /** Telegram may or may not have acted; there is no query to ask it, so this can only be waited out. */
     record Uncertain(String errorCode, String detail) implements TelegramCallResult {}
@@ -37,7 +39,7 @@ public sealed interface TelegramCallResult {
         return new Success(result);
     }
 
-    static TelegramCallResult retryable(String errorCode, String detail, Duration retryAfter) {
+    static TelegramCallResult retryable(String errorCode, String detail, @Nullable Duration retryAfter) {
         return new Retryable(errorCode, detail, retryAfter);
     }
 

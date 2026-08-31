@@ -1083,7 +1083,9 @@ public class JdbcLoyaltyStore {
                 .param("tenantId", tenantId)
                 .param("reservationId", reservationId)
                 .query((row, number) -> new LotConsumption(
-                        row.getObject("lot_id", UUID.class), row.getLong("amount_minor"), requiredInstant(row, "expires_at")))
+                        row.getObject("lot_id", UUID.class),
+                        row.getLong("amount_minor"),
+                        requiredInstant(row, "expires_at")))
                 .list();
     }
 

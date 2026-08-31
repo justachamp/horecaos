@@ -114,8 +114,7 @@ public class FakeCustomerPaymentService {
             // refusal: a real checkout could never have reached a payable attempt
             // without ADR 0038's seller assignment, so the fake customer should not
             // be able to pay one either.
-            throw new NoPayableClickAttemptException(
-                    "No legal entity is assigned to order " + orderId + "'s location");
+            throw new NoPayableClickAttemptException("No legal entity is assigned to order " + orderId + "'s location");
         }
 
         ProviderBinding binding = bindings.resolve(

@@ -7,6 +7,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -40,7 +41,7 @@ public class TelegramLinkService {
 
     /** Issues a short-lived code an operator pastes as {@code /link <code>} in the target group. */
     @Transactional
-    public String issueCode(UUID tenantId, UUID brandId, UUID locationId, String requestedByPrincipalId) {
+    public String issueCode(UUID tenantId, UUID brandId, @Nullable UUID locationId, String requestedByPrincipalId) {
         Instant now = clock.instant();
         String code = TelegramLinkCode.generate();
 

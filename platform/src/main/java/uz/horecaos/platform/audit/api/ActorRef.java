@@ -11,7 +11,10 @@ import org.jspecify.annotations.Nullable;
  * misleads.
  */
 public record ActorRef(
-        Type type, String subject, @Nullable String displayName, @Nullable String onBehalfOfSubject) {
+        Type type,
+        String subject,
+        @Nullable String displayName,
+        @Nullable String onBehalfOfSubject) {
 
     public enum Type {
         USER,

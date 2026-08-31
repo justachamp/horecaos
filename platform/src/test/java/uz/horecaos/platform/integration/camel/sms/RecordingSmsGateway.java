@@ -46,8 +46,7 @@ final class RecordingSmsGateway implements AutoCloseable {
     }
 
     static RecordingSmsGateway start() throws IOException {
-        HttpServer server =
-                HttpServer.create(new InetSocketAddress(InetAddress.getAllByName("127.0.0.1")[0], 0), 0);
+        HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getAllByName("127.0.0.1")[0], 0), 0);
         // A pool rather than the default serial dispatcher. The stall tests hold
         // one handler open past the caller's deadline on purpose, and on the
         // default executor that would also stall the /search that resolves it —

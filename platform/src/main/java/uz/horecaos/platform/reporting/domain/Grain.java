@@ -64,4 +64,3 @@ public enum Grain {
         return dimensions.contains(Dimension.LEGAL_ENTITY);
     }
 }
-

@@ -37,8 +37,7 @@ public class ProviderExceptionClassifier {
      * 408 and 425 were {@code UNCERTAIN} here and {@code RETRYABLE} there, and
      * the wired-in path was the unsafe one.
      */
-    public ProviderOutcome classifyFailureStatus(
-            int statusCode, @Nullable String body, @Nullable Duration retryAfter) {
+    public ProviderOutcome classifyFailureStatus(int statusCode, @Nullable String body, @Nullable Duration retryAfter) {
         String detail = body == null ? "" : body;
         if (statusCode == 408 || statusCode == 425) {
             // The provider received the request and timed out processing it, so

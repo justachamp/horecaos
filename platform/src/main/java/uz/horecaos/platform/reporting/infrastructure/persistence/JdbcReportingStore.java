@@ -198,7 +198,10 @@ public class JdbcReportingStore {
     }
 
     /** A metric's stored digest, and its finance signature once one exists. */
-    public record StoredMetric(String digest, @Nullable String signedBy, @Nullable Instant signedAt) {}
+    public record StoredMetric(
+            String digest,
+            @Nullable String signedBy,
+            @Nullable Instant signedAt) {}
 
     // -------------------------------------------------------- source reads
 
@@ -924,4 +927,3 @@ public class JdbcReportingStore {
         return value.length() <= limit ? value : value.substring(0, limit);
     }
 }
-

@@ -111,7 +111,11 @@ public final class TrackRetentionFloor {
      *                    it was breached
      */
     public record Verdict(
-            String origin, int retentionDays, int floorDays, Outcome outcome, @Nullable String explanation) {
+            String origin,
+            int retentionDays,
+            int floorDays,
+            Outcome outcome,
+            @Nullable String explanation) {
 
         public boolean isProblem() {
             return outcome != Outcome.WITHIN_FLOOR;

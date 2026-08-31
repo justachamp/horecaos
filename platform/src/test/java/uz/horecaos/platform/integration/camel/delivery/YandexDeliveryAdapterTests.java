@@ -83,8 +83,8 @@ class YandexDeliveryAdapterTests {
 
         Object first = partner.callTo("/claims/create").list("route_points").getFirst();
         @SuppressWarnings("unchecked")
-        Map<String, Object> address = Objects.requireNonNull(
-                (Map<String, Object>) ((Map<String, Object>) first).get("address"));
+        Map<String, Object> address =
+                Objects.requireNonNull((Map<String, Object>) ((Map<String, Object>) first).get("address"));
 
         // Reversed, this delivers to a point in the Indian Ocean rather than
         // failing, which is why it is asserted rather than trusted.

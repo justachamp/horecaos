@@ -14,6 +14,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import org.jspecify.annotations.Nullable;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -144,8 +145,11 @@ public final class FakeTelegramBotApi implements AutoCloseable {
         respondOk(exchange, result);
     }
 
-    private static long number(Object value) {
-        return ((Number) value).longValue();
+    private static long number(@Nullable Object value) {
+        if (!(value instanceof Number number)) {
+            throw new IllegalArgumentException("Expected a numeric Bot API field but got " + value);
+        }
+        return number.longValue();
     }
 
     private Map<String, Object> readBody(HttpExchange exchange) throws IOException {

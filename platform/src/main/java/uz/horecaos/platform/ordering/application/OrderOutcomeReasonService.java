@@ -106,13 +106,16 @@ public class OrderOutcomeReasonService {
                         expectedVersion,
                         command.internalName().strip(),
                         command.kind() == OutcomeReasonKind.CANCELLATION
-                                ? requireCancellationField(command.stockDisposition()).name()
+                                ? requireCancellationField(command.stockDisposition())
+                                        .name()
                                 : null,
                         command.kind() == OutcomeReasonKind.CANCELLATION
-                                ? requireCancellationField(command.liabilityParty()).name()
+                                ? requireCancellationField(command.liabilityParty())
+                                        .name()
                                 : null,
                         command.kind() == OutcomeReasonKind.CANCELLATION
-                                ? requireCancellationField(command.customerRefund()).name()
+                                ? requireCancellationField(command.customerRefund())
+                                        .name()
                                 : null,
                         command.kind() == OutcomeReasonKind.COMPLETION
                                 ? requireCompletionModes(command.allowedFulfillmentModes()).stream()

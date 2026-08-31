@@ -309,9 +309,7 @@ class JdbcProviderInstallationLookupTests {
                     .param("id", location)
                     .param("tenantId", TENANT)
                     .param("brandId", BRAND)
-                    .param(
-                            "code",
-                            "L" + location.toString().substring(24).toUpperCase(java.util.Locale.ROOT))
+                    .param("code", "L" + location.toString().substring(24).toUpperCase(java.util.Locale.ROOT))
                     .param("slug", "l-" + location.toString().substring(24))
                     .update();
         }

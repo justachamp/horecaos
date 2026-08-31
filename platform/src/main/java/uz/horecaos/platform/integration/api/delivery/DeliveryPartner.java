@@ -134,9 +134,11 @@ public interface DeliveryPartner {
     /**
      * Everything the transport needs that is not part of the business request.
      *
-     * @param idempotencyKey stable across retries of one logical operation
+     * @param idempotencyKey stable across retries of one logical operation, or null for a
+     *                       call with no idempotency semantics (e.g. Telegram's getUpdates poll)
      */
-    record ProviderCall(String baseUrl, String credential, String idempotencyKey, Duration timeout) {
+    record ProviderCall(
+            String baseUrl, String credential, @Nullable String idempotencyKey, Duration timeout) {
 
         /**
          * The credential is a live partner token. A generated {@code toString}

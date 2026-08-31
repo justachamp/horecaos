@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.inventory.api.AvailabilityDecision;
 import uz.horecaos.platform.ordering.api.OrderSettlementPort;
@@ -101,7 +102,7 @@ class CheckoutAttemptLedger {
     }
 
     /** Settles the attempt against a plain business refusal and builds the result a caller renders. */
-    CheckoutResult settle(UUID attemptId, UUID orderId, String code, String detail, Instant now) {
+    CheckoutResult settle(UUID attemptId, @Nullable UUID orderId, String code, @Nullable String detail, Instant now) {
         attempts.complete(attemptId, orderId, code, detail, now);
         return CheckoutResult.rejected(code, detail, warnings());
     }
@@ -141,7 +142,9 @@ class CheckoutAttemptLedger {
 
     /** The order's current version, for the result a successful checkout returns. */
     int orderVersion(UUID tenantId, UUID orderId) {
-        return orders.find(tenantId, orderId).map(JdbcOrderStore.OrderRow::version).orElse(1);
+        return orders.find(tenantId, orderId)
+                .map(JdbcOrderStore.OrderRow::version)
+                .orElse(1);
     }
 
     /**
@@ -149,7 +152,8 @@ class CheckoutAttemptLedger {
      * that mark a checkout as finished, once nothing further can refuse it.
      */
     void completeAttempt(CheckoutCommand command, CartRow cart, UUID attemptId, UUID orderId, Instant now) {
-        if (!carts.transition(command.tenantId(), cart.cartId(), CartStatus.ACTIVE, CartStatus.CONVERTED, orderId, now)) {
+        if (!carts.transition(
+                command.tenantId(), cart.cartId(), CartStatus.ACTIVE, CartStatus.CONVERTED, orderId, now)) {
             // Unreachable while the cart row lock is held, and worth failing on
             // rather than committing an order whose cart is still orderable.
             throw new IllegalStateException("Cart " + cart.cartId() + " changed during checkout");

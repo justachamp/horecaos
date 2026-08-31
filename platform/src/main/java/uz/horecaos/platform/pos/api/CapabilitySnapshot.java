@@ -29,7 +29,9 @@ import org.jspecify.annotations.Nullable;
  *                       cannot be read as though later code had produced it
  */
 public record CapabilitySnapshot(
-        Map<PosCapability, Entry> entries, @Nullable Instant verifiedAt, @Nullable String adapterVersion) {
+        Map<PosCapability, Entry> entries,
+        @Nullable Instant verifiedAt,
+        @Nullable String adapterVersion) {
 
     public CapabilitySnapshot {
         entries = entries == null ? Map.of() : Map.copyOf(entries);

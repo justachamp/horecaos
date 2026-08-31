@@ -128,7 +128,8 @@ public class LoyaltyOperationsController {
      *
      * @param status NOT_REQUIRED, PENDING, APPROVED, or DECLINED (ADR 0027)
      */
-    public record AdjustmentResponse(String status, @Nullable UUID approvalRequestId) {
+    public record AdjustmentResponse(
+            String status, @Nullable UUID approvalRequestId) {
 
         static AdjustmentResponse of(ApprovalOutcome outcome) {
             return switch (outcome) {

@@ -73,7 +73,10 @@ public final class LegacyTariffImport {
      *                       parser silently never having had it
      */
     public record LegacyDiscount(
-            long value, String mode, @Nullable Long minOrderPrice, @Nullable List<LegacyWindow> times) {}
+            long value,
+            String mode,
+            @Nullable Long minOrderPrice,
+            @Nullable List<LegacyWindow> times) {}
 
     /** {@code VendorDeliveryConfig}. Every field, including the inert ones. */
     public record LegacyDeliveryConfig(

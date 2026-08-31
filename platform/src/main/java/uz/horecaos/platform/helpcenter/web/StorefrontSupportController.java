@@ -108,7 +108,11 @@ public class StorefrontSupportController {
      *
      * @param imageUrl null unless an operator overrode the platform's own artwork.
      */
-    public record SocialLinkResponse(UUID linkId, String platform, String url, @Nullable String imageUrl) {
+    public record SocialLinkResponse(
+            UUID linkId,
+            String platform,
+            String url,
+            @Nullable String imageUrl) {
 
         static SocialLinkResponse of(SocialLink link) {
             return new SocialLinkResponse(link.linkId(), link.platform(), link.url(), link.imageUrl());

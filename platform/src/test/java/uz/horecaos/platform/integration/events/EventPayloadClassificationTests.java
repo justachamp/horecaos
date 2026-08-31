@@ -96,8 +96,7 @@ class EventPayloadClassificationTests {
                 .orElse(null);
     }
 
-    private static void inspect(
-            @Nullable Class<?> type, String path, Set<Class<?>> visited, List<String> violations) {
+    private static void inspect(@Nullable Class<?> type, String path, Set<Class<?>> visited, List<String> violations) {
         if (type == null || !type.isRecord() || !visited.add(type)) {
             return;
         }

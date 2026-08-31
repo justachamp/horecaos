@@ -46,8 +46,7 @@ public final class ControlledFakeProvider implements AutoCloseable {
     }
 
     public static ControlledFakeProvider start() throws IOException {
-        HttpServer server =
-                HttpServer.create(new InetSocketAddress(InetAddress.getAllByName("127.0.0.1")[0], 0), 0);
+        HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getAllByName("127.0.0.1")[0], 0), 0);
         ControlledFakeProvider provider = new ControlledFakeProvider(server);
         server.createContext("/provider/commands", provider::handle);
         server.createContext("/provider/status", provider::status);

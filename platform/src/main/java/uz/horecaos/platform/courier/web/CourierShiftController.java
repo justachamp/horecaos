@@ -211,7 +211,11 @@ public class CourierShiftController {
         }
     }
 
-    record CloseResponse(String status, long paidSeconds, long breakSeconds, @Nullable UUID cashHandoverId) {}
+    record CloseResponse(
+            String status,
+            long paidSeconds,
+            long breakSeconds,
+            @Nullable UUID cashHandoverId) {}
 
     /** Never a list of other couriers. Kept here so the shape is obvious. */
     record MyShifts(List<ShiftResponse> shifts) {}

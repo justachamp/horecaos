@@ -110,7 +110,9 @@ class FulfillmentCommandSchemaTests {
         JsonSchemaFactory factory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012);
         try (InputStream source = getClass().getClassLoader().getResourceAsStream(contract.schemaPath())) {
             assertThat(source).as("schema %s must exist", contract.schemaPath()).isNotNull();
-            return factory.getSchema(Objects.requireNonNull(source), SchemaValidatorsConfig.builder().build());
+            return factory.getSchema(
+                    Objects.requireNonNull(source),
+                    SchemaValidatorsConfig.builder().build());
         }
     }
 }

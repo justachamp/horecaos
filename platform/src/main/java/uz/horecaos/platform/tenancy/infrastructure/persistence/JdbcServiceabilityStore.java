@@ -491,7 +491,10 @@ public class JdbcServiceabilityStore {
     // --------------------------------------------------------------- row types
 
     public record ChannelAtLocation(
-            boolean exists, boolean active, boolean enabledAtLocation, @Nullable String channelCode) {}
+            boolean exists,
+            boolean active,
+            boolean enabledAtLocation,
+            @Nullable String channelCode) {}
 
     public record ServiceState(
             ServiceMode mode,

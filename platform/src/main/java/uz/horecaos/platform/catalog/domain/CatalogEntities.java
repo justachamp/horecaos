@@ -177,7 +177,11 @@ public final class CatalogEntities {
             int version) {}
 
     public record Translation(
-            EntityType entityType, UUID entityId, String locale, String name, @Nullable String description) {}
+            EntityType entityType,
+            UUID entityId,
+            String locale,
+            String name,
+            @Nullable String description) {}
 
     public record LocationOffering(
             UUID id,

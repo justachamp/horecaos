@@ -351,7 +351,10 @@ public class QuarantineService {
      *                                   a reason code. Never the evidence itself
      */
     public record QuarantineCommand(
-            String entityType, String legacyId, String reasonCode, @Nullable String sanitizedEvidenceReference) {
+            String entityType,
+            String legacyId,
+            String reasonCode,
+            @Nullable String sanitizedEvidenceReference) {
 
         public QuarantineCommand {
             Objects.requireNonNull(entityType, "An entity type is required");

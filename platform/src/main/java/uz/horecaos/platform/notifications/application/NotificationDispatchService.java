@@ -435,14 +435,13 @@ public class NotificationDispatchService {
      * references, never personal data, which is why neither goes near
      * {@link RecipientContactDirectory}.
      */
-    private String resolveRecipientValue(NotificationRow row) {
+    private @Nullable String resolveRecipientValue(NotificationRow row) {
         // Frozen by eligibility alongside the template; see render()'s comment.
         UUID endpointId = Objects.requireNonNull(
                 row.recipientEndpointId(),
                 () -> "Notification %s has no recipient endpoint frozen onto it".formatted(row.id()));
         JdbcNotificationStore.EndpointRow endpoint = notifications
                 .endpoint(row.tenantId(), endpointId)
-
                 .orElseThrow(() ->
                         new IllegalStateException("Notification %s has no resolvable endpoint".formatted(row.id())));
 
@@ -452,7 +451,10 @@ public class NotificationDispatchService {
         if (endpoint.operationsEndpointReference() != null) {
             return endpoint.operationsEndpointReference();
         }
-        return contacts.resolveValue(row.tenantId(), endpoint.contactPointId(), REVEAL_PURPOSE)
+        // ck_endpoint_destination (V0100) requires exactly one of the three
+        // columns to be set; neither of the other two is, so this one is.
+        UUID contactPointId = Objects.requireNonNull(endpoint.contactPointId());
+        return contacts.resolveValue(row.tenantId(), contactPointId, REVEAL_PURPOSE)
                 .orElse(null);
     }
 
@@ -494,4 +496,3 @@ public class NotificationDispatchService {
     /** Exists for the length of one call and is never persisted or logged. */
     private record Rendered(@Nullable String subject, String body) {}
 }
-

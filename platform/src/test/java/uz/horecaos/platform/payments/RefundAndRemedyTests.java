@@ -223,7 +223,10 @@ class RefundAndRemedyTests {
                                 order,
                                 50_000L,
                                 new RefundEvidence(
-                                        ExecutionChannel.PROVIDER_CONSOLE, "CLICK-REV-88213", "cashier-7", inTheCabinet))
+                                        ExecutionChannel.PROVIDER_CONSOLE,
+                                        "CLICK-REV-88213",
+                                        "cashier-7",
+                                        inTheCabinet))
                         .remedy(),
                 "this refund needed no approval");
 
@@ -275,7 +278,8 @@ class RefundAndRemedyTests {
         // call, so the second reaches only the points.
         refund(order, 96_000L, consoleRefund());
         RemedyRow onlyPoints = Objects.requireNonNull(
-                refund(order, 4_000L, new RefundEvidence(null, null, null, null)).remedy(),
+                refund(order, 4_000L, new RefundEvidence(null, null, null, null))
+                        .remedy(),
                 "this refund needed no approval");
 
         assertThat(onlyPoints.settlementBasis()).isEqualTo(SettlementBasis.PLATFORM_SETTLED);
@@ -504,8 +508,8 @@ class RefundAndRemedyTests {
     void aFutureDiscountIsNotMoney() {
         UUID order = settledSplitOrder("E-1", 100_000L, 4_000L);
 
-        RemedyRow remedy = Objects.requireNonNull(
-                grantThreeFreeDeliveries(order).remedy(), "this grant needed no approval");
+        RemedyRow remedy =
+                Objects.requireNonNull(grantThreeFreeDeliveries(order).remedy(), "this grant needed no approval");
 
         assertThat(remedy.remedyType()).isEqualTo(RemedyType.FUTURE_DISCOUNT);
         assertThat(remedy.amountMinor()).isZero();
@@ -524,9 +528,8 @@ class RefundAndRemedyTests {
     @DisplayName("one use is one order: a retried redemption of the same order spends nothing " + "more")
     void aRedemptionIsIdempotentPerOrder() {
         UUID granting = settledSplitOrder("E-2", 100_000L, 4_000L);
-        UUID entitlementId =
-                entitlementOf(Objects.requireNonNull(
-                        grantThreeFreeDeliveries(granting).remedy(), "this grant needed no approval")
+        UUID entitlementId = entitlementOf(
+                Objects.requireNonNull(grantThreeFreeDeliveries(granting).remedy(), "this grant needed no approval")
                         .id());
         UUID next = order("E-3", 60_000L, 12_000L, customerId);
 
@@ -549,9 +552,8 @@ class RefundAndRemedyTests {
     @DisplayName("uses run out, and the last one closes the grant")
     void anEntitlementIsExhaustedByItsGrantedUses() {
         UUID granting = settledSplitOrder("E-4", 100_000L, 4_000L);
-        UUID entitlementId =
-                entitlementOf(Objects.requireNonNull(
-                        grantThreeFreeDeliveries(granting).remedy(), "this grant needed no approval")
+        UUID entitlementId = entitlementOf(
+                Objects.requireNonNull(grantThreeFreeDeliveries(granting).remedy(), "this grant needed no approval")
                         .id());
 
         for (int use = 1; use <= 3; use++) {
@@ -581,9 +583,8 @@ class RefundAndRemedyTests {
             + "maximum, by another customer, or after it expires")
     void theBoundsOfAGrantAreEnforcedWhereTheMoneyIsTaken() {
         UUID granting = settledSplitOrder("E-5", 100_000L, 4_000L);
-        UUID entitlementId =
-                entitlementOf(Objects.requireNonNull(
-                        grantThreeFreeDeliveries(granting).remedy(), "this grant needed no approval")
+        UUID entitlementId = entitlementOf(
+                Objects.requireNonNull(grantThreeFreeDeliveries(granting).remedy(), "this grant needed no approval")
                         .id());
         UUID next = order("E-6", 60_000L, 12_000L, customerId);
 
@@ -770,7 +771,8 @@ class RefundAndRemedyTests {
         assertThat(outcome.recorded())
                 .as("the whole point: the customer's money can be given back")
                 .isTrue();
-        assertThat(Objects.requireNonNull(outcome.remedy(), "just asserted recorded()").attestedMoneyMinor())
+        assertThat(Objects.requireNonNull(outcome.remedy(), "just asserted recorded()")
+                        .attestedMoneyMinor())
                 .isEqualTo(96_000L);
         assertThat(points.reversed)
                 .as("and no points are returned, because they were already released; refunding "

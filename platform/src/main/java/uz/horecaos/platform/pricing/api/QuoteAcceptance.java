@@ -13,7 +13,8 @@ import org.jspecify.annotations.Nullable;
  *                   outcome is {@link Outcome#ACCEPTED}
  * @param currency null unless the outcome is {@link Outcome#ACCEPTED}
  */
-public record QuoteAcceptance(Outcome outcome, long totalMinor, @Nullable String currency) {
+public record QuoteAcceptance(
+        Outcome outcome, long totalMinor, @Nullable String currency) {
 
     public enum Outcome {
         ACCEPTED,

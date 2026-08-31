@@ -120,7 +120,9 @@ public class PlatformGrantController {
     public record ReasonRequest(@NotBlank @Size(max = 1000) String reason) {}
 
     public record PlatformGrantResponse(
-            String outcome, @Nullable UUID grantId, @Nullable UUID approvalRequestId) {
+            String outcome,
+            @Nullable UUID grantId,
+            @Nullable UUID approvalRequestId) {
 
         static PlatformGrantResponse of(Outcome outcome) {
             return new PlatformGrantResponse(outcome.status().name(), outcome.grantId(), outcome.approvalRequestId());

@@ -416,7 +416,9 @@ public class JdbcTelemetryStore {
                 resultSet.getObject("last_observed_at", OffsetDateTime.class),
                 "last_observed_at was NULL alongside a non-null first_observed_at");
         return Optional.of(new TrackAggregate(
-                resultSet.getInt("distance_meters"), resultSet.getInt("observation_count"), first.toInstant(),
+                resultSet.getInt("distance_meters"),
+                resultSet.getInt("observation_count"),
+                first.toInstant(),
                 last.toInstant()));
     }
 

@@ -111,13 +111,14 @@ class GrantManagementServiceTests {
         // Deliberately not the caching proxy: these tests are about the grant
         // rules, and a cache would hide a grant that was written but not yet
         // visible, turning a rule failure into a flake.
-        authorization = new JdbcAuthorizationService(
-                jdbc, clock, () -> new AuthenticatedActor("no-request-actor-in-fixture", Set.of(), Map.of())) {
-            @Override
-            public void evictGrants(String subject, @Nullable UUID tenantId) {
-                // no cache in this fixture
-            }
-        };
+        authorization =
+                new JdbcAuthorizationService(
+                        jdbc, clock, () -> new AuthenticatedActor("no-request-actor-in-fixture", Set.of(), Map.of())) {
+                    @Override
+                    public void evictGrants(String subject, @Nullable UUID tenantId) {
+                        // no cache in this fixture
+                    }
+                };
         // Stands in for Spring's BEFORE_COMMIT dispatch, so the published event
         // still reaches the audit listener that records it in production.
         GrantAuditListener auditListener = new GrantAuditListener(

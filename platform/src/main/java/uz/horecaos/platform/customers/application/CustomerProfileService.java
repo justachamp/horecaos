@@ -558,14 +558,27 @@ public class CustomerProfileService {
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record AddressFields(
             @jakarta.validation.constraints.Size(max = 200) String line1,
-            @jakarta.validation.constraints.Size(max = 200) @Nullable String line2,
+
+            @jakarta.validation.constraints.Size(max = 200) @Nullable
+            String line2,
+
             @jakarta.validation.constraints.Size(max = 120) String city,
             @jakarta.validation.constraints.Size(max = 120) String district,
-            @jakarta.validation.constraints.Size(max = 32) @Nullable String postalCode,
-            @jakarta.validation.constraints.Size(max = 32) @Nullable String entrance,
-            @jakarta.validation.constraints.Size(max = 32) @Nullable String floor,
-            @jakarta.validation.constraints.Size(max = 32) @Nullable String apartment,
-            @jakarta.validation.constraints.Size(max = 300) @Nullable String landmark) {}
+
+            @jakarta.validation.constraints.Size(max = 32) @Nullable
+            String postalCode,
+
+            @jakarta.validation.constraints.Size(max = 32) @Nullable
+            String entrance,
+
+            @jakarta.validation.constraints.Size(max = 32) @Nullable
+            String floor,
+
+            @jakarta.validation.constraints.Size(max = 32) @Nullable
+            String apartment,
+
+            @jakarta.validation.constraints.Size(max = 300) @Nullable
+            String landmark) {}
 
     public record RevealedContact(
             UUID id, ContactType type, String value, String verificationStatus, boolean isPrimary) {}

@@ -121,7 +121,8 @@ public class PriceAuthoringService {
         // CHANNEL assignment supplies one, and a channel assignment naming no
         // channel is exactly as unknown as one naming a channel that does not
         // exist for this tenant.
-        if (scope == AssignmentScope.CHANNEL && (scopeId == null || channels.byId(tenantId, scopeId).isEmpty())) {
+        if (scope == AssignmentScope.CHANNEL
+                && (scopeId == null || channels.byId(tenantId, scopeId).isEmpty())) {
             throw new UnknownAssignmentScopeException(scope, scopeId);
         }
 
@@ -300,7 +301,11 @@ public class PriceAuthoringService {
      *                 wall-clock timing never decide a price
      */
     public record NewPriceBook(
-            String name, String currency, @Nullable Instant validFrom, @Nullable Instant validUntil, int priority) {}
+            String name,
+            String currency,
+            @Nullable Instant validFrom,
+            @Nullable Instant validUntil,
+            int priority) {}
 
     /**
      * Where and when a price book applies.
@@ -308,7 +313,10 @@ public class PriceAuthoringService {
      * @param validFrom defaults to now when null
      * @param validUntil null is open-ended: the assignment never closes on its own
      */
-    public record Assignment(int priority, @Nullable Instant validFrom, @Nullable Instant validUntil) {}
+    public record Assignment(
+            int priority,
+            @Nullable Instant validFrom,
+            @Nullable Instant validUntil) {}
 
     public record PriceBook(
             UUID id,

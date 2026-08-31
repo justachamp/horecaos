@@ -48,8 +48,7 @@ public record DispatchOutcome(
         UNCERTAIN
     }
 
-    public static DispatchOutcome accepted(
-            @Nullable String externalMessageId, @Nullable String providerStatus) {
+    public static DispatchOutcome accepted(@Nullable String externalMessageId, @Nullable String providerStatus) {
         return new DispatchOutcome(Status.ACCEPTED, externalMessageId, providerStatus, null, null, null, null, null);
     }
 

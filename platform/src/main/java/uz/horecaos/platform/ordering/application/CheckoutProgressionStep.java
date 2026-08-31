@@ -35,7 +35,8 @@ class CheckoutProgressionStep {
     private final OrderInventoryProcess inventoryProcess;
     private final ApplicationEventPublisher events;
 
-    CheckoutProgressionStep(JdbcOrderStore orders, OrderInventoryProcess inventoryProcess, ApplicationEventPublisher events) {
+    CheckoutProgressionStep(
+            JdbcOrderStore orders, OrderInventoryProcess inventoryProcess, ApplicationEventPublisher events) {
         this.orders = orders;
         this.inventoryProcess = inventoryProcess;
         this.events = events;
@@ -80,7 +81,12 @@ class CheckoutProgressionStep {
     }
 
     OrderStatus awaitApproval(
-            CheckoutCommand command, CartRow cart, UUID orderId, OrderAcceptancePolicy policy, Instant deadline, Instant now) {
+            CheckoutCommand command,
+            CartRow cart,
+            UUID orderId,
+            OrderAcceptancePolicy policy,
+            Instant deadline,
+            Instant now) {
 
         OrderStateMachine.require(OrderStatus.RECEIVED, OrderStatus.AWAITING_APPROVAL);
         int version = orders.transition(

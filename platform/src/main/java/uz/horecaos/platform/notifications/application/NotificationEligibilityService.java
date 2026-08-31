@@ -182,11 +182,16 @@ public class NotificationEligibilityService {
         // absence of a decision is withheld rather than permitted — "we never
         // asked" and "they said yes" are the two states a default-true would merge.
         if (notificationClass.requiresConsent()) {
+            // requiresConsent() is true only for a class with a data subject (see
+            // NotificationClass), which is never OPERATIONS_ALERT, so the
+            // non-operations branch above already resolved accountId.
+            UUID consentAccountId = Objects.requireNonNull(
+                    accountId, "a class that requires consent must have resolved a customer account");
             String consentPurpose = Objects.requireNonNull(
                     template.consentPurpose(),
-                    "template %s is %s and must declare a consent purpose"
-                            .formatted(template.id(), notificationClass));
-            boolean granted = consent.consentFor(row.tenantId(), accountId, row.brandId(), consentPurpose, channel.name())
+                    "template %s is %s and must declare a consent purpose".formatted(template.id(), notificationClass));
+            boolean granted = consent.consentFor(
+                            row.tenantId(), consentAccountId, row.brandId(), consentPurpose, channel.name())
                     .map(ConsentDirectory.ConsentState::granted)
                     .orElse(false);
             if (!granted) {
@@ -195,9 +200,17 @@ public class NotificationEligibilityService {
         }
 
         if (notificationClass.respectsPreference()) {
+            // Same guarantee as above: respectsPreference() mirrors
+            // requiresConsent() for every class today (see NotificationClass).
+            UUID preferenceAccountId = Objects.requireNonNull(
+                    accountId, "a class that respects preference must have resolved a customer account");
             boolean disabled = notifications
                     .effectivePreference(
-                            row.tenantId(), accountId, row.brandId(), notificationClass.name(), channel.name())
+                            row.tenantId(),
+                            preferenceAccountId,
+                            row.brandId(),
+                            notificationClass.name(),
+                            channel.name())
                     .map(preference -> !preference.enabled())
                     .orElse(false);
             if (disabled) {
@@ -224,8 +237,7 @@ public class NotificationEligibilityService {
                     channel.contactMethod(), () -> channel + " is wired but names no contact method");
             UUID customerAccount = Objects.requireNonNull(
                     accountId, "customer-audience message reached endpoint resolution without an account");
-            Optional<ContactEndpoint> contact =
-                    contacts.primaryContact(row.tenantId(), customerAccount, contactMethod);
+            Optional<ContactEndpoint> contact = contacts.primaryContact(row.tenantId(), customerAccount, contactMethod);
             if (contact.isEmpty()) {
                 return suppress(row, SuppressionReason.NO_RECIPIENT_ENDPOINT, now);
             }
@@ -291,4 +303,3 @@ public class NotificationEligibilityService {
         return false;
     }
 }
-

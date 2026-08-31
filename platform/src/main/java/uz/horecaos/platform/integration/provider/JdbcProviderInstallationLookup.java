@@ -150,8 +150,7 @@ public class JdbcProviderInstallationLookup implements ProviderInstallationLooku
                 .optional();
     }
 
-    private List<Candidate> candidates(
-            UUID tenantId, UUID brandId, @Nullable UUID locationId, String capabilityCode) {
+    private List<Candidate> candidates(UUID tenantId, UUID brandId, @Nullable UUID locationId, String capabilityCode) {
 
         return jdbc.sql(SELECT_BINDINGS)
                 .param("tenantId", tenantId)

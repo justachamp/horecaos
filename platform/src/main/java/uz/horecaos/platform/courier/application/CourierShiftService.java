@@ -543,7 +543,10 @@ public class CourierShiftService {
      * @param cashHandoverId null when the shift took no cash, so no handover opened
      */
     public record CloseOutcome(
-            ShiftStatus status, long paidSeconds, long breakSeconds, @Nullable UUID cashHandoverId) {}
+            ShiftStatus status,
+            long paidSeconds,
+            long breakSeconds,
+            @Nullable UUID cashHandoverId) {}
 
     /** Exposed for the dispatch gate's readers and the operations board. */
     public Optional<ShiftRow> liveShiftOf(UUID tenantId, UUID courierId) {

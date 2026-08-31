@@ -145,6 +145,7 @@ public enum StreamChannel {
     // does not prove it statically. Same precedent as PlatformRole.capabilities.
     @SuppressWarnings("ImmutableEnumChecker")
     private final Set<ScopeType> scopeTypes;
+
     private final Capability capability;
     private final FrameClass frameClass;
     private final String source;

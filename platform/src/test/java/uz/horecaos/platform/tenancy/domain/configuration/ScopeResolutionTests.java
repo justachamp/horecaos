@@ -99,8 +99,8 @@ class ScopeResolutionTests {
     void aBrandScopedRequestNeverSeesALocationValue() {
         // LOCATION is a ScopeType.LOCATION scope, so its own constructor invariant
         // guarantees both identifiers are set.
-        ResourceScope brandScope =
-                ResourceScope.brand(Objects.requireNonNull(LOCATION.tenantId()), Objects.requireNonNull(LOCATION.brandId()));
+        ResourceScope brandScope = ResourceScope.brand(
+                Objects.requireNonNull(LOCATION.tenantId()), Objects.requireNonNull(LOCATION.brandId()));
 
         Resolved<Integer> resolved = ScopeResolution.resolve(
                 KEY,

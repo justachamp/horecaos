@@ -240,13 +240,7 @@ public class PosOrderExportService {
                     startedAt,
                     clock.instant());
             exports.settle(
-                    tenantId,
-                    exportId,
-                    ExportState.REJECTED,
-                    null,
-                    refusal.code(),
-                    refusal.detail(),
-                    clock.instant());
+                    tenantId, exportId, ExportState.REJECTED, null, refusal.code(), refusal.detail(), clock.instant());
             return ProviderOutcome.rejected(refusal.code(), refusal.detail());
         }
 

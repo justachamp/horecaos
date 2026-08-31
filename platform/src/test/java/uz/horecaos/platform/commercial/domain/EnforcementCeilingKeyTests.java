@@ -44,13 +44,11 @@ class EnforcementCeilingKeyTests {
         // deliberately raised runs the same way.
         assertThat(CommercialConfigurationKeys.ENFORCEMENT_CEILING.defaultValue())
                 .isEqualTo(EnforcementMode.METER_ONLY.name());
-        assertThat(EnforcementMode.valueOf(
-                                Objects.requireNonNull(
-                                                ConfigurationKeys.require(
-                                                                CommercialConfigurationKeys.ENFORCEMENT_CEILING_CODE)
-                                                        .defaultValue(),
-                                                "the registry declares a default for this key")
-                                        .toString())
+        assertThat(EnforcementMode.valueOf(Objects.requireNonNull(
+                                        ConfigurationKeys.require(CommercialConfigurationKeys.ENFORCEMENT_CEILING_CODE)
+                                                .defaultValue(),
+                                        "the registry declares a default for this key")
+                                .toString())
                         .canRefuse())
                 .as("a default that could refuse would enforce limits nobody has approved")
                 .isFalse();

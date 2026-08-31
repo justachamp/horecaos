@@ -12,11 +12,13 @@ import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.apache.camel.CamelContext;
 import org.apache.camel.impl.DefaultCamelContext;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
@@ -83,6 +85,10 @@ class TelegramOperationsNotificationIntegrationTest {
 
     private static final UUID TENANT = UUID.randomUUID();
     private static final UUID BRAND = UUID.randomUUID();
+    // Every stored order has a location (ordering.orders.location_id is NOT
+    // NULL); the brand-wide fan-out under test is a property of the Telegram
+    // binding's scope, not of the order.
+    private static final UUID LOCATION = UUID.randomUUID();
     private static final Instant NOW = Instant.parse("2026-08-30T09:00:00Z");
     private static final String SECRET_REFERENCE = "horecaos:local:provider_notification:platform:telegram-bot";
 
@@ -168,11 +174,11 @@ class TelegramOperationsNotificationIntegrationTest {
         orderThree = UUID.randomUUID();
         StubOrderDirectory orders = new StubOrderDirectory();
         orders.publish(new OrderDirectory.OrderSummary(
-                orderOne, TENANT, BRAND, null, "A-1", null, null, "CONFIRMED", "UZS", 100_000L, 1));
+                orderOne, TENANT, BRAND, LOCATION, "A-1", null, null, "CONFIRMED", "UZS", 100_000L, 1));
         orders.publish(new OrderDirectory.OrderSummary(
-                orderTwo, TENANT, BRAND, null, "A-2", null, null, "CONFIRMED", "UZS", 200_000L, 1));
+                orderTwo, TENANT, BRAND, LOCATION, "A-2", null, null, "CONFIRMED", "UZS", 200_000L, 1));
         orders.publish(new OrderDirectory.OrderSummary(
-                orderThree, TENANT, BRAND, null, "A-3", null, null, "CONFIRMED", "UZS", 300_000L, 1));
+                orderThree, TENANT, BRAND, LOCATION, "A-3", null, null, "CONFIRMED", "UZS", 300_000L, 1));
 
         NoOpContactDirectory contacts = new NoOpContactDirectory();
         NotificationEligibilityService eligibility = new NotificationEligibilityService(
@@ -218,8 +224,9 @@ class TelegramOperationsNotificationIntegrationTest {
         updateHandler.handle(
                 webhookInstallations.find(installationId).orElseThrow(), linkUpdate(codeOne, chatOne, null, 555L));
 
-        UUID bindingOne = onlyBindingFor(chatOne);
-        assertThat(bindingOne).isNotNull();
+        UUID maybeBindingOne = onlyBindingFor(chatOne);
+        assertThat(maybeBindingOne).isNotNull();
+        UUID bindingOne = Objects.requireNonNull(maybeBindingOne);
         assertThat(bot.messagesSentTo(chatOne)).hasSize(1); // the handshake's own confirmation
 
         // Two order confirmations, fired a beat apart (as two real ones always
@@ -255,8 +262,9 @@ class TelegramOperationsNotificationIntegrationTest {
         String codeTwo = links.issueCode(TENANT, BRAND, null, "operator-1");
         updateHandler.handle(
                 webhookInstallations.find(installationId).orElseThrow(), linkUpdate(codeTwo, chatTwoOld, null, 555L));
-        UUID bindingTwo = onlyBindingFor(chatTwoOld);
-        assertThat(bindingTwo).isNotNull();
+        UUID maybeBindingTwo = onlyBindingFor(chatTwoOld);
+        assertThat(maybeBindingTwo).isNotNull();
+        UUID bindingTwo = Objects.requireNonNull(maybeBindingTwo);
         assertThat(bot.messagesSentTo(chatTwoOld)).hasSize(1); // the handshake's own confirmation
 
         // Arm the migrate answer on the *next* send only — a real business
@@ -280,9 +288,7 @@ class TelegramOperationsNotificationIntegrationTest {
         jdbc.sql("""
                 INSERT INTO tenant.tenants (id, slug, legal_name, display_name, default_currency, default_timezone, status, version)
                 VALUES (:id, 'telegram-pilot-other', 'Legal', 'Other', 'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
-                """)
-                .param("id", otherTenant)
-                .update();
+                """).param("id", otherTenant).update();
 
         UUID bindingId = bindingStore.createBinding(TENANT, installationId, BRAND, null, -100999L, null, 1L);
 
@@ -316,7 +322,7 @@ class TelegramOperationsNotificationIntegrationTest {
 
     // ------------------------------------------------------------------- setup
 
-    private Map<String, Object> linkUpdate(String code, long chatId, Integer topicId, long fromUserId) {
+    private Map<String, Object> linkUpdate(String code, long chatId, @Nullable Integer topicId, long fromUserId) {
         Map<String, Object> chat = new LinkedHashMap<>();
         chat.put("id", chatId);
         chat.put("type", "supergroup");
@@ -344,7 +350,7 @@ class TelegramOperationsNotificationIntegrationTest {
                 orderId,
                 NOW,
                 BRAND,
-                null,
+                LOCATION,
                 "AUTO_ACCEPT",
                 null,
                 NOW,
@@ -386,6 +392,20 @@ class TelegramOperationsNotificationIntegrationTest {
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status)
                 VALUES (:id, :tenantId, 'PILOT', 'telegram-pilot-brand', 'Pilot brand', 'ACTIVE')
                 """).param("id", BRAND).param("tenantId", TENANT).update();
+        // Every stored order names a real location (fk_notification_location and
+        // ordering.orders.location_id NOT NULL); the brand-wide Telegram binding
+        // under test is what makes location scope irrelevant to the fan-out, not
+        // the absence of one on the order.
+        jdbc.sql("""
+                INSERT INTO tenant.locations (id, tenant_id, brand_id, code, slug, display_name,
+                    timezone, status, version)
+                VALUES (:id, :tenantId, :brandId, 'PILOT-1', 'telegram-pilot-location', 'Pilot location',
+                    'Asia/Tashkent', 'ACTIVE', 0)
+                """)
+                .param("id", LOCATION)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
     }
 
     private UUID seedTelegramInstallation() {
@@ -451,7 +471,7 @@ class TelegramOperationsNotificationIntegrationTest {
                 """).query(Long.class).single();
     }
 
-    private UUID onlyBindingFor(long chatId) {
+    private @Nullable UUID onlyBindingFor(long chatId) {
         return jdbc.sql("SELECT binding_id FROM integration.telegram_bindings WHERE chat_id = :chatId")
                 .param("chatId", chatId)
                 .query(UUID.class)

@@ -236,4 +236,3 @@ public class NotificationTemplateController {
             @Nullable Integer activeVersion,
             int version) {}
 }
-

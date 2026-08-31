@@ -59,11 +59,7 @@ public record NotificationSendOperation(
     }
 
     public static NotificationSendOperation queryStatus(
-            UUID tenantId,
-            UUID brandId,
-            @Nullable UUID locationId,
-            String channel,
-            String providerIdempotencyKey) {
+            UUID tenantId, UUID brandId, @Nullable UUID locationId, String channel, String providerIdempotencyKey) {
         return new NotificationSendOperation(
                 Kind.QUERY_STATUS, tenantId, brandId, locationId, channel, null, providerIdempotencyKey);
     }

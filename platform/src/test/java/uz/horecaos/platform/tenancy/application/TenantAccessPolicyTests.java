@@ -40,7 +40,8 @@ class TenantAccessPolicyTests {
     void deniesCrossTenantReads() {
         TenantAccessPolicy policy = policy(actor(Set.of(), Map.of("another-organization", Set.of("tenant-owner"))));
 
-        assertThatThrownBy(() -> policy.requireTenantRead(TENANT)).isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        assertThatThrownBy(() -> policy.requireTenantRead(TENANT))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
     }
 
     /**
@@ -141,7 +142,8 @@ class TenantAccessPolicyTests {
         TenantAccessPolicy policy =
                 enforcingPolicy(actor(Set.of(), Map.of("another-organization", Set.of("tenant-owner"))), allowAll());
 
-        assertThatThrownBy(() -> policy.requireTenantRead(TENANT)).isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        assertThatThrownBy(() -> policy.requireTenantRead(TENANT))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
     }
 
     /** Shadow mode, which the build no longer runs in but still supports. */

@@ -1149,7 +1149,11 @@ public class JdbcCatalogStore {
             UUID id, PublicationStatus status, String contentHash, UUID catalogId, String channel) {}
 
     public record TranslationRow(
-            EntityType entityType, UUID entityId, String locale, String name, @Nullable String description) {}
+            EntityType entityType,
+            UUID entityId,
+            String locale,
+            String name,
+            @Nullable String description) {}
 
     public record MediaRelationRow(EntityType entityType, UUID entityId, UUID mediaAssetId, String role) {}
 }

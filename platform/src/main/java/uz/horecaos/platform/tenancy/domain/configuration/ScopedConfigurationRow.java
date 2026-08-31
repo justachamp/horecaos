@@ -17,7 +17,8 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
  * two unrelated {@code ScopedValue}s in scope at once is exactly the confusion
  * that name would invite.
  */
-public record ScopedConfigurationRow(ScopeType scopeType, @Nullable Object value, boolean explicitNull) {
+public record ScopedConfigurationRow(
+        ScopeType scopeType, @Nullable Object value, boolean explicitNull) {
 
     public ScopedConfigurationRow {
         Objects.requireNonNull(scopeType, "Scope type is required");

@@ -143,8 +143,7 @@ class PaymeReceiptDetailTests {
                 .isEqualTo("NO_RECEIPT_LINES");
     }
 
-    private static FiscalReceiptLine line(
-            String name, int quantity, long unitPriceSom, @Nullable SomAmount discount) {
+    private static FiscalReceiptLine line(String name, int quantity, long unitPriceSom, @Nullable SomAmount discount) {
         return new FiscalReceiptLine(
                 name,
                 "00702001001000001",

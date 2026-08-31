@@ -163,7 +163,11 @@ class JdbcConfigurationResolverTests {
     }
 
     private void insertInteger(
-            ScopeType scopeType, @Nullable UUID tenantId, @Nullable UUID brandId, @Nullable UUID locationId, int value) {
+            ScopeType scopeType,
+            @Nullable UUID tenantId,
+            @Nullable UUID brandId,
+            @Nullable UUID locationId,
+            int value) {
         jdbc.sql("""
                 INSERT INTO tenant.configuration_values
                     (id, key_code, scope_type, tenant_id, brand_id, location_id,

@@ -396,4 +396,3 @@ public class DayCloseService {
     public record CloseResult(
             UUID runId, int ordersWritten, int linesWritten, int refundsWritten, List<Divergence> divergences) {}
 }
-

@@ -78,4 +78,3 @@ public class MetricSignatureController {
      */
     public record SignatureResponse(String metricCode, String definitionDigest, String signedBy) {}
 }
-

@@ -183,7 +183,7 @@ public class JdbcNotificationStore {
             UUID templateId,
             int templateVersion,
             String locale,
-            UUID accountId,
+            @Nullable UUID accountId,
             UUID endpointId,
             String variablesJson,
             String variablesHash,
@@ -830,7 +830,8 @@ public class JdbcNotificationStore {
      * caller's return type to {@code @Nullable}.
      */
     private static Instant requireInstant(@Nullable OffsetDateTime value) {
-        return java.util.Objects.requireNonNull(value, "NOT NULL column returned null").toInstant();
+        return java.util.Objects.requireNonNull(value, "NOT NULL column returned null")
+                .toInstant();
     }
 
     private static OffsetDateTime utc(Instant instant) {
@@ -845,6 +846,8 @@ public class JdbcNotificationStore {
      *                             {@code OrderRejected} and nowhere else, so it is
      *                             captured here or it is gone by the time
      *                             eligibility runs
+     * @param triggerEventId null for an alert with no originating Kafka event,
+     *                       e.g. {@code ApprovalDeadlineWarningSweeper}'s scheduled scan
      */
     public record NewNotification(
             UUID notificationId,
@@ -857,26 +860,26 @@ public class JdbcNotificationStore {
             String subjectType,
             UUID subjectId,
             @Nullable UUID recipientAccountId,
-            UUID triggerEventId,
+            @Nullable UUID triggerEventId,
             String idempotencyKey,
             String triggerVariablesJson,
             Instant scheduledAt,
             Instant expiresAt,
             Instant createdAt,
-            UUID recipientEndpointId) {
+            @Nullable UUID recipientEndpointId) {
 
         /** The shape every existing caller uses: no endpoint known yet at creation. */
         public NewNotification(
                 UUID notificationId,
                 UUID tenantId,
                 UUID brandId,
-                UUID locationId,
+                @Nullable UUID locationId,
                 String notificationClass,
                 String channel,
                 String templateKey,
                 String subjectType,
                 UUID subjectId,
-                UUID recipientAccountId,
+                @Nullable UUID recipientAccountId,
                 UUID triggerEventId,
                 String idempotencyKey,
                 String triggerVariablesJson,
@@ -995,4 +998,3 @@ public class JdbcNotificationStore {
             String timezone,
             int version) {}
 }
-

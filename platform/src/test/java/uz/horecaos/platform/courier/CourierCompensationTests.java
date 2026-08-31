@@ -496,8 +496,8 @@ class CourierCompensationTests {
         assertThat(statement.totals().grossEarningsMinor()).isEqualTo(afterLapse.totalMinor());
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> compliance =
-                (Map<String, Object>) Objects.requireNonNull(statement.document().get("compliance"));
+        Map<String, Object> compliance = (Map<String, Object>)
+                Objects.requireNonNull(statement.document().get("compliance"));
         assertThat(compliance.get("flag")).isEqualTo(true);
         assertThat((List<?>) compliance.get("affectedEntryIds")).hasSize(1);
     }
@@ -673,10 +673,7 @@ class CourierCompensationTests {
 
         assertThat(refused).isInstanceOf(ApiException.class);
         assertThat(((ApiException) refused).errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
-        assertThat(shiftStore
-                        .findHandover(TENANT, handoverId)
-                        .orElseThrow()
-                        .status())
+        assertThat(shiftStore.findHandover(TENANT, handoverId).orElseThrow().status())
                 .as("the ownership refusal happens before the handover is mutated")
                 .isEqualTo("PENDING");
     }
@@ -801,8 +798,7 @@ class CourierCompensationTests {
                 "the order never arrived",
                 "corr"));
         assertThat(approved.written()).isTrue();
-        assertThat(Objects.requireNonNull(approved.entry()).approvalRequestId())
-                .isNotNull();
+        assertThat(Objects.requireNonNull(approved.entry()).approvalRequestId()).isNotNull();
     }
 
     @Test

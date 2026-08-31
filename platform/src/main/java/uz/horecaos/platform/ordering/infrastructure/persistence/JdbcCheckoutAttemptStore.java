@@ -102,11 +102,7 @@ public class JdbcCheckoutAttemptStore {
      * anything written here.
      */
     public void complete(
-            UUID attemptId,
-            @Nullable UUID orderId,
-            String outcomeCode,
-            @Nullable String outcomeDetail,
-            Instant now) {
+            UUID attemptId, @Nullable UUID orderId, String outcomeCode, @Nullable String outcomeDetail, Instant now) {
         jdbc.sql("""
                 UPDATE ordering.checkout_attempts
                 SET status = 'COMPLETED', order_id = :orderId, outcome_code = :code,

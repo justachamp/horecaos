@@ -2,8 +2,10 @@ package uz.horecaos.platform.ordering.application;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.api.MigrationOwnershipPort;
@@ -78,7 +80,21 @@ class CheckoutEligibilityGuard {
      * @param eligible non-null when the checkout may proceed
      * @param rejectionCode non-null when it may not, naming why
      */
-    record Result(Eligible eligible, String rejectionCode, String rejectionDetail) {
+    record Result(
+            @Nullable Eligible eligible,
+            @Nullable String rejectionCode,
+            @Nullable String rejectionDetail) {
+
+        Result {
+            // Mirrors Serviceability's own compact constructor: the invariant the
+            // two javadoc'd params describe is enforced here, not just stated, so
+            // a caller that has null-checked eligible() can trust rejectionCode()
+            // the other way.
+            if ((eligible == null) == (rejectionCode == null)) {
+                throw new IllegalArgumentException(
+                        "A checkout eligibility result names either what is eligible or why it is not, never both or neither");
+            }
+        }
 
         boolean isEligible() {
             return eligible != null;
@@ -133,9 +149,15 @@ class CheckoutEligibilityGuard {
 
         // The quote must be the one bound to this cart. A client naming any quote
         // id could otherwise name one priced for a different, cheaper basket.
-        if (cart.pricingQuoteId() == null
-                || !cart.pricingQuoteId().equals(command.quoteId())
-                || !cart.pricingContextHash().equals(command.contextHash())) {
+        // pricingContextHash is null exactly when pricingQuoteId is (CartRow's own
+        // javadoc), but checked directly rather than assumed, so the compiler
+        // carries the fact rather than the comment alone.
+        UUID pricingQuoteId = cart.pricingQuoteId();
+        String pricingContextHash = cart.pricingContextHash();
+        if (pricingQuoteId == null
+                || !pricingQuoteId.equals(command.quoteId())
+                || pricingContextHash == null
+                || !pricingContextHash.equals(command.contextHash())) {
             return Result.rejected("QUOTE_NOT_BOUND_TO_CART", "This quote was not the one this cart was priced at");
         }
 
@@ -159,7 +181,10 @@ class CheckoutEligibilityGuard {
                 cart.fulfillmentMode(),
                 now);
         if (!decision.available()) {
-            return Result.rejected("NOT_SERVICEABLE", decision.reason().name());
+            // Serviceability's own compact constructor guarantees a reason is set
+            // whenever available is false.
+            return Result.rejected(
+                    "NOT_SERVICEABLE", Objects.requireNonNull(decision.reason()).name());
         }
 
         // Where it is going, for an order that is going anywhere (ADR 0014, ADR
@@ -191,18 +216,23 @@ class CheckoutEligibilityGuard {
         // nobody can refund is not a lighter kind of order. If an order without a
         // money tender ever needs to exist, it needs a settlement shape of its own
         // decided in a reviewed change, not silence here.
-        if (!namesAPaymentMethod(command)) {
+        // Checked directly (rather than through a boolean helper) so the compiler
+        // carries the non-null fact into every read below and into the two
+        // downstream collaborators (CheckoutOrderWriter, CheckoutSettlementStep)
+        // that only run once this guard has already refused a checkout without one.
+        String paymentMethodCode = command.paymentMethodCode();
+        if (paymentMethodCode == null || paymentMethodCode.isBlank()) {
             return Result.rejected(
-                    "PAYMENT_METHOD_REQUIRED", "An order says how it will be paid, or it cannot be settled or refunded");
+                    "PAYMENT_METHOD_REQUIRED",
+                    "An order says how it will be paid, or it cannot be settled or refunded");
         }
 
         // ADR 0013's precondition, and the last read-only refusal. A method with no
         // merchant account behind it is refused here rather than at the payment
         // step, because the alternative is an order that has taken a kitchen slot
         // and a quote and can never be paid.
-        if (!payments.canAcceptPayment(command.tenantId(), cart.locationId(), command.paymentMethodCode())) {
-            return Result.rejected(
-                    "PAYMENT_METHOD_UNAVAILABLE", "This location cannot take " + command.paymentMethodCode());
+        if (!payments.canAcceptPayment(command.tenantId(), cart.locationId(), paymentMethodCode)) {
+            return Result.rejected("PAYMENT_METHOD_UNAVAILABLE", "This location cannot take " + paymentMethodCode);
         }
 
         // ADR 0046's balance tender, refused here for the two reasons that need no
@@ -223,8 +253,7 @@ class CheckoutEligibilityGuard {
             // for points they also spent. Refused here, among the read-only
             // validations, so such a build takes the order for money rather than
             // taking it wrongly.
-            return Result.rejected(
-                    "REDEMPTION_UNAVAILABLE", "This deployment cannot settle an order from a balance");
+            return Result.rejected("REDEMPTION_UNAVAILABLE", "This deployment cannot settle an order from a balance");
         }
 
         QuoteSnapshot quote =
@@ -347,10 +376,5 @@ class CheckoutEligibilityGuard {
             return;
         }
         migrationOwnership.requireTargetMayWrite(tenantId, MigrationCapability.ORDERS, brandId, locationId);
-    }
-
-    private static boolean namesAPaymentMethod(CheckoutCommand command) {
-        return command.paymentMethodCode() != null
-                && !command.paymentMethodCode().isBlank();
     }
 }

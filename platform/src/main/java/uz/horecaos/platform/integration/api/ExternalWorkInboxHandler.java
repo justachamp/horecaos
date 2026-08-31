@@ -50,7 +50,8 @@ public interface ExternalWorkInboxHandler<T, W> extends InboxHandler<T> {
      * @return whatever the handler learned, or {@code null} when there is
      *         nothing honest to record and the work is simply done
      */
-    @Nullable W perform(ExternalEventEnvelope<T> event, Attempt attempt);
+    @Nullable
+    W perform(ExternalEventEnvelope<T> event, Attempt attempt);
 
     /**
      * The part that writes. Runs inside the transaction that also marks the

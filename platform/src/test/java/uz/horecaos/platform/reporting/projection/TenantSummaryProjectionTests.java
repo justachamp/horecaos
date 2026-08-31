@@ -211,4 +211,3 @@ class TenantSummaryProjectionTests {
                 """).param("id", TENANT).update();
     }
 }
-

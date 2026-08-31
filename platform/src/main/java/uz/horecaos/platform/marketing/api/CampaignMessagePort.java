@@ -39,7 +39,8 @@ public interface CampaignMessagePort {
      *         is not an error the caller retries: it is a deployment without
      *         notifications, and {@link #isWired} says so up front
      */
-    @Nullable UUID enqueue(MarketingMessage message);
+    @Nullable
+    UUID enqueue(MarketingMessage message);
 
     /**
      * The raw body template for each locale this campaign would send in.

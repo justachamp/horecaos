@@ -16,13 +16,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
@@ -683,7 +683,8 @@ class DeliveryFeeResolutionTests {
                 "STOREFRONT",
                 List.of(new QuoteRequest.Line(
                         "a",
-                        Objects.requireNonNull(burgerVariant, "seedCatalogAndPrices() must run before this cart is built"),
+                        Objects.requireNonNull(
+                                burgerVariant, "seedCatalogAndPrices() must run before this cart is built"),
                         1,
                         List.of())),
                 null));
@@ -791,7 +792,8 @@ class DeliveryFeeResolutionTests {
                 "STOREFRONT",
                 List.of(new QuoteRequest.Line(
                         "a",
-                        Objects.requireNonNull(burgerVariant, "seedCatalogAndPrices() must run before this cart is built"),
+                        Objects.requireNonNull(
+                                burgerVariant, "seedCatalogAndPrices() must run before this cart is built"),
                         1,
                         List.of())),
                 null));
@@ -850,7 +852,8 @@ class DeliveryFeeResolutionTests {
 
             assertThat(resolution.outcome()).isEqualTo(DeliveryFeeOutcome.RESOLVED);
             LocalDateTime local = LocalDateTime.ofInstant(at, ZoneId.of("Asia/Tashkent"));
-            int distanceMeters = Objects.requireNonNull(resolution.distanceMeters(), "a RESOLVED outcome always records a distance");
+            int distanceMeters =
+                    Objects.requireNonNull(resolution.distanceMeters(), "a RESOLVED outcome always records a distance");
             long expectedFee = LegacyDeliveryOracle.price(legacy, distanceMeters, local);
             long expectedDiscount = LegacyDeliveryOracle.discount(legacy, distanceMeters, local);
 
@@ -1002,7 +1005,8 @@ class DeliveryFeeResolutionTests {
                 "STOREFRONT",
                 List.of(new QuoteRequest.Line(
                         "a",
-                        Objects.requireNonNull(burgerVariant, "seedCatalogAndPrices() must run before this cart is built"),
+                        Objects.requireNonNull(
+                                burgerVariant, "seedCatalogAndPrices() must run before this cart is built"),
                         quantity,
                         List.of())),
                 null,

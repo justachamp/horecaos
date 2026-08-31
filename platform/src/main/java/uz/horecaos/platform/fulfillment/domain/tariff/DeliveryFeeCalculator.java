@@ -183,12 +183,11 @@ public final class DeliveryFeeCalculator {
 
         long rawMilli =
                 switch (discount.kind()) {
-                        // TariffDiscount's own compact constructor refuses an AMOUNT
-                        // discount without an amount, so this is never actually absent.
+                    // TariffDiscount's own compact constructor refuses an AMOUNT
+                    // discount without an amount, so this is never actually absent.
                     case AMOUNT ->
                         Math.multiplyExact(
-                                Objects.requireNonNull(discount.amountMinor(), "AMOUNT discount has no amount"),
-                                MILLI);
+                                Objects.requireNonNull(discount.amountMinor(), "AMOUNT discount has no amount"), MILLI);
                     // The band charge for the allowance under the table currently in force,
                     // which is what "the first N metres are free" has to mean if it is to
                     // stay true during a peak window. Never absent for the same reason.
@@ -196,7 +195,8 @@ public final class DeliveryFeeCalculator {
                         accrue(
                                         bands,
                                         Objects.requireNonNull(
-                                                discount.allowanceMeters(), "DISTANCE_ALLOWANCE discount has no allowance"),
+                                                discount.allowanceMeters(),
+                                                "DISTANCE_ALLOWANCE discount has no allowance"),
                                         tariff.distanceAccrual(),
                                         false)
                                 .milliMinor();

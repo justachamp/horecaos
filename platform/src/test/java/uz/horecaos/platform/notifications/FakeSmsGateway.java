@@ -193,4 +193,3 @@ public final class FakeSmsGateway implements AutoCloseable {
         ACCEPTED_THEN_TIMEOUT
     }
 }
-

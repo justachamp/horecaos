@@ -273,7 +273,10 @@ public class ReportQueryService {
     public record MedianResult(@Nullable Integer medianSeconds, Provenance provenance) {}
 
     /** A definition plus its signature state, which is what the metric dictionary shows. */
-    public record MetricView(MetricDefinition definition, @Nullable String signedBy, @Nullable Instant signedAt) {
+    public record MetricView(
+            MetricDefinition definition,
+            @Nullable String signedBy,
+            @Nullable Instant signedAt) {
 
         public boolean provisional() {
             return signedBy == null;
@@ -299,7 +302,8 @@ public class ReportQueryService {
             late += row.lateCount();
         }
 
-        @Nullable Long valueOf(MetricDefinition metric) {
+        @Nullable
+        Long valueOf(MetricDefinition metric) {
             return switch (metric.id().code()) {
                 case "revenue.gross.v1" -> gross;
                 case "revenue.net.v1" -> net - refunded;
@@ -316,4 +320,3 @@ public class ReportQueryService {
         }
     }
 }
-

@@ -31,7 +31,8 @@ class CheckoutReservationStep {
     private final LocationCapacityPort capacity;
     private final QuoteAcceptancePort quotes;
 
-    CheckoutReservationStep(InventoryReservationPort inventory, LocationCapacityPort capacity, QuoteAcceptancePort quotes) {
+    CheckoutReservationStep(
+            InventoryReservationPort inventory, LocationCapacityPort capacity, QuoteAcceptancePort quotes) {
         this.inventory = inventory;
         this.capacity = capacity;
         this.quotes = quotes;

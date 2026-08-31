@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -70,10 +71,10 @@ public class TelegramBindingStore {
             UUID tenantId,
             UUID installationId,
             UUID brandId,
-            UUID locationId,
+            @Nullable UUID locationId,
             long chatId,
-            Integer topicId,
-            Long linkedByTelegramUserId) {
+            @Nullable Integer topicId,
+            @Nullable Long linkedByTelegramUserId) {
         Instant now = clock.instant();
         UUID bindingId = UUID.randomUUID();
 
@@ -254,5 +255,6 @@ public class TelegramBindingStore {
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
-    public record ChatRef(UUID bindingId, long chatId, Integer topicId) {}
+    public record ChatRef(
+            UUID bindingId, long chatId, @Nullable Integer topicId) {}
 }

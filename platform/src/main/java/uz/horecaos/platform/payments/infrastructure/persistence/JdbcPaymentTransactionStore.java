@@ -155,10 +155,8 @@ public class JdbcPaymentTransactionStore {
                                 row.getString("provider_reason"),
                                 Objects.requireNonNull(
                                         instant(row, "recorded_at"), "payment_transactions.recorded_at is NOT NULL")),
-                Objects.requireNonNull(
-                        instant(row, "occurred_at"), "payment_transactions.occurred_at is NOT NULL"),
-                Objects.requireNonNull(
-                        instant(row, "recorded_at"), "payment_transactions.recorded_at is NOT NULL"),
+                Objects.requireNonNull(instant(row, "occurred_at"), "payment_transactions.occurred_at is NOT NULL"),
+                Objects.requireNonNull(instant(row, "recorded_at"), "payment_transactions.recorded_at is NOT NULL"),
                 row.getString("protected_request_reference"),
                 row.getString("protected_response_reference"));
     }

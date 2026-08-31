@@ -188,4 +188,3 @@ public abstract class TenantSummaryProjection<T> implements InboxHandler<T> {
         return value == null ? null : String.valueOf(value);
     }
 }
-

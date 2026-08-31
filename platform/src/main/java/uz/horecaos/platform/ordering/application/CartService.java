@@ -417,8 +417,8 @@ public class CartService {
                         decrypt(tenantId, cartId, INSTRUCTIONS_COLUMN, row.instructionsEncrypted(), purpose),
                         // Same guarantee as the address: upsertFulfillment never stores
                         // a null recipient name or phone.
-                        Objects.requireNonNull(
-                                decrypt(tenantId, cartId, RECIPIENT_NAME_COLUMN, row.recipientNameEncrypted(), purpose)),
+                        Objects.requireNonNull(decrypt(
+                                tenantId, cartId, RECIPIENT_NAME_COLUMN, row.recipientNameEncrypted(), purpose)),
                         Objects.requireNonNull(decrypt(
                                 tenantId, cartId, RECIPIENT_PHONE_COLUMN, row.recipientPhoneEncrypted(), purpose))));
     }
@@ -587,8 +587,8 @@ public class CartService {
                         encrypt(tenantId, rebuilt.cartId(), INSTRUCTIONS_COLUMN, captured.deliveryNote()),
                         Objects.requireNonNull(
                                 encrypt(tenantId, rebuilt.cartId(), RECIPIENT_NAME_COLUMN, captured.recipientName())),
-                        Objects.requireNonNull(encrypt(
-                                tenantId, rebuilt.cartId(), RECIPIENT_PHONE_COLUMN, captured.recipientPhone())),
+                        Objects.requireNonNull(
+                                encrypt(tenantId, rebuilt.cartId(), RECIPIENT_PHONE_COLUMN, captured.recipientPhone())),
                         captured.destination().latitude(),
                         captured.destination().longitude(),
                         now));
@@ -803,7 +803,10 @@ public class CartService {
      *                          standing instruction saved with the address
      */
     public record DestinationCommand(
-            UUID customerAddressId, String recipientName, String recipientPhone, @Nullable String deliveryNote) {
+            UUID customerAddressId,
+            String recipientName,
+            String recipientPhone,
+            @Nullable String deliveryNote) {
 
         public DestinationCommand {
             if (customerAddressId == null) {

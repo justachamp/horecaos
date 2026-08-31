@@ -45,4 +45,3 @@ public class SubjectPseudonym {
         return customerAccountId == null ? null : protection.lookupHash(tenantId, DOMAIN, customerAccountId.toString());
     }
 }
-

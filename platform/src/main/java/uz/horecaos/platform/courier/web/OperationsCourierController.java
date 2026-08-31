@@ -450,7 +450,8 @@ public class OperationsCourierController {
             @Nullable LocalDate registrationValidUntil,
             @Nullable LocalDate reverificationDueOn) {}
 
-    record AdjustmentResponse(@Nullable UUID entryId, @Nullable UUID approvalRequestId, boolean written) {}
+    record AdjustmentResponse(
+            @Nullable UUID entryId, @Nullable UUID approvalRequestId, boolean written) {}
 
     record LedgerResponse(long balanceMinor, List<LedgerLine> entries) {}
 

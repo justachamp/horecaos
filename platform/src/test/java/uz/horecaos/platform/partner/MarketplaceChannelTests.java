@@ -1039,7 +1039,13 @@ class MarketplaceChannelTests {
                 .isInstanceOf(ApiException.class);
 
         handovers.bypass(
-                TENANT, ResourceScope.tenant(TENANT), orderIdOf(outcome), "COURIER_APP_OFFLINE", "sup-1", "Aziza", null);
+                TENANT,
+                ResourceScope.tenant(TENANT),
+                orderIdOf(outcome),
+                "COURIER_APP_OFFLINE",
+                "sup-1",
+                "Aziza",
+                null);
 
         assertThat(jdbc.sql("SELECT status, bypass_reason_code, verified_by "
                                 + "FROM ordering.order_handover_challenges WHERE order_id = :id")
@@ -1081,7 +1087,13 @@ class MarketplaceChannelTests {
         }
 
         handovers.bypass(
-                TENANT, ResourceScope.tenant(TENANT), orderIdOf(outcome), "COURIER_APP_OFFLINE", "sup-1", "Aziza", null);
+                TENANT,
+                ResourceScope.tenant(TENANT),
+                orderIdOf(outcome),
+                "COURIER_APP_OFFLINE",
+                "sup-1",
+                "Aziza",
+                null);
 
         assertThat(jdbc.sql("SELECT status FROM ordering.order_handover_challenges " + "WHERE order_id = :id")
                         .param("id", outcome.orderId())

@@ -255,12 +255,7 @@ public class JdbcCartStore {
      * {@code CHECKOUT_IN_PROGRESS} cannot be released twice.
      */
     public boolean transition(
-            UUID tenantId,
-            UUID cartId,
-            CartStatus from,
-            CartStatus to,
-            @Nullable UUID convertedOrderId,
-            Instant now) {
+            UUID tenantId, UUID cartId, CartStatus from, CartStatus to, @Nullable UUID convertedOrderId, Instant now) {
         return jdbc.sql("""
                 UPDATE ordering.carts
                 SET status = :to,

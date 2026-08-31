@@ -271,7 +271,8 @@ public class NotificationTemplateService {
     }
 
     /** Either the wording, or which of the two ways it was missing. */
-    public record Resolution(@Nullable TemplateRow template, @Nullable VersionRow version, Outcome outcome) {
+    public record Resolution(
+            @Nullable TemplateRow template, @Nullable VersionRow version, Outcome outcome) {
 
         public enum Outcome {
             FOUND,
@@ -304,4 +305,3 @@ public class NotificationTemplateService {
         }
     }
 }
-

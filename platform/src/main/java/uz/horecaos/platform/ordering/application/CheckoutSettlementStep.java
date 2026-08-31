@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -36,6 +37,9 @@ class CheckoutSettlementStep {
     void planAndCreateIntent(CheckoutCommand command, Eligible eligible, UUID orderId, boolean paymentFirst) {
         var cart = eligible.cart();
         QuoteSnapshot quote = eligible.quote();
+        // CheckoutEligibilityGuard already refused any command with no payment
+        // method before this collaborator ever runs.
+        String paymentMethodCode = Objects.requireNonNull(command.paymentMethodCode());
 
         // 7a. The settlement that will discharge this order (ADR 0046), and with
         // it the only figure that says what is actually to be collected.
@@ -73,7 +77,7 @@ class CheckoutSettlementStep {
                         cart.customerAccountId(),
                         quote.currency(),
                         quote.totalMinor(),
-                        command.paymentMethodCode(),
+                        paymentMethodCode,
                         command.redeemFromBalanceMinor(),
                         command.idempotencyKey(),
                         command.actorId()));
@@ -87,7 +91,7 @@ class CheckoutSettlementStep {
                 orderId,
                 amountDueMinor(orderId, command, quote, settlement),
                 quote.currency(),
-                command.paymentMethodCode(),
+                paymentMethodCode,
                 command.idempotencyKey());
         if (paymentFirst && intentId == null) {
             // An order that may not be confirmed until it is paid, and nothing to

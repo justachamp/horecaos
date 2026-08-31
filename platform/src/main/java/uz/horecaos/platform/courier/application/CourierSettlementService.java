@@ -574,5 +574,6 @@ public class CourierSettlementService {
      *
      * @param authorised false when the payout is waiting on a second pair of eyes
      */
-    public record PayoutOutcome(@Nullable UUID payoutId, @Nullable UUID approvalRequestId, boolean authorised) {}
+    public record PayoutOutcome(
+            @Nullable UUID payoutId, @Nullable UUID approvalRequestId, boolean authorised) {}
 }

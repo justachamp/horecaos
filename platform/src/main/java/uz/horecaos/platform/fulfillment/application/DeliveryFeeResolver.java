@@ -416,5 +416,6 @@ public class DeliveryFeeResolver implements DeliveryFeePort {
     /** @param rung which precedence step answered, so the evidence explains itself */
     private record TariffChoice(String rung, DeliveryTariff tariff) {}
 
-    private record Distance(int meters, DistanceSource source, @Nullable String provider) {}
+    private record Distance(
+            int meters, DistanceSource source, @Nullable String provider) {}
 }
