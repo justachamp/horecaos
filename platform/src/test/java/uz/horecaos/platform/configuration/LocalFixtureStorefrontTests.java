@@ -95,6 +95,20 @@ class LocalFixtureStorefrontTests {
                 .andExpect(jsonPath("$.currency").value("UZS"));
     }
 
+    @Test
+    void anonymousErrorsKeepTheirRealStatus() throws Exception {
+        // A public request that errors — the menu without its required channel —
+        // must answer with its own status. In a servlet container the error body
+        // is rendered by an internal forward to /error, and until
+        // SecurityConfiguration permitted the ERROR dispatch, that forward was
+        // denied and every anonymous error masqueraded as an empty 401. MockMvc
+        // never performs the forward, so the masquerade itself cannot appear
+        // here; what this pins is the handler half — the 400 the forward exists
+        // to render. The dispatch half is the dispatcherTypeMatchers line in
+        // SecurityConfiguration.
+        mvc.perform(get(LOCATION_PATH + "/menu?locale=uz")).andExpect(status().isBadRequest());
+    }
+
     /** Avoids contacting Keycloak; the requests above are deliberately public. */
     @TestConfiguration(proxyBeanMethods = false)
     static class StubIssuer {

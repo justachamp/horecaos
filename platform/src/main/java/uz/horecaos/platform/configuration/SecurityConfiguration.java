@@ -1,5 +1,6 @@
 package uz.horecaos.platform.configuration;
 
+import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -40,6 +41,18 @@ public class SecurityConfiguration {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
+                        // The container's internal forward to /error. Without
+                        // this, any anonymous request that errors — a missing
+                        // query parameter, a 500 — has its error rendering
+                        // denied at the forward, and masquerades as an empty
+                        // 401 instead of its real Problem Details; a plain 400
+                        // cost half an hour of security archaeology before
+                        // this line. The dispatcher-type matcher permits only
+                        // the forward the container itself makes: a caller
+                        // requesting /error from outside is still anyRequest()
+                        // like everything else.
+                        .dispatcherTypeMatchers(DispatcherType.ERROR)
+                        .permitAll()
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/actuator/health",
