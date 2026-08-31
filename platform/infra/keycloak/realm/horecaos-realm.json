@@ -413,6 +413,97 @@
       "attributes": {
         "access.token.lifespan": "300"
       }
+    },
+    {
+      "clientId": "horecaos-operations",
+      "name": "horecaos-operations",
+      "description": "Staff console public OIDC client for frontend/operations (ADR 0003, ADR 0035). Public client, Authorization Code + PKCE S256 only, no secret.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:4200/auth/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:4200"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "defaultClientScopes": [
+        "basic",
+        "profile",
+        "email",
+        "roles",
+        "web-origins",
+        "acr"
+      ],
+      "optionalClientScopes": [
+        "organization"
+      ],
+      "protocolMappers": [
+        {
+          "name": "horecaos-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "horecaos-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "horecaos-control-plane",
+      "name": "horecaos-control-plane",
+      "description": "Staff console public OIDC client for frontend/control-plane (ADR 0003, ADR 0035). Public client, Authorization Code + PKCE S256 only, no secret. Carries offline_access so the library's refresh grant (see auth.config.ts) has a scope to request.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:4300/"
+      ],
+      "webOrigins": [
+        "http://localhost:4300"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "defaultClientScopes": [
+        "basic",
+        "profile",
+        "email",
+        "roles",
+        "web-origins",
+        "acr"
+      ],
+      "optionalClientScopes": [
+        "organization",
+        "offline_access"
+      ],
+      "protocolMappers": [
+        {
+          "name": "horecaos-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "horecaos-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
     }
   ],
   "clientScopeMappings": {},

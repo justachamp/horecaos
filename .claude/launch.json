@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "storefront",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "frontend/storefront", "start", "--", "--port", "5001"],
+      "port": 5001
+    },
+    {
+      "name": "operations",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "frontend/operations", "start"],
+      "port": 4200
+    },
+    {
+      "name": "control-plane",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "frontend/control-plane", "start", "--", "--port", "4300"],
+      "port": 4300
+    }
+  ]
+}
