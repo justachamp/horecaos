@@ -43,6 +43,10 @@ public final class FakeTelegramBotApi implements AutoCloseable {
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
     private final AtomicLong nextMessageId = new AtomicLong(1);
     private final Map<Long, List<String>> sentByChat = new ConcurrentHashMap<>();
+    private final Map<Long, Long> lastMessageIdByChat = new ConcurrentHashMap<>();
+    private final Map<Long, Object> replyMarkupByMessageId = new ConcurrentHashMap<>();
+    private final List<String> answeredCallbackQueryIds = new CopyOnWriteArrayList<>();
+    private final Map<String, String> answeredCallbackQueryText = new ConcurrentHashMap<>();
     private final Map<Long, String> kicked = new ConcurrentHashMap<>();
     private final Map<Long, Long> pendingMigrations = new ConcurrentHashMap<>();
     private volatile String chatMemberStatus = "administrator";
@@ -93,6 +97,53 @@ public final class FakeTelegramBotApi implements AutoCloseable {
         canManageTopics.set(value);
     }
 
+    /** The most recent message id sent (or edited) in this chat, for a test that then targets it directly. */
+    public @Nullable Long lastMessageIdSentTo(long chatId) {
+        return lastMessageIdByChat.get(chatId);
+    }
+
+    /**
+     * Whether this message currently carries an inline keyboard — true after
+     * a {@code sendMessage}/{@code editMessageReplyMarkup} that set one,
+     * false once {@code editMessageReplyMarkup} strips it (ADR 0060 §2/§4:
+     * "on the first successful decision the inline keyboard is stripped").
+     */
+    public boolean hasKeyboard(long messageId) {
+        return replyMarkupByMessageId.containsKey(messageId);
+    }
+
+    /**
+     * The opaque {@code callback_data} tokens on a message's current
+     * keyboard, in on-screen order — what a test reads to build a realistic
+     * {@code callback_query} update pointing at a real, server-minted token
+     * rather than a guessed string.
+     */
+    @SuppressWarnings("unchecked")
+    public List<String> callbackDataOn(long messageId) {
+        Object markup = replyMarkupByMessageId.get(messageId);
+        if (!(markup instanceof Map<?, ?> map) || !(map.get("inline_keyboard") instanceof List<?> rows)) {
+            return List.of();
+        }
+        List<String> tokens = new java.util.ArrayList<>();
+        for (Object rawRow : rows) {
+            for (Object rawButton : (List<Object>) rawRow) {
+                Map<String, Object> button = (Map<String, Object>) rawButton;
+                tokens.add(String.valueOf(button.get("callback_data")));
+            }
+        }
+        return tokens;
+    }
+
+    /** Every {@code callback_query_id} this fake has acknowledged, in arrival order. */
+    public List<String> answeredCallbackQueryIds() {
+        return List.copyOf(answeredCallbackQueryIds);
+    }
+
+    /** The toast text (if any) an {@code answerCallbackQuery} call carried for this query id. */
+    public @Nullable String answeredCallbackQueryText(String callbackQueryId) {
+        return answeredCallbackQueryText.get(callbackQueryId);
+    }
+
     private void handle(HttpExchange exchange) throws IOException {
         String path = exchange.getRequestURI().getPath();
         String method = path.substring(path.lastIndexOf('/') + 1);
@@ -101,6 +152,8 @@ public final class FakeTelegramBotApi implements AutoCloseable {
         switch (method) {
             case "sendMessage" -> handleSendOrEdit(exchange, body, false);
             case "editMessageText" -> handleSendOrEdit(exchange, body, true);
+            case "editMessageReplyMarkup" -> handleReplyMarkupEdit(exchange, body);
+            case "answerCallbackQuery" -> handleAnswerCallbackQuery(exchange, body);
             case "getMe" ->
                 respondOk(exchange, Map.of("id", BOT_USER_ID, "is_bot", true, "first_name", "HorecaOS Ops"));
             case "getChatMember" ->
@@ -137,12 +190,68 @@ public final class FakeTelegramBotApi implements AutoCloseable {
         String text = String.valueOf(body.get("text"));
         long messageId = isEdit ? number(body.get("message_id")) : nextMessageId.getAndIncrement();
         sentByChat.computeIfAbsent(chatId, key -> new CopyOnWriteArrayList<>()).add(text);
+        lastMessageIdByChat.put(chatId, messageId);
+
+        // Real Telegram semantics: sendMessage sets whatever keyboard is
+        // given (including none); editMessageText only touches the keyboard
+        // when reply_markup is explicitly present in the same call — omitted
+        // means "leave it as is", which is exactly how TelegramChannelAdapter
+        // relies on an edit preserving the Approve/Reject buttons it never
+        // resends.
+        if (!isEdit || body.containsKey("reply_markup")) {
+            Object replyMarkup = body.get("reply_markup");
+            if (replyMarkup == null || isEmptyKeyboard(replyMarkup)) {
+                replyMarkupByMessageId.remove(messageId);
+            } else {
+                replyMarkupByMessageId.put(messageId, replyMarkup);
+            }
+        }
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("message_id", messageId);
         result.put("chat", Map.of("id", chatId));
         result.put("text", text);
         respondOk(exchange, result);
+    }
+
+    private void handleReplyMarkupEdit(HttpExchange exchange, Map<String, Object> body) throws IOException {
+        long chatId = number(body.get("chat_id"));
+        long messageId = number(body.get("message_id"));
+
+        String kickReason = kicked.get(chatId);
+        if (kickReason != null) {
+            respond(exchange, 403, errorBody(403, "Forbidden: bot was blocked by the user"));
+            return;
+        }
+
+        Object replyMarkup = body.get("reply_markup");
+        if (replyMarkup == null || isEmptyKeyboard(replyMarkup)) {
+            replyMarkupByMessageId.remove(messageId);
+        } else {
+            replyMarkupByMessageId.put(messageId, replyMarkup);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("message_id", messageId);
+        result.put("chat", Map.of("id", chatId));
+        respondOk(exchange, result);
+    }
+
+    private void handleAnswerCallbackQuery(HttpExchange exchange, Map<String, Object> body) throws IOException {
+        String callbackQueryId = String.valueOf(body.get("callback_query_id"));
+        answeredCallbackQueryIds.add(callbackQueryId);
+        Object text = body.get("text");
+        if (text != null) {
+            answeredCallbackQueryText.put(callbackQueryId, String.valueOf(text));
+        }
+        respondOk(exchange, Boolean.TRUE);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static boolean isEmptyKeyboard(Object replyMarkup) {
+        return replyMarkup instanceof Map<?, ?> map
+                && map.get("inline_keyboard") instanceof List<?> rows
+                && rows.isEmpty();
     }
 
     private static long number(@Nullable Object value) {

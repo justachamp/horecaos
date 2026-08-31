@@ -166,6 +166,33 @@ public class TelegramBindingStore {
                 .list();
     }
 
+    /**
+     * The scope a bound chat receives notifications at (ADR 0060 §3): the
+     * reverse of {@link #chatFor}, so a typed command arriving in a bound
+     * group can resolve its own tenant/brand/location without the caller
+     * asking for it out of band. {@code locationId} is null for a brand-flat
+     * binding, which a caller that needs one location (a stop-list toggle, a
+     * stats query) must treat as unresolved rather than guess at.
+     */
+    public Optional<BindingScope> scopeForChat(UUID tenantId, long chatId, @Nullable Integer topicId) {
+        return jdbc.sql("""
+                SELECT b.id AS binding_id, b.brand_id, b.location_id
+                FROM integration.bindings b
+                JOIN integration.telegram_bindings tb ON tb.tenant_id = b.tenant_id AND tb.binding_id = b.id
+                WHERE b.tenant_id = :tenantId AND tb.chat_id = :chatId
+                  AND COALESCE(tb.topic_id, -1) = COALESCE(:topicId, -1)
+                  AND tb.retired_at IS NULL AND b.status = 'ACTIVE'
+                """)
+                .param("tenantId", tenantId)
+                .param("chatId", chatId)
+                .param("topicId", topicId)
+                .query((row, number) -> new BindingScope(
+                        row.getObject("binding_id", UUID.class),
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("location_id", UUID.class)))
+                .optional();
+    }
+
     /** The chat a binding currently points at, for the adapter to call the Bot API with. */
     public Optional<ChatRef> chatFor(UUID tenantId, UUID bindingId) {
         return jdbc.sql("""
@@ -257,4 +284,7 @@ public class TelegramBindingStore {
 
     public record ChatRef(
             UUID bindingId, long chatId, @Nullable Integer topicId) {}
+
+    public record BindingScope(
+            UUID bindingId, UUID brandId, @Nullable UUID locationId) {}
 }

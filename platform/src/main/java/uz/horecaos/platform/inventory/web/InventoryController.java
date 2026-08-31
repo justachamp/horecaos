@@ -83,7 +83,13 @@ public class InventoryController {
             @PathVariable UUID variantId,
             @Valid @RequestBody AvailabilityRequest body) {
         try {
-            inventory.setAvailability(tenantId, locationId, variantId, body.available(), body.reasonCode(), actorId());
+            inventory.setAvailabilityAudited(
+                    tenantId,
+                    locationId,
+                    variantId,
+                    body.available(),
+                    body.reasonCode(),
+                    currentActor.get().subject());
             return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException unknown) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
@@ -104,23 +110,6 @@ public class InventoryController {
             @PathVariable UUID locationId,
             @RequestParam @NotEmpty @Size(max = 100) List<UUID> variantIds) {
         return ResponseEntity.ok(inventory.checkAvailability(tenantId, locationId, Set.copyOf(variantIds)));
-    }
-
-    /**
-     * The acting user as a UUID.
-     *
-     * <p>The subject is a Keycloak identifier and is a UUID in this deployment. It
-     * is parsed rather than assumed: a subject that is not one would otherwise be
-     * stored as a nil id and quietly attribute the availability change to nobody.
-     */
-    private UUID actorId() {
-        String subject = currentActor.get().subject();
-        try {
-            return UUID.fromString(subject);
-        } catch (IllegalArgumentException notAUuid) {
-            throw new ApiException(
-                    ErrorCode.VALIDATION_FAILED, "This principal has no identifier that can be recorded as an actor");
-        }
     }
 
     public record ListVariantRequest(

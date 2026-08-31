@@ -109,6 +109,25 @@ public final class EntitlementKeys {
             .describedAs("Whether the advanced reporting surfaces are available.")
             .build();
 
+    /**
+     * ADR 0060: whether the Telegram staff bot answers a tap or a typed
+     * command with anything beyond its stage-1, read-only reach — the
+     * Approve/Reject buttons, the stop-list toggle, and the stats query.
+     *
+     * <p>{@code safeDefault(TRUE)} for the same reason every other feature key
+     * here defaults open: the pilot runs meter-only, and a no-POS tenant that
+     * onboarded before a plan exists must not lose the one floor ADR 0060
+     * promises it. Linking an account and receiving notifications are
+     * unaffected either way — this key gates interactivity specifically, not
+     * ADR 0058's stage-1 plumbing underneath it.
+     */
+    public static final EntitlementKey<Boolean> TELEGRAM_BOT_INTERACTIVE_ENABLED = EntitlementKey.feature(
+                    "integration.telegram_bot.interactive_enabled")
+            .safeDefault(Boolean.TRUE)
+            .ownedBy("integration")
+            .describedAs("Whether the Telegram staff bot accepts callback taps and typed commands for this tenant.")
+            .build();
+
     private static final Map<String, EntitlementKey<?>> BY_CODE = index(List.of(
             BRANDS_MAX_COUNT,
             LOCATIONS_MAX_COUNT,
@@ -121,7 +140,8 @@ public final class EntitlementKeys {
             POS_INTEGRATIONS_ENABLED,
             DELIVERY_PARTNER_INTEGRATIONS_ENABLED,
             PAYMENTS_PROVIDER_INTEGRATIONS_ENABLED,
-            ANALYTICS_ADVANCED_ENABLED));
+            ANALYTICS_ADVANCED_ENABLED,
+            TELEGRAM_BOT_INTERACTIVE_ENABLED));
 
     private EntitlementKeys() {}
 

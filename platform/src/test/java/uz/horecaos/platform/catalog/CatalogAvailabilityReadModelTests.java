@@ -89,7 +89,11 @@ class CatalogAvailabilityReadModelTests {
         insertTenancy(OTHER_TENANT, OTHER_BRAND, OTHER_LOCATION, "read-model-other-tenant", "OTHER-MAIN");
 
         store = new JdbcCatalogStore(jdbc, JsonMapper.builder().build());
-        authoring = new CatalogAuthoringService(store);
+        authoring = new CatalogAuthoringService(
+                store,
+                new uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder(
+                        jdbc, JsonMapper.builder().build()),
+                Clock.systemUTC());
         inventory = new InventoryService(
                 new JdbcInventoryStore(jdbc), Clock.fixed(Instant.parse("2026-08-30T10:00:00Z"), ZoneOffset.UTC));
     }

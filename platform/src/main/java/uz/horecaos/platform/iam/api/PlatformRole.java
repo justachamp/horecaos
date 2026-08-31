@@ -199,6 +199,7 @@ public enum PlatformRole {
                     INTEGRATION_INSTALLATION_MANAGE,
                     INTEGRATION_BINDING_ACTIVATE,
                     INTEGRATION_TELEGRAM_LINK_ISSUE,
+                    INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE,
                     INTEGRATION_FAILURE_READ,
                     INTEGRATION_FAILURE_RETRY,
                     POS_SYNC_READ,
@@ -312,6 +313,7 @@ public enum PlatformRole {
                     INTEGRATION_INSTALLATION_MANAGE,
                     INTEGRATION_BINDING_ACTIVATE,
                     INTEGRATION_TELEGRAM_LINK_ISSUE,
+                    INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE,
                     INTEGRATION_FAILURE_READ,
                     INTEGRATION_FAILURE_RETRY,
                     POS_SYNC_READ,
@@ -415,7 +417,10 @@ public enum PlatformRole {
                     DELIVERY_TARIFF_MANAGE,
                     MARKETPLACE_AVAILABILITY_PUSH,
                     NOTIFICATION_TEMPLATE_AUTHOR,
-                    REPORTING_READ)),
+                    REPORTING_READ,
+                    // ADR 0060: a brand manager who can toggle the stop list needs a
+                    // way to act on it from the pocket floor too.
+                    INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE)),
 
     LOCATION_MANAGER(
             "location-manager",
@@ -477,7 +482,10 @@ public enum PlatformRole {
                     CUSTOMER_READ,
                     CUSTOMER_PII_REVEAL,
                     INTEGRATION_FAILURE_READ,
-                    REPORTING_READ)),
+                    REPORTING_READ,
+                    // ADR 0060: the no-POS design center. A branch manager approves,
+                    // advances, and 86's from the bot when there is no screen at all.
+                    INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE)),
 
     /** Works the order feed. Deliberately cannot touch catalogue or money. */
     LOCATION_STAFF(
@@ -502,7 +510,10 @@ public enum PlatformRole {
                     DINEIN_SESSION_MANAGE,
                     RESERVATION_READ,
                     RESERVATION_MANAGE,
-                    DELIVERY_PLAN_READ)),
+                    DELIVERY_PLAN_READ,
+                    // ADR 0060: whoever holds order.approve on the floor is exactly
+                    // who the bot's Approve/Reject buttons are for.
+                    INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE)),
 
     COURIER_DISPATCHER(
             "courier-dispatcher",

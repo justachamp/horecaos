@@ -519,6 +519,20 @@ public enum Capability {
      * to "generate an invite" than to "configure a provider account".
      */
     INTEGRATION_TELEGRAM_LINK_ISSUE("integration.telegram-link.issue", "integration", "telegram-link.issue"),
+
+    /**
+     * ADR 0060: issuing a short-lived {@code /link <code>} that binds the
+     * issuing staff member's own Telegram account to their own principal.
+     *
+     * <p>Separate from {@link #INTEGRATION_TELEGRAM_LINK_ISSUE}, which issues a
+     * code for a <em>group</em> to receive operations alerts and is scoped to a
+     * brand. This one is self-service and per-principal — nobody can request a
+     * code that would link somebody else's account — so it is granted at
+     * {@code TENANT} scope to every staff bundle that can act on an order or the
+     * stop list, rather than reserved to an administrator.
+     */
+    INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE(
+            "integration.telegram-staff-link.issue", "integration", "telegram-staff-link.issue"),
     /**
      * ADR 0012: reading a POS catalog synchronization run, its staged snapshot,
      * its differences, and its conflicts.

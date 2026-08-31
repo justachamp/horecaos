@@ -43,6 +43,8 @@ import uz.horecaos.platform.integration.camel.notification.telegram.FakeTelegram
 import uz.horecaos.platform.integration.camel.notification.telegram.TelegramChannelAdapter;
 import uz.horecaos.platform.integration.camel.notification.telegram.TelegramCircuitBreakers;
 import uz.horecaos.platform.integration.provider.JdbcProviderInstallationLookup;
+import uz.horecaos.platform.integration.provider.telegram.BotActionTokenStore;
+import uz.horecaos.platform.integration.provider.telegram.BotCallbackAuthorizer;
 import uz.horecaos.platform.integration.provider.telegram.TelegramBindingStore;
 import uz.horecaos.platform.integration.provider.telegram.TelegramBotApiClient;
 import uz.horecaos.platform.integration.provider.telegram.TelegramChatLockService;
@@ -50,6 +52,7 @@ import uz.horecaos.platform.integration.provider.telegram.TelegramLinkService;
 import uz.horecaos.platform.integration.provider.telegram.TelegramMessageTracker;
 import uz.horecaos.platform.integration.provider.telegram.TelegramOperationsSubscriptionDirectory;
 import uz.horecaos.platform.integration.provider.telegram.TelegramRightsVerifier;
+import uz.horecaos.platform.integration.provider.telegram.TelegramStaffLinkService;
 import uz.horecaos.platform.integration.provider.telegram.TelegramUpdateHandler;
 import uz.horecaos.platform.integration.provider.telegram.TelegramWebhookInstallationLookup;
 import uz.horecaos.platform.notifications.application.NotificationDispatchService;
@@ -104,6 +107,7 @@ class TelegramOperationsNotificationIntegrationTest {
     private TelegramUpdateHandler updateHandler;
     private TelegramBindingStore bindingStore;
     private TelegramWebhookInstallationLookup webhookInstallations;
+    private BotActionTokenStore actionTokens;
     private UUID installationId;
     private MutableClock clock;
 
@@ -149,8 +153,41 @@ class TelegramOperationsNotificationIntegrationTest {
         TelegramRightsVerifier rights = new TelegramRightsVerifier(botApiClient);
         links = new TelegramLinkService(jdbc, clock, Duration.ofMinutes(15));
         webhookInstallations = new TelegramWebhookInstallationLookup(jdbc);
-        updateHandler =
-                new TelegramUpdateHandler(links, rights, bindingStore, botApiClient, secrets, audit, clock, "ru");
+
+        actionTokens = new BotActionTokenStore(jdbc, clock);
+        TelegramStaffLinkService staffLinks = new TelegramStaffLinkService(jdbc, clock, Duration.ofMinutes(15));
+        // ADR 0025's bootstrap-only branch reads CurrentActor solely for the
+        // platform-admin capability, never for any capability this suite's
+        // Telegram path checks; unreachable here is the correct behaviour if
+        // it were ever called, not a gap this stub papers over.
+        uz.horecaos.platform.iam.api.AuthorizationService authorization =
+                new uz.horecaos.platform.iam.infrastructure.authorization.JdbcAuthorizationService(jdbc, clock, () -> {
+                    throw new UnsupportedOperationException("not exercised by this suite");
+                });
+        BotCallbackAuthorizer callbackAuthorizer = new BotCallbackAuthorizer(
+                actionTokens,
+                staffLinks,
+                authorization,
+                new AlwaysEntitledService(),
+                new NoOpOrderDecisionPort(),
+                clock);
+        updateHandler = new TelegramUpdateHandler(
+                links,
+                staffLinks,
+                rights,
+                bindingStore,
+                actionTokens,
+                callbackAuthorizer,
+                authorization,
+                new AlwaysEntitledService(),
+                new StubOrderDirectory(),
+                new NoOpStopListPort(),
+                new NoOpStockAvailabilityPort(),
+                botApiClient,
+                secrets,
+                audit,
+                clock,
+                "ru");
 
         JdbcProviderInstallationLookup installationLookup = new JdbcProviderInstallationLookup(jdbc, clock);
         NotificationGateway gateway = new NotificationGateway(
@@ -160,7 +197,11 @@ class TelegramOperationsNotificationIntegrationTest {
                         locks,
                         tracker,
                         new TelegramCircuitBreakers(new SimpleMeterRegistry(), clock),
-                        Duration.ofSeconds(20))),
+                        actionTokens,
+                        clock,
+                        Duration.ofSeconds(20),
+                        Duration.ofHours(6),
+                        "ru")),
                 installationLookup,
                 secrets);
 
@@ -563,6 +604,69 @@ class TelegramOperationsNotificationIntegrationTest {
         public Optional<OrderSummary> summary(UUID tenantId, UUID orderId) {
             return Optional.ofNullable(summaries.get(orderId))
                     .filter(summary -> summary.tenantId().equals(tenantId));
+        }
+    }
+
+    /**
+     * ADR 0021's own safe-default rule, reproduced directly rather than
+     * wired through the real commercial module: this suite tests ADR 0058
+     * stage-1 delivery, never ADR 0060's interactive gating, so a stub that
+     * always answers "entitled" is the honest stand-in for an unsubscribed
+     * tenant under {@code EnforcementMode.METER_ONLY}.
+     */
+    private static final class AlwaysEntitledService implements uz.horecaos.platform.commercial.api.EntitlementService {
+        @Override
+        public uz.horecaos.platform.commercial.api.EntitlementSnapshot snapshot(UUID tenantId) {
+            throw new UnsupportedOperationException("not exercised by this suite");
+        }
+
+        @Override
+        public uz.horecaos.platform.commercial.api.LimitCheck check(
+                UUID tenantId, uz.horecaos.platform.commercial.api.EntitlementKey<Long> key, long requested) {
+            throw new UnsupportedOperationException("not exercised by this suite");
+        }
+
+        @Override
+        public uz.horecaos.platform.commercial.api.LimitCheck require(
+                UUID tenantId, uz.horecaos.platform.commercial.api.EntitlementKey<Long> key, long requested) {
+            throw new UnsupportedOperationException("not exercised by this suite");
+        }
+
+        @Override
+        public boolean featureEnabled(UUID tenantId, uz.horecaos.platform.commercial.api.EntitlementKey<Boolean> key) {
+            return true;
+        }
+
+        @Override
+        public void requireFeature(UUID tenantId, uz.horecaos.platform.commercial.api.EntitlementKey<Boolean> key) {}
+    }
+
+    /** ADR 0060's stop list, availability, and order-decision ports, unexercised by this ADR 0058 delivery suite. */
+    private static final class NoOpStopListPort implements uz.horecaos.platform.catalog.api.StopListPort {
+        @Override
+        public List<Item> listAtLocation(UUID tenantId, UUID brandId, UUID locationId) {
+            return List.of();
+        }
+    }
+
+    private static final class NoOpStockAvailabilityPort
+            implements uz.horecaos.platform.inventory.api.StockAvailabilityPort {
+        @Override
+        public void toggle(
+                UUID tenantId,
+                UUID locationId,
+                UUID variantId,
+                boolean available,
+                String reasonCode,
+                String actorSubject) {
+            throw new UnsupportedOperationException("not exercised by this suite");
+        }
+    }
+
+    private static final class NoOpOrderDecisionPort implements uz.horecaos.platform.ordering.api.OrderDecisionPort {
+        @Override
+        public Decision decide(UUID tenantId, UUID orderId, DecisionCommand command) {
+            throw new UnsupportedOperationException("not exercised by this suite");
         }
     }
 }

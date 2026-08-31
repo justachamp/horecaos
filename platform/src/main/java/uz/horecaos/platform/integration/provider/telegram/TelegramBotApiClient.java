@@ -65,12 +65,28 @@ public class TelegramBotApiClient {
     }
 
     public TelegramCallResult sendMessage(ProviderCall call, long chatId, @Nullable Integer topicId, String text) {
+        return sendMessage(call, chatId, topicId, text, null);
+    }
+
+    /**
+     * @param keyboard the inline Approve/Reject-style keyboard to attach
+     *                 (ADR 0060 §2), or null for a plain message
+     */
+    public TelegramCallResult sendMessage(
+            ProviderCall call,
+            long chatId,
+            @Nullable Integer topicId,
+            String text,
+            @Nullable TelegramInlineKeyboard keyboard) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("chat_id", chatId);
         if (topicId != null) {
             body.put("message_thread_id", topicId);
         }
         body.put("text", text);
+        if (keyboard != null) {
+            body.put("reply_markup", keyboard.toApiShape());
+        }
         return call("sendMessage", call, body);
     }
 
@@ -80,6 +96,46 @@ public class TelegramBotApiClient {
         body.put("message_id", messageId);
         body.put("text", text);
         return call("editMessageText", call, body);
+    }
+
+    /**
+     * Strips or replaces a message's inline keyboard without touching its text
+     * (ADR 0060 §2/§4: "on the first successful decision the inline keyboard
+     * is stripped").
+     *
+     * @param keyboard null strips the keyboard entirely — sent as an explicit
+     *                 empty {@code inline_keyboard} rather than an omitted
+     *                 field, because this call's only purpose is to change the
+     *                 markup and an omitted field would leave Telegram's own
+     *                 "nothing to update" behaviour to guess at
+     */
+    public TelegramCallResult editMessageReplyMarkup(
+            ProviderCall call, long chatId, long messageId, @Nullable TelegramInlineKeyboard keyboard) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("chat_id", chatId);
+        body.put("message_id", messageId);
+        body.put("reply_markup", keyboard == null ? Map.of("inline_keyboard", List.of()) : keyboard.toApiShape());
+        return call("editMessageReplyMarkup", call, body);
+    }
+
+    /**
+     * Acknowledges a callback query (ADR 0060 §2/§4): called immediately, on
+     * receipt, before any authorization check or mutation — Telegram's own
+     * deadline on this call is tight, and a caller that waited on the decide
+     * call first would routinely miss it. The outcome of the tap is reported
+     * separately, as a message edit or a follow-up send, never as a second
+     * answer to the same callback query — the Bot API accepts only one.
+     *
+     * @param text a short toast Telegram shows the tapper, or null for a bare
+     *             acknowledgement with no visible text
+     */
+    public TelegramCallResult answerCallbackQuery(ProviderCall call, String callbackQueryId, @Nullable String text) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("callback_query_id", callbackQueryId);
+        if (text != null) {
+            body.put("text", text);
+        }
+        return call("answerCallbackQuery", call, body);
     }
 
     /** The bot's own numeric user id, needed to ask {@link #getChatMember} about its own rights. */

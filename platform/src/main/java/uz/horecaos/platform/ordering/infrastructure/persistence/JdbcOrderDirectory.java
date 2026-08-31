@@ -48,4 +48,20 @@ public class JdbcOrderDirectory implements OrderDirectory {
     public List<ApprovalDeadlineWarning> ordersNearingApprovalDeadline(Instant now, Duration within, int limit) {
         return orders.ordersNearingApprovalDeadline(now, now.plus(within), limit);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Counts counts(UUID tenantId, UUID brandId, UUID locationId) {
+        var row = orders.counts(tenantId, brandId, locationId);
+        return new Counts(
+                row.newOrders(),
+                row.awaitingApproval(),
+                row.inKitchen(),
+                row.ready(),
+                row.fulfilling(),
+                row.completed(),
+                row.cancelled(),
+                row.totalNonTerminal(),
+                row.total());
+    }
 }
