@@ -185,6 +185,15 @@ export interface CircleRequest {
   radiusMeters?: number;
 }
 
+export interface ControlBandEscalationRequest {
+  description: string;
+  metricId: string;
+  reason: string;
+  tier: number;
+  unit: string;
+  value: string;
+}
+
 export interface CreateCatalogRequest {
   code: string;
   locale: string;
@@ -1015,6 +1024,7 @@ export interface ZoneView {
 }
 
 export interface Operations {
+  "raiseControlBandEscalation": { method: "POST"; path: "/api/v1/control-plane/alerts/control-band-escalations"; request: { parameters: Record<string, never>; body: ControlBandEscalationRequest }; responses: { "200": unknown } };
   "list_6": { method: "GET"; path: "/api/v1/control-plane/grants"; request: { parameters: Record<string, never> }; responses: { "200": Array<PlatformGrantView> } };
   "grant_1": { method: "POST"; path: "/api/v1/control-plane/grants"; request: { parameters: Record<string, never>; body: PlatformGrantRequest }; responses: { "200": PlatformGrantResponse } };
   "revoke_1": { method: "DELETE"; path: "/api/v1/control-plane/grants/{grantId}"; request: { parameters: { path: { grantId: string } }; body: PlatformGrantControllerReasonRequest }; responses: { "200": PlatformGrantResponse } };

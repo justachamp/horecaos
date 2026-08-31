@@ -543,6 +543,41 @@
         "required" : [ "originLocationId" ],
         "type" : "object"
       },
+      "ControlBandEscalationRequest" : {
+        "properties" : {
+          "description" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "metricId" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "tier" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "unit" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "value" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "description", "metricId", "reason", "tier", "unit", "value" ],
+        "type" : "object"
+      },
       "CreateCatalogRequest" : {
         "properties" : {
           "code" : {
@@ -3166,6 +3201,29 @@
   },
   "openapi" : "3.1.0",
   "paths" : {
+    "/api/v1/control-plane/alerts/control-band-escalations" : {
+      "post" : {
+        "description" : "Requires platform-admin. Called by ops/control_band_watch.py, never by a tenant.",
+        "operationId" : "raiseControlBandEscalation",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ControlBandEscalationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Raise a control-band tier escalation",
+        "tags" : [ "SaaS control plane" ]
+      }
+    },
     "/api/v1/control-plane/grants" : {
       "get" : {
         "operationId" : "list_6",
@@ -8134,35 +8192,17 @@
     "url" : "http://localhost"
   } ],
   "tags" : [ {
-    "description" : "Immutable security and business evidence",
-    "name" : "Audit"
-  }, {
     "description" : "Delivery and catchment geometry, versioned like a policy",
     "name" : "Service zones"
   }, {
     "description" : "Resumable onboarding runs and activation",
     "name" : "Tenant onboarding"
   }, {
-    "description" : "Inspect, retry, and resolve failed messages",
-    "name" : "Integration failures"
-  }, {
-    "description" : "The maker-checker queue: actions waiting for a second signature",
-    "name" : "Approval requests"
-  }, {
     "description" : "How a paid order is accepted: automatically, or by staff (ADR 0002)",
     "name" : "Order acceptance policy"
   }, {
-    "description" : "Named, reusable opening timetables",
-    "name" : "Service schedules"
-  }, {
     "description" : "The maker-checker thresholds that decide when an action needs a second signature",
     "name" : "Approval policies"
-  }, {
-    "description" : "What delivery costs here, and the evidence for it",
-    "name" : "Delivery fee"
-  }, {
-    "description" : "Price books, prices, assignments, and VAT",
-    "name" : "Price authoring"
   }, {
     "description" : "Why orders are cancelled and how they are completed, per tenant",
     "name" : "Order outcome reasons"
@@ -8173,26 +8213,47 @@
     "description" : "ADR 0038 legal entities and their location assignments",
     "name" : "SaaS control plane"
   }, {
-    "description" : "Versioned distance bands and peak-hour rules",
-    "name" : "Delivery tariffs"
-  }, {
     "description" : "PLATFORM-scope capability grants (ADR 0025, ADR 0027)",
     "name" : "Platform authorization"
   }, {
     "description" : "Reviewed catalog imports from a point of sale",
     "name" : "POS catalog synchronization"
   }, {
-    "description" : "Exports to a point of sale, and the ones a person has to settle",
-    "name" : "POS order exports"
-  }, {
     "description" : "Plans, subscriptions, entitlements, and metered usage",
     "name" : "Commercial"
   }, {
-    "description" : "Capability grants and session context",
-    "name" : "Authorization"
-  }, {
     "description" : "Read-only: which templates exist and what they configure (ADR 0008)",
     "name" : "Onboarding templates"
+  }, {
+    "description" : "Immutable security and business evidence",
+    "name" : "Audit"
+  }, {
+    "description" : "Control-plane alerts raised from outside the Java process",
+    "name" : "SaaS control plane"
+  }, {
+    "description" : "Inspect, retry, and resolve failed messages",
+    "name" : "Integration failures"
+  }, {
+    "description" : "The maker-checker queue: actions waiting for a second signature",
+    "name" : "Approval requests"
+  }, {
+    "description" : "Named, reusable opening timetables",
+    "name" : "Service schedules"
+  }, {
+    "description" : "What delivery costs here, and the evidence for it",
+    "name" : "Delivery fee"
+  }, {
+    "description" : "Price books, prices, assignments, and VAT",
+    "name" : "Price authoring"
+  }, {
+    "description" : "Versioned distance bands and peak-hour rules",
+    "name" : "Delivery tariffs"
+  }, {
+    "description" : "Exports to a point of sale, and the ones a person has to settle",
+    "name" : "POS order exports"
+  }, {
+    "description" : "Capability grants and session context",
+    "name" : "Authorization"
   }, {
     "description" : "Tenant, brand, and single-brand location onboarding",
     "name" : "SaaS control plane"

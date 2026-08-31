@@ -11,6 +11,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.integration.api.provider.BindingRef;
@@ -21,6 +22,7 @@ import uz.horecaos.platform.migration.api.ExternalEffect;
 import uz.horecaos.platform.migration.api.ImportSuppression;
 import uz.horecaos.platform.pos.api.CapabilitySnapshot.IdempotencyBehaviour;
 import uz.horecaos.platform.pos.api.PosCapability;
+import uz.horecaos.platform.pos.api.PosExportAwaitingOperator;
 import uz.horecaos.platform.pos.application.port.PosAdapter;
 import uz.horecaos.platform.pos.application.port.PosAdapter.ExportProbe;
 import uz.horecaos.platform.pos.application.port.PosAdapter.ExportResult;
@@ -98,6 +100,7 @@ public class PosOrderExportService {
     private final JdbcPosExportStore exports;
     private final JdbcPosCapabilityStore capabilities;
     private final PosOrderSource orders;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
 
     public PosOrderExportService(
@@ -108,6 +111,7 @@ public class PosOrderExportService {
             JdbcPosExportStore exports,
             JdbcPosCapabilityStore capabilities,
             PosOrderSource orders,
+            ApplicationEventPublisher events,
             Clock clock) {
         this.adapters = adapters;
         this.installations = installations;
@@ -116,6 +120,7 @@ public class PosOrderExportService {
         this.exports = exports;
         this.capabilities = capabilities;
         this.orders = orders;
+        this.events = events;
         this.clock = clock;
     }
 
@@ -393,6 +398,7 @@ public class PosOrderExportService {
                 yield ProviderOutcome.retryable("EXPORT_SAFE_TO_RESEND", decision.reason(), null);
             }
             case OPERATOR -> {
+                Instant now = clock.instant();
                 exports.resolve(
                         tenantId,
                         exportId,
@@ -402,7 +408,31 @@ public class PosOrderExportService {
                         null,
                         decision.reason(),
                         prepared.adapter().providerType(),
-                        clock.instant());
+                        now);
+                // ADR 0058's operations trigger. Plain publish, not
+                // @TransactionalEventListener-deferred on the consuming
+                // side: discoverOutcome is deliberately not @Transactional
+                // (the class's own reasoning — a connection must not be
+                // held across the provider read above), so there is no
+                // commit for a TransactionalEventListener to defer to.
+                //
+                // A second orders.find rather than reusing prepared.order():
+                // Prepared holds the adapter-facing OrderExport, which
+                // PosAdapter builds without a brand/location (adapters never
+                // need one), while the platform's own ExportableOrder — the
+                // same read prepare() itself started from — carries both.
+                // One extra indexed read on a path that fires at most once
+                // per export, not a hot one.
+                orders.find(tenantId, export.orderId(), REVEAL_PURPOSE)
+                        .ifPresent(exportableOrder -> events.publishEvent(new PosExportAwaitingOperator(
+                                UUID.randomUUID(),
+                                tenantId,
+                                exportableOrder.brandId(),
+                                exportableOrder.locationId(),
+                                exportId,
+                                export.orderId(),
+                                "EXPORT_NEEDS_OPERATOR",
+                                now)));
                 yield ProviderOutcome.uncertain("EXPORT_NEEDS_OPERATOR", decision.reason());
             }
         };

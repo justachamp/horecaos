@@ -13,12 +13,14 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.fiscal.api.FiscalDocumentBlocked;
 import uz.horecaos.platform.fiscal.api.PartnerFiscalizationPort;
 import uz.horecaos.platform.fiscal.domain.BusinessZone;
 import uz.horecaos.platform.fiscal.domain.FiscalCoverage;
@@ -56,6 +58,7 @@ public class FiscalDocumentService {
     private final FiscalReportingPolicyService policies;
     private final PartnerFiscalizationPort partner;
     private final AuditRecorder audit;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
     private final ZoneId fallbackZone;
     private final Duration minimumAge;
@@ -65,6 +68,7 @@ public class FiscalDocumentService {
             FiscalReportingPolicyService policies,
             PartnerFiscalizationPort partner,
             AuditRecorder audit,
+            ApplicationEventPublisher events,
             Clock clock,
             @Value("${horecaos.fiscal.business-timezone:Asia/Tashkent}") String fallbackZone,
             @Value("${horecaos.fiscal.sweeper.minimum-age:PT1M}") Duration minimumAge) {
@@ -72,6 +76,7 @@ public class FiscalDocumentService {
         this.policies = policies;
         this.partner = partner;
         this.audit = audit;
+        this.events = events;
         this.clock = clock;
         this.fallbackZone = ZoneId.of(fallbackZone);
         this.minimumAge = minimumAge;
@@ -142,6 +147,24 @@ public class FiscalDocumentService {
                         candidate.orderId(),
                         candidate.providerType() == null ? "the provider" : candidate.providerType(),
                         deadline.effective());
+
+                // ADR 0058's operations trigger: the worklist alert ADR 0038
+                // itself asks for, one message per block. Skipped, not
+                // failed, when the candidate's payment intent named no
+                // brand/location to route on — see ReportingCandidate's own
+                // Javadoc for when that happens; the document is still
+                // blocked and still on the worklist either way.
+                if (candidate.brandId() != null && candidate.locationId() != null) {
+                    events.publishEvent(new FiscalDocumentBlocked(
+                            UUID.randomUUID(),
+                            candidate.tenantId(),
+                            candidate.brandId(),
+                            candidate.locationId(),
+                            candidate.id(),
+                            candidate.orderId(),
+                            FiscalReasonCode.PROVIDER_REPORT_OVERDUE,
+                            now));
+                }
             }
         }
 

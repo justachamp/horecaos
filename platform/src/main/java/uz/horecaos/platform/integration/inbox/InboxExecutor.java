@@ -10,10 +10,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import uz.horecaos.platform.integration.api.DeadLetterRecorded;
 import uz.horecaos.platform.integration.api.ExternalEventEnvelope;
 import uz.horecaos.platform.integration.api.ExternalWorkInboxHandler;
 import uz.horecaos.platform.integration.api.InboxHandler;
@@ -46,6 +48,7 @@ public class InboxExecutor {
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactions;
     private final MeterRegistry meters;
+    private final ApplicationEventPublisher events;
     private final int maximumAttempts;
     private final RetryBackoff backoff;
     private final Duration blockedRecheckDelay;
@@ -58,6 +61,7 @@ public class InboxExecutor {
             ObjectMapper objectMapper,
             TransactionTemplate transactions,
             MeterRegistry meters,
+            ApplicationEventPublisher events,
             int maximumAttempts) {
         this(
                 store,
@@ -66,6 +70,7 @@ public class InboxExecutor {
                 objectMapper,
                 transactions,
                 meters,
+                events,
                 maximumAttempts,
                 DEFAULT_INITIAL_BACKOFF,
                 DEFAULT_MAXIMUM_BACKOFF,
@@ -80,6 +85,7 @@ public class InboxExecutor {
             ObjectMapper objectMapper,
             TransactionTemplate transactions,
             MeterRegistry meters,
+            ApplicationEventPublisher events,
             @Value("${horecaos.messaging.inbox.max-attempts:10}") int maximumAttempts,
             @Value("${horecaos.messaging.inbox.initial-backoff:2s}") Duration initialBackoff,
             @Value("${horecaos.messaging.inbox.max-backoff:5m}") Duration maximumBackoff,
@@ -90,6 +96,7 @@ public class InboxExecutor {
         this.objectMapper = objectMapper;
         this.transactions = transactions;
         this.meters = meters;
+        this.events = events;
         this.maximumAttempts = maximumAttempts;
         // Jittered (ADR 0006): the delay is otherwise a function of the attempt
         // count alone, so every consumer that failed against the same outage
@@ -150,6 +157,7 @@ public class InboxExecutor {
                 if (!row.isProcessed()) {
                     store.deadLetter(
                             row.id(), "PAYLOAD_INVALID", "The same event id arrived with a different payload hash");
+                    publishDeadLetter(envelope, "PAYLOAD_INVALID");
                 }
                 log.error(
                         "Contract collision on {}: event {} arrived with a different payload than the stored one "
@@ -227,6 +235,7 @@ public class InboxExecutor {
                     row.id(),
                     "CONTRACT_UNSUPPORTED",
                     "No handler for %s v%d".formatted(envelope.eventType(), envelope.eventVersion()));
+            publishDeadLetter(envelope, "CONTRACT_UNSUPPORTED");
             count(consumerName, envelope.eventType(), "unsupported");
             return InboxResult.UNSUPPORTED;
         }
@@ -278,6 +287,7 @@ public class InboxExecutor {
             if (attempts >= maximumAttempts) {
                 store.deadLetter(row.id(), "TRANSIENT_INFRASTRUCTURE", safeMessage);
                 log.error("Inbox item {} for {} exhausted {} attempts", row.id(), consumerName, attempts, failure);
+                publishDeadLetter(envelope, "TRANSIENT_INFRASTRUCTURE");
                 count(consumerName, envelope.eventType(), "dead_letter");
                 return InboxResult.DEAD_LETTERED;
             }
@@ -287,6 +297,33 @@ public class InboxExecutor {
             count(consumerName, envelope.eventType(), "retry");
             return InboxResult.RETRY_SCHEDULED;
         }
+    }
+
+    /**
+     * ADR 0058's operations trigger, for all three ways this class writes a
+     * dead letter.
+     *
+     * <p>A plain publish, not {@code @TransactionalEventListener}-deferred
+     * on the consuming side: none of the three call sites above run inside
+     * a business transaction this fact should wait to commit alongside
+     * (the dead-letter write itself is a terminal, already-decided outcome,
+     * not a pending one), so there is no commit for a {@code
+     * TransactionalEventListener} to defer to — one would silently drop
+     * this event.
+     */
+    private void publishDeadLetter(ExternalEventEnvelope<JsonNode> envelope, String reasonCode) {
+        // eventId is the envelope's own id, not a fresh one — see
+        // DeadLetterRecorded's own Javadoc and OutboxRelay's identical
+        // choice for why this is the field IntegrationOperationsAlertTrigger
+        // dedupes on.
+        events.publishEvent(new DeadLetterRecorded(
+                envelope.eventId(),
+                envelope.tenantId(),
+                DeadLetterRecorded.SOURCE_INBOX,
+                envelope.aggregateType(),
+                envelope.aggregateId(),
+                reasonCode,
+                envelope.occurredAt()));
     }
 
     /**

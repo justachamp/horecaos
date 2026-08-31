@@ -304,7 +304,7 @@ class CartCheckoutAndOrderTests {
         var channelStore = new JdbcSalesChannelStore(jdbc);
         var serviceabilityStore = new JdbcServiceabilityStore(jdbc);
 
-        inventory = new InventoryService(inventoryStore, clock);
+        inventory = new InventoryService(inventoryStore, event -> {}, clock);
         // ADR 0037. The real resolver, so a cart travels the production path rather
         // than a stand-in that could not refuse anything. It is not reached by the
         // carts below even where they are deliveries: CartPricingPort still carries

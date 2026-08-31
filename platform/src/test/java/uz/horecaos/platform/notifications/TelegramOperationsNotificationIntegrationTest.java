@@ -59,6 +59,7 @@ import uz.horecaos.platform.notifications.application.NotificationTemplateServic
 import uz.horecaos.platform.notifications.application.NotificationWorker;
 import uz.horecaos.platform.notifications.application.OperationsAlertFanoutService;
 import uz.horecaos.platform.notifications.application.OrderNotificationTrigger;
+import uz.horecaos.platform.notifications.application.TelegramOperationsEntitlementGate;
 import uz.horecaos.platform.notifications.domain.MessageLocale;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
 import uz.horecaos.platform.notifications.domain.NotificationClass;
@@ -196,7 +197,11 @@ class TelegramOperationsNotificationIntegrationTest {
         worker = new NotificationWorker(notifications, eligibility, dispatch, clock, 50, Duration.ofMinutes(2));
 
         OperationsAlertFanoutService fanout = new OperationsAlertFanoutService(
-                new TelegramOperationsSubscriptionDirectory(bindingStore), notifications, objectMapper, clock);
+                new TelegramOperationsSubscriptionDirectory(bindingStore),
+                notifications,
+                new TelegramOperationsEntitlementGate(new AlwaysEntitledService()),
+                objectMapper,
+                clock);
         trigger = new OrderNotificationTrigger(notifications, fanout, objectMapper, clock, "SMS", Duration.ofHours(6));
 
         activateTelegramTemplate();

@@ -61,7 +61,7 @@ public class JdbcInventoryStore {
 
     public Optional<StockItemRow> findStockItem(UUID tenantId, UUID locationId, UUID variantId) {
         return jdbc.sql("""
-                SELECT s.id, s.tracking_mode, p.binary_available, p.position_sequence
+                SELECT s.id, s.brand_id, s.tracking_mode, p.binary_available, p.position_sequence
                 FROM inventory.stock_items s
                 JOIN inventory.positions p ON p.stock_item_id = s.id
                 WHERE s.tenant_id = :tenantId AND s.location_id = :locationId
@@ -81,7 +81,7 @@ public class JdbcInventoryStore {
         }
         Map<UUID, StockItemRow> byVariant = new HashMap<>();
         jdbc.sql("""
-                SELECT s.variant_id, s.id, s.tracking_mode, p.binary_available, p.position_sequence
+                SELECT s.variant_id, s.id, s.brand_id, s.tracking_mode, p.binary_available, p.position_sequence
                 FROM inventory.stock_items s
                 JOIN inventory.positions p ON p.stock_item_id = s.id
                 WHERE s.tenant_id = :tenantId AND s.location_id = :locationId
@@ -270,13 +270,18 @@ public class JdbcInventoryStore {
     private static StockItemRow mapStockItem(java.sql.ResultSet row, int number) throws java.sql.SQLException {
         return new StockItemRow(
                 row.getObject("id", UUID.class),
+                row.getObject("brand_id", UUID.class),
                 TrackingMode.valueOf(row.getString("tracking_mode")),
                 (Boolean) row.getObject("binary_available"),
                 row.getLong("position_sequence"));
     }
 
     public record StockItemRow(
-            UUID stockItemId, TrackingMode trackingMode, Boolean binaryAvailable, long positionSequence) {}
+            UUID stockItemId,
+            UUID brandId,
+            TrackingMode trackingMode,
+            Boolean binaryAvailable,
+            long positionSequence) {}
 
     public record ReservationRow(UUID id, String status, Instant expiresAt) {}
 }

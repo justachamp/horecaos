@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.Test;
+import uz.horecaos.platform.integration.api.DeadLetterRecorded;
 
 /**
  * ADR 0006's retry policy is "exponential backoff with jitter". The relay had
@@ -70,12 +71,49 @@ class OutboxRelayBackoffTests {
                 .isEqualTo(NOW);
     }
 
+    @Test
+    void anExhaustedEventPublishesADeadLetterRecordedEventCarryingTheOriginalEventId() {
+        List<ClaimedOutboxEvent> batch = claimed(10);
+        List<Object> published = new ArrayList<>();
+
+        relay(new RecordingStore(batch), published::add).relayOnce();
+
+        List<DeadLetterRecorded> events = published.stream()
+                .filter(DeadLetterRecorded.class::isInstance)
+                .map(DeadLetterRecorded.class::cast)
+                .toList();
+        assertThat(events).hasSize(1);
+        DeadLetterRecorded event = events.get(0);
+        ClaimedOutboxEvent original = batch.getFirst();
+        assertThat(event.eventId())
+                .as("the row's own id, so a redelivery of the same event dedupes rather than re-alerting")
+                .isEqualTo(original.eventId());
+        assertThat(event.tenantId()).isEqualTo(original.tenantId());
+        assertThat(event.aggregateType()).isEqualTo(original.aggregateType());
+        assertThat(event.aggregateId()).isEqualTo(original.aggregateId());
+        assertThat(event.source()).isEqualTo(DeadLetterRecorded.SOURCE_OUTBOX);
+    }
+
+    @Test
+    void aRetryThatIsNotYetExhaustedPublishesNoDeadLetterEvent() {
+        List<Object> published = new ArrayList<>();
+
+        relay(new RecordingStore(claimed(4)), published::add).relayOnce();
+
+        assertThat(published).noneMatch(DeadLetterRecorded.class::isInstance);
+    }
+
     private static OutboxRelay relay(RelayStore store) {
+        return relay(store, event -> {});
+    }
+
+    private static OutboxRelay relay(RelayStore store, org.springframework.context.ApplicationEventPublisher events) {
         return new OutboxRelay(
                 store,
                 event -> {
                     throw new IllegalStateException("broker unavailable");
                 },
+                events,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 new SimpleMeterRegistry(),
                 20,

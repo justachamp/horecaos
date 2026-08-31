@@ -100,6 +100,7 @@ class JdbcOutboxStoreTests {
                 ignored -> {
                     throw new IllegalStateException("broker unavailable\nwithout leaking a payload");
                 },
+                event -> {},
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 new SimpleMeterRegistry(),
                 10,

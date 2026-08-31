@@ -210,7 +210,7 @@ class OrderingOnboardingStepHandlersTests {
     }
 
     private InventoryService inventory() {
-        return new InventoryService(new JdbcInventoryStore(jdbc), CLOCK);
+        return new InventoryService(new JdbcInventoryStore(jdbc), event -> {}, CLOCK);
     }
 
     private OrderingOnboardingStepHandlers.ActivationSmokeTest handler() {

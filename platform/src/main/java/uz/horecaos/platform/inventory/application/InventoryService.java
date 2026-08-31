@@ -12,11 +12,13 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.inventory.api.AvailabilityDecision;
 import uz.horecaos.platform.inventory.api.AvailabilityDecision.Unavailable;
 import uz.horecaos.platform.inventory.api.InventoryReservationPort;
+import uz.horecaos.platform.inventory.api.ItemAvailabilityChanged;
 import uz.horecaos.platform.inventory.api.ReservationResult;
 import uz.horecaos.platform.inventory.api.TrackingMode;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
@@ -47,10 +49,12 @@ public class InventoryService implements InventoryReservationPort {
     private static final String OWNER_QUOTE = "QUOTE";
 
     private final JdbcInventoryStore store;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
 
-    public InventoryService(JdbcInventoryStore store, Clock clock) {
+    public InventoryService(JdbcInventoryStore store, ApplicationEventPublisher events, Clock clock) {
         this.store = store;
+        this.events = events;
         this.clock = clock;
     }
 
@@ -147,6 +151,22 @@ public class InventoryService implements InventoryReservationPort {
                 clock.instant());
 
         log.info("Variant {} at location {} marked {}", variantId, locationId, available ? "available" : "unavailable");
+
+        // ADR 0058's operations trigger, gated in notifications on the
+        // available->false direction alone ("an item 86'd") — this event
+        // fires for both directions of the toggle because the fact itself
+        // ("availability changed") is symmetric, and item.brandId() is
+        // already in hand from the findStockItem read above, so there is
+        // nothing to gain by publishing only one of the two.
+        events.publishEvent(new ItemAvailabilityChanged(
+                UUID.randomUUID(),
+                tenantId,
+                item.brandId(),
+                locationId,
+                variantId,
+                available,
+                reasonCode,
+                clock.instant()));
     }
 
     /**

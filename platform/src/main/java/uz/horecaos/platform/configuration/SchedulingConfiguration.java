@@ -51,13 +51,14 @@ public class SchedulingConfiguration {
      * {@code TelegramLongPollingConsumer.pollOnce} — counted here too, since the
      * scan reads class metadata rather than a running context and does not know
      * a bean will be conditionally absent. ADR 0043 and ADR 0058's second stage
-     * added five more: {@code DayCloseScheduler.closeDueDays} and {@code
+     * added six more: {@code DayCloseScheduler.closeDueDays} and {@code
      * .recutSettledDays} (the day-close heartbeat ADR 0043 never had a
-     * production caller for), and {@code DigestScheduler}'s three cadences
+     * production caller for), {@code DigestScheduler}'s three cadences
      * ({@code emitFifteenMinuteDigests}, {@code emitHalfDayDigests}, {@code
-     * emitDayCloseDigests}).
+     * emitDayCloseDigests}), and {@code OnboardingStuckRunAlertSweeper.sweepOnce},
+     * the control-plane sibling of the onboarding stuck-run alert.
      */
-    static final int DEFAULT_POOL_SIZE = 36;
+    static final int DEFAULT_POOL_SIZE = 37;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

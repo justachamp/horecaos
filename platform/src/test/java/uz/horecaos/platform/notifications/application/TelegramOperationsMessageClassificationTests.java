@@ -27,7 +27,8 @@ import uz.horecaos.platform.tenancy.api.OnboardingHealth;
  * payloads does not reach it. What does reach it is
  * {@link uz.horecaos.platform.iam.api.protection.ClassificationScanner}'s own
  * name heuristic, applied directly to the variable maps
- * {@link OrderNotificationTrigger} and {@link ApprovalDeadlineWarningSweeper}
+ * {@link OrderNotificationTrigger}, {@link ApprovalDeadlineWarningSweeper},
+ * {@link FiscalOperationsAlertTrigger} and {@link InventoryOperationsAlertTrigger}
  * actually hand to a template — the entire allowlisted vocabulary an operations
  * message may render with, which is exactly what ADR 0020's "only allowlisted
  * typed variables from a versioned schema can render" makes closed enough to
@@ -38,6 +39,13 @@ import uz.horecaos.platform.tenancy.api.OnboardingHealth;
  * itself lives in {@code reporting} rather than {@code notifications} — see its
  * own class doc for why — because a digest is exactly the kind of group message
  * ADR 0058's "numbers and deep links only" rule exists for.
+ *
+ * <p>Three siblings of this class exist outside {@code notifications}, one
+ * per trigger that a module-boundary cycle forced to live in its own
+ * module rather than here (see each trigger's own Javadoc for why):
+ * {@code payments.notifications.PaymentOperationsMessageClassificationTests},
+ * {@code integration.notifications.DeadLetterOperationsMessageClassificationTests},
+ * and {@code pos.notifications.PosExportOperationsMessageClassificationTests}.
  */
 class TelegramOperationsMessageClassificationTests {
 
@@ -123,6 +131,28 @@ class TelegramOperationsMessageClassificationTests {
                         "onboardingRunsFailed",
                         "activeInstallations",
                         "failingConnections");
+    }
+
+    @Test
+    void theFiscalDocumentBlockedVariablesCarryNoProtectedField() {
+        Map<String, String> variables = FiscalOperationsAlertTrigger.reasonVariables("PROVIDER_REPORT_OVERDUE");
+        assertClean(variables, "FiscalOperationsAlertTrigger.reasonVariables");
+        assertThat(variables.keySet()).containsExactly("reasonCode");
+    }
+
+    @Test
+    void theItem86dVariablesCarryNoProtectedField() {
+        Map<String, String> variables = InventoryOperationsAlertTrigger.itemVariables("Lagman", "MANUAL");
+        assertClean(variables, "InventoryOperationsAlertTrigger.itemVariables");
+
+        // An item name is a product's own proper noun, the same PII-neutral
+        // category an order number already is — but named explicitly rather
+        // than only scanned, the same discipline
+        // theApprovalDeadlineWarningVariablesCarryNoProtectedField above
+        // applies: a third key appearing here is exactly the drift this
+        // test exists to catch even when the scanner's own name heuristic
+        // happens not to trigger on it.
+        assertThat(variables.keySet()).containsExactlyInAnyOrder("itemName", "reasonCode");
     }
 
     @Test

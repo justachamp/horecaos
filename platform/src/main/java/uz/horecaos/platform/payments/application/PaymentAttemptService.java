@@ -25,6 +25,8 @@ import uz.horecaos.platform.ordering.api.PaymentCaptured;
 import uz.horecaos.platform.ordering.api.PaymentFailed;
 import uz.horecaos.platform.ordering.api.PaymentRefunded;
 import uz.horecaos.platform.ordering.api.PaymentVoided;
+import uz.horecaos.platform.payments.api.PaymentAttemptFailed;
+import uz.horecaos.platform.payments.api.PaymentAttemptNeedsOperator;
 import uz.horecaos.platform.payments.domain.PaymentAttempt;
 import uz.horecaos.platform.payments.domain.PaymentAttemptStateMachine;
 import uz.horecaos.platform.payments.domain.PaymentAttemptStatus;
@@ -373,7 +375,11 @@ public class PaymentAttemptService {
                 null,
                 now);
 
-        applyToIntent(attempt, to, now);
+        // null: this method's own transition call above never carries a
+        // failure code either (see the literal null two lines up) — reserve,
+        // capture, cancel, expire and reverse are this method's whole domain,
+        // per its own Javadoc, and none of them is a decline.
+        applyToIntent(attempt, to, null, now);
         return true;
     }
 
@@ -404,6 +410,56 @@ public class PaymentAttemptService {
                 attempt.providerType(),
                 resolver,
                 now.plus(UNCERTAINTY_DEADLINE));
+
+        // Telegram's reconciliation path is unspecified (UncertaintyResolver's
+        // own Javadoc), so forProvider hands this attempt straight to
+        // OPERATIONS_EXCEPTION on its very first uncertainty — there is no
+        // automated leg to retry first. Every other provider starts on its own
+        // polling resolver here and reaches this event later, from
+        // resolveUncertainty, only once its deadline has actually passed.
+        if (resolver == UncertaintyResolver.OPERATIONS_EXCEPTION) {
+            publishNeedsOperator(attempt, PaymentAttemptNeedsOperator.REASON_UNSUPPORTED_PROVIDER, now);
+        }
+    }
+
+    /**
+     * Fans a {@link PaymentAttemptNeedsOperator} fact out alongside the
+     * attempt-store write that decided a human is needed.
+     *
+     * <p>Called only from inside an active transaction (the {@code
+     * @Transactional} method it publishes into or a caller's own {@code
+     * unitOfWork}/{@code independently} template), because
+     * {@code @TransactionalEventListener} silently drops an event published
+     * with no transaction in flight — the same discipline every other
+     * publish in this class already follows.
+     *
+     * <p>A second, best-effort lookup of the intent this attempt belongs to,
+     * for {@code brandId}/{@code locationId} alone: neither is on {@code
+     * PaymentAttempt} itself, and widening that record for three call sites
+     * that each already have a natural home for one extra read is a smaller
+     * change than it looks. A missing intent — reachable only if the intent
+     * row was deleted underneath a live attempt, which nothing in this
+     * codebase does — logs and skips rather than throws, because a human
+     * already knows to look here: {@link #markUncertain} and {@link
+     * #resolveUncertainty} both log at WARN before this is ever called.
+     */
+    private void publishNeedsOperator(PaymentAttempt attempt, String reasonCode, Instant now) {
+        intents.find(attempt.tenantId(), attempt.intentId())
+                .ifPresentOrElse(
+                        intent -> events.publishEvent(new PaymentAttemptNeedsOperator(
+                                UUID.randomUUID(),
+                                attempt.tenantId(),
+                                intent.brandId(),
+                                intent.locationId(),
+                                intent.orderId(),
+                                attempt.id(),
+                                reasonCode,
+                                now)),
+                        () -> log.warn(
+                                "Payment attempt {} needs an operator but its intent {} no longer resolves; "
+                                        + "no operations alert was raised.",
+                                attempt.id(),
+                                attempt.intentId()));
     }
 
     /**
@@ -443,8 +499,18 @@ public class PaymentAttemptService {
             // A binding cannot be retired while an attempt against it is uncertain,
             // so reaching here means configuration has been changed underneath a
             // live question about money. A human, not a retry.
-            attempts.recordResolutionAttempt(
-                    attempt.tenantId(), attempt.id(), UncertaintyResolver.OPERATIONS_EXCEPTION, clock.instant());
+            //
+            // independently rather than a bare write: recordResolutionAttempt and
+            // the operations-alert publish belong in one transaction, for the same
+            // reason every other publish in this class runs inside one — a
+            // TransactionalEventListener silently drops an event published with
+            // no transaction in flight.
+            independently.executeWithoutResult(ignored -> {
+                Instant now = clock.instant();
+                attempts.recordResolutionAttempt(
+                        attempt.tenantId(), attempt.id(), UncertaintyResolver.OPERATIONS_EXCEPTION, now);
+                publishNeedsOperator(attempt, PaymentAttemptNeedsOperator.REASON_BINDING_UNAVAILABLE, now);
+            });
             return PaymentAttemptStatus.UNCERTAIN;
         }
 
@@ -466,15 +532,27 @@ public class PaymentAttemptService {
                             outcome.externalDocumentId(),
                             outcome.failureCode(),
                             now);
-                    applyToIntent(attempt, settled, now);
+                    applyToIntent(attempt, settled, outcome.failureCode(), now);
                     yield settled;
                 }
                 case RETRYABLE, UNCERTAIN -> {
-                    UncertaintyResolver next = attempt.uncertain()
+                    boolean pastDeadline = attempt.uncertain()
                             .filter(uncertainty -> uncertainty.pastDeadline(now))
-                            .map(uncertainty -> UncertaintyResolver.OPERATIONS_EXCEPTION)
-                            .orElseGet(() -> UncertaintyResolver.forProvider(attempt.providerType()));
+                            .isPresent();
+                    UncertaintyResolver next = pastDeadline
+                            ? UncertaintyResolver.OPERATIONS_EXCEPTION
+                            : UncertaintyResolver.forProvider(attempt.providerType());
                     attempts.recordResolutionAttempt(attempt.tenantId(), attempt.id(), next, now);
+                    // Only the deadline transition is a human event. Every other
+                    // pass through here is the automated resolver trying again,
+                    // which ADR 0058 is explicit must not alert — "alert when a
+                    // human is genuinely needed, not on every retry" — and the
+                    // idempotency key on attemptId means a sweep that keeps
+                    // finding this same attempt past its deadline republishes
+                    // safely: the first one lands, the rest dedupe.
+                    if (pastDeadline) {
+                        publishNeedsOperator(attempt, PaymentAttemptNeedsOperator.REASON_DEADLINE_EXCEEDED, now);
+                    }
                     yield PaymentAttemptStatus.UNCERTAIN;
                 }
             };
@@ -553,8 +631,19 @@ public class PaymentAttemptService {
      * and {@code UNCERTAIN} publish nothing: the projection has no value for
      * either, and a reservation aging out is not, on its own, the fact an
      * operations list needs to see.
+     *
+     * @param freshFailureCode the failure code this exact transition is
+     *                         carrying, for {@link PaymentAttemptFailed} —
+     *                         never {@code attempt.failureCode()}, which is
+     *                         the attempt as it stood before this call and
+     *                         would read stale or null for the transition
+     *                         that just decided FAILED
      */
-    private void applyToIntent(PaymentAttempt attempt, PaymentAttemptStatus attemptStatus, Instant now) {
+    private void applyToIntent(
+            PaymentAttempt attempt,
+            PaymentAttemptStatus attemptStatus,
+            @Nullable String freshFailureCode,
+            Instant now) {
         intents.find(attempt.tenantId(), attempt.intentId()).ifPresent(intent -> {
             if (attemptStatus == PaymentAttemptStatus.CAPTURED) {
                 captures.recordCapture(intent.tenantId(), intent.orderId(), CAPTURE_ACTOR);
@@ -573,7 +662,24 @@ public class PaymentAttemptService {
             switch (attemptStatus) {
                 case CAPTURED ->
                     events.publishEvent(new PaymentCaptured(UUID.randomUUID(), tenant, intent.orderId(), now));
-                case FAILED -> events.publishEvent(new PaymentFailed(UUID.randomUUID(), tenant, intent.orderId(), now));
+                case FAILED -> {
+                    events.publishEvent(new PaymentFailed(UUID.randomUUID(), tenant, intent.orderId(), now));
+                    // ADR 0058's operations trigger: enough to route (brand,
+                    // location, both on this same intent already in scope) and
+                    // enough to say why (the attempt's own failureCode, never a
+                    // provider payload) — see PaymentAttemptFailed's own Javadoc
+                    // for why this is a sibling event and not a widened
+                    // PaymentFailed.
+                    events.publishEvent(new PaymentAttemptFailed(
+                            UUID.randomUUID(),
+                            intent.tenantId(),
+                            intent.brandId(),
+                            intent.locationId(),
+                            intent.orderId(),
+                            attempt.id(),
+                            freshFailureCode,
+                            now));
+                }
                 // CANCELLED here is always a release with no capture — the state
                 // machine forbids CAPTURED -> CANCELLED — so it is honestly a void,
                 // whether TerminalOrderPaymentVoid asked for it or a resolver found

@@ -80,6 +80,7 @@ class TenantSummaryProjectionTests {
                 JsonMapper.builder().build(),
                 new TransactionTemplate(new DataSourceTransactionManager(dataSource)),
                 new SimpleMeterRegistry(),
+                event -> {},
                 10);
     }
 
