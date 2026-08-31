@@ -21,17 +21,6 @@ export interface AddressFields {
   postalCode?: string;
 }
 
-export interface AddressResponse {
-  addressId?: string;
-  coordinateSource?: "NOT_GEOCODED" | "LANDMARK_ONLY" | "GEOCODER" | "CUSTOMER_PIN" | "OPERATOR_PIN" | "LEGACY_UNSOURCED";
-  deliveryInstructions?: string;
-  fields?: AddressFields;
-  label?: string;
-  latitude?: number;
-  longitude?: number;
-  version?: number;
-}
-
 export interface AdmissionResponse {
   brandId?: string;
   expiresAt?: string;
@@ -56,10 +45,6 @@ export interface BalanceResponse {
   nextExpiryAmount?: ApiMoney;
   nextExpiryAt?: string;
   spendable?: ApiMoney;
-}
-
-export interface CancelRequest {
-  reasonCode: string;
 }
 
 export interface CartLineResponse {
@@ -280,23 +265,8 @@ export interface OrderStateResponse {
   version?: number;
 }
 
-export interface OrderSummaryResponse {
-  currency?: string;
-  fulfillmentMode?: string;
-  fulfillmentStatus?: string;
-  locationId?: string;
-  orderId?: string;
-  paymentStatus?: string;
-  placedAt?: string;
-  promisedAt?: string;
-  publicOrderNumber?: string;
-  status?: string;
-  totalMinor?: number;
-  version?: number;
-}
-
-export interface PageOrderSummaryResponse {
-  items?: Array<OrderSummaryResponse>;
+export interface PageStorefrontOrderingControllerOrderSummaryResponse {
+  items?: Array<StorefrontOrderingControllerOrderSummaryResponse>;
   nextCursor?: string;
 }
 
@@ -426,6 +396,17 @@ export interface SocialLinkResponse {
   url?: string;
 }
 
+export interface StorefrontCustomerControllerAddressResponse {
+  addressId?: string;
+  coordinateSource?: "NOT_GEOCODED" | "LANDMARK_ONLY" | "GEOCODER" | "CUSTOMER_PIN" | "OPERATOR_PIN" | "LEGACY_UNSOURCED";
+  deliveryInstructions?: string;
+  fields?: AddressFields;
+  label?: string;
+  latitude?: number;
+  longitude?: number;
+  version?: number;
+}
+
 export interface StorefrontMenu {
   categories?: Array<MenuCategory>;
   currency?: string;
@@ -433,6 +414,25 @@ export interface StorefrontMenu {
   modifierGroups?: Array<MenuModifierGroup>;
   products?: Array<MenuProduct>;
   publicationId?: string;
+}
+
+export interface StorefrontOrderingControllerCancelRequest {
+  reasonCode: string;
+}
+
+export interface StorefrontOrderingControllerOrderSummaryResponse {
+  currency?: string;
+  fulfillmentMode?: string;
+  fulfillmentStatus?: string;
+  locationId?: string;
+  orderId?: string;
+  paymentStatus?: string;
+  placedAt?: string;
+  promisedAt?: string;
+  publicOrderNumber?: string;
+  status?: string;
+  totalMinor?: number;
+  version?: number;
 }
 
 export interface SubmitCodeRequest {
@@ -472,17 +472,17 @@ export interface Operations {
   "resolve": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/serviceability"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { at?: string; channel: string; mode: "DELIVERY" | "PICKUP" | "DINE_IN" } } }; responses: { "200": ServiceabilityView } };
   "profile": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": ProfileResponse } };
   "updateProfile": { method: "PATCH"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: UpdateProfileRequest }; responses: { "200": ProfileResponse } };
-  "addresses": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<AddressResponse> } };
-  "addAddress": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: SaveAddressRequest }; responses: { "200": AddressResponse } };
+  "addresses": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<StorefrontCustomerControllerAddressResponse> } };
+  "addAddress": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: SaveAddressRequest }; responses: { "200": StorefrontCustomerControllerAddressResponse } };
   "removeAddress": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses/{addressId}"; request: { parameters: { path: { addressId: string; brandId: string; tenantId: string } } }; responses: { "200": unknown } };
-  "address": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses/{addressId}"; request: { parameters: { path: { addressId: string; brandId: string; tenantId: string } } }; responses: { "200": AddressResponse } };
-  "updateAddress": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses/{addressId}"; request: { parameters: { path: { addressId: string; brandId: string; tenantId: string } }; body: SaveAddressRequest }; responses: { "200": AddressResponse } };
+  "address": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses/{addressId}"; request: { parameters: { path: { addressId: string; brandId: string; tenantId: string } } }; responses: { "200": StorefrontCustomerControllerAddressResponse } };
+  "updateAddress": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses/{addressId}"; request: { parameters: { path: { addressId: string; brandId: string; tenantId: string } }; body: SaveAddressRequest }; responses: { "200": StorefrontCustomerControllerAddressResponse } };
   "favourites": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/favourites"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": FavouritesResponse } };
   "removeFavourite": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/favourites/{productId}"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } } }; responses: { "200": unknown } };
   "addFavourite": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/favourites/{productId}"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } } }; responses: { "200": unknown } };
-  "listOrders": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PageOrderSummaryResponse } };
+  "listOrders": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PageStorefrontOrderingControllerOrderSummaryResponse } };
   "readOrder": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } } }; responses: { "200": OrderResponse } };
-  "cancel": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/cancellations"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } }; body: CancelRequest }; responses: { "200": OrderStateResponse } };
+  "cancel": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/cancellations"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } }; body: StorefrontOrderingControllerCancelRequest }; responses: { "200": OrderStateResponse } };
   "openPaymentSession": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/payment-sessions"; request: { parameters: { header: { "Idempotency-Key": string }; path: { brandId: string; orderId: string; tenantId: string } }; body: PaymentSessionRequest }; responses: { "200": PaymentSessionResponse } };
   "faq": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/support/faq"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { locale?: string } } }; responses: { "200": Array<FaqResponse> } };
   "socialLinks": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/support/social-links"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<SocialLinkResponse> } };
